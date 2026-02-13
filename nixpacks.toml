@@ -9,7 +9,7 @@ cmds = [
 
 [phases.build]
 cmds = [
-    "cd frontend && npm run build"
+    "echo 'Using pre-built assets from repository'"
 ]
 
 [start]

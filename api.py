@@ -828,11 +828,27 @@ if os.path.exists("frontend/dist"):
 else:
     print("Warning: frontend/dist folder not found. Run 'npm run build' in frontend directory.")
 
+@app.get("/api/debug/files")
+async def debug_files():
+    import os
+    cwd = os.getcwd()
+    files = []
+    for root, dirs, filenames in os.walk("."):
+        for filename in filenames:
+            files.append(os.path.join(root, filename))
+    return {
+        "cwd": cwd,
+        "files": files[:100], # Limit to first 100 to avoid potential huge payload
+        "frontend_dist_exists": os.path.exists("frontend/dist"),
+        "frontend_exists": os.path.exists("frontend")
+    }
+
 if __name__ == "__main__":
     print("Starting Stock Analysis API...")
     import traceback
     try:
-        uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)
+        import uvicorn
+        uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
     except Exception as e:
         print("CRITICAL: API failed to start")
         traceback.print_exc()

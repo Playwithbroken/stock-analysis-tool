@@ -144,7 +144,7 @@ def serialize_analysis_result(result) -> Dict[str, Any]:
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "message": "Stock Analysis API is running"}
+    return {"status": "ok", "message": "Stock Analysis API is running (v2)"}
 
 
 @app.get("/api/analyze/{ticker}")

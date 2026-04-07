@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import MarketSentiment from "./MarketSentiment";
+import PublicSignalsPanel from "./PublicSignalsPanel";
+import SignalWatchlistPanel from "./SignalWatchlistPanel";
+import NotificationSettingsPanel from "./NotificationSettingsPanel";
 import { useCurrency } from "../context/CurrencyContext";
 
 interface DiscoveryStock {
@@ -27,12 +30,27 @@ interface StarAssets {
   for_you?: DiscoveryStock[];
 }
 
+interface PublicSignalsData {
+  trackers: any[];
+}
+
+interface SignalWatchlistData {
+  items: any[];
+  ticker_signals: any[];
+  politician_signals: any[];
+}
+
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab] = useState<
-    "overview" | "ai" | "movers" | "alternative" | "etf"
+    "overview" | "signals" | "ai" | "movers" | "alternative" | "etf"
   >("overview");
   const [stars, setStars] = useState<StarAssets | null>(null);
+  const [publicSignals, setPublicSignals] = useState<PublicSignalsData | null>(
+    null,
+  );
+  const [signalWatchlist, setSignalWatchlist] =
+    useState<SignalWatchlistData | null>(null);
   const [trending, setTrending] = useState<DiscoveryStock[]>([]);
   const [gainers, setGainers] = useState<DiscoveryStock[]>([]);
   const [losers, setLosers] = useState<DiscoveryStock[]>([]);
@@ -54,8 +72,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [s, t, g, l, r, sc, m, cur, com, hr, e] = await Promise.all([
+        const [s, ps, sw, t, g, l, r, sc, m, cur, com, hr, e] = await Promise.all([
           fetch("/api/discovery/stars").then((r) => r.json()),
+          fetch("/api/discovery/public-signals").then((r) => r.json()),
+          fetch("/api/signals/watchlist").then((r) => r.json()),
           fetch("/api/discovery/trending").then((r) => r.json()),
           fetch("/api/discovery/gainers").then((r) => r.json()),
           fetch("/api/discovery/losers").then((r) => r.json()),
@@ -68,6 +88,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
           fetch("/api/discovery/etfs").then((r) => r.json()),
         ]);
         setStars(s);
+        setPublicSignals(ps);
+        setSignalWatchlist(sw);
         setTrending(t);
         setGainers(g);
         setLosers(l);
@@ -105,6 +127,12 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     }
   };
 
+  const refreshSignalWatchlist = async () => {
+    const res = await fetch("/api/signals/watchlist");
+    const data = await res.json();
+    setSignalWatchlist(data);
+  };
+
   const addSearchedEtf = async (res: any) => {
     // Show loading state or similar if needed
     try {
@@ -135,6 +163,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   };
 
   const tabs = [
+    { id: "signals", label: "Signals", icon: "ðŸ§­" },
     { id: "overview", label: "Markt-Puls", icon: "🌍" },
     { id: "ai", label: "AI Chancen", icon: "🤖" },
     { id: "movers", label: "Top/Flop", icon: "📊" },
@@ -181,15 +210,15 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   return (
     <div className="space-y-8 pb-20">
       {/* Tab Navigation */}
-      <div className="sticky top-20 z-40 flex items-center gap-2 p-1.5 bg-[#0a0a0c]/80 backdrop-blur-xl border border-white/5 rounded-2xl w-fit mx-auto lg:mx-0">
+      <div className="surface-panel sticky top-20 z-40 flex w-fit items-center gap-2 rounded-2xl p-1.5 mx-auto lg:mx-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
               activeTab === tab.id
-                ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
-                : "text-gray-400 hover:text-white hover:bg-white/5"
+                ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
+                : "text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]"
             }`}
           >
             <span>{tab.icon}</span>
@@ -199,10 +228,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
       </div>
 
       {activeTab === "etf" && (
-        <div className="flex items-center justify-between bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
+        <div className="surface-panel flex items-center justify-between rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
           <div className="flex items-center gap-4">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isComparing ? "bg-indigo-500 text-white" : "bg-slate-800 text-slate-500"}`}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isComparing ? "bg-[#101114] text-white" : "bg-[var(--bg-soft)] text-slate-500"}`}
             >
               <span className="text-xl font-bold">{selectedEtfs.length}</span>
             </div>
@@ -219,7 +248,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
             {selectedEtfs.length > 0 && (
               <button
                 onClick={() => setSelectedEtfs([])}
-                className="text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
               >
                 Auswahl leeren
               </button>
@@ -229,10 +258,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
               disabled={selectedEtfs.length < 2 && !isComparing}
               className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
                 isComparing
-                  ? "bg-slate-800 text-white"
+                  ? "bg-[#101114] text-white"
                   : selectedEtfs.length >= 2
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
-                    : "bg-slate-800/50 text-slate-600 cursor-not-allowed"
+                    ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
+                    : "bg-[var(--bg-soft)] text-slate-400 cursor-not-allowed"
               }`}
             >
               {isComparing ? "Vergleich schließen" : "Jetzt vergleichen"}
@@ -404,6 +433,18 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                 Failed to load market stars.
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "signals" && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+            <PublicSignalsPanel data={publicSignals} onAnalyze={onAnalyze} />
+            <NotificationSettingsPanel />
+            <SignalWatchlistPanel
+              data={signalWatchlist}
+              onAnalyze={onAnalyze}
+              onRefresh={refreshSignalWatchlist}
+            />
           </div>
         )}
 

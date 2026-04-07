@@ -3,16 +3,25 @@ FastAPI Backend for Stock Analysis Tool
 Provides REST API endpoints for stock analysis.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import uvicorn
 import numpy as np
+import asyncio
+import hashlib
+import hmac
+import secrets
+from datetime import datetime
 
 from src.data_fetcher import DataFetcher
 from src.analyzer import StockAnalyzer, Rating, Valuation
 from src.discovery_service import DiscoveryService
+from src.email_alert_service import EmailAlertService
+from src.morning_brief_service import MorningBriefService
+from src.public_signal_service import PublicSignalService
 from src.storage import PortfolioManager
 
 # Load environment variables
@@ -28,18 +37,81 @@ app = FastAPI(
 )
 
 # Enable CORS for frontend
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "APP_ALLOWED_ORIGINS",
+        "http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:5173,http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
 )
 
 
 # Global services (Lazy initialized)
 _discovery_service = None
 _portfolio_manager = None
+_public_signal_service = None
+_email_alert_service = None
+_signal_alert_task = None
+_morning_brief_service = None
+SESSION_COOKIE_NAME = "brokerfreund_session"
+
+
+def get_app_password() -> str:
+    return os.getenv("APP_ACCESS_PASSWORD", "").strip()
+
+
+def get_session_secret() -> str:
+    return os.getenv("APP_SESSION_SECRET", "").strip()
+
+
+def get_login_max_attempts() -> int:
+    return max(1, int(os.getenv("APP_LOGIN_MAX_ATTEMPTS", "5")))
+
+
+def get_login_lockout_minutes() -> int:
+    return max(1, int(os.getenv("APP_LOGIN_LOCKOUT_MINUTES", "15")))
+
+
+def use_secure_cookies() -> bool:
+    explicit = os.getenv("APP_COOKIE_SECURE")
+    if explicit is not None and explicit.strip() != "":
+        return explicit.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(
+        os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        or os.getenv("RAILWAY_STATIC_URL")
+        or os.getenv("APP_ENV", "").strip().lower() in {"production", "prod"}
+    )
+
+
+def create_session_value() -> str:
+    token = secrets.token_urlsafe(24)
+    signature = hmac.new(
+        get_session_secret().encode("utf-8"),
+        token.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{token}.{signature}"
+
+
+def is_valid_session(session_value: str | None) -> bool:
+    if not session_value or "." not in session_value or not get_session_secret():
+        return False
+    token, signature = session_value.split(".", 1)
+    expected = hmac.new(
+        get_session_secret().encode("utf-8"),
+        token.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected)
 
 def get_discovery_service():
     global _discovery_service
@@ -54,6 +126,80 @@ def get_portfolio_manager():
         print("Initializing PortfolioManager...")
         _portfolio_manager = PortfolioManager()
     return _portfolio_manager
+
+def get_public_signal_service():
+    global _public_signal_service
+    if _public_signal_service is None:
+        print("Initializing PublicSignalService...")
+        _public_signal_service = PublicSignalService()
+    return _public_signal_service
+
+def get_email_alert_service():
+    global _email_alert_service
+    if _email_alert_service is None:
+        print("Initializing EmailAlertService...")
+        _email_alert_service = EmailAlertService(
+            get_portfolio_manager(),
+            get_public_signal_service(),
+            get_morning_brief_service(),
+        )
+    return _email_alert_service
+
+def get_morning_brief_service():
+    global _morning_brief_service
+    if _morning_brief_service is None:
+        print("Initializing MorningBriefService...")
+        _morning_brief_service = MorningBriefService()
+    return _morning_brief_service
+
+
+@app.middleware("http")
+async def require_single_user_auth(request: Request, call_next):
+    path = request.url.path
+    open_paths = {
+        "/api/health",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/status",
+    }
+    if not path.startswith("/api") or path in open_paths:
+        return await call_next(request)
+
+    password = get_app_password()
+    secret = get_session_secret()
+    if not password or not secret:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "App security is not configured. Set APP_ACCESS_PASSWORD and APP_SESSION_SECRET."},
+        )
+
+    session_value = request.cookies.get(SESSION_COOKIE_NAME)
+    if not is_valid_session(session_value):
+        return JSONResponse(status_code=401, content={"detail": "Authentication required."})
+
+    return await call_next(request)
+
+async def _signal_alert_loop():
+    interval_minutes = int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15"))
+    while True:
+        try:
+            get_email_alert_service().check_and_send_alerts(force=False)
+            get_email_alert_service().send_scheduled_open_briefs()
+        except Exception as e:
+            print(f"Signal alert loop error: {e}")
+        await asyncio.sleep(max(1, interval_minutes) * 60)
+
+@app.on_event("startup")
+async def startup_event():
+    global _signal_alert_task
+    enabled = os.getenv("SIGNAL_ALERTS_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if enabled and _signal_alert_task is None:
+        _signal_alert_task = asyncio.create_task(_signal_alert_loop())
 
 # Response Models
 class AnalysisResponse(BaseModel):
@@ -93,6 +239,21 @@ class AddHoldingRequest(BaseModel):
 class OracleRequest(BaseModel):
     message: str
     context_ticker: Optional[str] = None
+
+class SignalWatchItemRequest(BaseModel):
+    kind: str
+    value: str
+
+class WorkspaceProfileRequest(BaseModel):
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    timezone: Optional[str] = None
+    browser_notifications: Optional[bool] = None
+    theme: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    password: str
 
 
 def rating_to_string(rating: Rating) -> str:
@@ -145,6 +306,73 @@ def serialize_analysis_result(result) -> Dict[str, Any]:
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok", "message": "Stock Analysis API is running (v2)"}
+
+
+@app.get("/api/auth/status")
+async def auth_status(request: Request):
+    profile = get_portfolio_manager().get_workspace_profile()
+    guard = get_portfolio_manager().get_login_guard_state()
+    return {
+        "authenticated": is_valid_session(request.cookies.get(SESSION_COOKIE_NAME)),
+        "configured": bool(get_app_password() and get_session_secret()),
+        "profile": profile,
+        "login_guard": guard,
+    }
+
+
+@app.post("/api/auth/login")
+async def auth_login(req: LoginRequest, response: Response):
+    password = get_app_password()
+    secret = get_session_secret()
+    if not password or not secret:
+        raise HTTPException(status_code=503, detail="Security config missing on server.")
+    guard = get_portfolio_manager().get_login_guard_state()
+    locked_until = guard.get("locked_until")
+    if locked_until:
+        try:
+            locked_dt = datetime.fromisoformat(locked_until)
+            if locked_dt > datetime.now():
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Too many failed attempts. Locked until {locked_dt.strftime('%H:%M')}.",
+                )
+        except ValueError:
+            get_portfolio_manager().reset_login_guard()
+    if not hmac.compare_digest(req.password, password):
+        guard = get_portfolio_manager().record_failed_login(
+            get_login_max_attempts(),
+            get_login_lockout_minutes(),
+        )
+        if guard.get("locked_until"):
+            locked_dt = datetime.fromisoformat(guard["locked_until"])
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Locked until {locked_dt.strftime('%H:%M')}.",
+            )
+        remaining = max(0, get_login_max_attempts() - int(guard.get("failed_attempts", 0)))
+        raise HTTPException(status_code=401, detail=f"Invalid code. {remaining} attempts left.")
+
+    get_portfolio_manager().reset_login_guard()
+
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        create_session_value(),
+        httponly=True,
+        samesite="lax",
+        secure=use_secure_cookies(),
+        max_age=60 * 60 * 12,
+    )
+    return {
+        "status": "ok",
+        "authenticated": True,
+        "profile": get_portfolio_manager().get_workspace_profile(),
+    }
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE_NAME, samesite="lax")
+    return {"status": "ok", "authenticated": False}
 
 
 @app.get("/api/analyze/{ticker}")
@@ -759,6 +987,114 @@ async def get_star_assets():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/discovery/public-signals")
+async def get_public_signals():
+    """Get delayed public copy-trade style signals from official sources."""
+    try:
+        return convert_numpy_types(get_public_signal_service().get_public_signals())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/signals/watchlist")
+async def get_signal_watchlist():
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        summary = get_public_signal_service().build_watchlist_snapshot(items)
+        return convert_numpy_types(summary)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/watchlist/items")
+async def add_signal_watch_item(req: SignalWatchItemRequest):
+    try:
+        get_portfolio_manager().add_signal_watch_item(req.kind, req.value)
+        items = get_portfolio_manager().get_signal_watch_items()
+        return convert_numpy_types(get_public_signal_service().build_watchlist_snapshot(items))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/signals/watchlist/items")
+async def delete_signal_watch_item(kind: str, value: str):
+    try:
+        get_portfolio_manager().remove_signal_watch_item(kind, value)
+        items = get_portfolio_manager().get_signal_watch_items()
+        return convert_numpy_types(get_public_signal_service().build_watchlist_snapshot(items))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/check")
+async def check_signal_alerts():
+    try:
+        return get_email_alert_service().check_and_send_alerts(force=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/test")
+async def send_test_signal_alert():
+    try:
+        return get_email_alert_service().send_test_email()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/notifications/status")
+async def get_notification_status():
+    try:
+        return get_email_alert_service().get_notification_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/settings/profile")
+async def get_workspace_profile():
+    try:
+        return convert_numpy_types(get_portfolio_manager().get_workspace_profile())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/settings/profile")
+async def save_workspace_profile(req: WorkspaceProfileRequest):
+    try:
+        payload = req.model_dump(exclude_none=True)
+        return convert_numpy_types(get_portfolio_manager().save_workspace_profile(payload))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/daily-brief")
+async def send_daily_brief():
+    try:
+        return get_email_alert_service().send_daily_brief()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/signals/history")
+async def get_signal_history(limit: int = 100):
+    try:
+        return convert_numpy_types(get_portfolio_manager().get_sent_signal_events(limit=limit))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/market/morning-brief")
+async def get_morning_brief():
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        return convert_numpy_types(get_morning_brief_service().get_brief(snapshot))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/morning-brief")
+async def send_morning_brief():
+    try:
+        return get_email_alert_service().send_morning_brief()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/open-brief/{session}")
+async def send_open_brief(session: str):
+    try:
+        return get_email_alert_service().send_open_brief(session)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/discovery/gainers")
 async def get_top_gainers():
     """Get market-wide top performers."""
@@ -848,7 +1184,7 @@ if __name__ == "__main__":
     import traceback
     try:
         import uvicorn
-        uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)
     except Exception as e:
         print("CRITICAL: API failed to start")
         traceback.print_exc()

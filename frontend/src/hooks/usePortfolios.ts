@@ -13,11 +13,16 @@ export interface Portfolio {
   createdAt: string
 }
 
-export function usePortfolios() {
+export function usePortfolios(enabled: boolean = true) {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchPortfolios = async () => {
+    if (!enabled) {
+      setPortfolios([])
+      setLoading(false)
+      return
+    }
     try {
       const response = await fetch('/api/portfolios')
       const data = await response.json()
@@ -36,7 +41,7 @@ export function usePortfolios() {
 
   useEffect(() => {
     fetchPortfolios()
-  }, [])
+  }, [enabled])
 
   const createPortfolio = async (name: string): Promise<Portfolio> => {
     const response = await fetch('/api/portfolios', {

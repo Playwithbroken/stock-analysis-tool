@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Zap, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
 
 interface HeatmapItem {
@@ -32,15 +32,25 @@ export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading)
-    return <div className="h-48 glass-card animate-pulse rounded-2xl"></div>;
+  if (loading) {
+    return <div className="surface-panel h-56 animate-pulse rounded-[2rem]" />;
+  }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-        <span className="text-pink-500">🌍</span> Global Market Pulse
-      </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+            Macro overview
+          </div>
+          <h2 className="mt-2 text-4xl text-slate-900">Global Market Pulse</h2>
+        </div>
+        <div className="hidden rounded-full border border-black/8 bg-white/70 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 md:block">
+          Sector heatmap
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {heatmap
           .sort((a, b) => b.strength - a.strength)
           .map((item) => {
@@ -52,99 +62,85 @@ export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
             return (
               <div
                 key={item.sector}
-                className={`p-5 rounded-2xl border transition-all duration-300 hover:scale-[1.02] group relative ${
-                  isBullish
-                    ? "bg-linear-to-br from-green-500/10 to-transparent border-green-500/20 hover:border-green-500/50"
-                    : "bg-linear-to-br from-red-500/10 to-transparent border-red-500/20 hover:border-red-500/50"
-                } hover:z-50`}
+                className="surface-panel group relative overflow-hidden rounded-[2rem] p-5 transition-transform duration-200 hover:-translate-y-1"
               >
-                {/* Glow background */}
                 <div
-                  className={`absolute -inset-1 opacity-0 group-hover:opacity-10 transition-opacity blur-2xl rounded-2xl ${isBullish ? "bg-green-500" : "bg-red-500"}`}
-                ></div>
-
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
+                  className={`absolute inset-x-0 top-0 h-1 ${
+                    isBullish ? "bg-emerald-600/70" : "bg-red-600/70"
+                  }`}
+                />
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                       {item.sector}
-                    </h4>
-                    {isBullish ? (
-                      <TrendingUp size={14} className="text-green-400" />
-                    ) : (
-                      <TrendingDown size={14} className="text-red-400" />
-                    )}
-                  </div>
-
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span
-                      className={`text-2xl font-black italic tracking-tighter ${isBullish ? "text-green-400" : "text-red-400"}`}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-1000 ${isBullish ? "bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.6)]" : "bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.6)]"}`}
-                      style={{ width: `${item.strength}%` }}
-                    ></div>
-                  </div>
-
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                      Verfassung
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono font-bold ${isBullish ? "text-green-400" : "text-red-400"}`}
-                    >
-                      {item.strength.toFixed(0)}%
-                    </span>
-                  </div>
-
-                  {/* Hot Stocks Popover on Hover */}
-                  {sortedStocks.length > 0 && (
-                    <div className="absolute top-[85%] left-0 right-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-300 z-100 transform translate-y-4 group-hover:translate-y-2">
-                      <div className="bg-black/95 border border-white/10 rounded-xl p-3 shadow-2xl shadow-black backdrop-blur-md ring-1 ring-white/5">
-                        <div className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3 pb-2 border-b border-white/5 flex items-center gap-2">
-                          <Zap
-                            size={10}
-                            className="text-yellow-400 fill-yellow-400"
-                          />
-                          Hot Assets
-                        </div>
-                        <div className="space-y-1">
-                          {sortedStocks.map((stock) => (
-                            <div
-                              key={stock.ticker}
-                              onClick={() => onAnalyze?.(stock.ticker)}
-                              className="flex items-center justify-between p-2 hover:bg-white/5 rounded-lg transition-all cursor-pointer group/stock"
-                            >
-                              <div className="flex flex-col">
-                                <span className="text-white text-xs font-bold group-hover/stock:text-pink-400 transition-colors">
-                                  {stock.ticker}
-                                </span>
-                                <span className="text-[8px] text-gray-500 truncate max-w-[70px]">
-                                  {stock.name}
-                                </span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-white text-[10px] font-mono font-medium">
-                                  {formatPrice(stock.price)}
-                                </div>
-                                <div
-                                  className={`text-[9px] font-black ${stock.change_1w >= 0 ? "text-green-400" : "text-red-400"}`}
-                                >
-                                  {stock.change_1w >= 0 ? "+" : ""}
-                                  {stock.change_1w?.toFixed(1)}%
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     </div>
-                  )}
+                    <div
+                      className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+                        isBullish
+                          ? "bg-emerald-500/10 text-emerald-700"
+                          : "bg-red-500/10 text-red-700"
+                      }`}
+                    >
+                      {isBullish ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                      {item.status}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-black/[0.03] p-2 text-slate-500">
+                    <Activity size={16} />
+                  </div>
                 </div>
+
+                <div className="mt-6">
+                  <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    <span>Strength</span>
+                    <span>{item.strength.toFixed(0)}%</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/[0.06]">
+                    <div
+                      className={`h-full rounded-full ${
+                        isBullish ? "bg-emerald-600" : "bg-red-600"
+                      }`}
+                      style={{ width: `${item.strength}%` }}
+                    />
+                  </div>
+                </div>
+
+                {sortedStocks.length > 0 && (
+                  <div className="mt-6 space-y-2">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                      Leading names
+                    </div>
+                    {sortedStocks.slice(0, 3).map((stock) => (
+                      <button
+                        key={stock.ticker}
+                        onClick={() => onAnalyze?.(stock.ticker)}
+                        className="flex w-full items-center justify-between rounded-[1.2rem] border border-black/6 bg-white/70 px-3 py-3 text-left transition-colors hover:bg-white"
+                      >
+                        <div>
+                          <div className="text-sm font-extrabold text-slate-900">
+                            {stock.ticker}
+                          </div>
+                          <div className="max-w-[140px] truncate text-xs text-slate-500">
+                            {stock.name}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-slate-700">
+                            {formatPrice(stock.price)}
+                          </div>
+                          <div
+                            className={`text-xs font-extrabold ${
+                              stock.change_1w >= 0 ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            {stock.change_1w >= 0 ? "+" : ""}
+                            {stock.change_1w.toFixed(1)}%
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -153,27 +153,27 @@ export default function AnalysisResult({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 relative">
+    <div className="relative flex flex-col gap-6 lg:flex-row">
       {/* Main Analysis Area */}
       <div
         className={`flex-1 transition-all duration-500 ease-in-out ${isPanelOpen ? "lg:mr-96" : ""}`}
       >
         <div className="space-y-6 pb-20">
           {/* Header Info */}
-          <div className="bg-linear-to-r from-[#0a0a0c] to-black rounded-2xl p-6 border border-white/5">
+          <div className="surface-panel rounded-[2rem] p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-linear-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-purple-500/20">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#101114] text-2xl font-bold text-white">
                   {data.ticker?.slice(0, 2)}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-white">
+                  <h2 className="text-3xl text-slate-900">
                     {data.company_name}
                   </h2>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-gray-400">{data.ticker}</span>
+                    <span className="text-slate-500">{data.ticker}</span>
                     <span className="text-gray-600">•</span>
-                    <span className="text-gray-400">
+                    <span className="text-slate-500">
                       {fundamentals?.sector}
                     </span>
                   </div>
@@ -182,7 +182,7 @@ export default function AnalysisResult({
               <div className="flex flex-col md:flex-row gap-3">
                 <button
                   onClick={exportToPDF}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 border border-white/10"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
                 >
                   <Download size={16} /> Broker-Dossier (PDF)
                 </button>
@@ -191,13 +191,13 @@ export default function AnalysisResult({
                     {!isPanelOpen && (
                       <button
                         onClick={() => setIsPanelOpen(true)}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-500/20 flex items-center gap-2"
+                        className="flex items-center gap-2 rounded-xl bg-[#101114] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#1a1c20]"
                       >
                         <FileText size={14} /> Summary einblenden
                       </button>
                     )}
                     <div className="text-right">
-                      <div className="text-3xl font-bold text-white">
+                      <div className="text-3xl font-bold text-slate-900">
                         {formatPrice(price_data?.current_price)}
                       </div>
                       <div
@@ -213,7 +213,7 @@ export default function AnalysisResult({
                   {portfolios.length > 0 && (
                     <button
                       onClick={() => setIsModalOpen(true)}
-                      className="w-full md:w-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#101114] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-[#1a1c20] md:w-auto"
                     >
                       <Plus size={16} /> Portfolio hinzufügen
                     </button>
@@ -311,14 +311,14 @@ export default function AnalysisResult({
           {/* Specialized Analysis (Potential & Rebound) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {data.potential && (
-              <div className="glass-card rounded-2xl p-6 border-t-4 border-purple-500/50">
+              <div className="glass-card rounded-2xl p-6 border-t-4 border-emerald-600/40">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                   <span className="text-purple-400">🚀</span> Growth Potential
                 </h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-400">Potential Score</span>
-                    <span className="font-bold text-purple-400">
+                    <span className="font-bold text-emerald-700">
                       {data.potential.score.toFixed(0)}/100
                     </span>
                   </div>
@@ -329,7 +329,7 @@ export default function AnalysisResult({
               </div>
             )}
             {data.rebound && data.rebound.score > 0 && (
-              <div className="glass-card rounded-2xl p-6 border-t-4 border-orange-500/50">
+              <div className="glass-card rounded-2xl p-6 border-t-4 border-amber-600/40">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                   <span className="text-orange-400">📈</span> Rebound Setup
                 </h3>
@@ -397,9 +397,9 @@ export default function AnalysisResult({
             ].map((item) => (
               <div
                 key={item.label}
-                className="bg-[#050507] rounded-xl p-4 border border-white/5"
+                className="surface-panel rounded-xl p-4"
               >
-                <div className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">
+                <div className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">
                   {item.label}
                 </div>
                 <div
@@ -413,8 +413,8 @@ export default function AnalysisResult({
 
           <NewsFeed news={news} />
 
-          <div className="bg-[#050507] rounded-xl p-6 border border-white/5">
-            <p className="text-gray-500 text-sm text-center">
+          <div className="surface-panel rounded-xl p-6">
+            <p className="text-slate-500 text-sm text-center">
               Die Analyse dient nur zu Informationszwecken und stellt keine
               Anlageberatung dar.
             </p>
@@ -424,21 +424,21 @@ export default function AnalysisResult({
 
       {/* Side Panel */}
       <div
-        className={`fixed top-20 right-0 h-[calc(100vh-80px)] bg-black/95 backdrop-blur-3xl border-l border-white/10 transition-all duration-500 ease-in-out z-40 overflow-hidden shadow-[-20px_0_50px_rgba(0,0,0,0.5)] ${isPanelOpen ? "w-full lg:w-96 opacity-100" : "w-0 opacity-0 pointer-events-none"}`}
+        className={`fixed top-20 right-0 h-[calc(100vh-80px)] border-l border-black/8 bg-[rgba(250,248,244,0.94)] backdrop-blur-3xl transition-all duration-500 ease-in-out z-40 overflow-hidden shadow-[-20px_0_50px_rgba(17,24,39,0.12)] ${isPanelOpen ? "w-full lg:w-96 opacity-100" : "w-0 opacity-0 pointer-events-none"}`}
       >
         <div className="p-8 h-full flex flex-col pt-10">
-          <div className="flex justify-between items-center mb-10 text-white">
+          <div className="mb-10 flex items-center justify-between text-slate-900">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-linear-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#101114] text-white shadow-xl">
                 <span className="text-3xl">🤖</span>
               </div>
               <div>
-                <h3 className="text-xl font-black text-white leading-none tracking-tight">
+                <h3 className="text-xl font-black text-slate-900 leading-none tracking-tight">
                   Broker Freund
                 </h3>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  <p className="text-[10px] text-purple-400 uppercase font-bold tracking-[0.2em]">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">
                     Live • AI Analysis
                   </p>
                 </div>
@@ -446,55 +446,55 @@ export default function AnalysisResult({
             </div>
             <button
               onClick={() => setIsPanelOpen(false)}
-              className="p-3 hover:bg-white/5 rounded-2xl transition-all border border-white/10"
+              className="rounded-2xl border border-black/8 p-3 transition-all hover:bg-black/[0.04]"
             >
-              <Plus size={24} className="rotate-45 text-gray-500" />
+              <Plus size={24} className="rotate-45 text-slate-500" />
             </button>
           </div>
 
           <div className="space-y-8 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
-            <div className="bg-white/2 rounded-3xl p-6 border border-white/5 text-center relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-transparent via-purple-500 to-transparent opacity-50"></div>
-              <div className="text-6xl font-black text-white mb-2 tracking-tighter">
+            <div className="relative overflow-hidden rounded-3xl border border-black/8 bg-white/80 p-6 text-center group">
+              <div className="absolute top-0 left-0 h-1 w-full bg-linear-to-r from-transparent via-emerald-600 to-transparent opacity-40"></div>
+              <div className="mb-2 text-6xl font-black tracking-tighter text-slate-900">
                 {total_score?.toFixed(0)}
               </div>
-              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4">
+              <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Pro Score
               </div>
               <div
-                className={`inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest ${total_score > 70 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}
+                className={`inline-block rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest ${total_score > 70 ? "bg-green-500/12 text-green-700" : "bg-red-500/12 text-red-700"}`}
               >
                 {recommendation?.action || recommendation}
               </div>
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"></span>
+              <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.25)]"></span>
                 Meine Einschätzung
               </h4>
-              <div className="bg-linear-to-br from-[#121214] to-[#0a0a0c] border border-purple-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 blur-3xl rounded-full"></div>
-                <div className="text-sm text-gray-200 leading-relaxed font-medium relative z-10">
+              <div className="relative overflow-hidden rounded-3xl border border-black/8 bg-white/80 p-6 shadow-xl">
+                <div className="absolute top-0 right-0 w-20 h-20 rounded-full bg-emerald-500/8 blur-3xl"></div>
+                <div className="relative z-10 text-sm font-medium leading-relaxed text-slate-700">
                   "{data.verdict}"
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              <div className="bg-white/2 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">
+              <div className="flex items-center justify-between rounded-2xl border border-black/8 bg-white/80 p-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Technisch
                 </span>
-                <span className="text-sm font-mono font-bold text-blue-400">
+                <span className="text-sm font-mono font-bold text-sky-700">
                   {total_score?.toFixed(0)}%
                 </span>
               </div>
-              <div className="bg-white/2 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">
+              <div className="flex items-center justify-between rounded-2xl border border-black/8 bg-white/80 p-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Fundament
                 </span>
-                <span className="text-sm font-mono font-bold text-indigo-400">
+                <span className="text-sm font-mono font-bold text-emerald-700">
                   {total_score?.toFixed(0)}%
                 </span>
               </div>
@@ -503,11 +503,11 @@ export default function AnalysisResult({
 
           <button
             onClick={exportToPDF}
-            className="mt-6 w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-all hover:border-purple-500/30 flex items-center justify-center gap-2 group"
+            className="group mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-black/8 bg-[#101114] py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[#1a1c20]"
           >
             <Download
               size={16}
-              className="text-gray-400 group-hover:text-purple-400 transition-colors"
+              className="text-white/60 transition-colors group-hover:text-white"
             />
             Dossier Exportieren
           </button>
@@ -520,9 +520,9 @@ export default function AnalysisResult({
 function NewsFeed({ news }: { news: any[] }) {
   if (!news || news.length === 0) return null;
   return (
-    <div className="bg-[#050507] rounded-xl p-6 border border-white/5">
-      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <FileText size={20} className="text-purple-400" /> Top News & Sentiment
+    <div className="surface-panel rounded-xl p-6">
+      <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900">
+        <FileText size={20} className="text-emerald-700" /> Top News & Sentiment
       </h3>
       <div className="space-y-4">
         {news.slice(0, 5).map((item, i) => (
@@ -531,17 +531,17 @@ function NewsFeed({ news }: { news: any[] }) {
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="block group p-4 rounded-xl border border-white/5 hover:border-purple-500/30 bg-white/2 hover:bg-white/5 transition-all cursor-pointer"
+            className="block group cursor-pointer rounded-xl border border-black/8 bg-white/70 p-4 transition-all hover:bg-white"
           >
-            <h4 className="text-sm font-bold text-gray-100 group-hover:text-purple-300 transition-colors line-clamp-2">
+            <h4 className="line-clamp-2 text-sm font-bold text-slate-900 transition-colors group-hover:text-emerald-700">
               {item.title}
             </h4>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] text-gray-500 font-bold uppercase">
+              <span className="text-[10px] text-slate-500 font-bold uppercase">
                 {item.source || item.publisher}
               </span>
               <span className="text-[10px] text-gray-700 font-bold">•</span>
-              <span className="text-[10px] text-gray-500">
+              <span className="text-[10px] text-slate-500">
                 {item.time || item.published}
               </span>
             </div>
@@ -564,8 +564,8 @@ function MetricCard({
   info?: string;
 }) {
   return (
-    <div className="bg-[#050507] rounded-xl p-5 border border-white/5 relative group hover:border-white/10 transition-all">
-      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2 flex items-center justify-between">
+    <div className="surface-panel relative group rounded-xl p-5 transition-all hover:border-black/12">
+      <div className="mb-2 flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-widest">
         {label}
         {info && (
           <span className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -573,12 +573,12 @@ function MetricCard({
           </span>
         )}
       </div>
-      <div className="text-xl font-mono font-bold text-white">
+      <div className="text-xl font-mono font-bold text-slate-900">
         {value ?? "N/A"}
       </div>
       {trend && (
         <div
-          className={`mt-2 text-[10px] font-bold ${trend === "up" ? "text-green-500" : "text-red-500"}`}
+          className={`mt-2 text-[10px] font-bold ${trend === "up" ? "text-emerald-700" : "text-red-700"}`}
         >
           {trend === "up" ? "↑ Optimiert" : "↓ Unter Bench"}
         </div>

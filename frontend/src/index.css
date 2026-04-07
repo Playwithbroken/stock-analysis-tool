@@ -1,85 +1,152 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap");
 @import "tailwindcss";
 
 :root {
-  --bg-deep: #030304; /* Slightly lighter deep black for warmth */
-  --bg-card: #0a0a0c;
-  --bg-input: #121214;
-  --accent-purple: #b05bf5; /* More vibrant purple */
-  --accent-neon: #8b3cce;
-  --accent-gold: #ffd700;
-  --glass-border: rgba(176, 91, 245, 0.15);
-  --glass-glow: rgba(139, 60, 206, 0.25);
-  --text-primary: #f0f0f5;
-  --text-secondary: #9ca3af;
+  --bg-canvas: #f5f3ee;
+  --bg-elevated: rgba(255, 255, 255, 0.72);
+  --bg-panel: rgba(255, 255, 255, 0.88);
+  --bg-strong: #101114;
+  --bg-soft: #ebe7df;
+  --line-subtle: rgba(16, 17, 20, 0.08);
+  --line-strong: rgba(16, 17, 20, 0.14);
+  --text-primary: #121316;
+  --text-secondary: #5d6169;
+  --text-tertiary: #7f838b;
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --accent-soft: rgba(15, 118, 110, 0.12);
+  --success: #15803d;
+  --danger: #b42318;
+  --warning: #b54708;
+  --shadow-soft: 0 20px 60px rgba(17, 24, 39, 0.08);
+  --shadow-card: 0 12px 28px rgba(17, 24, 39, 0.06);
 }
 
-.bg-blackout {
-  background-color: var(--bg-deep);
+* {
+  box-sizing: border-box;
 }
 
-.bg-card-dark {
-  background-color: var(--bg-card);
+html {
+  scroll-behavior: smooth;
 }
 
-/* Custom styles */
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  font-family: "Manrope", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-deep);
   color: var(--text-primary);
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(120, 50, 255, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 10%, rgba(99, 102, 241, 0.03) 0%, transparent 40%);
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(17, 24, 39, 0.05), transparent 22%),
+    linear-gradient(180deg, #faf8f4 0%, #f3f0e8 100%);
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+.font-serif {
+  font-family: "Instrument Serif", serif;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+#root {
   min-height: 100vh;
 }
 
-h1,h2,h3, .font-serif {
-  font-family: 'Playfair Display', serif;
-  letter-spacing: -0.01em;
-}
-
 .glass-card {
-  background: rgba(10, 10, 12, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.4);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: var(--bg-elevated);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--line-subtle);
+  box-shadow: var(--shadow-card);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
 }
 
 .glass-card:hover {
-  border-color: rgba(176, 91, 245, 0.3);
-  box-shadow: 0 12px 40px -8px rgba(139, 60, 206, 0.15);
-  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.09);
+  transform: translateY(-1px);
 }
 
-.classic-gradient {
-  background: linear-gradient(135deg, #1e1e1e 0%, #0a0a0b 100%);
+.surface-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line-subtle);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.surface-strong {
+  background: var(--bg-strong);
+  color: #f7f7f5;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.app-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.2)),
+    rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.score-bar,
+.analysis-card {
+  transition: all 220ms ease;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .shimmer {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.24),
     transparent
   );
   background-size: 200% 100%;
-  animation: shimmer 3s infinite linear;
+  animation: shimmer 2.8s linear infinite;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
-/* Modern Thin Scrollbar */
+.loading-pulse {
+  animation: pulse-glow 1.8s ease-in-out infinite;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -87,47 +154,27 @@ h1,h2,h3, .font-serif {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 99px;
-  border: 2px solid transparent; 
-  background-clip: content-box; 
+  background: rgba(17, 24, 39, 0.16);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
-  border: 1px solid transparent;
-  background-clip: content-box;
+  background: rgba(17, 24, 39, 0.24);
 }
 
-.score-bar {
-  transition-property: all;
-  transition-duration: 1000ms;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+.sentiment-positive,
+.rating-very_positive,
+.rating-positive {
+  color: var(--success);
 }
 
-.analysis-card {
-  transition-property: all;
-  transition-duration: 200ms;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+.sentiment-negative,
+.rating-very_negative,
+.rating-negative {
+  color: var(--danger);
 }
 
-.analysis-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1), 0 4px 6px -4px rgba(59, 130, 246, 0.1);
+.sentiment-neutral,
+.rating-neutral {
+  color: var(--warning);
 }
-
-/* Loading animation */
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
-.loading-pulse {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* Sentiment and Rating colors as standard classes */
-.sentiment-positive, .rating-very_positive { color: #34d399; }
-.sentiment-negative, .rating-very_negative { color: #f87171; }
-.sentiment-neutral, .rating-neutral { color: #fbbf24; }
-.rating-positive { color: #4ade80; }
-.rating-negative { color: #fb923c; }

@@ -153,7 +153,7 @@ export default function PortfolioView({
   return (
     <div className="space-y-6">
       {/* Portfolio Selector */}
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="surface-panel flex items-center gap-4 flex-wrap rounded-[2rem] p-4">
         <div className="flex items-center gap-2 flex-wrap">
           {portfolios.map((portfolio) => (
             <button
@@ -161,8 +161,8 @@ export default function PortfolioView({
               onClick={() => setSelectedPortfolio(portfolio.id)}
               className={`px-4 py-2 rounded-lg transition-all ${
                 selectedPortfolio === portfolio.id
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
-                  : "bg-[#0a0a0c] text-gray-400 hover:bg-[#121215]"
+                  ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
+                  : "bg-white text-slate-500 hover:bg-black/[0.03]"
               }`}
             >
               {portfolio.name}
@@ -174,7 +174,7 @@ export default function PortfolioView({
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-[#0a0a0c] hover:bg-[#121215] text-gray-400 rounded-lg transition-all flex items-center gap-2 border border-white/5"
+          className="px-4 py-2 bg-white hover:bg-black/[0.03] text-slate-600 rounded-lg transition-all flex items-center gap-2 border border-black/6"
         >
           <svg
             className="w-4 h-4"
@@ -197,19 +197,19 @@ export default function PortfolioView({
       {currentPortfolio ? (
         <div className="space-y-6">
           {/* Portfolio Header */}
-          <div className="flex items-center justify-between">
+          <div className="surface-panel flex items-center justify-between rounded-[2rem] p-6">
             <div>
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-3xl text-slate-900">
                 {currentPortfolio.name}
               </h2>
-              <p className="text-gray-400 text-sm">
+              <p className="text-slate-500 text-sm">
                 {currentPortfolio.holdings.length} holdings
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowAddHoldingModal(true)}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-[#101114] hover:bg-[#1a1c20] text-white rounded-lg transition-all flex items-center gap-2"
               >
                 <svg
                   className="w-4 h-4"
@@ -231,7 +231,7 @@ export default function PortfolioView({
                   currentPortfolio && analyzePortfolio(currentPortfolio)
                 }
                 disabled={loading || currentPortfolio.holdings.length === 0}
-                className="px-4 py-2 bg-[#0a0a0c] hover:bg-[#121215] text-white rounded-lg transition-all disabled:opacity-50 border border-white/5"
+                className="px-4 py-2 bg-white hover:bg-black/[0.03] text-slate-900 rounded-lg transition-all disabled:opacity-50 border border-black/6"
               >
                 {loading ? "Analyzing..." : "Refresh"}
               </button>
@@ -252,14 +252,14 @@ export default function PortfolioView({
           {/* Portfolio Summary */}
           {analysis && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-[#050507] rounded-xl p-4 border border-white/5 shadow-inner">
-                <div className="text-gray-400 text-sm mb-1">Total Value</div>
-                <div className="text-2xl font-bold text-white">
+              <div className="surface-panel rounded-[1.5rem] p-4">
+                <div className="text-slate-500 text-sm mb-1">Total Value</div>
+                <div className="text-2xl font-bold text-slate-900">
                   {formatPrice(analysis.summary.total_value)}
                 </div>
               </div>
-              <div className="bg-[#050507] rounded-xl p-4 border border-white/5 shadow-inner">
-                <div className="text-gray-400 text-sm mb-1">
+              <div className="surface-panel rounded-[1.5rem] p-4">
+                <div className="text-slate-500 text-sm mb-1">
                   Total Gain/Loss
                 </div>
                 <div
@@ -273,8 +273,8 @@ export default function PortfolioView({
                   {formatPercent(analysis.summary.gain_loss_pct)}
                 </div>
               </div>
-              <div className="bg-[#050507] rounded-xl p-4 border border-white/5 shadow-inner">
-                <div className="text-gray-400 text-sm mb-1">
+              <div className="surface-panel rounded-[1.5rem] p-4">
+                <div className="text-slate-500 text-sm mb-1">
                   Portfolio Score
                 </div>
                 <div
@@ -289,9 +289,9 @@ export default function PortfolioView({
                   {analysis.summary.avg_score.toFixed(1)}
                 </div>
               </div>
-              <div className="bg-[#050507] rounded-xl p-4 border border-white/5 shadow-inner">
-                <div className="text-gray-400 text-sm mb-1">Holdings</div>
-                <div className="text-2xl font-bold text-white">
+              <div className="surface-panel rounded-[1.5rem] p-4">
+                <div className="text-slate-500 text-sm mb-1">Holdings</div>
+                <div className="text-2xl font-bold text-slate-900">
                   {analysis.summary.num_holdings}
                 </div>
               </div>

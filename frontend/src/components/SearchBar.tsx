@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect, useRef } from "react";
+import { useState, FormEvent, useEffect, useRef, useMemo } from "react";
 import { Search, ArrowUpRight } from "lucide-react";
 import { fetchJsonWithRetry } from "../lib/api";
 
@@ -11,8 +11,16 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
   const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<any>(null);
+  const flatSuggestions = useMemo(
+    () =>
+      Object.entries(suggestions).flatMap(([category, values]) =>
+        (values || []).map((value) => ({ category, value })),
+      ),
+    [suggestions],
+  );
 
   useEffect(() => {
     fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
@@ -64,6 +72,10 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, suggestions]);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
@@ -81,6 +93,27 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
     setQuery(tickerToSearch);
     onSearch(tickerToSearch);
     setShowDropdown(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || flatSuggestions.length === 0) {
+      if (e.key === "Enter") {
+        handleSubmit(e as unknown as FormEvent);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((prev) => (prev + 1) % flatSuggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((prev) => (prev - 1 + flatSuggestions.length) % flatSuggestions.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      handleQuickSelect(flatSuggestions[activeIndex]?.value || query);
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+    }
   };
 
   return (
@@ -102,6 +135,7 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
+                onKeyDown={handleKeyDown}
                 placeholder="AAPL, NVDA, ASML, BTC-USD"
                 className="mt-1 w-full border-0 bg-transparent p-0 text-lg font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0"
                 disabled={loading}
@@ -175,18 +209,28 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
                   <h4 className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                     {category}
                   </h4>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-2">
                     {Array.isArray(tickers) &&
-                      tickers.map((ticker) => (
-                        <button
-                          key={ticker}
-                          type="button"
-                          onClick={() => handleQuickSelect(ticker)}
-                          className="rounded-full border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
-                        >
-                          {ticker}
-                        </button>
-                      ))}
+                      tickers.map((ticker) => {
+                        const flatIndex = flatSuggestions.findIndex(
+                          (item) => item.category === category && item.value === ticker,
+                        );
+                        const active = flatIndex === activeIndex;
+                        return (
+                          <button
+                            key={ticker}
+                            type="button"
+                            onClick={() => handleQuickSelect(ticker)}
+                            className={`rounded-2xl border px-3 py-2 text-left text-xs font-bold transition-colors ${
+                              active
+                                ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
+                                : "border-black/8 bg-white text-slate-700 hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                            }`}
+                          >
+                            {ticker}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               ))}

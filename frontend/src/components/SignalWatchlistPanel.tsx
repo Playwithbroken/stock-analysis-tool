@@ -83,12 +83,19 @@ const quickIdeas = [
   { kind: "politician", value: "Scott Peters" },
 ];
 
+function formatLine(parts: Array<string | number | null | undefined>) {
+  return parts
+    .filter((part) => part !== null && part !== undefined && `${part}`.trim() !== "")
+    .join(" | ");
+}
+
 export default function SignalWatchlistPanel({
   data,
   onAnalyze,
   onRefresh,
 }: SignalWatchlistPanelProps) {
   const [form, setForm] = useState(initialForm);
+  const [editingItem, setEditingItem] = useState<WatchItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string>("");
   const [notificationStatus, setNotificationStatus] = useState<any>(null);
@@ -122,14 +129,21 @@ export default function SignalWatchlistPanel({
     if (!form.value.trim()) return;
     setSubmitting(true);
     try {
+      if (editingItem) {
+        await fetch(
+          `/api/signals/watchlist/items?kind=${encodeURIComponent(editingItem.kind)}&value=${encodeURIComponent(editingItem.value)}`,
+          { method: "DELETE" },
+        );
+      }
       await fetch("/api/signals/watchlist/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       setForm(initialForm);
+      setEditingItem(null);
       await onRefresh();
-      setStatus("Watch item hinzugefuegt.");
+      setStatus(editingItem ? "Watch item aktualisiert." : "Watch item hinzugefuegt.");
     } finally {
       setSubmitting(false);
     }
@@ -144,9 +158,25 @@ export default function SignalWatchlistPanel({
       );
       await onRefresh();
       setStatus("Watch item entfernt.");
+      if (editingItem?.kind === kind && editingItem?.value === value) {
+        setEditingItem(null);
+        setForm(initialForm);
+      }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const startEditing = (item: WatchItem) => {
+    setEditingItem(item);
+    setForm({ kind: item.kind, value: item.value });
+    setStatus("");
+  };
+
+  const cancelEditing = () => {
+    setEditingItem(null);
+    setForm(initialForm);
+    setStatus("");
   };
 
   const triggerAlertCheck = async (
@@ -206,8 +236,17 @@ export default function SignalWatchlistPanel({
               disabled={submitting || !form.value.trim()}
               className="rounded-2xl bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
             >
-              Hinzufuegen
+              {editingItem ? "Speichern" : "Hinzufuegen"}
             </button>
+            {editingItem ? (
+              <button
+                onClick={cancelEditing}
+                disabled={submitting}
+                className="rounded-2xl border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700 disabled:opacity-50"
+              >
+                Abbrechen
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -297,21 +336,34 @@ export default function SignalWatchlistPanel({
                 {notificationStatus.schedule?.timezone}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                EU {notificationStatus.schedule?.europe_open} • US {notificationStatus.schedule?.us_open}
+                EU {notificationStatus.schedule?.europe_open} | US {notificationStatus.schedule?.us_open}
               </div>
             </div>
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap gap-3">
           {[...groupedItems.ticker, ...groupedItems.politician].map((item) => (
-            <button
+            <div
               key={`${item.kind}:${item.value}`}
-              onClick={() => removeItem(item.kind, item.value)}
-              className="rounded-full border border-black/8 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700"
+              className="flex items-center gap-2 rounded-full border border-black/8 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700"
             >
-              {item.kind === "ticker" ? "Ticker" : "House"}: {item.value} ×
-            </button>
+              <span>{item.kind === "ticker" ? "Ticker" : "House"}: {item.value}</span>
+              <button
+                type="button"
+                onClick={() => startEditing(item)}
+                className="rounded-full border border-black/8 bg-black/[0.02] px-2 py-1 text-[10px] font-extrabold text-slate-600 transition-colors hover:border-[var(--accent)]/25 hover:text-[var(--accent)]"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => removeItem(item.kind, item.value)}
+                className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-[10px] font-extrabold text-red-700 transition-colors hover:bg-red-500/15"
+              >
+                Remove
+              </button>
+            </div>
           ))}
         </div>
 
@@ -348,12 +400,26 @@ export default function SignalWatchlistPanel({
                     <div className="text-2xl font-black text-slate-900">{signal.ticker}</div>
                     <div className="text-sm text-slate-500">{signal.title}</div>
                   </div>
-                  <button
-                    onClick={() => onAnalyze(signal.ticker)}
-                    className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
-                  >
-                    Analyze
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => onAnalyze(signal.ticker)}
+                      className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                    >
+                      Analyze
+                    </button>
+                    <button
+                      onClick={() => startEditing({ kind: "ticker", value: signal.ticker })}
+                      className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => removeItem("ticker", signal.ticker)}
+                      className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
 
                 {signal.error ? (
@@ -383,14 +449,16 @@ export default function SignalWatchlistPanel({
                           </div>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {event.owner_title || "Insider"} • {event.trade_date} • filed {event.filed_date}
+                          {formatLine([event.owner_title || "Insider", event.trade_date, `filed ${event.filed_date}`])}
                         </div>
                         <div className="mt-2 text-sm text-slate-700">
-                          {event.shares?.toLocaleString("de-DE")} Aktien
-                          {event.value_label ? ` • ${event.value_label}` : ""}
-                          {typeof event.delay_days === "number"
-                            ? ` • delay ${event.delay_days}d`
-                            : ""}
+                          {formatLine([
+                            event.shares?.toLocaleString("de-DE")
+                              ? `${event.shares?.toLocaleString("de-DE")} Aktien`
+                              : null,
+                            event.value_label,
+                            typeof event.delay_days === "number" ? `delay ${event.delay_days}d` : null,
+                          ])}
                         </div>
                       </a>
                     ))}
@@ -414,10 +482,29 @@ export default function SignalWatchlistPanel({
           <div className="grid gap-4 xl:grid-cols-2">
             {politicianSignals.map((signal) => (
               <div key={signal.name} className="surface-panel rounded-[1.8rem] p-5">
-                <div className="text-2xl font-black text-slate-900">{signal.name}</div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Offizielle House PTR-Suche
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-2xl font-black text-slate-900">{signal.name}</div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      Offizielle House PTR-Suche
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => startEditing({ kind: "politician", value: signal.name })}
+                      className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => removeItem("politician", signal.name)}
+                      className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
+
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-3">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
@@ -444,6 +531,7 @@ export default function SignalWatchlistPanel({
                     </div>
                   </div>
                 </div>
+
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                   <span>{signal.summary?.report_count ?? signal.reports?.length ?? 0} reports</span>
                   <span>latest {signal.summary?.latest_trade_date || "N/A"}</span>
@@ -458,13 +546,15 @@ export default function SignalWatchlistPanel({
                       <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                         Congress playbook
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                        signal.playbook.setup?.includes("long")
-                          ? "bg-emerald-500/10 text-emerald-700"
-                          : signal.playbook.setup?.includes("short")
-                            ? "bg-red-500/10 text-red-700"
-                            : "bg-amber-500/10 text-amber-700"
-                      }`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                          signal.playbook.setup?.includes("long")
+                            ? "bg-emerald-500/10 text-emerald-700"
+                            : signal.playbook.setup?.includes("short")
+                              ? "bg-red-500/10 text-red-700"
+                              : "bg-amber-500/10 text-amber-700"
+                        }`}
+                      >
                         {signal.playbook.setup}
                       </span>
                       <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
@@ -503,7 +593,11 @@ export default function SignalWatchlistPanel({
                           </div>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {trade.trade_date} • filed {trade.notification_date} • delay {trade.delay_days}d
+                          {formatLine([
+                            trade.trade_date,
+                            `filed ${trade.notification_date}`,
+                            trade.delay_days != null ? `delay ${trade.delay_days}d` : null,
+                          ])}
                         </div>
                         <div className="mt-2 text-sm text-slate-700">{trade.amount_range}</div>
                         <div className="mt-2 flex items-center gap-3">

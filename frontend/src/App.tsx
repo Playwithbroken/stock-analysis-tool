@@ -19,6 +19,14 @@ interface AnalysisData {
   [key: string]: any;
 }
 
+interface TapeMover {
+  symbol: string;
+  price?: number | null;
+  change?: number | null;
+  label?: string;
+  side: "winner" | "loser";
+}
+
 interface AuthState {
   loading: boolean;
   authenticated: boolean;
@@ -241,6 +249,7 @@ function AppContent() {
     profile: null,
   });
   const [authStatus, setAuthStatus] = useState("");
+  const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
 
   const {
     portfolios,
@@ -263,6 +272,58 @@ function AppContent() {
     ].filter(Boolean) as string[]),
   );
   const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(headerSymbols, auth.authenticated);
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+
+    let cancelled = false;
+
+    const loadMovers = async () => {
+      try {
+        const [gainers, losers] = await Promise.all([
+          fetchJsonWithRetry<any[]>("/api/discovery/gainers", undefined, {
+            retries: 1,
+            retryDelayMs: 700,
+          }),
+          fetchJsonWithRetry<any[]>("/api/discovery/losers", undefined, {
+            retries: 1,
+            retryDelayMs: 700,
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        const winners = (gainers || []).slice(0, 6).map((item) => ({
+          symbol: item.ticker || item.symbol,
+          price: item.price ?? item.current_price ?? null,
+          change: item.change ?? item.change_percent ?? item.change_1d ?? null,
+          label: item.name || item.label,
+          side: "winner" as const,
+        }));
+
+        const losersTape = (losers || []).slice(0, 6).map((item) => ({
+          symbol: item.ticker || item.symbol,
+          price: item.price ?? item.current_price ?? null,
+          change: item.change ?? item.change_percent ?? item.change_1d ?? null,
+          label: item.name || item.label,
+          side: "loser" as const,
+        }));
+
+        setTapeMovers([...winners, ...losersTape].filter((item) => item.symbol));
+      } catch {
+        if (!cancelled) {
+          setTapeMovers([]);
+        }
+      }
+    };
+
+    loadMovers();
+    const interval = window.setInterval(loadMovers, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated]);
 
   const refreshAuth = async () => {
     const payload = await fetchJsonWithRetry<any>("/api/auth/status", undefined, {
@@ -460,15 +521,62 @@ function AppContent() {
                 </button>
               </div>
             </div>
-            <div className="mt-3 overflow-x-auto no-scrollbar">
-              <div className="flex min-w-max items-center gap-2">
-                <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
-                  {headerRealtimeConnected ? "Realtime feed" : "Snapshot feed"}
+            <div className="mt-3 space-y-2">
+              <div className="overflow-x-auto no-scrollbar">
+                <div className="flex min-w-max items-center gap-2">
+                  <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
+                    {headerRealtimeConnected ? "Realtime feed" : "Snapshot feed"}
+                  </div>
+                  {headerSymbols.map((symbol) => (
+                    <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
+                  ))}
                 </div>
-                {headerSymbols.map((symbol) => (
-                  <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
-                ))}
               </div>
+
+              {tapeMovers.length ? (
+                <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-3 py-2">
+                  <div className="ticker-marquee-track">
+                    {[...tapeMovers, ...tapeMovers].map((item, index) => {
+                      const isWinner = item.side === "winner";
+                      const ArrowIcon = isWinner ? ArrowUpRight : ArrowDownRight;
+                      return (
+                        <div
+                          key={`${item.side}-${item.symbol}-${index}`}
+                          className="ticker-marquee-chip"
+                        >
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                              isWinner
+                                ? "bg-emerald-500/10 text-emerald-700"
+                                : "bg-red-500/10 text-red-700"
+                            }`}
+                          >
+                            {isWinner ? "Winner" : "Loser"}
+                          </span>
+                          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                            {item.symbol}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-bold ${
+                              isWinner ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            <ArrowIcon size={12} />
+                            {typeof item.change === "number"
+                              ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}%`
+                              : "Move"}
+                          </span>
+                          {item.price != null ? (
+                            <span className="text-xs font-semibold text-slate-500">
+                              {item.price}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

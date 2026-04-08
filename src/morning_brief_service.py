@@ -152,6 +152,7 @@ class MorningBriefService:
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
             "opening_timeline": opening_timeline,
+            "action_board": self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"]),
             "watchlist_impact": [],
         }
         self._cache = brief
@@ -625,6 +626,107 @@ class MorningBriefService:
             "headline": headline,
             "summary_points": summary_points,
         }
+
+    def _build_action_board(
+        self,
+        news: List[Dict[str, Any]],
+        event_layer: List[Dict[str, Any]],
+        watchlist_snapshot: Dict[str, Any] | None,
+        macro_regime: str,
+    ) -> List[Dict[str, Any]]:
+        watched_tickers = {
+            str(item.get("value") or "").upper()
+            for item in (watchlist_snapshot or {}).get("items", [])
+            if item.get("kind") == "ticker"
+        }
+        board: List[Dict[str, Any]] = []
+        for item in news[:10]:
+            ticker = str(item.get("ticker") or "").upper() or None
+            event_type = item.get("event_type") or "macro"
+            impact = item.get("impact") or "low"
+            setup = "watch"
+            leverage = "avoid"
+            trigger = "Wait for confirmation after the open."
+            risk = "Do not force size without confirmation."
+            thesis = item.get("title") or "Market-moving headline."
+
+            if event_type in {"conflict", "policy"}:
+                setup = "hedge"
+                leverage = "avoid"
+                trigger = "Watch oil, gold and broad index reaction first."
+                risk = "Headline risk can reverse fast."
+            elif event_type in {"central_bank", "macro_data"}:
+                setup = "short" if macro_regime == "risk-off" else "long" if macro_regime == "risk-on" else "watch"
+                leverage = "conditional" if impact == "medium" else "avoid"
+                trigger = "Use only after rates, dollar and index futures confirm."
+                risk = "Macro reversals can invalidate the move quickly."
+            elif event_type == "energy":
+                setup = "long" if macro_regime != "risk-off" else "hedge"
+                leverage = "conditional"
+                trigger = "Energy strength should hold after the Europe or US open."
+                risk = "Oil spikes can fade on policy headlines."
+            elif event_type == "earnings":
+                setup = "long" if "upgrade" in (item.get("title") or "").lower() else "short" if "downgrade" in (item.get("title") or "").lower() else "watch"
+                leverage = "conditional" if impact == "medium" else "avoid"
+                trigger = "Wait for price to hold above or below the first impulse."
+                risk = "Single-name moves fail often without volume confirmation."
+
+            if ticker and ticker in watched_tickers:
+                trigger = f"Watch {ticker} first. It is already on your radar."
+
+            board.append(
+                {
+                    "title": thesis,
+                    "region": item.get("region") or "usa",
+                    "ticker": ticker,
+                    "event_type": event_type,
+                    "impact": impact,
+                    "setup": setup,
+                    "leverage": leverage,
+                    "thesis": self._action_thesis(event_type, macro_regime, ticker),
+                    "trigger": trigger,
+                    "risk": risk,
+                    "source": item.get("publisher"),
+                    "link": item.get("link"),
+                }
+            )
+
+        if not board and event_layer:
+            for item in event_layer[:4]:
+                board.append(
+                    {
+                        "title": item.get("title"),
+                        "region": item.get("region") or "global",
+                        "ticker": item.get("ticker"),
+                        "event_type": item.get("event_type") or "macro",
+                        "impact": item.get("impact") or "medium",
+                        "setup": "watch",
+                        "leverage": "avoid",
+                        "thesis": self._action_thesis(item.get("event_type") or "macro", macro_regime, item.get("ticker")),
+                        "trigger": "Wait for market structure to confirm direction.",
+                        "risk": "Do not use leverage on headline noise alone.",
+                        "source": item.get("publisher"),
+                        "link": item.get("link"),
+                    }
+                )
+        return board[:8]
+
+    def _action_thesis(self, event_type: str, macro_regime: str, ticker: str | None) -> str:
+        if event_type == "conflict":
+            return "Defensive assets and hedges matter more than aggressive upside chasing."
+        if event_type == "central_bank":
+            return "Rates and dollar direction should decide whether growth can extend or needs to fade."
+        if event_type == "policy":
+            return "Policy headlines can reprice sectors quickly. Prefer broad-theme trades over blind copy trades."
+        if event_type == "energy":
+            return "Energy-sensitive names and inflation expectations become more relevant."
+        if event_type == "earnings" and ticker:
+            return f"{ticker} needs follow-through, not just the headline."
+        if macro_regime == "risk-off":
+            return "Protect first. Shorts or hedges matter more than chasing momentum."
+        if macro_regime == "risk-on":
+            return "Constructive tape, but only names with confirmation deserve leverage."
+        return "Mixed regime. Keep conviction selective and size smaller."
 
     def _merge_watchlist_impact(
         self,

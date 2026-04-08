@@ -53,6 +53,13 @@ interface PoliticianSignal {
     latest_trade_date?: string | null;
     avg_delay_days?: number | null;
   };
+  playbook?: {
+    setup?: string;
+    leverage?: string;
+    thesis?: string;
+    trigger?: string;
+    copy_text?: string;
+  } | null;
 }
 
 interface WatchlistData {
@@ -444,6 +451,33 @@ export default function SignalWatchlistPanel({
                     official house ptr
                   </span>
                 </div>
+
+                {signal.playbook ? (
+                  <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-white/75 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                        Congress playbook
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                        signal.playbook.setup?.includes("long")
+                          ? "bg-emerald-500/10 text-emerald-700"
+                          : signal.playbook.setup?.includes("short")
+                            ? "bg-red-500/10 text-red-700"
+                            : "bg-amber-500/10 text-amber-700"
+                      }`}>
+                        {signal.playbook.setup}
+                      </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                        leverage {signal.playbook.leverage}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-sm font-bold text-slate-900">{signal.playbook.thesis}</div>
+                    <div className="mt-2 text-sm text-slate-600">{signal.playbook.trigger}</div>
+                    <div className="mt-3 rounded-xl border border-black/8 bg-white p-3 text-xs text-slate-600">
+                      {signal.playbook.copy_text}
+                    </div>
+                  </div>
+                ) : null}
 
                 {signal.error ? (
                   <div className="mt-4 text-sm text-red-700">{signal.error}</div>

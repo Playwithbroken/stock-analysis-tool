@@ -340,6 +340,7 @@ class PublicSignalService:
                             "latest_trade_date": latest_trade_date,
                             "avg_delay_days": avg_delay_days,
                         },
+                        "playbook": self._build_politician_playbook(name, trades[:8], avg_delay_days),
                     }
                 )
             except Exception as exc:
@@ -359,9 +360,52 @@ class PublicSignalService:
                             "latest_trade_date": None,
                             "avg_delay_days": None,
                         },
+                        "playbook": None,
                     }
                 )
         return results
+
+    def _build_politician_playbook(
+        self,
+        name: str,
+        trades: List[Dict[str, Any]],
+        avg_delay_days: float | None,
+    ) -> Dict[str, Any] | None:
+        if not trades:
+            return None
+        latest = trades[0]
+        buy_count = sum(1 for trade in trades if trade.get("action") == "buy")
+        sell_count = sum(1 for trade in trades if trade.get("action") == "sell")
+        ticker = latest.get("ticker")
+        delay = latest.get("delay_days")
+        setup = "watch"
+        leverage = "avoid"
+        if latest.get("action") == "buy" and (delay is not None and delay <= 20):
+            setup = "copy-long"
+            leverage = "conditional"
+        elif latest.get("action") == "sell" and (delay is not None and delay <= 20):
+            setup = "watch-short"
+            leverage = "avoid"
+        thesis = (
+            f"{name} has more buys than sells in the visible PTR window."
+            if buy_count >= sell_count
+            else f"{name} has more sells than buys in the visible PTR window."
+        )
+        if avg_delay_days is not None and avg_delay_days > 35:
+            thesis += " Delay is high, so this should not be treated as a fast copy trade."
+            leverage = "avoid"
+        trigger = (
+            f"Use {ticker} only if price action still confirms the direction after the filing delay."
+            if ticker
+            else "Use this as a theme clue, not a blind copy signal."
+        )
+        return {
+            "setup": setup,
+            "leverage": leverage,
+            "thesis": thesis,
+            "trigger": trigger,
+            "copy_text": f"{name}: {latest.get('action')} {ticker or latest.get('asset')} on {latest.get('trade_date')} with {delay or 'n/a'}d delay.",
+        }
 
     def _search_house_ptr_reports(self, name: str) -> List[Dict[str, Any]]:
         session = requests.Session()

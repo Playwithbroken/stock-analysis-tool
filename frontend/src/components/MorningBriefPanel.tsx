@@ -180,6 +180,61 @@ export default function MorningBriefPanel({
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Action Board
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              world watch
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {(brief.action_board || []).slice(0, 6).map((item: any, index: number) => (
+              <div
+                key={`${item.title}-${index}`}
+                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    {item.region} · {item.event_type} · {item.impact}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                      item.setup === "long"
+                        ? "bg-emerald-500/10 text-emerald-700"
+                        : item.setup === "short" || item.setup === "watch-short"
+                          ? "bg-red-500/10 text-red-700"
+                          : item.setup === "hedge"
+                            ? "bg-sky-500/10 text-sky-700"
+                            : "bg-amber-500/10 text-amber-700"
+                    }`}>
+                      {item.setup}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      leverage {item.leverage}
+                    </span>
+                    {item.ticker && (
+                      <button
+                        onClick={() => onAnalyze(item.ticker)}
+                        className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"
+                      >
+                        {item.ticker}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
+                <div className="mt-2 text-sm text-slate-600">{item.thesis}</div>
+                <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                  <div>Trigger: {item.trigger}</div>
+                  <div>Risk: {item.risk}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Top News
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">

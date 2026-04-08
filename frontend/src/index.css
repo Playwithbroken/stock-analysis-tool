@@ -143,6 +143,30 @@ h3,
   -webkit-backdrop-filter: blur(16px);
 }
 
+.app-shell-header {
+  position: relative;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.62)),
+    rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 24px 54px rgba(17, 24, 39, 0.08),
+    0 6px 20px rgba(255, 255, 255, 0.4) inset;
+}
+
+.app-shell-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 18px -12px 18px;
+  height: 20px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(17, 24, 39, 0.08), transparent 72%);
+  filter: blur(12px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .score-bar,
 .analysis-card {
   transition: all 220ms ease;

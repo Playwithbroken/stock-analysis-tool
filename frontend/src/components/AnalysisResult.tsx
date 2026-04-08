@@ -164,6 +164,19 @@ export default function AnalysisResult({
         <div className="space-y-6 pb-20">
           {/* Header Info */}
           <div className="surface-panel rounded-[2rem] p-6">
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                Analysis Desk
+              </span>
+              <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "border border-black/8 bg-white/70 text-slate-500"}`}>
+                {realtimeConnected ? "Live quote" : "Snapshot"}
+              </span>
+              {fundamentals?.sector ? (
+                <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                  {fundamentals.sector}
+                </span>
+              ) : null}
+            </div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--accent)] text-2xl font-bold text-white">
@@ -221,7 +234,7 @@ export default function AnalysisResult({
                       onClick={() => setIsModalOpen(true)}
                       className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)] md:w-auto"
                     >
-                      <Plus size={16} /> Portfolio hinzufügen
+                      <Plus size={16} /> Portfolio hinzufuegen
                     </button>
                   )}
                 </div>

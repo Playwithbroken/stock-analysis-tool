@@ -4,6 +4,7 @@ import LoadingState from "./components/LoadingState";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
+import { fetchJsonWithRetry } from "./lib/api";
 
 const AnalysisResult = lazy(() => import("./components/AnalysisResult"));
 const PortfolioView = lazy(() => import("./components/PortfolioView"));
@@ -58,7 +59,9 @@ function LoginScreen({
   return (
     <div className="min-h-screen bg-[var(--bg-base)] px-4 py-10 text-[var(--text-primary)] sm:px-6">
       <div className="layout-shell max-w-[1400px]">
-        <div className="surface-panel overflow-hidden rounded-[2.8rem] p-6 sm:p-8 lg:p-10">
+        <div className="surface-panel relative overflow-hidden rounded-[2.8rem] p-6 sm:p-8 lg:p-10">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_58%)]" />
+          <div className="pointer-events-none absolute bottom-0 right-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(16,17,20,0.08),transparent_68%)]" />
           <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#101114] text-white">
@@ -74,7 +77,7 @@ function LoginScreen({
                   Market Intelligence, locked to your local workspace.
                 </h1>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-                  Die App ist jetzt auf Single-User-Betrieb gehärtet: lokales Passwort, geschützte API,
+                  Die App ist jetzt auf Single-User-Betrieb gehaertet: lokales Passwort, geschuetzte API,
                   localhost-only und keine offenen Alert-Endpunkte mehr.
                 </p>
               </div>
@@ -86,6 +89,23 @@ function LoginScreen({
                 ].map((item) => (
                   <div key={item} className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-sm font-semibold text-slate-700">
                     {item}
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[
+                  ["Signal-first", "Morning Brief, Watchlist und Realtime direkt im Startpfad."],
+                  ["Private", "Nur dein Workspace, keine offene Multi-User-Flaeche."],
+                  ["Execution-ready", "Score, Paper Trading und Session-Listen in einem Flow."],
+                ].map(([title, body]) => (
+                  <div
+                    key={title}
+                    className="rounded-[1.7rem] border border-black/8 bg-[rgba(255,255,255,0.76)] p-5"
+                  >
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                      {title}
+                    </div>
+                    <div className="mt-3 text-sm leading-6 text-slate-700">{body}</div>
                   </div>
                 ))}
               </div>
@@ -121,6 +141,20 @@ function LoginScreen({
                 >
                   Unlock
                 </button>
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <div className="rounded-[1.2rem] border border-white/10 bg-white/8 p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/45">
+                    Access Model
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-white">Single workspace code</div>
+                </div>
+                <div className="rounded-[1.2rem] border border-white/10 bg-white/8 p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/45">
+                    Runtime
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-white">Web and phone ready</div>
+                </div>
               </div>
               {status ? <div className="mt-4 text-sm text-white/75">{status}</div> : null}
             </div>
@@ -173,8 +207,10 @@ function AppContent() {
   const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(headerSymbols, auth.authenticated);
 
   const refreshAuth = async () => {
-    const response = await fetch("/api/auth/status");
-    const payload = await response.json();
+    const payload = await fetchJsonWithRetry<any>("/api/auth/status", undefined, {
+      retries: 1,
+      retryDelayMs: 700,
+    });
     setAuth({
       loading: false,
       authenticated: Boolean(payload.authenticated),
@@ -216,15 +252,15 @@ function AppContent() {
 
   const handleLogin = async (password: string) => {
     setAuthStatus("");
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.detail || "Login failed.");
-    }
+    const payload = await fetchJsonWithRetry<any>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      },
+      { retries: 1, retryDelayMs: 700 },
+    );
     setAuth({
       loading: false,
       authenticated: true,
@@ -440,28 +476,45 @@ function AppContent() {
             )}
 
             {!analysis && !loading && !error && (
-              <section className="grid gap-4 md:grid-cols-3">
-                {[
-                  {
-                    title: "Public Signals",
-                    body: "Berkshire, Congress und weitere oeffentliche Filings mit sichtbarem Delay statt Black-Box-Hype.",
-                  },
-                  {
-                    title: "Decision Clarity",
-                    body: "Ruhigere Layouts, klarere Scores und bessere Priorisierung von Risiko, Bewertung und Momentum.",
-                  },
-                  {
-                    title: "Private Access",
-                    body: "Single-User-Hardening mit Login, lokaler Session und gesperrten API-Triggern fuer deinen Workspace.",
-                  },
-                ].map((card) => (
-                  <div key={card.title} className="surface-panel rounded-[2rem] p-6">
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      {card.title}
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">{card.body}</p>
+              <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                <div className="surface-panel rounded-[2rem] p-6">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Ready Desk
                   </div>
-                ))}
+                  <h3 className="mt-3 text-2xl text-slate-900">
+                    Search first, then move straight into analysis, signals and execution context.
+                  </h3>
+                  <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ["Public Signals", "Berkshire, Congress und weitere oeffentliche Filings mit sichtbarem Delay."],
+                      ["Decision Clarity", "Ruhigere Scores und bessere Priorisierung von Risiko, Bewertung und Momentum."],
+                      ["Private Access", "Single-User-Hardening mit Login, lokaler Session und gesperrten Triggern."],
+                    ].map(([title, body]) => (
+                      <div key={title} className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                          {title}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-[2rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.88))] p-6">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Workflow
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {[
+                      "1. Search a ticker, ETF or crypto pair.",
+                      "2. Read the live quote, score context and risk profile.",
+                      "3. Move into paper trading or signals only if the setup holds.",
+                    ].map((item) => (
+                      <div key={item} className="rounded-[1.3rem] border border-black/8 bg-white/78 p-4 text-sm text-slate-700">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </section>
             )}
           </>

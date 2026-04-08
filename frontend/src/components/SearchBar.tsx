@@ -152,6 +152,18 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
           ))}
         </div>
 
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-[11px] text-slate-500">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-black/8 bg-white/65 px-3 py-1 font-bold uppercase tracking-[0.14em] text-slate-600">
+              Fast lane
+            </span>
+            <span>Use quick picks or press enter for a full scan.</span>
+          </div>
+          <div className="font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
+            {loading ? "Deep scan running" : "Ready"}
+          </div>
+        </div>
+
         {showDropdown && Object.keys(suggestions).length > 0 && (
           <div
             ref={dropdownRef}

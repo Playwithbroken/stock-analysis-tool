@@ -55,22 +55,14 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [watchRes, historyRes, briefRes, scoreRes, sessionRes, paperRes, intelRes] = await Promise.all([
-        fetch("/api/signals/watchlist").then((r) => r.json()),
-        fetch("/api/signals/history?limit=8").then((r) => r.json()),
-        fetch("/api/market/morning-brief").then((r) => r.json()),
-        fetch("/api/signals/scoreboard").then((r) => r.json()),
-        fetch("/api/market/session-lists").then((r) => r.json()),
-        fetch("/api/trading/paper-dashboard").then((r) => r.json()),
-        fetch("/api/trading/intelligence").then((r) => r.json()),
-      ]);
-      setWatchlist(watchRes);
-      setHistory(historyRes);
-      setBrief(briefRes);
-      setScoreboard(scoreRes);
-      setSessionLists(sessionRes);
-      setPaperDashboard(paperRes);
-      setTradingIntelligence(intelRes);
+      const payload = await fetch("/api/radar/bootstrap?limit=8").then((r) => r.json());
+      setWatchlist(payload.watchlist || null);
+      setHistory(payload.history || []);
+      setBrief(payload.brief || null);
+      setScoreboard(payload.scoreboard || null);
+      setSessionLists(payload.session_lists || null);
+      setPaperDashboard(payload.paper_dashboard || null);
+      setTradingIntelligence(payload.trading_intelligence || null);
     } finally {
       setLoading(false);
     }

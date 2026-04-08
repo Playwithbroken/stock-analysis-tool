@@ -1172,6 +1172,31 @@ async def get_signal_history(limit: int = 100):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
+    items = get_portfolio_manager().get_signal_watch_items()
+    snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+    settings = get_portfolio_manager().get_signal_score_settings()
+    scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+
+    return {
+        "watchlist": convert_numpy_types(snapshot),
+        "history": convert_numpy_types(get_portfolio_manager().get_sent_signal_events(limit=limit)),
+        "brief": convert_numpy_types(get_morning_brief_service().get_brief(snapshot)),
+        "scoreboard": convert_numpy_types(scoreboard),
+        "session_lists": convert_numpy_types(await get_session_list_service().build_session_lists(snapshot)),
+        "paper_dashboard": convert_numpy_types(get_paper_trading_service().build_dashboard(scoreboard, settings)),
+        "trading_intelligence": convert_numpy_types(get_trading_intelligence_service().build_snapshot(snapshot)),
+    }
+
+
+@app.get("/api/radar/bootstrap")
+async def get_radar_bootstrap(limit: int = 8):
+    try:
+        return await build_radar_bootstrap(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/market/morning-brief")
 async def get_morning_brief():
     try:

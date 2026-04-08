@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 const AnalysisResult = lazy(() => import("./components/AnalysisResult"));
 const PortfolioView = lazy(() => import("./components/PortfolioView"));
@@ -32,6 +33,63 @@ const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
   { id: "discovery", label: "Markets", short: "Markets" },
   { id: "portfolio", label: "Portfolio", short: "Portfolio" },
 ];
+
+function HeaderTickerChip({
+  symbol,
+  quote,
+}: {
+  symbol: string;
+  quote: any;
+}) {
+  const previousPriceRef = useRef<number | null>(null);
+  const [priceDirection, setPriceDirection] = useState<"up" | "down" | null>(null);
+
+  useEffect(() => {
+    const nextPrice = typeof quote?.price === "number" ? quote.price : null;
+    const prevPrice = previousPriceRef.current;
+    if (nextPrice == null) return;
+    if (prevPrice != null && prevPrice !== nextPrice) {
+      setPriceDirection(nextPrice > prevPrice ? "up" : "down");
+      const timer = window.setTimeout(() => setPriceDirection(null), 950);
+      previousPriceRef.current = nextPrice;
+      return () => window.clearTimeout(timer);
+    }
+    previousPriceRef.current = nextPrice;
+  }, [quote?.price]);
+
+  const move = quote?.change_1w;
+  const moveTone = move != null && move < 0 ? "text-red-700" : "text-emerald-700";
+  const priceTone =
+    priceDirection === "up"
+      ? "ticker-chip-flash-up"
+      : priceDirection === "down"
+        ? "ticker-chip-flash-down"
+        : "";
+  const ArrowIcon = priceDirection === "down" ? ArrowDownRight : ArrowUpRight;
+
+  return (
+    <div
+      className={`rounded-full border border-black/8 bg-white/78 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors ${priceTone}`}
+    >
+      <span className="mr-2 uppercase text-slate-500">{symbol}</span>
+      <span className="mr-2 inline-flex items-center gap-1 text-slate-900">
+        {priceDirection ? (
+          <ArrowIcon
+            size={12}
+            className={priceDirection === "up" ? "text-emerald-700" : "text-red-700"}
+          />
+        ) : null}
+        {quote?.price ?? "..."}
+      </span>
+      {move != null ? (
+        <span className={moveTone}>
+          {move >= 0 ? "+" : ""}
+          {move}%
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function LoginScreen({
   configured,
@@ -407,24 +465,9 @@ function AppContent() {
                 <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
                   {headerRealtimeConnected ? "Realtime feed" : "Snapshot feed"}
                 </div>
-                {headerSymbols.map((symbol) => {
-                  const quote = headerQuotes[symbol];
-                  const move = quote?.change_1w;
-                  return (
-                    <div
-                      key={symbol}
-                      className="rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-xs font-bold text-slate-700"
-                    >
-                      <span className="mr-2 uppercase text-slate-500">{symbol}</span>
-                      <span className="mr-2 text-slate-900">{quote?.price ?? "..."}</span>
-                      {move != null ? (
-                        <span className={move >= 0 ? "text-emerald-700" : "text-red-700"}>
-                          {move >= 0 ? "+" : ""}{move}%
-                        </span>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                {headerSymbols.map((symbol) => (
+                  <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
+                ))}
               </div>
             </div>
           </div>

@@ -4,6 +4,7 @@ import PaperTradingPanel from "./PaperTradingPanel";
 import SignalScoreboardPanel from "./SignalScoreboardPanel";
 import SessionListsPanel from "./SessionListsPanel";
 import TradingIntelligencePanel from "./TradingIntelligencePanel";
+import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
 interface MyRadarProps {
   onAnalyze: (ticker: string) => void;
@@ -33,6 +34,24 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const [tradingIntelligence, setTradingIntelligence] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const realtimeSymbols = useMemo(() => {
+    const symbols = new Set<string>();
+    for (const regionKey of ["asia", "europe", "usa"]) {
+      for (const asset of brief?.regions?.[regionKey]?.assets || []) {
+        if (asset?.ticker) symbols.add(String(asset.ticker).toUpperCase());
+      }
+    }
+    for (const asset of brief?.macro_assets || []) {
+      if (asset?.ticker) symbols.add(String(asset.ticker).toUpperCase());
+    }
+    for (const item of tradingIntelligence?.indicators || []) {
+      if (item?.ticker) symbols.add(String(item.ticker).toUpperCase());
+    }
+    return Array.from(symbols);
+  }, [brief, tradingIntelligence]);
+
+  const { quotes: realtimeQuotes, connected: realtimeConnected } = useRealtimeFeed(realtimeSymbols, !loading);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -59,6 +78,13 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      fetchData().catch(() => undefined);
+    }, 60000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const summary = useMemo(() => {
@@ -88,7 +114,12 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
 
   return (
     <div className="space-y-6">
-      <MorningBriefPanel brief={brief} onAnalyze={onAnalyze} />
+      <MorningBriefPanel
+        brief={brief}
+        onAnalyze={onAnalyze}
+        realtimeQuotes={realtimeQuotes}
+        realtimeConnected={realtimeConnected}
+      />
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="surface-panel rounded-[2.5rem] p-6 sm:p-8">
@@ -98,6 +129,9 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
             </span>
             <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               Watchlist first
+            </span>
+            <span className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "border border-black/8 bg-white/70 text-slate-500"}`}>
+              {realtimeConnected ? "Realtime on" : "Realtime standby"}
             </span>
           </div>
 
@@ -180,9 +214,19 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
       </section>
 
       <SignalScoreboardPanel data={scoreboard} onAnalyze={onAnalyze} onRefresh={fetchData} />
-      <TradingIntelligencePanel data={tradingIntelligence} onAnalyze={onAnalyze} />
+      <TradingIntelligencePanel
+        data={tradingIntelligence}
+        onAnalyze={onAnalyze}
+        realtimeQuotes={realtimeQuotes}
+        realtimeConnected={realtimeConnected}
+      />
       <PaperTradingPanel data={paperDashboard} onAnalyze={onAnalyze} onRefresh={fetchData} />
-      <SessionListsPanel data={sessionLists} onAnalyze={onAnalyze} />
+      <SessionListsPanel
+        data={sessionLists}
+        onAnalyze={onAnalyze}
+        realtimeQuotes={realtimeQuotes}
+        realtimeConnected={realtimeConnected}
+      />
     </div>
   );
 }

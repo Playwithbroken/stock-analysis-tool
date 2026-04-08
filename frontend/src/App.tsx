@@ -3,6 +3,7 @@ import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
+import useRealtimeFeed from "./hooks/useRealtimeFeed";
 
 const AnalysisResult = lazy(() => import("./components/AnalysisResult"));
 const PortfolioView = lazy(() => import("./components/PortfolioView"));
@@ -56,7 +57,7 @@ function LoginScreen({
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)] px-4 py-10 text-[var(--text-primary)] sm:px-6">
-      <div className="mx-auto max-w-5xl">
+      <div className="layout-shell max-w-[1400px]">
         <div className="surface-panel overflow-hidden rounded-[2.8rem] p-6 sm:p-8 lg:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-6">
@@ -158,6 +159,18 @@ function AppContent() {
   } = usePortfolios(auth.authenticated);
 
   const { currency, setCurrency } = useCurrency();
+  const headerSymbols = Array.from(
+    new Set([
+      analysis?.ticker,
+      "SPY",
+      "QQQ",
+      "AAPL",
+      "NVDA",
+      "BTC-USD",
+      "GLD",
+    ].filter(Boolean) as string[]),
+  );
+  const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(headerSymbols, auth.authenticated);
 
   const refreshAuth = async () => {
     const response = await fetch("/api/auth/status");
@@ -282,7 +295,7 @@ function AppContent() {
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 border-b border-black/6 bg-[rgba(245,243,238,0.82)] backdrop-blur-xl">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
+        <div className="layout-shell px-4 py-4 sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell rounded-[2rem] px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
@@ -353,11 +366,40 @@ function AppContent() {
                 </button>
               </div>
             </div>
+            <div className="mt-3 overflow-x-auto no-scrollbar">
+              <div className="flex min-w-max items-center gap-2">
+                <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
+                  {headerRealtimeConnected ? "Realtime feed" : "Snapshot feed"}
+                </div>
+                {headerSymbols.map((symbol) => {
+                  const quote = headerQuotes[symbol];
+                  const move = quote?.change_1w;
+                  return (
+                    <div
+                      key={symbol}
+                      className="rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-xs font-bold text-slate-700"
+                    >
+                      <span className="mr-2 uppercase text-slate-500">{symbol}</span>
+                      <span className="mr-2 text-slate-900">{quote?.price ?? "..."}</span>
+                      {move != null ? (
+                        <span className={move >= 0 ? "text-emerald-700" : "text-red-700"}>
+                          {move >= 0 ? "+" : ""}{move}%
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className={`mx-auto max-w-7xl px-4 py-6 transition-all duration-300 sm:px-6 ${isChatOpen ? "mr-[480px]" : ""}`}>
+      <main
+        className={`content-shell px-4 py-6 transition-all duration-300 sm:px-6 xl:px-8 2xl:px-10 ${
+          isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
+        }`}
+      >
         {activeTab === "analyze" ? (
           <>
             {showHero && (
@@ -461,7 +503,7 @@ function AppContent() {
       </nav>
 
       <footer className="border-t border-black/6 bg-white/50">
-        <div className="mx-auto max-w-7xl px-4 py-6 text-center text-sm text-slate-500 sm:px-6">
+        <div className="layout-shell px-4 py-6 text-center text-sm text-slate-500 sm:px-6 xl:px-8 2xl:px-10">
           Local single-user workspace. Data provided for informational purposes only.
         </div>
       </footer>

@@ -10,6 +10,8 @@ import {
 } from "recharts";
 import { Calendar, Clock, TrendingUp } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
+import MeasuredChartFrame from "./MeasuredChartFrame";
+import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
 interface HistoryItem {
   time: string;
@@ -47,6 +49,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     rsi: [],
     macd: [],
   });
+  const { quotes, connected, lastUpdated } = useRealtimeFeed([ticker], true);
+  const realtimeQuote = quotes[ticker.toUpperCase()];
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -82,6 +86,20 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     fetchHistory();
   }, [ticker, period, onStatsUpdate]);
 
+  useEffect(() => {
+    if (!realtimeQuote?.price || data.length === 0) return;
+    setData((prev) => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+      const last = next[next.length - 1];
+      next[next.length - 1] = {
+        ...last,
+        price: realtimeQuote.price,
+      };
+      return next;
+    });
+  }, [realtimeQuote?.price]);
+
   const isPositive = stats.changePct >= 0;
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -111,6 +129,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               className={isPositive ? "text-emerald-600" : "text-red-600"}
             />
             <span className="text-sm font-semibold">Price History ({period.label})</span>
+            <span
+              className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                connected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"
+              }`}
+            >
+              {connected ? "Live" : "Polling"}
+            </span>
           </div>
           <div className="flex items-baseline gap-3">
             <div
@@ -168,13 +193,21 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         </div>
       </div>
 
-      <div className="h-[300px] w-full">
+      <MeasuredChartFrame
+        className="h-[300px] w-full"
+        minHeight={300}
+        fallback={
+          <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
+            <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
+          </div>
+        }
+      >
         {loading ? (
           <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
             <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
           </div>
         ) : data.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
@@ -248,14 +281,16 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             <p className="text-sm">Keine historischen Daten fuer diesen Zeitraum.</p>
           </div>
         )}
-      </div>
+      </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <div className="flex items-center gap-1">
           <Clock size={10} />
           {period.id === "1d" ? "Intraday Minute Data" : "Historical Market Data"}
         </div>
-        <div>YFinance-Engine v2.0</div>
+        <div>
+          {connected && lastUpdated ? `Live ${new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "YFinance-Engine v2.0"}
+        </div>
       </div>
     </div>
   );

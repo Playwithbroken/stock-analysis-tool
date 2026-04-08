@@ -259,6 +259,33 @@ class DataFetcher:
     def get_insider_transactions(self) -> list:
         return []
 
+    def get_dividends(self) -> Dict[str, Any]:
+        """Get basic dividend information for portfolio income estimates."""
+        try:
+            info = self.info
+            dividend_rate = info.get("dividendRate")
+            dividend_yield = info.get("dividendYield")
+            series = getattr(self.stock, "dividends", None)
+            last_payment = None
+            trailing_total = None
+
+            if isinstance(series, pd.Series) and not series.empty:
+                clean_series = series.dropna()
+                if not clean_series.empty:
+                    last_payment = float(clean_series.iloc[-1])
+                    trailing_total = float(clean_series.tail(12).sum())
+                    if dividend_rate in (None, 0):
+                        dividend_rate = trailing_total
+
+            return {
+                "dividend_rate": float(dividend_rate) if dividend_rate not in (None, "") else None,
+                "dividend_yield": float(dividend_yield) * 100 if dividend_yield not in (None, "") else None,
+                "last_payment": last_payment,
+                "trailing_12m_total": trailing_total,
+            }
+        except Exception as e:
+            return {"error": str(e), "dividend_rate": None, "dividend_yield": None}
+
     def get_history(self, period: str = "1mo", interval: str = "1d") -> list:
         """Get historical price data."""
         try:

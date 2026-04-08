@@ -3,7 +3,7 @@ FastAPI Backend for Stock Analysis Tool
 Provides REST API endpoints for stock analysis.
 """
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -25,6 +25,7 @@ from src.paper_trading_service import PaperTradingService
 from src.signal_score_service import SignalScoreService
 from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
+from src.realtime_market_service import RealtimeMarketService
 from src.public_signal_service import PublicSignalService
 from src.storage import PortfolioManager
 
@@ -70,6 +71,7 @@ _signal_score_service = None
 _session_list_service = None
 _paper_trading_service = None
 _trading_intelligence_service = None
+_realtime_market_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 
 
@@ -185,6 +187,12 @@ def get_trading_intelligence_service():
     if _trading_intelligence_service is None:
         _trading_intelligence_service = TradingIntelligenceService()
     return _trading_intelligence_service
+
+def get_realtime_market_service():
+    global _realtime_market_service
+    if _realtime_market_service is None:
+        _realtime_market_service = RealtimeMarketService()
+    return _realtime_market_service
 
 
 @app.middleware("http")
@@ -1153,7 +1161,7 @@ async def send_daily_brief():
 @app.post("/api/signals/alerts/a-setup-digest")
 async def send_a_setup_digest():
     try:
-        return get_email_alert_service().send_a_setup_digest()
+        return await get_email_alert_service().send_a_setup_digest_async()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1281,9 +1289,51 @@ async def send_open_brief(session: str):
 @app.post("/api/signals/alerts/session-list/{region}/{phase}")
 async def send_session_list_alert(region: str, phase: str):
     try:
-        return get_email_alert_service().send_session_list_alert(region, phase)
+        return await get_email_alert_service().send_session_list_alert_async(region, phase)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/realtime/snapshot")
+async def get_realtime_snapshot(symbols: str):
+    try:
+        requested = [item.strip() for item in symbols.split(",") if item.strip()]
+        return convert_numpy_types(get_realtime_market_service().build_snapshot(requested))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.websocket("/ws/realtime")
+async def websocket_realtime_feed(websocket: WebSocket):
+    password = get_app_password()
+    secret = get_session_secret()
+    if not password or not secret:
+        await websocket.close(code=1011)
+        return
+
+    session_value = websocket.cookies.get(SESSION_COOKIE_NAME)
+    if not is_valid_session(session_value):
+        await websocket.close(code=1008)
+        return
+
+    symbols_param = websocket.query_params.get("symbols", "")
+    symbols = [item.strip() for item in symbols_param.split(",") if item.strip()]
+    if not symbols:
+        symbols = ["SPY", "QQQ", "BTC-USD", "AAPL"]
+
+    await websocket.accept()
+    service = get_realtime_market_service()
+
+    try:
+        while True:
+            payload = convert_numpy_types(service.build_snapshot(symbols))
+            await websocket.send_json(payload)
+            await asyncio.sleep(8)
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
 
 @app.get("/api/discovery/gainers")
 async def get_top_gainers():

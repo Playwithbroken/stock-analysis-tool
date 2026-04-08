@@ -3,11 +3,15 @@ import React, { useMemo, useState } from "react";
 interface SessionListsPanelProps {
   data: any;
   onAnalyze: (ticker: string) => void;
+  realtimeQuotes?: Record<string, any>;
+  realtimeConnected?: boolean;
 }
 
 export default function SessionListsPanel({
   data,
   onAnalyze,
+  realtimeQuotes = {},
+  realtimeConnected = false,
 }: SessionListsPanelProps) {
   const [region, setRegion] = useState("europe");
   const [phase, setPhase] = useState("pre_open");
@@ -59,35 +63,44 @@ export default function SessionListsPanel({
         {title}
       </div>
       <div className="mt-4 space-y-3">
-        {(items || []).map((item, index) => (
-          <div
-            key={`${title}-${item.ticker}-${index}`}
-            className="flex items-center justify-between gap-3 rounded-[1.1rem] border border-black/8 bg-white p-3"
-          >
-            <div>
-              <div className="text-sm font-black text-slate-900">{item.ticker}</div>
-              <div className="mt-1 text-xs text-slate-500">
-                {item.label} · score {item.phase_score}
+        {(items || []).map((item, index) => {
+          const live = realtimeQuotes[item.ticker];
+          const move = live?.change_1w ?? item.change_1w;
+          return (
+            <div
+              key={`${title}-${item.ticker}-${index}`}
+              className="flex items-center justify-between gap-3 rounded-[1.1rem] border border-black/8 bg-white p-3"
+            >
+              <div>
+                <div className="text-sm font-black text-slate-900">{item.ticker}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {item.label} · score {item.phase_score}
+                </div>
+                {live ? (
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {live.price} {live.currency || ""}
+                  </div>
+                ) : null}
+              </div>
+              <div className="text-right">
+                <div
+                  className={`text-sm font-black ${
+                    (move || 0) >= 0 ? "text-emerald-700" : "text-red-700"
+                  }`}
+                >
+                  {(move || 0) >= 0 ? "+" : ""}
+                  {move?.toFixed(2)}%
+                </div>
+                <button
+                  onClick={() => onAnalyze(item.ticker)}
+                  className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
+                >
+                  open
+                </button>
               </div>
             </div>
-            <div className="text-right">
-              <div
-                className={`text-sm font-black ${
-                  (item.change_1w || 0) >= 0 ? "text-emerald-700" : "text-red-700"
-                }`}
-              >
-                {(item.change_1w || 0) >= 0 ? "+" : ""}
-                {item.change_1w?.toFixed(2)}%
-              </div>
-              <button
-                onClick={() => onAnalyze(item.ticker)}
-                className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
-              >
-                open
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {!items?.length && (
           <div className="rounded-[1.1rem] border border-black/8 bg-white p-3 text-sm text-slate-500">
             Keine Eintraege fuer diesen Block.
@@ -109,8 +122,19 @@ export default function SessionListsPanel({
               Asia, Europe, USA across the day
             </h2>
           </div>
-          <div className="rounded-full border border-black/8 bg-white/70 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-            {session?.label} · {current?.label}
+          <div className="flex items-center gap-2">
+            <div className="rounded-full border border-black/8 bg-white/70 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              {session?.label} · {current?.label}
+            </div>
+            <div
+              className={`rounded-full px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                realtimeConnected
+                  ? "bg-emerald-500/10 text-emerald-700"
+                  : "border border-black/8 bg-white/70 text-slate-500"
+              }`}
+            >
+              {realtimeConnected ? "Live synced" : "Static"}
+            </div>
           </div>
         </div>
 

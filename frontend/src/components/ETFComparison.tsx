@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
 } from "recharts";
+import MeasuredChartFrame from "./MeasuredChartFrame";
 
 interface Holding {
   symbol: string;
@@ -217,8 +218,8 @@ export default function ETFComparison({
             Visualisierung der Allokation
           </h3>
           {analysis.holdings.length > 0 ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <MeasuredChartFrame className="h-64 w-full" minHeight={256}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <PieChart>
                   <RechartsTooltip
                     content={({ active, payload }) => {
@@ -254,7 +255,7 @@ export default function ETFComparison({
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-            </div>
+            </MeasuredChartFrame>
           ) : (
             <div className="text-sm text-slate-500">Keine Allokationsdaten vorhanden.</div>
           )}

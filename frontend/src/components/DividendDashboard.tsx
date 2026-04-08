@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { Calendar, DollarSign } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
+import MeasuredChartFrame from "./MeasuredChartFrame";
 
 interface DividendData {
   monthly: number[];
@@ -99,8 +100,8 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
         </div>
       </div>
 
-      <div className="h-[200px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      <MeasuredChartFrame className="h-[200px] w-full" minHeight={200}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
           <BarChart data={chartData}>
             <CartesianGrid
               strokeDasharray="3 3"
@@ -140,7 +141,7 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </MeasuredChartFrame>
 
       <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/8 pt-4">
         <div>

@@ -8,6 +8,7 @@ import autoTable from "jspdf-autotable";
 import { useCurrency } from "../context/CurrencyContext";
 import BrokerChat from "./BrokerChat";
 import ETFComparison from "./ETFComparison";
+import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
 interface AnalysisResultProps {
   data: any;
@@ -60,6 +61,7 @@ export default function AnalysisResult({
     label: string;
   } | null>(null);
   const { formatPrice } = useCurrency();
+  const { quotes: realtimeQuotes, connected: realtimeConnected } = useRealtimeFeed([data.ticker], true);
 
   const handleStatsUpdate = (
     stats: { change: number; changePct: number },
@@ -77,6 +79,7 @@ export default function AnalysisResult({
     total_score,
     news,
   } = data;
+  const liveQuote = realtimeQuotes[data.ticker];
 
   const exportToPDF = () => {
     const doc = new jsPDF();
@@ -198,7 +201,7 @@ export default function AnalysisResult({
                     )}
                     <div className="text-right">
                       <div className="text-3xl font-bold text-slate-900">
-                        {formatPrice(price_data?.current_price)}
+                        {formatPrice(liveQuote?.price ?? price_data?.current_price)}
                       </div>
                       <div
                         className={`text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
@@ -207,6 +210,9 @@ export default function AnalysisResult({
                           chartStats?.changePct ?? price_data?.change_1y,
                         )}{" "}
                         ({chartStats?.label ?? "1Y"})
+                      </div>
+                      <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                        {realtimeConnected ? "Live quote" : "Snapshot"}
                       </div>
                     </div>
                   </div>

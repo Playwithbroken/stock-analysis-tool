@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { Clock, TrendingUp } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
+import MeasuredChartFrame from "./MeasuredChartFrame";
 
 interface PerformanceItem {
   time: string;
@@ -132,7 +133,18 @@ export default function PortfolioPerformance({
         </div>
       </div>
 
-      <div className="h-[250px] w-full">
+      <MeasuredChartFrame
+        className="h-[250px] w-full"
+        minHeight={250}
+        fallback={
+          <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              Calculating NAV
+            </span>
+          </div>
+        }
+      >
         {loading ? (
           <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
@@ -141,7 +153,7 @@ export default function PortfolioPerformance({
             </span>
           </div>
         ) : data.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="portfolioValue" x1="0" y1="0" x2="0" y2="1">
@@ -177,7 +189,7 @@ export default function PortfolioPerformance({
             <p className="text-sm font-medium">Add holdings to track performance</p>
           </div>
         )}
-      </div>
+      </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <Clock size={10} />

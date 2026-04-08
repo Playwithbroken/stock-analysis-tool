@@ -74,6 +74,16 @@ h3,
   min-height: 100vh;
 }
 
+.layout-shell {
+  width: min(100%, 1680px);
+  margin-inline: auto;
+}
+
+.content-shell {
+  width: min(100%, 1760px);
+  margin-inline: auto;
+}
+
 .glass-card {
   background: var(--bg-elevated);
   backdrop-filter: blur(18px);

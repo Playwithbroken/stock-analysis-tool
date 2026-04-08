@@ -167,13 +167,13 @@ class EmailAlertService:
         self._send_notifications(config, events, subject="Morning Brief: Global opening setup")
         return {"status": "ok", "message": "Morning brief sent."}
 
-    def send_a_setup_digest(self) -> Dict[str, Any]:
+    async def send_a_setup_digest_async(self) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
         items = self.portfolio_manager.get_signal_watch_items()
         snapshot = self.public_signal_service.build_watchlist_snapshot(items)
         settings = self.portfolio_manager.get_signal_score_settings()
-        scoreboard = asyncio.run(self.signal_score_service.build_scoreboard(snapshot, settings))
+        scoreboard = await self.signal_score_service.build_scoreboard(snapshot, settings)
         min_score = float(settings.get("high_conviction_min_score") or 75)
         top_ideas = [
             item for item in scoreboard.get("top_ideas", [])
@@ -200,6 +200,9 @@ class EmailAlertService:
         self._send_notifications(config, events, subject="A-Setup Digest: High-conviction ideas")
         return {"status": "ok", "message": f"A-Setup digest sent with {len(events)} ideas."}
 
+    def send_a_setup_digest(self) -> Dict[str, Any]:
+        return asyncio.run(self.send_a_setup_digest_async())
+
     def send_open_brief(self, session_label: str) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
@@ -214,16 +217,19 @@ class EmailAlertService:
         )
         return {"status": "ok", "message": f"{session.title()} open brief sent."}
 
-    def send_session_list_alert(self, region: str, phase: str) -> Dict[str, Any]:
+    async def send_session_list_alert_async(self, region: str, phase: str) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
-        events = asyncio.run(self._build_session_list_events(region, phase))
+        events = await self._build_session_list_events(region, phase)
         self._send_notifications(
             config,
             events,
             subject=f"{region.title()} {phase.replace('_', ' ').title()}: Session list",
         )
         return {"status": "ok", "message": f"{region.title()} {phase} session list sent."}
+
+    def send_session_list_alert(self, region: str, phase: str) -> Dict[str, Any]:
+        return asyncio.run(self.send_session_list_alert_async(region, phase))
 
     def send_scheduled_open_briefs(self) -> List[Dict[str, Any]]:
         config = self.get_config()

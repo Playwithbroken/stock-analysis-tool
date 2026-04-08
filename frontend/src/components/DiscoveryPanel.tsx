@@ -173,7 +173,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
 
   if (loading && !stars) {
     return (
-      <div className="space-y-8 p-4 max-w-7xl mx-auto">
+      <div className="content-shell space-y-8 p-4 xl:px-2">
         {/* Banner Skeleton */}
         <div className="relative h-48 w-full overflow-hidden rounded-3xl border border-black/8 bg-white/80 animate-pulse">
           <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-white/40"></div>

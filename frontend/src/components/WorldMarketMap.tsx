@@ -66,13 +66,16 @@ interface WorldMarketMapProps {
 interface GeoEvent extends MapNewsItem {
   markerLabel: string;
   markerTone: "red" | "amber" | "blue" | "slate";
+  markerIcon: string;
+  pulse: boolean;
+  regionKey: "USA" | "Europe" | "Asia" | "Global";
   markerPosition: { left: string; top: string };
 }
 
 const positions: Record<string, { x: number; y: number; align: "left" | "right" }> = {
-  USA: { x: 29, y: 40, align: "left" },
-  Europe: { x: 51, y: 31, align: "right" },
-  Asia: { x: 74, y: 38, align: "right" },
+  USA: { x: 22, y: 32, align: "left" },
+  Europe: { x: 49, y: 28, align: "right" },
+  Asia: { x: 73, y: 34, align: "right" },
 };
 
 const regionKeywords: Record<string, string[]> = {
@@ -82,10 +85,10 @@ const regionKeywords: Record<string, string[]> = {
 };
 
 const markerLayout = {
-  USA: { left: "24%", top: "50%" },
-  Europe: { left: "49%", top: "35%" },
-  Asia: { left: "69%", top: "41%" },
-  Global: { left: "58%", top: "57%" },
+  USA: { left: "26%", top: "36%" },
+  Europe: { left: "50%", top: "31%" },
+  Asia: { left: "71%", top: "38%" },
+  Global: { left: "56%", top: "52%" },
 };
 
 function formatPct(value: number) {
@@ -117,6 +120,21 @@ function markerClass(tone: GeoEvent["markerTone"]) {
   return "border-slate-400/20 bg-slate-500/10 text-slate-700";
 }
 
+function markerAccentClass(tone: GeoEvent["markerTone"]) {
+  if (tone === "red") return "bg-red-600";
+  if (tone === "amber") return "bg-amber-500";
+  if (tone === "blue") return "bg-blue-600";
+  return "bg-slate-600";
+}
+
+function getRegionKey(region?: string) {
+  const value = (region || "").toLowerCase();
+  if (value === "usa" || value === "us") return "USA";
+  if (value === "europe") return "Europe";
+  if (value === "asia") return "Asia";
+  return "Global";
+}
+
 function getRegionNews(news: MapNewsItem[], region: string) {
   const keywords = regionKeywords[region] || [];
   return news.filter((item) => {
@@ -127,13 +145,18 @@ function getRegionNews(news: MapNewsItem[], region: string) {
 
 function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
   const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""}`.toLowerCase();
+  const regionKey = getRegionKey(item.region);
+  const pulse = item.impact === "high";
 
   if (/(war|missile|attack|iran|israel|russia|ukraine)/.test(haystack)) {
     return {
       ...item,
       markerLabel: "Conflict",
       markerTone: "red",
-      markerPosition: markerLayout[item.region === "europe" ? "Europe" : item.region === "asia" ? "Asia" : "Global"],
+      markerIcon: "WAR",
+      pulse,
+      regionKey,
+      markerPosition: markerLayout[regionKey],
     };
   }
   if (/(fed|ecb|boj|central bank|rate|yield)/.test(haystack)) {
@@ -141,7 +164,10 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       ...item,
       markerLabel: "Central Bank",
       markerTone: "blue",
-      markerPosition: markerLayout[item.region === "europe" ? "Europe" : item.region === "asia" ? "Asia" : "USA"],
+      markerIcon: "CB",
+      pulse,
+      regionKey,
+      markerPosition: markerLayout[regionKey === "Global" ? "USA" : regionKey],
     };
   }
   if (/(oil|opec|crude|gas)/.test(haystack)) {
@@ -149,6 +175,9 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       ...item,
       markerLabel: "Energy",
       markerTone: "amber",
+      markerIcon: "OIL",
+      pulse: item.impact !== "low",
+      regionKey,
       markerPosition: markerLayout.Global,
     };
   }
@@ -157,7 +186,10 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       ...item,
       markerLabel: "Policy",
       markerTone: "slate",
-      markerPosition: markerLayout[item.region === "asia" ? "Asia" : item.region === "europe" ? "Europe" : "USA"],
+      markerIcon: "POL",
+      pulse,
+      regionKey,
+      markerPosition: markerLayout[regionKey === "Global" ? "USA" : regionKey],
     };
   }
   return null;
@@ -214,9 +246,32 @@ export default function WorldMarketMap({
       (eventLayer.length ? eventLayer : news)
         .map(classifyGeoEvent)
         .filter(Boolean)
-        .slice(0, 4) as GeoEvent[],
+        .filter((item) => item!.impact === "high" || item!.impact === "medium")
+        .sort((a, b) => {
+          const impactRank = { high: 0, medium: 1, low: 2 };
+          return (impactRank[a!.impact as keyof typeof impactRank] ?? 3) - (impactRank[b!.impact as keyof typeof impactRank] ?? 3);
+        })
+        .slice(0, 8) as GeoEvent[],
     [eventLayer, news],
   );
+
+  const positionedGeoSignals = useMemo(() => {
+    const counts: Record<string, number> = {};
+    return geoSignals.map((item) => {
+      const key = item.regionKey;
+      const count = counts[key] || 0;
+      counts[key] = count + 1;
+      const horizontal = item.regionKey === "Europe" ? -count * 8 : count * 8;
+      const vertical = count * 6;
+      return {
+        ...item,
+        adjustedStyle: {
+          left: `calc(${item.markerPosition.left} + ${horizontal}px)`,
+          top: `calc(${item.markerPosition.top} + ${vertical}px)`,
+        },
+      };
+    });
+  }, [geoSignals]);
 
   const timeline = useMemo(
     () =>
@@ -274,13 +329,30 @@ export default function WorldMarketMap({
               <img
                 src={worldMapSvg}
                 alt="World map"
-                className="h-full w-full scale-[1.08] object-cover object-center"
+                className="h-full w-full scale-[1.03] object-contain object-center"
                 draggable={false}
               />
             </div>
 
             <div className="absolute bottom-3 right-4 rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
               Wikimedia map base
+            </div>
+
+            <div className="absolute left-4 top-4 flex flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/88 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+              {[
+                { icon: "WAR", label: "Conflict", tone: "red" as const },
+                { icon: "CB", label: "Central Bank", tone: "blue" as const },
+                { icon: "OIL", label: "Energy", tone: "amber" as const },
+                { icon: "POL", label: "Policy", tone: "slate" as const },
+              ].map((item) => (
+                <div key={item.icon} className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${markerClass(item.tone)}`}>
+                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.tone)}`} />
+                    {item.icon}
+                  </span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </div>
+              ))}
             </div>
 
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.35),rgba(15,23,42,0))] lg:block" />
@@ -341,18 +413,44 @@ export default function WorldMarketMap({
               );
             })}
 
-            {geoSignals.map((item, index) => (
-              <div
+            {positionedGeoSignals.map((item, index) => (
+              <a
                 key={`${item.title}-${index}`}
-                className="absolute"
-                style={item.markerPosition}
+                className="absolute group"
+                style={item.adjustedStyle}
+                href={item.link}
+                target="_blank"
+                rel="noreferrer"
+                title={item.title}
               >
-                <div
-                  className={`rounded-full border px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${markerClass(item.markerTone)}`}
-                >
-                  {item.markerLabel}
+                <div className="relative">
+                  {item.pulse && (
+                    <div className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(item.markerTone)} animate-ping`} />
+                  )}
+                  <div
+                    className={`relative flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                    <span>{item.markerIcon}</span>
+                    <span className="hidden sm:inline">{item.markerLabel}</span>
+                  </div>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-64 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left shadow-[0_16px_34px_rgba(15,23,42,0.14)] group-hover:block">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                        {item.region || "Global"}
+                      </div>
+                      <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(item.markerTone)}`}>
+                        {item.impact || "macro"}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm font-bold leading-5 text-slate-900">{item.title}</div>
+                    {item.publisher ? (
+                      <div className="mt-2 text-[11px] text-slate-500">{item.publisher}</div>
+                    ) : null}
+                    <div className="mt-2 text-[11px] font-semibold text-[var(--accent)]">Open source</div>
+                  </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
 

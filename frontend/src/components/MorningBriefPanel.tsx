@@ -4,6 +4,8 @@ import WorldMarketMap from "./WorldMarketMap";
 interface MorningBriefPanelProps {
   brief: any;
   onAnalyze: (ticker: string) => void;
+  realtimeQuotes?: Record<string, any>;
+  realtimeConnected?: boolean;
 }
 
 function fmt(value?: number | null) {
@@ -14,6 +16,8 @@ function fmt(value?: number | null) {
 export default function MorningBriefPanel({
   brief,
   onAnalyze,
+  realtimeQuotes = {},
+  realtimeConnected = false,
 }: MorningBriefPanelProps) {
   if (!brief) return null;
 
@@ -82,6 +86,9 @@ export default function MorningBriefPanel({
             <div className="mt-2 text-lg font-black text-slate-900">
               {new Date(brief.generated_at).toLocaleTimeString()}
             </div>
+            <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
+              {realtimeConnected ? "Live stream on" : "Snapshot mode"}
+            </div>
           </div>
         </div>
       </section>
@@ -121,24 +128,28 @@ export default function MorningBriefPanel({
               {fmt(region.avg_change_1d)}
             </div>
             <div className="mt-4 space-y-3">
-              {region.assets?.map((asset: any) => (
+              {region.assets?.map((asset: any) => {
+                const live = realtimeQuotes[asset.ticker];
+                return (
                 <div
                   key={asset.ticker}
                   className="flex items-center justify-between rounded-[1.2rem] border border-black/8 bg-white/70 p-3"
                 >
                   <div>
                     <div className="text-sm font-bold text-slate-900">{asset.label}</div>
-                    <div className="text-xs text-slate-500">{asset.ticker}</div>
+                    <div className="text-xs text-slate-500">
+                      {asset.ticker}{live?.price != null ? ` · ${live.price}` : ""}
+                    </div>
                   </div>
                   <div
                     className={`text-sm font-bold ${
-                      (asset.change_1d || 0) >= 0 ? "text-emerald-700" : "text-red-700"
+                      ((live?.change_1w ?? asset.change_1d) || 0) >= 0 ? "text-emerald-700" : "text-red-700"
                     }`}
                   >
-                    {fmt(asset.change_1d)}
+                    {fmt(live?.change_1w ?? asset.change_1d)}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         ))}

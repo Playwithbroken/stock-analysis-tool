@@ -3,9 +3,16 @@ import React from "react";
 interface TradingIntelligencePanelProps {
   data: any;
   onAnalyze: (ticker: string) => void;
+  realtimeQuotes?: Record<string, any>;
+  realtimeConnected?: boolean;
 }
 
-export default function TradingIntelligencePanel({ data, onAnalyze }: TradingIntelligencePanelProps) {
+export default function TradingIntelligencePanel({
+  data,
+  onAnalyze,
+  realtimeQuotes = {},
+  realtimeConnected = false,
+}: TradingIntelligencePanelProps) {
   if (!data) return null;
 
   const indicators = data.indicators || [];
@@ -24,16 +31,29 @@ export default function TradingIntelligencePanel({ data, onAnalyze }: TradingInt
               RSI, ATR, EMA structure, VWAP, gap context, premarket levels and breakout state for the names that currently matter most.
             </p>
           </div>
+          <div className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
+            {realtimeConnected ? "Realtime connected" : "Realtime standby"}
+          </div>
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
-          {indicators.map((item: any) => (
+          {indicators.map((item: any) => {
+            const live = realtimeQuotes[item.ticker];
+            return (
             <div key={item.ticker} className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-black text-slate-900">{item.ticker}</div>
                   <div className="mt-1 text-xs text-slate-500">
                     {item.signal === "long" ? "Long bias" : item.signal === "short" ? "Short bias" : "Neutral"}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-base font-black text-slate-900">{live?.price ?? item.price}</span>
+                    {live?.change_1w != null ? (
+                      <span className={`text-xs font-bold ${live.change_1w >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        {live.change_1w >= 0 ? "+" : ""}{live.change_1w}%
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <button
@@ -98,9 +118,14 @@ export default function TradingIntelligencePanel({ data, onAnalyze }: TradingInt
                     {reason}
                   </div>
                 ))}
+                {live?.headline ? (
+                  <div className="rounded-xl border border-[var(--accent)]/14 bg-[var(--accent-soft)] p-3 text-slate-700">
+                    {live.headline}
+                  </div>
+                ) : null}
               </div>
             </div>
-          ))}
+          )})}
         </div>
       </div>
 

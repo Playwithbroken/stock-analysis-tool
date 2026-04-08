@@ -1,6 +1,7 @@
 import React from "react";
 import { ResponsiveContainer, Treemap } from "recharts";
 import { useCurrency } from "../context/CurrencyContext";
+import MeasuredChartFrame from "./MeasuredChartFrame";
 
 interface Holding {
   ticker: string;
@@ -93,8 +94,11 @@ export default function PortfolioHeatmap({ holdings }: PortfolioHeatmapProps) {
         Capital Allocation Heatmap
       </h3>
 
-      <div className="relative h-[250px] w-full overflow-hidden rounded-xl border border-black/8 bg-white/72">
-        <ResponsiveContainer width="99%" height="99%">
+      <MeasuredChartFrame
+        className="relative h-[250px] w-full overflow-hidden rounded-xl border border-black/8 bg-white/72"
+        minHeight={250}
+      >
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
           <Treemap
             data={data}
             dataKey="size"
@@ -104,7 +108,7 @@ export default function PortfolioHeatmap({ holdings }: PortfolioHeatmapProps) {
             content={<CustomizedContent formatPrice={formatPrice} />}
           />
         </ResponsiveContainer>
-      </div>
+      </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
         <span>Allocation distribution</span>

@@ -12,6 +12,7 @@ const PortfolioView = lazy(() => import("./components/PortfolioView"));
 const DiscoveryPanel = lazy(() => import("./components/DiscoveryPanel"));
 const BrokerChat = lazy(() => import("./components/BrokerChat"));
 const MyRadar = lazy(() => import("./components/MyRadar"));
+const WorldMarketMap = lazy(() => import("./components/WorldMarketMap"));
 
 interface AnalysisData {
   ticker: string;
@@ -250,6 +251,8 @@ function AppContent() {
   });
   const [authStatus, setAuthStatus] = useState("");
   const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
+  const [globalBrief, setGlobalBrief] = useState<any>(null);
+  const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
 
   const {
     portfolios,
@@ -319,6 +322,36 @@ function AppContent() {
 
     loadMovers();
     const interval = window.setInterval(loadMovers, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated]);
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+
+    let cancelled = false;
+
+    const loadGlobalBrief = async () => {
+      try {
+        const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
+          retries: 1,
+          retryDelayMs: 700,
+        });
+        if (!cancelled) {
+          setGlobalBrief(payload);
+          setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
+        }
+      } catch {
+        if (!cancelled) {
+          setGlobalBrief(null);
+        }
+      }
+    };
+
+    loadGlobalBrief();
+    const interval = window.setInterval(loadGlobalBrief, 120000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -446,6 +479,11 @@ function AppContent() {
   }
 
   const showHero = activeTab === "analyze" && !analysis && !loading;
+  const geoRegions = [
+    globalBrief?.regions?.asia,
+    globalBrief?.regions?.europe,
+    globalBrief?.regions?.usa,
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
@@ -615,15 +653,50 @@ function AppContent() {
             {loading && <LoadingState />}
 
             {analysis && !loading && (
-              <Suspense fallback={<LoadingState />}>
-                <AnalysisResult
-                  data={analysis}
-                  portfolios={portfolios}
-                  onAddHolding={addHolding}
-                  onOpenChat={() => setIsChatOpen(true)}
-                  onSelectTicker={handleSearch}
-                />
-              </Suspense>
+              <div className="space-y-8">
+                {globalBrief && geoRegions.length ? (
+                  <Suspense fallback={<LoadingState />}>
+                    <section className="space-y-4">
+                      <div className="surface-panel rounded-[2rem] p-5 sm:p-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                              World Watch
+                            </div>
+                            <div className="mt-2 text-2xl text-slate-900">
+                              Kriege, Wahlen, Naturkatastrophen, Energie und Policy direkt im Analyse-Pfad.
+                            </div>
+                          </div>
+                          <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                            {globalBrief.macro_regime}
+                          </div>
+                        </div>
+                      </div>
+                      <WorldMarketMap
+                        regions={geoRegions}
+                        selectedRegion={selectedGeoRegion}
+                        onSelectRegion={setSelectedGeoRegion}
+                        news={globalBrief.top_news || []}
+                        eventLayer={globalBrief.event_layer || []}
+                        watchlistImpact={globalBrief.watchlist_impact || []}
+                        contrarianSignals={globalBrief.contrarian_signals || []}
+                        openingTimeline={globalBrief.opening_timeline || []}
+                        onAnalyze={handleSearch}
+                      />
+                    </section>
+                  </Suspense>
+                ) : null}
+
+                <Suspense fallback={<LoadingState />}>
+                  <AnalysisResult
+                    data={analysis}
+                    portfolios={portfolios}
+                    onAddHolding={addHolding}
+                    onOpenChat={() => setIsChatOpen(true)}
+                    onSelectTicker={handleSearch}
+                  />
+                </Suspense>
+              </div>
             )}
 
             {!analysis && !loading && !error && (

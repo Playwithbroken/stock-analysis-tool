@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React from "react";
 import PriceChart from "./PriceChart";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
@@ -6,7 +6,6 @@ import { Plus, Download, FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrency } from "../context/CurrencyContext";
-import BrokerChat from "./BrokerChat";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
@@ -47,6 +46,11 @@ const getRatingColor = (rating: string): string => {
   return colors[rating] || "text-slate-500";
 };
 
+const clampScore = (value: number | null | undefined): number => {
+  if (value == null || !Number.isFinite(value)) return 0;
+  return Math.max(-100, Math.min(100, value));
+};
+
 export default function AnalysisResult({
   data,
   portfolios,
@@ -55,7 +59,6 @@ export default function AnalysisResult({
   onSelectTicker,
 }: AnalysisResultProps) {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [isPanelOpen, setIsPanelOpen] = React.useState(true);
   const [chartStats, setChartStats] = React.useState<{
     changePct: number;
     label: string;
@@ -80,6 +83,15 @@ export default function AnalysisResult({
     news,
   } = data;
   const liveQuote = realtimeQuotes[data.ticker];
+  const scoreValue = clampScore(total_score);
+  const verdictTone =
+    scoreValue >= 70
+      ? "bg-emerald-500/12 text-emerald-700"
+      : scoreValue <= -20
+        ? "bg-red-500/12 text-red-700"
+        : "bg-amber-500/12 text-amber-700";
+  const technicalScore = clampScore(analysis?.technical?.score ?? total_score);
+  const fundamentalScore = clampScore(analysis?.fundamental?.score ?? total_score);
 
   const exportToPDF = () => {
     const doc = new jsPDF();
@@ -101,10 +113,10 @@ export default function AnalysisResult({
     // Executive Verdict
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(18);
-    doc.text("Broker-Freund Einschätzung", 14, 55);
+    doc.text("Broker-Freund EinschÃ¤tzung", 14, 55);
     doc.setFontSize(11);
     doc.text(
-      `Hey! Hier ist meine Analyse für dich: ${data.verdict || "Kein Verdict verfügbar."}`,
+      `Hey! Hier ist meine Analyse fÃ¼r dich: ${data.verdict || "Kein Verdict verfÃ¼gbar."}`,
       14,
       62,
       { maxWidth: pageWidth - 28 },
@@ -156,14 +168,11 @@ export default function AnalysisResult({
   };
 
   return (
-    <div className="relative flex flex-col gap-6 lg:flex-row">
-      {/* Main Analysis Area */}
-      <div
-        className={`flex-1 transition-all duration-500 ease-in-out ${isPanelOpen ? "lg:mr-96" : ""}`}
-      >
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="min-w-0">
         <div className="space-y-6 pb-20">
           {/* Header Info */}
-          <div className="surface-panel rounded-[2rem] p-6">
+          <div className="surface-panel rounded-[2.4rem] p-6 sm:p-8">
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
                 Analysis Desk
@@ -177,66 +186,59 @@ export default function AnalysisResult({
                 </span>
               ) : null}
             </div>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-4">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] xl:items-center">
+              <div className="flex min-w-0 items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--accent)] text-2xl font-bold text-white">
                   {data.ticker?.slice(0, 2)}
                 </div>
-                <div>
-                  <h2 className="text-3xl text-slate-900">
+                <div className="min-w-0">
+                  <h2 className="truncate text-3xl text-slate-900">
                     {data.company_name}
                   </h2>
-                  <div className="flex items-center gap-3 mt-1">
+                  <div className="mt-1 flex flex-wrap items-center gap-3">
                     <span className="text-slate-500">{data.ticker}</span>
-                    <span className="text-gray-600">•</span>
+                    <span className="text-gray-600">·</span>
                     <span className="text-slate-500">
                       {fundamentals?.sector}
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col md:flex-row gap-3">
+              <div className="grid gap-4 rounded-[1.8rem] border border-black/8 bg-white/72 p-5">
                 <button
                   onClick={exportToPDF}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
+                  className="flex min-h-[5.6rem] items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
                 >
                   <Download size={16} /> Broker-Dossier (PDF)
                 </button>
-                <div className="text-right flex flex-col items-end gap-3">
-                  <div className="flex items-center gap-3">
-                    {!isPanelOpen && (
-                      <button
-                        onClick={() => setIsPanelOpen(true)}
-                        className="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
-                      >
-                        <FileText size={14} /> Summary einblenden
-                      </button>
-                    )}
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-slate-900">
-                        {formatPrice(liveQuote?.price ?? price_data?.current_price)}
-                      </div>
-                      <div
-                        className={`text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
-                      >
-                        {formatPercent(
-                          chartStats?.changePct ?? price_data?.change_1y,
-                        )}{" "}
-                        ({chartStats?.label ?? "1Y"})
-                      </div>
-                      <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                        {realtimeConnected ? "Live quote" : "Snapshot"}
-                      </div>
-                    </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-slate-900">
+                    {formatPrice(liveQuote?.price ?? price_data?.current_price)}
                   </div>
+                  <div
+                    className={`text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
+                  >
+                    {formatPercent(chartStats?.changePct ?? price_data?.change_1y)} ({chartStats?.label ?? "1Y"})
+                  </div>
+                  <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                    {realtimeConnected ? "Live quote" : "Snapshot"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
                   {portfolios.length > 0 && (
                     <button
                       onClick={() => setIsModalOpen(true)}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)] md:w-auto"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
                     >
                       <Plus size={16} /> Portfolio hinzufuegen
                     </button>
                   )}
+                  <button
+                    onClick={onOpenChat}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
+                  >
+                    <FileText size={14} /> AI Desk
+                  </button>
                 </div>
               </div>
             </div>
@@ -267,7 +269,7 @@ export default function AnalysisResult({
                         key={i}
                         className="text-sm font-medium text-slate-700"
                       >
-                        ● {flag.flag}
+                        â— {flag.flag}
                       </div>
                     ))}
                   </div>
@@ -284,7 +286,7 @@ export default function AnalysisResult({
                 <div className="space-y-3 text-sm font-medium text-slate-700">
                   {data.risk_audit.positive_signals?.map(
                     (s: any, i: number) => (
-                      <div key={i}>★ {s.signal}</div>
+                      <div key={i}>â˜… {s.signal}</div>
                     ),
                   )}
                 </div>
@@ -308,7 +310,7 @@ export default function AnalysisResult({
             <MetricCard
               label="Market Cap"
               value={formatBigNumber(fundamentals?.market_cap, formatPrice)}
-              info="Börsenwert"
+              info="BÃ¶rsenwert"
             />
             <MetricCard
               label="P/E Ratio"
@@ -441,97 +443,81 @@ export default function AnalysisResult({
         </div>
       </div>
 
-      {/* Side Panel */}
-      <div
-        className={`fixed top-20 right-0 h-[calc(100vh-80px)] border-l border-black/8 bg-[rgba(250,248,244,0.94)] backdrop-blur-3xl transition-all duration-500 ease-in-out z-40 overflow-hidden shadow-[-20px_0_50px_rgba(17,24,39,0.12)] ${isPanelOpen ? "w-full lg:w-96 opacity-100" : "w-0 opacity-0 pointer-events-none"}`}
-      >
-        <div className="p-8 h-full flex flex-col pt-10">
-          <div className="mb-10 flex items-center justify-between text-slate-900">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-xl">
-                <span className="text-xl font-black">AI</span>
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-none tracking-tight">
-                  Broker Freund
-                </h3>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">
-                    Live • AI Analysis
-                  </p>
-                </div>
+      <aside className="min-w-0 xl:sticky xl:top-[7.5rem] xl:self-start">
+        <div className="surface-panel rounded-[2.2rem] p-6 sm:p-7">
+          <div className="mb-8 flex items-center gap-4 text-slate-900">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-xl">
+              <span className="text-xl font-black">AI</span>
+            </div>
+            <div>
+              <h3 className="text-xl font-black leading-none tracking-tight text-slate-900">
+                Broker Freund
+              </h3>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                  Live · AI Analysis
+                </p>
               </div>
             </div>
-            <button
-              onClick={() => setIsPanelOpen(false)}
-              className="rounded-2xl border border-black/8 p-3 transition-all hover:bg-black/[0.04]"
-            >
-              <Plus size={24} className="rotate-45 text-slate-500" />
-            </button>
           </div>
 
-          <div className="space-y-8 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
-            <div className="relative overflow-hidden rounded-3xl border border-black/8 bg-white/80 p-6 text-center group">
-              <div className="absolute top-0 left-0 h-1 w-full bg-linear-to-r from-transparent via-emerald-600 to-transparent opacity-40"></div>
+          <div className="space-y-5">
+            <div className="relative overflow-hidden rounded-[2rem] border border-black/8 bg-white/80 p-6 text-center">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-emerald-600 to-transparent opacity-40"></div>
               <div className="mb-2 text-6xl font-black tracking-tighter text-slate-900">
-                {total_score?.toFixed(0)}
+                {scoreValue.toFixed(0)}
               </div>
               <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Pro Score
               </div>
-              <div
-                className={`inline-block rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest ${total_score > 70 ? "bg-green-500/12 text-green-700" : "bg-red-500/12 text-red-700"}`}
-              >
+              <div className={`inline-block rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest ${verdictTone}`}>
                 {recommendation?.action || recommendation}
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="rounded-[1.7rem] border border-black/8 bg-white/80 p-5">
               <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                <span className="w-2 h-2 rounded-full bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.25)]"></span>
-                Meine Einschätzung
+                <span className="h-2 w-2 rounded-full bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.25)]"></span>
+                Meine Einschaetzung
               </h4>
-              <div className="relative overflow-hidden rounded-3xl border border-black/8 bg-white/80 p-6 shadow-xl">
-                <div className="absolute top-0 right-0 w-20 h-20 rounded-full bg-emerald-500/8 blur-3xl"></div>
-                <div className="relative z-10 text-sm font-medium leading-relaxed text-slate-700">
-                  "{data.verdict}"
-                </div>
+              <div className="mt-4 text-sm font-medium leading-7 text-slate-700">
+                "{data.verdict}"
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-center justify-between rounded-2xl border border-black/8 bg-white/80 p-4">
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Technisch
                 </span>
                 <span className="text-sm font-mono font-bold text-sky-700">
-                  {total_score?.toFixed(0)}%
+                  {technicalScore.toFixed(0)}%
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-black/8 bg-white/80 p-4">
+              <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Fundament
                 </span>
                 <span className="text-sm font-mono font-bold text-emerald-700">
-                  {total_score?.toFixed(0)}%
+                  {fundamentalScore.toFixed(0)}%
                 </span>
               </div>
             </div>
-          </div>
 
-          <button
-            onClick={exportToPDF}
-            className="group mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-black/8 bg-[var(--accent)] py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[var(--accent-strong)]"
-          >
-            <Download
-              size={16}
-              className="text-white/60 transition-colors group-hover:text-white"
-            />
-            Dossier Exportieren
-          </button>
+            <button
+              onClick={exportToPDF}
+              className="group flex w-full items-center justify-center gap-2 rounded-[1.4rem] border border-black/8 bg-[var(--accent)] py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[var(--accent-strong)]"
+            >
+              <Download
+                size={16}
+                className="text-white/60 transition-colors group-hover:text-white"
+              />
+              Dossier Exportieren
+            </button>
+          </div>
         </div>
-      </div>
+      </aside>
     </div>
   );
 }
@@ -559,7 +545,7 @@ function NewsFeed({ news }: { news: any[] }) {
               <span className="text-[10px] text-slate-500 font-bold uppercase">
                 {item.source || item.publisher}
               </span>
-              <span className="text-[10px] text-gray-700 font-bold">•</span>
+              <span className="text-[10px] text-gray-700 font-bold">·</span>
               <span className="text-[10px] text-slate-500">
                 {item.time || item.published}
               </span>
@@ -587,8 +573,8 @@ function MetricCard({
       <div className="mb-2 flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-widest">
         {label}
         {info && (
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-            ⓘ
+          <span className="opacity-0 transition-opacity group-hover:opacity-100">
+            i
           </span>
         )}
       </div>
@@ -605,3 +591,5 @@ function MetricCard({
     </div>
   );
 }
+
+

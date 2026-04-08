@@ -1,5 +1,6 @@
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { Search, ArrowUpRight } from "lucide-react";
+import { fetchJsonWithRetry } from "../lib/api";
 
 interface SearchBarProps {
   onSearch: (ticker: string) => void;
@@ -14,10 +15,12 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
   const debounceTimer = useRef<any>(null);
 
   useEffect(() => {
-    fetch("/api/search/suggestions")
-      .then((res) => res.json())
+    fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
+      retries: 2,
+      retryDelayMs: 900,
+    })
       .then((data) => setSuggestions(data))
-      .catch((err) => console.error("Suggestions fetch error:", err));
+      .catch(() => setSuggestions({}));
   }, []);
 
   useEffect(() => {
@@ -25,8 +28,10 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
     if (trimmedQuery.length > 1) {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
-        fetch(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`)
-          .then((res) => res.json())
+        fetchJsonWithRetry<any>(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, undefined, {
+          retries: 2,
+          retryDelayMs: 900,
+        })
           .then((data) => {
             if (data.Matches && data.Matches.length > 0) {
               setSuggestions({ Treffer: data.Matches });
@@ -34,13 +39,15 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
               setSuggestions({});
             }
           })
-          .catch((err) => console.error("Search suggestions error:", err));
+          .catch(() => setSuggestions({}));
       }, 240);
     } else if (trimmedQuery.length === 0) {
-      fetch("/api/search/suggestions")
-        .then((res) => res.json())
+      fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
+        retries: 2,
+        retryDelayMs: 900,
+      })
         .then((data) => setSuggestions(data))
-        .catch((err) => console.error("Suggestions fetch error:", err));
+        .catch(() => setSuggestions({}));
     }
   }, [query]);
 
@@ -179,7 +186,7 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
                 onClick={() => setShowDropdown(false)}
                 className="font-bold uppercase tracking-[0.18em] text-slate-700"
               >
-                Schließen
+                Schliessen
               </button>
             </div>
           </div>

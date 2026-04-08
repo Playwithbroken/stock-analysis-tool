@@ -5,6 +5,7 @@ import SignalScoreboardPanel from "./SignalScoreboardPanel";
 import SessionListsPanel from "./SessionListsPanel";
 import TradingIntelligencePanel from "./TradingIntelligencePanel";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
+import { fetchJsonWithRetry } from "../lib/api";
 
 interface MyRadarProps {
   onAnalyze: (ticker: string) => void;
@@ -33,6 +34,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const [paperDashboard, setPaperDashboard] = useState<any>(null);
   const [tradingIntelligence, setTradingIntelligence] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const realtimeSymbols = useMemo(() => {
     const symbols = new Set<string>();
@@ -55,7 +57,11 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const payload = await fetch("/api/radar/bootstrap?limit=8").then((r) => r.json());
+      setLoadError("");
+      const payload = await fetchJsonWithRetry<any>("/api/radar/bootstrap?limit=8", undefined, {
+        retries: 2,
+        retryDelayMs: 1200,
+      });
       setWatchlist(payload.watchlist || null);
       setHistory(payload.history || []);
       setBrief(payload.brief || null);
@@ -63,6 +69,8 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
       setSessionLists(payload.session_lists || null);
       setPaperDashboard(payload.paper_dashboard || null);
       setTradingIntelligence(payload.trading_intelligence || null);
+    } catch {
+      setLoadError("Radar wird gerade aufgeweckt. Die Daten werden automatisch erneut geladen.");
     } finally {
       setLoading(false);
     }
@@ -106,6 +114,12 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
 
   return (
     <div className="space-y-6">
+      {loadError ? (
+        <div className="rounded-[1.4rem] border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-sm text-amber-800">
+          {loadError}
+        </div>
+      ) : null}
+
       <MorningBriefPanel
         brief={brief}
         onAnalyze={onAnalyze}
@@ -132,7 +146,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
             Statt generischer Discovery startet die App jetzt bei deiner Watchlist: Insider, Congress-Filings,
-            Berkshire-Signale, Morning Brief und persönlicher Alert-History.
+            Berkshire-Signale, Morning Brief und persoenlicher Alert-History.
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -198,7 +212,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-500">Noch keine gesendeten Alert-History-Einträge.</div>
+                <div className="text-sm text-slate-500">Noch keine gesendeten Alert-History-Eintraege.</div>
               )}
             </div>
           </div>

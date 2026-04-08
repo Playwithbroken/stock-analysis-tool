@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface RealtimeQuote {
   symbol: string;
@@ -34,17 +34,58 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const [quotes, setQuotes] = useState<Record<string, RealtimeQuote>>({});
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const lastFrameRef = useRef<number>(0);
 
   useEffect(() => {
     if (!enabled || cleaned.length === 0) return;
 
     let socket: WebSocket | null = null;
     let retry: number | null = null;
+    let staleTimer: number | null = null;
+    let pollTimer: number | null = null;
     let closed = false;
+
+    const mergeQuotes = (incoming: RealtimeQuote[]) => {
+      setQuotes((prev) => {
+        const next = { ...prev };
+        for (const quote of incoming || []) {
+          next[quote.symbol] = quote;
+        }
+        return next;
+      });
+    };
+
+    const scheduleStaleCheck = () => {
+      if (staleTimer) window.clearTimeout(staleTimer);
+      staleTimer = window.setTimeout(() => {
+        const now = Date.now();
+        if (lastFrameRef.current && now - lastFrameRef.current > 14000) {
+          setConnected(false);
+        }
+      }, 15000);
+    };
+
+    const fetchSnapshot = async () => {
+      if (closed || cleaned.length === 0) return;
+      try {
+        const response = await fetch(`/api/realtime/snapshot?symbols=${encodeURIComponent(cleaned.join(","))}`);
+        if (!response.ok) return;
+        const payload = (await response.json()) as RealtimePayload;
+        mergeQuotes(payload.quotes || []);
+        setLastUpdated(payload.generated_at);
+        if (!connected) {
+          setConnected(true);
+        }
+      } catch {
+        // ignore snapshot fallback errors
+      }
+    };
 
     const connect = () => {
       socket = new WebSocket(buildRealtimeUrl(cleaned));
-      socket.onopen = () => setConnected(true);
+      socket.onopen = () => {
+        scheduleStaleCheck();
+      };
       socket.onclose = () => {
         setConnected(false);
         if (!closed) {
@@ -55,12 +96,11 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data) as RealtimePayload;
-          const next: Record<string, RealtimeQuote> = {};
-          for (const quote of payload.quotes || []) {
-            next[quote.symbol] = quote;
-          }
-          setQuotes(next);
+          lastFrameRef.current = Date.now();
+          setConnected(true);
+          mergeQuotes(payload.quotes || []);
           setLastUpdated(payload.generated_at);
+          scheduleStaleCheck();
         } catch {
           // ignore malformed frames
         }
@@ -68,11 +108,20 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     };
 
     connect();
+    fetchSnapshot();
+    pollTimer = window.setInterval(() => {
+      const stale = !lastFrameRef.current || Date.now() - lastFrameRef.current > 12000;
+      if (stale) {
+        fetchSnapshot();
+      }
+    }, 10000);
 
     return () => {
       closed = true;
       setConnected(false);
       if (retry) window.clearTimeout(retry);
+      if (staleTimer) window.clearTimeout(staleTimer);
+      if (pollTimer) window.clearInterval(pollTimer);
       socket?.close();
     };
   }, [symbolKey, enabled]);

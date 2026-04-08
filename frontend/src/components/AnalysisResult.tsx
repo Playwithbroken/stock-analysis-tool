@@ -113,10 +113,10 @@ export default function AnalysisResult({
     // Executive Verdict
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(18);
-    doc.text("Broker-Freund EinschÃ¤tzung", 14, 55);
+    doc.text("Broker-Freund Einschaetzung", 14, 55);
     doc.setFontSize(11);
     doc.text(
-      `Hey! Hier ist meine Analyse fÃ¼r dich: ${data.verdict || "Kein Verdict verfÃ¼gbar."}`,
+      `Hey! Hier ist meine Analyse fuer dich: ${data.verdict || "Kein Verdict verfuegbar."}`,
       14,
       62,
       { maxWidth: pageWidth - 28 },
@@ -168,7 +168,7 @@ export default function AnalysisResult({
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19.5rem] 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:gap-8">
       <div className="min-w-0">
         <div className="space-y-6 pb-20">
           {/* Header Info */}
@@ -269,7 +269,7 @@ export default function AnalysisResult({
                         key={i}
                         className="text-sm font-medium text-slate-700"
                       >
-                        â— {flag.flag}
+                        - {flag.flag}
                       </div>
                     ))}
                   </div>
@@ -286,7 +286,7 @@ export default function AnalysisResult({
                 <div className="space-y-3 text-sm font-medium text-slate-700">
                   {data.risk_audit.positive_signals?.map(
                     (s: any, i: number) => (
-                      <div key={i}>â˜… {s.signal}</div>
+                      <div key={i}>+ {s.signal}</div>
                     ),
                   )}
                 </div>
@@ -310,7 +310,7 @@ export default function AnalysisResult({
             <MetricCard
               label="Market Cap"
               value={formatBigNumber(fundamentals?.market_cap, formatPrice)}
-              info="BÃ¶rsenwert"
+              info="Boersenwert"
             />
             <MetricCard
               label="P/E Ratio"
@@ -443,11 +443,23 @@ export default function AnalysisResult({
         </div>
       </div>
 
-      <aside className="min-w-0 xl:sticky xl:top-[7.5rem] xl:self-start">
+      <aside className="min-w-0 xl:sticky xl:top-[7.25rem] xl:w-full xl:max-w-[21rem] xl:self-start xl:justify-self-end">
         <div className="surface-panel rounded-[2.2rem] p-6 sm:p-7">
           <div className="mb-8 flex items-center gap-4 text-slate-900">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-xl">
-              <span className="text-xl font-black">AI</span>
+            <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(145deg,var(--accent),#0f766e)] text-white shadow-[0_18px_40px_rgba(15,118,110,0.24)]">
+              <svg
+                className="h-7 w-7"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 15.5 8.5 11l3.2 3.2L20 6" />
+                <path d="M16 6h4v4" />
+                <path d="M5 19h14" opacity="0.55" />
+              </svg>
             </div>
             <div>
               <h3 className="text-xl font-black leading-none tracking-tight text-slate-900">
@@ -456,7 +468,7 @@ export default function AnalysisResult({
               <div className="mt-2 flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                  Live · AI Analysis
+                  Live | Market Briefing
                 </p>
               </div>
             </div>

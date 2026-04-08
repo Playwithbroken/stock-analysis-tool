@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { MessageSquare, X, Send, Bot, User, Trash2 } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { X, Send, Bot, User } from "lucide-react";
 
 interface Message {
   role: "user" | "oracle";
@@ -24,8 +24,6 @@ export default function BrokerChat({
   setIsOpen: externalSetIsOpen,
 }: BrokerChatProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
-
-  // Use external state if provided, otherwise fallback to internal
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const setIsOpen =
     externalSetIsOpen !== undefined ? externalSetIsOpen : setInternalIsOpen;
@@ -36,30 +34,18 @@ export default function BrokerChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (initialMessage) {
-      setMessages([
-        {
-          role: "oracle",
-          content: initialMessage,
-        },
-      ]);
-    } else {
-      setMessages([
-        {
-          role: "oracle",
-          content:
-            "Hallo! Ich bin dein Broker Freund AI. Ich kenne dein Portfolio und den Markt. Was möchtest du wissen?",
-        },
-      ]);
-    }
+    setMessages([
+      {
+        role: "oracle",
+        content:
+          initialMessage ||
+          "Hallo. Ich bin dein Broker Freund Desk. Ich kenne dein Portfolio, deine Signale und den Markt. Was willst du zuerst einordnen?",
+      },
+    ]);
   }, [initialMessage]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = async () => {
@@ -75,7 +61,7 @@ export default function BrokerChat({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: input,
+          message: userMsg,
           context_ticker: Array.isArray(currentTicker)
             ? currentTicker.join(",")
             : currentTicker,
@@ -86,13 +72,13 @@ export default function BrokerChat({
         ...prev,
         { role: "oracle", content: data.response },
       ]);
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: "oracle",
           content:
-            "Entschuldigung, Verbindung unterbrochen. Versuche es gleich nochmal.",
+            "Verbindung kurz unterbrochen. Versuch es direkt noch einmal.",
         },
       ]);
     } finally {
@@ -105,30 +91,32 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : "surface-panel fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-black/8 bg-[rgba(250,248,244,0.96)] shadow-[-20px_0_50px_rgba(17,24,39,0.12)] backdrop-blur-3xl xl:max-w-[30rem] 2xl:max-w-[34rem]"
+          : "surface-panel fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-black/8 bg-[rgba(250,248,244,0.96)] shadow-[-20px_0_50px_rgba(17,24,39,0.12)] backdrop-blur-3xl xl:max-w-[28rem] 2xl:max-w-[31rem]"
       }`}
     >
-      {/* Header */}
       <div
         className={`flex items-center justify-between border-b border-black/8 bg-[linear-gradient(90deg,rgba(15,118,110,0.08),transparent)] p-6 ${isInline ? "px-0 pt-0" : ""}`}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--accent)]/15 bg-[var(--accent-soft)]">
-            <Bot size={24} className="text-[var(--accent)]" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-[var(--accent)]/15 bg-[var(--accent-soft)] text-[var(--accent)]">
+            <Bot size={22} />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Broker Freund AI</h3>
+            <h3 className="text-lg font-bold text-slate-900">Broker Freund Desk</h3>
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Live AI Insights
+                Live market context
               </span>
             </div>
           </div>
         </div>
         {!isInline && (
           <button
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setIsOpen(false);
+              onClose?.();
+            }}
             className="rounded-lg p-2 text-slate-500 transition-all hover:bg-black/[0.04] hover:text-slate-900"
           >
             <X size={20} />
@@ -136,9 +124,8 @@ export default function BrokerChat({
         )}
       </div>
 
-      {/* Messages */}
       <div
-        className={`flex-1 overflow-y-auto ${isInline ? "py-4 px-0" : "p-6"} space-y-6 scrollbar-hide`}
+        className={`flex-1 overflow-y-auto ${isInline ? "px-0 py-4" : "p-6"} space-y-6 scrollbar-hide`}
       >
         {messages.map((msg, i) => (
           <div
@@ -146,7 +133,7 @@ export default function BrokerChat({
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[85%] flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+              className={`flex max-w-[85%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
             >
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
@@ -176,16 +163,15 @@ export default function BrokerChat({
         {loading && (
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-2xl border border-black/8 bg-white/80 p-4">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-bounce"></span>
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0.2s]"></span>
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0.4s]"></span>
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)]"></span>
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:0.2s]"></span>
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:0.4s]"></span>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div
         className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-6"}`}
       >
@@ -202,8 +188,8 @@ export default function BrokerChat({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Frage den Broker Freund..."
-            className="w-full rounded-xl border border-black/8 bg-white pl-4 pr-12 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+            placeholder="Frage nach Markt, Aktie, ETF oder Risiko..."
+            className="w-full rounded-xl border border-black/8 bg-white py-3.5 pl-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
           />
           <button
             onClick={handleSend}
@@ -215,8 +201,7 @@ export default function BrokerChat({
         </div>
         {!isInline && (
           <p className="mt-4 text-center text-[10px] text-slate-500">
-            Broker Freund AI analysiert Live-Daten. Keine direkte
-            Anlageberatung.
+            Broker Freund Desk analysiert Live-Daten. Keine direkte Anlageberatung.
           </p>
         )}
       </div>
@@ -229,10 +214,18 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-8 right-8 z-40 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)] text-white shadow-[0_22px_48px_rgba(15,118,110,0.28)] transition-all hover:scale-110 hover:bg-[var(--accent-strong)] active:scale-95 group"
+        className="group fixed bottom-6 right-5 z-40 flex h-15 items-center gap-3 rounded-full border border-[var(--accent)]/18 bg-[rgba(15,118,110,0.96)] px-4 text-white shadow-[0_22px_48px_rgba(15,118,110,0.24)] transition-all hover:scale-[1.02] hover:bg-[var(--accent-strong)] active:scale-[0.98] sm:bottom-8 sm:right-8 xl:left-8 xl:right-auto"
       >
-        <div className="absolute inset-0 rounded-full bg-[var(--accent)] animate-ping opacity-15 group-hover:opacity-30"></div>
-        <Bot size={32} />
+        <div className="absolute inset-0 rounded-full bg-[var(--accent)] opacity-0 transition-opacity group-hover:opacity-10"></div>
+        <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/14">
+          <Bot size={22} />
+        </div>
+        <div className="relative hidden text-left sm:block">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+            Broker Freund
+          </div>
+          <div className="text-sm font-bold text-white">Open Desk</div>
+        </div>
       </button>
 
       {isOpen && chatContent}

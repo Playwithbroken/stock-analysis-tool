@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import MorningBriefPanel from "./MorningBriefPanel";
 import PaperTradingPanel from "./PaperTradingPanel";
 import SignalScoreboardPanel from "./SignalScoreboardPanel";
@@ -25,6 +25,27 @@ interface SignalHistoryItem {
   sent_at: string;
 }
 
+function RadarPlaceholder({
+  label,
+  description,
+  compact = false,
+}: {
+  label: string;
+  description: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`surface-panel rounded-[2.2rem] border border-dashed border-black/8 bg-white/65 ${
+        compact ? "p-5" : "p-6 sm:p-8"
+      }`}
+    >
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">{label}</div>
+      <div className="mt-3 text-sm leading-7 text-slate-600">{description}</div>
+    </div>
+  );
+}
+
 export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const [watchlist, setWatchlist] = useState<WatchlistSnapshot | null>(null);
   const [history, setHistory] = useState<SignalHistoryItem[]>([]);
@@ -33,7 +54,8 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const [sessionLists, setSessionLists] = useState<any>(null);
   const [paperDashboard, setPaperDashboard] = useState<any>(null);
   const [tradingIntelligence, setTradingIntelligence] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState("");
 
   const realtimeSymbols = useMemo(() => {
@@ -52,10 +74,18 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
     return Array.from(symbols);
   }, [brief, tradingIntelligence]);
 
-  const { quotes: realtimeQuotes, connected: realtimeConnected } = useRealtimeFeed(realtimeSymbols, !loading);
+  const hasRadarData = Boolean(brief || scoreboard || sessionLists || paperDashboard || tradingIntelligence);
+  const { quotes: realtimeQuotes, connected: realtimeConnected } = useRealtimeFeed(
+    realtimeSymbols,
+    hasRadarData || realtimeSymbols.length > 0,
+  );
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isBackgroundRefresh = false) => {
+    if (isBackgroundRefresh) {
+      setRefreshing(true);
+    } else {
+      setInitialLoading(true);
+    }
     try {
       setLoadError("");
       const payload = await fetchJsonWithRetry<any>("/api/radar/bootstrap?limit=8", undefined, {
@@ -72,17 +102,18 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
     } catch {
       setLoadError("Radar wird gerade aufgeweckt. Die Daten werden automatisch erneut geladen.");
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      fetchData().catch(() => undefined);
+      fetchData(true).catch(() => undefined);
     }, 60000);
     return () => window.clearInterval(interval);
   }, []);
@@ -108,24 +139,45 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const topTicker = watchlist?.ticker_signals?.find((item: any) => item.events?.length);
   const topPolitical = watchlist?.politician_signals?.find((item: any) => item.trades?.length);
 
-  if (loading) {
-    return <div className="surface-panel h-64 animate-pulse rounded-[2.5rem]" />;
+  if (initialLoading && !hasRadarData) {
+    return (
+      <div className="space-y-6">
+        <div className="surface-panel h-[16rem] animate-pulse rounded-[2.5rem]" />
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="surface-panel h-[22rem] animate-pulse rounded-[2.5rem]" />
+          <div className="surface-panel h-[22rem] animate-pulse rounded-[2.5rem]" />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
+      {refreshing ? (
+        <div className="rounded-[1.2rem] border border-black/8 bg-white/78 px-4 py-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+          Radar refresh in progress
+        </div>
+      ) : null}
+
       {loadError ? (
         <div className="rounded-[1.4rem] border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-sm text-amber-800">
           {loadError}
         </div>
       ) : null}
 
-      <MorningBriefPanel
-        brief={brief}
-        onAnalyze={onAnalyze}
-        realtimeQuotes={realtimeQuotes}
-        realtimeConnected={realtimeConnected}
-      />
+      {brief ? (
+        <MorningBriefPanel
+          brief={brief}
+          onAnalyze={onAnalyze}
+          realtimeQuotes={realtimeQuotes}
+          realtimeConnected={realtimeConnected}
+        />
+      ) : (
+        <RadarPlaceholder
+          label="Morning Brief"
+          description="Der globale Opening-Brief wird gerade nachgeladen. Weltkarte, Makro-Layer und Session-Kontext erscheinen automatisch, sobald der Snapshot bereit ist."
+        />
+      )}
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="surface-panel rounded-[2.5rem] p-6 sm:p-8">
@@ -219,20 +271,54 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
         </div>
       </section>
 
-      <SignalScoreboardPanel data={scoreboard} onAnalyze={onAnalyze} onRefresh={fetchData} />
-      <TradingIntelligencePanel
-        data={tradingIntelligence}
-        onAnalyze={onAnalyze}
-        realtimeQuotes={realtimeQuotes}
-        realtimeConnected={realtimeConnected}
-      />
-      <PaperTradingPanel data={paperDashboard} onAnalyze={onAnalyze} onRefresh={fetchData} />
-      <SessionListsPanel
-        data={sessionLists}
-        onAnalyze={onAnalyze}
-        realtimeQuotes={realtimeQuotes}
-        realtimeConnected={realtimeConnected}
-      />
+      {scoreboard ? (
+        <SignalScoreboardPanel data={scoreboard} onAnalyze={onAnalyze} onRefresh={() => fetchData(true)} />
+      ) : (
+        <RadarPlaceholder
+          label="Signal Score Engine"
+          description="Das Ranking fuer Equity-, ETF-, Crypto- und Political-Signale wird geladen."
+          compact
+        />
+      )}
+      {tradingIntelligence ? (
+        <TradingIntelligencePanel
+          data={tradingIntelligence}
+          onAnalyze={onAnalyze}
+          realtimeQuotes={realtimeQuotes}
+          realtimeConnected={realtimeConnected}
+        />
+      ) : (
+        <RadarPlaceholder
+          label="Trading Intelligence"
+          description="Indikatoren, Bias und Handelsregeln werden gerade aus den aktuellen Kursdaten aufgebaut."
+          compact
+        />
+      )}
+      {paperDashboard ? (
+        <PaperTradingPanel data={paperDashboard} onAnalyze={onAnalyze} onRefresh={() => fetchData(true)} />
+      ) : (
+        <RadarPlaceholder
+          label="Paper Trading"
+          description="Playbooks, Journal und Demo-Performance werden geladen."
+          compact
+        />
+      )}
+      {sessionLists ? (
+        <SessionListsPanel
+          data={sessionLists}
+          onAnalyze={onAnalyze}
+          realtimeQuotes={realtimeQuotes}
+          realtimeConnected={realtimeConnected}
+        />
+      ) : (
+        <RadarPlaceholder
+          label="Session Lists"
+          description="Pre-open-, post-open- und End-of-day-Listen fuer Asien, Europa und USA werden vorbereitet."
+          compact
+        />
+      )}
     </div>
   );
 }
+
+

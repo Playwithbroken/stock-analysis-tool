@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import hmac
 import secrets
+import math
 from datetime import datetime
 
 from src.data_fetcher import DataFetcher
@@ -356,7 +357,10 @@ def convert_numpy_types(obj: Any) -> Any:
     elif isinstance(obj, (np.integer,)):
         return int(obj)
     elif isinstance(obj, (np.floating,)):
-        return float(obj)
+        value = float(obj)
+        return None if math.isnan(value) or math.isinf(value) else value
+    elif isinstance(obj, float):
+        return None if math.isnan(obj) or math.isinf(obj) else obj
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, np.bool_):

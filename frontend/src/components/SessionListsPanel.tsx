@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React, { useMemo, useState } from "react";
 
 interface SessionListsPanelProps {
   data: any;
@@ -88,8 +88,7 @@ export default function SessionListsPanel({
                     (move || 0) >= 0 ? "text-emerald-700" : "text-red-700"
                   }`}
                 >
-                  {(move || 0) >= 0 ? "+" : ""}
-                  {move?.toFixed(2)}%
+                  {move == null || !Number.isFinite(move) ? "N/A" : `${move >= 0 ? "+" : ""}${move.toFixed(2)}%`}
                 </div>
                 <button
                   onClick={() => onAnalyze(item.ticker)}
@@ -216,3 +215,4 @@ export default function SessionListsPanel({
     </section>
   );
 }
+

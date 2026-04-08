@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React, { useMemo, useState } from "react";
 import WorldMarketMap from "./WorldMarketMap";
 
 interface MorningBriefPanelProps {
@@ -9,7 +9,7 @@ interface MorningBriefPanelProps {
 }
 
 function fmt(value?: number | null) {
-  if (value == null) return "N/A";
+  if (value == null || !Number.isFinite(value)) return "N/A";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
@@ -46,21 +46,42 @@ export default function MorningBriefPanel({
 
   return (
     <div className="space-y-6">
-      <section className="surface-panel rounded-[2.5rem] p-6 sm:p-8">
-        <div className="flex flex-wrap items-center gap-2">
+      <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_60%)]" />
+        <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(22,28,36,0.06),transparent_72%)]" />
+
+        <div className="relative flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[var(--accent)]">
             Morning Brief
           </span>
           <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
             {brief.macro_regime}
           </span>
+          <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            Focus {selectedRegion}
+          </span>
         </div>
-        <h2 className="mt-5 text-4xl text-slate-900 sm:text-5xl">
-          {brief.headline}
-        </h2>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-          {brief.opening_bias}
-        </p>
+        <div className="relative mt-5 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div>
+            <h2 className="text-4xl text-slate-900 sm:text-5xl">
+              {brief.headline}
+            </h2>
+            <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
+              {brief.opening_bias}
+            </p>
+          </div>
+          <div className="rounded-[1.8rem] border border-black/8 bg-white/78 p-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Opening Read
+            </div>
+            <div className="mt-3 text-sm leading-7 text-slate-700">
+              {brief.headline}
+            </div>
+            <div className="mt-4 rounded-[1rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">
+              {brief.opening_bias}
+            </div>
+          </div>
+        </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-5">
@@ -295,7 +316,7 @@ export default function MorningBriefPanel({
               ))
             ) : (
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-                Keine konträren Medien-Signale mit technischer Bestätigung.
+                Keine kontraeren Medien-Signale mit technischer Bestaetigung.
               </div>
             )}
           </div>
@@ -399,3 +420,5 @@ export default function MorningBriefPanel({
     </div>
   );
 }
+
+

@@ -92,6 +92,7 @@ const markerLayout = {
 };
 
 function formatPct(value: number) {
+  if (!Number.isFinite(value)) return "N/A";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 

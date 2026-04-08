@@ -168,6 +168,31 @@ export default function PortfolioView({
           </div>
         </div>
 
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Portfolio count
+            </div>
+            <div className="mt-2 text-3xl font-black text-slate-900">{portfolios.length}</div>
+          </div>
+          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Selected
+            </div>
+            <div className="mt-2 text-xl font-black text-slate-900">
+              {currentPortfolio?.name || "No portfolio"}
+            </div>
+          </div>
+          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Active holdings
+            </div>
+            <div className="mt-2 text-3xl font-black text-slate-900">
+              {currentPortfolio?.holdings.length || 0}
+            </div>
+          </div>
+        </div>
+
         <div className="mt-6 flex flex-wrap gap-2">
           {portfolios.map((portfolio) => (
             <button

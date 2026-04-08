@@ -1,17 +1,17 @@
 import React from "react";
 import {
-  Shield,
-  TrendingUp,
-  Info,
   AlertTriangle,
-  Layers,
   ArrowRight,
+  Info,
+  Layers,
+  Shield,
   Target,
+  TrendingUp,
 } from "lucide-react";
 import {
-  PieChart,
-  Pie,
   Cell,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
 } from "recharts";
@@ -43,10 +43,23 @@ interface ETFComparisonProps {
   onSelectTicker?: (ticker: string) => void;
 }
 
-const ETFComparison: React.FC<ETFComparisonProps> = ({
+const COLORS = [
+  "#0f766e",
+  "#0d9488",
+  "#14b8a6",
+  "#5eead4",
+  "#1d4ed8",
+  "#3b82f6",
+  "#93c5fd",
+  "#475569",
+  "#64748b",
+  "#94a3b8",
+];
+
+export default function ETFComparison({
   analysis,
   onSelectTicker,
-}) => {
+}: ETFComparisonProps) {
   const formatCurrency = (value: number) => {
     if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
@@ -60,75 +73,41 @@ const ETFComparison: React.FC<ETFComparisonProps> = ({
     fullName: h.name,
   }));
 
-  const COLORS = [
-    "#6366f1",
-    "#818cf8",
-    "#a5b4fc",
-    "#c7d2fe",
-    "#4f46e5",
-    "#4338ca",
-    "#3730a3",
-    "#312e81",
-    "#1e1b4b",
-    "#4338ca",
-  ];
-
   return (
     <div className="space-y-6">
-      {/* Header Info */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-4">
-          <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-            <Shield className="w-3 h-3" /> Kosten (TER)
-          </div>
-          <div className="text-xl font-bold text-white">
-            {analysis.ter !== null ? `${analysis.ter.toFixed(2)}%` : "N/A"}
-          </div>
-          <div
-            className={`text-xs mt-1 ${analysis.is_best_in_class ? "text-emerald-400" : "text-amber-400"}`}
-          >
-            {analysis.is_best_in_class
-              ? "Best-in-Class Gebühren"
-              : "Überdurchschnittliche Kosten"}
-          </div>
-        </div>
-
-        <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4">
-          <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-            <Layers className="w-3 h-3" /> Fondsvolumen
-          </div>
-          <div className="text-xl font-bold text-white">
-            {analysis.total_assets
-              ? formatCurrency(analysis.total_assets)
-              : "N/A"}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            AUM (Verwaltetes Vermögen)
-          </div>
-        </div>
-
-        <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4">
-          <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> Kategorie
-          </div>
-          <div
-            className="text-xl font-bold text-white truncate"
-            title={analysis.category}
-          >
-            {analysis.category || "N/A"}
-          </div>
-          <div className="text-xs text-slate-500 mt-1 font-mono uppercase tracking-wider">
-            Asset Klasse
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <InfoCard
+          icon={<Shield className="h-3 w-3" />}
+          label="Kosten (TER)"
+          value={analysis.ter !== null ? `${analysis.ter.toFixed(2)}%` : "N/A"}
+          tone={analysis.is_best_in_class ? "emerald" : "amber"}
+          detail={
+            analysis.is_best_in_class
+              ? "Best-in-Class Gebuehren"
+              : "Ueberdurchschnittliche Kosten"
+          }
+        />
+        <InfoCard
+          icon={<Layers className="h-3 w-3" />}
+          label="Fondsvolumen"
+          value={analysis.total_assets ? formatCurrency(analysis.total_assets) : "N/A"}
+          tone="blue"
+          detail="AUM (verwaltetes Vermoegen)"
+        />
+        <InfoCard
+          icon={<TrendingUp className="h-3 w-3" />}
+          label="Kategorie"
+          value={analysis.category || "N/A"}
+          tone="slate"
+          detail="Asset-Klasse"
+        />
       </div>
 
-      {/* Alternatives */}
       {analysis.alternatives.length > 0 && (
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
-            <h3 className="text-lg font-bold text-white">
+        <div className="surface-panel rounded-[1.8rem] p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <h3 className="text-lg font-bold text-slate-900">
               Optimierungspotenzial gefunden
             </h3>
           </div>
@@ -137,28 +116,26 @@ const ETFComparison: React.FC<ETFComparisonProps> = ({
               <div
                 key={alt.ticker}
                 onClick={() => onSelectTicker?.(alt.ticker)}
-                className="group flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-slate-800/50 border border-slate-700/50 rounded-lg hover:border-amber-500/50 transition-all cursor-pointer"
+                className="group flex cursor-pointer flex-col justify-between gap-4 rounded-[1.2rem] border border-black/8 bg-white/78 p-4 transition-all hover:border-amber-500/25 hover:bg-white md:flex-row md:items-center"
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-amber-400 font-bold font-mono tracking-tighter">
+                    <span className="font-mono font-bold tracking-tight text-amber-700">
                       {alt.ticker}
                     </span>
-                    <span className="text-slate-200 font-medium">
-                      {alt.name}
-                    </span>
+                    <span className="font-medium text-slate-900">{alt.name}</span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">{alt.reason}</p>
+                  <p className="mt-1 text-xs text-slate-500">{alt.reason}</p>
                 </div>
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex shrink-0 items-center gap-4">
                   <div className="text-right">
                     <div className="text-xs text-slate-500">TER</div>
-                    <div className="text-emerald-400 font-bold">
+                    <div className="font-bold text-emerald-700">
                       {alt.ter.toFixed(2)}%
                     </div>
                   </div>
-                  <div className="bg-amber-500/10 p-2 rounded-full group-hover:bg-amber-500/20 transition-colors">
-                    <ArrowRight className="w-4 h-4 text-amber-500" />
+                  <div className="rounded-full bg-amber-500/10 p-2 transition-colors group-hover:bg-amber-500/16">
+                    <ArrowRight className="h-4 w-4 text-amber-700" />
                   </div>
                 </div>
               </div>
@@ -167,13 +144,11 @@ const ETFComparison: React.FC<ETFComparisonProps> = ({
         </div>
       )}
 
-      {/* Top Holdings & Visualization */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: List */}
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-400" /> Top 10 Holdings
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="surface-panel rounded-[1.8rem] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+              <Layers className="h-5 w-5 text-[var(--accent)]" /> Top 10 Holdings
             </h3>
             <span className="text-xs text-slate-500">Nach Gewichtung</span>
           </div>
@@ -183,50 +158,45 @@ const ETFComparison: React.FC<ETFComparisonProps> = ({
               analysis.holdings.map((holding) => (
                 <div
                   key={holding.symbol}
-                  className="group relative flex items-center justify-between p-3 bg-slate-900/40 rounded-lg border border-slate-700/30 hover:border-indigo-500/50 hover:bg-slate-900/60 transition-all cursor-help"
+                  className="group relative flex cursor-help items-center justify-between rounded-xl border border-black/8 bg-white/78 p-3 transition-all hover:border-[var(--accent)]/20 hover:bg-white"
                 >
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-slate-200 font-bold font-mono text-sm truncate">
+                  <div className="min-w-0">
+                    <span className="block truncate font-mono text-sm font-bold text-slate-900">
                       {holding.symbol}
                     </span>
-                    <span className="text-[10px] text-slate-500 truncate group-hover:text-slate-400 transition-colors">
+                    <span className="block truncate text-[10px] text-slate-500">
                       {holding.name}
                     </span>
                   </div>
-                  <div className="flex flex-col items-end shrink-0 ml-4">
-                    <span className="text-indigo-400 font-bold text-sm">
-                      {holding.weight.toFixed(2)}%
-                    </span>
+                  <div className="ml-4 shrink-0 text-sm font-bold text-[var(--accent)]">
+                    {holding.weight.toFixed(2)}%
                   </div>
 
-                  {/* Enhanced Hover Card (Tooltip replacement) */}
-                  <div className="absolute left-full top-0 ml-4 z-50 w-64 p-4 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all delay-150 transform translate-x-2 group-hover:translate-x-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                        <Target className="w-4 h-4 text-indigo-400" />
+                  <div className="invisible absolute left-full top-0 z-50 ml-4 w-64 translate-x-2 rounded-xl border border-black/8 bg-white p-4 opacity-0 shadow-[0_20px_40px_rgba(17,24,39,0.12)] transition-all delay-150 group-hover:visible group-hover:translate-x-0 group-hover:opacity-100">
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-soft)]">
+                        <Target className="h-4 w-4 text-[var(--accent)]" />
                       </div>
-                      <div className="font-bold text-white text-sm truncate">
+                      <div className="truncate text-sm font-bold text-slate-900">
                         {holding.symbol}
                       </div>
                     </div>
-                    <div className="text-xs text-slate-300 font-medium mb-3">
+                    <div className="mb-3 text-xs font-medium text-slate-600">
                       {holding.name}
                     </div>
-                    <div className="grid grid-cols-1 gap-2 border-t border-slate-700/50 pt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] text-slate-500 uppercase tracking-tighter">
+                    <div className="border-t border-black/8 pt-2">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
                           Gewichtung
                         </span>
-                        <span className="text-xs font-bold text-white">
+                        <span className="text-xs font-bold text-slate-900">
                           {holding.weight.toFixed(2)}%
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06]">
                         <div
-                          className="h-full bg-indigo-500 rounded-full"
-                          style={{
-                            width: `${Math.min(100, holding.weight * 5)}%`,
-                          }}
+                          className="h-full rounded-full bg-[var(--accent)]"
+                          style={{ width: `${Math.min(100, holding.weight * 5)}%` }}
                         />
                       </div>
                     </div>
@@ -234,36 +204,35 @@ const ETFComparison: React.FC<ETFComparisonProps> = ({
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-slate-500 bg-slate-900/20 rounded-xl border border-dashed border-slate-700">
-                <Info className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                Keine Holdings-Daten verfügbar
+              <div className="rounded-xl border border-dashed border-black/8 bg-white/70 py-8 text-center text-slate-500">
+                <Info className="mx-auto mb-2 h-8 w-8 opacity-25" />
+                Keine Holdings-Daten verfuegbar
               </div>
             )}
           </div>
         </div>
 
-        {/* Right: Pie Chart */}
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-5 flex flex-col items-center justify-center min-h-[300px]">
-          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 self-start">
+        <div className="surface-panel flex min-h-[300px] flex-col items-center justify-center rounded-[1.8rem] p-5">
+          <h3 className="mb-6 self-start text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
             Visualisierung der Allokation
           </h3>
           {analysis.holdings.length > 0 ? (
-            <div className="w-full h-64">
+            <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <RechartsTooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl">
-                            <div className="text-indigo-400 font-bold">
+                          <div className="rounded-lg border border-black/8 bg-white p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
+                            <div className="font-bold text-[var(--accent)]">
                               {payload[0].name}
                             </div>
-                            <div className="text-[10px] text-slate-400 mb-1">
+                            <div className="mb-1 text-[10px] text-slate-500">
                               {payload[0].payload.fullName}
                             </div>
-                            <div className="text-xs font-bold text-white">
-                              {payload[0].value.toFixed(2)}%
+                            <div className="text-xs font-bold text-slate-900">
+                              {Number(payload[0].value).toFixed(2)}%
                             </div>
                           </div>
                         );
@@ -273,45 +242,58 @@ const ETFComparison: React.FC<ETFComparisonProps> = ({
                   />
                   <Pie
                     data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
                     dataKey="value"
+                    nameKey="name"
+                    innerRadius={58}
+                    outerRadius={92}
+                    paddingAngle={2}
                   >
                     {pieData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={`${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="grid grid-cols-5 gap-2 mt-4 px-2">
-                {pieData.slice(0, 5).map((entry, index) => (
-                  <div key={entry.name} className="flex flex-col items-center">
-                    <div
-                      className="w-2 h-2 rounded-full mb-1"
-                      style={{ backgroundColor: COLORS[index] }}
-                    />
-                    <span className="text-[8px] font-bold text-slate-500">
-                      {entry.name}
-                    </span>
-                  </div>
-                ))}
-              </div>
             </div>
           ) : (
-            <div className="text-slate-600 italic text-sm">
-              Keine Grafik verfügbar
-            </div>
+            <div className="text-sm text-slate-500">Keine Allokationsdaten vorhanden.</div>
           )}
         </div>
       </div>
     </div>
   );
-};
+}
 
-export default ETFComparison;
+function InfoCard({
+  icon,
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  tone: "emerald" | "amber" | "blue" | "slate";
+}) {
+  const toneClass =
+    tone === "emerald"
+      ? "bg-emerald-500/7 border-emerald-500/14 text-emerald-700"
+      : tone === "amber"
+        ? "bg-amber-500/7 border-amber-500/14 text-amber-700"
+        : tone === "blue"
+          ? "bg-sky-500/7 border-sky-500/14 text-sky-700"
+          : "bg-slate-500/7 border-slate-500/14 text-slate-700";
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClass}`}>
+      <div className="mb-1 flex items-center gap-1 text-xs">
+        {icon}
+        {label}
+      </div>
+      <div className="truncate text-xl font-bold text-slate-900">{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{detail}</div>
+    </div>
+  );
+}

@@ -75,10 +75,10 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-700">
                   Public Signals
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+                <span className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
                   {tracker.signal_quality}
                 </span>
               </div>
@@ -109,7 +109,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-3 lg:min-w-[320px]">
-              <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+              <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Filing Date
                 </div>
@@ -122,7 +122,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
                   </div>
                 )}
               </div>
-              <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+              <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Report Period
                 </div>
@@ -141,14 +141,14 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
             <div className="rounded-3xl border border-black/8 bg-white/60 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-400">
+                <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
                   Highlights
                 </h3>
                 <span className="text-xs text-slate-500">{tracker.lag_note}</span>
               </div>
 
               {tracker.error ? (
-                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700">
                   {tracker.error}
                 </div>
               ) : (
@@ -160,7 +160,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
                     return (
                       <div
                         key={`${tracker.id}-${index}`}
-                        className="rounded-2xl border border-white/5 bg-white/[0.03] p-4"
+                        className="rounded-2xl border border-black/8 bg-white/75 p-4"
                       >
                         {isPosition ? (
                           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -169,16 +169,16 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
                                 <span className="text-lg font-black text-slate-900">
                                   {item.issuer_name}
                                 </span>
-                                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">
+                                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
                                   {statusLabel[item.status || ""] || item.status}
                                 </span>
                                 {actionableTicker && (
-                                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
+                                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                                     {actionableTicker}
                                   </span>
                                 )}
                               </div>
-                              <div className="text-sm text-slate-400">
+                              <div className="text-sm text-slate-600">
                                 Delta {item.delta_value_label} bei{" "}
                                 {numberFormat.format(item.delta_shares || 0)} Aktien
                               </div>
@@ -191,7 +191,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
                             {actionableTicker && (
                               <button
                                 onClick={() => onAnalyze(actionableTicker)}
-                                className="rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-emerald-500"
+                                className="rounded-2xl bg-[var(--accent)] px-5 py-3 text-xs font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-[var(--accent-strong)]"
                               >
                                 Im Analyzer öffnen
                               </button>
@@ -202,7 +202,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
                             <div className="text-base font-black text-slate-900">
                               {item.title}
                             </div>
-                            <div className="text-sm text-slate-400">
+                            <div className="text-sm text-slate-600">
                               {item.detail}
                             </div>
                           </div>
@@ -215,15 +215,15 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-3xl border border-white/5 bg-black/30 p-5">
-                <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-400">
+              <div className="rounded-3xl border border-black/8 bg-white/65 p-5">
+                <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
                   Warum besser
                 </h3>
                 <div className="mt-4 space-y-2">
                   {(tracker.why_better || []).map((point) => (
                     <div
                       key={point}
-                      className="rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-sm text-slate-300"
+                      className="rounded-2xl border border-black/8 bg-white/75 p-3 text-sm text-slate-600"
                     >
                       {point}
                     </div>
@@ -233,7 +233,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
 
               {tracker.latest_filings?.length ? (
                 <div className="rounded-3xl border border-black/8 bg-white/60 p-5">
-                  <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-400">
+                  <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
                     Letzte Filings
                   </h3>
                   <div className="mt-4 space-y-2">
@@ -243,7 +243,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
                         href={filing.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-sm transition-colors hover:border-white/15"
+                        className="flex items-center justify-between rounded-2xl border border-black/8 bg-white/75 p-3 text-sm transition-colors hover:border-black/15"
                       >
                         <span className="font-bold text-slate-900">{filing.form}</span>
                         <span className="text-slate-500">{filing.filed_at}</span>
@@ -255,7 +255,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
 
               {tracker.official_links?.length ? (
                 <div className="rounded-3xl border border-black/8 bg-white/60 p-5">
-                  <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-400">
+                  <h3 className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
                     Offizielle Links
                   </h3>
                   <div className="mt-4 space-y-2">
@@ -275,7 +275,7 @@ const PublicSignalsPanel: React.FC<PublicSignalsPanelProps> = ({
               ) : null}
 
               {tracker.compliance_note ? (
-                <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5 text-sm text-amber-100">
+                <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5 text-sm text-amber-800">
                   {tracker.compliance_note}
                 </div>
               ) : null}

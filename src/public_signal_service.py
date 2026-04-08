@@ -312,12 +312,34 @@ class PublicSignalService:
                     )
                 )
 
+                buy_count = sum(1 for trade in trades if trade.get("action") == "buy")
+                sell_count = sum(1 for trade in trades if trade.get("action") == "sell")
+                latest_trade_date = next((trade.get("trade_date") for trade in trades if trade.get("trade_date")), None)
+                avg_delay_days = (
+                    round(
+                        sum(trade.get("delay_days") or 0 for trade in trades if trade.get("delay_days") is not None)
+                        / max(1, sum(1 for trade in trades if trade.get("delay_days") is not None)),
+                        1,
+                    )
+                    if trades
+                    else None
+                )
+
                 results.append(
                     {
                         "name": name,
                         "reports": entries[:3],
                         "trades": trades[:8],
                         "source_url": "https://disclosures-clerk.house.gov/FinancialDisclosure",
+                        "signal_quality": "official_house_ptr",
+                        "summary": {
+                            "report_count": len(entries[:3]),
+                            "trade_count": len(trades[:8]),
+                            "buy_count": buy_count,
+                            "sell_count": sell_count,
+                            "latest_trade_date": latest_trade_date,
+                            "avg_delay_days": avg_delay_days,
+                        },
                     }
                 )
             except Exception as exc:
@@ -328,6 +350,15 @@ class PublicSignalService:
                         "trades": [],
                         "error": str(exc),
                         "source_url": "https://disclosures-clerk.house.gov/FinancialDisclosure",
+                        "signal_quality": "official_house_ptr",
+                        "summary": {
+                            "report_count": 0,
+                            "trade_count": 0,
+                            "buy_count": 0,
+                            "sell_count": 0,
+                            "latest_trade_date": None,
+                            "avg_delay_days": None,
+                        },
                     }
                 )
         return results
@@ -385,7 +416,24 @@ class PublicSignalService:
                 continue
             seen.add(report["url"])
             unique_reports.append(report)
-        return unique_reports
+        filtered_reports = [
+            report for report in unique_reports if self._name_matches_house_result(name, report.get("name", ""))
+        ]
+        return filtered_reports or unique_reports
+
+    def _name_matches_house_result(self, requested_name: str, result_name: str) -> bool:
+        requested_tokens = [token for token in re.findall(r"[A-Za-z]+", requested_name.lower()) if token]
+        result_tokens = [token for token in re.findall(r"[A-Za-z]+", result_name.lower()) if token]
+        if not requested_tokens or not result_tokens:
+            return True
+        requested_last = requested_tokens[-1]
+        if requested_last not in result_tokens:
+            return False
+        requested_first = requested_tokens[0]
+        result_first = result_tokens[0]
+        if requested_first == result_first:
+            return True
+        return requested_first[:1] == result_first[:1]
 
     def _extract_house_ptr_trades(self, pdf_url: str, filed_year: str) -> List[Dict[str, Any]]:
         response = self.session.get(pdf_url, timeout=30)

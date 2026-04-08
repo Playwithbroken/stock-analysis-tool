@@ -8,8 +8,11 @@ market data, best-effort event classification, and watchlist-aware calendars.
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
+
+import pandas as pd
 
 from src.data_fetcher import DataFetcher
 
@@ -43,6 +46,56 @@ class MorningBriefService:
     ]
     NEWS_TICKERS = ["SPY", "QQQ", "GLD", "TLT", "XLE", "NVDA", "AAPL", "MSFT"]
     DEFAULT_BRIEF_TIMEZONE = "Europe/Berlin"
+    CONTRARIAN_PUBLISHERS = {"CNBC", "Bloomberg", "Reuters", "MarketWatch", "Barron's", "Barrons", "WSJ"}
+    TRUSTED_PUBLISHERS = {
+        "Reuters",
+        "Bloomberg",
+        "Financial Times",
+        "The Wall Street Journal",
+        "Wall Street Journal",
+        "CNBC",
+        "Barron's",
+        "Barrons",
+        "MarketWatch",
+        "The Economist",
+        "Associated Press",
+        "AP News",
+        "Nikkei Asia",
+        "WSJ",
+    }
+    ALLOWED_DOMAINS = {
+        "reuters.com",
+        "bloomberg.com",
+        "ft.com",
+        "wsj.com",
+        "cnbc.com",
+        "barrons.com",
+        "marketwatch.com",
+        "economist.com",
+        "apnews.com",
+        "nikkei.com",
+        "finance.yahoo.com",
+    }
+    EXCLUDED_SOURCE_TERMS = {
+        "x.com",
+        "twitter",
+        "tiktok",
+        "instagram",
+        "facebook",
+        "truth social",
+        "discord",
+        "telegram",
+        "stocktwits",
+        "youtube",
+        "substack",
+        "medium",
+        "blog",
+    }
+    CROWD_SOURCE_TERMS = {
+        "reddit",
+        "reddit.com",
+        "wallstreetbets",
+    }
 
     def get_brief(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
@@ -58,7 +111,9 @@ class MorningBriefService:
         usa = self._collect_region(self.USA, "USA")
         macro = self._collect_assets(self.MACRO)
         top_news = self._collect_news()
+        crowd_news = self._collect_crowd_news()
         event_layer = self._build_event_layer(top_news)
+        contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
@@ -84,7 +139,16 @@ class MorningBriefService:
             },
             "macro_assets": macro,
             "top_news": top_news,
+            "crowd_signals": self._build_crowd_signals(crowd_news),
+            "source_policy": {
+                "trusted_publishers": sorted(self.TRUSTED_PUBLISHERS),
+                "allowed_domains": sorted(self.ALLOWED_DOMAINS),
+                "excluded_sources": sorted(self.EXCLUDED_SOURCE_TERMS),
+                "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
+                "note": "Top News zeigt nur priorisierte serioese Quellen. Social/X wird ausgeschlossen. Reddit erscheint nur separat als Crowd-Signal bei Wiederholung.",
+            },
             "event_layer": event_layer,
+            "contrarian_signals": contrarian_signals,
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
             "opening_timeline": opening_timeline,
@@ -133,27 +197,38 @@ class MorningBriefService:
                     continue
                 seen_titles.add(title)
                 text = title.lower()
+                publisher = item.get("publisher") or ""
+                link = item.get("link")
+                source_meta = self._source_meta(publisher, link)
                 classification = self._classify_news_signal(text)
+                if source_meta["exclude"]:
+                    continue
                 items.append(
                     {
                         "ticker": ticker,
                         "title": title,
-                        "publisher": item.get("publisher"),
-                        "link": item.get("link"),
+                        "publisher": publisher,
+                        "link": link,
+                        "source_domain": source_meta["domain"],
+                        "source_type": source_meta["source_type"],
+                        "source_quality": source_meta["quality"],
+                        "is_trusted_source": source_meta["trusted"],
                         "impact": classification["impact"],
                         "region": classification["region"],
                         "event_type": classification["event_type"],
                         "severity": classification["severity"],
                     }
                 )
-        items.sort(
+        trusted_items = [item for item in items if item.get("is_trusted_source")]
+        trusted_items.sort(
             key=lambda item: (
+                0 if item.get("source_quality") == "tier_1" else 1,
                 0 if item["impact"] == "high" else 1 if item["impact"] == "medium" else 2,
                 0 if item.get("severity") == "critical" else 1 if item.get("severity") == "elevated" else 2,
                 item["region"],
             )
         )
-        return items[:12]
+        return trusted_items[:12]
 
     def _build_event_layer(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         layer = []
@@ -171,10 +246,168 @@ class MorningBriefService:
                     "event_type": event_type,
                     "severity": severity,
                     "publisher": item.get("publisher"),
+                    "source_quality": item.get("source_quality"),
                     "ticker": item.get("ticker"),
                 }
             )
         return layer[:8]
+
+    def _build_contrarian_signals(
+        self,
+        news: List[Dict[str, Any]],
+        watchlist_snapshot: Dict[str, Any] | None,
+    ) -> List[Dict[str, Any]]:
+        watch_tickers = [
+            (item.get("value") or "").upper()
+            for item in (watchlist_snapshot or {}).get("items", [])
+            if item.get("kind") == "ticker"
+        ]
+        candidates = []
+        seen = set()
+        for item in news:
+            title = (item.get("title") or "").lower()
+            publisher = item.get("publisher") or ""
+            ticker = (item.get("ticker") or "").upper()
+            if publisher not in self.CONTRARIAN_PUBLISHERS:
+                continue
+            if not any(term in title for term in ["buy", "sell", "bull", "bear", "upgrade", "downgrade", "top pick", "call"]):
+                continue
+            if not ticker or ticker in seen:
+                continue
+            if watch_tickers and ticker not in watch_tickers and ticker not in {"SPY", "QQQ", "AAPL", "MSFT", "NVDA"}:
+                continue
+            technical = self._build_contrarian_technical(ticker)
+            if not technical:
+                continue
+            media_bias = "long" if any(term in title for term in ["buy", "bull", "upgrade", "top pick"]) else "short"
+            contrarian_bias = "short" if media_bias == "long" else "long"
+            if not self._contrarian_confirmation(media_bias, technical):
+                continue
+            score = self._contrarian_score(technical)
+            candidates.append(
+                {
+                    "ticker": ticker,
+                    "title": item.get("title"),
+                    "publisher": publisher,
+                    "region": item.get("region") or "usa",
+                    "media_bias": media_bias,
+                    "contrarian_bias": contrarian_bias,
+                    "score": score,
+                    "rsi_14": technical["rsi_14"],
+                    "volume_ratio": technical["volume_ratio"],
+                    "ema_stack": technical["ema_stack"],
+                    "reason": technical["reason"],
+                    "link": item.get("link"),
+                }
+            )
+            seen.add(ticker)
+        candidates.sort(key=lambda row: row["score"], reverse=True)
+        return candidates[:6]
+
+    def _build_contrarian_technical(self, ticker: str) -> Dict[str, Any] | None:
+        try:
+            hist = DataFetcher(ticker).stock.history(period="6mo", interval="1d")
+            if hist.empty or len(hist) < 50:
+                return None
+            close = hist["Close"].astype(float)
+            volume = hist["Volume"].astype(float)
+            ema20 = close.ewm(span=20, adjust=False).mean().iloc[-1]
+            ema50 = close.ewm(span=50, adjust=False).mean().iloc[-1]
+            current = float(close.iloc[-1])
+            volume_ratio = float(volume.iloc[-1] / volume.tail(20).mean()) if float(volume.tail(20).mean() or 0) else 0
+            rsi = self._rsi(close, 14)
+            if current > ema20 > ema50:
+                ema_stack = "bullish"
+            elif current < ema20 < ema50:
+                ema_stack = "bearish"
+            else:
+                ema_stack = "mixed"
+            return {
+                "rsi_14": round(rsi, 1),
+                "volume_ratio": round(volume_ratio, 2),
+                "ema_stack": ema_stack,
+                "reason": f"RSI {rsi:.1f}, RVOL {volume_ratio:.2f}, EMA stack {ema_stack}",
+            }
+        except Exception:
+            return None
+
+    def _contrarian_confirmation(self, media_bias: str, technical: Dict[str, Any]) -> bool:
+        rsi = float(technical.get("rsi_14") or 50)
+        volume_ratio = float(technical.get("volume_ratio") or 0)
+        ema_stack = technical.get("ema_stack")
+        if media_bias == "long":
+            return (rsi >= 67 and ema_stack == "bullish") or (rsi >= 72) or (volume_ratio >= 1.8 and rsi >= 64)
+        return (rsi <= 33 and ema_stack == "bearish") or (rsi <= 28) or (volume_ratio >= 1.8 and rsi <= 36)
+
+    def _contrarian_score(self, technical: Dict[str, Any]) -> float:
+        rsi = float(technical.get("rsi_14") or 50)
+        volume_ratio = float(technical.get("volume_ratio") or 1)
+        distance = abs(rsi - 50)
+        return round(min(95, 52 + distance * 1.15 + max(0, volume_ratio - 1) * 14), 1)
+
+    def _rsi(self, close: pd.Series, window: int) -> float:
+        delta = close.diff()
+        gains = delta.clip(lower=0).rolling(window=window).mean()
+        losses = (-delta.clip(upper=0)).rolling(window=window).mean()
+        rs = gains / losses.replace(0, pd.NA)
+        rsi = 100 - (100 / (1 + rs))
+        return float(rsi.dropna().iloc[-1]) if not rsi.dropna().empty else 50.0
+
+    def _collect_crowd_news(self) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        seen_titles = set()
+        for ticker in self.NEWS_TICKERS:
+            news = DataFetcher(ticker).get_news()
+            for item in news[:4]:
+                title = item.get("title") or ""
+                if not title or title in seen_titles:
+                    continue
+                seen_titles.add(title)
+                publisher = item.get("publisher") or ""
+                link = item.get("link")
+                source_meta = self._source_meta(publisher, link)
+                if source_meta["source_type"] != "crowd":
+                    continue
+                classification = self._classify_news_signal(title.lower())
+                items.append(
+                    {
+                        "ticker": ticker,
+                        "title": title,
+                        "publisher": publisher,
+                        "link": link,
+                        "source_domain": source_meta["domain"],
+                        "source_type": source_meta["source_type"],
+                        "source_quality": source_meta["quality"],
+                        "impact": classification["impact"],
+                        "region": classification["region"],
+                        "event_type": classification["event_type"],
+                        "severity": classification["severity"],
+                    }
+                )
+        return items
+
+    def _build_crowd_signals(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for item in news:
+            if item.get("source_type") != "crowd":
+                continue
+            key = (item.get("ticker") or "") + ":" + (item.get("event_type") or "macro")
+            bucket = grouped.setdefault(
+                key,
+                {
+                    "ticker": item.get("ticker"),
+                    "event_type": item.get("event_type"),
+                    "region": item.get("region"),
+                    "mentions": 0,
+                    "titles": [],
+                },
+            )
+            bucket["mentions"] += 1
+            if item.get("title"):
+                bucket["titles"].append(item["title"])
+        signals = [item for item in grouped.values() if item["mentions"] >= 2]
+        signals.sort(key=lambda item: item["mentions"], reverse=True)
+        return signals[:6]
 
     def _collect_earnings_calendar(self, watchlist_snapshot: Dict[str, Any] | None) -> List[Dict[str, Any]]:
         tickers: List[str] = []
@@ -429,11 +662,69 @@ class MorningBriefService:
                     {
                         "ticker": news.get("ticker"),
                         "type": "news",
-                        "summary": news.get("title"),
+                        "summary": f"{news.get('title')} ({news.get('publisher')})",
                     }
                 )
         brief["watchlist_impact"] = impact[:8]
         return brief
+
+    def _source_meta(self, publisher: str | None, link: str | None) -> Dict[str, Any]:
+        publisher_value = (publisher or "").strip()
+        publisher_lower = publisher_value.lower()
+        domain = self._extract_domain(link)
+        domain_lower = domain.lower()
+
+        social_hit = any(term in publisher_lower or term in domain_lower for term in self.EXCLUDED_SOURCE_TERMS)
+        crowd_hit = any(term in publisher_lower or term in domain_lower for term in self.CROWD_SOURCE_TERMS)
+        trusted_publisher = any(
+            trusted.lower() in publisher_lower for trusted in self.TRUSTED_PUBLISHERS
+        )
+        trusted_domain = any(
+            domain_lower == allowed or domain_lower.endswith(f".{allowed}")
+            for allowed in self.ALLOWED_DOMAINS
+        )
+
+        if social_hit:
+            return {
+                "domain": domain,
+                "trusted": False,
+                "exclude": True,
+                "quality": "excluded",
+                "source_type": "social",
+            }
+        if crowd_hit:
+            return {
+                "domain": domain,
+                "trusted": False,
+                "exclude": False,
+                "quality": "crowd",
+                "source_type": "crowd",
+            }
+        if trusted_publisher or trusted_domain:
+            quality = "tier_1" if trusted_publisher and trusted_domain else "tier_2"
+            return {
+                "domain": domain,
+                "trusted": True,
+                "exclude": False,
+                "quality": quality,
+                "source_type": "publisher",
+            }
+        return {
+            "domain": domain,
+            "trusted": False,
+            "exclude": True,
+            "quality": "unverified",
+            "source_type": "unverified",
+        }
+
+    def _extract_domain(self, link: str | None) -> str:
+        if not link:
+            return ""
+        try:
+            parsed = urlparse(link)
+            return (parsed.netloc or "").lower().removeprefix("www.")
+        except Exception:
+            return ""
 
     def _estimate_change_1d(self, price_data: Dict[str, Any]) -> float | None:
         change_1w = price_data.get("change_1w")

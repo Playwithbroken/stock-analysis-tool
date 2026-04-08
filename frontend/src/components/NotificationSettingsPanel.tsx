@@ -167,7 +167,7 @@ export default function NotificationSettingsPanel({
             <button
               onClick={() => saveProfile()}
               disabled={saving}
-              className="rounded-xl bg-[#101114] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white disabled:opacity-50"
+              className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
             >
               Save settings
             </button>

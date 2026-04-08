@@ -21,6 +21,10 @@ from src.analyzer import StockAnalyzer, Rating, Valuation
 from src.discovery_service import DiscoveryService
 from src.email_alert_service import EmailAlertService
 from src.morning_brief_service import MorningBriefService
+from src.paper_trading_service import PaperTradingService
+from src.signal_score_service import SignalScoreService
+from src.session_list_service import SessionListService
+from src.trading_intelligence_service import TradingIntelligenceService
 from src.public_signal_service import PublicSignalService
 from src.storage import PortfolioManager
 
@@ -62,6 +66,10 @@ _public_signal_service = None
 _email_alert_service = None
 _signal_alert_task = None
 _morning_brief_service = None
+_signal_score_service = None
+_session_list_service = None
+_paper_trading_service = None
+_trading_intelligence_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 
 
@@ -142,6 +150,8 @@ def get_email_alert_service():
             get_portfolio_manager(),
             get_public_signal_service(),
             get_morning_brief_service(),
+            get_session_list_service(),
+            get_signal_score_service(),
         )
     return _email_alert_service
 
@@ -151,6 +161,30 @@ def get_morning_brief_service():
         print("Initializing MorningBriefService...")
         _morning_brief_service = MorningBriefService()
     return _morning_brief_service
+
+def get_signal_score_service():
+    global _signal_score_service
+    if _signal_score_service is None:
+        _signal_score_service = SignalScoreService()
+    return _signal_score_service
+
+def get_session_list_service():
+    global _session_list_service
+    if _session_list_service is None:
+        _session_list_service = SessionListService()
+    return _session_list_service
+
+def get_paper_trading_service():
+    global _paper_trading_service
+    if _paper_trading_service is None:
+        _paper_trading_service = PaperTradingService(get_portfolio_manager())
+    return _paper_trading_service
+
+def get_trading_intelligence_service():
+    global _trading_intelligence_service
+    if _trading_intelligence_service is None:
+        _trading_intelligence_service = TradingIntelligenceService()
+    return _trading_intelligence_service
 
 
 @app.middleware("http")
@@ -254,6 +288,43 @@ class WorkspaceProfileRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     password: str
+
+
+class PaperTradeCreateRequest(BaseModel):
+    ticker: str
+    asset_class: str = "equity"
+    direction: str = "long"
+    setup_type: str = "signal_follow"
+    thesis: Optional[str] = None
+    entry_price: float
+    stop_price: Optional[float] = None
+    target_price: Optional[float] = None
+    quantity: float = 1
+    confidence_score: Optional[float] = None
+    leverage: float = 1
+    notes: Optional[str] = None
+    exit_reason: Optional[str] = None
+    lessons_learned: Optional[str] = None
+
+
+class PaperTradeFromPlaybookRequest(BaseModel):
+    playbook_id: str
+    direction: Optional[str] = "long"
+    quantity: float = 1
+    leverage: float = 1
+
+
+class PaperTradeCloseRequest(BaseModel):
+    closed_price: Optional[float] = None
+    notes: Optional[str] = None
+    exit_reason: Optional[str] = None
+    lessons_learned: Optional[str] = None
+
+
+class PaperTradeJournalRequest(BaseModel):
+    notes: Optional[str] = None
+    exit_reason: Optional[str] = None
+    lessons_learned: Optional[str] = None
 
 
 def rating_to_string(rating: Rating) -> str:
@@ -1058,10 +1129,31 @@ async def save_workspace_profile(req: WorkspaceProfileRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/settings/signal-score")
+async def get_signal_score_settings():
+    try:
+        return convert_numpy_types(get_portfolio_manager().get_signal_score_settings())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/settings/signal-score")
+async def save_signal_score_settings(payload: Dict[str, Any]):
+    try:
+        return convert_numpy_types(get_portfolio_manager().save_signal_score_settings(payload))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/signals/alerts/daily-brief")
 async def send_daily_brief():
     try:
         return get_email_alert_service().send_daily_brief()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/a-setup-digest")
+async def send_a_setup_digest():
+    try:
+        return get_email_alert_service().send_a_setup_digest()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1081,6 +1173,97 @@ async def get_morning_brief():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/signals/scoreboard")
+async def get_signal_scoreboard():
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        settings = get_portfolio_manager().get_signal_score_settings()
+        scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+        return convert_numpy_types(scoreboard)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/trading/paper-dashboard")
+async def get_paper_trading_dashboard():
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        settings = get_portfolio_manager().get_signal_score_settings()
+        scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+        dashboard = get_paper_trading_service().build_dashboard(scoreboard, settings)
+        return convert_numpy_types(dashboard)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/trading/intelligence")
+async def get_trading_intelligence():
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        payload = get_trading_intelligence_service().build_snapshot(snapshot)
+        return convert_numpy_types(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/trading/paper-trades")
+async def create_paper_trade(req: PaperTradeCreateRequest):
+    try:
+        payload = req.model_dump()
+        trade = get_paper_trading_service().create_trade_from_payload(payload)
+        return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/trading/paper-trades/from-playbook")
+async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        settings = get_portfolio_manager().get_signal_score_settings()
+        scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+        trade = get_paper_trading_service().create_trade_from_playbook(req.model_dump(), scoreboard, settings)
+        return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/trading/paper-trades/{trade_id}/close")
+async def close_paper_trade(trade_id: str, req: PaperTradeCloseRequest):
+    try:
+        trade = get_paper_trading_service().close_trade(
+            trade_id,
+            closed_price=req.closed_price,
+            notes=req.notes,
+            exit_reason=req.exit_reason,
+            lessons_learned=req.lessons_learned,
+        )
+        return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/trading/paper-trades/{trade_id}/journal")
+async def update_paper_trade_journal(trade_id: str, req: PaperTradeJournalRequest):
+    try:
+        trade = get_paper_trading_service().update_trade_journal(
+            trade_id,
+            notes=req.notes,
+            exit_reason=req.exit_reason,
+            lessons_learned=req.lessons_learned,
+        )
+        return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/market/session-lists")
+async def get_market_session_lists():
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        payload = await get_session_list_service().build_session_lists(snapshot)
+        return convert_numpy_types(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/signals/alerts/morning-brief")
 async def send_morning_brief():
     try:
@@ -1092,6 +1275,13 @@ async def send_morning_brief():
 async def send_open_brief(session: str):
     try:
         return get_email_alert_service().send_open_brief(session)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/signals/alerts/session-list/{region}/{phase}")
+async def send_session_list_alert(region: str, phase: str):
+    try:
+        return get_email_alert_service().send_session_list_alert(region, phase)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

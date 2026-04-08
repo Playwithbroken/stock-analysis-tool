@@ -163,20 +163,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   };
 
   const tabs = [
-    { id: "signals", label: "Signals", icon: "ðŸ§­" },
-    { id: "overview", label: "Markt-Puls", icon: "🌍" },
-    { id: "ai", label: "AI Chancen", icon: "🤖" },
-    { id: "movers", label: "Top/Flop", icon: "📊" },
-    { id: "etf", label: "ETF Welt", icon: "🏢" },
-    { id: "alternative", label: "Alternativ", icon: "🪙" },
+    { id: "signals", label: "Signals", icon: "SG" },
+    { id: "overview", label: "Markt-Puls", icon: "MP" },
+    { id: "ai", label: "AI Chancen", icon: "AI" },
+    { id: "movers", label: "Top/Flop", icon: "TF" },
+    { id: "etf", label: "ETF Welt", icon: "ETF" },
+    { id: "alternative", label: "Alternativ", icon: "ALT" },
   ] as const;
 
   if (loading && !stars) {
     return (
       <div className="space-y-8 p-4 max-w-7xl mx-auto">
         {/* Banner Skeleton */}
-        <div className="h-48 w-full bg-linear-to-r from-gray-900 to-black rounded-3xl animate-pulse border border-white/5 relative overflow-hidden">
-          <div className="absolute inset-0 bg-white/5 -translate-x-full animate-[shimmer_2s_infinite]"></div>
+        <div className="relative h-48 w-full overflow-hidden rounded-3xl border border-black/8 bg-white/80 animate-pulse">
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-white/40"></div>
         </div>
 
         {/* Grid Skeleton */}
@@ -184,21 +184,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-40 rounded-3xl bg-[#0a0a0c] border border-white/5 animate-pulse relative overflow-hidden"
+              className="relative h-40 overflow-hidden rounded-3xl border border-black/8 bg-white/75 animate-pulse"
             >
-              <div className="absolute inset-0 bg-white/5 -translate-x-full animate-[shimmer_2s_infinite]"></div>
+              <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-white/40"></div>
             </div>
           ))}
         </div>
 
         {/* List Skeleton */}
         <div className="space-y-4">
-          <div className="h-8 w-48 bg-gray-900 rounded-lg animate-pulse"></div>
+          <div className="h-8 w-48 rounded-lg bg-[var(--bg-soft)] animate-pulse"></div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-32 bg-[#0a0a0c] rounded-2xl border border-white/5 animate-pulse"
+                className="h-32 rounded-2xl border border-black/8 bg-white/75 animate-pulse"
               ></div>
             ))}
           </div>
@@ -210,33 +210,37 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   return (
     <div className="space-y-8 pb-20">
       {/* Tab Navigation */}
-      <div className="surface-panel sticky top-20 z-40 flex w-fit items-center gap-2 rounded-2xl p-1.5 mx-auto lg:mx-0">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === tab.id
-                ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
-                : "text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]"
-            }`}
-          >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
-          </button>
-        ))}
+      <div className="no-scrollbar sticky top-20 z-40 -mx-1 overflow-x-auto px-1">
+        <div className="surface-panel mx-auto flex w-max min-w-full items-center gap-2 rounded-2xl p-1.5 lg:mx-0 lg:min-w-0">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all sm:px-6 ${
+                activeTab === tab.id
+                  ? "bg-[var(--accent)] text-white shadow-[0_10px_30px_rgba(15,118,110,0.18)]"
+                  : "text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]"
+              }`}
+            >
+              <span className="inline-flex min-w-[1.2rem] justify-center text-xs font-extrabold uppercase tracking-[0.14em]">
+                {tab.icon}
+              </span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {activeTab === "etf" && (
         <div className="surface-panel flex items-center justify-between rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
           <div className="flex items-center gap-4">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isComparing ? "bg-[#101114] text-white" : "bg-[var(--bg-soft)] text-slate-500"}`}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isComparing ? "bg-[var(--accent)] text-white" : "bg-[var(--bg-soft)] text-slate-500"}`}
             >
               <span className="text-xl font-bold">{selectedEtfs.length}</span>
             </div>
             <div>
-              <h4 className="text-sm font-bold text-white">
+              <h4 className="text-sm font-bold text-slate-900">
                 Multi-Vergleich Modus
               </h4>
               <p className="text-xs text-slate-500">
@@ -258,9 +262,9 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
               disabled={selectedEtfs.length < 2 && !isComparing}
               className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
                 isComparing
-                  ? "bg-[#101114] text-white"
+                  ? "bg-[var(--accent)] text-white"
                   : selectedEtfs.length >= 2
-                    ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
+                    ? "bg-[var(--accent)] text-white shadow-[0_10px_30px_rgba(15,118,110,0.18)]"
                     : "bg-[var(--bg-soft)] text-slate-400 cursor-not-allowed"
               }`}
             >
@@ -280,12 +284,12 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder="ETF suchen (z.B. MSCI World, S&P 500, Automation...)"
-            className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
+            className="w-full rounded-2xl border border-black/8 bg-white py-4 pl-12 pr-4 font-medium text-slate-900 placeholder:text-slate-400 transition-all focus:outline-hidden focus:ring-2 focus:ring-[var(--accent)]/20"
           />
 
           {/* Search Results Overlay */}
           {searchQuery.length >= 2 && (
-            <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 max-h-96 overflow-y-auto backdrop-blur-xl">
+            <div className="absolute top-full left-0 right-0 z-50 mt-2 max-h-96 overflow-y-auto rounded-2xl border border-black/8 bg-[rgba(255,255,255,0.96)] p-2 shadow-[0_24px_80px_rgba(17,24,39,0.12)] backdrop-blur-xl">
               {isSearching ? (
                 <div className="p-4 text-center text-slate-500 animate-pulse font-bold">
                   Wird gescannt...
@@ -307,14 +311,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                             setSearchResults([]);
                           }
                         }}
-                        className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group"
+                        className="group flex cursor-pointer items-center justify-between rounded-xl p-3 transition-colors hover:bg-black/[0.03]"
                       >
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-black text-xs">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] font-black text-xs">
                             {res.ticker.slice(0, 2)}
                           </div>
                           <div>
-                            <div className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">
+                            <div className="text-sm font-bold text-slate-900 transition-colors group-hover:text-[var(--accent)]">
                               {res.ticker}
                             </div>
                             <div className="text-[10px] text-slate-500 truncate max-w-[200px]">
@@ -347,8 +351,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
             {stars ? (
               <section className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
-                    <span className="text-yellow-500">⭐</span> STAR SPOTLIGHT
+                  <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
+                    <span className="text-yellow-600">Star</span> Spotlight
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -357,19 +361,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                     onClick={() =>
                       stars.day_winner && onAnalyze(stars.day_winner.ticker)
                     }
-                    className="group relative p-6 rounded-3xl bg-linear-to-br from-green-500/10 to-transparent border border-green-500/20 hover:border-green-500/50 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/10"
+                    className="surface-panel group relative cursor-pointer rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-green-500/20"
                   >
-                    <div className="text-[10px] font-bold text-green-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                       Day Winner
                     </div>
-                    <div className="text-3xl font-black text-white group-hover:text-green-300 mb-1 transition-colors">
+                    <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-green-700">
                       {stars.day_winner?.ticker || "N/A"}
                     </div>
-                    <div className="text-sm text-gray-500 mb-4 truncate">
+                    <div className="mb-4 truncate text-sm text-slate-500">
                       {stars.day_winner?.name || "No data"}
                     </div>
-                    <div className="text-2xl font-mono font-bold text-green-400">
+                    <div className="text-2xl font-mono font-bold text-emerald-700">
                       +{stars.day_winner?.change?.toFixed(2) || "0.00"}%
                     </div>
                   </div>
@@ -379,19 +383,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                     onClick={() =>
                       stars.week_winner && onAnalyze(stars.week_winner.ticker)
                     }
-                    className="group relative p-6 rounded-3xl bg-linear-to-br from-purple-500/10 to-transparent border border-purple-500/20 hover:border-purple-500/50 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-purple-500/10"
+                    className="surface-panel group relative cursor-pointer rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-[var(--accent)]/20"
                   >
-                    <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+                    <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
                       Week Winner
                     </div>
-                    <div className="text-3xl font-black text-white group-hover:text-purple-300 mb-1 transition-colors">
+                    <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-[var(--accent)]">
                       {stars.week_winner?.ticker || "N/A"}
                     </div>
-                    <div className="text-sm text-gray-500 mb-4 truncate">
+                    <div className="mb-4 truncate text-sm text-slate-500">
                       {stars.week_winner?.name || "No data"}
                     </div>
-                    <div className="text-2xl font-mono font-bold text-purple-400">
+                    <div className="text-2xl font-mono font-bold text-[var(--accent)]">
                       +{stars.week_winner?.change?.toFixed(2) || "0.00"}%
                     </div>
                   </div>
@@ -402,19 +406,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                       <div
                         key={stock.ticker || idx}
                         onClick={() => onAnalyze(stock.ticker)}
-                        className="group relative p-6 rounded-3xl bg-[#0a0a0c] border border-white/5 hover:border-blue-500/50 cursor-pointer transition-all hover:-translate-y-1"
+                        className="surface-panel group relative cursor-pointer rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-sky-500/20"
                       >
-                        <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4">
+                        <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-sky-700">
                           Picked for you
                         </div>
-                        <div className="text-3xl font-black text-white group-hover:text-blue-300 mb-1 transition-colors">
+                        <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-sky-700">
                           {stock.ticker}
                         </div>
-                        <div className="text-sm text-gray-500 mb-4 truncate">
+                        <div className="mb-4 truncate text-sm text-slate-500">
                           {stock.name}
                         </div>
                         <div
-                          className={`text-2xl font-mono font-bold ${stock.change && stock.change > 0 ? "text-green-400" : "text-red-400"}`}
+                          className={`text-2xl font-mono font-bold ${stock.change && stock.change > 0 ? "text-emerald-700" : "text-red-700"}`}
                         >
                           {stock.change && stock.change > 0 ? "+" : ""}
                           {stock.change?.toFixed(2)}%
@@ -422,14 +426,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                       </div>
                     ))
                   ) : (
-                    <div className="col-span-2 flex items-center justify-center p-6 rounded-3xl bg-white/5 border border-dashed border-white/10 text-gray-500 text-sm">
+                    <div className="col-span-2 flex items-center justify-center rounded-3xl border border-dashed border-black/8 bg-white/72 p-6 text-sm text-slate-500">
                       No personalized picks available yet.
                     </div>
                   )}
                 </div>
               </section>
             ) : (
-              <div className="text-center py-10 text-gray-500 bg-white/5 rounded-3xl">
+              <div className="rounded-3xl border border-dashed border-black/8 bg-white/72 py-10 text-center text-slate-500">
                 Failed to load market stars.
               </div>
             )}
@@ -450,55 +454,65 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
 
         {activeTab === "ai" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
-            {/* High-Risk Opps */}
             <section className="space-y-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
-                <span className="text-red-500">⚠️</span> HIGH-RISK RADAR
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+                    AI Chancen
+                  </div>
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                    High-Risk Radar
+                  </h2>
+                </div>
+                <div className="rounded-full border border-red-500/15 bg-red-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700">
+                  Opportunistisch
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {highRiskOpps.map((opp: any) => (
                   <div
                     key={opp.ticker}
                     onClick={() => onAnalyze(opp.ticker)}
-                    className="p-6 rounded-3xl bg-linear-to-b from-[#111] to-black border border-white/5 hover:border-red-500/30 cursor-pointer transition-all group"
+                    className="surface-panel group cursor-pointer rounded-[2rem] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-red-500/18"
                   >
-                    <div className="flex justify-between items-start mb-6">
+                    <div className="mb-6 flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-3xl font-black text-white mb-1">
+                        <div className="mb-1 text-3xl font-black text-slate-900">
                           {opp.ticker}
                         </div>
-                        <div className="text-sm text-gray-500 truncate max-w-[180px]">
+                        <div className="max-w-[180px] truncate text-sm text-slate-500">
                           {opp.name}
                         </div>
                       </div>
-                      <div className="bg-red-500/10 px-3 py-1 rounded-full text-[10px] font-bold text-red-400 border border-red-500/20">
-                        OPPORTUNITY
+                      <div className="rounded-full border border-red-500/15 bg-red-500/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-700">
+                        Opportunity
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 mb-6">
+                    <div className="mb-6 grid grid-cols-3 gap-3">
                       {[
                         {
                           label: "Risk",
                           val: opp.risk_score,
-                          color: "text-red-400",
+                          color: "text-red-700",
                         },
                         {
                           label: "Reward",
                           val: opp.reward_score,
-                          color: "text-green-400",
+                          color: "text-emerald-700",
                         },
                         {
                           label: "Score",
                           val: opp.opportunity_score,
-                          color: "text-purple-400",
+                          color: "text-indigo-700",
                         },
                       ].map((stat) => (
                         <div
                           key={stat.label}
-                          className="text-center p-2 rounded-2xl bg-white/5 border border-white/5"
+                          className="rounded-[1.1rem] border border-black/8 bg-[rgba(255,255,255,0.82)] p-3 text-center"
                         >
-                          <div className="text-[8px] font-bold text-gray-500 uppercase mb-1">
+                          <div className="mb-1 text-[8px] font-bold uppercase tracking-[0.18em] text-slate-500">
                             {stat.label}
                           </div>
                           <div className={`text-lg font-black ${stat.color}`}>
@@ -508,24 +522,22 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                       ))}
                     </div>
 
-                    <div className="p-4 bg-purple-500/5 border border-purple-500/20 rounded-2xl">
-                      <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-1">
+                    <div className="rounded-[1.4rem] border border-indigo-500/15 bg-indigo-500/6 p-4">
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-700">
                         AI Recommendation
                       </div>
-                      <div className="text-sm font-bold text-white mb-2">
+                      <div className="mb-2 text-sm font-bold text-slate-900">
                         {opp.recommendation}
                       </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {opp.reasons
-                          ?.slice(0, 2)
-                          .map((r: string, i: number) => (
-                            <span
-                              key={i}
-                              className="text-[9px] text-gray-400 bg-white/5 px-2 py-0.5 rounded-full"
-                            >
-                              • {r}
-                            </span>
-                          ))}
+                      <div className="flex flex-wrap gap-2">
+                        {opp.reasons?.slice(0, 2).map((r: string, i: number) => (
+                          <span
+                            key={i}
+                            className="rounded-full border border-black/8 bg-white/78 px-2 py-0.5 text-[9px] text-slate-600"
+                          >
+                            {r}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -533,48 +545,54 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
               </div>
             </section>
 
-            {/* Moonshots */}
             <section className="space-y-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
-                <span className="text-indigo-500">🚀</span> MOONSHOT SCANNER
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+                    AI Chancen
+                  </div>
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                    Moonshot Scanner
+                  </h2>
+                </div>
+                <div className="rounded-full border border-indigo-500/15 bg-indigo-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-indigo-700">
+                  Growth Bias
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {(moonshots.length > 0 ? moonshots : []).map((stock) => (
                   <div
                     key={stock.ticker}
                     onClick={() => onAnalyze(stock.ticker)}
-                    className="p-6 rounded-3xl bg-linear-to-br from-indigo-500/10 to-transparent border border-white/5 hover:border-indigo-500/30 cursor-pointer transition-all"
+                    className="surface-panel cursor-pointer rounded-[2rem] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500/18"
                   >
-                    <div className="flex justify-between items-start mb-6">
+                    <div className="mb-6 flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-3xl font-black text-white mb-1">
+                        <div className="mb-1 text-3xl font-black text-slate-900">
                           {stock.ticker}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {stock.name}
-                        </div>
+                        <div className="text-sm text-slate-500">{stock.name}</div>
                       </div>
-                      <div className="text-[10px] font-bold text-indigo-400 bg-indigo-400/10 px-2 py-1 rounded-lg">
-                        GROWTH
+                      <div className="rounded-lg border border-indigo-500/15 bg-indigo-500/8 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-700">
+                        Growth
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <div className="flex justify-between items-center text-xs font-bold">
-                        <span className="text-gray-500 uppercase tracking-widest">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-slate-500 uppercase tracking-widest">
                           Potential
                         </span>
-                        <span className="text-indigo-400">
-                          {stock.score || 85}%
-                        </span>
+                        <span className="text-indigo-700">{stock.score || 85}%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06]">
                         <div
-                          className="h-full bg-indigo-500 rounded-full"
+                          className="h-full rounded-full bg-indigo-500"
                           style={{ width: `${stock.score || 85}%` }}
                         ></div>
                       </div>
-                      <p className="text-[10px] text-gray-400 italic">
-                        “{stock.trend_context}”
+                      <p className="text-[10px] italic text-slate-500">
+                        "{stock.trend_context}"
                       </p>
                     </div>
                   </div>
@@ -587,29 +605,29 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
         {activeTab === "movers" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             <section className="space-y-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
-                <span className="text-green-500">📈</span> MARKET GAINERS
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
+                <span className="text-emerald-700">Up</span> MARKET GAINERS
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {gainers.map((stock) => (
                   <div
                     key={stock.ticker}
                     onClick={() => onAnalyze(stock.ticker)}
-                    className="p-5 rounded-2xl bg-green-500/5 border border-green-500/10 hover:border-green-500/40 cursor-pointer transition-all flex items-center justify-between"
+                    className="surface-panel flex cursor-pointer items-center justify-between rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-emerald-500/20"
                   >
                     <div>
-                      <div className="font-black text-white">
+                      <div className="font-black text-slate-900">
                         {stock.ticker}
                       </div>
-                      <div className="text-[10px] text-gray-500 truncate max-w-[100px]">
+                      <div className="max-w-[100px] truncate text-[10px] text-slate-500">
                         {stock.name}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-green-400">
+                      <div className="text-sm font-bold text-emerald-700">
                         +{stock.change?.toFixed(2)}%
                       </div>
-                      <div className="text-[8px] text-gray-600 uppercase font-black">
+                      <div className="text-[8px] font-black uppercase text-slate-500">
                         {stock.trend_context}
                       </div>
                     </div>
@@ -619,7 +637,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
             </section>
 
             <section className="space-y-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
                 <span className="text-red-500">📉</span> MAJOR DRAWDOWNS
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -627,21 +645,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                   <div
                     key={stock.ticker}
                     onClick={() => onAnalyze(stock.ticker)}
-                    className="p-5 rounded-2xl bg-red-500/5 border border-red-500/10 hover:border-red-500/40 cursor-pointer transition-all flex items-center justify-between"
+                    className="surface-panel flex cursor-pointer items-center justify-between rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-red-500/20"
                   >
                     <div>
-                      <div className="font-black text-white">
+                      <div className="font-black text-slate-900">
                         {stock.ticker}
                       </div>
-                      <div className="text-[10px] text-gray-500 truncate max-w-[100px]">
+                      <div className="max-w-[100px] truncate text-[10px] text-slate-500">
                         {stock.name}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-red-400">
+                      <div className="text-sm font-bold text-red-700">
                         {stock.change?.toFixed(2)}%
                       </div>
-                      <div className="text-[8px] text-gray-600 uppercase font-black">
+                      <div className="text-[8px] font-black uppercase text-slate-500">
                         Pullback
                       </div>
                     </div>
@@ -656,63 +674,63 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             {isComparing ? (
               <section className="space-y-6">
-                <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
+                <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
                   <span className="text-indigo-500">🏢</span> ETF COMPARISON
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {selectedEtfs.map((etf) => (
                     <div
                       key={etf.ticker}
-                      className="p-8 rounded-3xl bg-slate-900 border-2 border-indigo-500/50 relative overflow-hidden"
+                      className="surface-panel relative overflow-hidden rounded-3xl border border-[var(--accent)]/18 p-8"
                     >
                       <div className="absolute top-0 right-0 p-4">
-                        <span className="text-xs font-black text-indigo-400 opacity-20">
+                        <span className="text-xs font-black text-[var(--accent)] opacity-20">
                           {etf.ticker}
                         </span>
                       </div>
                       <div className="mb-8">
-                        <h3 className="text-3xl font-black text-white mb-2">
+                        <h3 className="mb-2 text-3xl font-black text-slate-900">
                           {etf.ticker}
                         </h3>
-                        <p className="text-sm text-slate-400 line-clamp-1">
+                        <p className="line-clamp-1 text-sm text-slate-500">
                           {etf.name}
                         </p>
                       </div>
 
                       <div className="space-y-6">
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
                             Jährliche Kosten (TER)
                           </span>
-                          <div className="text-2xl font-black text-emerald-400">
+                            <div className="text-2xl font-black text-emerald-700">
                             {etf.ter?.toFixed(2)}%
                           </div>
                         </div>
 
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
                             Performance (1 Woche)
                           </span>
                           <div
-                            className={`text-2xl font-black ${(etf.change || 0) >= 0 ? "text-green-400" : "text-red-400"}`}
+                            className={`text-2xl font-black ${(etf.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                           >
                             {(etf.change || 0) >= 0 ? "+" : ""}
                             {etf.change?.toFixed(2)}%
                           </div>
                         </div>
 
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
                             Anlagewelt
                           </span>
-                          <div className="text-sm font-bold text-white">
+                          <div className="text-sm font-bold text-slate-900">
                             {etf.category || "Diverse"}
                           </div>
                         </div>
 
                         <button
                           onClick={() => onAnalyze(etf.ticker)}
-                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-indigo-600/20"
+                          className="w-full rounded-2xl bg-[var(--accent)] py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-[var(--accent-strong)]"
                         >
                           Deep Scan Analyse
                         </button>
@@ -723,7 +741,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
               </section>
             ) : (
               <section className="space-y-6">
-                <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
+                <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
                   <span className="text-indigo-500">🏢</span> ETF EXPLORER
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -747,12 +765,12 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                         }}
                         className={`p-6 rounded-3xl border transition-all group relative cursor-pointer ${
                           isSelected
-                            ? "bg-indigo-500/20 border-indigo-500 animate-pulse-slow"
-                            : "bg-linear-to-br from-indigo-500/10 to-transparent border-white/5 hover:border-indigo-500/30"
+                            ? "bg-[var(--accent-soft)] border-[var(--accent)] animate-pulse-slow"
+                            : "bg-white/75 border-black/8 hover:border-[var(--accent)]/25"
                         }`}
                       >
                         {isSelected && (
-                          <div className="absolute -top-2 -right-2 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center border-4 border-black shadow-lg">
+                          <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-[var(--accent)] shadow-lg">
                             <span className="text-white text-xs font-black">
                               {selectedEtfs.findIndex(
                                 (s) => s.ticker === etf.ticker,
@@ -762,33 +780,33 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                         )}
                         <div className="flex justify-between items-start mb-6">
                           <div className="min-w-0">
-                            <div className="text-3xl font-black text-white mb-1">
+                            <div className="mb-1 text-3xl font-black text-slate-900">
                               {etf.ticker}
                             </div>
-                            <div className="text-sm text-gray-500 truncate">
+                            <div className="truncate text-sm text-slate-500">
                               {etf.name}
                             </div>
                           </div>
-                          <div className="bg-indigo-500/10 px-3 py-1 rounded-full text-[10px] font-bold text-indigo-400 border border-indigo-500/20 shrink-0">
+                          <div className="shrink-0 rounded-full border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-bold text-[var(--accent)]">
                             ETF
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-6">
-                          <div className="p-3 rounded-2xl bg-white/5 border border-white/5">
-                            <div className="text-[8px] font-bold text-gray-500 uppercase mb-1">
+                          <div className="rounded-2xl border border-black/8 bg-white/75 p-3">
+                            <div className="mb-1 text-[8px] font-bold uppercase text-slate-500">
                               Kosten (TER)
                             </div>
-                            <div className="text-lg font-black text-emerald-400">
+                            <div className="text-lg font-black text-emerald-700">
                               {etf.ter ? `${etf.ter.toFixed(2)}%` : "N/A"}
                             </div>
                           </div>
-                          <div className="p-3 rounded-2xl bg-white/5 border border-white/5">
-                            <div className="text-[8px] font-bold text-gray-500 uppercase mb-1">
+                          <div className="rounded-2xl border border-black/8 bg-white/75 p-3">
+                            <div className="mb-1 text-[8px] font-bold uppercase text-slate-500">
                               Performance (1W)
                             </div>
                             <div
-                              className={`text-lg font-black ${(etf.change || 0) >= 0 ? "text-green-400" : "text-red-400"}`}
+                              className={`text-lg font-black ${(etf.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                             >
                               {(etf.change || 0) >= 0 ? "+" : ""}
                               {etf.change?.toFixed(2)}%
@@ -796,11 +814,11 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                           </div>
                         </div>
 
-                        <div className="p-4 bg-white/5 border border-white/5 rounded-2xl">
-                          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
+                          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                             Kategorie
                           </div>
-                          <div className="text-sm font-bold text-white truncate">
+                          <div className="truncate text-sm font-bold text-slate-900">
                             {etf.category || "Diverse"}
                           </div>
                         </div>
@@ -816,28 +834,28 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
         {activeTab === "alternative" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             <section className="space-y-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
-                <span className="text-orange-500">🪙</span> CRYPTO ASSETS
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
+                <span className="text-amber-600">Alt</span> CRYPTO ASSETS
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {cryptos.map((coin) => (
                   <div
                     key={coin.ticker}
                     onClick={() => onAnalyze(coin.ticker)}
-                    className="p-6 rounded-3xl bg-linear-to-br from-orange-500/10 to-transparent border border-orange-500/10 hover:border-orange-500/40 cursor-pointer transition-all"
+                    className="surface-panel cursor-pointer rounded-3xl p-6 transition-all hover:border-amber-500/20"
                   >
-                    <div className="text-2xl font-black text-white mb-1">
+                    <div className="mb-1 text-2xl font-black text-slate-900">
                       {coin.ticker.replace("-USD", "")}
                     </div>
-                    <div className="text-[10px] text-orange-400 font-bold uppercase mb-4 tracking-widest">
+                    <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-amber-700">
                       Digital Asset
                     </div>
-                    <div className="flex justify-between items-baseline">
-                      <div className="text-xl font-mono text-white">
+                    <div className="flex items-baseline justify-between">
+                      <div className="text-xl font-mono text-slate-900">
                         {formatPrice(coin.price || 0)}
                       </div>
                       <div
-                        className={`text-xs font-bold ${coin.change && coin.change > 0 ? "text-green-400" : "text-red-400"}`}
+                        className={`text-xs font-bold ${coin.change && coin.change > 0 ? "text-emerald-700" : "text-red-700"}`}
                       >
                         {coin.change && coin.change > 0 ? "+" : ""}
                         {coin.change?.toFixed(2)}%
@@ -849,17 +867,17 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
             </section>
 
             <section className="space-y-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3 italic">
-                <span className="text-yellow-500">🔥</span> COMMODITIES
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
+                <span className="text-yellow-600">Hedge</span> COMMODITIES
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {commodities.map((item) => (
                   <div
                     key={item.ticker}
                     onClick={() => onAnalyze(item.ticker)}
-                    className="p-6 rounded-3xl bg-linear-to-br from-yellow-500/10 to-transparent border border-yellow-500/10 hover:border-yellow-500/40 cursor-pointer transition-all"
+                    className="surface-panel cursor-pointer rounded-3xl p-6 transition-all hover:border-yellow-500/20"
                   >
-                    <div className="text-2xl font-black text-white mb-1">
+                    <div className="mb-1 text-2xl font-black text-slate-900">
                       {item.ticker === "GC=F"
                         ? "GOLD"
                         : item.ticker === "CL=F"
@@ -868,17 +886,17 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                             ? "SILVER"
                             : item.ticker}
                     </div>
-                    <div className="text-[10px] text-yellow-500 font-bold uppercase mb-4 tracking-widest">
+                    <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-yellow-700">
                       Market Hedge
                     </div>
-                    <div className="flex justify-between items-baseline">
-                      <div className="text-xl font-mono text-white">
+                    <div className="flex items-baseline justify-between">
+                      <div className="text-xl font-mono text-slate-900">
                         {formatPrice(item.price || 0)}
                       </div>
                       <div
-                        className={`text-xs font-bold ${item.change && item.change > 0 ? "text-green-400" : "text-red-400"}`}
+                        className={`text-xs font-bold ${(item.change || 0) > 0 ? "text-emerald-700" : "text-red-700"}`}
                       >
-                        {item.change && item.change > 0 ? "+" : ""}
+                        {(item.change || 0) > 0 ? "+" : ""}
                         {item.change?.toFixed(2)}%
                       </div>
                     </div>

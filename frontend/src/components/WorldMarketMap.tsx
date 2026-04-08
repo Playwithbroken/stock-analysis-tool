@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import worldMapSvg from "../assets/world-map-wikimedia.svg";
 
 interface RegionAsset {
   ticker: string;
@@ -28,6 +29,20 @@ interface WatchlistImpactItem {
   summary?: string;
 }
 
+interface ContrarianSignalItem {
+  ticker?: string;
+  title?: string;
+  publisher?: string;
+  region?: string;
+  media_bias?: string;
+  contrarian_bias?: string;
+  score?: number;
+  rsi_14?: number;
+  volume_ratio?: number;
+  reason?: string;
+  link?: string;
+}
+
 interface WorldMarketMapProps {
   regions: RegionSummary[];
   selectedRegion: string;
@@ -35,6 +50,7 @@ interface WorldMarketMapProps {
   news?: MapNewsItem[];
   eventLayer?: MapNewsItem[];
   watchlistImpact?: WatchlistImpactItem[];
+  contrarianSignals?: ContrarianSignalItem[];
   openingTimeline?: Array<{
     stage: string;
     label: string;
@@ -181,6 +197,7 @@ export default function WorldMarketMap({
   news = [],
   eventLayer = [],
   watchlistImpact = [],
+  contrarianSignals = [],
   openingTimeline = [],
   onAnalyze,
 }: WorldMarketMapProps) {
@@ -209,6 +226,14 @@ export default function WorldMarketMap({
     [openingTimeline, regions, news],
   );
 
+  const regionalContrarian = useMemo(
+    () =>
+      contrarianSignals.filter((item) =>
+        activeRegion ? (item.region || "").toLowerCase() === activeRegion.label.toLowerCase() : true,
+      ),
+    [contrarianSignals, activeRegion],
+  );
+
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.06),transparent_26%)]" />
@@ -232,7 +257,7 @@ export default function WorldMarketMap({
                 onClick={() => onSelectRegion(region.label)}
                 className={`rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] transition-all ${
                   selectedRegion === region.label
-                    ? "bg-[#101114] text-white shadow-[0_16px_34px_rgba(15,23,42,0.18)]"
+                    ? "bg-[var(--accent)] text-white shadow-[0_16px_34px_rgba(15,118,110,0.18)]"
                     : "border border-black/8 bg-white/70 text-slate-500"
                 }`}
               >
@@ -243,36 +268,19 @@ export default function WorldMarketMap({
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="relative min-h-[380px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,240,232,0.95))] p-4 sm:p-6">
-            <div className="absolute inset-0 opacity-60">
-              <svg viewBox="0 0 1000 520" className="h-full w-full">
-                <defs>
-                  <linearGradient id="oceanGlow" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#efe9df" />
-                  </linearGradient>
-                </defs>
-                <rect width="1000" height="520" fill="url(#oceanGlow)" />
-                <g fill="#cfc8bb">
-                  <path d="M112 171c27-25 58-45 96-54 41-10 89-2 113 18 16 14 11 39-7 57-17 17-25 35-16 55 8 18-1 34-28 47-31 16-64 18-96 8-37-11-66-33-87-65-16-24-10-45 25-66z" />
-                  <path d="M335 343c17-12 44-19 64-14 24 6 39 21 47 40 8 18 6 38-13 48-20 10-44 5-67-5-26-12-41-31-45-48-3-10 2-16 14-21z" />
-                  <path d="M449 131c25-20 55-35 84-39 38-4 80 6 104 23 20 15 33 38 27 56-6 19-24 31-33 46-12 20-8 40 4 63 12 24 13 53-13 72-26 20-69 30-105 20-34 10-61-32-73-61-11-24-5-48 5-69 8-16 5-29-6-45-15-20-14-45 6-66z" />
-                  <path d="M633 152c34-21 72-32 103-27 38 6 76 28 92 53 12 18 13 40-4 55-20 17-49 20-73 28-20 6-34 18-38 36-5 21 11 34 26 46 17 14 20 37 3 53-21 20-61 31-96 27-39-5-74-20-86-48-11-24 2-47 10-69 7-19 5-35-5-53-14-25-2-46 68-101z" />
-                  <path d="M782 321c26-8 61-3 86 9 28 14 44 35 39 54-7 24-34 35-62 39-33 4-71-3-92-21-17-13-15-35 29-81z" />
-                </g>
-                <g stroke="#dcd6ca" strokeWidth="1.2" fill="none" opacity="0.7">
-                  <path d="M80 90h840" />
-                  <path d="M80 170h840" />
-                  <path d="M80 250h840" />
-                  <path d="M80 330h840" />
-                  <path d="M80 410h840" />
-                  <path d="M160 50v420" />
-                  <path d="M320 50v420" />
-                  <path d="M480 50v420" />
-                  <path d="M640 50v420" />
-                  <path d="M800 50v420" />
-                </g>
-              </svg>
+          <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,240,232,0.95))] p-4 sm:p-6">
+            <div className="absolute inset-0 overflow-hidden opacity-55">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.84),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.78),transparent_30%)]" />
+              <img
+                src={worldMapSvg}
+                alt="World map"
+                className="h-full w-full scale-[1.08] object-cover object-center"
+                draggable={false}
+              />
+            </div>
+
+            <div className="absolute bottom-3 right-4 rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              Wikimedia map base
             </div>
 
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.35),rgba(15,23,42,0))] lg:block" />
@@ -426,6 +434,53 @@ export default function WorldMarketMap({
                 )}
               </div>
             </div>
+
+            <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Contrarian Radar
+                </div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                  media fade
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {regionalContrarian.length ? (
+                  regionalContrarian.slice(0, 4).map((item, index) => (
+                    <div
+                      key={`${item.ticker}-${index}`}
+                      className="rounded-[1rem] border border-black/8 bg-white/75 p-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <button
+                          onClick={() => item.ticker && onAnalyze(item.ticker)}
+                          className="text-sm font-black text-slate-900"
+                        >
+                          {item.ticker}
+                        </button>
+                        <div
+                          className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${
+                            item.contrarian_bias === "long"
+                              ? "bg-emerald-500/10 text-emerald-700"
+                              : "bg-red-500/10 text-red-700"
+                          }`}
+                        >
+                          inverse {item.contrarian_bias}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        {item.publisher} · score {item.score} · RSI {item.rsi_14} · RVOL {item.volume_ratio}
+                      </div>
+                      <div className="mt-2 text-sm text-slate-700">{item.reason}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
+                    Keine konträren Medien-Setups mit technischer Bestätigung in dieser Region.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -489,7 +544,7 @@ export default function WorldMarketMap({
                     {item.ticker && (
                       <button
                         onClick={() => onAnalyze(item.ticker!)}
-                        className="rounded-full bg-[#101114] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white"
+                        className="rounded-full bg-[var(--accent)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white"
                       >
                         {item.ticker}
                       </button>

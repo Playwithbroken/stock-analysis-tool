@@ -102,21 +102,25 @@ export default function BrokerChat({
 
   const chatContent = (
     <div
-      className={`${isInline ? "h-full flex flex-col" : "fixed inset-y-0 right-0 w-full max-w-md bg-[#020203] border-l border-white/10 shadow-2xl z-50 flex flex-col backdrop-blur-3xl bg-opacity-95"}`}
+      className={`${
+        isInline
+          ? "flex h-full flex-col"
+          : "surface-panel fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-black/8 bg-[rgba(250,248,244,0.96)] shadow-[-20px_0_50px_rgba(17,24,39,0.12)] backdrop-blur-3xl"
+      }`}
     >
       {/* Header */}
       <div
-        className={`p-6 border-b border-white/10 flex justify-between items-center bg-linear-to-r from-purple-900/20 to-transparent ${isInline ? "px-0 pt-0" : ""}`}
+        className={`flex items-center justify-between border-b border-black/8 bg-[linear-gradient(90deg,rgba(15,118,110,0.08),transparent)] p-6 ${isInline ? "px-0 pt-0" : ""}`}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-600/20 rounded-xl flex items-center justify-center border border-purple-500/40">
-            <Bot size={24} className="text-purple-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--accent)]/15 bg-[var(--accent-soft)]">
+            <Bot size={24} className="text-[var(--accent)]" />
           </div>
           <div>
-            <h3 className="font-bold text-white text-lg">Broker Freund AI</h3>
+            <h3 className="text-lg font-bold text-slate-900">Broker Freund AI</h3>
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Live AI Insights
               </span>
             </div>
@@ -125,7 +129,7 @@ export default function BrokerChat({
         {!isInline && (
           <button
             onClick={() => setIsOpen(false)}
-            className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-white transition-all"
+            className="rounded-lg p-2 text-slate-500 transition-all hover:bg-black/[0.04] hover:text-slate-900"
           >
             <X size={20} />
           </button>
@@ -145,16 +149,24 @@ export default function BrokerChat({
               className={`max-w-[85%] flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
             >
               <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${msg.role === "user" ? "bg-blue-600/20 border-blue-500/20" : "bg-purple-600/20 border-purple-500/20"}`}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                  msg.role === "user"
+                    ? "border-slate-300 bg-slate-200/70"
+                    : "border-[var(--accent)]/15 bg-[var(--accent-soft)]"
+                }`}
               >
                 {msg.role === "user" ? (
-                  <User size={16} className="text-blue-400" />
+                  <User size={16} className="text-slate-700" />
                 ) : (
-                  <Bot size={16} className="text-purple-400" />
+                  <Bot size={16} className="text-[var(--accent)]" />
                 )}
               </div>
               <div
-                className={`p-4 rounded-2xl text-sm leading-relaxed ${msg.role === "user" ? "bg-blue-600/10 text-blue-50 border border-blue-500/10" : "bg-white/3 text-gray-100 border border-white/5"}`}
+                className={`rounded-2xl border p-4 text-sm leading-relaxed ${
+                  msg.role === "user"
+                    ? "border-slate-300 bg-slate-100 text-slate-800"
+                    : "border-black/8 bg-white/80 text-slate-700"
+                }`}
               >
                 {msg.content}
               </div>
@@ -163,10 +175,10 @@ export default function BrokerChat({
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white/3 border border-white/5 p-4 rounded-2xl flex gap-2 items-center">
-              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce"></span>
-              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+            <div className="flex items-center gap-2 rounded-2xl border border-black/8 bg-white/80 p-4">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-bounce"></span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0.2s]"></span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0.4s]"></span>
             </div>
           </div>
         )}
@@ -175,11 +187,11 @@ export default function BrokerChat({
 
       {/* Input */}
       <div
-        className={`${isInline ? "pt-4 border-t border-white/10" : "p-6 border-t border-white/10 bg-black/40"}`}
+        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-6"}`}
       >
         {currentTicker && !isInline && (
           <div className="mb-4 flex items-center gap-2">
-            <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest px-2 py-1 bg-purple-500/10 rounded-md border border-purple-500/20">
+            <span className="rounded-md border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">
               Kontext: {currentTicker}
             </span>
           </div>
@@ -191,18 +203,18 @@ export default function BrokerChat({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Frage den Broker Freund..."
-            className="w-full pl-4 pr-12 py-3.5 bg-white/3 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20 transition-all text-sm"
+            className="w-full rounded-xl border border-black/8 bg-white pl-4 pr-12 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || loading}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg disabled:opacity-50 transition-all"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-[var(--accent)] p-2 text-white transition-all hover:bg-[var(--accent-strong)] disabled:opacity-50"
           >
             <Send size={18} />
           </button>
         </div>
         {!isInline && (
-          <p className="text-[10px] text-gray-600 mt-4 text-center">
+          <p className="mt-4 text-center text-[10px] text-slate-500">
             Broker Freund AI analysiert Live-Daten. Keine direkte
             Anlageberatung.
           </p>
@@ -217,9 +229,9 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-8 right-8 w-16 h-16 bg-linear-to-br from-purple-600 to-indigo-700 rounded-full shadow-2xl shadow-purple-500/40 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all z-40 border border-white/10 group"
+        className="fixed bottom-8 right-8 z-40 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)] text-white shadow-[0_22px_48px_rgba(15,118,110,0.28)] transition-all hover:scale-110 hover:bg-[var(--accent-strong)] active:scale-95 group"
       >
-        <div className="absolute inset-0 bg-purple-500 rounded-full animate-ping opacity-20 group-hover:opacity-40"></div>
+        <div className="absolute inset-0 rounded-full bg-[var(--accent)] animate-ping opacity-15 group-hover:opacity-30"></div>
         <Bot size={32} />
       </button>
 

@@ -806,6 +806,10 @@ class StockAnalyzer:
         "Yahoo Finance", "Forbes", "MarketWatch", "Barrons", "Seeking Alpha",
         "Business Insider", "The Economist", "investors.com", "Investor's Business Daily"
     ]
+    EXCLUDED_NEWS_SOURCES = [
+        "x.com", "twitter", "stocktwits", "reddit", "wallstreetbets", "discord",
+        "telegram", "tiktok", "instagram", "facebook"
+    ]
 
 
     def is_trusted_source(self, source: str) -> bool:
@@ -868,6 +872,8 @@ class StockAnalyzer:
             title_raw = item.get("title") or ""
             title = title_raw.lower()
             source = item.get("publisher") or item.get("source") or ""
+            if any(blocked in source.lower() for blocked in self.EXCLUDED_NEWS_SOURCES):
+                continue
             is_trusted = self.is_trusted_source(source)
             
             sentiment = "neutral"

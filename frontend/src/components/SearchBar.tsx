@@ -105,7 +105,7 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="flex h-[60px] min-w-[160px] items-center justify-center gap-2 rounded-[1.4rem] bg-[#101114] px-6 text-sm font-extrabold uppercase tracking-[0.18em] text-white transition-all hover:bg-[#1a1c20] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-[60px] min-w-[160px] items-center justify-center gap-2 rounded-[1.4rem] bg-[var(--accent)] px-6 text-sm font-extrabold uppercase tracking-[0.18em] text-white transition-all hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? (
               <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">

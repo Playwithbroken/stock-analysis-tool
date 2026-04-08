@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { Clock, TrendingUp } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
 
 interface PerformanceItem {
@@ -35,7 +35,7 @@ export default function PortfolioPerformance({
   const { formatPrice } = useCurrency();
   const [data, setData] = useState<PerformanceItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState(PERIODS[1]); // Default 1M
+  const [period, setPeriod] = useState(PERIODS[1]);
   const [stats, setStats] = useState({ change: 0, changePct: 0 });
 
   useEffect(() => {
@@ -65,17 +65,19 @@ export default function PortfolioPerformance({
     if (portfolioId) fetchHistory();
   }, [portfolioId, period, refreshKey]);
 
+  const isPositive = stats.changePct >= 0;
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#0a0a0c] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-          <p className="text-gray-400 text-xs mb-1 uppercase tracking-widest">
+        <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
+          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-slate-500">
             {payload[0].payload.time}
           </p>
-          <p className="text-white font-bold text-lg">
+          <p className="text-lg font-bold text-slate-900">
             {formatPrice(payload[0].value)}
           </p>
-          <div className="text-[10px] text-purple-400 mt-1 uppercase font-bold">
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
             Market Value
           </div>
         </div>
@@ -84,44 +86,44 @@ export default function PortfolioPerformance({
     return null;
   };
 
-  const isPositive = stats.changePct >= 0;
-
   return (
-    <div className="bg-[#050507] rounded-2xl p-6 border border-white/5 shadow-inner">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="surface-panel rounded-[2rem] p-6">
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="flex items-center gap-2 text-gray-400 mb-1">
+          <div className="mb-1 flex items-center gap-2 text-slate-500">
             <TrendingUp
               size={16}
-              className={isPositive ? "text-green-500" : "text-red-500"}
+              className={isPositive ? "text-emerald-600" : "text-red-600"}
             />
-            <span className="text-sm font-medium uppercase tracking-wider">
+            <span className="text-sm font-medium uppercase tracking-[0.18em]">
               Portfolio Performance
             </span>
           </div>
           <div className="flex items-baseline gap-3">
             <div
-              className={`text-2xl font-bold ${isPositive ? "text-green-400" : "text-red-400"}`}
+              className={`text-2xl font-bold ${
+                isPositive ? "text-emerald-700" : "text-red-700"
+              }`}
             >
               {isPositive ? "+" : ""}
               {stats.changePct.toFixed(2)}%
             </div>
-            <div className="text-gray-500 text-sm font-mono">
+            <div className="text-sm font-mono text-slate-500">
               {isPositive ? "+" : ""}
               {formatPrice(stats.change)}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+        <div className="flex items-center gap-1 rounded-xl border border-black/8 bg-white/80 p-1">
           {PERIODS.map((p) => (
             <button
               key={p.id}
               onClick={() => setPeriod(p)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`rounded-lg px-4 py-1.5 text-xs font-bold transition-all ${
                 period.id === p.id
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
-                  : "text-gray-500 hover:text-white hover:bg-white/5"
+                  ? "bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(15,118,110,0.18)]"
+                  : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900"
               }`}
             >
               {p.label}
@@ -132,57 +134,54 @@ export default function PortfolioPerformance({
 
       <div className="h-[250px] w-full">
         {loading ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-black/20 rounded-xl animate-pulse space-y-4">
-            <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
-            <span className="text-gray-600 text-[10px] uppercase font-bold tracking-widest">
-              Calculating NAV...
+          <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              Calculating NAV
             </span>
           </div>
         ) : data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data}>
               <defs>
-                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                <linearGradient id="portfolioValue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#0f766e" stopOpacity={0.26} />
+                  <stop offset="95%" stopColor="#0f766e" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#222"
+                stroke="rgba(22,28,36,0.08)"
                 vertical={false}
-                strokeOpacity={0.2}
               />
               <XAxis dataKey="time" hide />
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
                 content={<CustomTooltip />}
-                cursor={{ stroke: "#333", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }}
               />
               <Area
                 type="monotone"
                 dataKey="price"
-                stroke="#a78bfa"
+                stroke="#0f766e"
                 strokeWidth={3}
                 fillOpacity={1}
-                fill="url(#colorValue)"
-                animationDuration={2000}
+                fill="url(#portfolioValue)"
+                animationDuration={1400}
               />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-700 border border-dashed border-white/5 rounded-2xl">
-            <TrendingUp size={32} className="mb-2 opacity-10" />
-            <p className="text-sm font-medium">
-              Add holdings to track performance
-            </p>
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl border border-dashed border-black/8 bg-white/70 text-slate-500">
+            <TrendingUp size={32} className="mb-2 opacity-20" />
+            <p className="text-sm font-medium">Add holdings to track performance</p>
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-2 text-[10px] text-gray-600 uppercase tracking-widest font-bold">
+      <div className="mt-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <Clock size={10} />
-        Aggregated Real-Time Intelligence
+        Aggregated Portfolio Intelligence
       </div>
     </div>
   );

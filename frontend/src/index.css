@@ -2,24 +2,38 @@
 @import "tailwindcss";
 
 :root {
-  --bg-canvas: #f5f3ee;
-  --bg-elevated: rgba(255, 255, 255, 0.72);
-  --bg-panel: rgba(255, 255, 255, 0.88);
-  --bg-strong: #101114;
-  --bg-soft: #ebe7df;
-  --line-subtle: rgba(16, 17, 20, 0.08);
-  --line-strong: rgba(16, 17, 20, 0.14);
-  --text-primary: #121316;
-  --text-secondary: #5d6169;
-  --text-tertiary: #7f838b;
+  /* 60 / 30 / 10 system
+     60% primary: warm stone surfaces
+     30% secondary: graphite structure and typography
+     10% accent: deep teal for focus and signal */
+  --primary-50: #faf8f3;
+  --primary-100: #f3efe6;
+  --primary-200: #e7dfd0;
+
+  --secondary-700: #49505a;
+  --secondary-800: #2a313b;
+  --secondary-900: #161c24;
+
   --accent: #0f766e;
   --accent-strong: #115e59;
   --accent-soft: rgba(15, 118, 110, 0.12);
+
+  --bg-base: var(--primary-50);
+  --bg-canvas: var(--primary-100);
+  --bg-elevated: rgba(255, 255, 255, 0.72);
+  --bg-panel: rgba(255, 255, 255, 0.88);
+  --bg-strong: var(--secondary-900);
+  --bg-soft: var(--primary-200);
+  --line-subtle: rgba(22, 28, 36, 0.08);
+  --line-strong: rgba(22, 28, 36, 0.14);
+  --text-primary: #121821;
+  --text-secondary: var(--secondary-700);
+  --text-tertiary: #7c848f;
   --success: #15803d;
   --danger: #b42318;
   --warning: #b54708;
-  --shadow-soft: 0 20px 60px rgba(17, 24, 39, 0.08);
-  --shadow-card: 0 12px 28px rgba(17, 24, 39, 0.06);
+  --shadow-soft: 0 20px 60px rgba(22, 28, 36, 0.08);
+  --shadow-card: 0 12px 28px rgba(22, 28, 36, 0.06);
 }
 
 * {
@@ -39,8 +53,8 @@ body {
   color: var(--text-primary);
   background:
     radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 30%),
-    radial-gradient(circle at top right, rgba(17, 24, 39, 0.05), transparent 22%),
-    linear-gradient(180deg, #faf8f4 0%, #f3f0e8 100%);
+    radial-gradient(circle at top right, rgba(22, 28, 36, 0.05), transparent 22%),
+    linear-gradient(180deg, var(--primary-50) 0%, var(--primary-100) 100%);
 }
 
 a {
@@ -89,6 +103,20 @@ h3,
 .surface-strong {
   background: var(--bg-strong);
   color: #f7f7f5;
+}
+
+.surface-accent {
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-strong);
+}
+
+.text-accent {
+  color: var(--accent);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
 }
 
 .text-balance {

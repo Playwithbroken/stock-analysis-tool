@@ -93,6 +93,7 @@ export default function MorningBriefPanel({
         news={brief.top_news || []}
         eventLayer={brief.event_layer || []}
         watchlistImpact={brief.watchlist_impact || []}
+        contrarianSignals={brief.contrarian_signals || []}
         openingTimeline={brief.opening_timeline || []}
         onAnalyze={onAnalyze}
       />
@@ -145,36 +146,12 @@ export default function MorningBriefPanel({
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <div className="surface-panel rounded-[2rem] p-5">
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-            Macro Assets
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {brief.macro_assets?.map((asset: any) => (
-              <div
-                key={asset.ticker}
-                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
-              >
-                <div className="text-sm font-bold text-slate-900">{asset.label}</div>
-                <div className="mt-2 text-xs text-slate-500">{asset.ticker}</div>
-                <div
-                  className={`mt-3 text-lg font-black ${
-                    (asset.change_1d || 0) >= 0 ? "text-emerald-700" : "text-red-700"
-                  }`}
-                >
-                  {fmt(asset.change_1d)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Top News
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              {selectedRegion} focus
+              Trusted only
             </div>
           </div>
           <div className="mt-4 space-y-3">
@@ -188,7 +165,7 @@ export default function MorningBriefPanel({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    {item.region} • {item.impact}
+                    {item.region} · {item.impact}
                   </div>
                   {item.ticker && (
                     <button
@@ -196,21 +173,123 @@ export default function MorningBriefPanel({
                         e.preventDefault();
                         onAnalyze(item.ticker);
                       }}
-                      className="rounded-lg bg-[#101114] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white"
+                      className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white"
                     >
                       {item.ticker}
                     </button>
                   )}
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.publisher}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span>{item.publisher}</span>
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    {item.source_quality || "trusted"}
+                  </span>
+                </div>
               </a>
             ))}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="surface-panel rounded-[2rem] p-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Source Policy
+            </div>
+            <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm leading-7 text-slate-600">
+              {brief.source_policy?.note ||
+                "Top News zeigt nur serioese Quellen. Social wird ausgeschlossen."}
+            </div>
+          </div>
+
+          <div className="surface-panel rounded-[2rem] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                Crowd Radar
+              </div>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+                Separat
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {(brief.crowd_signals || []).length ? (
+                (brief.crowd_signals || []).slice(0, 4).map((item: any, index: number) => (
+                  <div
+                    key={`${item.ticker || item.event_type}-${index}`}
+                    className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                        {item.region} · {item.event_type}
+                      </div>
+                      <div className="rounded-full border border-amber-500/20 bg-amber-500/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
+                        Crowd
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm font-bold text-slate-900">
+                      {(item.ticker || "Macro")} with {item.mentions} matching mentions
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
+                  Kein relevantes Reddit-/Crowd-Cluster im aktuellen Brief.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Contrarian Signals
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              media fade
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {(brief.contrarian_signals || []).length ? (
+              (brief.contrarian_signals || []).slice(0, 6).map((item: any, index: number) => (
+                <div
+                  key={`${item.ticker}-${index}`}
+                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => item.ticker && onAnalyze(item.ticker)}
+                      className="text-sm font-black text-slate-900"
+                    >
+                      {item.ticker}
+                    </button>
+                    <div
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                        item.contrarian_bias === "long"
+                          ? "bg-emerald-500/10 text-emerald-700"
+                          : "bg-red-500/10 text-red-700"
+                      }`}
+                    >
+                      inverse {item.contrarian_bias}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    {item.publisher} · {item.region} · score {item.score}
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
+                  <div className="mt-2 text-sm text-slate-600">{item.reason}</div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
+                Keine konträren Medien-Signale mit technischer Bestätigung.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
@@ -228,7 +307,7 @@ export default function MorningBriefPanel({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    {item.region} • {item.category}
+                    {item.region} · {item.category}
                   </div>
                   <div className="text-[11px] font-bold text-slate-500">
                     {new Date(item.scheduled_for).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -269,7 +348,7 @@ export default function MorningBriefPanel({
                   </div>
                   <div className="mt-2 text-xs text-slate-500">{item.company}</div>
                   <div className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {new Date(item.scheduled_for).toLocaleDateString()} • {item.region}
+                    {new Date(item.scheduled_for).toLocaleDateString()} · {item.region}
                   </div>
                 </div>
               ))

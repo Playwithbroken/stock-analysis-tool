@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import PriceChart from "./PriceChart";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
-import { Plus, Download, FileText, ShieldCheck } from "lucide-react";
+import { Plus, Download, FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrency } from "../context/CurrencyContext";
@@ -37,13 +37,13 @@ const formatPercent = (value: number | null | undefined): string => {
 
 const getRatingColor = (rating: string): string => {
   const colors: Record<string, string> = {
-    very_positive: "text-emerald-400",
-    positive: "text-green-400",
-    neutral: "text-yellow-400",
-    negative: "text-orange-400",
-    very_negative: "text-red-400",
+    very_positive: "text-emerald-700",
+    positive: "text-emerald-700",
+    neutral: "text-amber-700",
+    negative: "text-orange-700",
+    very_negative: "text-red-700",
   };
-  return colors[rating] || "text-gray-400";
+  return colors[rating] || "text-slate-500";
 };
 
 export default function AnalysisResult({
@@ -163,7 +163,7 @@ export default function AnalysisResult({
           <div className="surface-panel rounded-[2rem] p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#101114] text-2xl font-bold text-white">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--accent)] text-2xl font-bold text-white">
                   {data.ticker?.slice(0, 2)}
                 </div>
                 <div>
@@ -191,7 +191,7 @@ export default function AnalysisResult({
                     {!isPanelOpen && (
                       <button
                         onClick={() => setIsPanelOpen(true)}
-                        className="flex items-center gap-2 rounded-xl bg-[#101114] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#1a1c20]"
+                        className="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
                       >
                         <FileText size={14} /> Summary einblenden
                       </button>
@@ -201,7 +201,7 @@ export default function AnalysisResult({
                         {formatPrice(price_data?.current_price)}
                       </div>
                       <div
-                        className={`text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}
+                        className={`text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                       >
                         {formatPercent(
                           chartStats?.changePct ?? price_data?.change_1y,
@@ -213,7 +213,7 @@ export default function AnalysisResult({
                   {portfolios.length > 0 && (
                     <button
                       onClick={() => setIsModalOpen(true)}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#101114] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-[#1a1c20] md:w-auto"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)] md:w-auto"
                     >
                       <Plus size={16} /> Portfolio hinzufügen
                     </button>
@@ -236,9 +236,9 @@ export default function AnalysisResult({
           {data.risk_audit && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div
-                className={`rounded-2xl p-6 border transition-all ${data.risk_audit.red_flags.length > 0 ? "bg-red-500/5 border-red-500/20 shadow-lg shadow-red-500/5" : "bg-green-500/5 border-green-500/20"}`}
+                className={`rounded-2xl border p-6 transition-all ${data.risk_audit.red_flags.length > 0 ? "bg-red-500/5 border-red-500/20 shadow-lg shadow-red-500/5" : "bg-emerald-500/5 border-emerald-500/20"}`}
               >
-                <h3 className="text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2 text-red-400">
+                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-700">
                   <Plus size={14} className="rotate-45" /> Risiko-Audit
                 </h3>
                 {data.risk_audit.red_flags.length > 0 ? (
@@ -246,23 +246,23 @@ export default function AnalysisResult({
                     {data.risk_audit.red_flags.map((flag: any, i: number) => (
                       <div
                         key={i}
-                        className="text-sm font-medium text-gray-300"
+                        className="text-sm font-medium text-slate-700"
                       >
                         ● {flag.flag}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-green-400 font-bold">
+                  <div className="text-sm font-bold text-emerald-700">
                     Keine kritischen Warnsignale gefunden.
                   </div>
                 )}
               </div>
-              <div className="bg-blue-500/5 rounded-2xl p-6 border border-blue-500/20 shadow-lg shadow-blue-500/5">
-                <h3 className="text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2 text-blue-400">
+              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6 shadow-lg shadow-sky-500/5">
+                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-700">
                   <Plus size={14} /> Highlights
                 </h3>
-                <div className="space-y-3 font-medium text-gray-300 text-sm">
+                <div className="space-y-3 text-sm font-medium text-slate-700">
                   {data.risk_audit.positive_signals?.map(
                     (s: any, i: number) => (
                       <div key={i}>★ {s.signal}</div>
@@ -311,36 +311,36 @@ export default function AnalysisResult({
           {/* Specialized Analysis (Potential & Rebound) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {data.potential && (
-              <div className="glass-card rounded-2xl p-6 border-t-4 border-emerald-600/40">
+              <div className="glass-card rounded-2xl border-t-4 border-emerald-600/40 p-6">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span className="text-purple-400">🚀</span> Growth Potential
+                  <span className="text-[var(--accent)]">Potential</span> Growth Potential
                 </h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Potential Score</span>
+                    <span className="text-slate-500">Potential Score</span>
                     <span className="font-bold text-emerald-700">
                       {data.potential.score.toFixed(0)}/100
                     </span>
                   </div>
-                  <p className="text-sm text-gray-300 italic">
+                  <p className="text-sm italic text-slate-600">
                     "{data.potential.summary}"
                   </p>
                 </div>
               </div>
             )}
             {data.rebound && data.rebound.score > 0 && (
-              <div className="glass-card rounded-2xl p-6 border-t-4 border-amber-600/40">
+              <div className="glass-card rounded-2xl border-t-4 border-amber-600/40 p-6">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span className="text-orange-400">📈</span> Rebound Setup
+                  <span className="text-amber-700">Rebound</span> Rebound Setup
                 </h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Recovery Signal</span>
-                    <span className="font-bold text-orange-400">
+                    <span className="text-slate-500">Recovery Signal</span>
+                    <span className="font-bold text-amber-700">
                       {data.rebound.score.toFixed(0)}/100
                     </span>
                   </div>
-                  <p className="text-sm text-gray-300 italic">
+                  <p className="text-sm italic text-slate-600">
                     "{data.rebound.summary}"
                   </p>
                 </div>
@@ -358,12 +358,12 @@ export default function AnalysisResult({
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-bold">{section.category}</h3>
                   <span
-                    className={`text-xs font-bold px-2 py-1 rounded-md ${section.score > 20 ? "bg-green-500/10 text-green-400" : section.score < -20 ? "bg-red-500/10 text-red-400" : "bg-yellow-500/10 text-yellow-400"}`}
+                    className={`rounded-md px-2 py-1 text-xs font-bold ${section.score > 20 ? "bg-emerald-500/10 text-emerald-700" : section.score < -20 ? "bg-red-500/10 text-red-700" : "bg-amber-500/10 text-amber-700"}`}
                   >
                     {section.score.toFixed(0)}
                   </span>
                 </div>
-                <p className="text-sm text-gray-400 mb-4 h-10 line-clamp-2">
+                <p className="mb-4 h-10 line-clamp-2 text-sm text-slate-500">
                   {section.summary}
                 </p>
                 <div className="space-y-3">
@@ -374,9 +374,9 @@ export default function AnalysisResult({
                         key={idx}
                         className="flex justify-between items-center text-xs"
                       >
-                        <span className="text-gray-500">{finding.metric}</span>
+                        <span className="text-slate-500">{finding.metric}</span>
                         <span
-                          className={`font-medium ${finding.rating?.includes("positive") ? "text-green-400" : finding.rating?.includes("negative") ? "text-red-400" : "text-gray-300"}`}
+                          className={`font-medium ${finding.rating?.includes("positive") ? "text-emerald-700" : finding.rating?.includes("negative") ? "text-red-700" : "text-slate-600"}`}
                         >
                           {finding.value}
                         </span>
@@ -403,7 +403,7 @@ export default function AnalysisResult({
                   {item.label}
                 </div>
                 <div
-                  className={`text-xl font-mono font-bold ${(item.value || 0) >= 0 ? "text-green-400" : "text-red-400"}`}
+                  className={`text-xl font-mono font-bold ${(item.value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                 >
                   {formatPercent(item.value)}
                 </div>
@@ -429,8 +429,8 @@ export default function AnalysisResult({
         <div className="p-8 h-full flex flex-col pt-10">
           <div className="mb-10 flex items-center justify-between text-slate-900">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#101114] text-white shadow-xl">
-                <span className="text-3xl">🤖</span>
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-xl">
+                <span className="text-xl font-black">AI</span>
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900 leading-none tracking-tight">
@@ -503,7 +503,7 @@ export default function AnalysisResult({
 
           <button
             onClick={exportToPDF}
-            className="group mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-black/8 bg-[#101114] py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[#1a1c20]"
+            className="group mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-black/8 bg-[var(--accent)] py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[var(--accent-strong)]"
           >
             <Download
               size={16}

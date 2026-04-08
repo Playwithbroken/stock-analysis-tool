@@ -44,6 +44,15 @@ interface PoliticianSignal {
   source_url?: string;
   error?: string;
   trades: PoliticianTrade[];
+  reports?: Array<Record<string, any>>;
+  summary?: {
+    report_count?: number;
+    trade_count?: number;
+    buy_count?: number;
+    sell_count?: number;
+    latest_trade_date?: string | null;
+    avg_delay_days?: number | null;
+  };
 }
 
 interface WatchlistData {
@@ -188,7 +197,7 @@ export default function SignalWatchlistPanel({
             <button
               onClick={submitItem}
               disabled={submitting || !form.value.trim()}
-              className="rounded-2xl bg-[#101114] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white disabled:opacity-50"
+              className="rounded-2xl bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
             >
               Hinzufuegen
             </button>
@@ -206,7 +215,7 @@ export default function SignalWatchlistPanel({
           <button
             onClick={() => triggerAlertCheck("test")}
             disabled={submitting}
-            className="rounded-xl bg-[#101114] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white disabled:opacity-50"
+            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
           >
             Test alerts
           </button>
@@ -334,7 +343,7 @@ export default function SignalWatchlistPanel({
                   </div>
                   <button
                     onClick={() => onAnalyze(signal.ticker)}
-                    className="rounded-xl bg-[#101114] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white"
+                    className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
                   >
                     Analyze
                   </button>
@@ -402,6 +411,39 @@ export default function SignalWatchlistPanel({
                 <div className="mt-1 text-sm text-slate-500">
                   Offizielle House PTR-Suche
                 </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Trades
+                    </div>
+                    <div className="mt-1 text-lg font-black text-slate-900">
+                      {signal.summary?.trade_count ?? signal.trades.length}
+                    </div>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Buys / Sells
+                    </div>
+                    <div className="mt-1 text-lg font-black text-slate-900">
+                      {signal.summary?.buy_count ?? 0} / {signal.summary?.sell_count ?? 0}
+                    </div>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Avg Delay
+                    </div>
+                    <div className="mt-1 text-lg font-black text-slate-900">
+                      {signal.summary?.avg_delay_days != null ? `${signal.summary.avg_delay_days}d` : "N/A"}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  <span>{signal.summary?.report_count ?? signal.reports?.length ?? 0} reports</span>
+                  <span>latest {signal.summary?.latest_trade_date || "N/A"}</span>
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    official house ptr
+                  </span>
+                </div>
 
                 {signal.error ? (
                   <div className="mt-4 text-sm text-red-700">{signal.error}</div>
@@ -434,7 +476,7 @@ export default function SignalWatchlistPanel({
                           {trade.ticker && (
                             <button
                               onClick={() => onAnalyze(trade.ticker!)}
-                              className="rounded-xl bg-[#101114] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white"
+                              className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
                             >
                               Analyze
                             </button>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
 
@@ -30,7 +31,6 @@ export default function AddHoldingModal({
   useEffect(() => {
     if (initialTicker) setTicker(initialTicker);
 
-    // Convert initialPrice (assumed USD) to active currency for display
     if (initialPrice) {
       const displayPrice = convert(initialPrice, "USD");
       setBuyPrice(displayPrice.toFixed(2));
@@ -41,7 +41,7 @@ export default function AddHoldingModal({
     if (portfolios.length > 0 && !selectedPortfolioId) {
       setSelectedPortfolioId(portfolios[0].id);
     }
-  }, [initialTicker, initialPrice, portfolios, selectedPortfolioId, currency]); // Add currency to deps
+  }, [initialTicker, initialPrice, portfolios, selectedPortfolioId, currency, convert]);
 
   if (!isOpen) return null;
 
@@ -49,8 +49,6 @@ export default function AddHoldingModal({
     if (!ticker || !shares || !selectedPortfolioId) return;
 
     let priceInUSD = buyPrice ? parseFloat(buyPrice) : undefined;
-
-    // If user is in EUR mode, convert the input (EUR) back to USD
     if (priceInUSD !== undefined && currency === "EUR") {
       priceInUSD = priceInUSD / exchangeRate;
     }
@@ -64,36 +62,28 @@ export default function AddHoldingModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#050507] rounded-2xl p-6 w-full max-w-md border border-white/10 shadow-2xl">
-        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          <span className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400">
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
-            </svg>
-          </span>
-          Asset zum Portfolio hinzufügen
-        </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm">
+      <div className="surface-panel w-full max-w-md rounded-[2rem] p-6 sm:p-7">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] bg-[var(--accent-soft)] text-[var(--accent)]">
+            <Plus size={18} />
+          </div>
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Portfolio
+            </div>
+            <h3 className="mt-1 text-2xl font-black text-slate-900">
+              Asset hinzufuegen
+            </h3>
+          </div>
+        </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
-              Portfolio wählen
-            </label>
+          <Field label="Portfolio">
             <select
               value={selectedPortfolioId}
               onChange={(e) => setSelectedPortfolioId(e.target.value)}
-              className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 appearance-none cursor-pointer"
+              className="w-full appearance-none rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/20"
             >
               {portfolios.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -101,65 +91,73 @@ export default function AddHoldingModal({
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
-                Ticker
-              </label>
+            <Field label="Ticker">
               <input
                 type="text"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 placeholder="AAPL"
-                className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
               />
-            </div>
-            <div>
-              <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
-                Anzahl
-              </label>
+            </Field>
+            <Field label="Anzahl">
               <input
                 type="number"
                 value={shares}
                 onChange={(e) => setShares(e.target.value)}
                 placeholder="10"
-                className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
-              Kaufpreis ({currency === "EUR" ? "€" : "$"})
-            </label>
+          <Field label={`Kaufpreis (${currency === "EUR" ? "EUR" : "USD"})`}>
             <input
               type="number"
               value={buyPrice}
               onChange={(e) => setBuyPrice(e.target.value)}
               placeholder="0.00"
-              className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
             />
-          </div>
+          </Field>
         </div>
 
-        <div className="flex gap-3 justify-end mt-8">
+        <div className="mt-8 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-[#0a0a0c] hover:bg-white/5 text-gray-400 hover:text-white rounded-xl transition-all border border-white/5 font-bold text-sm"
+            className="rounded-xl border border-black/8 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-black/[0.03]"
           >
             Abbrechen
           </button>
           <button
             onClick={handleAdd}
             disabled={!ticker || !shares || !selectedPortfolioId}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50"
+            className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
           >
-            Hinzufügen
+            Hinzufuegen
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </div>
+      {children}
+    </label>
   );
 }

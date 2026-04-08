@@ -58,6 +58,38 @@ def init_db():
         updated_at TEXT NOT NULL
     )
     ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_trades (
+        id TEXT PRIMARY KEY,
+        ticker TEXT NOT NULL,
+        asset_class TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        setup_type TEXT NOT NULL,
+        thesis TEXT,
+        entry_price REAL NOT NULL,
+        stop_price REAL,
+        target_price REAL,
+        quantity REAL NOT NULL,
+        confidence_score REAL,
+        leverage REAL DEFAULT 1,
+        opened_at TEXT NOT NULL,
+        closed_at TEXT,
+        closed_price REAL,
+        status TEXT NOT NULL,
+        notes TEXT,
+        exit_reason TEXT,
+        lessons_learned TEXT
+    )
+    ''')
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN exit_reason TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN lessons_learned TEXT')
+    except sqlite3.OperationalError:
+        pass
     
     conn.commit()
     conn.close()
@@ -262,6 +294,44 @@ class PortfolioManager:
         self.set_app_setting("workspace_profile", json.dumps(current))
         return current
 
+    def get_signal_score_settings(self) -> Dict[str, Any]:
+        import json
+        raw = self.get_app_setting("signal_score_settings")
+        if raw:
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                pass
+        return {
+            "weights": {
+                "source": 0.35,
+                "timing": 0.30,
+                "conviction": 0.35,
+            },
+            "high_conviction_min_score": 75,
+            "do_not_trade": {
+                "max_political_delay_days": 45,
+                "min_score_for_new_trade": 78,
+                "min_score_for_leverage": 88,
+                "block_crypto_leverage": True,
+            },
+        }
+
+    def save_signal_score_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        import json
+        current = self.get_signal_score_settings()
+        current.update(settings or {})
+        current["weights"] = {
+            **self.get_signal_score_settings().get("weights", {}),
+            **(settings or {}).get("weights", {}),
+        }
+        current["do_not_trade"] = {
+            **self.get_signal_score_settings().get("do_not_trade", {}),
+            **(settings or {}).get("do_not_trade", {}),
+        }
+        self.set_app_setting("signal_score_settings", json.dumps(current))
+        return current
+
     def get_login_guard_state(self) -> Dict[str, Any]:
         import json
         raw = self.get_app_setting("login_guard")
@@ -297,3 +367,165 @@ class PortfolioManager:
             "login_guard",
             json.dumps({"failed_attempts": 0, "locked_until": None}),
         )
+
+    def list_paper_trades(self, status: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                '''
+                SELECT * FROM paper_trades
+                WHERE status = ?
+                ORDER BY opened_at DESC
+                LIMIT ?
+                ''',
+                (status, limit),
+            )
+        else:
+            cursor.execute(
+                '''
+                SELECT * FROM paper_trades
+                ORDER BY
+                    CASE WHEN status = 'open' THEN 0 ELSE 1 END,
+                    COALESCE(closed_at, opened_at) DESC
+                LIMIT ?
+                ''',
+                (limit,),
+            )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def create_paper_trade(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        trade_id = str(uuid.uuid4())
+        opened_at = datetime.now().isoformat()
+        row = {
+            "id": trade_id,
+            "ticker": (payload.get("ticker") or "").upper(),
+            "asset_class": payload.get("asset_class") or "equity",
+            "direction": payload.get("direction") or "long",
+            "setup_type": payload.get("setup_type") or "signal_follow",
+            "thesis": payload.get("thesis") or "",
+            "entry_price": float(payload.get("entry_price") or 0),
+            "stop_price": float(payload["stop_price"]) if payload.get("stop_price") not in (None, "") else None,
+            "target_price": float(payload["target_price"]) if payload.get("target_price") not in (None, "") else None,
+            "quantity": float(payload.get("quantity") or 0),
+            "confidence_score": float(payload["confidence_score"]) if payload.get("confidence_score") not in (None, "") else None,
+            "leverage": float(payload.get("leverage") or 1),
+            "opened_at": opened_at,
+            "closed_at": None,
+            "closed_price": None,
+            "status": "open",
+            "notes": payload.get("notes") or "",
+            "exit_reason": payload.get("exit_reason") or "",
+            "lessons_learned": payload.get("lessons_learned") or "",
+        }
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO paper_trades (
+                id, ticker, asset_class, direction, setup_type, thesis, entry_price,
+                stop_price, target_price, quantity, confidence_score, leverage,
+                opened_at, closed_at, closed_price, status, notes, exit_reason, lessons_learned
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                row["id"],
+                row["ticker"],
+                row["asset_class"],
+                row["direction"],
+                row["setup_type"],
+                row["thesis"],
+                row["entry_price"],
+                row["stop_price"],
+                row["target_price"],
+                row["quantity"],
+                row["confidence_score"],
+                row["leverage"],
+                row["opened_at"],
+                row["closed_at"],
+                row["closed_price"],
+                row["status"],
+                row["notes"],
+                row["exit_reason"],
+                row["lessons_learned"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return row
+
+    def close_paper_trade(
+        self,
+        trade_id: str,
+        closed_price: float,
+        notes: Optional[str] = None,
+        exit_reason: Optional[str] = None,
+        lessons_learned: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM paper_trades WHERE id = ?', (trade_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            conn.close()
+            return None
+        closed_at = datetime.now().isoformat()
+        merged_notes = notes if notes is not None else existing["notes"]
+        merged_exit_reason = exit_reason if exit_reason is not None else existing["exit_reason"]
+        merged_lessons = lessons_learned if lessons_learned is not None else existing["lessons_learned"]
+        cursor.execute(
+            '''
+            UPDATE paper_trades
+            SET status = 'closed',
+                closed_at = ?,
+                closed_price = ?,
+                notes = ?,
+                exit_reason = ?,
+                lessons_learned = ?
+            WHERE id = ?
+            ''',
+            (closed_at, closed_price, merged_notes, merged_exit_reason, merged_lessons, trade_id),
+        )
+        conn.commit()
+        cursor.execute('SELECT * FROM paper_trades WHERE id = ?', (trade_id,))
+        updated = dict(cursor.fetchone())
+        conn.close()
+        return updated
+
+    def update_paper_trade_journal(
+        self,
+        trade_id: str,
+        notes: Optional[str] = None,
+        exit_reason: Optional[str] = None,
+        lessons_learned: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM paper_trades WHERE id = ?', (trade_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            conn.close()
+            return None
+        cursor.execute(
+            '''
+            UPDATE paper_trades
+            SET notes = ?, exit_reason = ?, lessons_learned = ?
+            WHERE id = ?
+            ''',
+            (
+                existing["notes"] if notes is None else notes,
+                existing["exit_reason"] if exit_reason is None else exit_reason,
+                existing["lessons_learned"] if lessons_learned is None else lessons_learned,
+                trade_id,
+            ),
+        )
+        conn.commit()
+        cursor.execute('SELECT * FROM paper_trades WHERE id = ?', (trade_id,))
+        updated = dict(cursor.fetchone())
+        conn.close()
+        return updated

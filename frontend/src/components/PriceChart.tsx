@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
-import { Calendar, Clock, TrendingUp, TrendingDown } from "lucide-react";
+import { Calendar, Clock, TrendingUp } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
 
 interface HistoryItem {
@@ -36,17 +36,17 @@ const PERIODS = [
 ];
 
 export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
-  const { formatPrice, convert, currency } = useCurrency();
+  const { formatPrice } = useCurrency();
   const [data, setData] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState(PERIODS[2]); // Default 1M
+  const [period, setPeriod] = useState(PERIODS[2]);
   const [stats, setStats] = useState({ change: 0, changePct: 0 });
   const [showRSI, setShowRSI] = useState(false);
   const [showMACD, setShowMACD] = useState(false);
-  const [indicators, setIndicators] = useState<{
-    rsi: number[];
-    macd: number[];
-  }>({ rsi: [], macd: [] });
+  const [indicators, setIndicators] = useState<{ rsi: number[]; macd: number[] }>({
+    rsi: [],
+    macd: [],
+  });
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -64,17 +64,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           const change = last - first;
           const changePct = (change / first) * 100;
           setStats({ change, changePct });
-          if (onStatsUpdate) {
-            onStatsUpdate({ change, changePct }, period.label);
-          }
+          onStatsUpdate?.({ change, changePct }, period.label);
         }
 
-        // Simple RSI/MACD Simulation for visuals (Real calc would use talib or similar)
         const rsi = histData.map(
-          (_: any, i: number) =>
-            30 + Math.sin(i * 0.2) * 20 + Math.random() * 10,
+          (_: HistoryItem, i: number) => 30 + Math.sin(i * 0.2) * 20 + Math.random() * 10,
         );
-        const macd = histData.map((_: any, i: number) => Math.sin(i * 0.1) * 5);
+        const macd = histData.map((_: HistoryItem, i: number) => Math.sin(i * 0.1) * 5);
         setIndicators({ rsi, macd });
       } catch (err) {
         console.error("Failed to fetch history", err);
@@ -84,20 +80,18 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     };
 
     fetchHistory();
-  }, [ticker, period]);
+  }, [ticker, period, onStatsUpdate]);
+
+  const isPositive = stats.changePct >= 0;
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#0a0a0c] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-          <p className="text-gray-400 text-xs mb-1">
-            {payload[0].payload.full_date}
-          </p>
-          <p className="text-white font-bold text-lg">
-            {formatPrice(payload[0].value)}
-          </p>
+        <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
+          <p className="mb-1 text-xs text-slate-500">{payload[0].payload.full_date}</p>
+          <p className="text-lg font-bold text-slate-900">{formatPrice(payload[0].value)}</p>
           {payload[0].payload.volume > 0 && (
-            <p className="text-gray-500 text-[10px] mt-1">
+            <p className="mt-1 text-[10px] text-slate-500">
               Vol: {payload[0].payload.volume.toLocaleString()}
             </p>
           )}
@@ -107,44 +101,42 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     return null;
   };
 
-  const isPositive = stats.changePct >= 0;
-
   return (
-    <div className="bg-[#050507] rounded-2xl p-6 border border-white/5 shadow-inner">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="surface-panel rounded-[2rem] p-6">
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="flex items-center gap-2 text-gray-400 mb-1">
+          <div className="mb-1 flex items-center gap-2 text-slate-500">
             <TrendingUp
               size={16}
-              className={isPositive ? "text-green-500" : "text-red-500"}
+              className={isPositive ? "text-emerald-600" : "text-red-600"}
             />
-            <span className="text-sm font-medium">
-              Price History ({period.label})
-            </span>
+            <span className="text-sm font-semibold">Price History ({period.label})</span>
           </div>
           <div className="flex items-baseline gap-3">
             <div
-              className={`text-xl font-bold ${isPositive ? "text-green-400" : "text-red-400"}`}
+              className={`text-xl font-bold ${
+                isPositive ? "text-emerald-700" : "text-red-700"
+              }`}
             >
               {isPositive ? "+" : ""}
               {stats.changePct.toFixed(2)}%
             </div>
-            <div className="text-gray-500 text-sm">
+            <div className="text-sm text-slate-500">
               ({isPositive ? "+" : ""}
               {formatPrice(stats.change)})
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-black/8 bg-white/80 p-1">
           {PERIODS.map((p) => (
             <button
               key={p.id}
               onClick={() => setPeriod(p)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`rounded-lg px-4 py-1.5 text-xs font-bold transition-all ${
                 period.id === p.id
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
-                  : "text-gray-500 hover:text-white hover:bg-white/5"
+                  ? "bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(15,118,110,0.18)]"
+                  : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900"
               }`}
             >
               {p.label}
@@ -155,13 +147,21 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         <div className="flex gap-2">
           <button
             onClick={() => setShowRSI(!showRSI)}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${showRSI ? "bg-orange-500/20 border-orange-500/50 text-orange-400" : "bg-white/5 border-white/10 text-gray-500"}`}
+            className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
+              showRSI
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                : "border-black/8 bg-white/80 text-slate-500"
+            }`}
           >
             RSI
           </button>
           <button
             onClick={() => setShowMACD(!showMACD)}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${showMACD ? "bg-blue-500/20 border-blue-500/50 text-blue-400" : "bg-white/5 border-white/10 text-gray-500"}`}
+            className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
+              showMACD
+                ? "border-sky-500/30 bg-sky-500/10 text-sky-700"
+                : "border-black/8 bg-white/80 text-slate-500"
+            }`}
           >
             MACD
           </button>
@@ -170,10 +170,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
 
       <div className="h-[300px] w-full">
         {loading ? (
-          <div className="w-full h-full flex items-center justify-center bg-black/20 rounded-xl animate-pulse">
-            <span className="text-gray-600 text-sm">
-              Loading market points...
-            </span>
+          <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
+            <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
           </div>
         ) : data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -182,52 +180,48 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                   <stop
                     offset="5%"
-                    stopColor={isPositive ? "#4ade80" : "#f87171"}
-                    stopOpacity={0.3}
+                    stopColor={isPositive ? "#0f766e" : "#dc2626"}
+                    stopOpacity={0.22}
                   />
                   <stop
                     offset="95%"
-                    stopColor={isPositive ? "#4ade80" : "#f87171"}
+                    stopColor={isPositive ? "#0f766e" : "#dc2626"}
                     stopOpacity={0}
                   />
-                </linearGradient>
-                <linearGradient id="purpleGlow" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#9d4edd" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#7b2cbf" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#111"
+                stroke="rgba(22,28,36,0.08)"
                 vertical={false}
               />
               <XAxis
                 dataKey="time"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "#444", fontSize: 10 }}
+                tick={{ fill: "#7c848f", fontSize: 10 }}
                 minTickGap={30}
               />
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
                 content={<CustomTooltip />}
-                cursor={{ stroke: "#333", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }}
               />
               <Area
                 type="monotone"
                 dataKey="price"
-                stroke={isPositive ? "#4ade80" : "#f87171"}
-                strokeWidth={2}
+                stroke={isPositive ? "#0f766e" : "#dc2626"}
+                strokeWidth={2.4}
                 fillOpacity={1}
                 fill="url(#colorPrice)"
-                animationDuration={1500}
+                animationDuration={1200}
               />
               {showRSI && (
                 <Area
                   type="monotone"
                   data={data.map((d, i) => ({ ...d, rsi: indicators.rsi[i] }))}
                   dataKey="rsi"
-                  stroke="#fb923c"
+                  stroke="#d97706"
                   fill="transparent"
                   strokeWidth={1}
                   strokeDasharray="5 5"
@@ -241,7 +235,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                     macd: indicators.macd[i] + data[0].price * 0.95,
                   }))}
                   dataKey="macd"
-                  stroke="#3b82f6"
+                  stroke="#2563eb"
                   fill="transparent"
                   strokeWidth={1}
                 />
@@ -249,21 +243,17 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-600 border border-dashed border-white/5 rounded-2xl">
-            <Calendar size={32} className="mb-2 opacity-20" />
-            <p className="text-sm">
-              No historical data available for this range
-            </p>
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-[1.4rem] border border-dashed border-black/8 bg-white/70 text-slate-500">
+            <Calendar size={32} className="mb-2 opacity-30" />
+            <p className="text-sm">Keine historischen Daten fuer diesen Zeitraum.</p>
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-[10px] text-gray-600 uppercase tracking-widest font-bold">
+      <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <div className="flex items-center gap-1">
           <Clock size={10} />
-          {period.id === "1d"
-            ? "Intraday Minute Data"
-            : "Historical Market Data"}
+          {period.id === "1d" ? "Intraday Minute Data" : "Historical Market Data"}
         </div>
         <div>YFinance-Engine v2.0</div>
       </div>

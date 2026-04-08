@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import asyncio
 import os
 import smtplib
 from email.message import EmailMessage
@@ -14,6 +15,8 @@ from typing import Any, Dict, List
 import requests
 
 from src.public_signal_service import PublicSignalService
+from src.session_list_service import SessionListService
+from src.signal_score_service import SignalScoreService
 from src.storage import PortfolioManager
 from src.morning_brief_service import MorningBriefService
 
@@ -39,10 +42,14 @@ class EmailAlertService:
         portfolio_manager: PortfolioManager,
         public_signal_service: PublicSignalService,
         morning_brief_service: MorningBriefService | None = None,
+        session_list_service: SessionListService | None = None,
+        signal_score_service: SignalScoreService | None = None,
     ) -> None:
         self.portfolio_manager = portfolio_manager
         self.public_signal_service = public_signal_service
         self.morning_brief_service = morning_brief_service or MorningBriefService()
+        self.session_list_service = session_list_service or SessionListService()
+        self.signal_score_service = signal_score_service or SignalScoreService()
 
     def get_config(self) -> EmailAlertConfig:
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -107,7 +114,8 @@ class EmailAlertService:
         self._validate_config(config)
         items = self.portfolio_manager.get_signal_watch_items()
         snapshot = self.public_signal_service.build_watchlist_snapshot(items)
-        new_events = self._extract_new_events(snapshot)
+        settings = self.portfolio_manager.get_signal_score_settings()
+        new_events = self._extract_new_events(snapshot, settings)
 
         if not new_events:
             return {"status": "ok", "sent": 0, "message": "No new events."}
@@ -159,6 +167,39 @@ class EmailAlertService:
         self._send_notifications(config, events, subject="Morning Brief: Global opening setup")
         return {"status": "ok", "message": "Morning brief sent."}
 
+    def send_a_setup_digest(self) -> Dict[str, Any]:
+        config = self.get_config()
+        self._validate_config(config)
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        settings = self.portfolio_manager.get_signal_score_settings()
+        scoreboard = asyncio.run(self.signal_score_service.build_scoreboard(snapshot, settings))
+        min_score = float(settings.get("high_conviction_min_score") or 75)
+        top_ideas = [
+            item for item in scoreboard.get("top_ideas", [])
+            if float(item.get("total_score") or 0) >= min_score
+        ][:8]
+        if not top_ideas:
+            return {"status": "ok", "message": "No A-setups available right now."}
+        events = []
+        for index, item in enumerate(top_ideas):
+            line = f"{item.get('label')} | {item.get('headline')} | score {item.get('total_score')}"
+            if item.get("detail"):
+                line += f" | {item.get('detail')}"
+            events.append(
+                {
+                    "event_key": f"a-setup-digest:{datetime.now().strftime('%Y-%m-%d')}:{index}:{item.get('label')}",
+                    "category": "a_setup",
+                    "title": item.get("label") or "A-Setup",
+                    "line": line,
+                    "source_url": "",
+                    "source_label": item.get("source_label") or item.get("bucket"),
+                    "conviction_score": item.get("total_score"),
+                }
+            )
+        self._send_notifications(config, events, subject="A-Setup Digest: High-conviction ideas")
+        return {"status": "ok", "message": f"A-Setup digest sent with {len(events)} ideas."}
+
     def send_open_brief(self, session_label: str) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
@@ -172,6 +213,17 @@ class EmailAlertService:
             subject=f"{session.title()} Open Brief: Market opening setup",
         )
         return {"status": "ok", "message": f"{session.title()} open brief sent."}
+
+    def send_session_list_alert(self, region: str, phase: str) -> Dict[str, Any]:
+        config = self.get_config()
+        self._validate_config(config)
+        events = asyncio.run(self._build_session_list_events(region, phase))
+        self._send_notifications(
+            config,
+            events,
+            subject=f"{region.title()} {phase.replace('_', ' ').title()}: Session list",
+        )
+        return {"status": "ok", "message": f"{region.title()} {phase} session list sent."}
 
     def send_scheduled_open_briefs(self) -> List[Dict[str, Any]]:
         config = self.get_config()
@@ -248,6 +300,11 @@ class EmailAlertService:
             "",
             *brief.get("summary_points", [])[:4],
             "",
+            "Trusted source policy:",
+            "- Top News: nur priorisierte serioese Publisher und Domains.",
+            "- Social/X/Stocktwits/Telegram werden ausgeschlossen.",
+            "- Reddit erscheint nur separat als Crowd-Signal bei Wiederholung.",
+            "",
             "Economic calendar:",
         ]
 
@@ -283,6 +340,16 @@ class EmailAlertService:
         else:
             lines.append("- Keine direkten Watchlist-Treffer.")
 
+        lines.extend(["", "Crowd radar:"])
+        crowd_signals = brief.get("crowd_signals", [])
+        if crowd_signals:
+            lines.extend(
+                f"- {item.get('ticker') or 'Macro'} {item.get('event_type')} | {item.get('mentions')} Reddit/Crowd-Mentions"
+                for item in crowd_signals[:3]
+            )
+        else:
+            lines.append("- Kein relevantes Crowd-Cluster.")
+
         return [
             {
                 "event_key": f"{session_label}-brief:{datetime.now().strftime('%Y-%m-%d')}:{index}",
@@ -294,11 +361,85 @@ class EmailAlertService:
             for index, line in enumerate(lines)
         ]
 
-    def _extract_new_events(self, snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def _build_session_list_events(self, region: str, phase: str) -> List[Dict[str, Any]]:
+        region_key = (region or "").strip().lower()
+        phase_key = (phase or "").strip().lower()
+        if region_key not in {"asia", "europe", "usa"}:
+            raise ValueError("region must be asia, europe or usa")
+        if phase_key not in {"pre_open", "post_open", "end_of_day"}:
+            raise ValueError("phase must be pre_open, post_open or end_of_day")
+
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        payload = await self.session_list_service.build_session_lists(snapshot)
+        session = payload.get("sessions", {}).get(region_key, {})
+        bucket = session.get("phases", {}).get(phase_key, {})
+
+        lines = [
+            f"{session.get('label', region_key.title())} {bucket.get('label', phase_key)}",
+            "",
+            "Equities:",
+        ]
+        equities = bucket.get("equities") or []
+        if equities:
+            lines.extend(
+                f"- {item['ticker']} | score {item['phase_score']} | {item['change_1w']:+.2f}%"
+                for item in equities[:6]
+            )
+        else:
+            lines.append("- Keine Equity-Treffer.")
+
+        lines.extend(["", "ETFs:"])
+        etfs = bucket.get("etfs") or []
+        if etfs:
+            lines.extend(
+                f"- {item['ticker']} | score {item['phase_score']} | {item['change_1w']:+.2f}%"
+                for item in etfs[:4]
+            )
+        else:
+            lines.append("- Keine ETF-Treffer.")
+
+        lines.extend(["", "Crypto:"])
+        crypto = bucket.get("crypto") or []
+        if crypto:
+            lines.extend(
+                f"- {item['ticker']} | score {item['phase_score']} | {item['change_1w']:+.2f}%"
+                for item in crypto[:4]
+            )
+        else:
+            lines.append("- Keine Crypto-Treffer.")
+
+        lines.extend(["", "News:"])
+        news_items = bucket.get("news") or []
+        if news_items:
+            lines.extend(
+                f"- {item.get('title')} ({item.get('publisher')})"
+                for item in news_items[:4]
+            )
+        else:
+            lines.append("- Keine priorisierten News.")
+
+        return [
+            {
+                "event_key": f"session-list:{region_key}:{phase_key}:{datetime.now().strftime('%Y-%m-%d')}:{index}",
+                "category": "session_list",
+                "title": f"{region_key.title()} {phase_key}",
+                "line": line,
+                "source_url": "",
+            }
+            for index, line in enumerate(lines)
+        ]
+
+    def _extract_new_events(self, snapshot: Dict[str, Any], settings: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
         new_events: List[Dict[str, Any]] = []
+        settings = settings or self.portfolio_manager.get_signal_score_settings()
+        high_conviction = self.signal_score_service.build_conviction_index(snapshot, settings)
 
         for signal in snapshot.get("ticker_signals", []):
+            conviction_score = high_conviction.get(("ticker", signal.get("ticker")))
+            if conviction_score is None:
+                continue
             for event in signal.get("events", []):
                 event_key = (
                     f"ticker:{signal.get('ticker')}:{event.get('owner_name')}:{event.get('trade_date')}:"
@@ -309,11 +450,11 @@ class EmailAlertService:
                 action = (event.get("action") or "").upper()
                 line = (
                     f"{signal.get('ticker')}: {action} by {event.get('owner_name')} "
-                    f"on {event.get('trade_date')} • filed {event.get('filed_date')} • "
+                    f"on {event.get('trade_date')} | filed {event.get('filed_date')} | "
                     f"{event.get('shares')} shares"
                 )
                 if event.get("value_label"):
-                    line += f" • {event.get('value_label')}"
+                    line += f" | {event.get('value_label')}"
                 new_events.append(
                     {
                         "event_key": event_key,
@@ -321,11 +462,16 @@ class EmailAlertService:
                         "title": signal.get("ticker") or "Ticker Signal",
                         "line": line,
                         "source_url": event.get("source_url") or signal.get("source_url") or "",
+                        "source_label": "SEC Form 4",
+                        "conviction_score": conviction_score,
                     }
                 )
 
         for signal in snapshot.get("politician_signals", []):
             for trade in signal.get("trades", []):
+                conviction_score = high_conviction.get(("politician", signal.get("name"), trade.get("ticker")))
+                if conviction_score is None:
+                    continue
                 event_key = (
                     f"politician:{signal.get('name')}:{trade.get('ticker') or trade.get('asset')}:"
                     f"{trade.get('trade_date')}:{trade.get('action')}:{trade.get('amount_range')}"
@@ -335,7 +481,7 @@ class EmailAlertService:
                 action = (trade.get("action") or "").upper()
                 line = (
                     f"{signal.get('name')}: {action} {trade.get('ticker') or trade.get('asset')} "
-                    f"on {trade.get('trade_date')} • filed {trade.get('notification_date')} • "
+                    f"on {trade.get('trade_date')} | filed {trade.get('notification_date')} | "
                     f"{trade.get('amount_range')}"
                 )
                 new_events.append(
@@ -345,10 +491,26 @@ class EmailAlertService:
                         "title": signal.get("name") or "Congress Signal",
                         "line": line,
                         "source_url": trade.get("source_url") or signal.get("source_url") or "",
+                        "source_label": "House PTR",
+                        "conviction_score": conviction_score,
                     }
                 )
 
+        new_events.sort(key=self._event_priority)
         return new_events
+
+    def _event_priority(self, event: Dict[str, Any]) -> tuple[int, str]:
+        category = event.get("category")
+        line = (event.get("line") or "").lower()
+        if category == "ticker" and " buy " in f" {line} ":
+            return (0, line)
+        if category == "politician" and " buy " in f" {line} ":
+            return (1, line)
+        if category == "ticker":
+            return (2, line)
+        if category == "politician":
+            return (3, line)
+        return (4, line)
 
     def _send_notifications(
         self,
@@ -375,8 +537,12 @@ class EmailAlertService:
         lines = ["",]
         for event in events:
             lines.append(f"- {event['line']}")
+            if event.get("conviction_score") is not None:
+                lines.append(f"  A-Setup Score: {event['conviction_score']}")
+            if event.get("source_label"):
+                lines.append(f"  Quelle: {event['source_label']}")
             if event.get("source_url"):
-                lines.append(f"  Quelle: {event['source_url']}")
+                lines.append(f"  Link: {event['source_url']}")
         lines.extend(["", f"Erstellt am {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
         msg.set_content("\n".join(lines))
 
@@ -402,7 +568,8 @@ class EmailAlertService:
 
         lines = [f"*{subject}*", ""]
         for event in events[:20]:
-            lines.append(f"• {event['line']}")
+            suffix = f" | score {event['conviction_score']}" if event.get("conviction_score") is not None else ""
+            lines.append(f"- {event['line']}{suffix}")
         text = "\n".join(lines)
 
         response = requests.post(

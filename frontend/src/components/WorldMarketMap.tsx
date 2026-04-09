@@ -84,6 +84,7 @@ interface WorldMarketMapProps {
 }
 
 interface GeoEvent extends MapNewsItem {
+  geoKey?: string;
   markerLabel: string;
   markerTone: "red" | "amber" | "blue" | "slate";
   markerIcon: string;
@@ -251,24 +252,37 @@ function resolveGeoAnchor(haystack: string, regionKey: GeoEvent["regionKey"], ma
   return markerLayout[regionKey];
 }
 
-function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
+function expandConflictAnchors(haystack: string): MapAnchor[] {
+  const orderedMatches = geoAnchors.filter((entry) => entry.terms.some((term) => haystack.includes(term)));
+  const unique = new Map<string, MapAnchor>();
+  for (const match of orderedMatches) {
+    const key = `${match.anchor.left}-${match.anchor.top}`;
+    if (!unique.has(key)) unique.set(key, match.anchor);
+  }
+  return Array.from(unique.values()).slice(0, 3);
+}
+
+function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""} ${item.event_type || ""}`.toLowerCase();
   const regionKey = getRegionKey(item.region);
   const pulse = item.impact === "high";
 
   if (/(war|missile|attack|iran|israel|russia|ukraine|lebanon|beirut|conflict)/.test(haystack)) {
-    return {
+    const anchors = expandConflictAnchors(haystack);
+    const finalAnchors = anchors.length ? anchors : [resolveGeoAnchor(haystack, regionKey, "WAR")];
+    return finalAnchors.map((anchor, index) => ({
       ...item,
+      geoKey: `${item.title || "conflict"}-${index}`,
       markerLabel: "Conflict",
       markerTone: "red",
       markerIcon: "WAR",
       pulse,
-      regionKey,
-      markerPosition: resolveGeoAnchor(haystack, regionKey, "WAR"),
-    };
+      regionKey: anchor.left === "53.4%" ? "Europe" : anchor.left === "56.8%" || anchor.left === "52.6%" || anchor.left === "52.8%" ? "Global" : regionKey,
+      markerPosition: anchor,
+    }));
   }
   if (/(fed|ecb|boj|central bank|rate|yield)/.test(haystack)) {
-    return {
+    return [{
       ...item,
       markerLabel: "Central Bank",
       markerTone: "blue",
@@ -276,10 +290,10 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       pulse,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "CB"),
-    };
+    }];
   }
   if (/(oil|opec|crude|gas|energy)/.test(haystack)) {
-    return {
+    return [{
       ...item,
       markerLabel: "Energy",
       markerTone: "amber",
@@ -287,10 +301,10 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       pulse: item.impact !== "low",
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey, "OIL"),
-    };
+    }];
   }
   if (/(election|vote|ballot|president|prime minister|parliament|coalition|campaign)/.test(haystack)) {
-    return {
+    return [{
       ...item,
       markerLabel: "Election",
       markerTone: "blue",
@@ -298,10 +312,10 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       pulse,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Europe" : regionKey, "VOTE"),
-    };
+    }];
   }
   if (/(earthquake|wildfire|flood|storm|hurricane|typhoon|tsunami|drought|disaster)/.test(haystack)) {
-    return {
+    return [{
       ...item,
       markerLabel: "Disaster",
       markerTone: "red",
@@ -309,10 +323,10 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       pulse,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Asia" : regionKey, "NAT"),
-    };
+    }];
   }
   if (/(tariff|sanction|trade|policy|regulation)/.test(haystack)) {
-    return {
+    return [{
       ...item,
       markerLabel: "Policy",
       markerTone: "slate",
@@ -320,9 +334,9 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       pulse,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "POL"),
-    };
+    }];
   }
-  return null;
+  return [];
 }
 
 function buildTimeline(regions: RegionSummary[], activeRegionNews: MapNewsItem[]) {
@@ -385,14 +399,13 @@ export default function WorldMarketMap({
   const geoSignals = useMemo(
     () =>
       (eventLayer.length ? eventLayer : news)
-        .map(classifyGeoEvent)
-        .filter(Boolean)
+        .flatMap(classifyGeoEvents)
         .filter((item) => item!.impact === "high" || item!.impact === "medium")
         .sort((a, b) => {
           const impactRank = { high: 0, medium: 1, low: 2 };
           return (impactRank[a!.impact as keyof typeof impactRank] ?? 3) - (impactRank[b!.impact as keyof typeof impactRank] ?? 3);
         })
-        .slice(0, 10) as GeoEvent[],
+        .slice(0, 12) as GeoEvent[],
     [eventLayer, news],
   );
 
@@ -720,7 +733,7 @@ export default function WorldMarketMap({
 
             {positionedGeoSignals.map((item, index) => (
               <a
-                key={`${item.title}-${index}`}
+                key={item.geoKey || `${item.title}-${index}`}
                 className="absolute z-10 group"
                 style={item.adjustedStyle}
                 href={item.link}
@@ -979,7 +992,7 @@ export default function WorldMarketMap({
                 {showEventLayer && positionedGeoSignals.length ? (
                   positionedGeoSignals.map((item, index) => (
                     <a
-                      key={`${item.title}-${index}`}
+                      key={item.geoKey || `${item.title}-${index}`}
                       href={item.link}
                       target="_blank"
                       rel="noreferrer"

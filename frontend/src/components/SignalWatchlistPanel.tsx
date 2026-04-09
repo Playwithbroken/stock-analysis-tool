@@ -567,7 +567,28 @@ export default function SignalWatchlistPanel({
                       {signal.playbook.copy_text}
                     </div>
                   </div>
-                ) : null}
+                ) : signal.trades.length ? (
+                  <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-white/75 p-4">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Congress playbook
+                    </div>
+                    <div className="mt-3 text-sm font-bold text-slate-900">
+                      Noch kein klares Copy-Setup. Nutze den Feed als Themen- und Delay-Hinweis.
+                    </div>
+                    <div className="mt-2 text-sm text-slate-600">
+                      Pruefe Trade-Datum, Delay, Asset und ob die Richtung technisch ueberhaupt noch bestaetigt wird.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[1.2rem] border border-dashed border-black/8 bg-white/65 p-4">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Congress playbook
+                    </div>
+                    <div className="mt-3 text-sm text-slate-500">
+                      Noch keine auswertbaren PTR-Trades im aktuellen Suchfenster.
+                    </div>
+                  </div>
+                )}
 
                 {signal.error ? (
                   <div className="mt-4 text-sm text-red-700">{signal.error}</div>

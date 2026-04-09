@@ -43,6 +43,19 @@ const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
   { id: "portfolio", label: "Portfolio", short: "Portfolio" },
 ];
 
+function formatTickerPrice(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return "...";
+  if (Math.abs(value) >= 1000) return value.toFixed(0);
+  if (Math.abs(value) >= 100) return value.toFixed(2);
+  if (Math.abs(value) >= 1) return value.toFixed(2);
+  return value.toFixed(4);
+}
+
+function formatTickerMove(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return null;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
 function HeaderTickerChip({
   symbol,
   quote,
@@ -88,12 +101,11 @@ function HeaderTickerChip({
             className={priceDirection === "up" ? "text-emerald-700" : "text-red-700"}
           />
         ) : null}
-        {quote?.price ?? "..."}
+        {formatTickerPrice(quote?.price)}
       </span>
       {move != null ? (
         <span className={moveTone}>
-          {move >= 0 ? "+" : ""}
-          {move}%
+          {formatTickerMove(move)}
         </span>
       ) : null}
     </div>
@@ -606,7 +618,7 @@ function AppContent() {
                           </span>
                           {item.price != null ? (
                             <span className="text-xs font-semibold text-slate-500">
-                              {item.price}
+                              {formatTickerPrice(item.price)}
                             </span>
                           ) : null}
                         </div>

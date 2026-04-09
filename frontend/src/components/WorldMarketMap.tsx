@@ -75,9 +75,9 @@ interface GeoEvent extends MapNewsItem {
 }
 
 const positions: Record<string, { x: number; y: number; align: "left" | "right" }> = {
-  USA: { x: 22, y: 32, align: "left" },
-  Europe: { x: 49, y: 28, align: "right" },
-  Asia: { x: 73, y: 34, align: "right" },
+  USA: { x: 16.5, y: 31.5, align: "left" },
+  Europe: { x: 49.5, y: 28.5, align: "right" },
+  Asia: { x: 74.5, y: 35.5, align: "right" },
 };
 
 const regionKeywords: Record<string, string[]> = {
@@ -87,9 +87,9 @@ const regionKeywords: Record<string, string[]> = {
 };
 
 const markerLayout = {
-  USA: { left: "26%", top: "36%" },
-  Europe: { left: "50%", top: "31%" },
-  Asia: { left: "71%", top: "38%" },
+  USA: { left: "19%", top: "34%" },
+  Europe: { left: "50.5%", top: "31%" },
+  Asia: { left: "74%", top: "39%" },
   Global: { left: "56%", top: "52%" },
 };
 

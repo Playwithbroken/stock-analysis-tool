@@ -100,6 +100,7 @@ interface GeoEvent extends MapNewsItem {
   markerIcon: string;
   pulse: boolean;
   regionKey: "USA" | "Europe" | "Asia" | "Global";
+  geoZone?: string;
   markerPosition: { left: string; top: string };
 }
 
@@ -241,6 +242,17 @@ function compactList(items?: string[] | null, limit = 3) {
   return (items || []).filter(Boolean).slice(0, limit);
 }
 
+function topGeoZones(items: GeoEvent[], limit = 3) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (!item.geoZone || item.geoZone === item.regionKey) continue;
+    counts.set(item.geoZone, (counts.get(item.geoZone) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit);
+}
+
 function describeEventVariant(event: GeoEvent | null) {
   if (!event) return null;
   const title = `${event.title || ""} ${(event.region || "").toLowerCase()}`.toLowerCase();
@@ -274,6 +286,17 @@ function describeEventVariant(event: GeoEvent | null) {
     return "Central bank shift";
   }
   return event.markerLabel;
+}
+
+function inferGeoZone(haystack: string, regionKey: GeoEvent["regionKey"]) {
+  if (/(iran|tehran|israel|gaza|lebanon|beirut|saudi|gulf|red sea|middle east)/.test(haystack)) return "Middle East";
+  if (/(ukraine|kyiv|russia|moscow|poland|warsaw|hungary|budapest|eastern europe)/.test(haystack)) return "Eastern Europe";
+  if (/(germany|berlin|france|paris|london|uk |britain|italy|rome|western europe)/.test(haystack)) return "Western Europe";
+  if (/(china|beijing|shanghai|hong kong|taiwan|taipei|korea|seoul|japan|tokyo)/.test(haystack)) return "North Asia";
+  if (/(india|mumbai|delhi|singapore|southeast asia)/.test(haystack)) return "South Asia";
+  if (/(washington|new york|wall street|east coast|federal reserve)/.test(haystack)) return "US East";
+  if (/(california|silicon valley|west coast)/.test(haystack)) return "US West";
+  return regionKey;
 }
 
 function buildHedgeIdeas(event: GeoEvent | null) {
@@ -430,6 +453,7 @@ function expandConflictAnchors(haystack: string): MapAnchor[] {
 function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""} ${item.event_type || ""}`.toLowerCase();
   const regionKey = getRegionKey(item.region);
+  const geoZone = inferGeoZone(haystack, regionKey);
   const pulse = item.impact === "high";
 
   if (/(war|missile|attack|iran|israel|russia|ukraine|lebanon|beirut|conflict)/.test(haystack)) {
@@ -442,6 +466,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerTone: "red",
       markerIcon: "WAR",
       pulse,
+      geoZone,
       regionKey: anchor.left === "53.4%" ? "Europe" : anchor.left === "56.8%" || anchor.left === "52.6%" || anchor.left === "52.8%" ? "Global" : regionKey,
       markerPosition: anchor,
     }));
@@ -453,6 +478,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerTone: "blue",
       markerIcon: "CB",
       pulse,
+      geoZone,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "CB"),
     }];
@@ -464,6 +490,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerTone: "amber",
       markerIcon: "OIL",
       pulse: item.impact !== "low",
+      geoZone,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey, "OIL"),
     }];
@@ -475,6 +502,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerTone: "blue",
       markerIcon: "VOTE",
       pulse,
+      geoZone,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Europe" : regionKey, "VOTE"),
     }];
@@ -486,6 +514,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerTone: "red",
       markerIcon: "NAT",
       pulse,
+      geoZone,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Asia" : regionKey, "NAT"),
     }];
@@ -497,6 +526,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerTone: "slate",
       markerIcon: "POL",
       pulse,
+      geoZone,
       regionKey,
       markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "POL"),
     }];
@@ -747,6 +777,7 @@ export default function WorldMarketMap({
         key: item.geoKey || `${item.title}-${index}`,
         title: item.title,
         region: item.region || "Global",
+        geoZone: item.geoZone,
         variant: describeEventVariant(item) || item.markerLabel,
         freshness: freshnessLabel(item.event_intelligence?.decay, item.pulse),
         impact: item.impact || "macro",
@@ -761,11 +792,13 @@ export default function WorldMarketMap({
     const items = focusRegionSignals.slice(0, 4);
     const actionable = items.filter((item) => item.event_intelligence?.action && item.event_intelligence.action !== "watch").length;
     const highImpact = items.filter((item) => item.impact === "high").length;
+    const zones = topGeoZones(focusRegionSignals, 4);
     return {
       total: items.length,
       actionable,
       highImpact,
       items,
+      zones,
     };
   }, [focusRegionSignals]);
 
@@ -963,6 +996,11 @@ export default function WorldMarketMap({
                       {activeVariantLabel}
                     </span>
                   ) : null}
+                  {activeGeoEvent.geoZone && activeGeoEvent.geoZone !== activeGeoEvent.regionKey ? (
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {activeGeoEvent.geoZone}
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                     {activeGeoEvent.region || "Global"}
                   </span>
@@ -1088,7 +1126,9 @@ export default function WorldMarketMap({
                   <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                        {item.region || "Global"}
+                        {item.geoZone && item.geoZone !== item.regionKey
+                          ? `${item.region || "Global"} · ${item.geoZone}`
+                          : item.region || "Global"}
                       </div>
                       <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(item.markerTone)}`}>
                         {item.impact || "macro"}
@@ -1213,6 +1253,19 @@ export default function WorldMarketMap({
                 <div className={`mt-3 text-2xl font-black ${textToneClass(displayRegion.tone)}`}>
                   {formatPct(displayRegion.avg_change_1d)}
                 </div>
+                {regionDrilldown.zones.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {regionDrilldown.zones.map(([zone, count]) => (
+                      <span
+                        key={zone}
+                        className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                      >
+                        {zone}
+                        {count > 1 ? ` ${count}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="mt-3 space-y-2">
                   {(displayRegion.assets || []).slice(0, 1).map((asset) => (
                     <div
@@ -1281,6 +1334,11 @@ export default function WorldMarketMap({
                           </div>
                         </div>
                         <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
+                        {item.geoZone && item.geoZone !== item.regionKey ? (
+                          <div className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                            {item.geoZone}
+                          </div>
+                        ) : null}
                         {item.event_intelligence?.affected_assets?.length ? (
                           <div className="mt-2 text-[11px] leading-5 text-slate-500">
                             Assets: {compactList(item.event_intelligence.affected_assets, 2).join(" | ")}
@@ -1314,6 +1372,11 @@ export default function WorldMarketMap({
                   {activeVariantLabel ? (
                     <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                       {activeVariantLabel}
+                    </span>
+                  ) : null}
+                  {activeGeoEvent.geoZone && activeGeoEvent.geoZone !== activeGeoEvent.regionKey ? (
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {activeGeoEvent.geoZone}
                     </span>
                   ) : null}
                   <span className="rounded-full border border-black/8 bg-white px-2 py-1">
@@ -1565,10 +1628,16 @@ export default function WorldMarketMap({
                         >
                           {describeEventVariant(item) || item.markerLabel}
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                          <span>{item.region || "Global"}</span>
-                          <span>|</span>
-                          <span>{item.impact || "macro"}</span>
+                      <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                        <span>{item.region || "Global"}</span>
+                        {item.geoZone && item.geoZone !== item.regionKey ? (
+                          <>
+                            <span>|</span>
+                            <span>{item.geoZone}</span>
+                          </>
+                        ) : null}
+                        <span>|</span>
+                        <span>{item.impact || "macro"}</span>
                           <span
                             className={`rounded-full px-2 py-1 ${freshnessClass(
                               freshnessLabel(item.event_intelligence?.decay, item.pulse),
@@ -1762,6 +1831,11 @@ export default function WorldMarketMap({
                     </div>
                   </div>
                   <div className="mt-2 text-sm font-bold text-slate-900">{item.variant}</div>
+                  {item.geoZone && item.geoZone !== item.region ? (
+                    <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      {item.geoZone}
+                    </div>
+                  ) : null}
                   <div className="mt-2 line-clamp-2 text-sm text-slate-600">{item.title}</div>
                   <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                     <span className="rounded-full border border-black/8 bg-white px-2 py-1">

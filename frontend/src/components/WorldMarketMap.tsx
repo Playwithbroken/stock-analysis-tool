@@ -74,6 +74,11 @@ interface GeoEvent extends MapNewsItem {
   markerPosition: { left: string; top: string };
 }
 
+interface MapAnchor {
+  left: string;
+  top: string;
+}
+
 const positions: Record<
   string,
   {
@@ -103,6 +108,31 @@ const markerLayout = {
   Asia: { left: "74%", top: "48.5%" },
   Global: { left: "58.5%", top: "60%" },
 };
+
+const geoAnchors: Array<{ terms: string[]; anchor: MapAnchor }> = [
+  { terms: ["hungary", "budapest"], anchor: { left: "50.5%", top: "38%" } },
+  { terms: ["ukraine", "kyiv"], anchor: { left: "54%", top: "35.5%" } },
+  { terms: ["poland", "warsaw"], anchor: { left: "49.5%", top: "34.5%" } },
+  { terms: ["germany", "berlin"], anchor: { left: "46.5%", top: "33.5%" } },
+  { terms: ["france", "paris"], anchor: { left: "44.5%", top: "35.5%" } },
+  { terms: ["uk ", "britain", "london", "england"], anchor: { left: "42.5%", top: "31.5%" } },
+  { terms: ["italy", "rome"], anchor: { left: "47.8%", top: "39.5%" } },
+  { terms: ["turkey", "ankara"], anchor: { left: "52.5%", top: "40.5%" } },
+  { terms: ["russia", "moscow"], anchor: { left: "57%", top: "28.5%" } },
+  { terms: ["iran", "tehran"], anchor: { left: "57.5%", top: "43.5%" } },
+  { terms: ["israel", "gaza", "jerusalem"], anchor: { left: "53.8%", top: "44.5%" } },
+  { terms: ["saudi", "riyadh"], anchor: { left: "56%", top: "49.5%" } },
+  { terms: ["opec", "oil", "crude", "middle east", "gulf", "red sea"], anchor: { left: "57%", top: "50.5%" } },
+  { terms: ["india", "mumbai", "delhi"], anchor: { left: "65%", top: "48%" } },
+  { terms: ["china", "beijing", "shanghai"], anchor: { left: "73%", top: "40%" } },
+  { terms: ["taiwan", "taipei"], anchor: { left: "77.5%", top: "46.5%" } },
+  { terms: ["japan", "tokyo"], anchor: { left: "83.5%", top: "40.5%" } },
+  { terms: ["hong kong"], anchor: { left: "76%", top: "46%" } },
+  { terms: ["korea", "seoul"], anchor: { left: "79.5%", top: "40.5%" } },
+  { terms: ["australia", "sydney"], anchor: { left: "83%", top: "74%" } },
+  { terms: ["usa", "u.s.", "washington", "wall street", "new york"], anchor: { left: "23%", top: "42%" } },
+  { terms: ["california", "silicon valley"], anchor: { left: "16.5%", top: "45%" } },
+];
 
 const markerOffsets: Record<
   GeoEvent["regionKey"],
@@ -189,6 +219,16 @@ function getRegionNews(news: MapNewsItem[], region: string) {
   });
 }
 
+function resolveGeoAnchor(haystack: string, regionKey: GeoEvent["regionKey"], markerIcon: string): MapAnchor {
+  const matched = geoAnchors.find((entry) => entry.terms.some((term) => haystack.includes(term)));
+  if (matched) return matched.anchor;
+  if (markerIcon === "OIL") return { left: "57%", top: "50.5%" };
+  if (markerIcon === "VOTE" && regionKey === "Europe") return { left: "50.5%", top: "36.5%" };
+  if (markerIcon === "WAR" && regionKey === "Europe") return { left: "54%", top: "35.5%" };
+  if (markerIcon === "CB" && regionKey === "USA") return { left: "23%", top: "41.5%" };
+  return markerLayout[regionKey];
+}
+
 function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
   const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""} ${item.event_type || ""}`.toLowerCase();
   const regionKey = getRegionKey(item.region);
@@ -202,7 +242,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerIcon: "WAR",
       pulse,
       regionKey,
-      markerPosition: markerLayout[regionKey],
+      markerPosition: resolveGeoAnchor(haystack, regionKey, "WAR"),
     };
   }
   if (/(fed|ecb|boj|central bank|rate|yield)/.test(haystack)) {
@@ -213,7 +253,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerIcon: "CB",
       pulse,
       regionKey,
-      markerPosition: markerLayout[regionKey === "Global" ? "USA" : regionKey],
+      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "CB"),
     };
   }
   if (/(oil|opec|crude|gas|energy)/.test(haystack)) {
@@ -224,7 +264,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerIcon: "OIL",
       pulse: item.impact !== "low",
       regionKey,
-      markerPosition: markerLayout.Global,
+      markerPosition: resolveGeoAnchor(haystack, regionKey, "OIL"),
     };
   }
   if (/(election|vote|ballot|president|prime minister|parliament|coalition|campaign)/.test(haystack)) {
@@ -235,7 +275,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerIcon: "VOTE",
       pulse,
       regionKey,
-      markerPosition: markerLayout[regionKey === "Global" ? "Europe" : regionKey],
+      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Europe" : regionKey, "VOTE"),
     };
   }
   if (/(earthquake|wildfire|flood|storm|hurricane|typhoon|tsunami|drought|disaster)/.test(haystack)) {
@@ -246,7 +286,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerIcon: "NAT",
       pulse,
       regionKey,
-      markerPosition: markerLayout[regionKey === "Global" ? "Asia" : regionKey],
+      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Asia" : regionKey, "NAT"),
     };
   }
   if (/(tariff|sanction|trade|policy|regulation)/.test(haystack)) {
@@ -257,7 +297,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerIcon: "POL",
       pulse,
       regionKey,
-      markerPosition: markerLayout[regionKey === "Global" ? "USA" : regionKey],
+      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "POL"),
     };
   }
   return null;
@@ -356,8 +396,8 @@ export default function WorldMarketMap({
     [contrarianSignals, activeRegion],
   );
 
-  const globalDrivers = useMemo(
-    () => positionedGeoSignals.filter((item) => item.regionKey === "Global").slice(0, 3),
+  const activePulseEvent = useMemo(
+    () => positionedGeoSignals.find((item) => item.pulse) || null,
     [positionedGeoSignals],
   );
 
@@ -445,38 +485,6 @@ export default function WorldMarketMap({
                 </div>
               ))}
             </div>
-
-            {globalDrivers.length ? (
-              <div className="absolute bottom-4 right-4 z-30 max-w-[14rem] rounded-[1rem] border border-black/8 bg-white/92 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Global Drivers
-                </div>
-                <div className="mt-2 space-y-2">
-                  {globalDrivers.map((item, index) => (
-                    <a
-                      key={`${item.markerIcon}-${item.title}-${index}`}
-                      href={item.link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block rounded-[0.9rem] border border-black/8 bg-white/78 px-2.5 py-2 transition-colors hover:bg-white"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(item.markerTone)}`}>
-                          <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
-                          {item.markerIcon}
-                        </span>
-                        <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                          {item.impact || "macro"}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
-                        {item.title}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ) : null}
 
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.35),rgba(15,23,42,0))] lg:block" />
 
@@ -583,6 +591,28 @@ export default function WorldMarketMap({
                 </div>
               </a>
             ))}
+
+            {activePulseEvent ? (
+              <a
+                href={activePulseEvent.link}
+                target="_blank"
+                rel="noreferrer"
+                className="absolute right-4 top-4 z-30 max-w-[16rem] rounded-[1rem] border border-black/8 bg-white/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
+                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(activePulseEvent.markerTone)}`} />
+                    Live alert
+                  </span>
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                    {activePulseEvent.region || "Global"}
+                  </span>
+                </div>
+                <div className="mt-2 line-clamp-3 text-[12px] font-semibold leading-5 text-slate-800">
+                  {activePulseEvent.title}
+                </div>
+              </a>
+            ) : null}
           </div>
 
           <div className="space-y-4">

@@ -1253,7 +1253,7 @@ class MorningBriefService:
         impact = "low"
         severity = "normal"
 
-        if any(term in text for term in ["war", "missile", "attack", "israel", "iran", "russia", "ukraine"]):
+        if any(term in text for term in ["war", "missile", "attack", "israel", "iran", "russia", "ukraine", "lebanon", "beirut"]):
             event_type = "conflict"
             impact = "high"
             severity = "critical"
@@ -1298,11 +1298,18 @@ class MorningBriefService:
         }
 
     def _infer_region(self, text: str) -> str:
-        if any(term in text for term in ["china", "japan", "asia", "hong kong", "taiwan", "korea", "india"]):
+        asia_match = any(term in text for term in ["china", "japan", "asia", "hong kong", "taiwan", "korea", "india"])
+        europe_match = any(term in text for term in ["europe", "germany", "uk", "france", "ecb", "italy", "ukraine", "hungary", "poland"])
+        middle_east_match = any(term in text for term in ["iran", "lebanon", "beirut", "israel", "gaza", "middle east", "red sea"])
+        global_match = any(term in text for term in ["global", "opec", "oil", "war", "sanction"])
+
+        if (europe_match and middle_east_match) or global_match:
+            return "global"
+        if asia_match:
             return "asia"
-        if any(term in text for term in ["europe", "germany", "uk", "france", "ecb", "italy"]):
+        if europe_match:
             return "europe"
-        if any(term in text for term in ["global", "opec", "oil", "war", "sanction"]):
+        if middle_east_match:
             return "global"
         return "usa"
 

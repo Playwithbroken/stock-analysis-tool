@@ -132,18 +132,19 @@ const markerLayout = {
 
 const geoAnchors: Array<{ terms: string[]; anchor: MapAnchor }> = [
   { terms: ["hungary", "budapest"], anchor: { left: "50.5%", top: "38%" } },
-  { terms: ["ukraine", "kyiv"], anchor: { left: "54%", top: "35.5%" } },
+  { terms: ["ukraine", "kyiv", "odesa"], anchor: { left: "53.4%", top: "34.7%" } },
   { terms: ["poland", "warsaw"], anchor: { left: "49.5%", top: "34.5%" } },
   { terms: ["germany", "berlin"], anchor: { left: "46.5%", top: "33.5%" } },
   { terms: ["france", "paris"], anchor: { left: "44.5%", top: "35.5%" } },
   { terms: ["uk ", "britain", "london", "england"], anchor: { left: "42.5%", top: "31.5%" } },
   { terms: ["italy", "rome"], anchor: { left: "47.8%", top: "39.5%" } },
-  { terms: ["turkey", "ankara"], anchor: { left: "52.5%", top: "40.5%" } },
+  { terms: ["turkey", "ankara"], anchor: { left: "51.8%", top: "39.4%" } },
   { terms: ["russia", "moscow"], anchor: { left: "57%", top: "28.5%" } },
-  { terms: ["iran", "tehran"], anchor: { left: "57.5%", top: "43.5%" } },
-  { terms: ["israel", "gaza", "jerusalem"], anchor: { left: "53.8%", top: "44.5%" } },
-  { terms: ["saudi", "riyadh"], anchor: { left: "56%", top: "49.5%" } },
-  { terms: ["opec", "oil", "crude", "middle east", "gulf", "red sea"], anchor: { left: "57%", top: "50.5%" } },
+  { terms: ["lebanon", "beirut"], anchor: { left: "52.6%", top: "41.1%" } },
+  { terms: ["iran", "tehran"], anchor: { left: "56.8%", top: "42.2%" } },
+  { terms: ["israel", "gaza", "jerusalem"], anchor: { left: "52.8%", top: "42.9%" } },
+  { terms: ["saudi", "riyadh"], anchor: { left: "55.4%", top: "47.5%" } },
+  { terms: ["opec", "oil", "crude", "middle east", "gulf", "red sea", "brent"], anchor: { left: "55.8%", top: "46.6%" } },
   { terms: ["india", "mumbai", "delhi"], anchor: { left: "65%", top: "48%" } },
   { terms: ["china", "beijing", "shanghai"], anchor: { left: "73%", top: "40%" } },
   { terms: ["taiwan", "taipei"], anchor: { left: "77.5%", top: "46.5%" } },
@@ -243,9 +244,9 @@ function getRegionNews(news: MapNewsItem[], region: string) {
 function resolveGeoAnchor(haystack: string, regionKey: GeoEvent["regionKey"], markerIcon: string): MapAnchor {
   const matched = geoAnchors.find((entry) => entry.terms.some((term) => haystack.includes(term)));
   if (matched) return matched.anchor;
-  if (markerIcon === "OIL") return { left: "57%", top: "50.5%" };
+  if (markerIcon === "OIL") return { left: "55.8%", top: "46.6%" };
   if (markerIcon === "VOTE" && regionKey === "Europe") return { left: "50.5%", top: "36.5%" };
-  if (markerIcon === "WAR" && regionKey === "Europe") return { left: "54%", top: "35.5%" };
+  if (markerIcon === "WAR" && regionKey === "Europe") return { left: "53.4%", top: "34.7%" };
   if (markerIcon === "CB" && regionKey === "USA") return { left: "23%", top: "41.5%" };
   return markerLayout[regionKey];
 }
@@ -255,7 +256,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
   const regionKey = getRegionKey(item.region);
   const pulse = item.impact === "high";
 
-  if (/(war|missile|attack|iran|israel|russia|ukraine|conflict)/.test(haystack)) {
+  if (/(war|missile|attack|iran|israel|russia|ukraine|lebanon|beirut|conflict)/.test(haystack)) {
     return {
       ...item,
       markerLabel: "Conflict",
@@ -607,13 +608,13 @@ export default function WorldMarketMap({
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,240,232,0.95))] p-4 sm:p-6">
+          <div className="relative min-h-[340px] lg:min-h-[380px] xl:min-h-[400px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,240,232,0.95))] p-4 sm:p-6">
             <div className="absolute inset-0 overflow-hidden opacity-55">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.84),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.78),transparent_30%)]" />
               <img
                 src={worldMapSvg}
                 alt="World map"
-                className="h-full w-full scale-[1.03] object-contain object-center"
+                className="h-full w-full object-contain object-center"
                 draggable={false}
               />
             </div>

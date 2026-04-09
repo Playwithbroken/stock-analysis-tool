@@ -941,6 +941,13 @@ class MorningBriefService:
 
         affected = self._event_affected_buckets(event_type, ticker)
         action = self._event_action_hint(event_type, impact)
+        decision = self._decision_profile(
+            impact_score=min(99, impact_score),
+            confidence=min(95, confidence),
+            action=action["action"],
+            leverage=action["leverage"],
+            decay=decay,
+        )
         return {
             "impact_score": min(99, impact_score),
             "confidence_score": min(95, confidence),
@@ -953,6 +960,9 @@ class MorningBriefService:
             "trigger": action["trigger"],
             "invalidation": action["invalidation"],
             "execution_window": action["execution_window"],
+            "decision_quality": decision["decision_quality"],
+            "size_guidance": decision["size_guidance"],
+            "execution_bias": decision["execution_bias"],
         }
 
     def _event_affected_buckets(self, event_type: str, ticker: str | None) -> Dict[str, List[str]]:
@@ -1056,6 +1066,49 @@ class MorningBriefService:
             "trigger": "Stand by until price, rates and sector leadership align.",
             "invalidation": "No trade if the first reaction fades immediately.",
             "execution_window": "Event dependent",
+        }
+
+    def _decision_profile(
+        self,
+        impact_score: int,
+        confidence: int,
+        action: str,
+        leverage: str,
+        decay: str,
+    ) -> Dict[str, str]:
+        if action == "watch":
+            return {
+                "decision_quality": "watch only",
+                "size_guidance": "no position until confirmation",
+                "execution_bias": "wait",
+            }
+
+        combined = impact_score + confidence
+        if combined >= 170 and decay in {"developing", "active"} and leverage != "avoid":
+            quality = "high conviction"
+            sizing = "normal risk"
+        elif combined >= 150 and decay != "fading":
+            quality = "selective"
+            sizing = "reduced risk"
+        else:
+            quality = "tactical only"
+            sizing = "small risk"
+
+        execution_bias = {
+            "long": "follow strength",
+            "short": "fade weakness",
+            "hedge": "protect first",
+        }.get(action, "wait")
+
+        if leverage == "avoid":
+            sizing = "no leverage"
+        elif leverage == "conditional" and sizing == "normal risk":
+            sizing = "reduced leverage"
+
+        return {
+            "decision_quality": quality,
+            "size_guidance": sizing,
+            "execution_bias": execution_bias,
         }
 
     def _build_portfolio_exposure(

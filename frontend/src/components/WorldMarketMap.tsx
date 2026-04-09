@@ -34,6 +34,9 @@ interface MapNewsItem {
     trigger?: string;
     invalidation?: string;
     execution_window?: string;
+    decision_quality?: string;
+    size_guidance?: string;
+    execution_bias?: string;
   };
   portfolio_exposure?: {
     status?: string;
@@ -345,6 +348,13 @@ function freshnessClass(label: string) {
   if (label === "active") return "bg-blue-500/10 text-blue-700";
   if (label === "fading") return "bg-slate-500/10 text-slate-600";
   return "bg-amber-500/10 text-amber-700";
+}
+
+function decisionToneClass(value?: string) {
+  if (value === "high conviction") return "bg-emerald-500/10 text-emerald-700";
+  if (value === "selective") return "bg-sky-500/10 text-sky-700";
+  if (value === "tactical only") return "bg-amber-500/10 text-amber-700";
+  return "bg-slate-500/10 text-slate-600";
 }
 
 function stableHash(value: string) {
@@ -1220,6 +1230,11 @@ export default function WorldMarketMap({
                       leverage {activeGeoEvent.event_intelligence.leverage}
                     </span>
                   ) : null}
+                  {activeGeoEvent.event_intelligence?.decision_quality ? (
+                    <span className={`rounded-full px-2 py-1 ${decisionToneClass(activeGeoEvent.event_intelligence.decision_quality)}`}>
+                      {activeGeoEvent.event_intelligence.decision_quality}
+                    </span>
+                  ) : null}
                 </div>
                 {activeGeoEvent.event_intelligence ? (
                   <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
@@ -1329,6 +1344,11 @@ export default function WorldMarketMap({
                   </div>
                 ) : null}
                 <div className="mt-3 space-y-2">
+                  {activeGeoEvent.event_intelligence?.execution_bias ? (
+                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                      Bias: {activeGeoEvent.event_intelligence.execution_bias} | Size: {activeGeoEvent.event_intelligence.size_guidance}
+                    </div>
+                  ) : null}
                   {activeGeoEvent.event_intelligence?.trigger ? (
                     <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
                       Trigger: {activeGeoEvent.event_intelligence.trigger}
@@ -1444,6 +1464,18 @@ export default function WorldMarketMap({
                           <div className="line-clamp-2">
                             Action: {item.event_intelligence.action} | Leverage {item.event_intelligence.leverage}
                           </div>
+                          {item.event_intelligence.decision_quality ? (
+                            <div className="flex flex-wrap gap-2">
+                              <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${decisionToneClass(item.event_intelligence.decision_quality)}`}>
+                                {item.event_intelligence.decision_quality}
+                              </span>
+                              {item.event_intelligence.size_guidance ? (
+                                <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                                  {item.event_intelligence.size_guidance}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                           {compactList(item.event_intelligence.affected_sectors, 2).length ? (
                             <div className="flex flex-wrap gap-2">
                               {compactList(item.event_intelligence.affected_sectors, 2).map((sector) => (

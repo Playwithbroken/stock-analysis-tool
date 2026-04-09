@@ -26,6 +26,13 @@ function exposureTone(value?: string) {
   return "bg-emerald-500/10 text-emerald-700";
 }
 
+function decisionTone(value?: string) {
+  if (value === "high conviction") return "bg-emerald-500/10 text-emerald-700";
+  if (value === "selective") return "bg-sky-500/10 text-sky-700";
+  if (value === "tactical only") return "bg-amber-500/10 text-amber-700";
+  return "bg-slate-500/10 text-slate-600";
+}
+
 export default function MorningBriefPanel({
   brief,
   onAnalyze,
@@ -243,6 +250,23 @@ export default function MorningBriefPanel({
                     <div>Confidence {item.event_intelligence.confidence_score}</div>
                     <div>Decay {item.event_intelligence.decay}</div>
                     <div>Action {item.event_intelligence.action}</div>
+                  </div>
+                ) : null}
+                {item.event_intelligence?.decision_quality ? (
+                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em]">
+                    <span className={`rounded-full px-2 py-1 ${decisionTone(item.event_intelligence.decision_quality)}`}>
+                      {item.event_intelligence.decision_quality}
+                    </span>
+                    {item.event_intelligence.size_guidance ? (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-slate-500">
+                        {item.event_intelligence.size_guidance}
+                      </span>
+                    ) : null}
+                    {item.event_intelligence.execution_bias ? (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-slate-500">
+                        {item.event_intelligence.execution_bias}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
                 {item.event_intelligence?.affected_sectors?.length ? (

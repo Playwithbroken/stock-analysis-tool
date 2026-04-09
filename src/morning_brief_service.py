@@ -426,11 +426,16 @@ class MorningBriefService:
             mentions = int(item.get("mentions") or 0)
             event_type = item.get("event_type") or "macro"
             score = min(92, 44 + mentions * 12 + (8 if event_type in {"policy", "conflict", "energy"} else 0))
-            bias = "contrarian" if mentions >= 3 else "watch"
-            style = "meme risk" if mentions >= 4 else "crowd pressure"
+            bias = "contrarian fade" if mentions >= 4 else "watch" if mentions == 2 else "crowd long"
+            style = "meme risk" if mentions >= 4 else "crowd pressure" if mentions == 3 else "retail buildup"
+            risk = "avoid leverage" if mentions >= 4 else "needs tape confirmation"
+            action = "fade only if price stalls" if mentions >= 4 else "watch for squeeze continuation" if mentions >= 3 else "track only"
             item["crowd_score"] = score
             item["crowd_bias"] = bias
             item["crowd_style"] = style
+            item["crowd_risk"] = risk
+            item["crowd_action"] = action
+            item["crowd_intensity"] = "high" if mentions >= 4 else "medium" if mentions == 3 else "low"
         signals.sort(key=lambda item: item["mentions"], reverse=True)
         return signals[:6]
 
@@ -493,11 +498,16 @@ class MorningBriefService:
             mentions = int(item.get("mentions") or 0)
             event_type = item.get("event_type") or "macro"
             score = min(88, 40 + mentions * 10 + (6 if event_type in {"policy", "election", "energy"} else 0))
-            bias = "fade" if mentions >= 3 else "watch"
-            style = "retail chase" if mentions >= 3 else "social pulse"
+            bias = "contrarian fade" if mentions >= 4 else "retail chase" if mentions >= 3 else "watch"
+            style = "retail chase" if mentions >= 4 else "narrative build" if mentions == 3 else "social pulse"
+            risk = "high noise / avoid leverage" if mentions >= 4 else "needs price and volume confirmation"
+            action = "fade only after exhaustion" if mentions >= 4 else "watch for breakout follow-through" if mentions >= 3 else "monitor"
             item["social_score"] = score
             item["social_bias"] = bias
             item["social_style"] = style
+            item["social_risk"] = risk
+            item["social_action"] = action
+            item["social_intensity"] = "high" if mentions >= 4 else "medium" if mentions == 3 else "low"
         signals.sort(key=lambda item: (item["mentions"], item.get("ticker") is not None), reverse=True)
         return signals[:8]
 

@@ -699,6 +699,22 @@ export default function WorldMarketMap({
     return lines.slice(0, 4);
   }, [activeGeoEvent, positionedGeoSignals, activeRegion, activeRegionNews, focusTicker, watchlistImpact, regionalContrarian]);
 
+  const replayEvents = useMemo(
+    () =>
+      orderedGeoSignals.slice(0, 6).map((item, index) => ({
+        key: item.geoKey || `${item.title}-${index}`,
+        title: item.title,
+        region: item.region || "Global",
+        variant: describeEventVariant(item) || item.markerLabel,
+        freshness: freshnessLabel(item.event_intelligence?.decay, item.pulse),
+        impact: item.impact || "macro",
+        action: item.event_intelligence?.action || "watch",
+        asset: compactList(item.event_intelligence?.affected_assets, 1)[0] || item.ticker,
+        trigger: item.event_intelligence?.trigger,
+      })),
+    [orderedGeoSignals],
+  );
+
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.06),transparent_26%)]" />
@@ -1562,6 +1578,63 @@ export default function WorldMarketMap({
               <div className="mt-2 text-sm leading-6 text-slate-600">{item.driver}</div>
             </div>
           ))}
+        </div>
+
+        <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Event Replay
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+              {timeLens} lens
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 xl:grid-cols-3">
+            {replayEvents.length ? (
+              replayEvents.map((item) => (
+                <div
+                  key={item.key}
+                  className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      {item.region}
+                    </div>
+                    <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(item.freshness)}`}>
+                      {item.freshness}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-slate-900">{item.variant}</div>
+                  <div className="mt-2 line-clamp-2 text-sm text-slate-600">{item.title}</div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {item.impact}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {item.action}
+                    </span>
+                    {item.asset ? (
+                      <button
+                        onClick={() => onAnalyze(item.asset!)}
+                        className="rounded-full border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--accent)]"
+                      >
+                        {item.asset}
+                      </button>
+                    ) : null}
+                  </div>
+                  {item.trigger ? (
+                    <div className="mt-3 text-xs leading-6 text-slate-500">
+                      Trigger: {item.trigger}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4 text-sm text-slate-500 xl:col-span-3">
+                Kein Replay im aktuellen Kartenfilter. Wechsle auf `24h` oder `7d`, um den breiteren Event-Verlauf zu sehen.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>

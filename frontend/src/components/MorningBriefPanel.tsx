@@ -368,6 +368,12 @@ export default function MorningBriefPanel({
                       <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                         {item.social_bias || "watch"}
                       </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        {item.social_intensity || "low"}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-600">
+                      Action: {item.social_action || "monitor"} | Risk: {item.social_risk || "needs confirmation"}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {(item.titles || []).slice(0, 2).join(" | ") || "Live social pulse"}
@@ -406,6 +412,12 @@ export default function MorningBriefPanel({
                       <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                         {item.crowd_bias || "watch"}
                       </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        {item.crowd_intensity || "low"}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-600">
+                      Action: {item.crowd_action || "track only"} | Risk: {item.crowd_risk || "needs tape confirmation"}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {(item.titles || []).slice(0, 2).join(" | ") || "Crowd cluster"}

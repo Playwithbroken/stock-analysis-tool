@@ -265,6 +265,17 @@ function topGeoPlaces(items: GeoEvent[], limit = 4) {
     .slice(0, limit);
 }
 
+function eventTypeBreakdown(items: GeoEvent[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const key = item.markerIcon;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 4);
+}
+
 function describeEventVariant(event: GeoEvent | null) {
   if (!event) return null;
   const title = `${event.title || ""} ${(event.region || "").toLowerCase()}`.toLowerCase();
@@ -867,6 +878,7 @@ export default function WorldMarketMap({
     const highImpact = items.filter((item) => item.impact === "high").length;
     const zones = topGeoZones(focusRegionSignals, 4);
     const places = topGeoPlaces(focusRegionSignals, 5);
+    const eventMix = eventTypeBreakdown(focusedPlaceSignals);
     return {
       total: items.length,
       actionable,
@@ -874,6 +886,7 @@ export default function WorldMarketMap({
       items,
       zones,
       places,
+      eventMix,
     };
   }, [focusRegionSignals, focusedPlaceSignals]);
 
@@ -1210,9 +1223,9 @@ export default function WorldMarketMap({
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                         {item.geoPlace && item.geoPlace !== item.regionKey
-                          ? `${item.region || "Global"} · ${item.geoPlace}`
+                          ? `${item.region || "Global"} | ${item.geoPlace}`
                           : item.geoZone && item.geoZone !== item.regionKey
-                            ? `${item.region || "Global"} · ${item.geoZone}`
+                            ? `${item.region || "Global"} | ${item.geoZone}`
                             : item.region || "Global"}
                       </div>
                       <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(item.markerTone)}`}>
@@ -1433,6 +1446,18 @@ export default function WorldMarketMap({
                   {selectedGeoPlace ? (
                     <div className="rounded-[0.9rem] border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                       Place focus: {selectedGeoPlace}
+                    </div>
+                  ) : null}
+                  {selectedGeoPlace && regionDrilldown.eventMix.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {regionDrilldown.eventMix.map(([eventCode, count]) => (
+                        <span
+                          key={eventCode}
+                          className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                        >
+                          {eventCode} {count}
+                        </span>
+                      ))}
                     </div>
                   ) : null}
                   {regionDrilldown.items.length ? (

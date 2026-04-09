@@ -366,8 +366,12 @@ export default function WorldMarketMap({
   const [showRegionCards, setShowRegionCards] = useState(true);
   const [showLiveAlert, setShowLiveAlert] = useState(true);
   const [showEventLayer, setShowEventLayer] = useState(true);
+  const [activeEventIndex, setActiveEventIndex] = useState(0);
+  const [hoveredRegionLabel, setHoveredRegionLabel] = useState<string | null>(null);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
+  const displayRegion =
+    regions.find((region) => region.label === hoveredRegionLabel) || activeRegion;
 
   const activeRegionNews = useMemo(
     () => (activeRegion ? getRegionNews(news, activeRegion.label).slice(0, 4) : []),
@@ -455,12 +459,22 @@ export default function WorldMarketMap({
     [positionedGeoSignals],
   );
 
+  const activeGeoEvent = useMemo(
+    () => positionedGeoSignals[activeEventIndex] || positionedGeoSignals[0] || activePulseEvent || null,
+    [positionedGeoSignals, activeEventIndex, activePulseEvent],
+  );
+
   const whyItMatters = useMemo(() => {
     const lines: string[] = [];
-    const relevantEvent = positionedGeoSignals.find((item) =>
-      activeRegion ? item.regionKey.toLowerCase() === activeRegion.label.toLowerCase() || item.regionKey === "Global" : true,
-    );
+    const relevantEvent =
+      activeGeoEvent ||
+      positionedGeoSignals.find((item) =>
+        activeRegion ? item.regionKey.toLowerCase() === activeRegion.label.toLowerCase() || item.regionKey === "Global" : true,
+      );
     if (relevantEvent?.title) lines.push(`${relevantEvent.markerLabel}: ${relevantEvent.title}`);
+    if (relevantEvent?.event_intelligence?.why_now) {
+      lines.push(`Why now: ${relevantEvent.event_intelligence.why_now}`);
+    }
     if (activeRegionNews[0]?.title) lines.push(`Regional driver: ${activeRegionNews[0].title}`);
     if (focusTicker) {
       const impacted = watchlistImpact.find((item) => (item.ticker || "").toUpperCase() === focusTicker.toUpperCase());
@@ -474,7 +488,7 @@ export default function WorldMarketMap({
       lines.push(`Contrarian setup: ${regionalContrarian[0].ticker} | ${regionalContrarian[0].reason}`);
     }
     return lines.slice(0, 4);
-  }, [positionedGeoSignals, activeRegion, activeRegionNews, focusTicker, watchlistImpact, regionalContrarian]);
+  }, [activeGeoEvent, positionedGeoSignals, activeRegion, activeRegionNews, focusTicker, watchlistImpact, regionalContrarian]);
 
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
@@ -623,6 +637,10 @@ export default function WorldMarketMap({
                   key={region.label}
                   type="button"
                   onClick={() => onSelectRegion(region.label)}
+                  onMouseEnter={() => setHoveredRegionLabel(region.label)}
+                  onMouseLeave={() => setHoveredRegionLabel(null)}
+                  onFocus={() => setHoveredRegionLabel(region.label)}
+                  onBlur={() => setHoveredRegionLabel(null)}
                   className="absolute z-20 text-left group"
                   style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
@@ -694,6 +712,8 @@ export default function WorldMarketMap({
                 target="_blank"
                 rel="noreferrer"
                 title={item.title}
+                onMouseEnter={() => setActiveEventIndex(index)}
+                onFocus={() => setActiveEventIndex(index)}
               >
                 <div className="relative">
                   {item.pulse && (
@@ -773,7 +793,7 @@ export default function WorldMarketMap({
           </div>
 
           <div className="space-y-4">
-            {activeRegion && (
+            {displayRegion && (
               <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -781,20 +801,20 @@ export default function WorldMarketMap({
                       Region Focus
                     </div>
                     <div className="mt-2 text-2xl font-black text-slate-900">
-                      {activeRegion.label}
+                      {displayRegion.label}
                     </div>
                   </div>
                   <div
-                    className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(activeRegion.tone)}`}
+                    className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(displayRegion.tone)}`}
                   >
-                    {activeRegion.tone}
+                    {displayRegion.tone}
                   </div>
                 </div>
-                <div className={`mt-4 text-3xl font-black ${textToneClass(activeRegion.tone)}`}>
-                  {formatPct(activeRegion.avg_change_1d)}
+                <div className={`mt-4 text-3xl font-black ${textToneClass(displayRegion.tone)}`}>
+                  {formatPct(displayRegion.avg_change_1d)}
                 </div>
                 <div className="mt-4 space-y-2">
-                  {(activeRegion.assets || []).slice(0, 3).map((asset) => (
+                  {(displayRegion.assets || []).slice(0, 3).map((asset) => (
                     <div
                       key={asset.ticker}
                       className="flex items-center justify-between rounded-[1rem] border border-black/8 bg-white/75 px-3 py-2"
@@ -815,6 +835,68 @@ export default function WorldMarketMap({
                 </div>
               </div>
             )}
+
+            {activeGeoEvent ? (
+              <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Focus Event
+                  </div>
+                  <div className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(activeGeoEvent.markerTone)}`}>
+                    {activeGeoEvent.markerIcon}
+                  </div>
+                </div>
+                <div className="mt-3 text-sm font-bold leading-6 text-slate-900">
+                  {activeGeoEvent.title}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    {activeGeoEvent.region || "Global"}
+                  </span>
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    {activeGeoEvent.impact || "macro"}
+                  </span>
+                  {activeGeoEvent.event_intelligence?.action ? (
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {activeGeoEvent.event_intelligence.action}
+                    </span>
+                  ) : null}
+                  {activeGeoEvent.event_intelligence?.leverage ? (
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      leverage {activeGeoEvent.event_intelligence.leverage}
+                    </span>
+                  ) : null}
+                </div>
+                {activeGeoEvent.event_intelligence ? (
+                  <div className="mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
+                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                      Impact <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.impact_score}</span>
+                    </div>
+                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                      Confidence <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.confidence_score}</span>
+                    </div>
+                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                      Decay <span className="font-bold uppercase text-slate-900">{activeGeoEvent.event_intelligence.decay}</span>
+                    </div>
+                  </div>
+                ) : null}
+                {activeGeoEvent.event_intelligence?.affected_sectors?.length ? (
+                  <div className="mt-3 text-xs leading-6 text-slate-600">
+                    Sectors: {activeGeoEvent.event_intelligence.affected_sectors.join(" | ")}
+                  </div>
+                ) : null}
+                {activeGeoEvent.event_intelligence?.affected_assets?.length ? (
+                  <div className="mt-1 text-xs leading-6 text-slate-600">
+                    Assets: {activeGeoEvent.event_intelligence.affected_assets.join(" | ")}
+                  </div>
+                ) : null}
+                {activeGeoEvent.portfolio_exposure?.note ? (
+                  <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
+                    {activeGeoEvent.portfolio_exposure.note}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="rounded-[1.7rem] border border-black/8 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.88))] p-5">
               <div className="flex items-center justify-between gap-3">
@@ -860,7 +942,13 @@ export default function WorldMarketMap({
                       href={item.link}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-[1rem] border border-black/8 bg-white/75 p-3 transition-colors hover:bg-white"
+                      onMouseEnter={() => setActiveEventIndex(index)}
+                      onFocus={() => setActiveEventIndex(index)}
+                      className={`block rounded-[1rem] border p-3 transition-colors hover:bg-white ${
+                        activeGeoEvent?.title === item.title
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)]/70"
+                          : "border-black/8 bg-white/75"
+                      }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div
@@ -887,7 +975,7 @@ export default function WorldMarketMap({
                             Assets: {(item.event_intelligence.affected_assets || []).join(" | ")}
                           </div>
                           <div>
-                            Action: {item.event_intelligence.action} · Leverage {item.event_intelligence.leverage}
+                            Action: {item.event_intelligence.action} | Leverage {item.event_intelligence.leverage}
                           </div>
                         </div>
                       ) : null}

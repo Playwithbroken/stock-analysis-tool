@@ -128,6 +128,7 @@ class MorningBriefService:
             earnings_calendar,
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
+        action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
 
         brief = {
             "generated_at": now.isoformat(),
@@ -157,7 +158,8 @@ class MorningBriefService:
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
             "opening_timeline": opening_timeline,
-            "action_board": self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"]),
+            "action_board": action_board,
+            "portfolio_brain": self._build_portfolio_brain(action_board),
             "watchlist_impact": [],
         }
         self._cache = brief
@@ -830,6 +832,77 @@ class MorningBriefService:
                     }
                 )
         return board[:8]
+
+    def _build_portfolio_brain(self, action_board: List[Dict[str, Any]]) -> Dict[str, Any]:
+        summary = {
+            "at_risk": 0,
+            "beneficiaries": 0,
+            "hedges": 0,
+        }
+        items: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for item in action_board:
+            exposure = item.get("portfolio_exposure") or {}
+            matched_holdings = [
+                str(value or "").upper()
+                for value in exposure.get("matched_holdings") or []
+                if value
+            ]
+            if not matched_holdings:
+                continue
+
+            setup = str(item.get("setup") or exposure.get("action") or "watch").lower()
+            if setup in {"short", "watch-short"}:
+                portfolio_action = "reduce"
+                bucket = "at_risk"
+            elif setup == "hedge":
+                portfolio_action = "hedge"
+                bucket = "hedges"
+            elif setup == "long":
+                portfolio_action = "add"
+                bucket = "beneficiaries"
+            else:
+                portfolio_action = "watch"
+                bucket = "at_risk"
+
+            summary[bucket] += len(matched_holdings)
+            hedges = [
+                hedge for hedge in (exposure.get("hedge_candidates") or [])
+                if hedge and hedge.get("ticker")
+            ][:3]
+
+            for holding in matched_holdings[:4]:
+                dedupe_key = f"{holding}:{item.get('title')}:{portfolio_action}"
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                items.append(
+                    {
+                        "ticker": holding,
+                        "title": item.get("title"),
+                        "portfolio_action": portfolio_action,
+                        "bucket": bucket,
+                        "reason": exposure.get("note") or item.get("thesis"),
+                        "event_type": item.get("event_type"),
+                        "impact": item.get("impact"),
+                        "exposure_strength": exposure.get("exposure_strength"),
+                        "trigger": item.get("trigger") or item.get("event_intelligence", {}).get("trigger"),
+                        "hedge_candidates": hedges,
+                    }
+                )
+
+        items.sort(
+            key=lambda row: (
+                0 if row.get("exposure_strength") == "high" else 1 if row.get("exposure_strength") == "medium" else 2,
+                0 if row.get("bucket") == "hedges" else 1 if row.get("bucket") == "at_risk" else 2,
+                0 if row.get("impact") == "high" else 1 if row.get("impact") == "medium" else 2,
+            )
+        )
+        return {
+            "summary": summary,
+            "actions": items[:8],
+        }
 
     def _build_event_intelligence(
         self,

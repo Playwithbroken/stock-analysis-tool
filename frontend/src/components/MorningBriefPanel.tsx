@@ -13,6 +13,19 @@ function fmt(value?: number | null) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function actionTone(action?: string) {
+  if (action === "hedge") return "bg-sky-500/10 text-sky-700";
+  if (action === "reduce") return "bg-red-500/10 text-red-700";
+  if (action === "add") return "bg-emerald-500/10 text-emerald-700";
+  return "bg-amber-500/10 text-amber-700";
+}
+
+function exposureTone(value?: string) {
+  if (value === "high") return "bg-red-500/10 text-red-700";
+  if (value === "medium") return "bg-amber-500/10 text-amber-700";
+  return "bg-emerald-500/10 text-emerald-700";
+}
+
 export default function MorningBriefPanel({
   brief,
   onAnalyze,
@@ -406,6 +419,94 @@ export default function MorningBriefPanel({
               )}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="surface-panel rounded-[2rem] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Portfolio Brain
+          </div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+            personal exposure
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-[1.2rem] border border-red-500/10 bg-red-500/5 p-4">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              At Risk
+            </div>
+            <div className="mt-2 text-2xl font-black text-slate-900">
+              {brief.portfolio_brain?.summary?.at_risk || 0}
+            </div>
+          </div>
+          <div className="rounded-[1.2rem] border border-emerald-500/10 bg-emerald-500/5 p-4">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Beneficiaries
+            </div>
+            <div className="mt-2 text-2xl font-black text-slate-900">
+              {brief.portfolio_brain?.summary?.beneficiaries || 0}
+            </div>
+          </div>
+          <div className="rounded-[1.2rem] border border-sky-500/10 bg-sky-500/5 p-4">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Hedge Ideas
+            </div>
+            <div className="mt-2 text-2xl font-black text-slate-900">
+              {brief.portfolio_brain?.summary?.hedges || 0}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {(brief.portfolio_brain?.actions || []).length ? (
+            (brief.portfolio_brain.actions || []).map((item: any, index: number) => (
+              <div
+                key={`${item.ticker}-${item.title}-${index}`}
+                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    onClick={() => onAnalyze(item.ticker)}
+                    className="text-sm font-black text-slate-900"
+                  >
+                    {item.ticker}
+                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${actionTone(item.portfolio_action)}`}>
+                      {item.portfolio_action}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${exposureTone(item.exposure_strength)}`}>
+                      {item.exposure_strength || "watch"}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
+                <div className="mt-2 text-sm text-slate-600">{item.reason}</div>
+                {item.trigger ? (
+                  <div className="mt-2 text-xs text-slate-500">
+                    Trigger: {item.trigger}
+                  </div>
+                ) : null}
+                {(item.hedge_candidates || []).length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(item.hedge_candidates || []).slice(0, 3).map((hedge: any, hedgeIndex: number) => (
+                      <button
+                        key={`${item.ticker}-hedge-${hedge.ticker || hedgeIndex}`}
+                        onClick={() => hedge.ticker && onAnalyze(hedge.ticker)}
+                        className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600"
+                      >
+                        {hedge.ticker} - {hedge.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500 xl:col-span-2">
+              Noch kein direkter Portfolio-Bezug aus dem aktuellen Brief. Sobald ein Event echte Holdings oder Held-Sektoren trifft, erscheinen hier konkrete `add`, `reduce` oder `hedge`-Hinweise.
+            </div>
+          )}
         </div>
       </section>
 

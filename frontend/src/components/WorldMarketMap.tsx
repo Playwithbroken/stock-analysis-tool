@@ -514,6 +514,19 @@ export default function WorldMarketMap({
     return stats;
   }, [positionedGeoSignals]);
 
+  const mapSignalSummary = useMemo(() => {
+    const highImpact = positionedGeoSignals.filter((item) => item.impact === "high").length;
+    const actionable = positionedGeoSignals.filter((item) => {
+      const action = item.event_intelligence?.action;
+      return action && action !== "watch";
+    }).length;
+    return {
+      total: positionedGeoSignals.length,
+      highImpact,
+      actionable,
+    };
+  }, [positionedGeoSignals]);
+
   const activeGeoEvent = useMemo(
     () =>
       (hoveredEventIndex != null ? positionedGeoSignals[hoveredEventIndex] : null) ||
@@ -612,7 +625,7 @@ export default function WorldMarketMap({
             <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
               Sort
             </div>
-            {[
+            {[ 
               { key: "impact", label: "Impact" },
               { key: "region", label: "Region" },
               { key: "latest", label: "Latest" },
@@ -629,6 +642,15 @@ export default function WorldMarketMap({
                 {item.label}
               </button>
             ))}
+            <span className="ml-1 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+              {mapSignalSummary.total} events
+            </span>
+            <span className="rounded-full border border-red-500/12 bg-red-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-red-700">
+              {mapSignalSummary.highImpact} high
+            </span>
+            <span className="rounded-full border border-emerald-500/12 bg-emerald-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">
+              {mapSignalSummary.actionable} active setups
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {[
@@ -842,19 +864,30 @@ export default function WorldMarketMap({
                       <div className="mt-2 text-[11px] text-slate-500">{item.publisher}</div>
                     ) : null}
                     {item.event_intelligence ? (
-                      <div className="mt-3 grid gap-2 text-[11px] text-slate-600">
-                        <div className="flex items-center justify-between">
-                          <span>Impact</span>
-                          <span className="font-bold text-slate-900">{item.event_intelligence.impact_score}</span>
+                      <div className="mt-3 space-y-2 text-[11px] text-slate-600">
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                            impact {item.event_intelligence.impact_score}
+                          </span>
+                          <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                            confidence {item.event_intelligence.confidence_score}
+                          </span>
+                          {item.event_intelligence.action ? (
+                            <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                              {item.event_intelligence.action}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span>Confidence</span>
-                          <span className="font-bold text-slate-900">{item.event_intelligence.confidence_score}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Decay</span>
-                          <span className="font-bold uppercase text-slate-900">{item.event_intelligence.decay}</span>
-                        </div>
+                        {item.event_intelligence.why_now ? (
+                          <div className="line-clamp-3 text-[11px] leading-5 text-slate-600">
+                            {item.event_intelligence.why_now}
+                          </div>
+                        ) : null}
+                        {item.event_intelligence.affected_assets?.length ? (
+                          <div className="line-clamp-2 text-[10px] leading-5 text-slate-500">
+                            Assets: {item.event_intelligence.affected_assets.join(" | ")}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -896,6 +929,23 @@ export default function WorldMarketMap({
           </div>
 
           <div className="space-y-3">
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                Map Status
+              </div>
+              <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
+                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                  Events <span className="font-bold text-slate-900">{mapSignalSummary.total}</span>
+                </div>
+                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                  High impact <span className="font-bold text-slate-900">{mapSignalSummary.highImpact}</span>
+                </div>
+                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                  Actionable <span className="font-bold text-slate-900">{mapSignalSummary.actionable}</span>
+                </div>
+              </div>
+            </div>
+
             {displayRegion && (
               <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -1065,7 +1115,7 @@ export default function WorldMarketMap({
               </div>
               <div className="mt-4 space-y-3">
                 {showEventLayer && positionedGeoSignals.length ? (
-                  positionedGeoSignals.map((item, index) => (
+                  positionedGeoSignals.slice(0, 4).map((item, index) => (
                     <a
                       key={item.geoKey || `${item.title}-${index}`}
                       href={item.link}

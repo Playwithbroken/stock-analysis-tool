@@ -74,10 +74,21 @@ interface GeoEvent extends MapNewsItem {
   markerPosition: { left: string; top: string };
 }
 
-const positions: Record<string, { x: number; y: number; align: "left" | "right" }> = {
-  USA: { x: 16.5, y: 31.5, align: "left" },
-  Europe: { x: 49.5, y: 28.5, align: "right" },
-  Asia: { x: 74.5, y: 35.5, align: "right" },
+const positions: Record<
+  string,
+  {
+    x: number;
+    y: number;
+    align: "left" | "right";
+    cardWidth: number;
+    lineLength: number;
+    cardOffsetX: number;
+    cardOffsetY: number;
+  }
+> = {
+  USA: { x: 18.5, y: 45.5, align: "left", cardWidth: 150, lineLength: 38, cardOffsetX: 52, cardOffsetY: -10 },
+  Europe: { x: 48.5, y: 39.5, align: "right", cardWidth: 148, lineLength: 34, cardOffsetX: 44, cardOffsetY: -42 },
+  Asia: { x: 73.5, y: 47.5, align: "right", cardWidth: 148, lineLength: 34, cardOffsetX: 44, cardOffsetY: -8 },
 };
 
 const regionKeywords: Record<string, string[]> = {
@@ -87,10 +98,10 @@ const regionKeywords: Record<string, string[]> = {
 };
 
 const markerLayout = {
-  USA: { left: "19%", top: "34%" },
-  Europe: { left: "50.5%", top: "31%" },
-  Asia: { left: "74%", top: "39%" },
-  Global: { left: "56%", top: "52%" },
+  USA: { left: "22%", top: "47%" },
+  Europe: { left: "49.5%", top: "41.5%" },
+  Asia: { left: "74%", top: "48.5%" },
+  Global: { left: "55%", top: "63%" },
 };
 
 const markerOffsets: Record<
@@ -98,25 +109,25 @@ const markerOffsets: Record<
   Partial<Record<GeoEvent["markerIcon"], { x: number; y: number }>>
 > = {
   USA: {
-    WAR: { x: -8, y: -10 },
-    CB: { x: 8, y: -14 },
-    POL: { x: -12, y: 10 },
-    VOTE: { x: 10, y: 12 },
-    NAT: { x: -2, y: 18 },
+    WAR: { x: -12, y: -8 },
+    CB: { x: 12, y: -16 },
+    POL: { x: -14, y: 8 },
+    VOTE: { x: 14, y: 10 },
+    NAT: { x: 0, y: 18 },
   },
   Europe: {
-    WAR: { x: -10, y: -8 },
-    CB: { x: 10, y: -12 },
-    POL: { x: -12, y: 9 },
-    VOTE: { x: 12, y: 10 },
-    NAT: { x: 2, y: 18 },
+    WAR: { x: -16, y: -8 },
+    CB: { x: 12, y: -18 },
+    POL: { x: -14, y: 10 },
+    VOTE: { x: 14, y: 10 },
+    NAT: { x: 0, y: 18 },
   },
   Asia: {
-    WAR: { x: -12, y: -8 },
-    CB: { x: 8, y: -12 },
-    POL: { x: -14, y: 10 },
-    VOTE: { x: 12, y: 12 },
-    NAT: { x: 0, y: 18 },
+    WAR: { x: -14, y: -8 },
+    CB: { x: 10, y: -16 },
+    POL: { x: -14, y: 8 },
+    VOTE: { x: 14, y: 12 },
+    NAT: { x: 2, y: 18 },
   },
   Global: {
     OIL: { x: 0, y: 0 },
@@ -460,15 +471,24 @@ export default function WorldMarketMap({
                     />
                     <div
                       className="absolute top-1/2 h-px w-16 bg-slate-400/70"
-                      style={pos.align === "left" ? { left: 16 } : { right: 16 }}
+                      style={{
+                        width: `${pos.lineLength}px`,
+                        ...(pos.align === "left" ? { left: 16 } : { right: 16 }),
+                      }}
                     />
                     <div
-                      className={`absolute top-1/2 w-44 -translate-y-1/2 rounded-[1.2rem] border p-3 backdrop-blur transition-all ${
+                      className={`absolute top-1/2 -translate-y-1/2 rounded-[1.1rem] border p-2.5 backdrop-blur transition-all ${
                         isActive
                           ? "border-black/12 bg-white/94 shadow-[0_20px_40px_rgba(15,23,42,0.12)]"
                           : "border-black/8 bg-white/82 shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
                       }`}
-                      style={pos.align === "left" ? { left: 88 } : { right: 88 }}
+                      style={{
+                        width: `${pos.cardWidth}px`,
+                        marginTop: `${pos.cardOffsetY}px`,
+                        ...(pos.align === "left"
+                          ? { left: `${pos.cardOffsetX}px` }
+                          : { right: `${pos.cardOffsetX}px` }),
+                      }}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
@@ -480,10 +500,10 @@ export default function WorldMarketMap({
                           {region.tone}
                         </div>
                       </div>
-                      <div className={`mt-2 text-lg font-black ${textToneClass(region.tone)}`}>
+                      <div className={`mt-2 text-base font-black ${textToneClass(region.tone)}`}>
                         {formatPct(region.avg_change_1d)}
                       </div>
-                      <div className="mt-2 text-[11px] text-slate-500">
+                      <div className="mt-1.5 text-[10px] leading-4 text-slate-500">
                         {(region.assets || []).slice(0, 2).map((asset) => asset.label).join(" | ") || "Macro mix"}
                       </div>
                     </div>

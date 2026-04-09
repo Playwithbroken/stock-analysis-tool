@@ -300,8 +300,24 @@ function buildPlaceVariantStack(items: GeoEvent[]) {
       freshness: freshnessLabel(item.event_intelligence?.decay, item.pulse),
       place: item.geoPlace,
       trigger: item.event_intelligence?.trigger,
+      thesis: item.event_intelligence?.why_now,
+      risk: item.event_intelligence?.invalidation,
       geoKey: item.geoKey,
     }));
+}
+
+function placeOutcomeTone(action?: string) {
+  if (action === "long") return "bg-emerald-500/10 text-emerald-700";
+  if (action === "short") return "bg-red-500/10 text-red-700";
+  if (action === "hedge") return "bg-amber-500/10 text-amber-700";
+  return "bg-slate-500/10 text-slate-600";
+}
+
+function placeOutcomeLabel(action?: string) {
+  if (action === "long") return "Chance";
+  if (action === "short") return "Risk";
+  if (action === "hedge") return "Protect";
+  return "Watch";
 }
 
 function describeEventVariant(event: GeoEvent | null) {
@@ -1517,10 +1533,23 @@ export default function WorldMarketMap({
                             <span className="rounded-full border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-2 py-1 text-[var(--accent)]">
                               {item.action}
                             </span>
+                            <span className={`rounded-full px-2 py-1 ${placeOutcomeTone(item.action)}`}>
+                              {placeOutcomeLabel(item.action)}
+                            </span>
                           </div>
+                          {item.thesis ? (
+                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-600">
+                              {item.thesis}
+                            </div>
+                          ) : null}
                           {item.trigger ? (
                             <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
                               Trigger: {item.trigger}
+                            </div>
+                          ) : null}
+                          {item.risk ? (
+                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-400">
+                              Risk: {item.risk}
                             </div>
                           ) : null}
                         </button>

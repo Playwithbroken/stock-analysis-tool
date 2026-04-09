@@ -230,6 +230,41 @@ function compactList(items?: string[] | null, limit = 3) {
   return (items || []).filter(Boolean).slice(0, limit);
 }
 
+function describeEventVariant(event: GeoEvent | null) {
+  if (!event) return null;
+  const title = `${event.title || ""} ${(event.region || "").toLowerCase()}`.toLowerCase();
+  const eventType = (event.event_type || "").toLowerCase();
+
+  if (eventType === "conflict") {
+    if (/(iran|tehran|israel|gaza|lebanon|beirut|red sea)/.test(title)) return "Middle East conflict";
+    if (/(ukraine|kyiv|russia|moscow)/.test(title)) return "Eastern Europe conflict";
+    if (/(taiwan|china sea|korea)/.test(title)) return "Asia-Pacific conflict";
+    return "Global conflict";
+  }
+  if (eventType === "energy") {
+    if (/(opec|saudi|gulf|middle east|brent|crude)/.test(title)) return "Oil supply shock";
+    if (/(gas|lng|pipeline)/.test(title)) return "Gas and transport stress";
+    return "Energy repricing";
+  }
+  if (eventType === "election") {
+    if (/(hungary|budapest|europe|eu|parliament)/.test(title)) return "European election";
+    if (/(usa|u.s.|washington|president)/.test(title)) return "US election";
+    return "Political vote";
+  }
+  if (eventType === "policy") {
+    if (/(tariff|trade|sanction)/.test(title)) return "Trade and sanctions";
+    if (/(regulation|policy)/.test(title)) return "Policy regime shift";
+    return "Policy shock";
+  }
+  if (eventType === "disaster") {
+    return "Natural disaster";
+  }
+  if (eventType === "central_bank") {
+    return "Central bank shift";
+  }
+  return event.markerLabel;
+}
+
 function buildHedgeIdeas(event: GeoEvent | null) {
   if (!event) return [];
   const ideas = new Map<string, { ticker: string; label: string }>();
@@ -590,6 +625,11 @@ export default function WorldMarketMap({
     [activeGeoEvent],
   );
 
+  const activeVariantLabel = useMemo(
+    () => describeEventVariant(activeGeoEvent),
+    [activeGeoEvent],
+  );
+
   const whyItMatters = useMemo(() => {
     const lines: string[] = [];
     const relevantEvent =
@@ -785,6 +825,11 @@ export default function WorldMarketMap({
                   {activeGeoEvent.title}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  {activeVariantLabel ? (
+                    <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                      {activeVariantLabel}
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                     {activeGeoEvent.region || "Global"}
                   </span>
@@ -1068,6 +1113,11 @@ export default function WorldMarketMap({
                   {activeGeoEvent.title}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  {activeVariantLabel ? (
+                    <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                      {activeVariantLabel}
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                     {activeGeoEvent.region || "Global"}
                   </span>
@@ -1246,7 +1296,7 @@ export default function WorldMarketMap({
                         <div
                           className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(item.markerTone)}`}
                         >
-                          {item.markerLabel}
+                          {describeEventVariant(item) || item.markerLabel}
                         </div>
                         <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                           {item.region || "Global"} | {item.impact || "macro"}

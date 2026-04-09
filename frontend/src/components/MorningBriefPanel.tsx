@@ -363,7 +363,7 @@ export default function MorningBriefPanel({
                 ))
               ) : (
                 <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-                  Kein relevantes X-/Social-Signal im aktuellen Brief.
+                  Kein relevantes X-/Social-Signal im aktuellen Brief. Das spricht eher fuer wenig akuten Retail- oder Narrative-Druck.
                 </div>
               )}
               {(brief.crowd_signals || []).length ? (
@@ -401,7 +401,7 @@ export default function MorningBriefPanel({
                 ))
               ) : (
                 <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-                  Kein relevantes Reddit-/Crowd-Cluster im aktuellen Brief.
+                  Kein relevantes Reddit-/Crowd-Cluster im aktuellen Brief. Im Moment ist also kein sichtbarer Meme- oder Crowd-Schub dominant.
                 </div>
               )}
             </div>
@@ -452,7 +452,7 @@ export default function MorningBriefPanel({
               ))
             ) : (
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-                Keine kontraeren Medien-Signale mit technischer Bestaetigung.
+                Keine kontraeren Medien-Signale mit technischer Bestaetigung. Aktuell gibt es also keinen sauberen Fade- oder Inverse-Media-Trigger.
               </div>
             )}
           </div>

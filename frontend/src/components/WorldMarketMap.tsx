@@ -226,6 +226,14 @@ function markerAccentClass(tone: GeoEvent["markerTone"]) {
   return "bg-slate-600";
 }
 
+function stableHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
 function getRegionKey(region?: string) {
   const value = (region || "").toLowerCase();
   if (value === "usa" || value === "us") return "USA";
@@ -440,19 +448,23 @@ export default function WorldMarketMap({
   }, [filteredGeoSignals, sortMode]);
 
   const positionedGeoSignals = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const orbitOffsets = [
+      { x: 0, y: 0 },
+      { x: 8, y: -5 },
+      { x: -8, y: -5 },
+      { x: 10, y: 7 },
+      { x: -10, y: 7 },
+      { x: 0, y: 11 },
+    ];
     return orderedGeoSignals.slice(0, 6).map((item) => {
-      const key = item.regionKey;
-      const count = counts[key] || 0;
-      counts[key] = count + 1;
       const baseOffset = markerOffsets[item.regionKey]?.[item.markerIcon] || { x: 0, y: 0 };
-      const horizontalStack = item.regionKey === "Europe" ? -count * 6 : count * 6;
-      const verticalStack = count * 5;
+      const hash = stableHash(item.geoKey || item.title || item.markerIcon);
+      const orbit = orbitOffsets[hash % orbitOffsets.length];
       return {
         ...item,
         adjustedStyle: {
-          left: `calc(${item.markerPosition.left} + ${baseOffset.x + horizontalStack}px)`,
-          top: `calc(${item.markerPosition.top} + ${baseOffset.y + verticalStack}px)`,
+          left: `calc(${item.markerPosition.left} + ${baseOffset.x + orbit.x}px)`,
+          top: `calc(${item.markerPosition.top} + ${baseOffset.y + orbit.y}px)`,
         },
       };
     });

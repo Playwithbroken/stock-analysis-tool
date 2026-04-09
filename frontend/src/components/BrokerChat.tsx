@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { X, Send, Bot, User } from "lucide-react";
+import { X, Send, Bot, User, ChevronUp, ChevronDown } from "lucide-react";
 
 interface Message {
   role: "user" | "oracle";
@@ -31,6 +31,7 @@ export default function BrokerChat({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mobileSheetMode, setMobileSheetMode] = useState<"peek" | "full">("peek");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +48,12 @@ export default function BrokerChat({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMobileSheetMode("peek");
+    }
+  }, [isOpen]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -91,9 +98,22 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : "surface-panel fixed inset-x-3 bottom-24 top-auto z-50 flex h-[min(72vh,44rem)] w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]"
+          : `surface-panel fixed inset-x-3 top-auto z-50 flex w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-3 h-[min(86vh,52rem)]" : "bottom-24 h-[min(62vh,38rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
       }`}
     >
+      {!isInline && (
+        <div className="flex justify-center pt-2 md:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileSheetMode((prev) => (prev === "peek" ? "full" : "peek"))}
+            className="flex items-center gap-2 rounded-full border border-black/8 bg-white/80 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
+            aria-label={mobileSheetMode === "peek" ? "Expand broker desk" : "Collapse broker desk"}
+          >
+            <span className="h-1.5 w-10 rounded-full bg-slate-300" />
+            {mobileSheetMode === "peek" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        </div>
+      )}
       <div
         className={`flex items-center justify-between border-b border-black/8 bg-[linear-gradient(90deg,rgba(15,118,110,0.08),transparent)] p-6 ${isInline ? "px-0 pt-0" : ""}`}
       >
@@ -229,10 +249,10 @@ export default function BrokerChat({
             Broker Freund
           </div>
           <div className="truncate text-sm font-bold text-white">
-            Open Desk
+            {isOpen ? "Desk Live" : "Open Desk"}
           </div>
           <div className="truncate text-[11px] leading-4 text-white/72">
-            Signals, news, macro and crowd
+            {isOpen ? "Slide up for full context" : "Signals, news, macro and crowd"}
           </div>
         </div>
         <div className="relative hidden rounded-full border border-white/14 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/80 md:block">

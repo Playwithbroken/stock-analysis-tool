@@ -531,7 +531,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
-      <header className="sticky top-0 z-50 bg-[linear-gradient(180deg,rgba(250,248,243,0.92),rgba(250,248,243,0.62)_72%,transparent)]">
+      <header className="sticky top-0 z-50 bg-[linear-gradient(180deg,rgba(250,248,243,0.98),rgba(250,248,243,0.94)_72%,rgba(250,248,243,0.82))] backdrop-blur-xl">
         <div className="layout-shell px-4 pt-4 pb-3 sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header rounded-[2.1rem] px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between gap-3">

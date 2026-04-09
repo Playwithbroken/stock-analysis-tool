@@ -427,7 +427,7 @@ export default function WorldMarketMap({
               />
             </div>
 
-            <div className="absolute left-4 top-4 flex flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/88 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+            <div className="absolute bottom-4 left-4 z-30 flex max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
               {[
                 { icon: "WAR", label: "Conflict", tone: "red" as const },
                 { icon: "CB", label: "Central Bank", tone: "blue" as const },
@@ -447,7 +447,7 @@ export default function WorldMarketMap({
             </div>
 
             {globalDrivers.length ? (
-              <div className="absolute right-4 top-4 max-w-[15rem] rounded-[1rem] border border-black/8 bg-white/88 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+              <div className="absolute bottom-4 right-4 z-30 max-w-[14rem] rounded-[1rem] border border-black/8 bg-white/92 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                   Global Drivers
                 </div>
@@ -490,7 +490,7 @@ export default function WorldMarketMap({
                   key={region.label}
                   type="button"
                   onClick={() => onSelectRegion(region.label)}
-                  className="absolute text-left"
+                  className="absolute z-20 text-left"
                   style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
                   <div className="relative">
@@ -548,7 +548,7 @@ export default function WorldMarketMap({
             {positionedGeoSignals.map((item, index) => (
               <a
                 key={`${item.title}-${index}`}
-                className="absolute group"
+                className="absolute z-10 group"
                 style={item.adjustedStyle}
                 href={item.link}
                 target="_blank"
@@ -560,11 +560,10 @@ export default function WorldMarketMap({
                     <div className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(item.markerTone)} animate-ping`} />
                   )}
                   <div
-                    className={`relative flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)}`}
+                    className={`relative flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)}`}
                   >
                     <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
                     <span>{item.markerIcon}</span>
-                    <span className="hidden sm:inline">{item.markerLabel}</span>
                   </div>
                   <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-64 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left shadow-[0_16px_34px_rgba(15,23,42,0.14)] group-hover:block">
                     <div className="flex items-center justify-between gap-3">

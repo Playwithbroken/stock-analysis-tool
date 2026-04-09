@@ -462,6 +462,17 @@ export default function WorldMarketMap({
     [positionedGeoSignals],
   );
 
+  const eventTempo = useMemo(() => {
+    const stats = { developing: 0, active: 0, fading: 0 };
+    for (const item of positionedGeoSignals) {
+      const decay = item.event_intelligence?.decay;
+      if (decay === "developing") stats.developing += 1;
+      else if (decay === "fading") stats.fading += 1;
+      else stats.active += 1;
+    }
+    return stats;
+  }, [positionedGeoSignals]);
+
   const activeGeoEvent = useMemo(
     () => positionedGeoSignals[activeEventIndex] || positionedGeoSignals[0] || activePulseEvent || null,
     [positionedGeoSignals, activeEventIndex, activePulseEvent],
@@ -951,6 +962,17 @@ export default function WorldMarketMap({
             <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                 Event Layer
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
+                  New <span className="font-bold text-slate-900">{eventTempo.developing}</span>
+                </div>
+                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
+                  Active <span className="font-bold text-slate-900">{eventTempo.active}</span>
+                </div>
+                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
+                  Fading <span className="font-bold text-slate-900">{eventTempo.fading}</span>
+                </div>
               </div>
               <div className="mt-4 space-y-3">
                 {showEventLayer && positionedGeoSignals.length ? (

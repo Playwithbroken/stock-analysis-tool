@@ -345,6 +345,17 @@ export default function MorningBriefPanel({
                     <div className="mt-2 text-sm font-bold text-slate-900">
                       {(item.ticker || "Macro")} with {item.mentions} social mentions
                     </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        score {item.social_score ?? "n/a"}
+                      </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        {item.social_style || "social pulse"}
+                      </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        {item.social_bias || "watch"}
+                      </span>
+                    </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {(item.titles || []).slice(0, 2).join(" | ") || "Live social pulse"}
                     </div>
@@ -371,6 +382,17 @@ export default function MorningBriefPanel({
                     </div>
                     <div className="mt-2 text-sm font-bold text-slate-900">
                       {(item.ticker || "Macro")} with {item.mentions} matching mentions
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        score {item.crowd_score ?? "n/a"}
+                      </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        {item.crowd_style || "crowd pressure"}
+                      </span>
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        {item.crowd_bias || "watch"}
+                      </span>
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {(item.titles || []).slice(0, 2).join(" | ") || "Crowd cluster"}

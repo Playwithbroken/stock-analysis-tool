@@ -413,12 +413,22 @@ class MorningBriefService:
                     "region": item.get("region"),
                     "mentions": 0,
                     "titles": [],
+                    "impact": item.get("impact"),
                 },
             )
             bucket["mentions"] += 1
             if item.get("title"):
                 bucket["titles"].append(item["title"])
         signals = [item for item in grouped.values() if item["mentions"] >= 2]
+        for item in signals:
+            mentions = int(item.get("mentions") or 0)
+            event_type = item.get("event_type") or "macro"
+            score = min(92, 44 + mentions * 12 + (8 if event_type in {"policy", "conflict", "energy"} else 0))
+            bias = "contrarian" if mentions >= 3 else "watch"
+            style = "meme risk" if mentions >= 4 else "crowd pressure"
+            item["crowd_score"] = score
+            item["crowd_bias"] = bias
+            item["crowd_style"] = style
         signals.sort(key=lambda item: item["mentions"], reverse=True)
         return signals[:6]
 
@@ -470,12 +480,22 @@ class MorningBriefService:
                     "publisher": item.get("publisher") or item.get("source_domain") or "Social",
                     "mentions": 0,
                     "titles": [],
+                    "impact": item.get("impact"),
                 },
             )
             bucket["mentions"] += 1
             if item.get("title"):
                 bucket["titles"].append(item["title"])
         signals = list(grouped.values())
+        for item in signals:
+            mentions = int(item.get("mentions") or 0)
+            event_type = item.get("event_type") or "macro"
+            score = min(88, 40 + mentions * 10 + (6 if event_type in {"policy", "election", "energy"} else 0))
+            bias = "fade" if mentions >= 3 else "watch"
+            style = "retail chase" if mentions >= 3 else "social pulse"
+            item["social_score"] = score
+            item["social_bias"] = bias
+            item["social_style"] = style
         signals.sort(key=lambda item: (item["mentions"], item.get("ticker") is not None), reverse=True)
         return signals[:8]
 

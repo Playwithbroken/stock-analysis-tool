@@ -91,7 +91,7 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : "surface-panel fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-black/8 bg-[rgba(250,248,244,0.96)] shadow-[-20px_0_50px_rgba(17,24,39,0.12)] backdrop-blur-3xl xl:max-w-[28rem] 2xl:max-w-[31rem]"
+          : "surface-panel fixed inset-x-3 bottom-24 top-auto z-50 flex h-[min(72vh,44rem)] w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]"
       }`}
     >
       <div
@@ -214,15 +214,29 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="group fixed bottom-5 right-5 z-40 flex h-16 w-16 items-center justify-center rounded-[1.45rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.02] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.98] sm:bottom-8 sm:right-8"
+        className="group fixed bottom-24 left-4 right-4 z-40 flex h-[4.4rem] items-center justify-between rounded-[1.6rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0 sm:bottom-28 sm:left-6 sm:right-6 md:sm:right-8 md:sm:left-auto"
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
-        <div className="absolute -top-2 right-0 rounded-full border border-white/15 bg-[#0b1216]/70 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.16)]">
+        <div className="absolute -top-2 right-3 rounded-full border border-white/15 bg-[#0b1216]/70 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.16)] md:right-0">
           Live
         </div>
-        <div className="relative flex h-11 w-11 items-center justify-center rounded-[1rem] border border-white/16 bg-white/14">
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-white/16 bg-white/14">
           <Bot size={22} />
+        </div>
+        <div className="relative min-w-0 flex-1 px-3 text-left md:hidden">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+            Broker Freund
+          </div>
+          <div className="truncate text-sm font-bold text-white">
+            Open Desk
+          </div>
+          <div className="truncate text-[11px] leading-4 text-white/72">
+            Signals, news, macro and crowd
+          </div>
+        </div>
+        <div className="relative hidden rounded-full border border-white/14 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/80 md:block">
+          Desk
         </div>
         <div className="pointer-events-none absolute bottom-0 right-[calc(100%+12px)] hidden w-[15.5rem] rounded-[1.3rem] border border-white/18 bg-[linear-gradient(180deg,rgba(11,18,22,0.95),rgba(15,118,110,0.92))] px-4 py-3 text-left text-white opacity-0 shadow-[0_24px_54px_rgba(15,23,42,0.24)] transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 lg:block lg:translate-x-2">
           <div className="flex items-center justify-between gap-3">

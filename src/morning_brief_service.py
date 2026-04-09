@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Sequence
 import pandas as pd
 
 from src.data_fetcher import DataFetcher
+from src.storage import PortfolioManager
 
 
 class MorningBriefService:
@@ -96,6 +97,8 @@ class MorningBriefService:
         "reddit.com",
         "wallstreetbets",
     }
+    _portfolio_manager: PortfolioManager | None = None
+    _holding_profile_cache: Dict[str, Dict[str, Any]] = {}
 
     def get_brief(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
@@ -906,32 +909,145 @@ class MorningBriefService:
         watchlist_snapshot: Dict[str, Any] | None,
         intelligence: Dict[str, Any],
     ) -> Dict[str, Any]:
+        workspace_holdings = self._get_workspace_holdings()
+        normalized_ticker = str(ticker or "").upper()
         watched_tickers = {
             str(item.get("value") or "").upper()
             for item in (watchlist_snapshot or {}).get("items", [])
             if item.get("kind") == "ticker"
         }
-        if ticker and str(ticker).upper() in watched_tickers:
+        if normalized_ticker:
+            direct_holding = next(
+                (item for item in workspace_holdings if item.get("ticker") == normalized_ticker),
+                None,
+            )
+            if direct_holding:
+                portfolio_name = direct_holding.get("portfolio_name") or "deinem Portfolio"
+                return {
+                    "ticker": normalized_ticker,
+                    "status": "direct_holding",
+                    "note": f"{normalized_ticker} liegt direkt in {portfolio_name} und ist vom Event betroffen.",
+                    "action": intelligence.get("action"),
+                }
+
+        if normalized_ticker and normalized_ticker in watched_tickers:
             return {
-                "ticker": str(ticker).upper(),
+                "ticker": normalized_ticker,
                 "status": "direct",
-                "note": f"{str(ticker).upper()} ist direkt auf deiner Watchlist und vom Event betroffen.",
+                "note": f"{normalized_ticker} ist direkt auf deiner Watchlist und vom Event betroffen.",
                 "action": intelligence.get("action"),
             }
+
         sectors = intelligence.get("affected_sectors") or []
+        sector_matches = self._match_holdings_by_sector(workspace_holdings, sectors)
+        if sector_matches:
+            labels = ", ".join(item["ticker"] for item in sector_matches[:3])
+            return {
+                "ticker": normalized_ticker or sector_matches[0]["ticker"],
+                "status": "portfolio_sector",
+                "note": f"Portfolio-Exposure ueber {labels} in {', '.join(sectors[:2])}.",
+                "action": intelligence.get("action"),
+            }
+
         if sectors:
             return {
-                "ticker": ticker,
+                "ticker": normalized_ticker or ticker,
                 "status": "sector",
                 "note": f"Indirekter Impact ueber {', '.join(sectors[:2])}.",
                 "action": intelligence.get("action"),
             }
         return {
-            "ticker": ticker,
+            "ticker": normalized_ticker or ticker,
             "status": "market",
             "note": "Vor allem Makro- und Sentiment-Effekt, kein klarer Direktbezug.",
             "action": intelligence.get("action"),
         }
+
+    def _get_portfolio_manager(self) -> PortfolioManager:
+        if self._portfolio_manager is None:
+            self._portfolio_manager = PortfolioManager()
+        return self._portfolio_manager
+
+    def _get_workspace_holdings(self) -> List[Dict[str, Any]]:
+        holdings: List[Dict[str, Any]] = []
+        try:
+            portfolios = self._get_portfolio_manager().get_portfolios()
+        except Exception:
+            return holdings
+
+        for portfolio in portfolios:
+            portfolio_name = portfolio.get("name") or "Portfolio"
+            for holding in portfolio.get("holdings", []):
+                ticker = str(holding.get("ticker") or "").upper()
+                if not ticker:
+                    continue
+                holdings.append(
+                    {
+                        "ticker": ticker,
+                        "portfolio_name": portfolio_name,
+                        "shares": holding.get("shares"),
+                        "buy_price": holding.get("buyPrice"),
+                    }
+                )
+        return holdings
+
+    def _get_holding_profile(self, ticker: str) -> Dict[str, Any]:
+        normalized = str(ticker or "").upper()
+        if not normalized:
+            return {}
+        if normalized in self._holding_profile_cache:
+            return self._holding_profile_cache[normalized]
+
+        try:
+            fundamentals = DataFetcher(normalized).get_fundamentals()
+        except Exception:
+            fundamentals = {}
+        profile = {
+            "sector": str(fundamentals.get("sector") or "").strip(),
+            "industry": str(fundamentals.get("industry") or "").strip(),
+            "quote_type": str(fundamentals.get("quote_type") or "").strip(),
+        }
+        self._holding_profile_cache[normalized] = profile
+        return profile
+
+    def _match_holdings_by_sector(
+        self,
+        holdings: List[Dict[str, Any]],
+        sectors: List[str],
+    ) -> List[Dict[str, Any]]:
+        if not holdings or not sectors:
+            return []
+
+        sector_map = {
+            "Energy": ["energy", "oil", "gas"],
+            "Defense": ["aerospace", "defense"],
+            "Airlines": ["airline", "travel", "transportation"],
+            "Growth": ["technology", "software", "semiconductor", "internet"],
+            "Financials": ["financial", "bank", "insurance", "capital markets"],
+            "REITs": ["reit", "real estate"],
+            "Utilities": ["utility"],
+            "Banks": ["bank", "financial"],
+            "Insurers": ["insurance"],
+            "Industrials": ["industrial", "manufacturing", "transportation"],
+            "Transport": ["transportation", "shipping", "airline", "logistics"],
+            "Semis": ["semiconductor"],
+            "Autos": ["auto", "vehicle", "automaker"],
+            "Consumer": ["consumer", "retail", "apparel", "restaurant"],
+        }
+
+        matches: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for holding in holdings:
+            profile = self._get_holding_profile(holding["ticker"])
+            haystack = f"{profile.get('sector', '')} {profile.get('industry', '')}".lower()
+            for sector in sectors:
+                aliases = sector_map.get(sector, [sector.lower()])
+                if any(alias in haystack for alias in aliases):
+                    if holding["ticker"] not in seen:
+                        seen.add(holding["ticker"])
+                        matches.append(holding)
+                    break
+        return matches
 
     def _action_thesis(self, event_type: str, macro_regime: str, ticker: str | None) -> str:
         if event_type == "conflict":

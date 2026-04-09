@@ -101,8 +101,12 @@ class EmailAlertService:
             },
             "schedule": {
                 "timezone": os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"),
+                "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
+                "morning": os.getenv("MORNING_BRIEF_TIME", "07:15"),
                 "europe_open": os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40"),
+                "midday": os.getenv("MIDDAY_BRIEF_TIME", "12:30"),
                 "us_open": os.getenv("US_OPEN_BRIEF_TIME", "15:10"),
+                "close_recap": os.getenv("CLOSE_RECAP_TIME", "21:45"),
             },
         }
 
@@ -237,39 +241,106 @@ class EmailAlertService:
             return []
         self._validate_config(config)
 
-        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
+        if not self._schedule_day_matches(now):
+            return []
+
+        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
         jobs = [
-            ("europe", os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40")),
-            ("usa", os.getenv("US_OPEN_BRIEF_TIME", "15:10")),
+            {
+                "job_key": "morning-brief",
+                "scheduled_time": os.getenv("MORNING_BRIEF_TIME", "07:15"),
+                "subject": "Morning Brief: Global macro, news and setup",
+                "title": "Morning Brief",
+                "category": "scheduled_brief",
+                "build_events": lambda: self._build_open_brief_events("global"),
+            },
+            {
+                "job_key": "open-brief:europe",
+                "scheduled_time": os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40"),
+                "subject": "Europe Open Brief: Market opening setup",
+                "title": "Europe Open Brief",
+                "category": "open_brief",
+                "build_events": lambda: self._build_open_brief_events("europe"),
+            },
+            {
+                "job_key": "midday-brief",
+                "scheduled_time": os.getenv("MIDDAY_BRIEF_TIME", "12:30"),
+                "subject": "Midday Update: What changed since the open",
+                "title": "Midday Update",
+                "category": "scheduled_brief",
+                "build_events": self._build_midday_update_events,
+            },
+            {
+                "job_key": "open-brief:usa",
+                "scheduled_time": os.getenv("US_OPEN_BRIEF_TIME", "15:10"),
+                "subject": "US Open Brief: Market opening setup",
+                "title": "US Open Brief",
+                "category": "open_brief",
+                "build_events": lambda: self._build_open_brief_events("usa"),
+            },
+            {
+                "job_key": "close-recap",
+                "scheduled_time": os.getenv("CLOSE_RECAP_TIME", "21:45"),
+                "subject": "End of Day Recap: Stocks, macro and next risks",
+                "title": "End of Day Recap",
+                "category": "scheduled_brief",
+                "build_events": self._build_close_recap_events,
+            },
         ]
         results: List[Dict[str, Any]] = []
 
-        for session, scheduled_time in jobs:
-            event_key = f"open-brief:{session}:{now.date().isoformat()}"
+        for job in jobs:
+            event_key = f"{job['job_key']}:{now.date().isoformat()}"
             if event_key in sent_keys:
                 continue
-            if not self._time_window_matches(now, scheduled_time):
+            if not self._time_window_matches(now, str(job["scheduled_time"])):
                 continue
 
-            events = self._build_open_brief_events(session)
-            self._send_notifications(
-                config,
-                events,
-                subject=f"{session.title()} Open Brief: Market opening setup",
-            )
+            events = job["build_events"]()
+            self._send_notifications(config, events, subject=str(job["subject"]))
             self.portfolio_manager.mark_signal_events_sent(
                 [
                     {
                         "event_key": event_key,
-                        "category": "open_brief",
-                        "title": f"{session.title()} Open Brief",
+                        "category": str(job["category"]),
+                        "title": str(job["title"]),
                     }
                 ]
             )
-            results.append({"session": session, "status": "sent"})
+            results.append({"job": job["job_key"], "status": "sent"})
 
         return results
+
+    def _schedule_day_matches(self, now: datetime) -> bool:
+        raw_value = os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri")
+        day_aliases = {
+            "mon": 0,
+            "monday": 0,
+            "tue": 1,
+            "tues": 1,
+            "tuesday": 1,
+            "wed": 2,
+            "wednesday": 2,
+            "thu": 3,
+            "thur": 3,
+            "thurs": 3,
+            "thursday": 3,
+            "fri": 4,
+            "friday": 4,
+            "sat": 5,
+            "saturday": 5,
+            "sun": 6,
+            "sunday": 6,
+        }
+        allowed_days = {
+            day_aliases[token.strip().lower()]
+            for token in raw_value.split(",")
+            if token.strip().lower() in day_aliases
+        }
+        if not allowed_days:
+            allowed_days = {0, 1, 2, 3, 4}
+        return now.weekday() in allowed_days
 
     def _time_window_matches(self, now: datetime, scheduled_hhmm: str) -> bool:
         try:
@@ -361,6 +432,117 @@ class EmailAlertService:
                 "event_key": f"{session_label}-brief:{datetime.now().strftime('%Y-%m-%d')}:{index}",
                 "category": "morning_brief",
                 "title": f"{session_label.title()} Brief",
+                "line": line,
+                "source_url": "",
+            }
+            for index, line in enumerate(lines)
+        ]
+
+    def _build_midday_update_events(self) -> List[Dict[str, Any]]:
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        brief = self.morning_brief_service.get_brief(snapshot)
+        settings = self.portfolio_manager.get_signal_score_settings()
+        conviction = self.signal_score_service.build_conviction_index(snapshot, settings)
+        top_signals = self._extract_new_events(snapshot, settings)[:5]
+
+        lines = [
+            brief.get("headline", "Midday Update"),
+            "",
+            "What changed since the open:",
+            *brief.get("summary_points", [])[:3],
+            "",
+            "World and macro:",
+        ]
+
+        event_layer = brief.get("event_layer", [])
+        if event_layer:
+            lines.extend(
+                f"- {item.get('region', 'global').title()} | {item.get('event_type')} | {item.get('title')}"
+                for item in event_layer[:4]
+            )
+        else:
+            lines.append("- Kein dominanter Geo- oder Makrotreiber.")
+
+        lines.extend(["", "High-conviction setups:"])
+        if top_signals:
+            lines.extend(f"- {event['line']}" for event in top_signals[:4])
+        else:
+            lines.append("- Keine frischen A-Setups seit dem Open.")
+
+        lines.extend(["", "Portfolio Brain:"])
+        portfolio_brain = brief.get("portfolio_brain", {})
+        cards = (
+            (portfolio_brain.get("at_risk") or [])[:2]
+            + (portfolio_brain.get("beneficiaries") or [])[:2]
+            + (portfolio_brain.get("hedge_ideas") or [])[:2]
+        )
+        if cards:
+            for card in cards[:5]:
+                action = card.get("action") or card.get("bucket") or "watch"
+                holding = card.get("holding") or card.get("ticker") or card.get("label") or "Portfolio"
+                reason = card.get("reason") or card.get("summary") or card.get("trigger") or ""
+                lines.append(f"- {holding} | {action} | {reason}".strip())
+        else:
+            lines.append("- Kein direkter Portfolio-Handlungsbedarf zur Mittagslage.")
+
+        return [
+            {
+                "event_key": f"midday-brief:{datetime.now().strftime('%Y-%m-%d')}:{index}",
+                "category": "scheduled_brief",
+                "title": "Midday Update",
+                "line": line,
+                "source_url": "",
+                "conviction_score": max(conviction.values()) if conviction else None,
+            }
+            for index, line in enumerate(lines)
+        ]
+
+    def _build_close_recap_events(self) -> List[Dict[str, Any]]:
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        brief = self.morning_brief_service.get_brief(snapshot)
+
+        lines = [
+            "End of Day Recap",
+            "",
+            "Closing read:",
+            *brief.get("summary_points", [])[:3],
+            "",
+            "Session pulse:",
+        ]
+
+        timeline = brief.get("opening_timeline", [])
+        if timeline:
+            lines.extend(
+                f"- {item.get('label')}: {item.get('tone')} {float(item.get('move') or 0):+.2f}% | {item.get('driver')}"
+                for item in timeline[:3]
+            )
+        else:
+            lines.append("- Keine Session-Zusammenfassung verfuegbar.")
+
+        lines.extend(["", "Top risks into next session:"])
+        event_layer = brief.get("event_layer", [])
+        if event_layer:
+            lines.extend(
+                f"- {item.get('event_type')} | {item.get('region', 'global').title()} | {item.get('title')}"
+                for item in event_layer[:4]
+            )
+        else:
+            lines.append("- Kein dominanter uebernachtlicher Risikotreiber erkannt.")
+
+        lines.extend(["", "Next watchlist focus:"])
+        impacts = brief.get("watchlist_impact", [])
+        if impacts:
+            lines.extend(f"- {item.get('summary')}" for item in impacts[:4])
+        else:
+            lines.append("- Keine direkte Watchlist-Verschiebung fuer morgen erkannt.")
+
+        return [
+            {
+                "event_key": f"close-recap:{datetime.now().strftime('%Y-%m-%d')}:{index}",
+                "category": "scheduled_brief",
+                "title": "End of Day Recap",
                 "line": line,
                 "source_url": "",
             }

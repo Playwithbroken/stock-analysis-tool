@@ -101,7 +101,7 @@ const markerLayout = {
   USA: { left: "22%", top: "47%" },
   Europe: { left: "49.5%", top: "41.5%" },
   Asia: { left: "74%", top: "48.5%" },
-  Global: { left: "55%", top: "63%" },
+  Global: { left: "58.5%", top: "60%" },
 };
 
 const markerOffsets: Record<
@@ -356,6 +356,11 @@ export default function WorldMarketMap({
     [contrarianSignals, activeRegion],
   );
 
+  const globalDrivers = useMemo(
+    () => positionedGeoSignals.filter((item) => item.regionKey === "Global").slice(0, 3),
+    [positionedGeoSignals],
+  );
+
   const whyItMatters = useMemo(() => {
     const lines: string[] = [];
     const relevantEvent = positionedGeoSignals.find((item) =>
@@ -422,10 +427,6 @@ export default function WorldMarketMap({
               />
             </div>
 
-            <div className="absolute bottom-3 right-4 rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
-              Wikimedia map base
-            </div>
-
             <div className="absolute left-4 top-4 flex flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/88 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
               {[
                 { icon: "WAR", label: "Conflict", tone: "red" as const },
@@ -444,6 +445,38 @@ export default function WorldMarketMap({
                 </div>
               ))}
             </div>
+
+            {globalDrivers.length ? (
+              <div className="absolute right-4 top-4 max-w-[15rem] rounded-[1rem] border border-black/8 bg-white/88 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Global Drivers
+                </div>
+                <div className="mt-2 space-y-2">
+                  {globalDrivers.map((item, index) => (
+                    <a
+                      key={`${item.markerIcon}-${item.title}-${index}`}
+                      href={item.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-[0.9rem] border border-black/8 bg-white/78 px-2.5 py-2 transition-colors hover:bg-white"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(item.markerTone)}`}>
+                          <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                          {item.markerIcon}
+                        </span>
+                        <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                          {item.impact || "macro"}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
+                        {item.title}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.35),rgba(15,23,42,0))] lg:block" />
 

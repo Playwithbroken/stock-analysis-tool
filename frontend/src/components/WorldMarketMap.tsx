@@ -230,6 +230,50 @@ function compactList(items?: string[] | null, limit = 3) {
   return (items || []).filter(Boolean).slice(0, limit);
 }
 
+function buildHedgeIdeas(event: GeoEvent | null) {
+  if (!event) return [];
+  const ideas = new Map<string, { ticker: string; label: string }>();
+  const eventType = (event.event_type || "").toLowerCase();
+  const sectors = (event.event_intelligence?.affected_sectors || []).map((item) => item.toLowerCase());
+  const assets = (event.event_intelligence?.affected_assets || []).map((item) => item.toUpperCase());
+  const action = (event.event_intelligence?.action || "").toLowerCase();
+
+  const add = (ticker: string, label: string) => {
+    if (!ticker) return;
+    ideas.set(ticker, { ticker, label });
+  };
+
+  if (eventType === "conflict" || action === "hedge") {
+    add("GLD", "Gold hedge");
+    add("XLE", "Energy cushion");
+    add("TLT", "Rates hedge");
+  }
+  if (eventType === "energy" || sectors.some((item) => item.includes("energy"))) {
+    add("XLE", "Energy leaders");
+    add("USO", "Oil follow-through");
+  }
+  if (eventType === "central_bank") {
+    add("TLT", "Duration watch");
+    add("UUP", "Dollar hedge");
+    add("QQQ", "Growth reaction");
+  }
+  if (eventType === "election" || eventType === "policy") {
+    add("XLI", "Industrials");
+    add("ITA", "Defense");
+    add("XLF", "Banks");
+  }
+  if (eventType === "disaster") {
+    add("GLD", "Shock hedge");
+    add("DBA", "Commodity stress");
+  }
+  if (assets.includes("GLD")) add("GLD", "Gold hedge");
+  if (assets.includes("TLT")) add("TLT", "Duration hedge");
+  if (assets.includes("XLE")) add("XLE", "Energy hedge");
+  if (assets.includes("SPY")) add("SPY", "Index reaction");
+
+  return Array.from(ideas.values()).slice(0, 4);
+}
+
 function stableHash(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -539,6 +583,11 @@ export default function WorldMarketMap({
       activePulseEvent ||
       null,
     [activePulseEvent, hoveredEventIndex, pinnedEventIndex, positionedGeoSignals],
+  );
+
+  const hedgeIdeas = useMemo(
+    () => buildHedgeIdeas(activeGeoEvent),
+    [activeGeoEvent],
   );
 
   const whyItMatters = useMemo(() => {
@@ -1087,6 +1136,24 @@ export default function WorldMarketMap({
                 {activeGeoEvent.portfolio_exposure?.note ? (
                   <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
                     {activeGeoEvent.portfolio_exposure.note}
+                  </div>
+                ) : null}
+                {hedgeIdeas.length ? (
+                  <div className="mt-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      Hedge Ideas
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {hedgeIdeas.map((idea) => (
+                        <button
+                          key={idea.ticker}
+                          onClick={() => onAnalyze(idea.ticker)}
+                          className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600"
+                        >
+                          {idea.ticker} · {idea.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
                 <div className="mt-3 space-y-2">

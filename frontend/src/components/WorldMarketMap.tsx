@@ -80,6 +80,7 @@ interface MapAnchor {
 }
 
 type EventFilter = "all" | "WAR" | "CB" | "OIL" | "VOTE" | "NAT" | "POL";
+type EventSort = "impact" | "region" | "latest";
 
 const positions: Record<
   string,
@@ -345,6 +346,11 @@ export default function WorldMarketMap({
   focusTicker,
 }: WorldMarketMapProps) {
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
+  const [sortMode, setSortMode] = useState<EventSort>("impact");
+  const [showLegend, setShowLegend] = useState(true);
+  const [showRegionCards, setShowRegionCards] = useState(true);
+  const [showLiveAlert, setShowLiveAlert] = useState(true);
+  const [showEventLayer, setShowEventLayer] = useState(true);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
 
@@ -375,9 +381,31 @@ export default function WorldMarketMap({
     [geoSignals, activeFilter],
   );
 
+  const orderedGeoSignals = useMemo(() => {
+    const impactRank = { high: 0, medium: 1, low: 2 } as const;
+    const items = [...filteredGeoSignals];
+    if (sortMode === "region") {
+      items.sort((a, b) => {
+        const regionCompare = (a.region || "").localeCompare(b.region || "");
+        if (regionCompare !== 0) return regionCompare;
+        return (impactRank[a.impact as keyof typeof impactRank] ?? 3) - (impactRank[b.impact as keyof typeof impactRank] ?? 3);
+      });
+      return items;
+    }
+    if (sortMode === "latest") {
+      return items.reverse();
+    }
+    items.sort(
+      (a, b) =>
+        (impactRank[a.impact as keyof typeof impactRank] ?? 3) -
+        (impactRank[b.impact as keyof typeof impactRank] ?? 3),
+    );
+    return items;
+  }, [filteredGeoSignals, sortMode]);
+
   const positionedGeoSignals = useMemo(() => {
     const counts: Record<string, number> = {};
-    return filteredGeoSignals.slice(0, 6).map((item) => {
+    return orderedGeoSignals.slice(0, 6).map((item) => {
       const key = item.regionKey;
       const count = counts[key] || 0;
       counts[key] = count + 1;
@@ -392,7 +420,7 @@ export default function WorldMarketMap({
         },
       };
     });
-  }, [filteredGeoSignals]);
+  }, [orderedGeoSignals]);
 
   const timeline = useMemo(
     () => (openingTimeline.length ? openingTimeline : buildTimeline(regions, news)),
@@ -490,6 +518,51 @@ export default function WorldMarketMap({
           ))}
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-black/8 bg-white/70 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+              Sort
+            </div>
+            {[
+              { key: "impact", label: "Impact" },
+              { key: "region", label: "Region" },
+              { key: "latest", label: "Latest" },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setSortMode(item.key as EventSort)}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                  sortMode === item.key
+                    ? "bg-[var(--accent)] text-white"
+                    : "border border-black/8 bg-white text-slate-500"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { key: "legend", label: "Legend", value: showLegend, set: setShowLegend },
+              { key: "regions", label: "Regions", value: showRegionCards, set: setShowRegionCards },
+              { key: "alert", label: "Live alert", value: showLiveAlert, set: setShowLiveAlert },
+              { key: "layer", label: "Event layer", value: showEventLayer, set: setShowEventLayer },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => item.set(!item.value)}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                  item.value
+                    ? "bg-[#101114] text-white"
+                    : "border border-black/8 bg-white text-slate-500"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
           <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,240,232,0.95))] p-4 sm:p-6">
             <div className="absolute inset-0 overflow-hidden opacity-55">
@@ -502,6 +575,7 @@ export default function WorldMarketMap({
               />
             </div>
 
+            {showLegend ? (
             <div className="absolute bottom-4 left-4 z-30 flex max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
               {[
                 { icon: "WAR", label: "Conflict", tone: "red" as const },
@@ -520,10 +594,11 @@ export default function WorldMarketMap({
                 </div>
               ))}
             </div>
+            ) : null}
 
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.35),rgba(15,23,42,0))] lg:block" />
 
-            {regions.map((region) => {
+            {showRegionCards ? regions.map((region) => {
               const pos = positions[region.label];
               if (!pos) return null;
               const isActive = region.label === selectedRegion;
@@ -586,7 +661,7 @@ export default function WorldMarketMap({
                   </div>
                 </button>
               );
-            })}
+            }) : null}
 
             {positionedGeoSignals.map((item, index) => (
               <a
@@ -627,7 +702,7 @@ export default function WorldMarketMap({
               </a>
             ))}
 
-            {activePulseEvent ? (
+            {showLiveAlert && activePulseEvent ? (
               <a
                 href={activePulseEvent.link}
                 target="_blank"
@@ -731,7 +806,7 @@ export default function WorldMarketMap({
                 Event Layer
               </div>
               <div className="mt-4 space-y-3">
-                {positionedGeoSignals.length ? (
+                {showEventLayer && positionedGeoSignals.length ? (
                   positionedGeoSignals.map((item, index) => (
                     <a
                       key={`${item.title}-${index}`}
@@ -755,7 +830,7 @@ export default function WorldMarketMap({
                   ))
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                    Keine dominanten Events im aktuellen Filter.
+                    {showEventLayer ? "Keine dominanten Events im aktuellen Filter." : "Event Layer ist ausgeblendet."}
                   </div>
                 )}
               </div>

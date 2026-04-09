@@ -93,6 +93,38 @@ const markerLayout = {
   Global: { left: "56%", top: "52%" },
 };
 
+const markerOffsets: Record<
+  GeoEvent["regionKey"],
+  Partial<Record<GeoEvent["markerIcon"], { x: number; y: number }>>
+> = {
+  USA: {
+    WAR: { x: -8, y: -10 },
+    CB: { x: 8, y: -14 },
+    POL: { x: -12, y: 10 },
+    VOTE: { x: 10, y: 12 },
+    NAT: { x: -2, y: 18 },
+  },
+  Europe: {
+    WAR: { x: -10, y: -8 },
+    CB: { x: 10, y: -12 },
+    POL: { x: -12, y: 9 },
+    VOTE: { x: 12, y: 10 },
+    NAT: { x: 2, y: 18 },
+  },
+  Asia: {
+    WAR: { x: -12, y: -8 },
+    CB: { x: 8, y: -12 },
+    POL: { x: -14, y: 10 },
+    VOTE: { x: 12, y: 12 },
+    NAT: { x: 0, y: 18 },
+  },
+  Global: {
+    OIL: { x: 0, y: 0 },
+    POL: { x: 12, y: -8 },
+    CB: { x: -10, y: -10 },
+  },
+};
+
 function formatPct(value: number) {
   if (!Number.isFinite(value)) return "N/A";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -287,13 +319,14 @@ export default function WorldMarketMap({
       const key = item.regionKey;
       const count = counts[key] || 0;
       counts[key] = count + 1;
-      const horizontal = item.regionKey === "Europe" ? -count * 8 : count * 8;
-      const vertical = count * 6;
+      const baseOffset = markerOffsets[item.regionKey]?.[item.markerIcon] || { x: 0, y: 0 };
+      const horizontalStack = item.regionKey === "Europe" ? -count * 6 : count * 6;
+      const verticalStack = count * 5;
       return {
         ...item,
         adjustedStyle: {
-          left: `calc(${item.markerPosition.left} + ${horizontal}px)`,
-          top: `calc(${item.markerPosition.top} + ${vertical}px)`,
+          left: `calc(${item.markerPosition.left} + ${baseOffset.x + horizontalStack}px)`,
+          top: `calc(${item.markerPosition.top} + ${baseOffset.y + verticalStack}px)`,
         },
       };
     });

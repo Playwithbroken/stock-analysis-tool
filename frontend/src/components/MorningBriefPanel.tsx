@@ -293,17 +293,44 @@ export default function MorningBriefPanel({
           <div className="surface-panel rounded-[2rem] p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                Crowd Radar
+                Social Radar
               </div>
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-                Separat
+                X / Reddit / Crowd
               </div>
             </div>
             <div className="mt-4 space-y-3">
-              {(brief.crowd_signals || []).length ? (
-                (brief.crowd_signals || []).slice(0, 4).map((item: any, index: number) => (
+              {(brief.social_signals || []).length ? (
+                (brief.social_signals || []).slice(0, 4).map((item: any, index: number) => (
                   <div
-                    key={`${item.ticker || item.event_type}-${index}`}
+                    key={`${item.ticker || item.publisher || item.event_type}-${index}`}
+                    className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                        {item.region} · {item.event_type}
+                      </div>
+                      <div className="rounded-full border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">
+                        {item.publisher || "Social"}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm font-bold text-slate-900">
+                      {(item.ticker || "Macro")} with {item.mentions} social mentions
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {(item.titles || []).slice(0, 2).join(" | ") || "Live social pulse"}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
+                  Kein relevantes X-/Social-Signal im aktuellen Brief.
+                </div>
+              )}
+              {(brief.crowd_signals || []).length ? (
+                (brief.crowd_signals || []).slice(0, 3).map((item: any, index: number) => (
+                  <div
+                    key={`${item.ticker || item.event_type}-crowd-${index}`}
                     className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -311,11 +338,14 @@ export default function MorningBriefPanel({
                         {item.region} · {item.event_type}
                       </div>
                       <div className="rounded-full border border-amber-500/20 bg-amber-500/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
-                        Crowd
+                        Reddit / Crowd
                       </div>
                     </div>
                     <div className="mt-2 text-sm font-bold text-slate-900">
                       {(item.ticker || "Macro")} with {item.mentions} matching mentions
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {(item.titles || []).slice(0, 2).join(" | ") || "Crowd cluster"}
                     </div>
                   </div>
                 ))

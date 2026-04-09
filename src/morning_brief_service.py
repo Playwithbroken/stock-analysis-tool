@@ -112,6 +112,7 @@ class MorningBriefService:
         macro = self._collect_assets(self.MACRO)
         top_news = self._collect_news()
         crowd_news = self._collect_crowd_news()
+        social_news = self._collect_social_news()
         event_layer = self._build_event_layer(top_news)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
@@ -140,12 +141,13 @@ class MorningBriefService:
             "macro_assets": macro,
             "top_news": top_news,
             "crowd_signals": self._build_crowd_signals(crowd_news),
+            "social_signals": self._build_social_signals(social_news),
             "source_policy": {
                 "trusted_publishers": sorted(self.TRUSTED_PUBLISHERS),
                 "allowed_domains": sorted(self.ALLOWED_DOMAINS),
                 "excluded_sources": sorted(self.EXCLUDED_SOURCE_TERMS),
                 "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
-                "note": "Top News zeigt nur priorisierte serioese Quellen. Social/X wird ausgeschlossen. Reddit erscheint nur separat als Crowd-Signal bei Wiederholung.",
+                "note": "Top News zeigt nur priorisierte serioese Quellen. Social/X und Reddit laufen separat ueber Social und Crowd Radar, nicht im Trusted-News-Block.",
             },
             "event_layer": event_layer,
             "contrarian_signals": contrarian_signals,
@@ -409,6 +411,63 @@ class MorningBriefService:
         signals = [item for item in grouped.values() if item["mentions"] >= 2]
         signals.sort(key=lambda item: item["mentions"], reverse=True)
         return signals[:6]
+
+    def _collect_social_news(self) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        seen_titles = set()
+        for ticker in self.NEWS_TICKERS:
+            news = DataFetcher(ticker).get_news()
+            for item in news[:5]:
+                title = item.get("title") or ""
+                if not title or title in seen_titles:
+                    continue
+                seen_titles.add(title)
+                publisher = item.get("publisher") or ""
+                link = item.get("link")
+                source_meta = self._source_meta(publisher, link)
+                if source_meta["source_type"] != "social":
+                    continue
+                classification = self._classify_news_signal(title.lower())
+                items.append(
+                    {
+                        "ticker": ticker,
+                        "title": title,
+                        "publisher": publisher,
+                        "link": link,
+                        "source_domain": source_meta["domain"],
+                        "source_type": source_meta["source_type"],
+                        "source_quality": source_meta["quality"],
+                        "impact": classification["impact"],
+                        "region": classification["region"],
+                        "event_type": classification["event_type"],
+                        "severity": classification["severity"],
+                    }
+                )
+        return items
+
+    def _build_social_signals(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for item in news:
+            if item.get("source_type") != "social":
+                continue
+            key = f"{item.get('ticker') or 'macro'}:{item.get('publisher') or item.get('source_domain') or 'social'}:{item.get('event_type') or 'macro'}"
+            bucket = grouped.setdefault(
+                key,
+                {
+                    "ticker": item.get("ticker"),
+                    "event_type": item.get("event_type"),
+                    "region": item.get("region"),
+                    "publisher": item.get("publisher") or item.get("source_domain") or "Social",
+                    "mentions": 0,
+                    "titles": [],
+                },
+            )
+            bucket["mentions"] += 1
+            if item.get("title"):
+                bucket["titles"].append(item["title"])
+        signals = list(grouped.values())
+        signals.sort(key=lambda item: (item["mentions"], item.get("ticker") is not None), reverse=True)
+        return signals[:8]
 
     def _collect_earnings_calendar(self, watchlist_snapshot: Dict[str, Any] | None) -> List[Dict[str, Any]]:
         tickers: List[str] = []

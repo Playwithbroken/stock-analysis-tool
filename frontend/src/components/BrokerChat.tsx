@@ -214,17 +214,25 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="group fixed bottom-6 right-5 z-40 flex h-15 items-center gap-3 rounded-full border border-[var(--accent)]/18 bg-[rgba(15,118,110,0.96)] px-4 text-white shadow-[0_22px_48px_rgba(15,118,110,0.24)] transition-all hover:scale-[1.02] hover:bg-[var(--accent-strong)] active:scale-[0.98] sm:bottom-8 sm:right-8 xl:left-8 xl:right-auto"
+        className="group fixed bottom-6 right-5 z-40 flex items-center gap-3 rounded-[1.35rem] border border-white/60 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 py-3 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.02] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.98] sm:bottom-8 sm:right-8"
       >
-        <div className="absolute inset-0 rounded-full bg-[var(--accent)] opacity-0 transition-opacity group-hover:opacity-10"></div>
-        <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/14">
+        <div className="absolute inset-0 rounded-[1.35rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
+        <div className="relative flex h-11 w-11 items-center justify-center rounded-[1rem] border border-white/16 bg-white/14">
           <Bot size={22} />
         </div>
         <div className="relative hidden text-left sm:block">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
-            Broker Freund
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+              Broker Freund
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/14 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-white/80">
+              Live
+            </span>
           </div>
-          <div className="text-sm font-bold text-white">Open Desk</div>
+          <div className="mt-1 text-sm font-bold text-white">Open Desk</div>
+          <div className="mt-0.5 text-[11px] text-white/70">
+            Signals, news, macro, crowd
+          </div>
         </div>
       </button>
 

@@ -682,6 +682,7 @@ function AppContent() {
                         contrarianSignals={globalBrief.contrarian_signals || []}
                         openingTimeline={globalBrief.opening_timeline || []}
                         onAnalyze={handleSearch}
+                        focusTicker={analysis?.ticker}
                       />
                     </section>
                   </Suspense>

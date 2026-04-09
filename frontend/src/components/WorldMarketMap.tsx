@@ -21,6 +21,7 @@ interface MapNewsItem {
   publisher?: string;
   link?: string;
   ticker?: string;
+  event_type?: string;
 }
 
 interface WatchlistImpactItem {
@@ -61,6 +62,7 @@ interface WorldMarketMapProps {
     earnings?: string[];
   }>;
   onAnalyze: (ticker: string) => void;
+  focusTicker?: string;
 }
 
 interface GeoEvent extends MapNewsItem {
@@ -145,11 +147,11 @@ function getRegionNews(news: MapNewsItem[], region: string) {
 }
 
 function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
-  const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""}`.toLowerCase();
+  const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""} ${item.event_type || ""}`.toLowerCase();
   const regionKey = getRegionKey(item.region);
   const pulse = item.impact === "high";
 
-  if (/(war|missile|attack|iran|israel|russia|ukraine)/.test(haystack)) {
+  if (/(war|missile|attack|iran|israel|russia|ukraine|conflict)/.test(haystack)) {
     return {
       ...item,
       markerLabel: "Conflict",
@@ -171,7 +173,7 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       markerPosition: markerLayout[regionKey === "Global" ? "USA" : regionKey],
     };
   }
-  if (/(oil|opec|crude|gas)/.test(haystack)) {
+  if (/(oil|opec|crude|gas|energy)/.test(haystack)) {
     return {
       ...item,
       markerLabel: "Energy",
@@ -180,6 +182,28 @@ function classifyGeoEvent(item: MapNewsItem): GeoEvent | null {
       pulse: item.impact !== "low",
       regionKey,
       markerPosition: markerLayout.Global,
+    };
+  }
+  if (/(election|vote|ballot|president|prime minister|parliament|coalition|campaign)/.test(haystack)) {
+    return {
+      ...item,
+      markerLabel: "Election",
+      markerTone: "blue",
+      markerIcon: "VOTE",
+      pulse,
+      regionKey,
+      markerPosition: markerLayout[regionKey === "Global" ? "Europe" : regionKey],
+    };
+  }
+  if (/(earthquake|wildfire|flood|storm|hurricane|typhoon|tsunami|drought|disaster)/.test(haystack)) {
+    return {
+      ...item,
+      markerLabel: "Disaster",
+      markerTone: "red",
+      markerIcon: "NAT",
+      pulse,
+      regionKey,
+      markerPosition: markerLayout[regionKey === "Global" ? "Asia" : regionKey],
     };
   }
   if (/(tariff|sanction|trade|policy|regulation)/.test(haystack)) {
@@ -233,6 +257,7 @@ export default function WorldMarketMap({
   contrarianSignals = [],
   openingTimeline = [],
   onAnalyze,
+  focusTicker,
 }: WorldMarketMapProps) {
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
@@ -275,10 +300,7 @@ export default function WorldMarketMap({
   }, [geoSignals]);
 
   const timeline = useMemo(
-    () =>
-      openingTimeline.length
-        ? openingTimeline
-        : buildTimeline(regions, news),
+    () => (openingTimeline.length ? openingTimeline : buildTimeline(regions, news)),
     [openingTimeline, regions, news],
   );
 
@@ -289,6 +311,27 @@ export default function WorldMarketMap({
       ),
     [contrarianSignals, activeRegion],
   );
+
+  const whyItMatters = useMemo(() => {
+    const lines: string[] = [];
+    const relevantEvent = positionedGeoSignals.find((item) =>
+      activeRegion ? item.regionKey.toLowerCase() === activeRegion.label.toLowerCase() || item.regionKey === "Global" : true,
+    );
+    if (relevantEvent?.title) lines.push(`${relevantEvent.markerLabel}: ${relevantEvent.title}`);
+    if (activeRegionNews[0]?.title) lines.push(`Regional driver: ${activeRegionNews[0].title}`);
+    if (focusTicker) {
+      const impacted = watchlistImpact.find((item) => (item.ticker || "").toUpperCase() === focusTicker.toUpperCase());
+      if (impacted?.summary) {
+        lines.push(`${focusTicker}: ${impacted.summary}`);
+      } else if (activeRegion?.assets?.some((asset) => asset.ticker?.toUpperCase() === focusTicker.toUpperCase())) {
+        lines.push(`${focusTicker}: direkt mit ${activeRegion.label} verknuepft und damit exposed to den aktiven Makro-Block.`);
+      }
+    }
+    if (regionalContrarian[0]?.ticker && regionalContrarian[0]?.reason) {
+      lines.push(`Contrarian setup: ${regionalContrarian[0].ticker} | ${regionalContrarian[0].reason}`);
+    }
+    return lines.slice(0, 4);
+  }, [positionedGeoSignals, activeRegion, activeRegionNews, focusTicker, watchlistImpact, regionalContrarian]);
 
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
@@ -302,7 +345,7 @@ export default function WorldMarketMap({
             </div>
             <h3 className="mt-2 text-4xl text-slate-900">Overnight world flow</h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-              Regionen, Makro-Ton, geopolitische Events und der Hand-off bis zur US-Eröffnung
+              Regionen, Makro-Ton, geopolitische Events und der Hand-off bis zur US-Eroeffnung
               in einer kompakten Macro-Ansicht.
             </p>
           </div>
@@ -344,6 +387,8 @@ export default function WorldMarketMap({
                 { icon: "WAR", label: "Conflict", tone: "red" as const },
                 { icon: "CB", label: "Central Bank", tone: "blue" as const },
                 { icon: "OIL", label: "Energy", tone: "amber" as const },
+                { icon: "VOTE", label: "Election", tone: "blue" as const },
+                { icon: "NAT", label: "Disaster", tone: "red" as const },
                 { icon: "POL", label: "Policy", tone: "slate" as const },
               ].map((item) => (
                 <div key={item.icon} className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
@@ -406,7 +451,7 @@ export default function WorldMarketMap({
                         {formatPct(region.avg_change_1d)}
                       </div>
                       <div className="mt-2 text-[11px] text-slate-500">
-                        {(region.assets || []).slice(0, 2).map((asset) => asset.label).join(" • ") || "Macro mix"}
+                        {(region.assets || []).slice(0, 2).map((asset) => asset.label).join(" | ") || "Macro mix"}
                       </div>
                     </div>
                   </div>
@@ -499,6 +544,38 @@ export default function WorldMarketMap({
               </div>
             )}
 
+            <div className="rounded-[1.7rem] border border-black/8 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.88))] p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Why it matters
+                </div>
+                {focusTicker ? (
+                  <button
+                    onClick={() => onAnalyze(focusTicker)}
+                    className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600"
+                  >
+                    {focusTicker}
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-3">
+                {whyItMatters.length ? (
+                  whyItMatters.map((item, index) => (
+                    <div
+                      key={`${item}-${index}`}
+                      className="rounded-[1rem] border border-black/8 bg-white/78 p-3 text-sm leading-6 text-slate-700"
+                    >
+                      {item}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1rem] border border-black/8 bg-white/78 p-3 text-sm leading-6 text-slate-500">
+                    Der aktive Welt- und Makroblock wird geladen. Sobald neue Events klassifiziert sind, erscheint hier die direkte Relevanz fuer Region, Risiko und moegliche Marktreaktion.
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                 Event Layer
@@ -520,7 +597,7 @@ export default function WorldMarketMap({
                           {item.markerLabel}
                         </div>
                         <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                          {item.region || "Global"} • {item.impact || "macro"}
+                          {item.region || "Global"} | {item.impact || "macro"}
                         </div>
                       </div>
                       <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
@@ -558,7 +635,7 @@ export default function WorldMarketMap({
                           {item.ticker}
                         </button>
                         <div
-                          className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
                             item.contrarian_bias === "long"
                               ? "bg-emerald-500/10 text-emerald-700"
                               : "bg-red-500/10 text-red-700"
@@ -567,15 +644,12 @@ export default function WorldMarketMap({
                           inverse {item.contrarian_bias}
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        {item.publisher} · score {item.score} · RSI {item.rsi_14} · RVOL {item.volume_ratio}
-                      </div>
-                      <div className="mt-2 text-sm text-slate-700">{item.reason}</div>
+                      <div className="mt-2 text-sm text-slate-600">{item.reason}</div>
                     </div>
                   ))
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                    Keine konträren Medien-Setups mit technischer Bestätigung in dieser Region.
+                    Kein bestaetigtes kontraeres Mediensetup in der aktiven Region.
                   </div>
                 )}
               </div>
@@ -583,127 +657,28 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.8rem] border border-black/8 bg-white/80 p-5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Opening Timeline
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {timeline.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={() => onSelectRegion(item.label)}
-                  className={`rounded-[1.3rem] border p-4 text-left transition-all ${
-                    selectedRegion === item.label
-                      ? "border-black/12 bg-white shadow-[0_16px_34px_rgba(15,23,42,0.08)]"
-                      : "border-black/8 bg-white/65"
-                  }`}
-                >
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    {item.stage}
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <div className="text-lg font-black text-slate-900">{item.label}</div>
-                    <div
-                      className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(item.tone)}`}
-                    >
-                      {item.tone}
-                    </div>
-                  </div>
-                  <div className={`mt-3 text-2xl font-black ${textToneClass(item.tone)}`}>
-                    {formatPct(item.move)}
-                  </div>
-                  <div className="mt-3 text-sm leading-6 text-slate-600">
-                    {item.driver}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[1.8rem] border border-black/8 bg-white/80 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                Watchlist In Play
+        <div className="grid gap-4 md:grid-cols-3">
+          {timeline.slice(0, 3).map((item: any) => (
+            <div
+              key={item.stage}
+              className="rounded-[1.5rem] border border-black/8 bg-white/78 p-4"
+            >
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                {item.stage}
               </div>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
-                {(watchlistImpact || []).length} live items
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="text-lg font-black text-slate-900">{item.label}</div>
+                <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(item.tone)}`}>
+                  {item.tone}
+                </div>
               </div>
+              <div className={`mt-3 text-2xl font-black ${textToneClass(item.tone)}`}>
+                {formatPct(item.move)}
+              </div>
+              <div className="mt-2 text-sm leading-6 text-slate-600">{item.driver}</div>
             </div>
-            <div className="mt-4 space-y-3">
-              {(watchlistImpact || []).slice(0, 4).map((item, index) => (
-                <div
-                  key={`${item.ticker || item.summary}-${index}`}
-                  className="rounded-[1rem] border border-black/8 bg-white/75 p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                      {item.type || "signal"}
-                    </div>
-                    {item.ticker && (
-                      <button
-                        onClick={() => onAnalyze(item.ticker!)}
-                        className="rounded-full bg-[var(--accent)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white"
-                      >
-                        {item.ticker}
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-2 text-sm font-bold text-slate-900">
-                    {item.summary}
-                  </div>
-                </div>
-              ))}
-              {!watchlistImpact?.length && (
-                <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                  Aktuell keine direkten Watchlist-Signale in der Opening-Lage.
-                </div>
-              )}
-            </div>
-          </div>
+          ))}
         </div>
-
-        {activeRegionNews.length > 0 && (
-          <div className="rounded-[1.8rem] border border-black/8 bg-white/80 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                Regional Drivers
-              </div>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
-                {activeRegion?.label} focus
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {activeRegionNews.map((item, index) => (
-                <a
-                  key={`${item.title}-${index}`}
-                  href={item.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-[1rem] border border-black/8 bg-white/75 p-4 transition-colors hover:bg-white"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                      {item.publisher || activeRegion?.label}
-                    </div>
-                    {item.ticker && (
-                      <button
-                        onClick={(event) => {
-                          event.preventDefault();
-                          onAnalyze(item.ticker!);
-                        }}
-                        className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-700"
-                      >
-                        {item.ticker}
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );

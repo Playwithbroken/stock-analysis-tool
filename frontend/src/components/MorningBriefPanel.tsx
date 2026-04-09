@@ -124,6 +124,7 @@ export default function MorningBriefPanel({
         contrarianSignals={brief.contrarian_signals || []}
         openingTimeline={brief.opening_timeline || []}
         onAnalyze={onAnalyze}
+        focusTicker={brief.watchlist_impact?.[0]?.ticker}
       />
 
       <section className="grid gap-4 xl:grid-cols-3">

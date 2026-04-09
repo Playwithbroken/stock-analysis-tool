@@ -655,6 +655,16 @@ class MorningBriefService:
                 leverage = "avoid"
                 trigger = "Watch oil, gold and broad index reaction first."
                 risk = "Headline risk can reverse fast."
+            elif event_type == "election":
+                setup = "watch"
+                leverage = "avoid"
+                trigger = "Wait for the first market read after voting or coalition headlines."
+                risk = "Election headlines can violently reprice sectors before direction settles."
+            elif event_type == "disaster":
+                setup = "hedge"
+                leverage = "avoid"
+                trigger = "Focus on supply-chain, insurers, commodities and transport sensitivity first."
+                risk = "Initial panic often overshoots before the economic damage is clear."
             elif event_type in {"central_bank", "macro_data"}:
                 setup = "short" if macro_regime == "risk-off" else "long" if macro_regime == "risk-on" else "watch"
                 leverage = "conditional" if impact == "medium" else "avoid"
@@ -720,6 +730,10 @@ class MorningBriefService:
             return "Policy headlines can reprice sectors quickly. Prefer broad-theme trades over blind copy trades."
         if event_type == "energy":
             return "Energy-sensitive names and inflation expectations become more relevant."
+        if event_type == "election":
+            return "Election outcomes can rotate capital across rates, defense, energy and domestic cyclicals."
+        if event_type == "disaster":
+            return "Natural disasters matter when they hit supply chains, insurers, commodities or transport routes."
         if event_type == "earnings" and ticker:
             return f"{ticker} needs follow-through, not just the headline."
         if macro_regime == "risk-off":
@@ -851,6 +865,14 @@ class MorningBriefService:
             event_type = "energy"
             impact = "medium"
             severity = "elevated"
+        elif any(term in text for term in ["election", "vote", "ballot", "president", "prime minister", "parliament", "coalition", "campaign"]):
+            event_type = "election"
+            impact = "high"
+            severity = "elevated"
+        elif any(term in text for term in ["earthquake", "wildfire", "flood", "storm", "hurricane", "typhoon", "tsunami", "drought", "disaster"]):
+            event_type = "disaster"
+            impact = "high"
+            severity = "critical"
         elif any(term in text for term in ["tariff", "sanction", "trade", "regulation", "policy"]):
             event_type = "policy"
             impact = "high"

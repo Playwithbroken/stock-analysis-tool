@@ -35,6 +35,13 @@ interface AuthState {
   profile: { display_name?: string } | null;
 }
 
+interface WatchlistSnapshot {
+  items?: Array<{
+    kind?: string;
+    value?: string;
+  }>;
+}
+
 type Tab = "analyze" | "discovery" | "portfolio";
 
 const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
@@ -265,6 +272,7 @@ function AppContent() {
   const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
   const [globalBrief, setGlobalBrief] = useState<any>(null);
   const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
+  const [watchlist, setWatchlist] = useState<WatchlistSnapshot | null>(null);
 
   const {
     portfolios,
@@ -275,23 +283,44 @@ function AppContent() {
   } = usePortfolios(auth.authenticated);
 
   const { currency, setCurrency } = useCurrency();
+  const watchlistTickerSymbols = (watchlist?.items || [])
+    .filter((item) => item.kind === "ticker" && item.value)
+    .map((item) => (item.value || "").toUpperCase());
+  const portfolioTickerSymbols = portfolios
+    .flatMap((portfolio) => portfolio.holdings || [])
+    .map((holding) => (holding.ticker || "").toUpperCase())
+    .filter(Boolean);
   const headerSymbols = Array.from(
     new Set([
-      analysis?.ticker,
-      "SPY",
-      "QQQ",
-      "AAPL",
-      "NVDA",
-      "BTC-USD",
-      "GLD",
+      analysis?.ticker?.toUpperCase(),
+      ...watchlistTickerSymbols,
+      ...portfolioTickerSymbols,
     ].filter(Boolean) as string[]),
-  );
-  const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(headerSymbols, auth.authenticated);
+  ).slice(0, 10);
+  const headerFallbackSymbols = ["SPY", "QQQ", "AAPL", "NVDA", "BTC-USD", "GLD"];
+  const favoriteSymbols = headerSymbols.length ? headerSymbols : headerFallbackSymbols;
+  const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
 
   useEffect(() => {
     if (!auth.authenticated) return;
 
     let cancelled = false;
+
+    const loadWatchlist = async () => {
+      try {
+        const payload = await fetchJsonWithRetry<WatchlistSnapshot>("/api/signals/watchlist", undefined, {
+          retries: 1,
+          retryDelayMs: 700,
+        });
+        if (!cancelled) {
+          setWatchlist(payload || { items: [] });
+        }
+      } catch {
+        if (!cancelled) {
+          setWatchlist({ items: [] });
+        }
+      }
+    };
 
     const loadMovers = async () => {
       try {
@@ -333,10 +362,13 @@ function AppContent() {
     };
 
     loadMovers();
+    loadWatchlist();
     const interval = window.setInterval(loadMovers, 60000);
+    const watchlistInterval = window.setInterval(loadWatchlist, 90000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.clearInterval(watchlistInterval);
     };
   }, [auth.authenticated]);
 
@@ -575,9 +607,9 @@ function AppContent() {
               <div className="overflow-x-auto no-scrollbar">
                 <div className="flex min-w-max items-center gap-2">
                   <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
-                    {headerRealtimeConnected ? "Realtime feed" : "Snapshot feed"}
+                    {headerRealtimeConnected ? "Favorites feed" : "Favorites snapshot"}
                   </div>
-                  {headerSymbols.map((symbol) => (
+                  {favoriteSymbols.map((symbol) => (
                     <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
                   ))}
                 </div>
@@ -585,6 +617,14 @@ function AppContent() {
 
               {tapeMovers.length ? (
                 <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-3 py-2">
+                  <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Market movers
+                    </div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      Winners, losers, broad tape
+                    </div>
+                  </div>
                   <div className="ticker-marquee-track">
                     {[...tapeMovers, ...tapeMovers].map((item, index) => {
                       const isWinner = item.side === "winner";

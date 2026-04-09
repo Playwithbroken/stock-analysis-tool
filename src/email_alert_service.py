@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import asyncio
+from html import escape
 import os
 import smtplib
 from email.message import EmailMessage
@@ -722,9 +723,16 @@ class EmailAlertService:
         msg["To"] = config.smtp_to
         msg["Subject"] = subject
 
-        lines = ["",]
+        lines = [subject, ""]
         for event in events:
-            lines.append(f"- {event['line']}")
+            line = (event.get("line") or "").strip()
+            if not line:
+                lines.append("")
+                continue
+            if self._is_section_heading(line):
+                lines.append(line)
+                continue
+            lines.append(f"- {line}")
             if event.get("conviction_score") is not None:
                 lines.append(f"  A-Setup Score: {event['conviction_score']}")
             if event.get("source_label"):
@@ -733,6 +741,7 @@ class EmailAlertService:
                 lines.append(f"  Link: {event['source_url']}")
         lines.extend(["", f"Erstellt am {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
         msg.set_content("\n".join(lines))
+        msg.add_alternative(self._build_html_email(subject, events), subtype="html")
 
         with smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=30) as server:
             if config.smtp_starttls:
@@ -754,10 +763,24 @@ class EmailAlertService:
         ):
             return
 
-        lines = [f"*{subject}*", ""]
+        lines = [f"*{self._escape_markdown(subject)}*", ""]
+        current_section = ""
         for event in events[:20]:
-            suffix = f" | score {event['conviction_score']}" if event.get("conviction_score") is not None else ""
-            lines.append(f"- {event['line']}{suffix}")
+            line = (event.get("line") or "").strip()
+            if not line:
+                continue
+            if self._is_section_heading(line):
+                current_section = line.rstrip(":")
+                lines.extend([f"*{self._escape_markdown(current_section)}*", ""])
+                continue
+
+            prefix = self._telegram_prefix_for_event(event)
+            rendered_line = f"{prefix} {self._escape_markdown(line)}".strip()
+            if event.get("conviction_score") is not None:
+                rendered_line += f" | score {self._escape_markdown(str(event['conviction_score']))}"
+            if event.get("source_label"):
+                rendered_line += f" | {self._escape_markdown(str(event['source_label']))}"
+            lines.append(rendered_line)
         text = "\n".join(lines)
 
         response = requests.post(
@@ -771,6 +794,138 @@ class EmailAlertService:
             timeout=20,
         )
         response.raise_for_status()
+
+    def _build_html_email(self, subject: str, events: List[Dict[str, Any]]) -> str:
+        generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cards: List[str] = []
+        current_section = "Overview"
+
+        for event in events:
+            line = (event.get("line") or "").strip()
+            if not line:
+                continue
+            if self._is_section_heading(line):
+                current_section = line.rstrip(":")
+                continue
+
+            tone = self._tone_for_event(event)
+            meta_parts = [escape(current_section)]
+            if event.get("conviction_score") is not None:
+                meta_parts.append(f"Score {escape(str(event['conviction_score']))}")
+            if event.get("source_label"):
+                meta_parts.append(escape(str(event["source_label"])))
+
+            link_html = ""
+            if event.get("source_url"):
+                safe_url = escape(str(event["source_url"]), quote=True)
+                link_html = (
+                    f'<a href="{safe_url}" '
+                    'style="display:inline-block;margin-top:12px;color:#0f766e;'
+                    'font-weight:700;text-decoration:none;">Open source</a>'
+                )
+
+            cards.append(
+                f"""
+                <div style="border:1px solid rgba(15,23,42,0.08);border-radius:20px;padding:18px 18px 16px;background:{tone['background']};box-shadow:0 10px 28px rgba(15,23,42,0.05);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <div style="font-size:11px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:#64748b;">{escape(current_section)}</div>
+                    <div style="display:inline-flex;align-items:center;border-radius:999px;padding:6px 10px;background:{tone['pill_bg']};color:{tone['pill_fg']};font-size:10px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;">{escape(tone['label'])}</div>
+                  </div>
+                  <div style="margin-top:12px;font-size:15px;line-height:1.65;color:#0f172a;font-weight:600;">{escape(line)}</div>
+                  <div style="margin-top:12px;font-size:12px;line-height:1.6;color:#64748b;">{' | '.join(meta_parts)}</div>
+                  {link_html}
+                </div>
+                """
+            )
+
+        cards_html = "".join(cards) or """
+            <div style="border:1px solid rgba(15,23,42,0.08);border-radius:20px;padding:18px;background:#ffffff;">
+              <div style="font-size:15px;line-height:1.65;color:#0f172a;font-weight:600;">No fresh items in this run.</div>
+            </div>
+        """
+
+        return f"""
+        <!doctype html>
+        <html lang="en">
+          <body style="margin:0;background:#f5f2ea;font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f172a;">
+            <div style="padding:28px 14px;background:radial-gradient(circle at top left,rgba(15,118,110,0.12),transparent 38%),#f5f2ea;">
+              <div style="max-width:760px;margin:0 auto;">
+                <div style="border:1px solid rgba(15,23,42,0.08);border-radius:28px;padding:24px 24px 22px;background:rgba(255,255,255,0.88);backdrop-filter:blur(18px);box-shadow:0 24px 60px rgba(15,23,42,0.10);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;">
+                    <div>
+                      <div style="font-size:11px;font-weight:800;letter-spacing:0.22em;text-transform:uppercase;color:#64748b;">Broker Freund</div>
+                      <div style="margin-top:6px;font-size:28px;line-height:1.15;font-weight:800;color:#0f172a;">{escape(subject)}</div>
+                      <div style="margin-top:10px;font-size:14px;line-height:1.7;color:#475569;">Signals, macro, portfolio context and actionable setups in the style of your desk.</div>
+                    </div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                      <div style="border:1px solid rgba(15,23,42,0.08);border-radius:999px;padding:8px 12px;background:#f8fafc;font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#0f766e;">Live journal</div>
+                      <div style="border:1px solid rgba(15,23,42,0.08);border-radius:999px;padding:8px 12px;background:#ffffff;font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#475569;">{escape(generated_at)}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-top:18px;display:grid;gap:14px;">
+                  {cards_html}
+                </div>
+              </div>
+            </div>
+          </body>
+        </html>
+        """
+
+    def _is_section_heading(self, line: str) -> bool:
+        stripped = line.strip()
+        return stripped.endswith(":") and "|" not in stripped and len(stripped) < 50
+
+    def _tone_for_event(self, event: Dict[str, Any]) -> Dict[str, str]:
+        category = (event.get("category") or "").lower()
+        conviction = float(event.get("conviction_score") or 0)
+        line = (event.get("line") or "").lower()
+
+        if "hedge" in line or "risk" in line or "avoid" in line:
+            return {
+                "label": "Risk",
+                "background": "linear-gradient(180deg,rgba(254,242,242,0.96),rgba(255,255,255,0.96))",
+                "pill_bg": "rgba(239,68,68,0.12)",
+                "pill_fg": "#dc2626",
+            }
+        if conviction >= 85 or "buy" in line or category in {"a_setup", "ticker"}:
+            return {
+                "label": "Setup",
+                "background": "linear-gradient(180deg,rgba(236,253,245,0.96),rgba(255,255,255,0.96))",
+                "pill_bg": "rgba(16,185,129,0.12)",
+                "pill_fg": "#047857",
+            }
+        if category in {"morning_brief", "scheduled_brief", "session_list"}:
+            return {
+                "label": "Brief",
+                "background": "linear-gradient(180deg,rgba(239,246,255,0.96),rgba(255,255,255,0.96))",
+                "pill_bg": "rgba(14,165,233,0.12)",
+                "pill_fg": "#0369a1",
+            }
+        return {
+            "label": "Note",
+            "background": "linear-gradient(180deg,rgba(248,250,252,0.98),rgba(255,255,255,0.96))",
+            "pill_bg": "rgba(15,23,42,0.08)",
+            "pill_fg": "#475569",
+        }
+
+    def _telegram_prefix_for_event(self, event: Dict[str, Any]) -> str:
+        line = (event.get("line") or "").lower()
+        category = (event.get("category") or "").lower()
+        conviction = float(event.get("conviction_score") or 0)
+        if "risk" in line or "avoid" in line or "hedge" in line:
+            return "[RISK]"
+        if conviction >= 85 or category in {"a_setup", "ticker"}:
+            return "[SETUP]"
+        if category in {"scheduled_brief", "morning_brief", "session_list"}:
+            return "[BRIEF]"
+        return "[INFO]"
+
+    def _escape_markdown(self, text: str) -> str:
+        escaped = text or ""
+        for char in ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]:
+            escaped = escaped.replace(char, f"\\{char}")
+        return escaped
 
     def _build_daily_brief_lines(self, snapshot: Dict[str, Any]) -> List[str]:
         ticker_signals = snapshot.get("ticker_signals", [])

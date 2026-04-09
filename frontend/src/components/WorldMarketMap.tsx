@@ -39,6 +39,13 @@ interface MapNewsItem {
     status?: string;
     note?: string;
     action?: string;
+    exposure_strength?: string;
+    matched_holdings?: string[];
+    matched_sectors?: string[];
+    hedge_candidates?: Array<{
+      ticker?: string;
+      label?: string;
+    }>;
   };
 }
 
@@ -267,6 +274,14 @@ function describeEventVariant(event: GeoEvent | null) {
 
 function buildHedgeIdeas(event: GeoEvent | null) {
   if (!event) return [];
+  const portfolioIdeas = (event.portfolio_exposure?.hedge_candidates || [])
+    .filter((item) => item?.ticker)
+    .map((item) => ({
+      ticker: String(item.ticker).toUpperCase(),
+      label: item.label || "Portfolio hedge",
+    }));
+  if (portfolioIdeas.length) return portfolioIdeas.slice(0, 4);
+
   const ideas = new Map<string, { ticker: string; label: string }>();
   const eventType = (event.event_type || "").toLowerCase();
   const sectors = (event.event_intelligence?.affected_sectors || []).map((item) => item.toLowerCase());
@@ -307,6 +322,12 @@ function buildHedgeIdeas(event: GeoEvent | null) {
   if (assets.includes("SPY")) add("SPY", "Index reaction");
 
   return Array.from(ideas.values()).slice(0, 4);
+}
+
+function exposureToneClass(value?: string) {
+  if (value === "high") return "bg-red-500/10 text-red-700";
+  if (value === "medium") return "bg-amber-500/10 text-amber-700";
+  return "bg-emerald-500/10 text-emerald-700";
 }
 
 function stableHash(value: string) {
@@ -1185,7 +1206,43 @@ export default function WorldMarketMap({
                 ) : null}
                 {activeGeoEvent.portfolio_exposure?.note ? (
                   <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
-                    {activeGeoEvent.portfolio_exposure.note}
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{activeGeoEvent.portfolio_exposure.note}</span>
+                      {activeGeoEvent.portfolio_exposure.exposure_strength ? (
+                        <span
+                          className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${exposureToneClass(
+                            activeGeoEvent.portfolio_exposure.exposure_strength,
+                          )}`}
+                        >
+                          {activeGeoEvent.portfolio_exposure.exposure_strength} exposure
+                        </span>
+                      ) : null}
+                    </div>
+                    {compactList(activeGeoEvent.portfolio_exposure.matched_holdings, 4).length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {compactList(activeGeoEvent.portfolio_exposure.matched_holdings, 4).map((holding) => (
+                          <button
+                            key={holding}
+                            onClick={() => onAnalyze(holding)}
+                            className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700"
+                          >
+                            {holding}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {compactList(activeGeoEvent.portfolio_exposure.matched_sectors, 3).length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {compactList(activeGeoEvent.portfolio_exposure.matched_sectors, 3).map((sector) => (
+                          <span
+                            key={sector}
+                            className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                          >
+                            {sector}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {hedgeIdeas.length ? (
@@ -1200,7 +1257,7 @@ export default function WorldMarketMap({
                           onClick={() => onAnalyze(idea.ticker)}
                           className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600"
                         >
-                          {idea.ticker} · {idea.label}
+                          {idea.ticker} - {idea.label}
                         </button>
                       ))}
                     </div>
@@ -1338,7 +1395,34 @@ export default function WorldMarketMap({
                       ) : null}
                       {item.portfolio_exposure?.note ? (
                         <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
-                          {item.portfolio_exposure.note}
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{item.portfolio_exposure.note}</span>
+                            {item.portfolio_exposure.exposure_strength ? (
+                              <span
+                                className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${exposureToneClass(
+                                  item.portfolio_exposure.exposure_strength,
+                                )}`}
+                              >
+                                {item.portfolio_exposure.exposure_strength}
+                              </span>
+                            ) : null}
+                          </div>
+                          {compactList(item.portfolio_exposure.matched_holdings, 3).length ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {compactList(item.portfolio_exposure.matched_holdings, 3).map((holding) => (
+                                <button
+                                  key={holding}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    onAnalyze(holding);
+                                  }}
+                                  className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                >
+                                  {holding}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </a>

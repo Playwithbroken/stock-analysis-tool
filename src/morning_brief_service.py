@@ -983,6 +983,9 @@ class MorningBriefService:
     ) -> Dict[str, Any]:
         workspace_holdings = self._get_workspace_holdings()
         normalized_ticker = str(ticker or "").upper()
+        sectors = [str(item or "").strip() for item in (intelligence.get("affected_sectors") or []) if item]
+        event_action = intelligence.get("action")
+        event_type = self._infer_event_type_from_intelligence(intelligence)
         watched_tickers = {
             str(item.get("value") or "").upper()
             for item in (watchlist_snapshot or {}).get("items", [])
@@ -999,7 +1002,15 @@ class MorningBriefService:
                     "ticker": normalized_ticker,
                     "status": "direct_holding",
                     "note": f"{normalized_ticker} liegt direkt in {portfolio_name} und ist vom Event betroffen.",
-                    "action": intelligence.get("action"),
+                    "action": event_action,
+                    "exposure_strength": "high",
+                    "matched_holdings": [normalized_ticker],
+                    "matched_sectors": sectors[:3],
+                    "hedge_candidates": self._build_portfolio_hedges(
+                        sectors=sectors,
+                        event_type=event_type,
+                        matched_holdings=[direct_holding],
+                    ),
                 }
 
         if normalized_ticker and normalized_ticker in watched_tickers:
@@ -1007,10 +1018,17 @@ class MorningBriefService:
                 "ticker": normalized_ticker,
                 "status": "direct",
                 "note": f"{normalized_ticker} ist direkt auf deiner Watchlist und vom Event betroffen.",
-                "action": intelligence.get("action"),
+                "action": event_action,
+                "exposure_strength": "medium",
+                "matched_holdings": [normalized_ticker],
+                "matched_sectors": sectors[:3],
+                "hedge_candidates": self._build_portfolio_hedges(
+                    sectors=sectors,
+                    event_type=event_type,
+                    matched_holdings=[],
+                ),
             }
 
-        sectors = intelligence.get("affected_sectors") or []
         sector_matches = self._match_holdings_by_sector(workspace_holdings, sectors)
         if sector_matches:
             labels = ", ".join(item["ticker"] for item in sector_matches[:3])
@@ -1018,7 +1036,15 @@ class MorningBriefService:
                 "ticker": normalized_ticker or sector_matches[0]["ticker"],
                 "status": "portfolio_sector",
                 "note": f"Portfolio-Exposure ueber {labels} in {', '.join(sectors[:2])}.",
-                "action": intelligence.get("action"),
+                "action": event_action,
+                "exposure_strength": "medium" if len(sector_matches) == 1 else "high",
+                "matched_holdings": [item["ticker"] for item in sector_matches[:4]],
+                "matched_sectors": sectors[:3],
+                "hedge_candidates": self._build_portfolio_hedges(
+                    sectors=sectors,
+                    event_type=event_type,
+                    matched_holdings=sector_matches,
+                ),
             }
 
         if sectors:
@@ -1026,14 +1052,105 @@ class MorningBriefService:
                 "ticker": normalized_ticker or ticker,
                 "status": "sector",
                 "note": f"Indirekter Impact ueber {', '.join(sectors[:2])}.",
-                "action": intelligence.get("action"),
+                "action": event_action,
+                "exposure_strength": "low",
+                "matched_holdings": [],
+                "matched_sectors": sectors[:3],
+                "hedge_candidates": self._build_portfolio_hedges(
+                    sectors=sectors,
+                    event_type=event_type,
+                    matched_holdings=[],
+                ),
             }
         return {
             "ticker": normalized_ticker or ticker,
             "status": "market",
             "note": "Vor allem Makro- und Sentiment-Effekt, kein klarer Direktbezug.",
-            "action": intelligence.get("action"),
+            "action": event_action,
+            "exposure_strength": "low",
+            "matched_holdings": [],
+            "matched_sectors": [],
+            "hedge_candidates": self._build_portfolio_hedges(
+                sectors=[],
+                event_type=event_type,
+                matched_holdings=[],
+            ),
         }
+
+    def _infer_event_type_from_intelligence(self, intelligence: Dict[str, Any]) -> str:
+        sectors = {str(item or "").lower() for item in intelligence.get("affected_sectors") or []}
+        action = str(intelligence.get("action") or "").lower()
+        assets = " ".join(str(item or "").lower() for item in intelligence.get("affected_assets") or [])
+
+        if "defense" in sectors or "oil" in assets or "gold" in assets:
+            return "conflict"
+        if "financials" in sectors or "reits" in sectors or "nasdaq futures" in assets:
+            return "central_bank"
+        if "energy" in sectors:
+            return "energy"
+        if "utilities" in sectors or "banks" in sectors:
+            return "election"
+        if "insurers" in sectors or "transport" in sectors:
+            return "disaster"
+        if "semis" in sectors or "autos" in sectors:
+            return "policy"
+        if action == "hedge":
+            return "conflict"
+        if action == "short":
+            return "policy"
+        return "macro"
+
+    def _build_portfolio_hedges(
+        self,
+        sectors: List[str],
+        event_type: str,
+        matched_holdings: List[Dict[str, Any]],
+    ) -> List[Dict[str, str]]:
+        ideas: List[Dict[str, str]] = []
+        seen: set[str] = set()
+
+        def add(ticker: str, label: str) -> None:
+            normalized = str(ticker or "").upper()
+            if not normalized or normalized in seen:
+                return
+            seen.add(normalized)
+            ideas.append({"ticker": normalized, "label": label})
+
+        event_defaults = {
+            "conflict": [("GLD", "Gold hedge"), ("XLE", "Energy cushion"), ("TLT", "Rates hedge")],
+            "central_bank": [("TLT", "Duration hedge"), ("UUP", "Dollar hedge"), ("QQQ", "Growth reaction")],
+            "energy": [("XLE", "Energy leaders"), ("USO", "Oil follow-through"), ("GLD", "Inflation hedge")],
+            "election": [("XLU", "Utilities"), ("XLF", "Banks"), ("ITA", "Defense")],
+            "disaster": [("GLD", "Shock hedge"), ("DBA", "Commodity stress"), ("IYT", "Transport read")],
+            "policy": [("XLI", "Industrials"), ("SMH", "Semis"), ("UUP", "Dollar protection")],
+            "macro": [("SPY", "Broad market"), ("GLD", "Macro hedge")],
+        }
+        sector_defaults = {
+            "Energy": [("XLE", "Sector hedge"), ("USO", "Oil beta")],
+            "Defense": [("ITA", "Defense basket")],
+            "Airlines": [("JETS", "Airlines read")],
+            "Growth": [("QQQ", "Growth proxy")],
+            "Financials": [("XLF", "Financials")],
+            "REITs": [("VNQ", "REITs")],
+            "Utilities": [("XLU", "Utilities")],
+            "Banks": [("KBE", "Banks")],
+            "Insurers": [("KIE", "Insurers")],
+            "Industrials": [("XLI", "Industrials")],
+            "Transport": [("IYT", "Transport")],
+            "Semis": [("SMH", "Semis")],
+            "Autos": [("CARZ", "Autos")],
+            "Consumer": [("XLY", "Consumer")],
+        }
+
+        for ticker, label in event_defaults.get(event_type, event_defaults["macro"]):
+            add(ticker, label)
+        for sector in sectors[:3]:
+            for ticker, label in sector_defaults.get(sector, []):
+                add(ticker, label)
+        if matched_holdings:
+            add("SPY", "Index hedge")
+
+        return ideas[:4]
 
     def _get_portfolio_manager(self) -> PortfolioManager:
         if self._portfolio_manager is None:

@@ -626,6 +626,7 @@ export default function WorldMarketMap({
   const [showRegionCards, setShowRegionCards] = useState(true);
   const [showLiveAlert, setShowLiveAlert] = useState(true);
   const [showEventLayer, setShowEventLayer] = useState(true);
+  const [selectedGeoPlace, setSelectedGeoPlace] = useState<string | null>(null);
   const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
   const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
   const [hoveredRegionLabel, setHoveredRegionLabel] = useState<string | null>(null);
@@ -691,6 +692,14 @@ export default function WorldMarketMap({
     [orderedGeoSignals, activeRegion],
   );
 
+  const focusedPlaceSignals = useMemo(
+    () =>
+      selectedGeoPlace
+        ? focusRegionSignals.filter((item) => item.geoPlace === selectedGeoPlace)
+        : focusRegionSignals,
+    [focusRegionSignals, selectedGeoPlace],
+  );
+
   const positionedGeoSignals = useMemo(() => {
     const orbitOffsets = [
       { x: 0, y: 0 },
@@ -746,6 +755,14 @@ export default function WorldMarketMap({
     }
   }, [hoveredEventIndex, pinnedEventIndex, positionedGeoSignals]);
 
+  useEffect(() => {
+    if (!selectedGeoPlace) return;
+    const stillExists = focusRegionSignals.some((item) => item.geoPlace === selectedGeoPlace);
+    if (!stillExists) {
+      setSelectedGeoPlace(null);
+    }
+  }, [focusRegionSignals, selectedGeoPlace]);
+
   const eventTempo = useMemo(() => {
     const stats = { developing: 0, active: 0, fading: 0 };
     for (const item of positionedGeoSignals) {
@@ -770,15 +787,24 @@ export default function WorldMarketMap({
     };
   }, [positionedGeoSignals]);
 
+  const visibleEventLayerSignals = useMemo(
+    () =>
+      selectedGeoPlace
+        ? positionedGeoSignals.filter((item) => item.geoPlace === selectedGeoPlace)
+        : positionedGeoSignals,
+    [positionedGeoSignals, selectedGeoPlace],
+  );
+
   const activeGeoEvent = useMemo(
     () =>
       (hoveredEventIndex != null ? positionedGeoSignals[hoveredEventIndex] : null) ||
       positionedGeoSignals[pinnedEventIndex] ||
+      focusedPlaceSignals[0] ||
       focusRegionSignals[0] ||
       positionedGeoSignals[0] ||
       activePulseEvent ||
       null,
-    [activePulseEvent, hoveredEventIndex, pinnedEventIndex, positionedGeoSignals, focusRegionSignals],
+    [activePulseEvent, hoveredEventIndex, pinnedEventIndex, positionedGeoSignals, focusedPlaceSignals, focusRegionSignals],
   );
 
   const hedgeIdeas = useMemo(
@@ -836,7 +862,7 @@ export default function WorldMarketMap({
   );
 
   const regionDrilldown = useMemo(() => {
-    const items = focusRegionSignals.slice(0, 4);
+    const items = focusedPlaceSignals.slice(0, 4);
     const actionable = items.filter((item) => item.event_intelligence?.action && item.event_intelligence.action !== "watch").length;
     const highImpact = items.filter((item) => item.impact === "high").length;
     const zones = topGeoZones(focusRegionSignals, 4);
@@ -849,7 +875,7 @@ export default function WorldMarketMap({
       zones,
       places,
     };
-  }, [focusRegionSignals]);
+  }, [focusRegionSignals, focusedPlaceSignals]);
 
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
@@ -1152,7 +1178,10 @@ export default function WorldMarketMap({
               <a
                 key={item.geoKey || `${item.title}-${index}`}
                 className={`absolute z-10 group transition-opacity ${
-                  isRegionFocusMatch(activeRegion?.label, item) ? "opacity-100" : "opacity-35 hover:opacity-70"
+                  isRegionFocusMatch(activeRegion?.label, item) &&
+                  (!selectedGeoPlace || item.geoPlace === selectedGeoPlace)
+                    ? "opacity-100"
+                    : "opacity-25 hover:opacity-70"
                 }`}
                 style={item.adjustedStyle}
                 href={item.link}
@@ -1325,14 +1354,35 @@ export default function WorldMarketMap({
                 {regionDrilldown.places.length ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {regionDrilldown.places.map(([place, count]) => (
-                      <span
+                      <button
                         key={place}
-                        className="rounded-full border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+                        type="button"
+                        onClick={() => {
+                          const nextPlace = selectedGeoPlace === place ? null : place;
+                          setSelectedGeoPlace(nextPlace);
+                          if (!nextPlace) return;
+                          const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoPlace === nextPlace);
+                          if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                        }}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all ${
+                          selectedGeoPlace === place
+                            ? "border-[var(--accent)] bg-[var(--accent)] text-white shadow-[0_10px_20px_rgba(15,118,110,0.18)]"
+                            : "border-[var(--accent)]/12 bg-[var(--accent-soft)] text-[var(--accent)]"
+                        }`}
                       >
                         {place}
                         {count > 1 ? ` ${count}` : ""}
-                      </span>
+                      </button>
                     ))}
+                    {selectedGeoPlace ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGeoPlace(null)}
+                        className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="mt-3 space-y-2">
@@ -1380,6 +1430,11 @@ export default function WorldMarketMap({
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
+                  {selectedGeoPlace ? (
+                    <div className="rounded-[0.9rem] border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                      Place focus: {selectedGeoPlace}
+                    </div>
+                  ) : null}
                   {regionDrilldown.items.length ? (
                     regionDrilldown.items.map((item, index) => (
                       <button
@@ -1683,18 +1738,27 @@ export default function WorldMarketMap({
                 </div>
               </div>
               <div className="mt-4 space-y-3">
-                {showEventLayer && positionedGeoSignals.length ? (
-                  positionedGeoSignals.slice(0, 4).map((item, index) => (
+                {showEventLayer && visibleEventLayerSignals.length ? (
+                  visibleEventLayerSignals.slice(0, 4).map((item) => (
                     <a
-                      key={item.geoKey || `${item.title}-${index}`}
+                      key={item.geoKey || item.title}
                       href={item.link}
                       target="_blank"
                       rel="noreferrer"
-                      onMouseEnter={() => setHoveredEventIndex(index)}
+                      onMouseEnter={() => {
+                        const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
+                        if (nextIndex >= 0) setHoveredEventIndex(nextIndex);
+                      }}
                       onMouseLeave={() => setHoveredEventIndex(null)}
-                      onFocus={() => setHoveredEventIndex(index)}
+                      onFocus={() => {
+                        const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
+                        if (nextIndex >= 0) setHoveredEventIndex(nextIndex);
+                      }}
                       onBlur={() => setHoveredEventIndex(null)}
-                      onClick={() => setPinnedEventIndex(index)}
+                      onClick={() => {
+                        const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
+                        if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                      }}
                       className={`block rounded-[1rem] border p-3 transition-colors hover:bg-white ${
                         activeGeoEvent?.title === item.title
                           ? "border-[var(--accent)] bg-[var(--accent-soft)]/70"
@@ -1815,7 +1879,7 @@ export default function WorldMarketMap({
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
                     {showEventLayer
-                      ? `Keine dominanten Events im aktuellen Filter fuer ${timeLens}.`
+                      ? `Keine dominanten Events im aktuellen Filter${selectedGeoPlace ? ` fuer ${selectedGeoPlace}` : ""} fuer ${timeLens}.`
                       : "Event Layer ist ausgeblendet."}
                   </div>
                 )}

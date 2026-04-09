@@ -402,6 +402,11 @@ function getRegionNews(news: MapNewsItem[], region: string) {
   });
 }
 
+function isRegionFocusMatch(regionLabel: string | undefined, item: GeoEvent) {
+  if (!regionLabel) return true;
+  return item.regionKey === regionLabel || item.regionKey === "Global";
+}
+
 function resolveGeoAnchor(haystack: string, regionKey: GeoEvent["regionKey"], markerIcon: string): MapAnchor {
   const matched = geoAnchors.find((entry) => entry.terms.some((term) => haystack.includes(term)));
   if (matched) return matched.anchor;
@@ -605,6 +610,11 @@ export default function WorldMarketMap({
     return items;
   }, [filteredGeoSignals, sortMode]);
 
+  const focusRegionSignals = useMemo(
+    () => orderedGeoSignals.filter((item) => isRegionFocusMatch(activeRegion?.label, item)),
+    [orderedGeoSignals, activeRegion],
+  );
+
   const positionedGeoSignals = useMemo(() => {
     const orbitOffsets = [
       { x: 0, y: 0 },
@@ -642,8 +652,8 @@ export default function WorldMarketMap({
   );
 
   const activePulseEvent = useMemo(
-    () => positionedGeoSignals.find((item) => item.pulse) || null,
-    [positionedGeoSignals],
+    () => focusRegionSignals.find((item) => item.pulse) || positionedGeoSignals.find((item) => item.pulse) || null,
+    [focusRegionSignals, positionedGeoSignals],
   );
 
   useEffect(() => {
@@ -688,10 +698,11 @@ export default function WorldMarketMap({
     () =>
       (hoveredEventIndex != null ? positionedGeoSignals[hoveredEventIndex] : null) ||
       positionedGeoSignals[pinnedEventIndex] ||
+      focusRegionSignals[0] ||
       positionedGeoSignals[0] ||
       activePulseEvent ||
       null,
-    [activePulseEvent, hoveredEventIndex, pinnedEventIndex, positionedGeoSignals],
+    [activePulseEvent, hoveredEventIndex, pinnedEventIndex, positionedGeoSignals, focusRegionSignals],
   );
 
   const hedgeIdeas = useMemo(
@@ -745,6 +756,18 @@ export default function WorldMarketMap({
       })),
     [orderedGeoSignals],
   );
+
+  const regionDrilldown = useMemo(() => {
+    const items = focusRegionSignals.slice(0, 4);
+    const actionable = items.filter((item) => item.event_intelligence?.action && item.event_intelligence.action !== "watch").length;
+    const highImpact = items.filter((item) => item.impact === "high").length;
+    return {
+      total: items.length,
+      actionable,
+      highImpact,
+      items,
+    };
+  }, [focusRegionSignals]);
 
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
@@ -1036,7 +1059,9 @@ export default function WorldMarketMap({
             {positionedGeoSignals.map((item, index) => (
               <a
                 key={item.geoKey || `${item.title}-${index}`}
-                className="absolute z-10 group"
+                className={`absolute z-10 group transition-opacity ${
+                  isRegionFocusMatch(activeRegion?.label, item) ? "opacity-100" : "opacity-35 hover:opacity-70"
+                }`}
                 style={item.adjustedStyle}
                 href={item.link}
                 target="_blank"
@@ -1053,7 +1078,9 @@ export default function WorldMarketMap({
                     <div className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(item.markerTone)} animate-ping`} />
                   )}
                   <div
-                    className={`relative flex items-center gap-1.5 rounded-full border px-1.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
+                    className={`relative flex items-center gap-1.5 rounded-full border px-1.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""} ${
+                      isRegionFocusMatch(activeRegion?.label, item) ? "scale-100" : "scale-[0.94]"
+                    }`}
                   >
                     <span className={`h-1.5 w-1.5 rounded-full ${markerAccentClass(item.markerTone)}`} />
                     <span>{item.markerIcon}</span>
@@ -1208,6 +1235,67 @@ export default function WorldMarketMap({
                 </div>
               </div>
             )}
+
+            {displayRegion ? (
+              <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Region Drilldown
+                  </div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                    {displayRegion.label}
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                    Events <span className="font-bold text-slate-900">{regionDrilldown.total}</span>
+                  </div>
+                  <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                    High impact <span className="font-bold text-slate-900">{regionDrilldown.highImpact}</span>
+                  </div>
+                  <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                    Actionable <span className="font-bold text-slate-900">{regionDrilldown.actionable}</span>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {regionDrilldown.items.length ? (
+                    regionDrilldown.items.map((item, index) => (
+                      <button
+                        key={item.geoKey || `${item.title}-${index}`}
+                        onClick={() => {
+                          const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
+                          if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                        }}
+                        className={`block w-full rounded-[1rem] border p-3 text-left transition-colors ${
+                          activeGeoEvent?.geoKey === item.geoKey
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)]/70"
+                            : "border-black/8 bg-white/75 hover:bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                            {describeEventVariant(item) || item.markerLabel}
+                          </div>
+                          <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(freshnessLabel(item.event_intelligence?.decay, item.pulse))}`}>
+                            {freshnessLabel(item.event_intelligence?.decay, item.pulse)}
+                          </div>
+                        </div>
+                        <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
+                        {item.event_intelligence?.affected_assets?.length ? (
+                          <div className="mt-2 text-[11px] leading-5 text-slate-500">
+                            Assets: {compactList(item.event_intelligence.affected_assets, 2).join(" | ")}
+                          </div>
+                        ) : null}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
+                      Kein dominanter Drilldown fuer {displayRegion.label} im aktuellen Filter.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {activeGeoEvent ? (
               <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">

@@ -652,7 +652,7 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid items-start gap-5 xl:grid-cols-[1.62fr_0.38fr]">
+        <div className="grid items-start gap-5 xl:grid-cols-[1.68fr_0.32fr]">
           <div className="relative self-start min-h-[360px] lg:min-h-[410px] xl:min-h-[430px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
             <div className="absolute inset-0 overflow-hidden opacity-80">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.58),transparent_28%)]" />
@@ -917,7 +917,7 @@ export default function WorldMarketMap({
                   {formatPct(displayRegion.avg_change_1d)}
                 </div>
                 <div className="mt-3 space-y-2">
-                  {(displayRegion.assets || []).slice(0, 2).map((asset) => (
+                  {(displayRegion.assets || []).slice(0, 1).map((asset) => (
                     <div
                       key={asset.ticker}
                       className="flex items-center justify-between rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2"
@@ -943,13 +943,13 @@ export default function WorldMarketMap({
               <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Focus Event
+                    Event Decision
                   </div>
                   <div className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(activeGeoEvent.markerTone)}`}>
                     {activeGeoEvent.markerIcon}
                   </div>
                 </div>
-                <div className="mt-3 text-sm font-bold leading-6 text-slate-900">
+                <div className="mt-3 line-clamp-3 text-sm font-bold leading-6 text-slate-900">
                   {activeGeoEvent.title}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -996,16 +996,18 @@ export default function WorldMarketMap({
                     {activeGeoEvent.portfolio_exposure.note}
                   </div>
                 ) : null}
-                {activeGeoEvent.event_intelligence?.trigger ? (
-                  <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
-                    Trigger: {activeGeoEvent.event_intelligence.trigger}
-                  </div>
-                ) : null}
-                {activeGeoEvent.event_intelligence?.invalidation ? (
-                  <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
-                    Invalidation: {activeGeoEvent.event_intelligence.invalidation}
-                  </div>
-                ) : null}
+                <div className="mt-3 space-y-2">
+                  {activeGeoEvent.event_intelligence?.trigger ? (
+                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                      Trigger: {activeGeoEvent.event_intelligence.trigger}
+                    </div>
+                  ) : null}
+                  {activeGeoEvent.event_intelligence?.invalidation ? (
+                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                      Invalidation: {activeGeoEvent.event_intelligence.invalidation}
+                    </div>
+                  ) : null}
+                </div>
                 {activeGeoEvent.event_intelligence?.execution_window ? (
                   <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
                     Window: {activeGeoEvent.event_intelligence.execution_window}
@@ -1090,29 +1092,31 @@ export default function WorldMarketMap({
                           {item.region || "Global"} | {item.impact || "macro"}
                         </div>
                       </div>
-                      <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
+                      <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
                       {item.event_intelligence ? (
-                        <div className="mt-3 grid gap-2 text-xs text-slate-500">
+                        <div className="mt-3 space-y-2 text-xs text-slate-500">
                           <div className="flex flex-wrap gap-2">
                             <span>Impact {item.event_intelligence.impact_score}</span>
                             <span>Confidence {item.event_intelligence.confidence_score}</span>
                             <span>{item.event_intelligence.decay}</span>
                           </div>
-                          <div>
-                            Sectors: {(item.event_intelligence.affected_sectors || []).join(" | ")}
-                          </div>
-                          <div>
-                            Assets: {(item.event_intelligence.affected_assets || []).join(" | ")}
-                          </div>
-                          <div>
+                          <div className="line-clamp-2">
                             Action: {item.event_intelligence.action} | Leverage {item.event_intelligence.leverage}
                           </div>
-                          <div>
-                            Trigger: {item.event_intelligence.trigger}
-                          </div>
-                          <div>
-                            Invalidation: {item.event_intelligence.invalidation}
-                          </div>
+                          {activeGeoEvent?.geoKey === item.geoKey ? (
+                            <>
+                              {(item.event_intelligence.affected_sectors || []).length ? (
+                                <div className="line-clamp-2">
+                                  Sectors: {(item.event_intelligence.affected_sectors || []).join(" | ")}
+                                </div>
+                              ) : null}
+                              {item.event_intelligence.trigger ? (
+                                <div className="line-clamp-2">
+                                  Trigger: {item.event_intelligence.trigger}
+                                </div>
+                              ) : null}
+                            </>
+                          ) : null}
                         </div>
                       ) : null}
                       {item.portfolio_exposure?.note ? (

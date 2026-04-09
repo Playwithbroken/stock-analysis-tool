@@ -226,6 +226,10 @@ function markerAccentClass(tone: GeoEvent["markerTone"]) {
   return "bg-slate-600";
 }
 
+function compactList(items?: string[] | null, limit = 3) {
+  return (items || []).filter(Boolean).slice(0, limit);
+}
+
 function stableHash(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -924,6 +928,18 @@ export default function WorldMarketMap({
                     </span>
                   </div>
                 ) : null}
+                {compactList(activePulseEvent.event_intelligence?.affected_sectors, 2).length ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {compactList(activePulseEvent.event_intelligence?.affected_sectors, 2).map((sector) => (
+                      <span
+                        key={sector}
+                        className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+                      >
+                        {sector}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </a>
             ) : null}
           </div>
@@ -1033,14 +1049,41 @@ export default function WorldMarketMap({
                     </div>
                   </div>
                 ) : null}
-                <div className="mt-3 space-y-2 text-xs leading-6 text-slate-600">
-                  {activeGeoEvent.event_intelligence?.affected_sectors?.length ? (
-                    <div>Sectors: {activeGeoEvent.event_intelligence.affected_sectors.join(" | ")}</div>
-                  ) : null}
-                  {activeGeoEvent.event_intelligence?.affected_assets?.length ? (
-                    <div>Assets: {activeGeoEvent.event_intelligence.affected_assets.join(" | ")}</div>
-                  ) : null}
-                </div>
+                {compactList(activeGeoEvent.event_intelligence?.affected_sectors).length ? (
+                  <div className="mt-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      Sector Impact
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {compactList(activeGeoEvent.event_intelligence?.affected_sectors).map((sector) => (
+                        <span
+                          key={sector}
+                          className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600"
+                        >
+                          {sector}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {compactList(activeGeoEvent.event_intelligence?.affected_assets, 4).length ? (
+                  <div className="mt-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      Affected Assets
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {compactList(activeGeoEvent.event_intelligence?.affected_assets, 4).map((asset) => (
+                        <button
+                          key={asset}
+                          onClick={() => onAnalyze(asset)}
+                          className="rounded-full border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--accent)]"
+                        >
+                          {asset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {activeGeoEvent.portfolio_exposure?.note ? (
                   <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
                     {activeGeoEvent.portfolio_exposure.note}
@@ -1153,13 +1196,20 @@ export default function WorldMarketMap({
                           <div className="line-clamp-2">
                             Action: {item.event_intelligence.action} | Leverage {item.event_intelligence.leverage}
                           </div>
+                          {compactList(item.event_intelligence.affected_sectors, 2).length ? (
+                            <div className="flex flex-wrap gap-2">
+                              {compactList(item.event_intelligence.affected_sectors, 2).map((sector) => (
+                                <span
+                                  key={sector}
+                                  className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                                >
+                                  {sector}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                           {activeGeoEvent?.geoKey === item.geoKey ? (
                             <>
-                              {(item.event_intelligence.affected_sectors || []).length ? (
-                                <div className="line-clamp-2">
-                                  Sectors: {(item.event_intelligence.affected_sectors || []).join(" | ")}
-                                </div>
-                              ) : null}
                               {item.event_intelligence.trigger ? (
                                 <div className="line-clamp-2">
                                   Trigger: {item.event_intelligence.trigger}

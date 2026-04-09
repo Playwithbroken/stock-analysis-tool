@@ -246,6 +246,16 @@ export default function MorningBriefPanel({
                   <div>Trigger: {item.trigger}</div>
                   <div>Risk: {item.risk}</div>
                 </div>
+                {item.event_intelligence?.invalidation ? (
+                  <div className="mt-2 text-xs text-slate-500">
+                    Invalidation: {item.event_intelligence.invalidation}
+                  </div>
+                ) : null}
+                {item.event_intelligence?.execution_window ? (
+                  <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                    Window: {item.event_intelligence.execution_window}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

@@ -847,6 +847,9 @@ class MorningBriefService:
             "action": action["action"],
             "leverage": action["leverage"],
             "why_now": action["why_now"],
+            "trigger": action["trigger"],
+            "invalidation": action["invalidation"],
+            "execution_window": action["execution_window"],
         }
 
     def _event_affected_buckets(self, event_type: str, ticker: str | None) -> Dict[str, List[str]]:
@@ -890,18 +893,67 @@ class MorningBriefService:
 
     def _event_action_hint(self, event_type: str, impact: str) -> Dict[str, str]:
         if event_type == "conflict":
-            return {"action": "hedge", "leverage": "avoid", "why_now": "Conflict risk favors defense, oil and gold over aggressive longs."}
+            return {
+                "action": "hedge",
+                "leverage": "avoid",
+                "why_now": "Conflict risk favors defense, oil and gold over aggressive longs.",
+                "trigger": "Only act if oil, gold or defense holds its first reaction after the open.",
+                "invalidation": "If crude and gold fade back below the first impulse, reduce the hedge thesis.",
+                "execution_window": "Open to first 90 minutes",
+            }
         if event_type == "central_bank":
-            return {"action": "watch", "leverage": "conditional" if impact == "medium" else "avoid", "why_now": "Rates, dollar and futures need confirmation before directional trades."}
+            return {
+                "action": "watch",
+                "leverage": "conditional" if impact == "medium" else "avoid",
+                "why_now": "Rates, dollar and futures need confirmation before directional trades.",
+                "trigger": "Wait for yields, dollar and index futures to confirm in the same direction.",
+                "invalidation": "No trade if bonds, dollar and futures disagree after the release.",
+                "execution_window": "Macro release to first hour",
+            }
         if event_type == "energy":
-            return {"action": "long", "leverage": "conditional", "why_now": "Energy follow-through matters if oil strength survives the open."}
+            return {
+                "action": "long",
+                "leverage": "conditional",
+                "why_now": "Energy follow-through matters if oil strength survives the open.",
+                "trigger": "Take only if oil and energy equities keep relative strength after Europe or US open.",
+                "invalidation": "Skip if oil spikes but XLE and cyclicals do not confirm.",
+                "execution_window": "Europe handoff to US open",
+            }
         if event_type == "election":
-            return {"action": "watch", "leverage": "avoid", "why_now": "Election outcomes rotate sectors before a clean trend appears."}
+            return {
+                "action": "watch",
+                "leverage": "avoid",
+                "why_now": "Election outcomes rotate sectors before a clean trend appears.",
+                "trigger": "Let sector rotation show up first in banks, utilities, defense or domestic indices.",
+                "invalidation": "Avoid if the first reaction reverses into the next headline cycle.",
+                "execution_window": "Headline release to session close",
+            }
         if event_type == "disaster":
-            return {"action": "hedge", "leverage": "avoid", "why_now": "Supply-chain and insurer stress often matter before stock-specific narratives."}
+            return {
+                "action": "hedge",
+                "leverage": "avoid",
+                "why_now": "Supply-chain and insurer stress often matter before stock-specific narratives.",
+                "trigger": "Watch transport, insurers and commodity routes before acting on single names.",
+                "invalidation": "Stand down if the event gets contained quickly and transport normalizes.",
+                "execution_window": "First session after event shock",
+            }
         if event_type == "policy":
-            return {"action": "short", "leverage": "avoid" if impact == "high" else "conditional", "why_now": "Policy shocks can fade, so risk control matters more than speed."}
-        return {"action": "watch", "leverage": "avoid", "why_now": "Wait for market structure to confirm the headline."}
+            return {
+                "action": "short",
+                "leverage": "avoid" if impact == "high" else "conditional",
+                "why_now": "Policy shocks can fade, so risk control matters more than speed.",
+                "trigger": "Use only if affected sectors lose support and broad tape confirms the policy shock.",
+                "invalidation": "No short if the market absorbs the headline within the first impulse.",
+                "execution_window": "Headline to first trend confirmation",
+            }
+        return {
+            "action": "watch",
+            "leverage": "avoid",
+            "why_now": "Wait for market structure to confirm the headline.",
+            "trigger": "Stand by until price, rates and sector leadership align.",
+            "invalidation": "No trade if the first reaction fades immediately.",
+            "execution_window": "Event dependent",
+        }
 
     def _build_portfolio_exposure(
         self,

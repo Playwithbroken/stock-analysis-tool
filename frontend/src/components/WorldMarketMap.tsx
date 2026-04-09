@@ -31,6 +31,9 @@ interface MapNewsItem {
     action?: string;
     leverage?: string;
     why_now?: string;
+    trigger?: string;
+    invalidation?: string;
+    execution_window?: string;
   };
   portfolio_exposure?: {
     status?: string;
@@ -895,6 +898,21 @@ export default function WorldMarketMap({
                     {activeGeoEvent.portfolio_exposure.note}
                   </div>
                 ) : null}
+                {activeGeoEvent.event_intelligence?.trigger ? (
+                  <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                    Trigger: {activeGeoEvent.event_intelligence.trigger}
+                  </div>
+                ) : null}
+                {activeGeoEvent.event_intelligence?.invalidation ? (
+                  <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                    Invalidation: {activeGeoEvent.event_intelligence.invalidation}
+                  </div>
+                ) : null}
+                {activeGeoEvent.event_intelligence?.execution_window ? (
+                  <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    Window: {activeGeoEvent.event_intelligence.execution_window}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -976,6 +994,12 @@ export default function WorldMarketMap({
                           </div>
                           <div>
                             Action: {item.event_intelligence.action} | Leverage {item.event_intelligence.leverage}
+                          </div>
+                          <div>
+                            Trigger: {item.event_intelligence.trigger}
+                          </div>
+                          <div>
+                            Invalidation: {item.event_intelligence.invalidation}
                           </div>
                         </div>
                       ) : null}

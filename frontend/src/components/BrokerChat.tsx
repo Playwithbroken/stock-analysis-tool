@@ -110,6 +110,41 @@ export default function BrokerChat({
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];
 
+  const contextLabel = currentTicker
+    ? Array.isArray(currentTicker)
+      ? currentTicker.join(", ")
+      : currentTicker
+    : "Market overview";
+
+  const peekCards = [
+    {
+      label: "Setup",
+      value: currentTicker ? "Focused setup" : "Market scan",
+      detail: currentTicker
+        ? `Priorisiere ${contextLabel} nur bei bestaetigtem Trigger.`
+        : "Suche nach frischem Trigger, bevor du Momentum jagst.",
+      tone:
+        "border-emerald-200/80 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(255,255,255,0.92))]",
+    },
+    {
+      label: "Risk",
+      value: "Tactical only",
+      detail:
+        "Groesse klein halten, solange Newsflow oder Open-Richtung nicht sauber bestaetigt sind.",
+      tone:
+        "border-amber-200/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.09),rgba(255,255,255,0.92))]",
+    },
+    {
+      label: "Hedge",
+      value: "Keep ready",
+      detail: currentTicker
+        ? `Pruefe Hedge-Ideen gegen ${contextLabel}, falls das Setup kippt.`
+        : "GLD, UUP oder TLT nur dann aktivieren, wenn Risiko wirklich hochzieht.",
+      tone:
+        "border-sky-200/80 bg-[linear-gradient(180deg,rgba(14,165,233,0.08),rgba(255,255,255,0.92))]",
+    },
+  ];
+
   const chatContent = (
     <div
       className={`${
@@ -180,11 +215,7 @@ export default function BrokerChat({
                   Context
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">
-                  {currentTicker
-                    ? Array.isArray(currentTicker)
-                      ? currentTicker.join(", ")
-                      : currentTicker
-                    : "Market overview"}
+                  {contextLabel}
                 </div>
               </div>
               <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
@@ -203,6 +234,24 @@ export default function BrokerChat({
                   Slide up or tap a prompt
                 </div>
               </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {peekCards.map((card) => (
+                <div
+                  key={card.label}
+                  className={`rounded-[1.2rem] border p-3 ${card.tone}`}
+                >
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    {card.label}
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-slate-900">
+                    {card.value}
+                  </div>
+                  <div className="mt-2 text-[12px] leading-5 text-slate-600">
+                    {card.detail}
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="space-y-2">
               {quickActions.map((action) => (

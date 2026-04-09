@@ -107,6 +107,7 @@ interface MapAnchor {
 
 type EventFilter = "all" | "WAR" | "CB" | "OIL" | "VOTE" | "NAT" | "POL";
 type EventSort = "impact" | "region" | "latest";
+type TimeLens = "live" | "24h" | "7d";
 
 const positions: Record<
   string,
@@ -330,6 +331,22 @@ function exposureToneClass(value?: string) {
   return "bg-emerald-500/10 text-emerald-700";
 }
 
+function freshnessLabel(decay?: string, pulse?: boolean) {
+  if (pulse) return "live";
+  if (decay === "developing") return "new";
+  if (decay === "active") return "active";
+  if (decay === "fading") return "fading";
+  return "watch";
+}
+
+function freshnessClass(label: string) {
+  if (label === "live") return "bg-red-500/10 text-red-700";
+  if (label === "new") return "bg-emerald-500/10 text-emerald-700";
+  if (label === "active") return "bg-blue-500/10 text-blue-700";
+  if (label === "fading") return "bg-slate-500/10 text-slate-600";
+  return "bg-amber-500/10 text-amber-700";
+}
+
 function stableHash(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -492,6 +509,7 @@ export default function WorldMarketMap({
 }: WorldMarketMapProps) {
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
   const [sortMode, setSortMode] = useState<EventSort>("impact");
+  const [timeLens, setTimeLens] = useState<TimeLens>("24h");
   const [showLegend, setShowLegend] = useState(true);
   const [showRegionCards, setShowRegionCards] = useState(true);
   const [showLiveAlert, setShowLiveAlert] = useState(true);
@@ -524,10 +542,14 @@ export default function WorldMarketMap({
 
   const filteredGeoSignals = useMemo(
     () =>
-      geoSignals.filter((item) =>
-        activeFilter === "all" ? true : item.markerIcon === activeFilter,
-      ),
-    [geoSignals, activeFilter],
+      geoSignals.filter((item) => {
+        const filterMatch = activeFilter === "all" ? true : item.markerIcon === activeFilter;
+        if (!filterMatch) return false;
+        if (timeLens === "7d") return true;
+        if (timeLens === "24h") return item.event_intelligence?.decay !== "fading";
+        return item.pulse || item.event_intelligence?.decay === "developing";
+      }),
+    [geoSignals, activeFilter, timeLens],
   );
 
   const orderedGeoSignals = useMemo(() => {
@@ -767,6 +789,26 @@ export default function WorldMarketMap({
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+              Lens
+            </div>
+            {[
+              { key: "live", label: "Live" },
+              { key: "24h", label: "24h" },
+              { key: "7d", label: "7d" },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setTimeLens(item.key as TimeLens)}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                  timeLens === item.key
+                    ? "bg-[var(--accent)] text-white"
+                    : "border border-black/8 bg-white text-slate-500"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
             {[
               { key: "legend", label: "Legend", value: showLegend, set: setShowLegend },
               { key: "regions", label: "Regions", value: showRegionCards, set: setShowRegionCards },
@@ -1150,6 +1192,13 @@ export default function WorldMarketMap({
                       {activeGeoEvent.event_intelligence.action}
                     </span>
                   ) : null}
+                  <span
+                    className={`rounded-full px-2 py-1 ${freshnessClass(
+                      freshnessLabel(activeGeoEvent.event_intelligence?.decay, activeGeoEvent.pulse),
+                    )}`}
+                  >
+                    {freshnessLabel(activeGeoEvent.event_intelligence?.decay, activeGeoEvent.pulse)}
+                  </span>
                   {activeGeoEvent.event_intelligence?.leverage ? (
                     <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                       leverage {activeGeoEvent.event_intelligence.leverage}
@@ -1355,8 +1404,17 @@ export default function WorldMarketMap({
                         >
                           {describeEventVariant(item) || item.markerLabel}
                         </div>
-                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                          {item.region || "Global"} | {item.impact || "macro"}
+                        <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                          <span>{item.region || "Global"}</span>
+                          <span>|</span>
+                          <span>{item.impact || "macro"}</span>
+                          <span
+                            className={`rounded-full px-2 py-1 ${freshnessClass(
+                              freshnessLabel(item.event_intelligence?.decay, item.pulse),
+                            )}`}
+                          >
+                            {freshnessLabel(item.event_intelligence?.decay, item.pulse)}
+                          </span>
                         </div>
                       </div>
                       <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
@@ -1429,7 +1487,9 @@ export default function WorldMarketMap({
                   ))
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                    {showEventLayer ? "Keine dominanten Events im aktuellen Filter." : "Event Layer ist ausgeblendet."}
+                    {showEventLayer
+                      ? `Keine dominanten Events im aktuellen Filter fuer ${timeLens}.`
+                      : "Event Layer ist ausgeblendet."}
                   </div>
                 )}
               </div>

@@ -306,6 +306,27 @@ function buildPlaceVariantStack(items: GeoEvent[]) {
     }));
 }
 
+function buildPlaceHeat(items: GeoEvent[]) {
+  const placeMap = new Map<string, { place: string; score: number; events: number; actionable: number }>();
+  for (const item of items) {
+    if (!item.geoPlace) continue;
+    const current = placeMap.get(item.geoPlace) || { place: item.geoPlace, score: 0, events: 0, actionable: 0 };
+    const impactScore = item.impact === "high" ? 36 : item.impact === "medium" ? 22 : 10;
+    const actionScore = item.event_intelligence?.action && item.event_intelligence.action !== "watch" ? 18 : 6;
+    const pulseScore = item.pulse ? 8 : 0;
+    current.score += impactScore + actionScore + pulseScore;
+    current.events += 1;
+    if (item.event_intelligence?.action && item.event_intelligence.action !== "watch") current.actionable += 1;
+    placeMap.set(item.geoPlace, current);
+  }
+  const values = [...placeMap.values()].sort((a, b) => b.score - a.score || a.place.localeCompare(b.place)).slice(0, 5);
+  const maxScore = values[0]?.score || 1;
+  return values.map((item) => ({
+    ...item,
+    weight: Math.max(18, Math.round((item.score / maxScore) * 100)),
+  }));
+}
+
 function placeOutcomeTone(action?: string) {
   if (action === "long") return "bg-emerald-500/10 text-emerald-700";
   if (action === "short") return "bg-red-500/10 text-red-700";
@@ -922,6 +943,7 @@ export default function WorldMarketMap({
     const highImpact = items.filter((item) => item.impact === "high").length;
     const zones = topGeoZones(focusRegionSignals, 4);
     const places = topGeoPlaces(focusRegionSignals, 5);
+    const placeHeat = buildPlaceHeat(focusRegionSignals);
     const eventMix = eventTypeBreakdown(focusedPlaceSignals);
     const placeStack = buildPlaceVariantStack(focusedPlaceSignals);
     return {
@@ -931,6 +953,7 @@ export default function WorldMarketMap({
       items,
       zones,
       places,
+      placeHeat,
       eventMix,
       placeStack,
     };
@@ -1442,6 +1465,44 @@ export default function WorldMarketMap({
                         Clear
                       </button>
                     ) : null}
+                  </div>
+                ) : null}
+                {regionDrilldown.placeHeat.length ? (
+                  <div className="mt-4 space-y-2">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      Country Heat
+                    </div>
+                    {regionDrilldown.placeHeat.map((item) => (
+                      <button
+                        key={item.place}
+                        type="button"
+                        onClick={() => {
+                          const nextPlace = selectedGeoPlace === item.place ? null : item.place;
+                          setSelectedGeoPlace(nextPlace);
+                          if (!nextPlace) return;
+                          const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoPlace === nextPlace);
+                          if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                        }}
+                        className="block w-full rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2 text-left transition-colors hover:bg-white"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                            {item.place}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                            <span>{item.events} events</span>
+                            <span>|</span>
+                            <span>{item.actionable} actionable</span>
+                          </div>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full ${selectedGeoPlace === item.place ? "bg-[var(--accent)]" : "bg-slate-900/75"}`}
+                            style={{ width: `${item.weight}%` }}
+                          />
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 ) : null}
                 <div className="mt-3 space-y-2">

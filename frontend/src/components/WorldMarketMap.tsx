@@ -357,6 +357,27 @@ function decisionToneClass(value?: string) {
   return "bg-slate-500/10 text-slate-600";
 }
 
+function sectorHeatProfile(sector: string, action?: string) {
+  const sectorKey = sector.toLowerCase();
+  const longish = action === "long";
+  const hedgeish = action === "hedge";
+  const shortish = action === "short";
+
+  let level = 52;
+  if (/(energy|defense|gold)/.test(sectorKey)) level = hedgeish || longish ? 88 : 68;
+  else if (/(airlines|transport|consumer|growth|reits)/.test(sectorKey)) level = shortish ? 82 : 58;
+  else if (/(financial|banks|utilities|industrials|semis|autos)/.test(sectorKey)) level = 72;
+
+  const toneClass =
+    hedgeish || longish
+      ? "bg-emerald-500"
+      : shortish
+        ? "bg-red-500"
+        : "bg-sky-500";
+
+  return { level, toneClass };
+}
+
 function stableHash(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -1254,15 +1275,31 @@ export default function WorldMarketMap({
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                       Sector Impact
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {compactList(activeGeoEvent.event_intelligence?.affected_sectors).map((sector) => (
-                        <span
-                          key={sector}
-                          className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600"
-                        >
-                          {sector}
-                        </span>
-                      ))}
+                    <div className="mt-2 grid gap-2">
+                      {compactList(activeGeoEvent.event_intelligence?.affected_sectors).map((sector) => {
+                        const heat = sectorHeatProfile(sector, activeGeoEvent.event_intelligence?.action);
+                        return (
+                          <div
+                            key={sector}
+                            className="rounded-[0.95rem] border border-black/8 bg-white px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700">
+                                {sector}
+                              </span>
+                              <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                                {heat.level}
+                              </span>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className={`h-full rounded-full ${heat.toneClass}`}
+                                style={{ width: `${heat.level}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}

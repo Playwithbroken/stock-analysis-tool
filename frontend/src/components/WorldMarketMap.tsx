@@ -22,6 +22,21 @@ interface MapNewsItem {
   link?: string;
   ticker?: string;
   event_type?: string;
+  event_intelligence?: {
+    impact_score?: number;
+    confidence_score?: number;
+    decay?: string;
+    affected_sectors?: string[];
+    affected_assets?: string[];
+    action?: string;
+    leverage?: string;
+    why_now?: string;
+  };
+  portfolio_exposure?: {
+    status?: string;
+    note?: string;
+    action?: string;
+  };
 }
 
 interface WatchlistImpactItem {
@@ -703,7 +718,22 @@ export default function WorldMarketMap({
                     {item.publisher ? (
                       <div className="mt-2 text-[11px] text-slate-500">{item.publisher}</div>
                     ) : null}
-                    <div className="mt-2 text-[11px] font-semibold text-[var(--accent)]">Open source</div>
+                    {item.event_intelligence ? (
+                      <div className="mt-3 grid gap-2 text-[11px] text-slate-600">
+                        <div className="flex items-center justify-between">
+                          <span>Impact</span>
+                          <span className="font-bold text-slate-900">{item.event_intelligence.impact_score}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Confidence</span>
+                          <span className="font-bold text-slate-900">{item.event_intelligence.confidence_score}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Decay</span>
+                          <span className="font-bold uppercase text-slate-900">{item.event_intelligence.decay}</span>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </a>
@@ -728,6 +758,16 @@ export default function WorldMarketMap({
                 <div className="mt-2 line-clamp-3 text-[12px] font-semibold leading-5 text-slate-800">
                   {activePulseEvent.title}
                 </div>
+                {activePulseEvent.event_intelligence ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      impact {activePulseEvent.event_intelligence.impact_score}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      {activePulseEvent.event_intelligence.action}
+                    </span>
+                  </div>
+                ) : null}
               </a>
             ) : null}
           </div>
@@ -833,6 +873,29 @@ export default function WorldMarketMap({
                         </div>
                       </div>
                       <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
+                      {item.event_intelligence ? (
+                        <div className="mt-3 grid gap-2 text-xs text-slate-500">
+                          <div className="flex flex-wrap gap-2">
+                            <span>Impact {item.event_intelligence.impact_score}</span>
+                            <span>Confidence {item.event_intelligence.confidence_score}</span>
+                            <span>{item.event_intelligence.decay}</span>
+                          </div>
+                          <div>
+                            Sectors: {(item.event_intelligence.affected_sectors || []).join(" | ")}
+                          </div>
+                          <div>
+                            Assets: {(item.event_intelligence.affected_assets || []).join(" | ")}
+                          </div>
+                          <div>
+                            Action: {item.event_intelligence.action} · Leverage {item.event_intelligence.leverage}
+                          </div>
+                        </div>
+                      ) : null}
+                      {item.portfolio_exposure?.note ? (
+                        <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
+                          {item.portfolio_exposure.note}
+                        </div>
+                      ) : null}
                     </a>
                   ))
                 ) : (

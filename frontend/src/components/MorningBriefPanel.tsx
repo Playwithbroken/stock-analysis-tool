@@ -224,6 +224,24 @@ export default function MorningBriefPanel({
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
                 <div className="mt-2 text-sm text-slate-600">{item.thesis}</div>
+                {item.event_intelligence ? (
+                  <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                    <div>Impact {item.event_intelligence.impact_score}</div>
+                    <div>Confidence {item.event_intelligence.confidence_score}</div>
+                    <div>Decay {item.event_intelligence.decay}</div>
+                    <div>Action {item.event_intelligence.action}</div>
+                  </div>
+                ) : null}
+                {item.event_intelligence?.affected_sectors?.length ? (
+                  <div className="mt-2 text-xs text-slate-500">
+                    Sectors: {item.event_intelligence.affected_sectors.join(" | ")}
+                  </div>
+                ) : null}
+                {item.portfolio_exposure?.note ? (
+                  <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
+                    {item.portfolio_exposure.note}
+                  </div>
+                ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>Trigger: {item.trigger}</div>
                   <div>Risk: {item.risk}</div>

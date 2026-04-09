@@ -251,6 +251,13 @@ class MorningBriefService:
                     "publisher": item.get("publisher"),
                     "source_quality": item.get("source_quality"),
                     "ticker": item.get("ticker"),
+                    "event_intelligence": self._build_event_intelligence(
+                        event_type=event_type,
+                        impact=item.get("impact") or "low",
+                        severity=severity,
+                        source_quality=item.get("source_quality") or "tier_2",
+                        ticker=item.get("ticker"),
+                    ),
                 }
             )
         return layer[:8]
@@ -743,6 +750,13 @@ class MorningBriefService:
             if ticker and ticker in watched_tickers:
                 trigger = f"Watch {ticker} first. It is already on your radar."
 
+            intelligence = self._build_event_intelligence(
+                event_type=event_type,
+                impact=impact,
+                severity=item.get("severity") or "normal",
+                source_quality=item.get("source_quality") or "tier_2",
+                ticker=ticker,
+            )
             board.append(
                 {
                     "title": thesis,
@@ -757,6 +771,8 @@ class MorningBriefService:
                     "risk": risk,
                     "source": item.get("publisher"),
                     "link": item.get("link"),
+                    "event_intelligence": intelligence,
+                    "portfolio_exposure": self._build_portfolio_exposure(ticker, watchlist_snapshot, intelligence),
                 }
             )
 
@@ -776,9 +792,146 @@ class MorningBriefService:
                         "risk": "Do not use leverage on headline noise alone.",
                         "source": item.get("publisher"),
                         "link": item.get("link"),
+                        "event_intelligence": item.get("event_intelligence") or self._build_event_intelligence(
+                            event_type=item.get("event_type") or "macro",
+                            impact=item.get("impact") or "medium",
+                            severity=item.get("severity") or "normal",
+                            source_quality=item.get("source_quality") or "tier_2",
+                            ticker=item.get("ticker"),
+                        ),
+                        "portfolio_exposure": self._build_portfolio_exposure(
+                            item.get("ticker"),
+                            watchlist_snapshot,
+                            item.get("event_intelligence") or {},
+                        ),
                     }
                 )
         return board[:8]
+
+    def _build_event_intelligence(
+        self,
+        event_type: str,
+        impact: str,
+        severity: str,
+        source_quality: str,
+        ticker: str | None,
+    ) -> Dict[str, Any]:
+        impact_score = {"high": 88, "medium": 68, "low": 48}.get(impact, 50)
+        confidence = {
+            "tier_1": 86,
+            "tier_2": 74,
+            "crowd": 46,
+            "excluded": 32,
+        }.get(source_quality, 58)
+        if severity == "critical":
+            impact_score += 6
+            confidence += 4
+            decay = "developing"
+        elif severity == "elevated":
+            impact_score += 3
+            decay = "active"
+        else:
+            decay = "fading" if impact == "low" else "active"
+
+        affected = self._event_affected_buckets(event_type, ticker)
+        action = self._event_action_hint(event_type, impact)
+        return {
+            "impact_score": min(99, impact_score),
+            "confidence_score": min(95, confidence),
+            "decay": decay,
+            "affected_sectors": affected["sectors"],
+            "affected_assets": affected["assets"],
+            "action": action["action"],
+            "leverage": action["leverage"],
+            "why_now": action["why_now"],
+        }
+
+    def _event_affected_buckets(self, event_type: str, ticker: str | None) -> Dict[str, List[str]]:
+        mapping = {
+            "conflict": {
+                "sectors": ["Energy", "Defense", "Airlines"],
+                "assets": ["Oil", "Gold", "S&P 500 Futures"],
+            },
+            "central_bank": {
+                "sectors": ["Growth", "Financials", "REITs"],
+                "assets": ["US 10Y Yield", "US Dollar Index", "Nasdaq Futures"],
+            },
+            "energy": {
+                "sectors": ["Energy", "Industrials", "Airlines"],
+                "assets": ["Oil", "XLE", "Gold"],
+            },
+            "election": {
+                "sectors": ["Defense", "Utilities", "Banks"],
+                "assets": ["Domestic indices", "Rates", "EUR/USD"],
+            },
+            "disaster": {
+                "sectors": ["Insurers", "Industrials", "Transport"],
+                "assets": ["Commodities", "Shipping", "Regional equities"],
+            },
+            "policy": {
+                "sectors": ["Industrials", "Semis", "Autos"],
+                "assets": ["Dollar", "Regional indices", "Commodity baskets"],
+            },
+            "macro_data": {
+                "sectors": ["Growth", "Consumer", "Financials"],
+                "assets": ["Treasuries", "Dollar", "Index futures"],
+            },
+        }
+        payload = mapping.get(event_type, {"sectors": ["Broad market"], "assets": ["Index futures", "Dollar"]})
+        if ticker:
+            payload = {
+                "sectors": payload["sectors"],
+                "assets": [ticker, *payload["assets"]][:4],
+            }
+        return payload
+
+    def _event_action_hint(self, event_type: str, impact: str) -> Dict[str, str]:
+        if event_type == "conflict":
+            return {"action": "hedge", "leverage": "avoid", "why_now": "Conflict risk favors defense, oil and gold over aggressive longs."}
+        if event_type == "central_bank":
+            return {"action": "watch", "leverage": "conditional" if impact == "medium" else "avoid", "why_now": "Rates, dollar and futures need confirmation before directional trades."}
+        if event_type == "energy":
+            return {"action": "long", "leverage": "conditional", "why_now": "Energy follow-through matters if oil strength survives the open."}
+        if event_type == "election":
+            return {"action": "watch", "leverage": "avoid", "why_now": "Election outcomes rotate sectors before a clean trend appears."}
+        if event_type == "disaster":
+            return {"action": "hedge", "leverage": "avoid", "why_now": "Supply-chain and insurer stress often matter before stock-specific narratives."}
+        if event_type == "policy":
+            return {"action": "short", "leverage": "avoid" if impact == "high" else "conditional", "why_now": "Policy shocks can fade, so risk control matters more than speed."}
+        return {"action": "watch", "leverage": "avoid", "why_now": "Wait for market structure to confirm the headline."}
+
+    def _build_portfolio_exposure(
+        self,
+        ticker: str | None,
+        watchlist_snapshot: Dict[str, Any] | None,
+        intelligence: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        watched_tickers = {
+            str(item.get("value") or "").upper()
+            for item in (watchlist_snapshot or {}).get("items", [])
+            if item.get("kind") == "ticker"
+        }
+        if ticker and str(ticker).upper() in watched_tickers:
+            return {
+                "ticker": str(ticker).upper(),
+                "status": "direct",
+                "note": f"{str(ticker).upper()} ist direkt auf deiner Watchlist und vom Event betroffen.",
+                "action": intelligence.get("action"),
+            }
+        sectors = intelligence.get("affected_sectors") or []
+        if sectors:
+            return {
+                "ticker": ticker,
+                "status": "sector",
+                "note": f"Indirekter Impact ueber {', '.join(sectors[:2])}.",
+                "action": intelligence.get("action"),
+            }
+        return {
+            "ticker": ticker,
+            "status": "market",
+            "note": "Vor allem Makro- und Sentiment-Effekt, kein klarer Direktbezug.",
+            "action": intelligence.get("action"),
+        }
 
     def _action_thesis(self, event_type: str, macro_regime: str, ticker: str | None) -> str:
         if event_type == "conflict":

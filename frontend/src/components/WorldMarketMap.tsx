@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import worldMapSvg from "../assets/world-map-wikimedia.svg";
 
 interface RegionAsset {
@@ -392,7 +392,8 @@ export default function WorldMarketMap({
   const [showRegionCards, setShowRegionCards] = useState(true);
   const [showLiveAlert, setShowLiveAlert] = useState(true);
   const [showEventLayer, setShowEventLayer] = useState(true);
-  const [activeEventIndex, setActiveEventIndex] = useState(0);
+  const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
+  const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
   const [hoveredRegionLabel, setHoveredRegionLabel] = useState<string | null>(null);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
@@ -488,6 +489,20 @@ export default function WorldMarketMap({
     [positionedGeoSignals],
   );
 
+  useEffect(() => {
+    if (!positionedGeoSignals.length) {
+      setPinnedEventIndex(0);
+      setHoveredEventIndex(null);
+      return;
+    }
+    if (pinnedEventIndex >= positionedGeoSignals.length) {
+      setPinnedEventIndex(0);
+    }
+    if (hoveredEventIndex != null && hoveredEventIndex >= positionedGeoSignals.length) {
+      setHoveredEventIndex(null);
+    }
+  }, [hoveredEventIndex, pinnedEventIndex, positionedGeoSignals]);
+
   const eventTempo = useMemo(() => {
     const stats = { developing: 0, active: 0, fading: 0 };
     for (const item of positionedGeoSignals) {
@@ -500,8 +515,13 @@ export default function WorldMarketMap({
   }, [positionedGeoSignals]);
 
   const activeGeoEvent = useMemo(
-    () => positionedGeoSignals[activeEventIndex] || positionedGeoSignals[0] || activePulseEvent || null,
-    [positionedGeoSignals, activeEventIndex, activePulseEvent],
+    () =>
+      (hoveredEventIndex != null ? positionedGeoSignals[hoveredEventIndex] : null) ||
+      positionedGeoSignals[pinnedEventIndex] ||
+      positionedGeoSignals[0] ||
+      activePulseEvent ||
+      null,
+    [activePulseEvent, hoveredEventIndex, pinnedEventIndex, positionedGeoSignals],
   );
 
   const whyItMatters = useMemo(() => {
@@ -632,14 +652,22 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="relative min-h-[340px] lg:min-h-[380px] xl:min-h-[400px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,240,232,0.95))] p-4 sm:p-6">
-            <div className="absolute inset-0 overflow-hidden opacity-55">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.84),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.78),transparent_30%)]" />
+        <div className="grid items-start gap-5 xl:grid-cols-[1.62fr_0.38fr]">
+          <div className="relative self-start min-h-[360px] lg:min-h-[410px] xl:min-h-[430px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
+            <div className="absolute inset-0 overflow-hidden opacity-80">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.58),transparent_28%)]" />
               <img
                 src={worldMapSvg}
                 alt="World map"
-                className="h-full w-full object-contain object-center"
+                className="absolute inset-0 block opacity-90 contrast-[1.24] brightness-[0.97] saturate-[0.7] mix-blend-multiply"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  objectFit: "contain",
+                  objectPosition: "50% 58%",
+                }}
                 draggable={false}
               />
             </div>
@@ -665,7 +693,39 @@ export default function WorldMarketMap({
             </div>
             ) : null}
 
-            <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.35),rgba(15,23,42,0))] lg:block" />
+            <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.28),rgba(15,23,42,0))] lg:block" />
+
+            {activeGeoEvent ? (
+              <div className="absolute left-4 top-4 z-30 max-w-[18rem] rounded-[1.1rem] border border-black/8 bg-white/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    Focus
+                  </div>
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activeGeoEvent.markerTone)}`}>
+                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(activeGeoEvent.markerTone)}`} />
+                    {activeGeoEvent.markerIcon}
+                  </span>
+                </div>
+                <div className="mt-2 line-clamp-3 text-sm font-bold leading-5 text-slate-900">
+                  {activeGeoEvent.title}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    {activeGeoEvent.region || "Global"}
+                  </span>
+                  {activeGeoEvent.event_intelligence?.action ? (
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {activeGeoEvent.event_intelligence.action}
+                    </span>
+                  ) : null}
+                  {activeGeoEvent.event_intelligence?.impact_score ? (
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      impact {activeGeoEvent.event_intelligence.impact_score}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             {showRegionCards ? regions.map((region) => {
               const pos = positions[region.label];
@@ -694,14 +754,14 @@ export default function WorldMarketMap({
                       className={`h-3.5 w-3.5 rounded-full ${toneDotClass(region.tone)} ring-4 ring-white/80 shadow-[0_6px_24px_rgba(15,23,42,0.18)] ${isActive ? "scale-125" : ""}`}
                     />
                     <div
-                      className="absolute top-1/2 h-px w-16 bg-slate-400/70"
+                      className="absolute top-1/2 h-px w-16 bg-slate-400/55"
                       style={{
                         width: `${pos.lineLength}px`,
                         ...(pos.align === "left" ? { left: 16 } : { right: 16 }),
                       }}
                     />
                     <div
-                      className={`absolute top-1/2 -translate-y-1/2 rounded-[1.1rem] border p-2.5 backdrop-blur transition-all ${
+                      className={`absolute top-1/2 -translate-y-1/2 rounded-[1rem] border p-2.5 backdrop-blur transition-all ${
                         isActive
                           ? "pointer-events-auto opacity-100 border-black/12 bg-white/94 shadow-[0_20px_40px_rgba(15,23,42,0.12)]"
                           : "pointer-events-none opacity-0 scale-[0.98] border-black/8 bg-white/82 shadow-[0_14px_34px_rgba(15,23,42,0.08)] group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:scale-100"
@@ -724,7 +784,7 @@ export default function WorldMarketMap({
                           {region.tone}
                         </div>
                       </div>
-                      <div className={`mt-2 text-base font-black ${textToneClass(region.tone)}`}>
+                      <div className={`mt-2 text-sm font-black ${textToneClass(region.tone)}`}>
                         {formatPct(region.avg_change_1d)}
                       </div>
                       <div className="mt-1.5 text-[10px] leading-4 text-slate-500">
@@ -752,20 +812,23 @@ export default function WorldMarketMap({
                 target="_blank"
                 rel="noreferrer"
                 title={item.title}
-                onMouseEnter={() => setActiveEventIndex(index)}
-                onFocus={() => setActiveEventIndex(index)}
+                onMouseEnter={() => setHoveredEventIndex(index)}
+                onMouseLeave={() => setHoveredEventIndex(null)}
+                onFocus={() => setHoveredEventIndex(index)}
+                onBlur={() => setHoveredEventIndex(null)}
+                onClick={() => setPinnedEventIndex(index)}
               >
                 <div className="relative">
                   {item.pulse && (
                     <div className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(item.markerTone)} animate-ping`} />
                   )}
                   <div
-                    className={`relative flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)}`}
+                    className={`relative flex items-center gap-1.5 rounded-full border px-1.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
                   >
-                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                    <span className={`h-1.5 w-1.5 rounded-full ${markerAccentClass(item.markerTone)}`} />
                     <span>{item.markerIcon}</span>
                   </div>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-64 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left shadow-[0_16px_34px_rgba(15,23,42,0.14)] group-hover:block">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                         {item.region || "Global"}
@@ -799,12 +862,12 @@ export default function WorldMarketMap({
               </a>
             ))}
 
-            {showLiveAlert && activePulseEvent ? (
+            {showLiveAlert && activePulseEvent && hoveredEventIndex == null ? (
               <a
                 href={activePulseEvent.link}
                 target="_blank"
                 rel="noreferrer"
-                className="absolute right-4 top-4 z-30 max-w-[16rem] rounded-[1rem] border border-black/8 bg-white/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)]"
+                className="absolute right-4 bottom-4 z-30 max-w-[15rem] rounded-[1rem] border border-black/8 bg-white/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
@@ -832,15 +895,15 @@ export default function WorldMarketMap({
             ) : null}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {displayRegion && (
-              <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
+              <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                       Region Focus
                     </div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">
+                    <div className="mt-2 text-xl font-black text-slate-900">
                       {displayRegion.label}
                     </div>
                   </div>
@@ -850,14 +913,14 @@ export default function WorldMarketMap({
                     {displayRegion.tone}
                   </div>
                 </div>
-                <div className={`mt-4 text-3xl font-black ${textToneClass(displayRegion.tone)}`}>
+                <div className={`mt-3 text-2xl font-black ${textToneClass(displayRegion.tone)}`}>
                   {formatPct(displayRegion.avg_change_1d)}
                 </div>
-                <div className="mt-4 space-y-2">
-                  {(displayRegion.assets || []).slice(0, 3).map((asset) => (
+                <div className="mt-3 space-y-2">
+                  {(displayRegion.assets || []).slice(0, 2).map((asset) => (
                     <div
                       key={asset.ticker}
-                      className="flex items-center justify-between rounded-[1rem] border border-black/8 bg-white/75 px-3 py-2"
+                      className="flex items-center justify-between rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2"
                     >
                       <div>
                         <div className="text-sm font-bold text-slate-900">{asset.label}</div>
@@ -877,7 +940,7 @@ export default function WorldMarketMap({
             )}
 
             {activeGeoEvent ? (
-              <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
+              <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                     Focus Event
@@ -908,7 +971,7 @@ export default function WorldMarketMap({
                   ) : null}
                 </div>
                 {activeGeoEvent.event_intelligence ? (
-                  <div className="mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
+                  <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
                     <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
                       Impact <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.impact_score}</span>
                     </div>
@@ -920,16 +983,14 @@ export default function WorldMarketMap({
                     </div>
                   </div>
                 ) : null}
-                {activeGeoEvent.event_intelligence?.affected_sectors?.length ? (
-                  <div className="mt-3 text-xs leading-6 text-slate-600">
-                    Sectors: {activeGeoEvent.event_intelligence.affected_sectors.join(" | ")}
-                  </div>
-                ) : null}
-                {activeGeoEvent.event_intelligence?.affected_assets?.length ? (
-                  <div className="mt-1 text-xs leading-6 text-slate-600">
-                    Assets: {activeGeoEvent.event_intelligence.affected_assets.join(" | ")}
-                  </div>
-                ) : null}
+                <div className="mt-3 space-y-2 text-xs leading-6 text-slate-600">
+                  {activeGeoEvent.event_intelligence?.affected_sectors?.length ? (
+                    <div>Sectors: {activeGeoEvent.event_intelligence.affected_sectors.join(" | ")}</div>
+                  ) : null}
+                  {activeGeoEvent.event_intelligence?.affected_assets?.length ? (
+                    <div>Assets: {activeGeoEvent.event_intelligence.affected_assets.join(" | ")}</div>
+                  ) : null}
+                </div>
                 {activeGeoEvent.portfolio_exposure?.note ? (
                   <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
                     {activeGeoEvent.portfolio_exposure.note}
@@ -953,7 +1014,7 @@ export default function WorldMarketMap({
               </div>
             ) : null}
 
-            <div className="rounded-[1.7rem] border border-black/8 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.88))] p-5">
+            <div className="rounded-[1.5rem] border border-black/8 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.88))] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                   Why it matters
@@ -985,7 +1046,7 @@ export default function WorldMarketMap({
               </div>
             </div>
 
-            <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                 Event Layer
               </div>
@@ -1008,8 +1069,11 @@ export default function WorldMarketMap({
                       href={item.link}
                       target="_blank"
                       rel="noreferrer"
-                      onMouseEnter={() => setActiveEventIndex(index)}
-                      onFocus={() => setActiveEventIndex(index)}
+                      onMouseEnter={() => setHoveredEventIndex(index)}
+                      onMouseLeave={() => setHoveredEventIndex(null)}
+                      onFocus={() => setHoveredEventIndex(index)}
+                      onBlur={() => setHoveredEventIndex(null)}
+                      onClick={() => setPinnedEventIndex(index)}
                       className={`block rounded-[1rem] border p-3 transition-colors hover:bg-white ${
                         activeGeoEvent?.title === item.title
                           ? "border-[var(--accent)] bg-[var(--accent-soft)]/70"
@@ -1066,7 +1130,7 @@ export default function WorldMarketMap({
               </div>
             </div>
 
-            <div className="rounded-[1.7rem] border border-black/8 bg-white/85 p-5">
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                   Contrarian Radar
@@ -1077,7 +1141,7 @@ export default function WorldMarketMap({
               </div>
               <div className="mt-4 space-y-3">
                 {regionalContrarian.length ? (
-                  regionalContrarian.slice(0, 4).map((item, index) => (
+                  regionalContrarian.slice(0, 2).map((item, index) => (
                     <div
                       key={`${item.ticker}-${index}`}
                       className="rounded-[1rem] border border-black/8 bg-white/75 p-3"

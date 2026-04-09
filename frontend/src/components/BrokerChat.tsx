@@ -55,10 +55,10 @@ export default function BrokerChat({
     }
   }, [isOpen]);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const submitMessage = async (rawMessage: string) => {
+    const userMsg = rawMessage.trim();
+    if (!userMsg || loading) return;
 
-    const userMsg = input.trim();
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     setLoading(true);
@@ -92,6 +92,23 @@ export default function BrokerChat({
       setLoading(false);
     }
   };
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    await submitMessage(input);
+  };
+
+  const latestOracleMessage =
+    [...messages].reverse().find((message) => message.role === "oracle")?.content ||
+    "Broker Freund analysiert gerade Markt, Signale und dein Setup.";
+
+  const quickActions = [
+    currentTicker
+      ? `Was ist heute der wichtigste Trigger fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}?`
+      : "Was ist heute das wichtigste Setup?",
+    "Wo ist heute das groesste Risiko?",
+    "Welche Hedge-Idee ist heute am sinnvollsten?",
+  ];
 
   const chatContent = (
     <div
@@ -147,49 +164,109 @@ export default function BrokerChat({
       <div
         className={`flex-1 overflow-y-auto ${isInline ? "px-0 py-4" : "p-6"} space-y-6 scrollbar-hide`}
       >
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`flex max-w-[85%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-            >
-              <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
-                  msg.role === "user"
-                    ? "border-slate-300 bg-slate-200/70"
-                    : "border-[var(--accent)]/15 bg-[var(--accent-soft)]"
-                }`}
-              >
-                {msg.role === "user" ? (
-                  <User size={16} className="text-slate-700" />
-                ) : (
-                  <Bot size={16} className="text-[var(--accent)]" />
-                )}
+        {!isInline && mobileSheetMode === "peek" ? (
+          <div className="space-y-4 md:hidden">
+            <div className="rounded-[1.3rem] border border-black/8 bg-white/82 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Desk Snapshot
               </div>
-              <div
-                className={`rounded-2xl border p-4 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "border-slate-300 bg-slate-100 text-slate-800"
-                    : "border-black/8 bg-white/80 text-slate-700"
-                }`}
-              >
-                {msg.content}
+              <div className="mt-3 text-sm leading-6 text-slate-700">
+                {latestOracleMessage}
               </div>
             </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl border border-black/8 bg-white/80 p-4">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)]"></span>
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:0.2s]"></span>
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:0.4s]"></span>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                  Context
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">
+                  {currentTicker
+                    ? Array.isArray(currentTicker)
+                      ? currentTicker.join(", ")
+                      : currentTicker
+                    : "Market overview"}
+                </div>
+              </div>
+              <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                  Mode
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">
+                  Live desk
+                </div>
+              </div>
+              <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                  Next step
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">
+                  Slide up or tap a prompt
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {quickActions.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => {
+                    setMobileSheetMode("full");
+                    void submitMessage(action);
+                  }}
+                  className="block w-full rounded-[1.1rem] border border-black/8 bg-white/78 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-[var(--accent-soft)]"
+                >
+                  {action}
+                </button>
+              ))}
             </div>
           </div>
+        ) : (
+          <>
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`flex max-w-[85%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                >
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                      msg.role === "user"
+                        ? "border-slate-300 bg-slate-200/70"
+                        : "border-[var(--accent)]/15 bg-[var(--accent-soft)]"
+                    }`}
+                  >
+                    {msg.role === "user" ? (
+                      <User size={16} className="text-slate-700" />
+                    ) : (
+                      <Bot size={16} className="text-[var(--accent)]" />
+                    )}
+                  </div>
+                  <div
+                    className={`rounded-2xl border p-4 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "border-slate-300 bg-slate-100 text-slate-800"
+                        : "border-black/8 bg-white/80 text-slate-700"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl border border-black/8 bg-white/80 p-4">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)]"></span>
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:0.2s]"></span>
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:0.4s]"></span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       <div
@@ -202,23 +279,33 @@ export default function BrokerChat({
             </span>
           </div>
         )}
-        <div className="relative">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Frage nach Markt, Aktie, ETF oder Risiko..."
-            className="w-full rounded-xl border border-black/8 bg-white py-3.5 pl-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-          />
+        {!isInline && mobileSheetMode === "peek" ? (
           <button
-            onClick={handleSend}
-            disabled={!input.trim() || loading}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-[var(--accent)] p-2 text-white transition-all hover:bg-[var(--accent-strong)] disabled:opacity-50"
+            type="button"
+            onClick={() => setMobileSheetMode("full")}
+            className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-[var(--accent-soft)] md:hidden"
           >
-            <Send size={18} />
+            Vollstaendige Desk-Ansicht oeffnen
           </button>
-        </div>
+        ) : (
+          <div className="relative">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Frage nach Markt, Aktie, ETF oder Risiko..."
+              className="w-full rounded-xl border border-black/8 bg-white py-3.5 pl-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-[var(--accent)] p-2 text-white transition-all hover:bg-[var(--accent-strong)] disabled:opacity-50"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        )}
         {!isInline && (
           <p className="mt-4 text-center text-[10px] text-slate-500">
             Broker Freund Desk analysiert Live-Daten. Keine direkte Anlageberatung.

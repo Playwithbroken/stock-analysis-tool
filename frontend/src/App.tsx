@@ -763,16 +763,42 @@ function AppContent() {
                   </h3>
                   <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     {[
-                      ["Public Signals", "Berkshire, Congress und weitere oeffentliche Filings mit sichtbarem Delay."],
-                      ["Decision Clarity", "Ruhigere Scores und bessere Priorisierung von Risiko, Bewertung und Momentum."],
-                      ["Private Access", "Single-User-Hardening mit Login, lokaler Session und gesperrten Triggern."],
-                    ].map(([title, body]) => (
-                      <div key={title} className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+                      {
+                        title: "Public Signals",
+                        body: "Berkshire, Congress und weitere oeffentliche Filings mit sichtbarem Delay.",
+                        cta: "Open Markets",
+                        action: () => setActiveTab("discovery" as Tab),
+                      },
+                      {
+                        title: "Decision Clarity",
+                        body: "Ruhigere Scores und bessere Priorisierung von Risiko, Bewertung und Momentum.",
+                        cta: "Run Analysis",
+                        action: () => {
+                          const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="AAPL, NVDA, ASML, BTC-USD"]');
+                          searchInput?.focus();
+                        },
+                      },
+                      {
+                        title: "Private Access",
+                        body: "Single-User-Hardening mit Login, lokaler Session und gesperrten Triggern.",
+                        cta: "Open Portfolio",
+                        action: () => setActiveTab("portfolio" as Tab),
+                      },
+                    ].map((item) => (
+                      <button
+                        key={item.title}
+                        type="button"
+                        onClick={item.action}
+                        className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 text-left transition-all hover:border-black/14 hover:bg-white hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)]"
+                      >
                         <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                          {title}
+                          {item.title}
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
-                      </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
+                        <div className="mt-4 inline-flex rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                          {item.cta}
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -782,13 +808,36 @@ function AppContent() {
                   </div>
                   <div className="mt-4 space-y-3">
                     {[
-                      "1. Search a ticker, ETF or crypto pair.",
-                      "2. Read the live quote, score context and risk profile.",
-                      "3. Move into paper trading or signals only if the setup holds.",
+                      {
+                        copy: "1. Search a ticker, ETF or crypto pair.",
+                        cta: "Focus Search",
+                        action: () => {
+                          const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="AAPL, NVDA, ASML, BTC-USD"]');
+                          searchInput?.focus();
+                        },
+                      },
+                      {
+                        copy: "2. Read the live quote, score context and risk profile.",
+                        cta: "Open Markets",
+                        action: () => setActiveTab("discovery" as Tab),
+                      },
+                      {
+                        copy: "3. Move into paper trading or signals only if the setup holds.",
+                        cta: "Open Portfolio",
+                        action: () => setActiveTab("portfolio" as Tab),
+                      },
                     ].map((item) => (
-                      <div key={item} className="rounded-[1.3rem] border border-black/8 bg-white/78 p-4 text-sm text-slate-700">
-                        {item}
-                      </div>
+                      <button
+                        key={item.copy}
+                        type="button"
+                        onClick={item.action}
+                        className="rounded-[1.3rem] border border-black/8 bg-white/78 p-4 text-left text-sm text-slate-700 transition-all hover:border-black/14 hover:bg-white"
+                      >
+                        <div>{item.copy}</div>
+                        <div className="mt-3 inline-flex rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                          {item.cta}
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </div>

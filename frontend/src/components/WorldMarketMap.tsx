@@ -276,6 +276,34 @@ function eventTypeBreakdown(items: GeoEvent[]) {
     .slice(0, 4);
 }
 
+function buildPlaceVariantStack(items: GeoEvent[]) {
+  const impactRank = { high: 3, medium: 2, low: 1 } as const;
+  return [...items]
+    .sort((a, b) => {
+      const scoreA =
+        (impactRank[a.impact as keyof typeof impactRank] || 0) +
+        (a.event_intelligence?.action && a.event_intelligence.action !== "watch" ? 2 : 0) +
+        (a.pulse ? 1 : 0);
+      const scoreB =
+        (impactRank[b.impact as keyof typeof impactRank] || 0) +
+        (b.event_intelligence?.action && b.event_intelligence.action !== "watch" ? 2 : 0) +
+        (b.pulse ? 1 : 0);
+      return scoreB - scoreA;
+    })
+    .slice(0, 4)
+    .map((item) => ({
+      key: item.geoKey || item.title,
+      label: describeEventVariant(item) || item.markerLabel,
+      eventCode: item.markerIcon,
+      impact: item.impact || "macro",
+      action: item.event_intelligence?.action || "watch",
+      freshness: freshnessLabel(item.event_intelligence?.decay, item.pulse),
+      place: item.geoPlace,
+      trigger: item.event_intelligence?.trigger,
+      geoKey: item.geoKey,
+    }));
+}
+
 function describeEventVariant(event: GeoEvent | null) {
   if (!event) return null;
   const title = `${event.title || ""} ${(event.region || "").toLowerCase()}`.toLowerCase();
@@ -879,6 +907,7 @@ export default function WorldMarketMap({
     const zones = topGeoZones(focusRegionSignals, 4);
     const places = topGeoPlaces(focusRegionSignals, 5);
     const eventMix = eventTypeBreakdown(focusedPlaceSignals);
+    const placeStack = buildPlaceVariantStack(focusedPlaceSignals);
     return {
       total: items.length,
       actionable,
@@ -887,6 +916,7 @@ export default function WorldMarketMap({
       zones,
       places,
       eventMix,
+      placeStack,
     };
   }, [focusRegionSignals, focusedPlaceSignals]);
 
@@ -1457,6 +1487,43 @@ export default function WorldMarketMap({
                         >
                           {eventCode} {count}
                         </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {selectedGeoPlace && regionDrilldown.placeStack.length ? (
+                    <div className="grid gap-2">
+                      {regionDrilldown.placeStack.map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
+                            if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                          }}
+                          className="rounded-[0.95rem] border border-black/8 bg-white px-3 py-2 text-left transition-colors hover:bg-[var(--accent-soft)]"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                              {item.eventCode} | {item.label}
+                            </div>
+                            <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(item.freshness)}`}>
+                              {item.freshness}
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em]">
+                            <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-slate-500">
+                              {item.impact}
+                            </span>
+                            <span className="rounded-full border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-2 py-1 text-[var(--accent)]">
+                              {item.action}
+                            </span>
+                          </div>
+                          {item.trigger ? (
+                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
+                              Trigger: {item.trigger}
+                            </div>
+                          ) : null}
+                        </button>
                       ))}
                     </div>
                   ) : null}

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import worldMapSvg from "../assets/world-map-wikimedia.svg";
 
 interface RegionAsset {
@@ -78,6 +78,8 @@ interface MapAnchor {
   left: string;
   top: string;
 }
+
+type EventFilter = "all" | "WAR" | "CB" | "OIL" | "VOTE" | "NAT" | "POL";
 
 const positions: Record<
   string,
@@ -342,6 +344,7 @@ export default function WorldMarketMap({
   onAnalyze,
   focusTicker,
 }: WorldMarketMapProps) {
+  const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
 
@@ -360,13 +363,21 @@ export default function WorldMarketMap({
           const impactRank = { high: 0, medium: 1, low: 2 };
           return (impactRank[a!.impact as keyof typeof impactRank] ?? 3) - (impactRank[b!.impact as keyof typeof impactRank] ?? 3);
         })
-        .slice(0, 8) as GeoEvent[],
+        .slice(0, 10) as GeoEvent[],
     [eventLayer, news],
+  );
+
+  const filteredGeoSignals = useMemo(
+    () =>
+      geoSignals.filter((item) =>
+        activeFilter === "all" ? true : item.markerIcon === activeFilter,
+      ),
+    [geoSignals, activeFilter],
   );
 
   const positionedGeoSignals = useMemo(() => {
     const counts: Record<string, number> = {};
-    return geoSignals.map((item) => {
+    return filteredGeoSignals.slice(0, 6).map((item) => {
       const key = item.regionKey;
       const count = counts[key] || 0;
       counts[key] = count + 1;
@@ -381,7 +392,7 @@ export default function WorldMarketMap({
         },
       };
     });
-  }, [geoSignals]);
+  }, [filteredGeoSignals]);
 
   const timeline = useMemo(
     () => (openingTimeline.length ? openingTimeline : buildTimeline(regions, news)),
@@ -453,6 +464,30 @@ export default function WorldMarketMap({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: "all", label: "All" },
+            { key: "WAR", label: "War" },
+            { key: "VOTE", label: "Election" },
+            { key: "OIL", label: "Oil" },
+            { key: "CB", label: "CB" },
+            { key: "NAT", label: "Disaster" },
+            { key: "POL", label: "Policy" },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setActiveFilter(item.key as EventFilter)}
+              className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                activeFilter === item.key
+                  ? "bg-[#101114] text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)]"
+                  : "border border-black/8 bg-white/70 text-slate-500"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
@@ -696,8 +731,8 @@ export default function WorldMarketMap({
                 Event Layer
               </div>
               <div className="mt-4 space-y-3">
-                {geoSignals.length ? (
-                  geoSignals.map((item, index) => (
+                {positionedGeoSignals.length ? (
+                  positionedGeoSignals.map((item, index) => (
                     <a
                       key={`${item.title}-${index}`}
                       href={item.link}
@@ -720,7 +755,7 @@ export default function WorldMarketMap({
                   ))
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                    Keine dominanten geopolitischen Schocks im aktuellen Brief.
+                    Keine dominanten Events im aktuellen Filter.
                   </div>
                 )}
               </div>

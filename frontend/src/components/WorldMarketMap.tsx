@@ -608,7 +608,7 @@ export default function WorldMarketMap({
                   key={region.label}
                   type="button"
                   onClick={() => onSelectRegion(region.label)}
-                  className="absolute z-20 text-left"
+                  className="absolute z-20 text-left group"
                   style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
                   <div className="relative">
@@ -630,8 +630,8 @@ export default function WorldMarketMap({
                     <div
                       className={`absolute top-1/2 -translate-y-1/2 rounded-[1.1rem] border p-2.5 backdrop-blur transition-all ${
                         isActive
-                          ? "border-black/12 bg-white/94 shadow-[0_20px_40px_rgba(15,23,42,0.12)]"
-                          : "border-black/8 bg-white/82 shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
+                          ? "pointer-events-auto opacity-100 border-black/12 bg-white/94 shadow-[0_20px_40px_rgba(15,23,42,0.12)]"
+                          : "pointer-events-none opacity-0 scale-[0.98] border-black/8 bg-white/82 shadow-[0_14px_34px_rgba(15,23,42,0.08)] group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:scale-100"
                       }`}
                       style={{
                         width: `${pos.cardWidth}px`,
@@ -658,6 +658,13 @@ export default function WorldMarketMap({
                         {(region.assets || []).slice(0, 2).map((asset) => asset.label).join(" | ") || "Macro mix"}
                       </div>
                     </div>
+                    {!isActive ? (
+                      <div className="pointer-events-none absolute top-1/2 hidden -translate-y-1/2 rounded-full border border-black/8 bg-white/90 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.08)] group-hover:block group-focus-visible:block"
+                        style={pos.align === "left" ? { left: `${pos.cardOffsetX - 2}px` } : { right: `${pos.cardOffsetX - 2}px` }}
+                      >
+                        {region.label}
+                      </div>
+                    ) : null}
                   </div>
                 </button>
               );

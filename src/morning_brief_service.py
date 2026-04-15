@@ -17,6 +17,7 @@ import requests
 
 from src.data_fetcher import DataFetcher
 from src.storage import PortfolioManager
+from src.social_intelligence_service import SocialIntelligenceService
 
 try:
     import feedparser  # type: ignore
@@ -119,6 +120,7 @@ class MorningBriefService:
     }
     _portfolio_manager: PortfolioManager | None = None
     _holding_profile_cache: Dict[str, Dict[str, Any]] = {}
+    _social_service: SocialIntelligenceService = SocialIntelligenceService()
 
     def get_brief(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
@@ -143,6 +145,35 @@ class MorningBriefService:
         top_news = self._collect_news(extra_tickers=watchlist_tickers)
         crowd_news = self._collect_crowd_news()
         social_news = self._collect_social_news()
+
+        # Social intelligence — Reddit, Stocktwits, Polymarket, Google News, broad earnings
+        try:
+            reddit_posts = self._social_service.get_reddit_sentiment(watchlist_tickers or [])
+        except Exception:
+            reddit_posts = []
+        try:
+            stocktwits_data = self._social_service.get_stocktwits_sentiment(
+                (watchlist_tickers or []) + self.NEWS_TICKERS[:4]
+            )
+        except Exception:
+            stocktwits_data = []
+        try:
+            polymarket_events = self._social_service.get_polymarket_events()
+        except Exception:
+            polymarket_events = []
+        try:
+            google_news_extra = self._social_service.get_google_news(
+                (watchlist_tickers or [])[:4] + ["S&P 500", "Fed interest rates", "market today"]
+            )
+        except Exception:
+            google_news_extra = []
+        try:
+            broad_earnings = self._social_service.get_broad_earnings_calendar(
+                extra_tickers=watchlist_tickers or [], days_ahead=14
+            )
+        except Exception:
+            broad_earnings = []
+
         event_layer = self._build_event_layer(top_news)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
@@ -184,10 +215,16 @@ class MorningBriefService:
             "contrarian_signals": contrarian_signals,
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
+            "broad_earnings": broad_earnings,
             "opening_timeline": opening_timeline,
             "action_board": action_board,
             "portfolio_brain": self._build_portfolio_brain(action_board),
             "watchlist_impact": [],
+            # Social intelligence
+            "reddit_posts": reddit_posts[:10],
+            "stocktwits": stocktwits_data,
+            "polymarket": polymarket_events[:8],
+            "google_news_extra": google_news_extra[:8],
         }
         self._cache = brief
         self._cache_time = now

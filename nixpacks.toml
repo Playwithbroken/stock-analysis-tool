@@ -4,12 +4,12 @@ nixPkgs = ["python3", "nodejs_20"]
 [phases.install]
 cmds = [
     "pip install -r requirements.txt",
-    "cd frontend && npm ci"
+    "cd frontend && npm ci --prefer-offline"
 ]
 
 [phases.build]
 cmds = [
-    "cd frontend && npm run build"
+    "cd frontend && NODE_OPTIONS='--max-old-space-size=1536' npm run build"
 ]
 
 [start]

@@ -12,7 +12,9 @@ export default defineConfig({
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: false, // we use our own /public/manifest.json
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Only precache small files — skip large vendor chunks to avoid OOM on CI
+        globPatterns: ['**/*.{html,css,ico,png,woff2}'],
+        maximumFileSizeToCacheInBytes: 500 * 1024, // 500 KB cap
         runtimeCaching: [
           {
             urlPattern: /^\/api\/.*/i,

@@ -289,6 +289,26 @@ class EmailAlertService:
                 "is_brief": True,
             },
             {
+                "job_key": "close-brief:europe",
+                "scheduled_time": os.getenv("EUROPE_CLOSE_BRIEF_TIME", "17:30"),
+                "subject": "Europe Close Brief: Session wrap + US watch",
+                "title": "Europe Close Brief",
+                "category": "close_brief",
+                "session_label": "europe_close",
+                "build_events": lambda: self._build_close_brief_events("europe"),
+                "is_brief": True,
+            },
+            {
+                "job_key": "close-brief:usa",
+                "scheduled_time": os.getenv("US_CLOSE_BRIEF_TIME", "22:15"),
+                "subject": "US Close Brief: Session wrap + overnight watch",
+                "title": "US Close Brief",
+                "category": "close_brief",
+                "session_label": "usa_close",
+                "build_events": lambda: self._build_close_brief_events("usa"),
+                "is_brief": True,
+            },
+            {
                 "job_key": "close-recap",
                 "scheduled_time": os.getenv("CLOSE_RECAP_TIME", "21:45"),
                 "subject": "End of Day Recap: Stocks, macro and next risks",
@@ -520,6 +540,61 @@ class EmailAlertService:
                 "conviction_score": max(conviction.values()) if conviction else None,
             }
             for index, line in enumerate(lines)
+        ]
+
+    def _build_close_brief_events(self, session: str) -> List[Dict[str, Any]]:
+        """Build events for Europe Close (17:30) or US Close (22:15)."""
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        brief = self.morning_brief_service.get_brief(snapshot)
+        region_label = "Europe" if session == "europe" else "US"
+        region_key = "europe" if session == "europe" else "usa"
+        next_session = "US open (15:30)" if session == "europe" else "Asia open + overnight"
+        region_data = brief.get("regions", {}).get(region_key, {})
+        avg_chg = region_data.get("avg_change_1d") or 0
+        tone = region_data.get("tone") or "mixed"
+
+        lines = [
+            f"{region_label} Close Brief",
+            "",
+            f"Session: {tone} {avg_chg:+.2f}%",
+            "",
+            "Session summary:",
+        ]
+        timeline = brief.get("opening_timeline", [])
+        session_data = next((t for t in timeline if t.get("label", "").lower() == region_key), None)
+        if session_data:
+            driver = session_data.get("driver") or ""
+            lines.append(f"- Driver: {driver}")
+        lines.extend(["", "Top moves today:"])
+        for asset in region_data.get("assets", [])[:3]:
+            chg = asset.get("change_1d")
+            chg_str = f"{chg:+.2f}%" if chg is not None else "—"
+            lines.append(f"- {asset.get('label', '')} {chg_str}")
+        lines.extend(["", f"Watch for {next_session}:"])
+        impacts = brief.get("watchlist_impact", [])
+        if impacts:
+            lines.extend(f"- {item['summary']}" for item in impacts[:4])
+        else:
+            lines.append("- Keine Watchlist-Treffer.")
+        lines.extend(["", "Overnight risks:"])
+        event_layer = brief.get("event_layer", [])
+        if event_layer:
+            lines.extend(
+                f"- {item.get('event_type', 'macro')} | {item.get('region', 'global').title()} | {item.get('title', '')}"
+                for item in event_layer[:3]
+            )
+        else:
+            lines.append("- Kein dominanter Overnight-Risikotreiber.")
+        return [
+            {
+                "event_key": f"close-brief:{session}:{datetime.now().strftime('%Y-%m-%d')}:{i}",
+                "category": "close_brief",
+                "title": f"{region_label} Close Brief",
+                "line": line,
+                "source_url": "",
+            }
+            for i, line in enumerate(lines)
         ]
 
     def _build_close_recap_events(self) -> List[Dict[str, Any]]:
@@ -803,7 +878,14 @@ class EmailAlertService:
         brief: Dict[str, Any],
         session_label: str,
     ) -> None:
-        """Send the morning/open brief as 2-3 rich HTML Telegram messages."""
+        """
+        Send brief as up to 4 focused Telegram messages (HTML).
+        Structure varies by session:
+          global / asia   → Full morning brief (markets + news + social + action)
+          europe / usa    → Session open brief (session markets + key news + action)
+          midday          → What changed + setups + portfolio brain
+          close           → Session close + tomorrow risks + earnings preview
+        """
         if not (config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id):
             return
         token = config.telegram_bot_token
@@ -812,43 +894,61 @@ class EmailAlertService:
         now_str = datetime.now(tz).strftime("%a %d.%m.%Y · %H:%M")
         regime = brief.get("macro_regime", "mixed").upper()
         bias = brief.get("opening_bias", "")
-        session_icons = {
-            "global": "🌅", "europe": "🇪🇺", "usa": "🇺🇸",
-            "asia": "🌏", "midday": "☀️", "close": "🌇",
-        }
-        icon = session_icons.get(session_label.lower(), "📊")
-        session_name = {
-            "global": "Morning Brief", "europe": "Europe Open",
-            "usa": "US Open", "asia": "Asia Handoff",
-            "midday": "Midday Update", "close": "End of Day Recap",
-        }.get(session_label.lower(), session_label.title())
+        sl = session_label.lower()
 
-        # ── Message 1: Market Snapshot ──────────────────────────────────────
+        META = {
+            "global":       ("🌅", "Morning Brief"),
+            "europe":       ("🇪🇺", "Europe Open"),
+            "europe_close": ("🇪🇺", "Europe Close"),
+            "usa":          ("🇺🇸", "US Open"),
+            "usa_close":    ("🇺🇸", "US Close"),
+            "asia":         ("🌏", "Asia Close"),
+            "midday":       ("☀️", "Midday Update"),
+            "close":        ("🌇", "End of Day Recap"),
+        }
+        icon, session_name = META.get(sl, ("📊", session_label.title()))
+
+        # Which region assets to highlight per session
+        REGION_FOCUS: Dict[str, List[str]] = {
+            "global":       ["usa", "europe", "asia"],
+            "asia":         ["asia"],
+            "europe":       ["europe", "usa"],
+            "europe_close": ["europe", "usa"],
+            "usa":          ["usa", "europe"],
+            "usa_close":    ["usa"],
+            "midday":       ["usa", "europe"],
+            "close":        ["usa", "europe", "asia"],
+        }
+        focus_regions = REGION_FOCUS.get(sl, ["usa", "europe", "asia"])
+
+        # ── MSG 1: Market Snapshot ──────────────────────────────────────────
         lines1: List[str] = [
             f"{icon} <b>{self._tg_esc(session_name)} — {now_str}</b>",
-            f"Regime: <b>{self._tg_esc(regime)}</b> · {self._tg_esc(bias)}",
+            f"Regime: <b>{self._tg_esc(regime)}</b> · <i>{self._tg_esc(bias)}</i>",
             "",
+            "📊 <b>Märkte</b>",
         ]
-
         regions_data = brief.get("regions", {})
-        region_order = [("usa", "🇺🇸 US Futures"), ("europe", "🇪🇺 Europa"), ("asia", "🌏 Asien")]
-        lines1.append("📊 <b>Märkte</b>")
-        for key, label in region_order:
-            region = regions_data.get(key, {})
-            assets = region.get("assets", [])
-            for asset in assets[:2]:
+        region_labels = {"usa": "🇺🇸", "europe": "🇪🇺", "asia": "🌏"}
+        for rkey in focus_regions:
+            region = regions_data.get(rkey, {})
+            flag = region_labels.get(rkey, "")
+            tone = region.get("tone", "mixed")
+            avg = region.get("avg_change_1d") or 0
+            lines1.append(f"{flag} <b>{rkey.title()}</b> {tone} {avg:+.2f}%")
+            for asset in region.get("assets", [])[:3]:
                 chg = asset.get("change_1d")
                 price = asset.get("price")
                 arrow = self._tg_arrow(chg)
                 chg_str = f"{chg:+.2f}%" if chg is not None else "—"
-                price_str = f" ${price:,.2f}" if price else ""
-                lines1.append(f"{arrow} {self._tg_esc(asset.get('label', ''))} {chg_str}{price_str}")
+                price_str = f" <code>${price:,.2f}</code>" if price else ""
+                lines1.append(f"  {arrow} {self._tg_esc(asset.get('label', ''))} {chg_str}{price_str}")
 
-        macro_assets = brief.get("macro_assets", [])
         macro_icons = {
             "CL=F": "🛢 Oil", "GC=F": "🥇 Gold", "BTC-USD": "₿ BTC",
-            "^TNX": "📉 10Y Yield", "DX-Y.NYB": "💵 USD Index",
+            "^TNX": "📉 10Y Yield", "DX-Y.NYB": "💵 DXY",
         }
+        macro_assets = brief.get("macro_assets", [])
         if macro_assets:
             lines1.append("")
             lines1.append("💹 <b>Makro</b>")
@@ -858,118 +958,210 @@ class EmailAlertService:
                 arrow = self._tg_arrow(chg)
                 chg_str = f"{chg:+.2f}%" if chg is not None else "—"
                 label = macro_icons.get(asset.get("ticker", ""), self._tg_esc(asset.get("label", "")))
-                price_str = f" {price:,.2f}" if price else ""
-                lines1.append(f"{arrow} {label}{price_str} <i>({chg_str})</i>")
+                price_str = f" <code>{price:,.2f}</code>" if price else ""
+                lines1.append(f"{arrow} {label}{price_str} ({chg_str})")
 
         self._tg_post(token, chat, "\n".join(lines1))
 
-        # ── Message 2: News & Events ────────────────────────────────────────
-        lines2: List[str] = ["📰 <b>Top News</b>", ""]
-        top_news = brief.get("top_news", [])
-        news_shown = 0
-        for item in top_news[:8]:
+        # ── MSG 2: News (Reuters/CNBC/Bloomberg + Google News) ─────────────
+        lines2: List[str] = ["📰 <b>News</b>", ""]
+
+        # Merge top_news + google_news_extra, deduplicate
+        seen_titles: set = set()
+        all_news: List[Dict[str, Any]] = []
+        for item in brief.get("top_news", []) + brief.get("google_news_extra", []):
+            t = item.get("title") or ""
+            if t and t not in seen_titles:
+                seen_titles.add(t)
+                all_news.append(item)
+        for item in all_news[:10]:
             title = self._tg_esc(item.get("title") or "")
-            link = item.get("link") or ""
+            link = (item.get("link") or "").strip()
             publisher = self._tg_esc(item.get("publisher") or "")
-            ticker = item.get("ticker") or ""
-            ticker_tag = f"<code>{self._tg_esc(ticker)}</code> " if ticker else ""
-            if link:
-                lines2.append(f"• {ticker_tag}<a href=\"{link}\">{title}</a> <i>({publisher})</i>")
-            else:
-                lines2.append(f"• {ticker_tag}{title} <i>({publisher})</i>")
-            news_shown += 1
-        if not news_shown:
+            ticker = (item.get("ticker") or "").strip()
+            tag = f"<code>{self._tg_esc(ticker)}</code> " if ticker else ""
+            line = f"• {tag}<a href=\"{link}\">{title}</a>" if link else f"• {tag}{title}"
+            if publisher:
+                line += f" <i>({publisher})</i>"
+            lines2.append(line)
+
+        if not all_news:
             lines2.append("<i>Keine aktuellen Meldungen.</i>")
 
         # Watchlist impact
         watchlist_impact = brief.get("watchlist_impact", [])
         if watchlist_impact:
-            lines2.extend(["", "🎯 <b>Watchlist Update</b>"])
+            lines2.extend(["", "🎯 <b>Deine Watchlist</b>"])
             for item in watchlist_impact[:5]:
                 summary = self._tg_esc(item.get("summary") or "")
                 ticker = self._tg_esc(item.get("ticker") or "")
                 tag = f"<code>{ticker}</code> " if ticker else ""
                 lines2.append(f"• {tag}{summary}")
 
-        # Earnings radar
-        earnings = brief.get("earnings_calendar", [])
+        # Earnings calendar (broad S&P500 + watchlist)
+        earnings = brief.get("broad_earnings") or brief.get("earnings_calendar", [])
         if earnings:
-            lines2.extend(["", "📅 <b>Earnings Radar</b>"])
-            for item in earnings[:4]:
+            lines2.extend(["", "📅 <b>Earnings nächste 14 Tage</b>"])
+            for item in earnings[:6]:
                 t = self._tg_esc(item.get("ticker") or "")
-                company = self._tg_esc(item.get("company") or t)
-                session = self._tg_esc(item.get("session") or "")
-                date_str = (item.get("scheduled_for") or "")[:10]
-                lines2.append(f"• <code>{t}</code> {company} — {date_str} {session}")
+                company = self._tg_esc((item.get("company") or t)[:28])
+                session = item.get("session") or ""
+                session_emoji = "🌅" if "pre" in session else "🌇" if "after" in session else "⏰"
+                date_str = (item.get("date") or item.get("scheduled_for") or "")[:10]
+                days = item.get("days_until")
+                days_str = f" <i>(in {days}d)</i>" if isinstance(days, int) else ""
+                cap = item.get("market_cap")
+                cap_str = f" ${cap/1e9:.0f}B" if cap and cap > 1e9 else ""
+                lines2.append(f"• <code>{t}</code> {company}{cap_str} — {date_str} {session_emoji}{days_str}")
 
-        # Economic calendar
-        econ = brief.get("economic_calendar", [])
-        econ_events = [e for e in econ if e.get("category") not in {"session"}]
-        if econ_events:
-            lines2.extend(["", "🗓 <b>Makro-Kalender</b>"])
-            for item in econ_events[:3]:
+        # Economic macro windows
+        econ = [e for e in brief.get("economic_calendar", []) if e.get("category") != "session"]
+        if econ:
+            lines2.extend(["", "🗓 <b>Makro-Fenster heute</b>"])
+            for item in econ[:4]:
                 title = self._tg_esc(item.get("title") or "")
                 time_str = (item.get("scheduled_for") or "")[11:16]
                 region = self._tg_esc((item.get("region") or "").upper())
-                lines2.append(f"• {time_str} <b>{region}</b> {title}")
+                lines2.append(f"• {time_str} <b>{region}</b> — {title}")
 
         self._tg_post(token, chat, "\n".join(lines2))
 
-        # ── Message 3: Action Board + Crowd ────────────────────────────────
+        # ── MSG 3: Social Intelligence (Reddit + Stocktwits + Polymarket) ──
         lines3: List[str] = []
+
+        reddit = brief.get("reddit_posts", [])
+        if reddit:
+            lines3.append("🤖 <b>Reddit Hot Posts</b>")
+            for post in reddit[:5]:
+                title = self._tg_esc((post.get("title") or "")[:120])
+                sub = self._tg_esc(post.get("subreddit") or "")
+                score = post.get("score") or 0
+                comments = post.get("num_comments") or 0
+                sentiment = post.get("sentiment") or "neutral"
+                sent_icon = "📈" if sentiment == "bullish" else "📉" if sentiment == "bearish" else "➡️"
+                url = post.get("url") or ""
+                tickers = post.get("ticker_matches", [])
+                ticker_str = " ".join(f"<code>{t}</code>" for t in tickers[:3])
+                line = f"{sent_icon} <a href=\"{url}\">{title}</a>"
+                if ticker_str:
+                    line += f" {ticker_str}"
+                line += f" <i>({sub} · ⬆️{score} 💬{comments})</i>"
+                lines3.append(line)
+
+        stocktwits = brief.get("stocktwits", [])
+        if stocktwits:
+            if lines3:
+                lines3.append("")
+            lines3.append("💬 <b>Stocktwits Sentiment</b>")
+            for item in stocktwits:
+                t = self._tg_esc(item.get("ticker") or "")
+                bull = item.get("bull_ratio") or 0
+                label = item.get("sentiment_label") or "neutral"
+                icon_s = "🐂" if label == "bullish" else "🐻" if label == "bearish" else "➡️"
+                msgs = item.get("message_count") or 0
+                bar_filled = round(bull / 10)
+                bar = "█" * bar_filled + "░" * (10 - bar_filled)
+                lines3.append(f"{icon_s} <code>{t}</code> {bar} {bull}% bullish · {msgs} msgs")
+                # Show top message
+                tops = item.get("top_messages") or []
+                if tops:
+                    top_txt = self._tg_esc((tops[0].get("text") or "")[:100])
+                    lines3.append(f'   <i>"{top_txt}"</i>')
+
+        polymarket = brief.get("polymarket", [])
+        if polymarket:
+            if lines3:
+                lines3.append("")
+            lines3.append("🎲 <b>Polymarket — Markt-Wahrscheinlichkeiten</b>")
+            for item in polymarket[:6]:
+                q = self._tg_esc((item.get("question") or "")[:100])
+                prob = item.get("probability_yes")
+                vol = item.get("volume_usd") or 0
+                url = item.get("url") or ""
+                end = (item.get("end_date") or "")
+                prob_str = f"<b>{prob:.0f}%</b>" if prob is not None else "?"
+                vol_str = f"${vol/1000:.0f}K" if vol >= 1000 else f"${vol:.0f}"
+                line = f"• <a href=\"{url}\">{q}</a>"
+                line += f" → {prob_str} Ja · Vol {vol_str}"
+                if end:
+                    line += f" (bis {end})"
+                lines3.append(line)
+
+        if lines3:
+            self._tg_post(token, chat, "\n".join(lines3))
+
+        # ── MSG 4: Action Board + Portfolio Brain + Contrarian ──────────────
+        lines4: List[str] = []
         action_board = brief.get("action_board", [])
         if action_board:
-            lines3.append("⚡ <b>Action Board</b>")
+            lines4.append("⚡ <b>Action Board</b>")
             for item in action_board[:5]:
-                ticker = self._tg_esc(item.get("ticker") or "macro")
+                ticker = self._tg_esc(item.get("ticker") or "Macro")
                 setup = self._tg_esc(item.get("setup") or "watch")
                 trigger = self._tg_esc(item.get("trigger") or "")
-                tag = f"<code>{ticker}</code> " if ticker != "macro" else ""
-                lines3.append(f"• {tag}<b>{setup}</b> — {trigger}")
+                tag = f"<code>{ticker}</code> " if ticker != "Macro" else ""
+                lines4.append(f"• {tag}<b>{setup}</b> — {trigger}")
 
         portfolio_brain = brief.get("portfolio_brain", {})
         at_risk = (portfolio_brain.get("at_risk") or [])[:2]
         beneficiaries = (portfolio_brain.get("beneficiaries") or [])[:2]
-        hedge_ideas = (portfolio_brain.get("hedge_ideas") or [])[:1]
+        hedge_ideas = (portfolio_brain.get("hedge_ideas") or [])[:2]
         if at_risk or beneficiaries or hedge_ideas:
-            lines3.extend(["", "🧠 <b>Portfolio Brain</b>"])
+            if lines4:
+                lines4.append("")
+            lines4.append("🧠 <b>Portfolio Brain</b>")
             for card in at_risk:
                 h = self._tg_esc(card.get("holding") or card.get("ticker") or "")
                 r = self._tg_esc(card.get("reason") or card.get("trigger") or "")
-                lines3.append(f"⚠️ Risiko: <code>{h}</code> — {r}")
+                lines4.append(f"⚠️ <code>{h}</code> — {r}")
             for card in beneficiaries:
                 h = self._tg_esc(card.get("holding") or card.get("ticker") or "")
                 r = self._tg_esc(card.get("reason") or card.get("trigger") or "")
-                lines3.append(f"✅ Profiteur: <code>{h}</code> — {r}")
+                lines4.append(f"✅ <code>{h}</code> — {r}")
             for card in hedge_ideas:
                 h = self._tg_esc(card.get("label") or card.get("ticker") or "")
                 r = self._tg_esc(card.get("trigger") or card.get("reason") or "")
-                lines3.append(f"🛡 Hedge: <code>{h}</code> — {r}")
-
-        crowd = brief.get("crowd_signals", [])
-        if crowd:
-            lines3.extend(["", "👥 <b>Crowd Radar</b>"])
-            for item in crowd[:3]:
-                t = self._tg_esc(item.get("ticker") or "Makro")
-                evt = self._tg_esc(item.get("event_type") or "")
-                mentions = item.get("mentions") or 0
-                bias = self._tg_esc(item.get("crowd_bias") or "watch")
-                lines3.append(f"• <code>{t}</code> {evt} — {mentions}× Mentions · {bias}")
+                lines4.append(f"🛡 <code>{h}</code> — {r}")
 
         contrarian = brief.get("contrarian_signals", [])
         if contrarian:
-            lines3.extend(["", "🔀 <b>Contrarian Signal</b>"])
-            for item in contrarian[:2]:
+            if lines4:
+                lines4.append("")
+            lines4.append("🔀 <b>Contrarian Signals</b>")
+            for item in contrarian[:3]:
                 t = self._tg_esc(item.get("ticker") or "")
                 pub = self._tg_esc(item.get("publisher") or "Media")
                 media_bias = self._tg_esc(item.get("media_bias") or "")
                 contra = self._tg_esc(item.get("contrarian_bias") or "")
                 score = item.get("score") or 0
                 rsi = item.get("rsi_14") or 0
-                lines3.append(f"• <code>{t}</code> {pub} calls {media_bias} → contra {contra} | RSI {rsi} · Score {score}")
+                link = item.get("link") or ""
+                title_str = self._tg_esc((item.get("title") or "")[:80])
+                title_part = f'<a href="{link}">{title_str}</a>' if link else title_str
+                lines4.append(
+                    f"• <code>{t}</code> {pub}: {media_bias} → contra <b>{contra}</b>"
+                    f" | RSI {rsi} · Score {score}"
+                )
+                if title_str:
+                    lines4.append(f"   <i>{title_part}</i>")
 
-        if lines3:
-            self._tg_post(token, chat, "\n".join(lines3))
+        # Session-close / EOD additions
+        if sl in {"close", "europe_close", "usa_close"}:
+            timeline = brief.get("opening_timeline", [])
+            if timeline:
+                if lines4:
+                    lines4.append("")
+                lines4.append("📈 <b>Session-Abschluss</b>")
+                for sess in timeline:
+                    label_s = self._tg_esc(sess.get("label") or "")
+                    tone_s = self._tg_esc(sess.get("tone") or "")
+                    move_s = float(sess.get("move") or 0)
+                    driver_s = self._tg_esc((sess.get("driver") or "")[:80])
+                    arrow = self._tg_arrow(move_s)
+                    lines4.append(f"{arrow} <b>{label_s}</b> {tone_s} {move_s:+.2f}% — {driver_s}")
+
+        if lines4:
+            self._tg_post(token, chat, "\n".join(lines4))
 
     def _send_telegram(
         self,

@@ -13,9 +13,16 @@ from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
 
 import pandas as pd
+import requests
 
 from src.data_fetcher import DataFetcher
 from src.storage import PortfolioManager
+
+try:
+    import feedparser  # type: ignore
+    _HAS_FEEDPARSER = True
+except ImportError:
+    _HAS_FEEDPARSER = False
 
 
 class MorningBriefService:
@@ -45,7 +52,20 @@ class MorningBriefService:
         ("^TNX", "US 10Y Yield"),
         ("DX-Y.NYB", "US Dollar Index"),
     ]
-    NEWS_TICKERS = ["SPY", "QQQ", "GLD", "TLT", "XLE", "NVDA", "AAPL", "MSFT"]
+    NEWS_TICKERS = ["SPY", "QQQ", "GLD", "TLT", "XLE", "NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "META", "GOOGL"]
+
+    # Free RSS feeds for real-time headlines
+    RSS_FEEDS = [
+        ("https://feeds.reuters.com/reuters/businessNews", "Reuters"),
+        ("https://feeds.reuters.com/reuters/technologyNews", "Reuters"),
+        ("https://feeds.reuters.com/news/economy", "Reuters"),
+        ("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147", "CNBC"),
+        ("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135", "CNBC"),
+        ("https://feeds.marketwatch.com/marketwatch/topstories/", "MarketWatch"),
+        ("https://feeds.marketwatch.com/marketwatch/marketpulse/", "MarketWatch"),
+        ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance"),
+        ("https://www.investing.com/rss/news.rss", "Investing.com"),
+    ]
     DEFAULT_BRIEF_TIMEZONE = "Europe/Berlin"
     CONTRARIAN_PUBLISHERS = {"CNBC", "Bloomberg", "Reuters", "MarketWatch", "Barron's", "Barrons", "WSJ"}
     TRUSTED_PUBLISHERS = {
@@ -109,11 +129,18 @@ class MorningBriefService:
         ):
             return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
 
+        # Include user watchlist tickers in news fetch
+        watchlist_tickers = [
+            (item.get("value") or "").upper()
+            for item in (watchlist_snapshot or {}).get("items", [])
+            if item.get("kind") == "ticker" and item.get("value")
+        ]
+
         asia = self._collect_region(self.ASIA, "Asia")
         europe = self._collect_region(self.EUROPE, "Europe")
         usa = self._collect_region(self.USA, "USA")
         macro = self._collect_assets(self.MACRO)
-        top_news = self._collect_news()
+        top_news = self._collect_news(extra_tickers=watchlist_tickers)
         crowd_news = self._collect_crowd_news()
         social_news = self._collect_social_news()
         event_layer = self._build_event_layer(top_news)
@@ -194,12 +221,82 @@ class MorningBriefService:
             )
         return assets
 
-    def _collect_news(self) -> List[Dict[str, Any]]:
+    def _collect_rss_news(self) -> List[Dict[str, Any]]:
+        """Fetch fresh headlines from free RSS feeds (Reuters, CNBC, MarketWatch, etc.)"""
+        if not _HAS_FEEDPARSER:
+            return []
         items: List[Dict[str, Any]] = []
-        seen_titles = set()
-        for ticker in self.NEWS_TICKERS:
+        seen_titles: set = set()
+        for feed_url, feed_publisher in self.RSS_FEEDS:
+            try:
+                parsed = feedparser.parse(feed_url, request_headers={"User-Agent": "Mozilla/5.0"})
+                for entry in (parsed.entries or [])[:5]:
+                    title = (entry.get("title") or "").strip()
+                    link = entry.get("link") or ""
+                    if not title or title in seen_titles:
+                        continue
+                    # Filter out very old entries (older than 18 hours)
+                    published = entry.get("published_parsed")
+                    if published:
+                        import time as _time
+                        age_hours = (_time.time() - _time.mktime(published)) / 3600
+                        if age_hours > 18:
+                            continue
+                    seen_titles.add(title)
+                    text = title.lower()
+                    source_meta = self._source_meta(feed_publisher, link)
+                    classification = self._classify_news_signal(text)
+                    if source_meta["exclude"]:
+                        continue
+                    # Try to associate with a known ticker
+                    ticker = None
+                    for t in self.NEWS_TICKERS:
+                        if t.lower() in text:
+                            ticker = t
+                            break
+                    items.append(
+                        {
+                            "ticker": ticker,
+                            "title": title,
+                            "publisher": feed_publisher,
+                            "link": link,
+                            "source_domain": source_meta["domain"],
+                            "source_type": source_meta["source_type"],
+                            "source_quality": source_meta["quality"],
+                            "is_trusted_source": source_meta["trusted"],
+                            "impact": classification["impact"],
+                            "region": classification["region"],
+                            "event_type": classification["event_type"],
+                            "severity": classification["severity"],
+                            "source": "rss",
+                        }
+                    )
+            except Exception:
+                continue
+        return items
+
+    def _collect_news(self, extra_tickers: List[str] | None = None) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        seen_titles: set = set()
+
+        # 1. Collect from RSS feeds (real-time, highest priority)
+        rss_items = self._collect_rss_news()
+        for item in rss_items:
+            title = item.get("title") or ""
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                items.append(item)
+
+        # 2. Collect from yfinance per ticker (includes user watchlist tickers)
+        all_tickers = list(self.NEWS_TICKERS)
+        if extra_tickers:
+            for t in extra_tickers:
+                if t and t not in all_tickers:
+                    all_tickers.append(t)
+
+        for ticker in all_tickers:
             news = DataFetcher(ticker).get_news()
-            for item in news[:2]:
+            for item in news[:3]:
                 title = item.get("title") or ""
                 if not title or title in seen_titles:
                     continue
@@ -227,6 +324,7 @@ class MorningBriefService:
                         "severity": classification["severity"],
                     }
                 )
+
         trusted_items = [item for item in items if item.get("is_trusted_source")]
         trusted_items.sort(
             key=lambda item: (
@@ -236,7 +334,7 @@ class MorningBriefService:
                 item["region"],
             )
         )
-        return trusted_items[:12]
+        return trusted_items[:16]
 
     def _build_event_layer(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         layer = []

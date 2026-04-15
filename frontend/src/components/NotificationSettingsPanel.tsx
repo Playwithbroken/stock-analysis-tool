@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTheme } from "../context/ThemeContext";
 
 interface NotificationSettingsPanelProps {
   onSaved?: () => void;
@@ -30,6 +31,7 @@ const initialProfile: WorkspaceProfile = {
 export default function NotificationSettingsPanel({
   onSaved,
 }: NotificationSettingsPanelProps) {
+  const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<WorkspaceProfile>(initialProfile);
   const [notificationStatus, setNotificationStatus] = useState<NotificationStatus | null>(null);
   const [permission, setPermission] = useState<string>(
@@ -154,12 +156,16 @@ export default function NotificationSettingsPanel({
               Theme
             </div>
             <select
-              value={profile.theme}
-              onChange={(e) => setProfile((prev) => ({ ...prev, theme: e.target.value }))}
+              value={theme}
+              onChange={(e) => {
+                const t = e.target.value as "premium-light" | "dark";
+                setTheme(t);
+                setProfile((prev) => ({ ...prev, theme: t }));
+              }}
               className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
             >
               <option value="premium-light">Premium Light</option>
-              <option value="terminal-light">Terminal Light</option>
+              <option value="dark">Dark Mode</option>
             </select>
           </div>
 

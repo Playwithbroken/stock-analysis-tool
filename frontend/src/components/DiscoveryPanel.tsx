@@ -85,9 +85,9 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
         withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }));
 
       const results = await Promise.allSettled([
-        safeFetch("/api/discovery/stars"),
-        safeFetch("/api/discovery/public-signals"),
-        safeFetch("/api/signals/watchlist"),
+        safeFetch<StarAssets>("/api/discovery/stars"),
+        safeFetch<PublicSignalsData>("/api/discovery/public-signals"),
+        safeFetch<SignalWatchlistData>("/api/signals/watchlist"),
         safeFetch<DiscoveryStock[]>("/api/discovery/trending"),
         safeFetch<DiscoveryStock[]>("/api/discovery/gainers"),
         safeFetch<DiscoveryStock[]>("/api/discovery/losers"),
@@ -96,8 +96,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
         safeFetch<DiscoveryStock[]>("/api/discovery/moonshots"),
         safeFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
         safeFetch<DiscoveryStock[]>("/api/discovery/commodities"),
-        safeFetch("/api/discovery/high-risk-opportunities"),
-        safeFetch("/api/discovery/etfs"),
+        safeFetch<any[]>("/api/discovery/high-risk-opportunities"),
+        safeFetch<any[]>("/api/discovery/etfs"),
       ]);
 
       const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>

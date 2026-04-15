@@ -3,8 +3,7 @@ import PriceChart from "./PriceChart";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
 import { Plus, Download, FileText } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// jsPDF and autoTable are dynamically imported inside exportToPDF to keep the initial bundle small
 import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
@@ -93,7 +92,9 @@ export default function AnalysisResult({
   const technicalScore = clampScore(analysis?.technical?.score ?? total_score);
   const fundamentalScore = clampScore(analysis?.fundamental?.score ?? total_score);
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 

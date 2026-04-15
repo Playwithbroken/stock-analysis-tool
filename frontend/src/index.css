@@ -242,6 +242,74 @@ h3,
   }
 }
 
+/* ─── Dark mode ──────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --primary-50: #0f1117;
+  --primary-100: #161a23;
+  --primary-200: #1e2330;
+
+  --secondary-700: #9aa3b2;
+  --secondary-800: #c8d0dc;
+  --secondary-900: #f1f3f7;
+
+  --accent: #2dd4bf;
+  --accent-strong: #14b8a6;
+  --accent-soft: rgba(45, 212, 191, 0.12);
+
+  --bg-base: #0f1117;
+  --bg-canvas: #161a23;
+  --bg-elevated: rgba(255, 255, 255, 0.06);
+  --bg-panel: rgba(255, 255, 255, 0.04);
+  --bg-strong: #f1f3f7;
+  --bg-soft: #1e2330;
+  --line-subtle: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --text-primary: #f1f3f7;
+  --text-secondary: #9aa3b2;
+  --text-tertiary: #6b7584;
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 12px 28px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.06), transparent 30%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.02), transparent 22%),
+    linear-gradient(180deg, #0f1117 0%, #161a23 100%);
+}
+
+[data-theme="dark"] .app-shell {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .app-shell-header {
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .surface-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .surface-strong {
+  background: #f1f3f7;
+  color: #0f1117;
+}
+
 .ticker-chip-flash-up {
   animation: ticker-flash-up 0.95s ease-out;
 }

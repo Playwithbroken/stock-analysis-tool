@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import worldMapSvg from "../assets/world-map-wikimedia.svg";
+
+// Lazy-load world map SVG — keeps initial bundle ~280KB smaller
+const worldMapSvg = new URL("../assets/world-map-wikimedia.svg", import.meta.url).href;
 
 interface RegionAsset {
   ticker: string;

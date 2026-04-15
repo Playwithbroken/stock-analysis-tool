@@ -6,7 +6,7 @@ interface SearchBarProps {
   onSearch: (ticker: string) => void;
   loading: boolean;
   /** Optional ref forwarded to the underlying text input for programmatic focus */
-  inputRef?: RefObject<HTMLInputElement>;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }
 
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {

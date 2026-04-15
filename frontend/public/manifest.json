@@ -1,0 +1,26 @@
+{
+  "name": "Broker Freund — Stock Analyzer",
+  "short_name": "Broker Freund",
+  "description": "AI-powered stock analysis, portfolio tracking, and market intelligence.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#faf8f3",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "lang": "de"
+}

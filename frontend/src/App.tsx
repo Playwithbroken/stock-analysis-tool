@@ -4,6 +4,7 @@ import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
@@ -934,8 +935,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <CurrencyProvider>
-      <AppContent />
-    </CurrencyProvider>
+    <ThemeProvider>
+      <CurrencyProvider>
+        <AppContent />
+      </CurrencyProvider>
+    </ThemeProvider>
   );
 }

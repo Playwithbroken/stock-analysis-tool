@@ -46,7 +46,8 @@ export default function PortfolioPerformance({
         const response = await fetch(
           `/api/portfolio/${portfolioId}/history?period=${period.id}`,
         );
-        const histData = await response.json();
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const histData: PerformanceItem[] = await response.json();
         setData(histData);
 
         if (histData.length > 1) {
@@ -56,8 +57,8 @@ export default function PortfolioPerformance({
           const changePct = (change / first) * 100;
           setStats({ change, changePct });
         }
-      } catch (err) {
-        console.error("Failed to fetch portfolio performance", err);
+      } catch {
+        setData([]);
       } finally {
         setLoading(false);
       }

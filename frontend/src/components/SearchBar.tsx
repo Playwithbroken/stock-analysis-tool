@@ -1,13 +1,15 @@
-import { useState, FormEvent, useEffect, useRef, useMemo } from "react";
+import { useState, FormEvent, useEffect, useRef, useMemo, RefObject } from "react";
 import { Search, ArrowUpRight } from "lucide-react";
 import { fetchJsonWithRetry } from "../lib/api";
 
 interface SearchBarProps {
   onSearch: (ticker: string) => void;
   loading: boolean;
+  /** Optional ref forwarded to the underlying text input for programmatic focus */
+  inputRef?: RefObject<HTMLInputElement>;
 }
 
-export default function SearchBar({ onSearch, loading }: SearchBarProps) {
+export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
   const [showDropdown, setShowDropdown] = useState(false);
@@ -121,7 +123,7 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
       <div className="surface-panel relative overflow-hidden rounded-[2rem] p-3">
         <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-black/10 to-transparent" />
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="flex flex-1 items-center gap-4 rounded-[1.5rem] bg-white/70 px-5 py-4 ring-1 ring-black/5">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
               <Search size={18} />
@@ -131,12 +133,14 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
                 Global Search
               </div>
               <input
+                ref={inputRef}
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
                 onKeyDown={handleKeyDown}
                 placeholder="AAPL, NVDA, ASML, BTC-USD"
+                aria-label="Search for a stock, ETF, or crypto ticker"
                 className="mt-1 w-full border-0 bg-transparent p-0 text-lg font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0"
                 disabled={loading}
               />

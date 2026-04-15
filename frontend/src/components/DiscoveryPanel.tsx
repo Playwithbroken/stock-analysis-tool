@@ -4,6 +4,15 @@ import PublicSignalsPanel from "./PublicSignalsPanel";
 import SignalWatchlistPanel from "./SignalWatchlistPanel";
 import NotificationSettingsPanel from "./NotificationSettingsPanel";
 import { useCurrency } from "../context/CurrencyContext";
+import { fetchJsonWithRetry } from "../lib/api";
+
+/** Wraps a promise with a timeout — resolves null instead of hanging forever */
+function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
 
 interface DiscoveryStock {
   ticker: string;
@@ -71,40 +80,46 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
-      try {
-        const [s, ps, sw, t, g, l, r, sc, m, cur, com, hr, e] = await Promise.all([
-          fetch("/api/discovery/stars").then((r) => r.json()),
-          fetch("/api/discovery/public-signals").then((r) => r.json()),
-          fetch("/api/signals/watchlist").then((r) => r.json()),
-          fetch("/api/discovery/trending").then((r) => r.json()),
-          fetch("/api/discovery/gainers").then((r) => r.json()),
-          fetch("/api/discovery/losers").then((r) => r.json()),
-          fetch("/api/discovery/rebounds").then((r) => r.json()),
-          fetch("/api/discovery/small-caps").then((r) => r.json()),
-          fetch("/api/discovery/moonshots").then((r) => r.json()),
-          fetch("/api/discovery/cryptos").then((r) => r.json()),
-          fetch("/api/discovery/commodities").then((r) => r.json()),
-          fetch("/api/discovery/high-risk-opportunities").then((r) => r.json()),
-          fetch("/api/discovery/etfs").then((r) => r.json()),
-        ]);
-        setStars(s);
-        setPublicSignals(ps);
-        setSignalWatchlist(sw);
-        setTrending(t);
-        setGainers(g);
-        setLosers(l);
-        setRebounds(r);
-        setSmallCaps(sc);
-        setMoonshots(m);
-        setCryptos(cur);
-        setCommodities(com);
-        setHighRiskOpps(hr);
-        setEtfs(e);
-      } catch (e) {
-        console.error("Discovery fetch failed", e);
-      } finally {
-        setLoading(false);
-      }
+
+      const safeFetch = <T,>(url: string) =>
+        withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }));
+
+      const results = await Promise.allSettled([
+        safeFetch("/api/discovery/stars"),
+        safeFetch("/api/discovery/public-signals"),
+        safeFetch("/api/signals/watchlist"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/trending"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/gainers"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/losers"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/rebounds"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/small-caps"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/moonshots"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
+        safeFetch<DiscoveryStock[]>("/api/discovery/commodities"),
+        safeFetch("/api/discovery/high-risk-opportunities"),
+        safeFetch("/api/discovery/etfs"),
+      ]);
+
+      const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>
+        r.status === "fulfilled" && r.value != null ? r.value : fallback;
+
+      const [s, ps, sw, t, g, l, r, sc, m, cur, com, hr, e] = results;
+
+      setStars(val(s, null));
+      setPublicSignals(val(ps, null));
+      setSignalWatchlist(val(sw, null));
+      setTrending(val(t, []));
+      setGainers(val(g, []));
+      setLosers(val(l, []));
+      setRebounds(val(r, []));
+      setSmallCaps(val(sc, []));
+      setMoonshots(val(m, []));
+      setCryptos(val(cur, []));
+      setCommodities(val(com, []));
+      setHighRiskOpps(val(hr, []));
+      setEtfs(val(e, []));
+
+      setLoading(false);
     };
     fetchAll();
   }, []);
@@ -117,28 +132,35 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     }
     setIsSearching(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      setSearchResults(data);
-    } catch (e) {
-      console.error("Search failed", e);
+      const data = await fetchJsonWithRetry<any[]>(
+        `/api/search?q=${encodeURIComponent(query)}`,
+        undefined,
+        { retries: 1, retryDelayMs: 800 },
+      );
+      setSearchResults(data ?? []);
+    } catch {
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
   };
 
   const refreshSignalWatchlist = async () => {
-    const res = await fetch("/api/signals/watchlist");
-    const data = await res.json();
-    setSignalWatchlist(data);
+    try {
+      const data = await fetchJsonWithRetry<SignalWatchlistData>("/api/signals/watchlist");
+      setSignalWatchlist(data);
+    } catch {
+      // silently keep existing state
+    }
   };
 
   const addSearchedEtf = async (res: any) => {
-    // Show loading state or similar if needed
     try {
-      // We could use the existing etf discovery logic or a dedicated endpoint
-      const response = await fetch(`/api/analysis/basic?ticker=${res.ticker}`);
-      const data = await response.json();
+      const data = await fetchJsonWithRetry<any>(
+        `/api/analysis/basic?ticker=${res.ticker}`,
+        undefined,
+        { retries: 1, retryDelayMs: 800 },
+      );
 
       const newEtf = {
         ticker: res.ticker,
@@ -151,9 +173,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
       if (selectedEtfs.length < 3) {
         setSelectedEtfs([...selectedEtfs, newEtf]);
       }
-    } catch (e) {
-      console.error("Failed to fetch ETF details", e);
-      // Fallback
+    } catch {
+      // Fallback with basic info
       if (selectedEtfs.length < 3) {
         setSelectedEtfs([...selectedEtfs, { ...res, ter: 0, change: 0 }]);
       }

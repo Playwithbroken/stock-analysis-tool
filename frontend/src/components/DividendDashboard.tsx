@@ -36,10 +36,11 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
       setLoading(true);
       try {
         const res = await fetch(`/api/portfolio/${portfolioId}/dividends`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         setData(json);
-      } catch (e) {
-        console.error("Failed to fetch dividend data", e);
+      } catch {
+        setData(null);
       } finally {
         setLoading(false);
       }

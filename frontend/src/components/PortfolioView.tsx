@@ -87,10 +87,11 @@ export default function PortfolioView({
   const fetchPortfolioVerdict = async (id: string) => {
     try {
       const res = await fetch(`/api/portfolio/${id}/verdict`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setPortfolioVerdict(data.verdict);
-    } catch (e) {
-      console.error("Failed to fetch verdict", e);
+      setPortfolioVerdict(data.verdict ?? null);
+    } catch {
+      setPortfolioVerdict(null);
     }
   };
 
@@ -115,8 +116,8 @@ export default function PortfolioView({
         const data = await response.json();
         setAnalysis(data);
       }
-    } catch (err) {
-      console.error("Failed to analyze portfolio:", err);
+    } catch {
+      setAnalysis(null);
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { Calendar, Clock, TrendingUp } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
+import { fetchJsonWithRetry } from "../lib/api";
 import MeasuredChartFrame from "./MeasuredChartFrame";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
@@ -56,11 +57,12 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const response = await fetch(
+        const histData = await fetchJsonWithRetry<HistoryItem[]>(
           `/api/history/${ticker}?period=${period.id}&interval=${period.interval}`,
+          undefined,
+          { retries: 1, retryDelayMs: 800 },
         );
-        const histData = await response.json();
-        setData(histData);
+        setData(histData ?? []);
 
         if (histData.length > 1) {
           const first = histData[0].price;
@@ -76,8 +78,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         );
         const macd = histData.map((_: HistoryItem, i: number) => Math.sin(i * 0.1) * 5);
         setIndicators({ rsi, macd });
-      } catch (err) {
-        console.error("Failed to fetch history", err);
+      } catch {
+        setData([]);
       } finally {
         setLoading(false);
       }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
+import { fetchJsonWithRetry } from "../lib/api";
 
 interface HeatmapItem {
   sector: string;
@@ -25,10 +26,12 @@ export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/discovery/sentiment-heatmap")
-      .then((res) => res.json())
-      .then((data) => setHeatmap(data))
-      .catch((err) => console.error("Heatmap fetch error:", err))
+    fetchJsonWithRetry<HeatmapItem[]>("/api/discovery/sentiment-heatmap", undefined, {
+      retries: 1,
+      retryDelayMs: 800,
+    })
+      .then((data) => setHeatmap(data ?? []))
+      .catch(() => setHeatmap([]))
       .finally(() => setLoading(false));
   }, []);
 

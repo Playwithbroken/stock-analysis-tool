@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
@@ -149,7 +150,7 @@ function LoginScreen({
           <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_58%)]" />
           <div className="pointer-events-none absolute bottom-0 right-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(16,17,20,0.08),transparent_68%)]" />
           <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-6">
+            <div className="order-last space-y-6 lg:order-first">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#101114] text-white">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l5-5 4 4 7-8" />
@@ -159,7 +160,7 @@ function LoginScreen({
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-slate-500">
                   Private Workspace
                 </div>
-                <h1 className="mt-3 max-w-3xl text-5xl leading-none text-slate-900 sm:text-6xl">
+                <h1 className="mt-3 max-w-3xl text-3xl leading-none text-slate-900 sm:text-5xl lg:text-6xl">
                   Market Intelligence, locked to your local workspace.
                 </h1>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
@@ -197,7 +198,7 @@ function LoginScreen({
               </div>
             </div>
 
-            <div className="surface-strong rounded-[2.4rem] p-6 sm:p-8">
+            <div className="order-first surface-strong rounded-[2.4rem] p-6 sm:p-8 lg:order-last">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-white/50">
                 Access
               </div>
@@ -217,6 +218,7 @@ function LoginScreen({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") submit();
                   }}
+                  aria-label="6-digit workspace access code"
                   className="w-full rounded-[1.2rem] border border-white/10 bg-white/8 px-4 py-3 text-sm font-semibold text-white placeholder:text-white/35"
                   placeholder="6-digit access code"
                 />
@@ -242,7 +244,15 @@ function LoginScreen({
                   <div className="mt-2 text-sm font-semibold text-white">Web and phone ready</div>
                 </div>
               </div>
-              {status ? <div className="mt-4 text-sm text-white/75">{status}</div> : null}
+              {status ? (
+                <div className="mt-4 text-sm text-white/75">
+                  {status.includes("500")
+                    ? "Cannot connect to the server — check that the backend is running."
+                    : status.includes("401") || status.includes("403")
+                      ? "Incorrect code. Please try again."
+                      : status}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -273,6 +283,7 @@ function AppContent() {
   const [globalBrief, setGlobalBrief] = useState<any>(null);
   const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
   const [watchlist, setWatchlist] = useState<WatchlistSnapshot | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {
     portfolios,
@@ -474,7 +485,11 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Network error — clear local session anyway
+    }
     setAuth((prev) => ({ ...prev, authenticated: false }));
     setAuthStatus("Abgemeldet.");
   };
@@ -568,9 +583,11 @@ function AppContent() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Desktop: full USD / EUR toggle */}
                 <div className="hidden rounded-[1.1rem] bg-white/70 p-1 ring-1 ring-black/6 sm:flex">
                   <button
                     onClick={() => setCurrency("USD")}
+                    aria-label="Switch to USD"
                     className={`rounded-[0.9rem] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] transition-all ${
                       currency === "USD" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-800"
                     }`}
@@ -579,6 +596,7 @@ function AppContent() {
                   </button>
                   <button
                     onClick={() => setCurrency("EUR")}
+                    aria-label="Switch to EUR"
                     className={`rounded-[0.9rem] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] transition-all ${
                       currency === "EUR" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-800"
                     }`}
@@ -586,7 +604,16 @@ function AppContent() {
                     EUR
                   </button>
                 </div>
-                <div className="hidden rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-600 sm:block">
+                {/* Mobile: compact toggle that cycles USD ↔ EUR */}
+                <button
+                  onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
+                  aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
+                  className="rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-800 transition-colors hover:bg-white sm:hidden"
+                >
+                  {currency}
+                </button>
+                {/* Username — visible on all screen sizes */}
+                <div className="rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-600">
                   {auth.profile?.display_name || "Private"}
                 </div>
                 <button
@@ -681,11 +708,13 @@ function AppContent() {
           <>
             {showHero && (
               <section className="mb-8 space-y-6">
-                <Suspense fallback={<LoadingState />}>
-                  <MyRadar onAnalyze={handleSearch} onOpenSignals={() => setActiveTab("discovery")} />
-                </Suspense>
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingState />}>
+                    <MyRadar onAnalyze={handleSearch} onOpenSignals={() => setActiveTab("discovery")} />
+                  </Suspense>
+                </ErrorBoundary>
                 <div>
-                  <SearchBar onSearch={handleSearch} loading={loading} />
+                  <SearchBar onSearch={handleSearch} loading={loading} inputRef={searchInputRef} />
                 </div>
               </section>
             )}
@@ -707,48 +736,52 @@ function AppContent() {
             {analysis && !loading && (
               <div className="space-y-8">
                 {globalBrief && geoRegions.length ? (
-                  <Suspense fallback={<LoadingState />}>
-                    <section className="space-y-4">
-                      <div className="surface-panel rounded-[2rem] p-5 sm:p-6">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                              World Watch
+                  <ErrorBoundary>
+                    <Suspense fallback={<LoadingState />}>
+                      <section className="space-y-4">
+                        <div className="surface-panel rounded-[2rem] p-5 sm:p-6">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                                World Watch
+                              </div>
+                              <div className="mt-2 text-2xl text-slate-900">
+                                Kriege, Wahlen, Naturkatastrophen, Energie und Policy direkt im Analyse-Pfad.
+                              </div>
                             </div>
-                            <div className="mt-2 text-2xl text-slate-900">
-                              Kriege, Wahlen, Naturkatastrophen, Energie und Policy direkt im Analyse-Pfad.
+                            <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                              {globalBrief.macro_regime}
                             </div>
-                          </div>
-                          <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                            {globalBrief.macro_regime}
                           </div>
                         </div>
-                      </div>
-                      <WorldMarketMap
-                        regions={geoRegions}
-                        selectedRegion={selectedGeoRegion}
-                        onSelectRegion={setSelectedGeoRegion}
-                        news={globalBrief.top_news || []}
-                        eventLayer={globalBrief.event_layer || []}
-                        watchlistImpact={globalBrief.watchlist_impact || []}
-                        contrarianSignals={globalBrief.contrarian_signals || []}
-                        openingTimeline={globalBrief.opening_timeline || []}
-                        onAnalyze={handleSearch}
-                        focusTicker={analysis?.ticker}
-                      />
-                    </section>
-                  </Suspense>
+                        <WorldMarketMap
+                          regions={geoRegions}
+                          selectedRegion={selectedGeoRegion}
+                          onSelectRegion={setSelectedGeoRegion}
+                          news={globalBrief.top_news || []}
+                          eventLayer={globalBrief.event_layer || []}
+                          watchlistImpact={globalBrief.watchlist_impact || []}
+                          contrarianSignals={globalBrief.contrarian_signals || []}
+                          openingTimeline={globalBrief.opening_timeline || []}
+                          onAnalyze={handleSearch}
+                          focusTicker={analysis?.ticker}
+                        />
+                      </section>
+                    </Suspense>
+                  </ErrorBoundary>
                 ) : null}
 
-                <Suspense fallback={<LoadingState />}>
-                  <AnalysisResult
-                    data={analysis}
-                    portfolios={portfolios}
-                    onAddHolding={addHolding}
-                    onOpenChat={() => setIsChatOpen(true)}
-                    onSelectTicker={handleSearch}
-                  />
-                </Suspense>
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingState />}>
+                    <AnalysisResult
+                      data={analysis}
+                      portfolios={portfolios}
+                      onAddHolding={addHolding}
+                      onOpenChat={() => setIsChatOpen(true)}
+                      onSelectTicker={handleSearch}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             )}
 
@@ -774,8 +807,7 @@ function AppContent() {
                         body: "Ruhigere Scores und bessere Priorisierung von Risiko, Bewertung und Momentum.",
                         cta: "Run Analysis",
                         action: () => {
-                          const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="AAPL, NVDA, ASML, BTC-USD"]');
-                          searchInput?.focus();
+                          searchInputRef.current?.focus();
                         },
                       },
                       {
@@ -845,23 +877,27 @@ function AppContent() {
             )}
           </>
         ) : activeTab === "discovery" ? (
-          <Suspense fallback={<LoadingState />}>
-            <DiscoveryPanel onAnalyze={handleSearch} />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingState />}>
+              <DiscoveryPanel onAnalyze={handleSearch} />
+            </Suspense>
+          </ErrorBoundary>
         ) : (
-          <Suspense fallback={<LoadingState />}>
-            <PortfolioView
-              portfolios={portfolios}
-              onCreatePortfolio={createPortfolio}
-              onDeletePortfolio={deletePortfolio}
-              onAddHolding={addHolding}
-              onRemoveHolding={removeHolding}
-              onAnalyzeStock={(ticker) => {
-                setActiveTab("analyze");
-                handleSearch(ticker);
-              }}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingState />}>
+              <PortfolioView
+                portfolios={portfolios}
+                onCreatePortfolio={createPortfolio}
+                onDeletePortfolio={deletePortfolio}
+                onAddHolding={addHolding}
+                onRemoveHolding={removeHolding}
+                onAnalyzeStock={(ticker) => {
+                  setActiveTab("analyze");
+                  handleSearch(ticker);
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
         )}
       </main>
 
@@ -887,9 +923,11 @@ function AppContent() {
         </div>
       </footer>
 
-      <Suspense fallback={null}>
-        <BrokerChat currentTicker={analysis?.ticker} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
-      </Suspense>
+      <ErrorBoundary fallback={<></>}>
+        <Suspense fallback={null}>
+          <BrokerChat currentTicker={analysis?.ticker} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }

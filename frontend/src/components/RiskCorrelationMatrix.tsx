@@ -20,10 +20,11 @@ export default function RiskCorrelationMatrix({ portfolioId }: RiskMatrixProps) 
       setLoading(true);
       try {
         const res = await fetch(`/api/portfolio/${portfolioId}/correlation`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         setData(json);
-      } catch (e) {
-        console.error("Failed to fetch correlation", e);
+      } catch {
+        setData(null);
       } finally {
         setLoading(false);
       }

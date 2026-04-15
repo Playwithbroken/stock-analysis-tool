@@ -24,10 +24,11 @@ export default function AssetSuggestions({
       setLoading(true);
       try {
         const res = await fetch(`/api/portfolio/${portfolioId}/suggestions`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        setSuggestions(json);
-      } catch (e) {
-        console.error("Failed to fetch suggestions", e);
+        setSuggestions(Array.isArray(json) ? json : []);
+      } catch {
+        setSuggestions([]);
       } finally {
         setLoading(false);
       }

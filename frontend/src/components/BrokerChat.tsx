@@ -74,10 +74,11 @@ export default function BrokerChat({
             : currentTicker,
         }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setMessages((prev) => [
         ...prev,
-        { role: "oracle", content: data.response },
+        { role: "oracle", content: data.response ?? "Keine Antwort erhalten." },
       ]);
     } catch {
       setMessages((prev) => [
@@ -370,7 +371,7 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="group fixed bottom-24 left-4 right-4 z-40 flex h-[4.4rem] items-center justify-between rounded-[1.6rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0 sm:bottom-28 sm:left-6 sm:right-6 md:sm:right-8 md:sm:left-auto"
+        className={`group fixed bottom-24 left-4 right-4 z-40${isOpen ? " hidden" : ""} flex h-[4.4rem] items-center justify-between rounded-[1.6rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0 sm:bottom-28 sm:left-6 sm:right-6 md:sm:right-8 md:sm:left-auto"
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>

@@ -5,6 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
+import { fetchJsonWithRetry } from "../lib/api";
 
 type Currency = "USD" | "EUR";
 
@@ -35,13 +36,16 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const res = await fetch("/api/market/exchange-rate");
-        const data = await res.json();
+        const data = await fetchJsonWithRetry<{ rate?: number }>(
+          "/api/market/exchange-rate",
+          undefined,
+          { retries: 1, retryDelayMs: 1000 },
+        );
         if (data.rate) {
           setExchangeRate(data.rate);
         }
-      } catch (err) {
-        console.error("Failed to fetch exchange rate:", err);
+      } catch {
+        // Silently fall back to default rate (0.92) — not critical
       }
     };
     fetchRate();

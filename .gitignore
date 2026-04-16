@@ -14,8 +14,11 @@ venv.bak/
 node_modules/
 npm-debug.log
 yarn-error.log
-dist/
+# Ignore generic dist outputs but keep prebuilt frontend SPA tracked for Railway
+/dist/
+src/dist/
 !frontend/dist/
+!frontend/dist/**
 .npm/
 .yarn/
 

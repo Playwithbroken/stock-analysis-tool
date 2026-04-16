@@ -31,5 +31,40 @@
   <script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
   <body>
     <div id="root"></div>
+    <script>
+      // One-shot recovery: if a dynamic import fails (almost always means the
+      // current page references stale chunk hashes from an old service worker),
+      // clear all caches + unregister SWs and hard-reload — but only once per
+      // visit so we don't loop.
+      (function () {
+        var KEY = '__bf_chunk_recover';
+        window.addEventListener('error', function (ev) {
+          var msg = (ev && ev.message) || '';
+          if (
+            (msg.indexOf('dynamically imported module') !== -1 ||
+              msg.indexOf('Importing a module script failed') !== -1 ||
+              msg.indexOf('Failed to fetch dynamically') !== -1) &&
+            !sessionStorage.getItem(KEY)
+          ) {
+            sessionStorage.setItem(KEY, '1');
+            try {
+              if ('caches' in window) {
+                caches.keys().then(function (keys) {
+                  keys.forEach(function (k) { caches.delete(k); });
+                });
+              }
+              if (navigator.serviceWorker) {
+                navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  regs.forEach(function (r) { r.unregister(); });
+                  setTimeout(function () { location.reload(); }, 250);
+                });
+              } else {
+                location.reload();
+              }
+            } catch (_) { location.reload(); }
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

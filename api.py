@@ -1418,6 +1418,17 @@ import os
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+# Unauth diagnostic endpoint (open) — reports whether frontend was built
+@app.get("/healthz")
+async def healthz():
+    dist_exists = os.path.exists("frontend/dist")
+    index_exists = os.path.exists("frontend/dist/index.html")
+    try:
+        listing = os.listdir("frontend/dist") if dist_exists else os.listdir("frontend") if os.path.exists("frontend") else os.listdir(".")
+    except Exception as e:
+        listing = [f"err:{e}"]
+    return {"ok": True, "dist": dist_exists, "index": index_exists, "cwd": os.getcwd(), "listing": listing[:30]}
+
 # Check if dist folder exists
 if os.path.exists("frontend/dist"):
     app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
@@ -1427,11 +1438,18 @@ if os.path.exists("frontend/dist"):
         # Allow API calls to pass through
         if full_path.startswith("api"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
-        
+
         # Serve index.html:
         return FileResponse("frontend/dist/index.html")
 else:
     print("Warning: frontend/dist folder not found. Run 'npm run build' in frontend directory.")
+
+    @app.get("/")
+    async def root_fallback():
+        return JSONResponse(status_code=503, content={
+            "detail": "Frontend build missing. Check Railway build logs.",
+            "hint": "Visit /healthz for diagnostics.",
+        })
 
 @app.get("/api/debug/files")
 async def debug_files():

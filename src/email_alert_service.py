@@ -1163,6 +1163,93 @@ class EmailAlertService:
         if lines4:
             self._tg_post(token, chat, "\n".join(lines4))
 
+        # ── MSG 5: Trading Edge (squeeze, insider, options, analysts, regime) ─
+        edge = brief.get("trading_edge") or {}
+        lines5: List[str] = []
+        if edge:
+            regime = edge.get("regime") or {}
+            if regime:
+                vix = regime.get("vix") or {}
+                fng = regime.get("crypto_fng") or {}
+                parts = []
+                if vix:
+                    parts.append(f"VIX <b>{vix.get('value')}</b> ({self._tg_esc(vix.get('regime',''))}, {vix.get('change','+0'):+.2f})")
+                if fng:
+                    parts.append(f"Crypto F&amp;G <b>{fng.get('value')}</b> ({self._tg_esc(fng.get('label',''))})")
+                if parts:
+                    lines5.append("🌡 <b>Market Regime</b> — " + " · ".join(parts))
+
+            yc = edge.get("yield_curve") or {}
+            if yc:
+                inv = "⚠️ <b>INVERTED</b>" if yc.get("inverted") else "normal"
+                lines5.append(
+                    f"📉 <b>Yield Curve</b> — 10Y {yc.get('us10y','?')}% · 5Y {yc.get('us5y','?')}% · 30Y {yc.get('us30y','?')}% · 10-5 spread {yc.get('spread_10y_5y','?'):+.2f}pp ({inv})"
+                )
+
+            sectors = edge.get("sectors") or []
+            if sectors:
+                lines5.append("")
+                lines5.append("🔄 <b>Sector Rotation (5d)</b>")
+                top3 = sectors[:3]
+                bot3 = sectors[-3:]
+                for s in top3:
+                    lines5.append(f"🟢 <code>{s['ticker']}</code> {self._tg_esc(s['name'])} {s['change_5d']:+.2f}% (1d {s['change_1d']:+.2f}%)")
+                for s in bot3:
+                    lines5.append(f"🔴 <code>{s['ticker']}</code> {self._tg_esc(s['name'])} {s['change_5d']:+.2f}% (1d {s['change_1d']:+.2f}%)")
+
+            pre = edge.get("premarket") or []
+            if pre:
+                lines5.append("")
+                lines5.append("⏰ <b>Pre-Market Movers</b>")
+                for m in pre[:5]:
+                    arrow = self._tg_arrow(m["change_pct"])
+                    lines5.append(f"{arrow} <code>{m['ticker']}</code> {m['change_pct']:+.2f}% @ ${m['pre']}")
+
+            squeeze = edge.get("squeeze") or []
+            if squeeze:
+                lines5.append("")
+                lines5.append("🎯 <b>Short-Squeeze Watch</b>")
+                for s in squeeze[:5]:
+                    lines5.append(
+                        f"• <code>{s['ticker']}</code> score <b>{s['score']}</b> · short {s['short_pct_float']}% · DTC {s['days_to_cover']} · RSI {s['rsi']}"
+                    )
+
+            options = edge.get("options") or []
+            if options:
+                lines5.append("")
+                lines5.append("🎲 <b>Unusual Options</b>")
+                for o in options[:5]:
+                    tag = "🐂 bullish" if o["sentiment"] == "bullish" else "🐻 bearish" if o["sentiment"] == "bearish" else "neutral"
+                    lines5.append(
+                        f"• <code>{o['ticker']}</code> {tag} · P/C {o['pc_ratio']} · calls {o['calls_vol']:,} / puts {o['puts_vol']:,} ({self._tg_esc(o['expiry'])})"
+                    )
+
+            analyst = edge.get("analyst") or []
+            if analyst:
+                lines5.append("")
+                lines5.append("🏦 <b>Analyst Actions (14d)</b>")
+                for a in analyst[:5]:
+                    tk = a["ticker"]
+                    latest = a["actions"][-3:]
+                    for act in latest:
+                        firm = self._tg_esc(act.get("firm", ""))[:28]
+                        to = self._tg_esc(act.get("to", ""))
+                        frm = self._tg_esc(act.get("from", ""))
+                        action = self._tg_esc(act.get("action", ""))
+                        lines5.append(f"• <code>{tk}</code> {firm}: {frm} → <b>{to}</b> ({action})")
+
+            insider = edge.get("insider") or []
+            if insider:
+                lines5.append("")
+                lines5.append("👔 <b>Insider Cluster Buys (7d)</b>")
+                for i in insider[:6]:
+                    lines5.append(
+                        f"• <code>{self._tg_esc(i.get('ticker',''))}</code> {self._tg_esc(i.get('title',''))[:20]} · {self._tg_esc(i.get('value',''))} ({self._tg_esc(i.get('date',''))})"
+                    )
+
+        if lines5:
+            self._tg_post(token, chat, "\n".join(lines5))
+
     def _send_telegram(
         self,
         config: "EmailAlertConfig",

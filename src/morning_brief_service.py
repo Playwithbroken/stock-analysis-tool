@@ -18,6 +18,7 @@ import requests
 from src.data_fetcher import DataFetcher
 from src.storage import PortfolioManager
 from src.social_intelligence_service import SocialIntelligenceService
+from src.trading_signals_service import TradingSignalsService
 
 try:
     import feedparser  # type: ignore
@@ -121,6 +122,7 @@ class MorningBriefService:
     _portfolio_manager: PortfolioManager | None = None
     _holding_profile_cache: Dict[str, Dict[str, Any]] = {}
     _social_service: SocialIntelligenceService = SocialIntelligenceService()
+    _signals_service: TradingSignalsService = TradingSignalsService()
 
     def get_brief(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
@@ -173,6 +175,12 @@ class MorningBriefService:
             )
         except Exception:
             broad_earnings = []
+        try:
+            trading_edge = self._signals_service.get_full_edge_pack(
+                (watchlist_tickers or []) + self.NEWS_TICKERS[:6]
+            )
+        except Exception:
+            trading_edge = {}
 
         event_layer = self._build_event_layer(top_news)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
@@ -225,6 +233,7 @@ class MorningBriefService:
             "stocktwits": stocktwits_data,
             "polymarket": polymarket_events[:8],
             "google_news_extra": google_news_extra[:8],
+            "trading_edge": trading_edge,
         }
         self._cache = brief
         self._cache_time = now

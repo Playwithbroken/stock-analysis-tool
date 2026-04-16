@@ -1210,6 +1210,37 @@ async def get_morning_brief():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/market/trading-edge")
+async def get_trading_edge():
+    """Heavy trading-signals payload (squeeze, insider, options, regime,
+    sectors, yield curve). Loaded by the frontend separately so the main
+    brief stays fast. Cached internally per-component (10min – 6h)."""
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        return convert_numpy_types(
+            get_morning_brief_service().get_trading_edge(snapshot)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/send-telegram-brief")
+async def send_telegram_brief_now(session: str = "global"):
+    """Manually trigger a rich Telegram brief without waiting for the
+    scheduled slot. Useful for testing or on-demand market checks.
+
+    session: global | europe | midday | usa | europe_close | close | usa_close
+    """
+    valid = {"global", "europe", "midday", "usa", "europe_close", "close", "usa_close"}
+    if session not in valid:
+        raise HTTPException(status_code=400, detail=f"session must be one of {sorted(valid)}")
+    try:
+        return get_email_alert_service().send_session_brief_now(session)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/signals/scoreboard")
 async def get_signal_scoreboard():
     try:

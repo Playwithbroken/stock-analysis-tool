@@ -172,6 +172,27 @@ class EmailAlertService:
         self._send_notifications(config, events, subject="Morning Brief: Global opening setup")
         return {"status": "ok", "message": "Morning brief sent."}
 
+    def send_session_brief_now(self, session: str = "global") -> Dict[str, Any]:
+        """Manually fire a rich Telegram brief for the requested session.
+
+        session: one of global, europe, midday, usa, europe_close,
+                 close, usa_close. Defaults to 'global' (full morning brief).
+        """
+        config = self.get_config()
+        self._validate_config(config)
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        brief = dict(self.morning_brief_service.get_brief(snapshot))
+        try:
+            brief["trading_edge"] = self.morning_brief_service.get_trading_edge(snapshot)
+        except Exception:
+            brief["trading_edge"] = {}
+        try:
+            self._send_telegram_rich_brief(config, brief, session)
+        except Exception as e:
+            return {"status": "error", "message": f"Telegram send failed: {e}"}
+        return {"status": "ok", "message": f"Session brief '{session}' sent to Telegram."}
+
     async def send_a_setup_digest_async(self) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
@@ -335,6 +356,13 @@ class EmailAlertService:
                 items = self.portfolio_manager.get_signal_watch_items()
                 snapshot = self.public_signal_service.build_watchlist_snapshot(items)
                 brief = self.morning_brief_service.get_brief(snapshot)
+                # Trading edge is decoupled from the cached brief — fetch
+                # fresh here so scheduled briefs always include MSG 5.
+                try:
+                    brief = dict(brief)
+                    brief["trading_edge"] = self.morning_brief_service.get_trading_edge(snapshot)
+                except Exception:
+                    pass
                 try:
                     self._send_telegram_rich_brief(config, brief, str(job["session_label"]))
                 except Exception:

@@ -69,6 +69,7 @@ interface TradingEdge {
 
 interface Props {
   edge: TradingEdge | null | undefined;
+  loading?: boolean;
   onSelectTicker?: (ticker: string) => void;
 }
 
@@ -81,7 +82,41 @@ const arrow = (n: number) => (n > 0 ? "▲" : n < 0 ? "▼" : "▶");
 const colorPct = (n: number) =>
   n > 0 ? "text-emerald-600" : n < 0 ? "text-rose-600" : "text-slate-500";
 
-export const TradingEdgePanel: FC<Props> = ({ edge, onSelectTicker }) => {
+export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) => {
+  if (loading) {
+    return (
+      <section
+        aria-label="Trading Edge loading"
+        aria-busy="true"
+        className="surface-panel rounded-[2rem] p-6 space-y-4"
+      >
+        <div>
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Trading Edge
+          </div>
+          <h2 className="mt-1 text-xl font-bold text-slate-900">
+            Loading live signals…
+          </h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-20 animate-pulse rounded-2xl bg-slate-100"
+            />
+          ))}
+        </div>
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-9 animate-pulse rounded-xl bg-slate-100"
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
   if (!edge || Object.keys(edge).length === 0) return null;
 
   const {

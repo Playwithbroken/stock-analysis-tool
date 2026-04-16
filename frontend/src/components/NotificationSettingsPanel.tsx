@@ -250,7 +250,93 @@ export default function NotificationSettingsPanel({
             </div>
           </div>
         </div>
+
+        <ManualTelegramTrigger />
       </div>
     </section>
+  );
+}
+
+function ManualTelegramTrigger() {
+  const [session, setSession] = useState<string>("global");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>("");
+
+  const sessions: Array<{ value: string; label: string }> = [
+    { value: "global", label: "Morning Brief (full)" },
+    { value: "europe", label: "Europe Open" },
+    { value: "midday", label: "Midday Pulse" },
+    { value: "usa", label: "US Open" },
+    { value: "europe_close", label: "Europe Close" },
+    { value: "usa_close", label: "US Close" },
+    { value: "close", label: "Daily Recap" },
+  ];
+
+  const send = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch(
+        `/api/admin/send-telegram-brief?session=${encodeURIComponent(session)}`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(`✕ ${data.detail || "Send failed"}`);
+      } else {
+        setMsg(`✓ ${data.message || "Sent."}`);
+      }
+    } catch (e) {
+      setMsg(`✕ Network error: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setMsg(""), 6000);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-[1.4rem] border border-teal-500/20 bg-teal-50/40 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-teal-700">
+            Send Telegram brief now
+          </div>
+          <div className="mt-1 text-xs text-slate-600">
+            Manually trigger any session brief — useful before market open or
+            to verify the bot link.
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={session}
+            onChange={(e) => setSession(e.target.value)}
+            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-800"
+            disabled={busy}
+          >
+            {sessions.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={send}
+            disabled={busy}
+            className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-50"
+          >
+            {busy ? "Sending…" : "Send to Telegram"}
+          </button>
+        </div>
+      </div>
+      {msg ? (
+        <div
+          className={`mt-3 text-xs font-semibold ${
+            msg.startsWith("✓") ? "text-emerald-700" : "text-rose-700"
+          }`}
+        >
+          {msg}
+        </div>
+      ) : null}
+    </div>
   );
 }

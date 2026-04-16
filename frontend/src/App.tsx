@@ -283,6 +283,8 @@ function AppContent() {
   const [authStatus, setAuthStatus] = useState("");
   const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
   const [globalBrief, setGlobalBrief] = useState<any>(null);
+  const [tradingEdge, setTradingEdge] = useState<any>(null);
+  const [tradingEdgeLoading, setTradingEdgeLoading] = useState(false);
   const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
   const [watchlist, setWatchlist] = useState<WatchlistSnapshot | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -409,6 +411,33 @@ function AppContent() {
 
     loadGlobalBrief();
     const interval = window.setInterval(loadGlobalBrief, 120000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated]);
+
+  // Trading edge — heavy payload, loaded separately with own spinner.
+  // Refresh every 5 min; backend caches per-component (10min – 6h).
+  useEffect(() => {
+    if (!auth.authenticated) return;
+    let cancelled = false;
+    const loadEdge = async () => {
+      setTradingEdgeLoading(true);
+      try {
+        const payload = await fetchJsonWithRetry<any>("/api/market/trading-edge", undefined, {
+          retries: 1,
+          retryDelayMs: 1000,
+        });
+        if (!cancelled) setTradingEdge(payload);
+      } catch {
+        if (!cancelled) setTradingEdge(null);
+      } finally {
+        if (!cancelled) setTradingEdgeLoading(false);
+      }
+    };
+    loadEdge();
+    const interval = window.setInterval(loadEdge, 300000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -773,11 +802,12 @@ function AppContent() {
                   </ErrorBoundary>
                 ) : null}
 
-                {globalBrief?.trading_edge ? (
+                {(tradingEdge || tradingEdgeLoading) ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
                       <TradingEdgePanel
-                        edge={globalBrief.trading_edge}
+                        edge={tradingEdge}
+                        loading={tradingEdgeLoading && !tradingEdge}
                         onSelectTicker={handleSearch}
                       />
                     </Suspense>

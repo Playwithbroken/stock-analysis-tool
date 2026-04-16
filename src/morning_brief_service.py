@@ -124,6 +124,24 @@ class MorningBriefService:
     _social_service: SocialIntelligenceService = SocialIntelligenceService()
     _signals_service: TradingSignalsService = TradingSignalsService()
 
+    def get_trading_edge(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        """Heavy trading-signals payload (squeeze, insider, options, etc.).
+
+        Built lazily so the main brief stays fast. The underlying service
+        caches each component (10min – 6h) so repeated calls are cheap.
+        """
+        watchlist_tickers = [
+            (item.get("value") or "").upper()
+            for item in (watchlist_snapshot or {}).get("items", [])
+            if item.get("kind") == "ticker" and item.get("value")
+        ]
+        try:
+            return self._signals_service.get_full_edge_pack(
+                (watchlist_tickers or []) + self.NEWS_TICKERS[:6]
+            )
+        except Exception:
+            return {}
+
     def get_brief(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
         if (
@@ -175,12 +193,11 @@ class MorningBriefService:
             )
         except Exception:
             broad_earnings = []
-        try:
-            trading_edge = self._signals_service.get_full_edge_pack(
-                (watchlist_tickers or []) + self.NEWS_TICKERS[:6]
-            )
-        except Exception:
-            trading_edge = {}
+        # NOTE: trading_edge is intentionally NOT computed here — it is heavy
+        # (yfinance options chains, insider scrape, sector ETFs) and would
+        # block the brief response. Frontend fetches /api/market/trading-edge
+        # separately; scheduled Telegram briefs build it just-in-time below.
+        trading_edge: Dict[str, Any] = {}
 
         event_layer = self._build_event_layer(top_news)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)

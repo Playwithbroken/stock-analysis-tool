@@ -45,9 +45,10 @@ interface WatchlistSnapshot {
   }>;
 }
 
-type Tab = "analyze" | "discovery" | "portfolio";
+type Tab = "dashboard" | "analyze" | "discovery" | "portfolio";
 
 const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
+  { id: "dashboard", label: "Dashboard", short: "Home" },
   { id: "analyze", label: "Analyzer", short: "Analyze" },
   { id: "discovery", label: "Markets", short: "Markets" },
   { id: "portfolio", label: "Portfolio", short: "Portfolio" },
@@ -265,7 +266,7 @@ function LoginScreen({
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
-    return (localStorage.getItem("activeTab") as Tab) || "analyze";
+    return (localStorage.getItem("activeTab") as Tab) || "dashboard";
   });
   const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
     const saved = localStorage.getItem("lastAnalysis");
@@ -735,7 +736,70 @@ function AppContent() {
           isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
         }`}
       >
-        {activeTab === "analyze" ? (
+        {activeTab === "dashboard" ? (
+          <div className="space-y-8">
+            <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Dashboard
+                  </div>
+                  <h2 className="mt-2 text-3xl text-slate-900">
+                    World watch, sectors and live trading edge
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    Übersicht über globale Märkte, Wars / Wahlen / Energie / Policy events
+                    sowie Squeeze-, Insider- und Options-Signale auf einen Blick.
+                  </p>
+                </div>
+                {globalBrief?.macro_regime ? (
+                  <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    {globalBrief.macro_regime}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            {globalBrief && geoRegions.length ? (
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingState />}>
+                  <WorldMarketMap
+                    regions={geoRegions}
+                    selectedRegion={selectedGeoRegion}
+                    onSelectRegion={setSelectedGeoRegion}
+                    news={globalBrief.top_news || []}
+                    eventLayer={globalBrief.event_layer || []}
+                    watchlistImpact={globalBrief.watchlist_impact || []}
+                    contrarianSignals={globalBrief.contrarian_signals || []}
+                    openingTimeline={globalBrief.opening_timeline || []}
+                    onAnalyze={(t) => {
+                      setActiveTab("analyze");
+                      handleSearch(t);
+                    }}
+                    focusTicker={analysis?.ticker}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : !globalBrief ? (
+              <LoadingState />
+            ) : null}
+
+            {(tradingEdge || tradingEdgeLoading) ? (
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingState />}>
+                  <TradingEdgePanel
+                    edge={tradingEdge}
+                    loading={tradingEdgeLoading && !tradingEdge}
+                    onSelectTicker={(t) => {
+                      setActiveTab("analyze");
+                      handleSearch(t);
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : null}
+          </div>
+        ) : activeTab === "analyze" ? (
           <>
             {showHero && (
               <section className="mb-8 space-y-6">
@@ -766,54 +830,6 @@ function AppContent() {
 
             {analysis && !loading && (
               <div className="space-y-8">
-                {globalBrief && geoRegions.length ? (
-                  <ErrorBoundary>
-                    <Suspense fallback={<LoadingState />}>
-                      <section className="space-y-4">
-                        <div className="surface-panel rounded-[2rem] p-5 sm:p-6">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                                World Watch
-                              </div>
-                              <div className="mt-2 text-2xl text-slate-900">
-                                Kriege, Wahlen, Naturkatastrophen, Energie und Policy direkt im Analyse-Pfad.
-                              </div>
-                            </div>
-                            <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                              {globalBrief.macro_regime}
-                            </div>
-                          </div>
-                        </div>
-                        <WorldMarketMap
-                          regions={geoRegions}
-                          selectedRegion={selectedGeoRegion}
-                          onSelectRegion={setSelectedGeoRegion}
-                          news={globalBrief.top_news || []}
-                          eventLayer={globalBrief.event_layer || []}
-                          watchlistImpact={globalBrief.watchlist_impact || []}
-                          contrarianSignals={globalBrief.contrarian_signals || []}
-                          openingTimeline={globalBrief.opening_timeline || []}
-                          onAnalyze={handleSearch}
-                          focusTicker={analysis?.ticker}
-                        />
-                      </section>
-                    </Suspense>
-                  </ErrorBoundary>
-                ) : null}
-
-                {(tradingEdge || tradingEdgeLoading) ? (
-                  <ErrorBoundary>
-                    <Suspense fallback={<LoadingState />}>
-                      <TradingEdgePanel
-                        edge={tradingEdge}
-                        loading={tradingEdgeLoading && !tradingEdge}
-                        onSelectTicker={handleSearch}
-                      />
-                    </Suspense>
-                  </ErrorBoundary>
-                ) : null}
-
                 <ErrorBoundary>
                   <Suspense fallback={<LoadingState />}>
                     <AnalysisResult

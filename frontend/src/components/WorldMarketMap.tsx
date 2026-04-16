@@ -1099,7 +1099,7 @@ export default function WorldMarketMap({
               <img
                 src={worldMapSvg}
                 alt="World map"
-                className="absolute inset-0 block opacity-90 contrast-[1.24] brightness-[0.97] saturate-[0.7] mix-blend-multiply"
+                className="absolute inset-0 block opacity-95 contrast-[1.05] saturate-[0.85]"
                 style={{
                   width: "100%",
                   height: "100%",

@@ -34,7 +34,7 @@ cd ..
 # Stage + amend build output into last commit if dirty
 if ! git diff --quiet frontend/dist || [ -n "$(git ls-files --others --exclude-standard frontend/dist)" ]; then
   git add -f frontend/dist
-  git commit --amend --no-edit --no-verify
+  git commit --amend --no-edit --no-verify || true
   echo "[pre-push] frontend/dist refreshed and amended into last commit."
 fi
 

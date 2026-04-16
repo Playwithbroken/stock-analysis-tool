@@ -1433,14 +1433,53 @@ async def healthz():
 if os.path.exists("frontend/dist"):
     app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
+    # Mount icons + any other static folder explicitly so PWA assets work
+    if os.path.exists("frontend/dist/icons"):
+        app.mount("/icons", StaticFiles(directory="frontend/dist/icons"), name="icons")
+
+    _DIST_ROOT_FILES = {
+        "registerSW.js": "application/javascript",
+        "sw.js": "application/javascript",
+        "manifest.json": "application/manifest+json",
+        "vite.svg": "image/svg+xml",
+        "favicon.ico": "image/x-icon",
+        "robots.txt": "text/plain",
+    }
+
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         # Allow API calls to pass through
         if full_path.startswith("api"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
 
-        # Serve index.html:
-        return FileResponse("frontend/dist/index.html")
+        # Serve real dist file if it exists (PWA: registerSW.js, sw.js,
+        # workbox-*.js, manifest.json, icons, etc.) — otherwise SPA fallback.
+        if full_path:
+            candidate = os.path.normpath(os.path.join("frontend", "dist", full_path))
+            # Guard against path traversal
+            if candidate.startswith(os.path.normpath("frontend/dist")) and os.path.isfile(candidate):
+                # Force correct MIME for known extensions
+                media_type = None
+                ext = os.path.splitext(full_path)[1].lower()
+                ext_map = {
+                    ".js": "application/javascript",
+                    ".mjs": "application/javascript",
+                    ".css": "text/css",
+                    ".json": "application/json",
+                    ".webmanifest": "application/manifest+json",
+                    ".svg": "image/svg+xml",
+                    ".png": "image/png",
+                    ".ico": "image/x-icon",
+                    ".woff2": "font/woff2",
+                    ".map": "application/json",
+                }
+                media_type = ext_map.get(ext)
+                if full_path in _DIST_ROOT_FILES:
+                    media_type = _DIST_ROOT_FILES[full_path]
+                return FileResponse(candidate, media_type=media_type)
+
+        # SPA fallback for client-side routes (/, /portfolio, etc.)
+        return FileResponse("frontend/dist/index.html", media_type="text/html")
 else:
     print("Warning: frontend/dist folder not found. Run 'npm run build' in frontend directory.")
 

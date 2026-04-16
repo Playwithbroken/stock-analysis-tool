@@ -15,6 +15,7 @@ const DiscoveryPanel = lazy(() => import("./components/DiscoveryPanel"));
 const BrokerChat = lazy(() => import("./components/BrokerChat"));
 const MyRadar = lazy(() => import("./components/MyRadar"));
 const WorldMarketMap = lazy(() => import("./components/WorldMarketMap"));
+const TradingEdgePanel = lazy(() => import("./components/TradingEdgePanel"));
 
 interface AnalysisData {
   ticker: string;
@@ -768,6 +769,17 @@ function AppContent() {
                           focusTicker={analysis?.ticker}
                         />
                       </section>
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : null}
+
+                {globalBrief?.trading_edge ? (
+                  <ErrorBoundary>
+                    <Suspense fallback={<LoadingState />}>
+                      <TradingEdgePanel
+                        edge={globalBrief.trading_edge}
+                        onSelectTicker={handleSearch}
+                      />
                     </Suspense>
                   </ErrorBoundary>
                 ) : null}

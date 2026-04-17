@@ -119,6 +119,37 @@ class MorningBriefService:
         "reddit.com",
         "wallstreetbets",
     }
+    GEO_LOOKUP: List[Dict[str, Any]] = [
+        {"terms": ["budapest", "hungary"], "place": "Budapest", "country": "Hungary", "lat": 47.4979, "lon": 19.0402},
+        {"terms": ["kyiv", "ukraine"], "place": "Kyiv", "country": "Ukraine", "lat": 50.4501, "lon": 30.5234},
+        {"terms": ["warsaw", "poland"], "place": "Warsaw", "country": "Poland", "lat": 52.2297, "lon": 21.0122},
+        {"terms": ["berlin", "germany"], "place": "Berlin", "country": "Germany", "lat": 52.5200, "lon": 13.4050},
+        {"terms": ["paris", "france"], "place": "Paris", "country": "France", "lat": 48.8566, "lon": 2.3522},
+        {"terms": ["london", "britain", "united kingdom"], "place": "London", "country": "United Kingdom", "lat": 51.5074, "lon": -0.1278},
+        {"terms": ["rome", "italy"], "place": "Rome", "country": "Italy", "lat": 41.9028, "lon": 12.4964},
+        {"terms": ["ankara", "turkey"], "place": "Ankara", "country": "Turkey", "lat": 39.9334, "lon": 32.8597},
+        {"terms": ["moscow", "russia"], "place": "Moscow", "country": "Russia", "lat": 55.7558, "lon": 37.6173},
+        {"terms": ["beirut", "lebanon"], "place": "Beirut", "country": "Lebanon", "lat": 33.8938, "lon": 35.5018},
+        {"terms": ["tehran", "iran"], "place": "Tehran", "country": "Iran", "lat": 35.6892, "lon": 51.3890},
+        {"terms": ["jerusalem", "israel", "gaza"], "place": "Jerusalem", "country": "Israel", "lat": 31.7683, "lon": 35.2137},
+        {"terms": ["riyadh", "saudi"], "place": "Riyadh", "country": "Saudi Arabia", "lat": 24.7136, "lon": 46.6753},
+        {"terms": ["opec", "brent", "crude", "oil", "gulf", "middle east", "red sea"], "place": "Gulf Region", "country": "Middle East", "lat": 26.0000, "lon": 50.5000},
+        {"terms": ["cairo", "egypt"], "place": "Cairo", "country": "Egypt", "lat": 30.0444, "lon": 31.2357},
+        {"terms": ["mumbai", "delhi", "india"], "place": "Mumbai", "country": "India", "lat": 19.0760, "lon": 72.8777},
+        {"terms": ["beijing", "shanghai", "china"], "place": "Beijing", "country": "China", "lat": 39.9042, "lon": 116.4074},
+        {"terms": ["taipei", "taiwan"], "place": "Taipei", "country": "Taiwan", "lat": 25.0330, "lon": 121.5654},
+        {"terms": ["tokyo", "japan"], "place": "Tokyo", "country": "Japan", "lat": 35.6762, "lon": 139.6503},
+        {"terms": ["hong kong"], "place": "Hong Kong", "country": "Hong Kong", "lat": 22.3193, "lon": 114.1694},
+        {"terms": ["seoul", "korea"], "place": "Seoul", "country": "South Korea", "lat": 37.5665, "lon": 126.9780},
+        {"terms": ["sydney", "australia"], "place": "Sydney", "country": "Australia", "lat": -33.8688, "lon": 151.2093},
+        {"terms": ["sao paulo", "brazil"], "place": "Sao Paulo", "country": "Brazil", "lat": -23.5505, "lon": -46.6333},
+        {"terms": ["mexico city", "mexico"], "place": "Mexico City", "country": "Mexico", "lat": 19.4326, "lon": -99.1332},
+        {"terms": ["canada", "toronto"], "place": "Toronto", "country": "Canada", "lat": 43.6532, "lon": -79.3832},
+        {"terms": ["washington", "new york", "wall street", "federal reserve", "usa", "u.s."], "place": "New York", "country": "United States", "lat": 40.7128, "lon": -74.0060},
+        {"terms": ["california", "silicon valley", "san francisco"], "place": "San Francisco", "country": "United States", "lat": 37.7749, "lon": -122.4194},
+        {"terms": ["johannesburg", "south africa"], "place": "Johannesburg", "country": "South Africa", "lat": -26.2041, "lon": 28.0473},
+        {"terms": ["lagos", "nigeria"], "place": "Lagos", "country": "Nigeria", "lat": 6.5244, "lon": 3.3792},
+    ]
     _portfolio_manager: PortfolioManager | None = None
     _holding_profile_cache: Dict[str, Dict[str, Any]] = {}
     _social_service: SocialIntelligenceService = SocialIntelligenceService()
@@ -406,20 +437,34 @@ class MorningBriefService:
             severity = item.get("severity") or "normal"
             if event_type == "macro" and item.get("impact") == "low":
                 continue
+            geo = self._resolve_event_geo(item)
+            impact = item.get("impact") or "low"
+            map_priority = 100
+            if impact == "high":
+                map_priority -= 40
+            elif impact == "medium":
+                map_priority -= 20
+            if severity == "critical":
+                map_priority -= 30
+            elif severity == "elevated":
+                map_priority -= 15
+
             layer.append(
                 {
                     "title": item.get("title"),
                     "link": item.get("link"),
                     "region": item.get("region"),
-                    "impact": item.get("impact"),
+                    "impact": impact,
                     "event_type": event_type,
                     "severity": severity,
                     "publisher": item.get("publisher"),
                     "source_quality": item.get("source_quality"),
                     "ticker": item.get("ticker"),
+                    "geo": geo,
+                    "map_priority": max(1, map_priority),
                     "event_intelligence": self._build_event_intelligence(
                         event_type=event_type,
-                        impact=item.get("impact") or "low",
+                        impact=impact,
                         severity=severity,
                         source_quality=item.get("source_quality") or "tier_2",
                         ticker=item.get("ticker"),
@@ -427,6 +472,64 @@ class MorningBriefService:
                 }
             )
         return layer[:8]
+
+    def _resolve_event_geo(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        # Priority 1: upstream/provider geo values if present.
+        geo = item.get("geo") if isinstance(item.get("geo"), dict) else {}
+        lat = self._safe_float(geo.get("lat"))
+        lon = self._safe_float(geo.get("lon"))
+        if lat is not None and lon is not None:
+            return {
+                "lat": lat,
+                "lon": lon,
+                "place": geo.get("place"),
+                "country": geo.get("country"),
+                "confidence": "high",
+                "source": "provider",
+            }
+
+        # Priority 2: deterministic mapping table.
+        title = str(item.get("title") or "").lower()
+        region = str(item.get("region") or "").lower()
+        event_type = str(item.get("event_type") or "").lower()
+        haystack = f"{title} {region} {event_type}"
+        for row in self.GEO_LOOKUP:
+            if any(term in haystack for term in row["terms"]):
+                return {
+                    "lat": row["lat"],
+                    "lon": row["lon"],
+                    "place": row["place"],
+                    "country": row["country"],
+                    "confidence": "medium",
+                    "source": "resolver",
+                }
+
+        # Priority 3: region fallback.
+        fallback = {
+            "usa": {"lat": 40.0, "lon": -98.0, "place": "United States", "country": "United States"},
+            "europe": {"lat": 50.0, "lon": 14.0, "place": "Europe", "country": "Europe"},
+            "asia": {"lat": 34.0, "lon": 103.0, "place": "Asia", "country": "Asia"},
+            "global": {"lat": 20.0, "lon": 20.0, "place": "Global", "country": "Global"},
+        }.get(region, {"lat": 20.0, "lon": 20.0, "place": "Global", "country": "Global"})
+        return {
+            "lat": fallback["lat"],
+            "lon": fallback["lon"],
+            "place": fallback["place"],
+            "country": fallback["country"],
+            "confidence": "low",
+            "source": "fallback",
+        }
+
+    def _safe_float(self, value: Any) -> float | None:
+        try:
+            if value is None:
+                return None
+            parsed = float(value)
+            if parsed != parsed:  # NaN guard
+                return None
+            return parsed
+        except (TypeError, ValueError):
+            return None
 
     def _build_contrarian_signals(
         self,

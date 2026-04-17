@@ -52,6 +52,15 @@ interface MapNewsItem {
       label?: string;
     }>;
   };
+  geo?: {
+    lat: number;
+    lon: number;
+    place?: string;
+    country?: string;
+    confidence?: "high" | "medium" | "low";
+    source?: "provider" | "resolver" | "fallback";
+  };
+  map_priority?: number;
 }
 
 interface WatchlistImpactItem {
@@ -110,6 +119,21 @@ interface GeoEvent extends MapNewsItem {
 interface MapAnchor {
   left: string;
   top: string;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function anchorFromGeo(geo?: MapNewsItem["geo"]): MapAnchor | null {
+  if (!geo) return null;
+  if (!Number.isFinite(geo.lat) || !Number.isFinite(geo.lon)) return null;
+  const left = ((geo.lon + 180) / 360) * 100;
+  const top = ((90 - geo.lat) / 180) * 100;
+  return {
+    left: `${clamp(left, 2, 98).toFixed(2)}%`,
+    top: `${clamp(top, 3, 97).toFixed(2)}%`,
+  };
 }
 
 type EventFilter = "all" | "WAR" | "CB" | "OIL" | "VOTE" | "NAT" | "POL";
@@ -562,7 +586,9 @@ function isRegionFocusMatch(regionLabel: string | undefined, item: GeoEvent) {
   return item.regionKey === regionLabel || item.regionKey === "Global";
 }
 
-function resolveGeoAnchor(haystack: string, regionKey: GeoEvent["regionKey"], markerIcon: string): MapAnchor {
+function resolveGeoAnchor(item: MapNewsItem, haystack: string, regionKey: GeoEvent["regionKey"], markerIcon: string): MapAnchor {
+  const explicitAnchor = anchorFromGeo(item.geo);
+  if (explicitAnchor) return explicitAnchor;
   const matched = geoAnchors.find((entry) => entry.terms.some((term) => haystack.includes(term)));
   if (matched) return matched.anchor;
   if (markerIcon === "OIL") return { left: "55.8%", top: "46.6%" };
@@ -572,7 +598,9 @@ function resolveGeoAnchor(haystack: string, regionKey: GeoEvent["regionKey"], ma
   return markerLayout[regionKey];
 }
 
-function expandConflictAnchors(haystack: string): MapAnchor[] {
+function expandConflictAnchors(item: MapNewsItem, haystack: string): MapAnchor[] {
+  const explicitAnchor = anchorFromGeo(item.geo);
+  if (explicitAnchor) return [explicitAnchor];
   const orderedMatches = geoAnchors.filter((entry) => entry.terms.some((term) => haystack.includes(term)));
   const unique = new Map<string, MapAnchor>();
   for (const match of orderedMatches) {
@@ -585,13 +613,13 @@ function expandConflictAnchors(haystack: string): MapAnchor[] {
 function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   const haystack = `${item.title || ""} ${item.impact || ""} ${item.region || ""} ${item.event_type || ""}`.toLowerCase();
   const regionKey = getRegionKey(item.region);
-  const geoZone = inferGeoZone(haystack, regionKey);
-  const geoPlace = inferGeoPlace(haystack, regionKey);
+  const geoZone = item.geo?.country || inferGeoZone(haystack, regionKey);
+  const geoPlace = item.geo?.place || inferGeoPlace(haystack, regionKey);
   const pulse = item.impact === "high";
 
   if (/(war|missile|attack|iran|israel|russia|ukraine|lebanon|beirut|conflict)/.test(haystack)) {
-    const anchors = expandConflictAnchors(haystack);
-    const finalAnchors = anchors.length ? anchors : [resolveGeoAnchor(haystack, regionKey, "WAR")];
+    const anchors = expandConflictAnchors(item, haystack);
+    const finalAnchors = anchors.length ? anchors : [resolveGeoAnchor(item, haystack, regionKey, "WAR")];
     return finalAnchors.map((anchor, index) => ({
       ...item,
       geoKey: `${item.title || "conflict"}-${index}`,
@@ -601,7 +629,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       pulse,
       geoZone,
       geoPlace,
-      regionKey: anchor.left === "53.4%" ? "Europe" : anchor.left === "56.8%" || anchor.left === "52.6%" || anchor.left === "52.8%" ? "Global" : regionKey,
+      regionKey,
       markerPosition: anchor,
     }));
   }
@@ -615,7 +643,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       geoZone,
       geoPlace,
       regionKey,
-      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "CB"),
+      markerPosition: resolveGeoAnchor(item, haystack, regionKey === "Global" ? "USA" : regionKey, "CB"),
     }];
   }
   if (/(oil|opec|crude|gas|energy)/.test(haystack)) {
@@ -628,7 +656,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       geoZone,
       geoPlace,
       regionKey,
-      markerPosition: resolveGeoAnchor(haystack, regionKey, "OIL"),
+      markerPosition: resolveGeoAnchor(item, haystack, regionKey, "OIL"),
     }];
   }
   if (/(election|vote|ballot|president|prime minister|parliament|coalition|campaign)/.test(haystack)) {
@@ -641,7 +669,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       geoZone,
       geoPlace,
       regionKey,
-      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Europe" : regionKey, "VOTE"),
+      markerPosition: resolveGeoAnchor(item, haystack, regionKey === "Global" ? "Europe" : regionKey, "VOTE"),
     }];
   }
   if (/(earthquake|wildfire|flood|storm|hurricane|typhoon|tsunami|drought|disaster)/.test(haystack)) {
@@ -654,7 +682,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       geoZone,
       geoPlace,
       regionKey,
-      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "Asia" : regionKey, "NAT"),
+      markerPosition: resolveGeoAnchor(item, haystack, regionKey === "Global" ? "Asia" : regionKey, "NAT"),
     }];
   }
   if (/(tariff|sanction|trade|policy|regulation)/.test(haystack)) {
@@ -667,7 +695,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       geoZone,
       geoPlace,
       regionKey,
-      markerPosition: resolveGeoAnchor(haystack, regionKey === "Global" ? "USA" : regionKey, "POL"),
+      markerPosition: resolveGeoAnchor(item, haystack, regionKey === "Global" ? "USA" : regionKey, "POL"),
     }];
   }
   return [];
@@ -773,9 +801,14 @@ export default function WorldMarketMap({
       return items.reverse();
     }
     items.sort(
-      (a, b) =>
-        (impactRank[a.impact as keyof typeof impactRank] ?? 3) -
-        (impactRank[b.impact as keyof typeof impactRank] ?? 3),
+      (a, b) => {
+        const priorityDelta = (a.map_priority ?? 999) - (b.map_priority ?? 999);
+        if (priorityDelta !== 0) return priorityDelta;
+        return (
+          (impactRank[a.impact as keyof typeof impactRank] ?? 3) -
+          (impactRank[b.impact as keyof typeof impactRank] ?? 3)
+        );
+      },
     );
     return items;
   }, [filteredGeoSignals, sortMode]);
@@ -796,21 +829,28 @@ export default function WorldMarketMap({
   const positionedGeoSignals = useMemo(() => {
     const orbitOffsets = [
       { x: 0, y: 0 },
-      { x: 8, y: -5 },
-      { x: -8, y: -5 },
-      { x: 10, y: 7 },
-      { x: -10, y: 7 },
-      { x: 0, y: 11 },
+      { x: 10, y: -8 },
+      { x: -10, y: -8 },
+      { x: 14, y: 10 },
+      { x: -14, y: 10 },
+      { x: 0, y: 15 },
+      { x: 18, y: 0 },
+      { x: -18, y: 0 },
     ];
-    return orderedGeoSignals.slice(0, 6).map((item) => {
+    const collisionBuckets = new Map<string, number>();
+    return orderedGeoSignals.map((item) => {
       const baseOffset = markerOffsets[item.regionKey]?.[item.markerIcon] || { x: 0, y: 0 };
-      const hash = stableHash(item.geoKey || item.title || item.markerIcon);
-      const orbit = orbitOffsets[hash % orbitOffsets.length];
+      const bucketKey = `${item.markerPosition.left}|${item.markerPosition.top}`;
+      const bucketIndex = collisionBuckets.get(bucketKey) || 0;
+      collisionBuckets.set(bucketKey, bucketIndex + 1);
+      const hash = stableHash(`${item.geoKey || item.title || item.markerIcon}-${bucketIndex}`);
+      const orbit = orbitOffsets[(hash + bucketIndex) % orbitOffsets.length];
+      const stackLift = Math.floor(bucketIndex / orbitOffsets.length) * 12;
       return {
         ...item,
         adjustedStyle: {
           left: `calc(${item.markerPosition.left} + ${baseOffset.x + orbit.x}px)`,
-          top: `calc(${item.markerPosition.top} + ${baseOffset.y + orbit.y}px)`,
+          top: `calc(${item.markerPosition.top} + ${baseOffset.y + orbit.y + stackLift}px)`,
         },
       };
     });
@@ -1107,8 +1147,9 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid items-start gap-5 xl:grid-cols-[1.68fr_0.32fr]">
-          <div className="relative self-start min-h-[360px] lg:min-h-[410px] xl:min-h-[430px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
+        <div className="grid items-stretch gap-5 xl:grid-cols-[1.58fr_0.42fr]">
+          <div className="relative self-stretch h-full min-h-[360px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
+            <div className="relative h-full w-full min-h-[320px] md:min-h-[380px] xl:min-h-[440px] [aspect-ratio:16/9] xl:[aspect-ratio:19/10]">
             <div className="absolute inset-0 overflow-hidden opacity-80">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.58),transparent_28%)]" />
               <img
@@ -1120,8 +1161,8 @@ export default function WorldMarketMap({
                   height: "100%",
                   maxWidth: "100%",
                   maxHeight: "100%",
-                  objectFit: "contain",
-                  objectPosition: "50% 58%",
+                  objectFit: "cover",
+                  objectPosition: "50% 50%",
                 }}
                 draggable={false}
               />
@@ -1355,7 +1396,7 @@ export default function WorldMarketMap({
             ))}
 
             {showLiveAlert && activePulseEvent && hoveredEventIndex == null ? (
-              <a
+                <a
                 href={activePulseEvent.link}
                 target="_blank"
                 rel="noreferrer"
@@ -1397,6 +1438,7 @@ export default function WorldMarketMap({
                 ) : null}
               </a>
             ) : null}
+            </div>
           </div>
 
           <div className="space-y-3">

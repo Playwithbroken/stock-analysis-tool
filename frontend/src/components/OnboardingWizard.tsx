@@ -4,12 +4,14 @@ interface OnboardingWizardProps {
   isOpen: boolean;
   onCreatePortfolio: (name: string) => Promise<any> | any;
   onComplete: () => void;
+  onDismiss: () => void;
 }
 
 export default function OnboardingWizard({
   isOpen,
   onCreatePortfolio,
   onComplete,
+  onDismiss,
 }: OnboardingWizardProps) {
   const [step, setStep] = useState(1);
   const [watchTicker, setWatchTicker] = useState("");
@@ -63,8 +65,17 @@ export default function OnboardingWizard({
             </div>
             <h2 className="mt-2 text-3xl text-slate-900">Workspace Setup</h2>
           </div>
-          <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
-            Schritt {step}/3
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500"
+            >
+              Spaeter
+            </button>
+            <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
+              Schritt {step}/3
+            </div>
           </div>
         </div>
 
@@ -166,4 +177,3 @@ export default function OnboardingWizard({
     </div>
   );
 }
-

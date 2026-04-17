@@ -402,6 +402,7 @@ class WorkspaceProfileRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     password: str
+    remember_device: bool = True
 
 
 class PaperTradeCreateRequest(BaseModel):
@@ -542,13 +543,14 @@ async def auth_login(req: LoginRequest, response: Response):
 
     get_portfolio_manager().reset_login_guard()
 
+    max_age = 60 * 60 * 24 * 7 if req.remember_device else 60 * 60 * 12
     response.set_cookie(
         SESSION_COOKIE_NAME,
         create_session_value(),
         httponly=True,
         samesite="lax",
         secure=use_secure_cookies(),
-        max_age=60 * 60 * 12,
+        max_age=max_age,
     )
     return {
         "status": "ok",

@@ -132,17 +132,18 @@ function LoginScreen({
   status,
 }: {
   configured: boolean;
-  onLogin: (password: string) => Promise<void>;
+  onLogin: (password: string, rememberDevice: boolean) => Promise<void>;
   status: string;
 }) {
   const [password, setPassword] = useState("");
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     if (!password.trim()) return;
     setSubmitting(true);
     try {
-      await onLogin(password);
+      await onLogin(password, rememberDevice);
       setPassword("");
     } finally {
       setSubmitting(false);
@@ -228,6 +229,15 @@ function LoginScreen({
                   className="login-password-input w-full rounded-[1.2rem] border px-4 py-3 text-sm font-semibold"
                   placeholder="6-digit access code"
                 />
+                <label className="flex items-center gap-2 rounded-[1rem] border border-white/12 bg-white/8 px-3 py-2 text-xs text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/30 bg-transparent"
+                  />
+                  Auf diesem Geraet angemeldet bleiben (7 Tage)
+                </label>
                 <button
                   onClick={submit}
                   disabled={submitting || !configured}
@@ -268,6 +278,8 @@ function LoginScreen({
 }
 
 function AppContent() {
+  const ONBOARDING_DISMISSED_AT_KEY = "onboardingDismissedAt";
+  const ONBOARDING_DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
   const { theme, setTheme } = useTheme();
   const toggleTheme = () => setTheme(theme === "dark" ? "premium-light" : "dark");
   const push = usePushNotifications();
@@ -282,6 +294,7 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
+  const [hideOnboardingNudge, setHideOnboardingNudge] = useState(false);
   const [auth, setAuth] = useState<AuthState>({
     loading: true,
     authenticated: false,
@@ -538,12 +551,8 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (!auth.authenticated) {
-      setShowOnboarding(false);
-      return;
-    }
-    const done = Boolean(auth.profile?.onboarding_done);
-    setShowOnboarding(!done);
+    // Silent start: onboarding should never auto-block app opening.
+    setShowOnboarding(false);
   }, [auth.authenticated, auth.profile]);
 
   useEffect(() => {
@@ -565,14 +574,14 @@ function AppContent() {
     }
   }, [analysis]);
 
-  const handleLogin = async (password: string) => {
+  const handleLogin = async (password: string, rememberDevice: boolean) => {
     setAuthStatus("");
     const payload = await fetchJsonWithRetry<any>(
       "/api/auth/login",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, remember_device: rememberDevice }),
       },
       { retries: 1, retryDelayMs: 700 },
     );
@@ -584,9 +593,9 @@ function AppContent() {
     });
   };
 
-  const loginAction = async (password: string) => {
+  const loginAction = async (password: string, rememberDevice: boolean) => {
     try {
-      await handleLogin(password);
+      await handleLogin(password, rememberDevice);
     } catch (err) {
       setAuthStatus(err instanceof Error ? err.message : "Login failed.");
     }
@@ -651,6 +660,14 @@ function AppContent() {
     globalBrief?.regions?.europe,
     globalBrief?.regions?.usa,
   ].filter(Boolean);
+  const onboardingDone = Boolean(auth.profile?.onboarding_done);
+  const onboardingDismissedAtRaw = localStorage.getItem(ONBOARDING_DISMISSED_AT_KEY);
+  const onboardingDismissedAt = onboardingDismissedAtRaw ? Number(onboardingDismissedAtRaw) : 0;
+  const onboardingInCooldown =
+    Number.isFinite(onboardingDismissedAt) &&
+    onboardingDismissedAt > 0 &&
+    Date.now() - onboardingDismissedAt < ONBOARDING_DISMISS_COOLDOWN_MS;
+  const showOnboardingNudge = !onboardingDone && !onboardingInCooldown && !hideOnboardingNudge;
 
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
@@ -858,6 +875,40 @@ function AppContent() {
       >
         {activeTab === "dashboard" ? (
           <div className="space-y-8">
+            {showOnboardingNudge ? (
+              <section className="rounded-[1.6rem] border border-[var(--accent)]/16 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.9))] p-4 sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                      Optional Setup
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-800">
+                      First Run ist jetzt optional und blockiert den Start nicht mehr.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOnboarding(true)}
+                      className="rounded-[0.9rem] bg-[var(--accent)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-white"
+                    >
+                      Jetzt einrichten
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem(ONBOARDING_DISMISSED_AT_KEY, String(Date.now()));
+                        setHideOnboardingNudge(true);
+                      }}
+                      className="rounded-[0.9rem] border border-black/10 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      Spaeter
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1179,7 +1230,12 @@ function AppContent() {
           onCreatePortfolio={createPortfolio}
           onComplete={async () => {
             setShowOnboarding(false);
+            localStorage.removeItem(ONBOARDING_DISMISSED_AT_KEY);
             await refreshAuth().catch(() => undefined);
+          }}
+          onDismiss={() => {
+            localStorage.setItem(ONBOARDING_DISMISSED_AT_KEY, String(Date.now()));
+            setShowOnboarding(false);
           }}
         />
       </Suspense>

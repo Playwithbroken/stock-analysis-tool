@@ -61,6 +61,9 @@ export default defineConfig({
     },
   },
   build: {
+    // Keep prior hashed chunks so users with stale cached HTML can still
+    // resolve dynamic imports during rollout windows.
+    emptyOutDir: false,
     rollupOptions: {
       output: {
         manualChunks: {

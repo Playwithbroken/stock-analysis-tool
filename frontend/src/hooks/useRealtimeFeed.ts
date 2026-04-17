@@ -36,6 +36,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const lastFrameRef = useRef<number>(0);
   const reconnectAttemptRef = useRef<number>(0);
+  const wsDisabledRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!enabled || cleaned.length === 0) return;
@@ -51,6 +52,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     setConnected(false);
     lastFrameRef.current = 0;
     reconnectAttemptRef.current = 0;
+    wsDisabledRef.current = false;
 
     const allowedSymbols = new Set(cleaned);
 
@@ -105,8 +107,12 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     };
 
     const scheduleReconnect = () => {
-      if (closed || retry != null) return;
+      if (closed || retry != null || wsDisabledRef.current) return;
       const attempt = reconnectAttemptRef.current;
+      if (attempt >= 5) {
+        wsDisabledRef.current = true;
+        return;
+      }
       const waitMs = getBackoffDelayMs(attempt);
       reconnectAttemptRef.current = attempt + 1;
       retry = window.setTimeout(() => {
@@ -116,9 +122,11 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     };
 
     const connect = () => {
+      if (wsDisabledRef.current) return;
       socket = new WebSocket(buildRealtimeUrl(cleaned));
       socket.onopen = () => {
         reconnectAttemptRef.current = 0;
+        wsDisabledRef.current = false;
         scheduleStaleCheck();
       };
       socket.onclose = () => {

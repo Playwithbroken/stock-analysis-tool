@@ -1997,7 +1997,9 @@ async def healthz():
 
 # Check if dist folder exists
 if os.path.exists("frontend/dist"):
-    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+    # NOTE: /assets is served by a custom endpoint below so we can provide
+    # hash-fallback compatibility across deploys (prevents blank screens when
+    # older cached HTML requests previous chunk hashes).
 
     # Mount icons + any other static folder explicitly so PWA assets work
     if os.path.exists("frontend/dist/icons"):
@@ -2011,6 +2013,59 @@ if os.path.exists("frontend/dist"):
         "favicon.ico": "image/x-icon",
         "robots.txt": "text/plain",
     }
+
+    @app.get("/assets/{asset_path:path}")
+    async def serve_asset(asset_path: str):
+        dist_assets_root = os.path.normpath(os.path.join("frontend", "dist", "assets"))
+        candidate = os.path.normpath(os.path.join("frontend", "dist", "assets", asset_path))
+
+        if not candidate.startswith(dist_assets_root):
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+        ext_map = {
+            ".js": "application/javascript",
+            ".mjs": "application/javascript",
+            ".css": "text/css",
+            ".json": "application/json",
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".ico": "image/x-icon",
+            ".woff2": "font/woff2",
+            ".map": "application/json",
+        }
+
+        if os.path.isfile(candidate):
+            ext = os.path.splitext(candidate)[1].lower()
+            response = FileResponse(candidate, media_type=ext_map.get(ext))
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return response
+
+        filename = os.path.basename(asset_path)
+        stem, ext = os.path.splitext(filename)
+        if "-" in stem and ext in {".js", ".css"}:
+            prefix = stem.rsplit("-", 1)[0]
+            try:
+                matches = [
+                    fn for fn in os.listdir(dist_assets_root)
+                    if fn.startswith(f"{prefix}-") and fn.endswith(ext)
+                ]
+                if matches:
+                    matches.sort(
+                        key=lambda fn: os.path.getmtime(os.path.join(dist_assets_root, fn)),
+                        reverse=True,
+                    )
+                    fallback_path = os.path.join(dist_assets_root, matches[0])
+                    response = FileResponse(
+                        fallback_path,
+                        media_type=ext_map.get(ext),
+                    )
+                    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                    response.headers["X-Asset-Fallback"] = "1"
+                    return response
+            except Exception:
+                pass
+
+        raise HTTPException(status_code=404, detail="Asset not found")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):

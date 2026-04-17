@@ -49,10 +49,21 @@ interface SignalWatchlistData {
   politician_signals: any[];
 }
 
+interface ScreenerRow {
+  ticker: string;
+  name: string;
+  sector?: string;
+  price?: number;
+  market_cap?: number;
+  rsi_14?: number;
+  high52_proximity?: number;
+  low52_proximity?: number;
+}
+
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab] = useState<
-    "overview" | "signals" | "ai" | "movers" | "alternative" | "etf" | "internals"
+    "overview" | "signals" | "ai" | "movers" | "screener" | "alternative" | "etf" | "internals"
   >("overview");
   const [stars, setStars] = useState<StarAssets | null>(null);
   const [publicSignals, setPublicSignals] = useState<PublicSignalsData | null>(
@@ -78,6 +89,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [internals, setInternals] = useState<any>(null);
   const [internalsLoading, setInternalsLoading] = useState(false);
+  const [screenerRows, setScreenerRows] = useState<ScreenerRow[]>([]);
+  const [screenerLoading, setScreenerLoading] = useState(false);
+  const [screenerSector, setScreenerSector] = useState("");
+  const [screenerRsi, setScreenerRsi] = useState("30");
+  const [screenerHigh52, setScreenerHigh52] = useState("");
+  const [screenerLow52, setScreenerLow52] = useState("");
+  const [screenerSortBy, setScreenerSortBy] = useState<"rsi_14" | "market_cap" | "high52_proximity" | "low52_proximity">("rsi_14");
+  const [screenerSortDirection, setScreenerSortDirection] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -162,6 +181,30 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     return () => { cancelled = true; };
   }, [activeTab, internals]);
 
+  const runScreener = async () => {
+    setScreenerLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (screenerRsi.trim()) params.set("rsi_max", screenerRsi.trim());
+      if (screenerSector.trim()) params.set("sector", screenerSector.trim());
+      if (screenerHigh52.trim()) params.set("high52_proximity", screenerHigh52.trim());
+      if (screenerLow52.trim()) params.set("low52_proximity", screenerLow52.trim());
+      params.set("limit", "40");
+      const rows = await fetchJsonWithRetry<ScreenerRow[]>(`/api/screener?${params.toString()}`);
+      setScreenerRows(Array.isArray(rows) ? rows : []);
+    } catch {
+      setScreenerRows([]);
+    } finally {
+      setScreenerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "screener") return;
+    if (screenerRows.length > 0) return;
+    runScreener();
+  }, [activeTab]);
+
   const refreshSignalWatchlist = async () => {
     try {
       const data = await fetchJsonWithRetry<SignalWatchlistData>("/api/signals/watchlist");
@@ -205,10 +248,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     { id: "overview", label: "Markt-Puls", icon: "MP" },
     { id: "ai", label: "AI Chancen", icon: "AI" },
     { id: "movers", label: "Top/Flop", icon: "TF" },
+    { id: "screener", label: "Screener", icon: "SC" },
     { id: "etf", label: "ETF Welt", icon: "ETF" },
     { id: "alternative", label: "Alternativ", icon: "ALT" },
     { id: "internals", label: "Internals", icon: "⚖" },
   ] as const;
+
+  const sortedScreenerRows = [...screenerRows].sort((a, b) => {
+    const aValue = Number(a?.[screenerSortBy] ?? 0);
+    const bValue = Number(b?.[screenerSortBy] ?? 0);
+    if (screenerSortDirection === "asc") {
+      return aValue - bValue;
+    }
+    return bValue - aValue;
+  });
 
   if (loading && !stars) {
     return (
@@ -867,6 +920,157 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                 </div>
               </section>
             )}
+          </div>
+        )}
+
+        {activeTab === "screener" && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            <section className="surface-panel rounded-[2rem] p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Screener
+                  </div>
+                  <h3 className="mt-2 text-2xl text-slate-900">
+                    RSI, Sector und 52W Filter
+                  </h3>
+                </div>
+                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
+                  {sortedScreenerRows.length} Treffer
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
+                <input
+                  value={screenerRsi}
+                  onChange={(e) => setScreenerRsi(e.target.value)}
+                  placeholder="RSI max (z.B. 30)"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                />
+                <input
+                  value={screenerSector}
+                  onChange={(e) => setScreenerSector(e.target.value)}
+                  placeholder="Sector (z.B. Technology)"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                />
+                <input
+                  value={screenerHigh52}
+                  onChange={(e) => setScreenerHigh52(e.target.value)}
+                  placeholder="Nahe 52W High <= %"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                />
+                <input
+                  value={screenerLow52}
+                  onChange={(e) => setScreenerLow52(e.target.value)}
+                  placeholder="Nahe 52W Low <= %"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                />
+                <button
+                  onClick={runScreener}
+                  disabled={screenerLoading}
+                  className="rounded-xl bg-[var(--accent)] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-60"
+                >
+                  {screenerLoading ? "Lade..." : "Scan"}
+                </button>
+              </div>
+            </section>
+
+            <section className="surface-panel overflow-hidden rounded-[2rem] p-0">
+              <div className="border-b border-black/6 px-6 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Filter-Ergebnisse
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={screenerSortBy}
+                      onChange={(e) =>
+                        setScreenerSortBy(
+                          e.target.value as "rsi_14" | "market_cap" | "high52_proximity" | "low52_proximity",
+                        )
+                      }
+                      className="rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                    >
+                      <option value="rsi_14">Sort: RSI</option>
+                      <option value="market_cap">Sort: Market Cap</option>
+                      <option value="high52_proximity">Sort: 52W High Dist.</option>
+                      <option value="low52_proximity">Sort: 52W Low Dist.</option>
+                    </select>
+                    <button
+                      onClick={() =>
+                        setScreenerSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+                      }
+                      className="rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                    >
+                      {screenerSortDirection === "asc" ? "Asc" : "Desc"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      <th className="px-5 py-3">Ticker</th>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Sector</th>
+                      <th className="px-4 py-3 text-right">Price</th>
+                      <th className="px-4 py-3 text-right">RSI</th>
+                      <th className="px-4 py-3 text-right">MCap</th>
+                      <th className="px-4 py-3 text-right">Dist. 52W High</th>
+                      <th className="px-4 py-3 text-right">Dist. 52W Low</th>
+                      <th className="px-5 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {screenerLoading ? (
+                      <tr>
+                        <td colSpan={9} className="px-5 py-5 text-sm text-slate-500">
+                          Screener wird geladen...
+                        </td>
+                      </tr>
+                    ) : sortedScreenerRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-5 py-5 text-sm text-slate-500">
+                          Keine Ergebnisse fuer die aktuellen Filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedScreenerRows.map((row) => (
+                        <tr key={row.ticker} className="border-b border-black/6 last:border-b-0">
+                          <td className="px-5 py-4 text-sm font-extrabold text-slate-900">{row.ticker}</td>
+                          <td className="px-4 py-4 text-sm text-slate-600">{row.name}</td>
+                          <td className="px-4 py-4 text-sm text-slate-600">{row.sector || "-"}</td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {row.price != null ? formatPrice(row.price) : "-"}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {row.rsi_14 != null ? row.rsi_14.toFixed(1) : "-"}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {row.market_cap != null ? `${(row.market_cap / 1e9).toFixed(1)}B` : "-"}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {row.high52_proximity != null ? `${row.high52_proximity.toFixed(1)}%` : "-"}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {row.low52_proximity != null ? `${row.low52_proximity.toFixed(1)}%` : "-"}
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              onClick={() => onAnalyze(row.ticker)}
+                              className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                            >
+                              Analyze
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
         )}
 

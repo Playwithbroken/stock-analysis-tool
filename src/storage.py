@@ -60,6 +60,20 @@ def init_db():
     ''')
 
     cursor.execute('''
+    CREATE TABLE IF NOT EXISTS price_alerts (
+        id TEXT PRIMARY KEY,
+        symbol TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        target_price REAL NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        cooldown_minutes INTEGER NOT NULL DEFAULT 5,
+        last_triggered_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    ''')
+
+    cursor.execute('''
     CREATE TABLE IF NOT EXISTS paper_trades (
         id TEXT PRIMARY KEY,
         ticker TEXT NOT NULL,
@@ -88,6 +102,22 @@ def init_db():
         pass
     try:
         cursor.execute('ALTER TABLE paper_trades ADD COLUMN lessons_learned TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE price_alerts ADD COLUMN cooldown_minutes INTEGER NOT NULL DEFAULT 5')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE price_alerts ADD COLUMN last_triggered_at TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE price_alerts ADD COLUMN created_at TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE price_alerts ADD COLUMN updated_at TEXT')
     except sqlite3.OperationalError:
         pass
     
@@ -285,6 +315,7 @@ class PortfolioManager:
             "timezone": "Europe/Berlin",
             "browser_notifications": False,
             "theme": "premium-light",
+            "onboarding_done": False,
         }
 
     def save_workspace_profile(self, profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -495,6 +526,139 @@ class PortfolioManager:
         updated = dict(cursor.fetchone())
         conn.close()
         return updated
+
+    def list_price_alerts(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        if enabled_only:
+            cursor.execute(
+                '''
+                SELECT * FROM price_alerts
+                WHERE enabled = 1
+                ORDER BY updated_at DESC, created_at DESC
+                '''
+            )
+        else:
+            cursor.execute(
+                '''
+                SELECT * FROM price_alerts
+                ORDER BY updated_at DESC, created_at DESC
+                '''
+            )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        for row in rows:
+            row["enabled"] = bool(row.get("enabled", 0))
+        return rows
+
+    def create_price_alert(
+        self,
+        symbol: str,
+        direction: str,
+        target_price: float,
+        enabled: bool = True,
+        cooldown_minutes: int = 5,
+    ) -> Dict[str, Any]:
+        alert_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        normalized_symbol = (symbol or "").strip().upper()
+        normalized_direction = (direction or "").strip().lower()
+        if normalized_direction not in {"above", "below"}:
+            raise ValueError("direction must be 'above' or 'below'")
+
+        row = {
+            "id": alert_id,
+            "symbol": normalized_symbol,
+            "direction": normalized_direction,
+            "target_price": float(target_price),
+            "enabled": bool(enabled),
+            "cooldown_minutes": max(1, int(cooldown_minutes or 5)),
+            "last_triggered_at": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO price_alerts (
+                id, symbol, direction, target_price, enabled, cooldown_minutes,
+                last_triggered_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                row["id"],
+                row["symbol"],
+                row["direction"],
+                row["target_price"],
+                1 if row["enabled"] else 0,
+                row["cooldown_minutes"],
+                row["last_triggered_at"],
+                row["created_at"],
+                row["updated_at"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return row
+
+    def update_price_alert(self, alert_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        allowed = {"symbol", "direction", "target_price", "enabled", "cooldown_minutes", "last_triggered_at"}
+        updates: Dict[str, Any] = {}
+        for key, value in (payload or {}).items():
+            if key not in allowed:
+                continue
+            updates[key] = value
+        if not updates:
+            return self.get_price_alert(alert_id)
+
+        if "symbol" in updates:
+            updates["symbol"] = (updates["symbol"] or "").strip().upper()
+        if "direction" in updates:
+            updates["direction"] = (updates["direction"] or "").strip().lower()
+            if updates["direction"] not in {"above", "below"}:
+                raise ValueError("direction must be 'above' or 'below'")
+        if "target_price" in updates:
+            updates["target_price"] = float(updates["target_price"])
+        if "enabled" in updates:
+            updates["enabled"] = 1 if bool(updates["enabled"]) else 0
+        if "cooldown_minutes" in updates:
+            updates["cooldown_minutes"] = max(1, int(updates["cooldown_minutes"] or 5))
+
+        updates["updated_at"] = datetime.now().isoformat()
+        sets = ", ".join([f"{key} = ?" for key in updates.keys()])
+        values = list(updates.values()) + [alert_id]
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE price_alerts SET {sets} WHERE id = ?", values)
+        conn.commit()
+        conn.close()
+        return self.get_price_alert(alert_id)
+
+    def get_price_alert(self, alert_id: str) -> Optional[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM price_alerts WHERE id = ?", (alert_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        payload = dict(row)
+        payload["enabled"] = bool(payload.get("enabled", 0))
+        return payload
+
+    def delete_price_alert(self, alert_id: str) -> bool:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM price_alerts WHERE id = ?", (alert_id,))
+        changed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return changed > 0
 
     def update_paper_trade_journal(
         self,

@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
-  Cell,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   ReferenceLine,
@@ -22,9 +22,9 @@ import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
 interface HistoryItem {
   time: string;
-  full_date: string;
+  full_date?: string;
   price: number;
-  volume: number;
+  volume?: number;
 }
 
 interface PriceChartProps {
@@ -33,6 +33,17 @@ interface PriceChartProps {
     stats: { change: number; changePct: number },
     periodLabel: string,
   ) => void;
+}
+
+interface IndicatorSeries {
+  rsi: Array<number | null>;
+  macd: Array<number | null>;
+  sma20: Array<number | null>;
+  sma50: Array<number | null>;
+  sma200: Array<number | null>;
+  bbUpper: Array<number | null>;
+  bbLower: Array<number | null>;
+  vwap: Array<number | null>;
 }
 
 const PERIODS = [
@@ -44,144 +55,302 @@ const PERIODS = [
   { id: "max", label: "MAX", interval: "1mo" },
 ];
 
+const emptyIndicators = (): IndicatorSeries => ({
+  rsi: [],
+  macd: [],
+  sma20: [],
+  sma50: [],
+  sma200: [],
+  bbUpper: [],
+  bbLower: [],
+  vwap: [],
+});
+
+const rollingAverage = (values: number[], period: number): Array<number | null> => {
+  const out: Array<number | null> = new Array(values.length).fill(null);
+  if (period <= 0) return out;
+  let sum = 0;
+  for (let idx = 0; idx < values.length; idx += 1) {
+    sum += values[idx];
+    if (idx >= period) {
+      sum -= values[idx - period];
+    }
+    if (idx >= period - 1) {
+      out[idx] = sum / period;
+    }
+  }
+  return out;
+};
+
+const rollingStdDev = (values: number[], period: number): Array<number | null> => {
+  const out: Array<number | null> = new Array(values.length).fill(null);
+  for (let idx = period - 1; idx < values.length; idx += 1) {
+    const window = values.slice(idx - period + 1, idx + 1);
+    const mean = window.reduce((acc, val) => acc + val, 0) / period;
+    const variance = window.reduce((acc, val) => acc + (val - mean) ** 2, 0) / period;
+    out[idx] = Math.sqrt(variance);
+  }
+  return out;
+};
+
+const computeRsi = (prices: number[], period = 14): Array<number | null> => {
+  const rsiValues: Array<number | null> = new Array(prices.length).fill(null);
+  if (prices.length <= period) return rsiValues;
+
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let idx = 1; idx <= period; idx += 1) {
+    const diff = prices[idx] - prices[idx - 1];
+    if (diff >= 0) {
+      avgGain += diff;
+    } else {
+      avgLoss += -diff;
+    }
+  }
+  avgGain /= period;
+  avgLoss /= period;
+  rsiValues[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+
+  for (let idx = period + 1; idx < prices.length; idx += 1) {
+    const diff = prices[idx] - prices[idx - 1];
+    avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+    rsiValues[idx] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return rsiValues;
+};
+
+const computeMacdHistogram = (prices: number[]): Array<number | null> => {
+  if (!prices.length) return [];
+  const ema = (src: number[], span: number): number[] => {
+    const k = 2 / (span + 1);
+    const out: number[] = [src[0]];
+    for (let idx = 1; idx < src.length; idx += 1) {
+      out.push(src[idx] * k + out[idx - 1] * (1 - k));
+    }
+    return out;
+  };
+  const ema12 = ema(prices, 12);
+  const ema26 = ema(prices, 26);
+  const macdLine = ema12.map((val, idx) => val - ema26[idx]);
+  const signal = ema(macdLine, 9);
+  return macdLine.map((val, idx) => val - signal[idx]);
+};
+
 export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const { formatPrice } = useCurrency();
   const [data, setData] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
+  const [fetchErrorMessage, setFetchErrorMessage] = useState<string>("");
   const [period, setPeriod] = useState(PERIODS[2]);
   const [stats, setStats] = useState({ change: 0, changePct: 0 });
   const [showRSI, setShowRSI] = useState(false);
   const [showMACD, setShowMACD] = useState(false);
-  const [indicators, setIndicators] = useState<{ rsi: number[]; macd: number[] }>({
-    rsi: [],
-    macd: [],
-  });
+  const [showSMA, setShowSMA] = useState(true);
+  const [showBollinger, setShowBollinger] = useState(false);
+  const [showVolume, setShowVolume] = useState(true);
+  const [showVWAP, setShowVWAP] = useState(false);
+  const [retryCounter, setRetryCounter] = useState(0);
+  const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
+  const tickerSymbol = ticker.toUpperCase();
   const { quotes, connected, lastUpdated } = useRealtimeFeed([ticker], true);
-  const realtimeQuote = quotes[ticker.toUpperCase()];
+  const realtimeQuote = quotes[tickerSymbol];
+
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const fetchHistory = async () => {
       setLoading(true);
       setFetchError(false);
+      setFetchErrorMessage("");
+      setData([]);
+      setIndicators(emptyIndicators());
+
       try {
         const histData = await fetchJsonWithRetry<HistoryItem[]>(
-          `/api/history/${ticker}?period=${period.id}&interval=${period.interval}`,
-          undefined,
+          `/api/history/${tickerSymbol}?period=${period.id}&interval=${period.interval}`,
+          { signal: controller.signal },
           { retries: 1, retryDelayMs: 800 },
         );
-        setData(histData ?? []);
 
-        if (histData.length > 1) {
-          const first = histData[0].price;
-          const last = histData[histData.length - 1].price;
+        if (requestIdRef.current !== requestId) return;
+
+        const normalized = (histData || [])
+          .filter((item) => item && Number.isFinite(item.price))
+          .map((item) => ({
+            ...item,
+            full_date: item.full_date || item.time,
+            volume: Number.isFinite(item.volume as number) ? Number(item.volume) : 0,
+          }));
+
+        if (!normalized.length) {
+          setData([]);
+          setFetchError(true);
+          setFetchErrorMessage("Keine Kursdaten erhalten. Bitte erneut versuchen.");
+          return;
+        }
+
+        setData(normalized);
+        if (normalized.length > 1) {
+          const first = normalized[0].price;
+          const last = normalized[normalized.length - 1].price;
           const change = last - first;
-          const changePct = (change / first) * 100;
+          const changePct = first !== 0 ? (change / first) * 100 : 0;
           setStats({ change, changePct });
           onStatsUpdate?.({ change, changePct }, period.label);
+        } else {
+          setStats({ change: 0, changePct: 0 });
+          onStatsUpdate?.({ change: 0, changePct: 0 }, period.label);
         }
 
-        // Real RSI (14-period)
-        const prices = histData.map((d: HistoryItem) => d.price);
-        const rsiPeriod = 14;
-        const rsiValues: number[] = new Array(prices.length).fill(50);
-        if (prices.length > rsiPeriod) {
-          let avgGain = 0, avgLoss = 0;
-          for (let j = 1; j <= rsiPeriod; j++) {
-            const diff = prices[j] - prices[j - 1];
-            if (diff > 0) avgGain += diff; else avgLoss -= diff;
-          }
-          avgGain /= rsiPeriod;
-          avgLoss /= rsiPeriod;
-          rsiValues[rsiPeriod] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-          for (let j = rsiPeriod + 1; j < prices.length; j++) {
-            const diff = prices[j] - prices[j - 1];
-            avgGain = (avgGain * (rsiPeriod - 1) + (diff > 0 ? diff : 0)) / rsiPeriod;
-            avgLoss = (avgLoss * (rsiPeriod - 1) + (diff < 0 ? -diff : 0)) / rsiPeriod;
-            rsiValues[j] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-          }
+        const prices = normalized.map((item) => item.price);
+        const volumes = normalized.map((item) => item.volume || 0);
+        const sma20 = rollingAverage(prices, 20);
+        const sma50 = rollingAverage(prices, 50);
+        const sma200 = rollingAverage(prices, 200);
+        const std20 = rollingStdDev(prices, 20);
+        const bbUpper = sma20.map((sma, idx) =>
+          sma != null && std20[idx] != null ? sma + (std20[idx] as number) * 2 : null,
+        );
+        const bbLower = sma20.map((sma, idx) =>
+          sma != null && std20[idx] != null ? sma - (std20[idx] as number) * 2 : null,
+        );
+        const rsi = computeRsi(prices, 14);
+        const macd = computeMacdHistogram(prices);
+        let cumulativePV = 0;
+        let cumulativeVol = 0;
+        const vwap = prices.map((pricePoint, idx) => {
+          const volume = Math.max(0, volumes[idx] || 0);
+          cumulativePV += pricePoint * volume;
+          cumulativeVol += volume;
+          return cumulativeVol > 0 ? cumulativePV / cumulativeVol : null;
+        });
+
+        setIndicators({
+          rsi,
+          macd,
+          sma20,
+          sma50,
+          sma200,
+          bbUpper,
+          bbLower,
+          vwap,
+        });
+      } catch (error) {
+        if (controller.signal.aborted || requestIdRef.current !== requestId) {
+          return;
         }
-        // Real MACD (12/26/9 EMA)
-        const ema = (src: number[], span: number): number[] => {
-          const k = 2 / (span + 1);
-          const out: number[] = [src[0]];
-          for (let j = 1; j < src.length; j++) out.push(src[j] * k + out[j - 1] * (1 - k));
-          return out;
-        };
-        const ema12 = ema(prices, 12);
-        const ema26 = ema(prices, 26);
-        const macdLine = ema12.map((v, j) => v - ema26[j]);
-        const signal = ema(macdLine, 9);
-        const macdHist = macdLine.map((v, j) => v - signal[j]);
-        setIndicators({ rsi: rsiValues, macd: macdHist });
-      } catch {
+        const message = error instanceof Error ? error.message : "Kursdaten konnten nicht geladen werden.";
+        if (message.includes("504")) {
+          setFetchErrorMessage("Datenprovider-Timeout. Bitte mit Retry erneut laden.");
+        } else if (message.includes("Failed to fetch")) {
+          setFetchErrorMessage("Netzwerkproblem beim Laden der Historie.");
+        } else {
+          setFetchErrorMessage(message);
+        }
         setData([]);
         setFetchError(true);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted && requestIdRef.current === requestId) {
+          setLoading(false);
+        }
       }
     };
 
     fetchHistory();
-  }, [ticker, period, onStatsUpdate]);
-
-  useEffect(() => {
-    if (!realtimeQuote?.price || data.length === 0) return;
-    setData((prev) => {
-      if (!prev.length) return prev;
-      const next = [...prev];
-      const last = next[next.length - 1];
-      next[next.length - 1] = {
-        ...last,
-        price: realtimeQuote.price,
-      };
-      return next;
-    });
-  }, [realtimeQuote?.price]);
-
-  const isPositive = stats.changePct >= 0;
+    return () => {
+      controller.abort();
+    };
+  }, [tickerSymbol, period, onStatsUpdate, retryCounter]);
 
   const chartData = useMemo(() => {
-    return data.map((d, i) => ({
-      ...d,
-      _rsi: indicators.rsi[i],
-      _macd: indicators.macd[i],
-    }));
-  }, [data, indicators]);
+    const livePrice =
+      realtimeQuote?.symbol?.toUpperCase() === tickerSymbol && Number.isFinite(realtimeQuote?.price)
+        ? Number(realtimeQuote.price)
+        : null;
+    return data.map((entry, idx) => {
+      const isLast = idx === data.length - 1;
+      return {
+        ...entry,
+        price: isLast && livePrice != null ? livePrice : entry.price,
+        _rsi: indicators.rsi[idx],
+        _macd: indicators.macd[idx],
+        _sma20: indicators.sma20[idx],
+        _sma50: indicators.sma50[idx],
+        _sma200: indicators.sma200[idx],
+        _bbUpper: indicators.bbUpper[idx],
+        _bbLower: indicators.bbLower[idx],
+        _vwap: indicators.vwap[idx],
+        _volume: entry.volume || 0,
+      };
+    });
+  }, [data, indicators, realtimeQuote, tickerSymbol]);
 
-  const CustomTooltip = useCallback(({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const d = payload[0].payload;
-      return (
-        <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
-          <p className="mb-1 text-xs text-slate-500">{d.full_date}</p>
-          <p className="text-lg font-bold text-slate-900">{formatPrice(payload[0].value)}</p>
-          {d.volume > 0 && (
-            <p className="mt-1 text-[10px] text-slate-500">
-              Vol: {d.volume.toLocaleString()}
-            </p>
-          )}
-          {d._rsi != null && showRSI && (
-            <p className="mt-1 text-[10px] text-amber-600">RSI: {d._rsi.toFixed(1)}</p>
-          )}
-          {d._macd != null && showMACD && (
-            <p className="mt-1 text-[10px] text-sky-600">MACD: {d._macd.toFixed(3)}</p>
-          )}
-        </div>
-      );
-    }
-    return null;
-  }, [formatPrice, showRSI, showMACD]);
+  const isPositive = stats.changePct >= 0;
+  const subPanels = [showVolume, showRSI, showMACD].filter(Boolean).length;
+  const mainHeightPercent = subPanels > 0 ? Math.max(40, 100 - subPanels * 20) : 100;
+  const subPanelHeightPercent = subPanels > 0 ? Math.max(18, Math.floor((100 - mainHeightPercent) / subPanels)) : 0;
+  const indicatorToggles: Array<{
+    label: string;
+    active: boolean;
+    setActive: React.Dispatch<React.SetStateAction<boolean>>;
+    activeTone: string;
+  }> = [
+    { label: "RSI", active: showRSI, setActive: setShowRSI, activeTone: "border-amber-500/30 bg-amber-500/10 text-amber-700" },
+    { label: "MACD", active: showMACD, setActive: setShowMACD, activeTone: "border-sky-500/30 bg-sky-500/10 text-sky-700" },
+    { label: "SMA", active: showSMA, setActive: setShowSMA, activeTone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" },
+    { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700" },
+    { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700" },
+    { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700" },
+  ];
+
+  const CustomTooltip = useCallback(
+    ({ active, payload }: any) => {
+      if (active && payload && payload.length) {
+        const d = payload[0].payload;
+        return (
+          <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
+            <p className="mb-1 text-xs text-slate-500">{d.full_date || d.time}</p>
+            <p className="text-lg font-bold text-slate-900">{formatPrice(d.price)}</p>
+            {d._volume > 0 ? (
+              <p className="mt-1 text-[10px] text-slate-500">
+                Vol: {Number(d._volume).toLocaleString()}
+              </p>
+            ) : null}
+            {d._rsi != null && showRSI ? (
+              <p className="mt-1 text-[10px] text-amber-600">RSI: {d._rsi.toFixed(1)}</p>
+            ) : null}
+            {d._macd != null && showMACD ? (
+              <p className="mt-1 text-[10px] text-sky-600">MACD: {d._macd.toFixed(3)}</p>
+            ) : null}
+          </div>
+        );
+      }
+      return null;
+    },
+    [formatPrice, showMACD, showRSI],
+  );
 
   return (
     <div className="surface-panel rounded-[2rem] p-6">
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <div className="mb-1 flex items-center gap-2 text-slate-500">
-            <TrendingUp
-              size={16}
-              className={isPositive ? "text-emerald-600" : "text-red-600"}
-            />
+            <TrendingUp size={16} className={isPositive ? "text-emerald-600" : "text-red-600"} />
             <span className="text-sm font-semibold">Price History ({period.label})</span>
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
@@ -192,11 +361,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             </span>
           </div>
           <div className="flex items-baseline gap-3">
-            <div
-              className={`text-xl font-bold ${
-                isPositive ? "text-emerald-700" : "text-red-700"
-              }`}
-            >
+            <div className={`text-xl font-bold ${isPositive ? "text-emerald-700" : "text-red-700"}`}>
               {isPositive ? "+" : ""}
               {stats.changePct.toFixed(2)}%
             </div>
@@ -222,34 +387,25 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
+        {indicatorToggles.map((toggle) => (
           <button
-            onClick={() => setShowRSI(!showRSI)}
+            key={toggle.label}
+            onClick={() => toggle.setActive((prev) => !prev)}
             className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
-              showRSI
-                ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
-                : "border-black/8 bg-white/80 text-slate-500"
+              toggle.active ? toggle.activeTone : "border-black/8 bg-white/80 text-slate-500"
             }`}
           >
-            RSI
+            {toggle.label}
           </button>
-          <button
-            onClick={() => setShowMACD(!showMACD)}
-            className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
-              showMACD
-                ? "border-sky-500/30 bg-sky-500/10 text-sky-700"
-                : "border-black/8 bg-white/80 text-slate-500"
-            }`}
-          >
-            MACD
-          </button>
-        </div>
+        ))}
       </div>
 
       <MeasuredChartFrame
-        className={`w-full ${showRSI || showMACD ? "h-[440px]" : "h-[300px]"}`}
-        minHeight={showRSI || showMACD ? 440 : 300}
+        className={`w-full ${subPanels > 0 ? "h-[520px]" : "h-[320px]"}`}
+        minHeight={subPanels > 0 ? 520 : 320}
         fallback={
           <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
             <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
@@ -262,22 +418,25 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span className="text-sm text-slate-500">Lade Kursverlauf…</span>
+            <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
           </div>
         ) : fetchError ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-dashed border-red-200 bg-red-50/60 text-slate-600">
-            <span className="text-2xl">⚠️</span>
+            <span className="text-2xl">!</span>
             <p className="text-sm font-semibold">Kursdaten konnten nicht geladen werden.</p>
+            {fetchErrorMessage ? (
+              <p className="max-w-md text-center text-xs text-slate-500">{fetchErrorMessage}</p>
+            ) : null}
             <button
-              onClick={() => setPeriod({ ...period })}
+              onClick={() => setRetryCounter((prev) => prev + 1)}
               className="rounded-[0.8rem] border border-black/8 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
             >
-              Erneut versuchen
+              Retry
             </button>
           </div>
         ) : chartData.length > 0 ? (
-          <div className="flex h-full w-full flex-col gap-1">
-            <div className={showRSI || showMACD ? "h-[60%]" : "h-full"}>
+          <div className="flex h-full w-full flex-col gap-2">
+            <div style={{ height: `${mainHeightPercent}%` }} className="min-h-[200px]">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                 <AreaChart data={chartData}>
                   <defs>
@@ -290,20 +449,55 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: "#7c848f", fontSize: 10 }} minTickGap={30} />
                   <YAxis hide domain={["auto", "auto"]} />
                   <Tooltip content={<CustomTooltip />} cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }} />
-                  <Area type="monotone" dataKey="price" stroke={isPositive ? "#0f766e" : "#dc2626"} strokeWidth={2.4} fillOpacity={1} fill="url(#colorPrice)" animationDuration={1200} />
+                  {showBollinger ? (
+                    <>
+                      <Line type="monotone" dataKey="_bbUpper" stroke="#c026d3" strokeOpacity={0.6} strokeWidth={1.2} dot={false} />
+                      <Line type="monotone" dataKey="_bbLower" stroke="#c026d3" strokeOpacity={0.6} strokeWidth={1.2} dot={false} />
+                    </>
+                  ) : null}
+                  {showSMA ? (
+                    <>
+                      <Line type="monotone" dataKey="_sma20" stroke="#0f766e" strokeOpacity={0.9} strokeWidth={1.5} dot={false} />
+                      <Line type="monotone" dataKey="_sma50" stroke="#0369a1" strokeOpacity={0.9} strokeWidth={1.4} dot={false} />
+                      <Line type="monotone" dataKey="_sma200" stroke="#7c3aed" strokeOpacity={0.85} strokeWidth={1.3} dot={false} />
+                    </>
+                  ) : null}
+                  {showVWAP ? (
+                    <Line type="monotone" dataKey="_vwap" stroke="#0891b2" strokeWidth={1.4} strokeOpacity={0.9} dot={false} />
+                  ) : null}
+                  <Area type="monotone" dataKey="price" stroke={isPositive ? "#0f766e" : "#dc2626"} strokeWidth={2.4} fillOpacity={1} fill="url(#colorPrice)" animationDuration={850} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            {showRSI && (
-              <div className="h-[20%] min-h-[60px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+
+            {showVolume ? (
+              <div style={{ height: `${subPanelHeightPercent}%` }} className="min-h-[74px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={74}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
+                    <XAxis dataKey="time" hide />
+                    <YAxis hide />
+                    <Bar dataKey="_volume" animationDuration={550}>
+                      {chartData.map((entry, idx) => (
+                        <Cell key={`vol-${idx}`} fill={(entry._macd ?? 0) >= 0 ? "#2563eb" : "#64748b"} fillOpacity={0.6} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">Volume</div>
+              </div>
+            ) : null}
+
+            {showRSI ? (
+              <div style={{ height: `${subPanelHeightPercent}%` }} className="min-h-[74px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={74}>
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
                     <XAxis dataKey="time" hide />
                     <YAxis domain={[0, 100]} hide />
                     <ReferenceLine y={70} stroke="#dc2626" strokeDasharray="4 4" strokeOpacity={0.5} />
                     <ReferenceLine y={30} stroke="#0f766e" strokeDasharray="4 4" strokeOpacity={0.5} />
-                    <Line type="monotone" dataKey="_rsi" stroke="#d97706" strokeWidth={1.5} dot={false} animationDuration={800} />
+                    <Line type="monotone" dataKey="_rsi" stroke="#d97706" strokeWidth={1.5} dot={false} animationDuration={600} />
                   </LineChart>
                 </ResponsiveContainer>
                 <div className="flex justify-between px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">
@@ -312,18 +506,19 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   <span className="text-emerald-500">30</span>
                 </div>
               </div>
-            )}
-            {showMACD && (
-              <div className="h-[20%] min-h-[60px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            ) : null}
+
+            {showMACD ? (
+              <div style={{ height: `${subPanelHeightPercent}%` }} className="min-h-[74px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={74}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
                     <XAxis dataKey="time" hide />
                     <YAxis hide />
                     <ReferenceLine y={0} stroke="rgba(22,28,36,0.15)" />
-                    <Bar dataKey="_macd" animationDuration={800}>
+                    <Bar dataKey="_macd" animationDuration={600}>
                       {chartData.map((entry, idx) => (
-                        <Cell key={idx} fill={(entry._macd ?? 0) >= 0 ? "#0f766e" : "#dc2626"} fillOpacity={0.7} />
+                        <Cell key={`macd-${idx}`} fill={(entry._macd ?? 0) >= 0 ? "#0f766e" : "#dc2626"} fillOpacity={0.7} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -332,7 +527,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   MACD Histogram (12/26/9)
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center rounded-[1.4rem] border border-dashed border-black/8 bg-white/70 text-slate-500">
@@ -348,7 +543,9 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           {period.id === "1d" ? "Intraday Minute Data" : "Historical Market Data"}
         </div>
         <div>
-          {connected && lastUpdated ? `Live ${new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "YFinance-Engine v2.0"}
+          {connected && lastUpdated
+            ? `Live ${new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+            : "YFinance-Engine v2.0"}
         </div>
       </div>
     </div>

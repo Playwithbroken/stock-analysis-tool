@@ -35,6 +35,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const lastFrameRef = useRef<number>(0);
+  const reconnectAttemptRef = useRef<number>(0);
 
   useEffect(() => {
     if (!enabled || cleaned.length === 0) return;
@@ -45,11 +46,26 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     let pollTimer: number | null = null;
     let closed = false;
 
+    setQuotes({});
+    setLastUpdated(null);
+    setConnected(false);
+    lastFrameRef.current = 0;
+    reconnectAttemptRef.current = 0;
+
+    const allowedSymbols = new Set(cleaned);
+
     const mergeQuotes = (incoming: RealtimeQuote[]) => {
       setQuotes((prev) => {
-        const next = { ...prev };
+        const next: Record<string, RealtimeQuote> = {};
+        for (const symbol of allowedSymbols) {
+          if (prev[symbol]) {
+            next[symbol] = prev[symbol];
+          }
+        }
         for (const quote of incoming || []) {
-          next[quote.symbol] = quote;
+          if (quote?.symbol && allowedSymbols.has(quote.symbol)) {
+            next[quote.symbol] = quote;
+          }
         }
         return next;
       });
@@ -73,7 +89,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         const payload = (await response.json()) as RealtimePayload;
         mergeQuotes(payload.quotes || []);
         setLastUpdated(payload.generated_at);
-        if (!connected) {
+        if ((payload.quotes || []).length > 0) {
           setConnected(true);
         }
       } catch {
@@ -81,16 +97,33 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
       }
     };
 
+    const getBackoffDelayMs = (attempt: number) => {
+      const schedule = [3000, 6000, 12000, 30000, 60000];
+      const base = schedule[Math.min(attempt, schedule.length - 1)];
+      const jitter = Math.floor(Math.random() * 700);
+      return Math.min(60000, base + jitter);
+    };
+
+    const scheduleReconnect = () => {
+      if (closed || retry != null) return;
+      const attempt = reconnectAttemptRef.current;
+      const waitMs = getBackoffDelayMs(attempt);
+      reconnectAttemptRef.current = attempt + 1;
+      retry = window.setTimeout(() => {
+        retry = null;
+        connect();
+      }, waitMs);
+    };
+
     const connect = () => {
       socket = new WebSocket(buildRealtimeUrl(cleaned));
       socket.onopen = () => {
+        reconnectAttemptRef.current = 0;
         scheduleStaleCheck();
       };
       socket.onclose = () => {
         setConnected(false);
-        if (!closed) {
-          retry = window.setTimeout(connect, 3000);
-        }
+        scheduleReconnect();
       };
       socket.onerror = () => setConnected(false);
       socket.onmessage = (event) => {

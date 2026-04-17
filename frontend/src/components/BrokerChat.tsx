@@ -8,6 +8,10 @@ interface Message {
 
 interface BrokerChatProps {
   currentTicker?: string | string[];
+  portfolioSnapshot?: any;
+  liveQuotes?: Record<string, any>;
+  signalScore?: any;
+  morningBriefSummary?: any;
   isInline?: boolean;
   initialMessage?: string;
   onClose?: () => void;
@@ -17,6 +21,10 @@ interface BrokerChatProps {
 
 export default function BrokerChat({
   currentTicker,
+  portfolioSnapshot,
+  liveQuotes,
+  signalScore,
+  morningBriefSummary,
   isInline = false,
   initialMessage,
   onClose,
@@ -72,6 +80,10 @@ export default function BrokerChat({
           context_ticker: Array.isArray(currentTicker)
             ? currentTicker.join(",")
             : currentTicker,
+          portfolio_snapshot: portfolioSnapshot,
+          live_quotes: liveQuotes,
+          signal_score: signalScore,
+          morning_brief_summary: morningBriefSummary,
         }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

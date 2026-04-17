@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -18,6 +18,7 @@ const MyRadar = lazy(() => import("./components/MyRadar"));
 const WorldMarketMap = lazy(() => import("./components/WorldMarketMap"));
 const TradingEdgePanel = lazy(() => import("./components/TradingEdgePanel"));
 const MorningBriefPanel = lazy(() => import("./components/MorningBriefPanel"));
+const OnboardingWizard = lazy(() => import("./components/OnboardingWizard"));
 
 interface AnalysisData {
   ticker: string;
@@ -37,7 +38,7 @@ interface AuthState {
   loading: boolean;
   authenticated: boolean;
   configured: boolean;
-  profile: { display_name?: string } | null;
+  profile: { display_name?: string; onboarding_done?: boolean } | null;
 }
 
 interface WatchlistSnapshot {
@@ -288,8 +289,10 @@ function AppContent() {
     profile: null,
   });
   const [authStatus, setAuthStatus] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
   const [globalBrief, setGlobalBrief] = useState<any>(null);
+  const [signalScoreContext, setSignalScoreContext] = useState<any>(null);
   const [tradingEdge, setTradingEdge] = useState<any>(null);
   const [tradingEdgeLoading, setTradingEdgeLoading] = useState(false);
   const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
@@ -326,6 +329,34 @@ function AppContent() {
   const headerFallbackSymbols = ["SPY", "QQQ", "AAPL", "NVDA", "BTC-USD", "GLD"];
   const favoriteSymbols = headerSymbols.length ? headerSymbols : headerFallbackSymbols;
   const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
+  const portfolioSnapshotForChat = useMemo(() => {
+    const holdings = portfolios.flatMap((portfolio) =>
+      (portfolio.holdings || []).map((holding) => ({
+        ticker: holding.ticker,
+        shares: holding.shares,
+        buy_price: holding.buyPrice ?? null,
+        portfolio: portfolio.name,
+      })),
+    );
+    return {
+      summary: {
+        num_holdings: holdings.length,
+        portfolios: portfolios.length,
+      },
+      holdings: holdings.slice(0, 50),
+    };
+  }, [portfolios]);
+  const briefSummaryForChat = useMemo(
+    () =>
+      globalBrief
+        ? {
+            headline: globalBrief.headline,
+            opening_bias: globalBrief.opening_bias,
+            macro_regime: globalBrief.macro_regime,
+          }
+        : null,
+    [globalBrief],
+  );
 
   useEffect(() => {
     if (!auth.authenticated) return;
@@ -395,6 +426,32 @@ function AppContent() {
       cancelled = true;
       window.clearInterval(interval);
       window.clearInterval(watchlistInterval);
+    };
+  }, [auth.authenticated]);
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+    let cancelled = false;
+    const loadSignalContext = async () => {
+      try {
+        const payload = await fetchJsonWithRetry<any>("/api/signals/scoreboard", undefined, {
+          retries: 1,
+          retryDelayMs: 700,
+        });
+        if (!cancelled) {
+          setSignalScoreContext(payload);
+        }
+      } catch {
+        if (!cancelled) {
+          setSignalScoreContext(null);
+        }
+      }
+    };
+    loadSignalContext();
+    const interval = window.setInterval(loadSignalContext, 120000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
     };
   }, [auth.authenticated]);
 
@@ -479,6 +536,15 @@ function AppContent() {
       setAuthStatus("Server-Status konnte nicht geladen werden.");
     });
   }, []);
+
+  useEffect(() => {
+    if (!auth.authenticated) {
+      setShowOnboarding(false);
+      return;
+    }
+    const done = Boolean(auth.profile?.onboarding_done);
+    setShowOnboarding(!done);
+  }, [auth.authenticated, auth.profile]);
 
   useEffect(() => {
     const onUnauthorized = () => {
@@ -1095,9 +1161,28 @@ function AppContent() {
 
       <ErrorBoundary fallback={<></>}>
         <Suspense fallback={null}>
-          <BrokerChat currentTicker={analysis?.ticker} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+          <BrokerChat
+            currentTicker={analysis?.ticker}
+            portfolioSnapshot={portfolioSnapshotForChat}
+            liveQuotes={headerQuotes}
+            signalScore={signalScoreContext}
+            morningBriefSummary={briefSummaryForChat}
+            isOpen={isChatOpen}
+            setIsOpen={setIsChatOpen}
+          />
         </Suspense>
       </ErrorBoundary>
+
+      <Suspense fallback={null}>
+        <OnboardingWizard
+          isOpen={showOnboarding}
+          onCreatePortfolio={createPortfolio}
+          onComplete={async () => {
+            setShowOnboarding(false);
+            await refreshAuth().catch(() => undefined);
+          }}
+        />
+      </Suspense>
 
       {/* Push notifications blocked — help modal */}
       {showNotifHelp && (

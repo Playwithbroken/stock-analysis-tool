@@ -410,6 +410,25 @@ h3,
 [data-theme="dark"] .recharts-xAxis .recharts-text {
   fill: #7c848f !important;
 }
+[data-theme="dark"] .recharts-yAxis .recharts-text {
+  fill: #7c848f !important;
+}
+[data-theme="dark"] .recharts-tooltip-wrapper > div,
+[data-theme="dark"] .recharts-default-tooltip {
+  background: rgba(15, 17, 23, 0.94) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f1f3f7 !important;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.35) !important;
+}
+[data-theme="dark"] .recharts-legend-item-text {
+  color: #c8d0dc !important;
+}
+[data-theme="dark"] .surface-panel .text-red-700 {
+  color: #fb7185 !important;
+}
+[data-theme="dark"] .surface-panel .text-emerald-700 {
+  color: #34d399 !important;
+}
 
 .ticker-chip-flash-up {
   animation: ticker-flash-up 0.95s ease-out;

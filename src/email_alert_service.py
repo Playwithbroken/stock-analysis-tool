@@ -148,6 +148,41 @@ class EmailAlertService:
         self._send_notifications(config, [sample_event], subject="Test Alert: Mailversand aktiv")
         return {"status": "ok", "message": "Test email sent."}
 
+    def send_price_alert(
+        self,
+        symbol: str,
+        direction: str,
+        target_price: float,
+        current_price: float,
+    ) -> Dict[str, Any]:
+        config = self.get_config()
+        self._validate_config(config)
+        normalized_symbol = (symbol or "").strip().upper()
+        normalized_direction = (direction or "").strip().lower()
+        if normalized_direction not in {"above", "below"}:
+            raise ValueError("direction must be 'above' or 'below'")
+
+        condition = ">=" if normalized_direction == "above" else "<="
+        line = (
+            f"{normalized_symbol} hit {current_price:.2f} "
+            f"(Alert {condition} {float(target_price):.2f})"
+        )
+        event = {
+            "event_key": f"price-alert:{normalized_symbol}:{datetime.now().isoformat()}",
+            "category": "price_alert",
+            "title": f"Price Alert {normalized_symbol}",
+            "line": line,
+            "source_url": "",
+            "source_label": "Realtime monitor",
+            "conviction_score": None,
+        }
+        self._send_notifications(
+            config,
+            [event],
+            subject=f"Price Alert: {normalized_symbol}",
+        )
+        return {"status": "ok", "message": "Price alert notification sent."}
+
     def send_daily_brief(self) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)

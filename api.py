@@ -15,7 +15,7 @@ import hashlib
 import hmac
 import secrets
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.data_fetcher import DataFetcher
 from src.analyzer import StockAnalyzer, Rating, Valuation
@@ -56,7 +56,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["Content-Type"],
 )
 
@@ -67,6 +67,7 @@ _portfolio_manager = None
 _public_signal_service = None
 _email_alert_service = None
 _signal_alert_task = None
+_price_alert_task = None
 _morning_brief_service = None
 _signal_score_service = None
 _session_list_service = None
@@ -241,9 +242,81 @@ async def _signal_alert_loop():
             print(f"Signal alert loop error: {e}")
         await asyncio.sleep(max(1, interval_minutes) * 60)
 
+
+def _is_alert_in_cooldown(last_triggered_at: Optional[str], cooldown_minutes: int) -> bool:
+    if not last_triggered_at:
+        return False
+    try:
+        last_ts = datetime.fromisoformat(last_triggered_at)
+    except Exception:
+        return False
+    return datetime.now() < (last_ts + timedelta(minutes=max(1, cooldown_minutes)))
+
+
+async def _price_alert_loop():
+    while True:
+        try:
+            manager = get_portfolio_manager()
+            alerts = manager.list_price_alerts(enabled_only=True)
+            if alerts:
+                symbols = sorted({str(alert.get("symbol", "")).upper() for alert in alerts if alert.get("symbol")})
+                snapshot = get_realtime_market_service().build_snapshot(symbols)
+                quote_map = {
+                    str(item.get("symbol", "")).upper(): item
+                    for item in snapshot.get("quotes", [])
+                    if item and item.get("symbol")
+                }
+                for alert in alerts:
+                    symbol = str(alert.get("symbol", "")).upper()
+                    quote = quote_map.get(symbol)
+                    if not quote:
+                        continue
+                    current_price = quote.get("price")
+                    if current_price is None:
+                        continue
+                    direction = str(alert.get("direction", "")).lower()
+                    target = float(alert.get("target_price") or 0)
+                    triggered = (
+                        direction == "above" and float(current_price) >= target
+                    ) or (
+                        direction == "below" and float(current_price) <= target
+                    )
+                    if not triggered:
+                        continue
+                    cooldown_minutes = int(alert.get("cooldown_minutes") or 5)
+                    if _is_alert_in_cooldown(alert.get("last_triggered_at"), cooldown_minutes):
+                        continue
+
+                    alert_id = alert.get("id")
+                    if alert_id:
+                        manager.update_price_alert(
+                            str(alert_id),
+                            {"last_triggered_at": datetime.now().isoformat()},
+                        )
+
+                    condition = f"{direction} {target:.2f}"
+                    try:
+                        get_push_service().notify_price_alert(symbol, float(current_price), condition)
+                    except Exception as push_error:
+                        print(f"Push price alert failed for {symbol}: {push_error}")
+
+                    try:
+                        get_email_alert_service().send_price_alert(
+                            symbol=symbol,
+                            direction=direction,
+                            target_price=target,
+                            current_price=float(current_price),
+                        )
+                    except Exception as notify_error:
+                        print(f"Email/Telegram price alert failed for {symbol}: {notify_error}")
+        except Exception as e:
+            print(f"Price alert loop error: {e}")
+
+        await asyncio.sleep(15)
+
 @app.on_event("startup")
 async def startup_event():
-    global _signal_alert_task
+    global _signal_alert_task, _price_alert_task
     enabled = os.getenv("SIGNAL_ALERTS_ENABLED", "false").strip().lower() in {
         "1",
         "true",
@@ -252,6 +325,8 @@ async def startup_event():
     }
     if enabled and _signal_alert_task is None:
         _signal_alert_task = asyncio.create_task(_signal_alert_loop())
+    if _price_alert_task is None:
+        _price_alert_task = asyncio.create_task(_price_alert_loop())
 
 # Response Models
 class AnalysisResponse(BaseModel):
@@ -291,6 +366,26 @@ class AddHoldingRequest(BaseModel):
 class OracleRequest(BaseModel):
     message: str
     context_ticker: Optional[str] = None
+    portfolio_snapshot: Optional[Dict[str, Any]] = None
+    live_quotes: Optional[Dict[str, Any]] = None
+    signal_score: Optional[Dict[str, Any]] = None
+    morning_brief_summary: Optional[Dict[str, Any]] = None
+
+
+class PriceAlertCreateRequest(BaseModel):
+    symbol: str
+    direction: str
+    target_price: float
+    enabled: bool = True
+    cooldown_minutes: int = 5
+
+
+class PriceAlertUpdateRequest(BaseModel):
+    symbol: Optional[str] = None
+    direction: Optional[str] = None
+    target_price: Optional[float] = None
+    enabled: Optional[bool] = None
+    cooldown_minutes: Optional[int] = None
 
 class SignalWatchItemRequest(BaseModel):
     kind: str
@@ -302,6 +397,7 @@ class WorkspaceProfileRequest(BaseModel):
     timezone: Optional[str] = None
     browser_notifications: Optional[bool] = None
     theme: Optional[str] = None
+    onboarding_done: Optional[bool] = None
 
 
 class LoginRequest(BaseModel):
@@ -628,7 +724,7 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             )
         return convert_numpy_types(history)
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="History fetch timed out — yfinance did not respond in time")
+        raise HTTPException(status_code=504, detail="History fetch timed out - yfinance did not respond in time")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
@@ -822,42 +918,127 @@ async def get_search_suggestions(q: str = None):
 
 @app.post("/api/oracle/chat")
 async def oracle_chat(req: OracleRequest):
-    """Deep AI Oracle chat logic."""
-    msg = req.message.lower()
-    ticker = req.context_ticker
-    
-    # Context gathering
-    context_info = ""
-    if ticker:
-        tickers = ticker.split(',') if ',' in ticker else [ticker]
-        summaries = []
-        for t in tickers:
-            try:
-                fetcher = DataFetcher(t)
-                data = fetcher.get_all_data()
-                analyzer = StockAnalyzer(data)
-                score = analyzer.calculate_total_score()
-                verdict = analyzer.get_one_sentence_verdict()
-                summaries.append(f"{t}: Score {score:.1f}, '{verdict}'")
-            except:
-                continue
-        context_info = " | ".join(summaries)
+    """Deterministic Broker desk response with market and portfolio context."""
+    message = (req.message or "").strip()
+    msg = message.lower()
+    ticker_raw = (req.context_ticker or "").strip()
+    tickers = [
+        item.strip().upper()
+        for item in ticker_raw.split(",")
+        if item and item.strip()
+    ][:3]
 
-    # Simple logic-based 'Oracle' response (Simulation of LLM persona)
-    if "vergleich" in msg or (ticker and ',' in ticker):
-        response = f"Der Vergleich zwischen diesen Assets ({context_info}) zeigt spannende Unterschiede. Bei ETFs achte ich besonders auf die TER-Korrektur und die Sektor-Überschneidungen!"
-    elif any(k in msg for k in ["kaufen", "buy", "investieren"]):
-        if ticker:
-             response = f"Basierend auf meinen Daten für {ticker} ({context_info}): Ich sehe hier eher {'eine Chance' if score > 15 else 'ein Risiko'}. Denke dran: Moonshots sind riskant, Big Player stabil."
+    ticker_context: List[Dict[str, Any]] = []
+    for symbol in tickers:
+        try:
+            fetcher = DataFetcher(symbol)
+            data = fetcher.get_all_data()
+            analyzer = StockAnalyzer(data)
+            recommendation = analyzer.generate_recommendation()
+            price_data = data.get("price_data", {})
+            ticker_context.append(
+                {
+                    "symbol": symbol,
+                    "price": price_data.get("current_price"),
+                    "change_1w": price_data.get("change_1w"),
+                    "score": float(recommendation.get("total_score", 0)),
+                    "verdict": analyzer.get_one_sentence_verdict(),
+                }
+            )
+        except Exception:
+            continue
+
+    live_quotes = req.live_quotes or {}
+    for item in ticker_context:
+        quote = live_quotes.get(item["symbol"]) if isinstance(live_quotes, dict) else None
+        if isinstance(quote, dict) and quote.get("price") is not None:
+            item["price"] = quote.get("price")
+        if isinstance(quote, dict) and quote.get("change_1w") is not None:
+            item["change_1w"] = quote.get("change_1w")
+
+    top_signal = None
+    signal_items = []
+    if isinstance(req.signal_score, dict):
+        signal_items = req.signal_score.get("top_ideas", []) or []
+    if signal_items:
+        top_signal = signal_items[0]
+
+    profile = req.portfolio_snapshot or {}
+    portfolio_summary = profile.get("summary", {}) if isinstance(profile, dict) else {}
+    holdings_count = int(portfolio_summary.get("num_holdings") or 0)
+    total_value = float(portfolio_summary.get("total_value") or 0)
+    gain_loss_pct = float(portfolio_summary.get("gain_loss_pct") or 0)
+
+    brief = req.morning_brief_summary or {}
+    macro_regime = brief.get("macro_regime") if isinstance(brief, dict) else None
+    headline = brief.get("headline") if isinstance(brief, dict) else None
+
+    primary = ticker_context[0] if ticker_context else None
+    score = float(primary.get("score", 0)) if primary else 0.0
+    symbol = primary.get("symbol") if primary else "MARKET"
+    week_change = float(primary.get("change_1w") or 0) if primary else 0.0
+    price = primary.get("price") if primary else None
+
+    if primary:
+        if score >= 30 and week_change >= 0:
+            thesis = f"{symbol} bleibt konstruktiv, solange Momentum und Score stabil bleiben."
+        elif score <= -20 or week_change < -3:
+            thesis = f"{symbol} zeigt fragiles Profil; Kapitalerhalt ist aktuell wichtiger als Aggression."
         else:
-            response = "Der Markt ist gerade volatil. Schau dir im Moonshot-Scanner die Titel mit hohem Volumen an, wenn du Risiko magst."
-    elif any(k in msg for k in ["verkaufen", "sell", "raus"]):
-        response = "Emotionale Verkäufe sind der Feind der Rendite. Prüfe den Critical Risk Audit – wenn da viele rote Flaggen sind, ist Vorsicht geboten."
-    elif any(k in msg for k in ["portfolio", "bestand"]):
-        response = "Dein Portfolio braucht Diversifikation. Wenn du zu viel Tech hast, schau dir Rohstoffe wie Gold (GC=F) an."
+            thesis = f"{symbol} ist aktuell neutral, Setup nur bei klarem Trigger handeln."
     else:
-        response = "Interessante Frage. Ich analysiere die Korrelationen und das Sentiment für dich. Mein Rat: Bleib kritisch und achte auf die Insider-Cluster!"
+        thesis = "Ohne konkreten Ticker liegt der Fokus auf Regime, Risiko und bestätigten Triggern."
 
+    if "short" in msg or "sell" in msg or "verkauf" in msg:
+        thesis = f"{thesis} Short-Ideen nur mit bestätigtem Bruch und engem Risikorahmen."
+    elif "long" in msg or "buy" in msg or "kauf" in msg:
+        thesis = f"{thesis} Long nur mit Folgekäufen und sauberem Volumen."
+
+    risk_line_parts: List[str] = []
+    if macro_regime:
+        risk_line_parts.append(f"Regime: {macro_regime}")
+    if holdings_count > 0:
+        risk_line_parts.append(
+            f"Portfolio {holdings_count} Positionen, P&L {gain_loss_pct:+.2f}% auf {total_value:,.0f} Gesamtwert"
+        )
+    if top_signal:
+        risk_line_parts.append(
+            f"Top-Signal: {top_signal.get('label', 'Idea')} (Score {float(top_signal.get('total_score') or 0):.0f})"
+        )
+    if not risk_line_parts:
+        risk_line_parts.append("Keine erweiterten Risiko-Metadaten, Standard-Risikobudget nutzen.")
+
+    if primary and price:
+        up_trigger = float(price) * 1.01
+        down_trigger = float(price) * 0.99
+        trigger_line = (
+            f"Long-Trigger über {up_trigger:.2f}, defensiv unter {down_trigger:.2f}. "
+            f"Nur handeln, wenn der Move bestätigt wird."
+        )
+        invalidation_line = (
+            f"Invalidierung bei Rücklauf unter {down_trigger:.2f} oder wenn Newsflow gegen das Setup dreht."
+        )
+        levels = [
+            f"{symbol} Spot: {float(price):.2f}",
+            f"Breakout-Zone: {up_trigger:.2f}",
+            f"Risk-Cut-Zone: {down_trigger:.2f}",
+        ]
+    else:
+        trigger_line = "Trigger über frische Tageshochs mit Volumenbestätigung oder klare Makro-Breaks."
+        invalidation_line = "Invalidierung bei fehlender Anschlussdynamik und gegenteiligen Headlines."
+        levels = ["SPY / QQQ Richtung", "VIX-Regime", "US10Y / DXY Reaktion"]
+
+    if headline:
+        levels.append(f"Brief-Headline: {headline}")
+
+    response = (
+        f"These: {thesis}\n"
+        f"Risiko: {' | '.join(risk_line_parts)}\n"
+        f"Trigger: {trigger_line}\n"
+        f"Invalidierung: {invalidation_line}\n"
+        "Beobachtbare Levels:\n"
+        + "\n".join([f"- {line}" for line in levels])
+    )
     return {"response": response}
 
 
@@ -1136,6 +1317,62 @@ async def delete_signal_watch_item(kind: str, value: str):
         get_portfolio_manager().remove_signal_watch_item(kind, value)
         items = get_portfolio_manager().get_signal_watch_items()
         return convert_numpy_types(get_public_signal_service().build_watchlist_snapshot(items))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/alerts")
+async def list_price_alerts():
+    try:
+        return convert_numpy_types(get_portfolio_manager().list_price_alerts())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts")
+async def create_price_alert(req: PriceAlertCreateRequest):
+    try:
+        payload = get_portfolio_manager().create_price_alert(
+            symbol=req.symbol,
+            direction=req.direction,
+            target_price=req.target_price,
+            enabled=req.enabled,
+            cooldown_minutes=req.cooldown_minutes,
+        )
+        return convert_numpy_types(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/alerts/{alert_id}")
+async def update_price_alert(alert_id: str, req: PriceAlertUpdateRequest):
+    try:
+        updated = get_portfolio_manager().update_price_alert(
+            alert_id,
+            req.model_dump(exclude_none=True),
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        return convert_numpy_types(updated)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/alerts/{alert_id}")
+async def delete_price_alert(alert_id: str):
+    try:
+        removed = get_portfolio_manager().delete_price_alert(alert_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        return {"status": "deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1458,6 +1695,32 @@ async def get_small_cap_growth():
     """Identify high-growth small-cap stocks."""
     try:
         return await get_discovery_service().get_small_caps()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener")
+async def run_market_screener(
+    rsi_max: Optional[float] = None,
+    market_cap_min: Optional[float] = None,
+    market_cap_max: Optional[float] = None,
+    sector: Optional[str] = None,
+    high52_proximity: Optional[float] = None,
+    low52_proximity: Optional[float] = None,
+    limit: int = 35,
+):
+    try:
+        return convert_numpy_types(
+            await get_discovery_service().run_screener(
+                rsi_max=rsi_max,
+                market_cap_min=market_cap_min,
+                market_cap_max=market_cap_max,
+                sector=sector,
+                high52_proximity=high52_proximity,
+                low52_proximity=low52_proximity,
+                limit=limit,
+            )
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -35,3 +35,17 @@ Notes:
 - Frontend assets are built during deploy with `cd frontend && npm run build`.
 - Keep `.env` local and do not upload local secrets to git.
 - For a private single-user setup, keep the app behind the local access code and use a strong `APP_SESSION_SECRET`.
+
+## Persistente SQLite auf Railway (Volume)
+
+Damit Portfolios, Alerts und Watchlists nach Redeploys erhalten bleiben:
+
+1. In Railway beim Service ein Volume anlegen und nach `/app/data` mounten.
+2. Redeploy ausloesen und im Log pruefen, dass die App normal startet.
+3. Healthcheck:
+   - `GET /api/health` -> `status: ok`
+   - Neues Portfolio anlegen, Redeploy ausfuehren, danach `GET /api/portfolios` pruefen.
+4. Recovery-Checkliste:
+   - Wenn Daten fehlen: Mount-Pfad `/app/data` kontrollieren.
+   - Sicherstellen, dass nur ein Service auf dieselbe DB schreibt.
+   - Backup der `data/portfolios.db` regelmaessig exportieren.

@@ -31,6 +31,16 @@ interface PortfolioAnalysis {
   };
 }
 
+interface PriceAlert {
+  id: string;
+  symbol: string;
+  direction: "above" | "below";
+  target_price: number;
+  enabled: boolean;
+  cooldown_minutes: number;
+  last_triggered_at?: string | null;
+}
+
 const formatPercent = (value: number): string => {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
@@ -57,6 +67,11 @@ export default function PortfolioView({
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [portfolioVerdict, setPortfolioVerdict] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [newAlertSymbol, setNewAlertSymbol] = useState("");
+  const [newAlertDirection, setNewAlertDirection] = useState<"above" | "below">("above");
+  const [newAlertTarget, setNewAlertTarget] = useState("");
 
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
@@ -83,6 +98,84 @@ export default function PortfolioView({
       setPortfolioVerdict(null);
     }
   }, [selectedPortfolio, portfolios]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAlerts = async () => {
+      setAlertsLoading(true);
+      try {
+        const response = await fetch("/api/alerts");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = (await response.json()) as PriceAlert[];
+        if (!cancelled) {
+          setAlerts(Array.isArray(payload) ? payload : []);
+        }
+      } catch {
+        if (!cancelled) setAlerts([]);
+      } finally {
+        if (!cancelled) setAlertsLoading(false);
+      }
+    };
+    loadAlerts();
+    const interval = window.setInterval(loadAlerts, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const createPriceAlert = async () => {
+    const symbol = newAlertSymbol.trim().toUpperCase();
+    const target = Number(newAlertTarget);
+    if (!symbol || !Number.isFinite(target) || target <= 0) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol,
+          direction: newAlertDirection,
+          target_price: target,
+          cooldown_minutes: 5,
+          enabled: true,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const created = (await response.json()) as PriceAlert;
+      setAlerts((prev) => [created, ...prev]);
+      setNewAlertSymbol("");
+      setNewAlertTarget("");
+    } catch {
+      // keep UI stable without modal errors
+    }
+  };
+
+  const toggleAlert = async (alert: PriceAlert) => {
+    try {
+      const response = await fetch(`/api/alerts/${alert.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !alert.enabled }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const updated = (await response.json()) as PriceAlert;
+      setAlerts((prev) => prev.map((item) => (item.id === alert.id ? updated : item)));
+    } catch {
+      // ignore failed toggle
+    }
+  };
+
+  const deleteAlert = async (alert: PriceAlert) => {
+    try {
+      const response = await fetch(`/api/alerts/${alert.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setAlerts((prev) => prev.filter((item) => item.id !== alert.id));
+    } catch {
+      // ignore failed delete
+    }
+  };
 
   const fetchPortfolioVerdict = async (id: string) => {
     try {
@@ -263,13 +356,21 @@ export default function PortfolioView({
             </div>
 
             {analysis && (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                     Total value
                   </div>
                   <div className="mt-2 text-3xl font-black text-slate-900">
                     {formatPrice(analysis.summary.total_value)}
+                  </div>
+                </div>
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    Total cost
+                  </div>
+                  <div className="mt-2 text-3xl font-black text-slate-900">
+                    {formatPrice(analysis.summary.total_cost)}
                   </div>
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
@@ -301,6 +402,125 @@ export default function PortfolioView({
                 </div>
               </div>
             )}
+
+            <section className="surface-panel rounded-[2rem] p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Price Alerts
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Touch-Trigger mit 5 Minuten Cooldown. Push und Telegram werden automatisch versendet.
+                  </p>
+                </div>
+                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
+                  {alerts.filter((item) => item.enabled).length} aktiv
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px_140px_120px]">
+                <input
+                  value={newAlertSymbol}
+                  onChange={(e) => setNewAlertSymbol(e.target.value.toUpperCase())}
+                  placeholder="Ticker (z.B. AAPL)"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                />
+                <select
+                  value={newAlertDirection}
+                  onChange={(e) => setNewAlertDirection(e.target.value as "above" | "below")}
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                >
+                  <option value="above">Above</option>
+                  <option value="below">Below</option>
+                </select>
+                <input
+                  value={newAlertTarget}
+                  onChange={(e) => setNewAlertTarget(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  placeholder="Target"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                />
+                <button
+                  onClick={createPriceAlert}
+                  className="rounded-xl bg-[var(--accent)] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
+                >
+                  Add Alert
+                </button>
+              </div>
+
+              <div className="mt-5 overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      <th className="px-4 py-3">Ticker</th>
+                      <th className="px-4 py-3">Rule</th>
+                      <th className="px-4 py-3 text-right">Target</th>
+                      <th className="px-4 py-3">Last Trigger</th>
+                      <th className="px-4 py-3 text-right">Status</th>
+                      <th className="px-4 py-3 text-right">Manage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alertsLoading ? (
+                      <tr>
+                        <td className="px-4 py-4 text-sm text-slate-500" colSpan={6}>
+                          Alerts werden geladen...
+                        </td>
+                      </tr>
+                    ) : alerts.length === 0 ? (
+                      <tr>
+                        <td className="px-4 py-4 text-sm text-slate-500" colSpan={6}>
+                          Noch keine Alerts vorhanden.
+                        </td>
+                      </tr>
+                    ) : (
+                      alerts.map((alert) => (
+                        <tr key={alert.id} className="border-b border-black/6 last:border-b-0">
+                          <td className="px-4 py-4 text-sm font-extrabold text-slate-900">{alert.symbol}</td>
+                          <td className="px-4 py-4 text-sm font-semibold text-slate-700">{alert.direction}</td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {formatPrice(alert.target_price)}
+                          </td>
+                          <td className="px-4 py-4 text-xs text-slate-500">
+                            {alert.last_triggered_at
+                              ? new Date(alert.last_triggered_at).toLocaleString()
+                              : "Never"}
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <span
+                              className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                                alert.enabled
+                                  ? "bg-emerald-500/10 text-emerald-700"
+                                  : "bg-slate-200 text-slate-500"
+                              }`}
+                            >
+                              {alert.enabled ? "Active" : "Paused"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => toggleAlert(alert)}
+                                className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                              >
+                                {alert.enabled ? "Pause" : "Enable"}
+                              </button>
+                              <button
+                                onClick={() => deleteAlert(alert)}
+                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
             {portfolioVerdict && (
               <div className="mt-6 flex items-start gap-4 rounded-[1.8rem] border border-[var(--accent)]/12 bg-[linear-gradient(135deg,rgba(240,253,250,0.92),rgba(255,255,255,0.9))] p-6 text-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
@@ -377,6 +597,7 @@ export default function PortfolioView({
                       <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                         <th className="px-6 py-4">Stock</th>
                         <th className="px-4 py-4 text-right">Shares</th>
+                        <th className="px-4 py-4 text-right">Entry</th>
                         <th className="px-4 py-4 text-right">Price</th>
                         <th className="px-4 py-4 text-right">Value</th>
                         <th className="px-4 py-4 text-right">Gain/Loss</th>
@@ -394,6 +615,9 @@ export default function PortfolioView({
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                             {holding.shares}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {holding.buy_price != null ? formatPrice(holding.buy_price) : "-"}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                             {formatPrice(holding.current_price || 0)}

@@ -289,13 +289,40 @@ class DataFetcher:
     def get_history(self, period: str = "1mo", interval: str = "1d") -> list:
         """Get historical price data."""
         try:
-            hist = self.stock.history(period=period, interval=interval)
-            if hist.empty: return []
+            hist = self.stock.history(period=period, interval=interval, auto_adjust=False)
+            if hist.empty:
+                return []
             hist = hist.reset_index()
+            ts_col = "Datetime" if "Datetime" in hist.columns else "Date"
+            if ts_col not in hist.columns:
+                ts_col = hist.columns[0]
+
+            is_intraday = any(token in interval.lower() for token in ["m", "h"])
             result = []
             for _, row in hist.iterrows():
-                time_val = row["Date"].strftime("%Y-%m-%d") if "Date" in row else row["Datetime"].strftime("%H:%M")
-                result.append({"time": time_val, "price": float(row["Close"])})
+                ts_value = row.get(ts_col)
+                if isinstance(ts_value, pd.Timestamp):
+                    full_date = ts_value.isoformat()
+                    time_value = ts_value.strftime("%H:%M") if is_intraday else ts_value.strftime("%Y-%m-%d")
+                else:
+                    full_date = str(ts_value)
+                    time_value = str(ts_value)
+
+                close_value = row.get("Close")
+                if close_value is None or (isinstance(close_value, float) and np.isnan(close_value)):
+                    continue
+                volume_value = row.get("Volume", 0)
+                if volume_value is None or (isinstance(volume_value, float) and np.isnan(volume_value)):
+                    volume_value = 0
+
+                result.append(
+                    {
+                        "time": time_value,
+                        "full_date": full_date,
+                        "price": float(close_value),
+                        "volume": float(volume_value),
+                    }
+                )
             return result
         except Exception:
             return []

@@ -32,6 +32,26 @@ class DiscoveryService:
             "PANW", "SNPS", "ASML", "LRCX", "ADI", "MELI", "CDNS", "KLAC", "PDD", "PYPL"
         ]
 
+    @staticmethod
+    def _compute_rsi(prices: List[float], period: int = 14) -> Optional[float]:
+        if len(prices) <= period:
+            return None
+        gains = []
+        losses = []
+        for idx in range(1, len(prices)):
+            diff = prices[idx] - prices[idx - 1]
+            gains.append(max(diff, 0.0))
+            losses.append(max(-diff, 0.0))
+        avg_gain = sum(gains[:period]) / period
+        avg_loss = sum(losses[:period]) / period
+        for idx in range(period, len(gains)):
+            avg_gain = ((avg_gain * (period - 1)) + gains[idx]) / period
+            avg_loss = ((avg_loss * (period - 1)) + losses[idx]) / period
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+
     async def _fetch_stock_basic(self, ticker: str) -> Optional[Dict[str, Any]]:
         """Helper to fetch basic stock info in parallel."""
         try:
@@ -76,6 +96,93 @@ class DiscoveryService:
         if not hasattr(self, '_movers_cache'): self._movers_cache = {}
         self._movers_cache[cache_key] = (results, now)
         return results[:8]
+
+    async def run_screener(
+        self,
+        rsi_max: Optional[float] = None,
+        market_cap_min: Optional[float] = None,
+        market_cap_max: Optional[float] = None,
+        sector: Optional[str] = None,
+        high52_proximity: Optional[float] = None,
+        low52_proximity: Optional[float] = None,
+        limit: int = 35,
+    ) -> List[Dict[str, Any]]:
+        """Filter stocks by RSI, market cap, sector and 52-week positioning."""
+        import asyncio
+
+        symbols = list(dict.fromkeys(self.market_movers_universe + self.tech_universe))
+        scan_pool = symbols[: max(10, min(limit, len(symbols)))]
+        sector_filter = (sector or "").strip().lower()
+
+        async def fetch_screen_item(ticker: str) -> Optional[Dict[str, Any]]:
+            try:
+                def fetch() -> Optional[Dict[str, Any]]:
+                    fetcher = DataFetcher(ticker)
+                    info = fetcher.info or {}
+                    price_data = fetcher.get_price_data()
+                    history = fetcher.stock.history(period="6mo", interval="1d")
+                    closes = [float(val) for val in list(history.get("Close", [])) if val is not None]
+                    rsi = self._compute_rsi(closes, 14)
+
+                    current_price = price_data.get("current_price")
+                    high_52w = price_data.get("high_52w")
+                    low_52w = price_data.get("low_52w")
+                    from_high = None
+                    from_low = None
+                    if current_price and high_52w:
+                        from_high = ((high_52w - current_price) / high_52w) * 100
+                    if current_price and low_52w:
+                        from_low = ((current_price - low_52w) / low_52w) * 100
+
+                    return {
+                        "ticker": ticker,
+                        "name": info.get("longName") or info.get("shortName") or ticker,
+                        "sector": info.get("sector") or "Unknown",
+                        "price": current_price,
+                        "change_1w": price_data.get("change_1w"),
+                        "market_cap": info.get("marketCap"),
+                        "rsi_14": rsi,
+                        "high_52w": high_52w,
+                        "low_52w": low_52w,
+                        "high52_proximity": from_high,
+                        "low52_proximity": from_low,
+                    }
+
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(None, fetch)
+            except Exception:
+                return None
+
+        tasks = [fetch_screen_item(symbol) for symbol in scan_pool]
+        results = [item for item in await asyncio.gather(*tasks) if item]
+
+        def pass_filters(item: Dict[str, Any]) -> bool:
+            if sector_filter and sector_filter not in str(item.get("sector", "")).lower():
+                return False
+            market_cap = item.get("market_cap")
+            if market_cap_min is not None and (market_cap is None or float(market_cap) < float(market_cap_min)):
+                return False
+            if market_cap_max is not None and (market_cap is None or float(market_cap) > float(market_cap_max)):
+                return False
+            rsi = item.get("rsi_14")
+            if rsi_max is not None and (rsi is None or float(rsi) > float(rsi_max)):
+                return False
+            near_high = item.get("high52_proximity")
+            if high52_proximity is not None and (near_high is None or float(near_high) > float(high52_proximity)):
+                return False
+            near_low = item.get("low52_proximity")
+            if low52_proximity is not None and (near_low is None or float(near_low) > float(low52_proximity)):
+                return False
+            return True
+
+        filtered = [item for item in results if pass_filters(item)]
+        filtered.sort(
+            key=lambda item: (
+                999 if item.get("rsi_14") is None else item.get("rsi_14"),
+                -float(item.get("market_cap") or 0),
+            )
+        )
+        return filtered[: max(5, min(limit, 100))]
 
     async def get_trending(self) -> List[Dict[str, Any]]:
         """Identify trending stocks with parallel fetching."""

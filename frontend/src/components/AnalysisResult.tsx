@@ -58,6 +58,13 @@ export default function AnalysisResult({
   onSelectTicker,
 }: AnalysisResultProps) {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [alertModalOpen, setAlertModalOpen] = React.useState(false);
+  const [alertDirection, setAlertDirection] = React.useState<"above" | "below">("above");
+  const [alertTarget, setAlertTarget] = React.useState("");
+  const [alertBusy, setAlertBusy] = React.useState(false);
+  const [alertStatus, setAlertStatus] = React.useState<string | null>(null);
+  const [isInWatchlist, setIsInWatchlist] = React.useState(false);
+  const [watchlistBusy, setWatchlistBusy] = React.useState(false);
   const [chartStats, setChartStats] = React.useState<{
     changePct: number;
     label: string;
@@ -91,6 +98,102 @@ export default function AnalysisResult({
         : "bg-amber-500/12 text-amber-700";
   const technicalScore = clampScore(analysis?.technical?.score ?? total_score);
   const fundamentalScore = clampScore(analysis?.fundamental?.score ?? total_score);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const loadWatchlistState = async () => {
+      try {
+        const response = await fetch("/api/signals/watchlist");
+        if (!response.ok) return;
+        const payload = await response.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const exists = items.some(
+          (item: any) =>
+            String(item?.kind || "").toLowerCase() === "ticker" &&
+            String(item?.value || "").toUpperCase() === String(data.ticker || "").toUpperCase(),
+        );
+        if (!cancelled) setIsInWatchlist(exists);
+      } catch {
+        if (!cancelled) setIsInWatchlist(false);
+      }
+    };
+    loadWatchlistState();
+    return () => {
+      cancelled = true;
+    };
+  }, [data.ticker]);
+
+  const toggleWatchlist = async () => {
+    if (watchlistBusy) return;
+    setWatchlistBusy(true);
+    setAlertStatus(null);
+    try {
+      if (isInWatchlist) {
+        const params = new URLSearchParams({
+          kind: "ticker",
+          value: data.ticker,
+        });
+        const response = await fetch(`/api/signals/watchlist/items?${params.toString()}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setIsInWatchlist(false);
+        setAlertStatus(`${data.ticker} aus Watchlist entfernt.`);
+      } else {
+        const response = await fetch("/api/signals/watchlist/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "ticker", value: data.ticker }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setIsInWatchlist(true);
+        setAlertStatus(`${data.ticker} zur Watchlist hinzugefuegt.`);
+      }
+    } catch {
+      setAlertStatus("Watchlist konnte nicht aktualisiert werden.");
+    } finally {
+      setWatchlistBusy(false);
+    }
+  };
+
+  const openAlertModal = () => {
+    const livePrice = Number(liveQuote?.price ?? price_data?.current_price ?? 0);
+    if (Number.isFinite(livePrice) && livePrice > 0) {
+      const base = alertDirection === "above" ? livePrice * 1.01 : livePrice * 0.99;
+      setAlertTarget(base.toFixed(2));
+    }
+    setAlertModalOpen(true);
+  };
+
+  const createPriceAlert = async () => {
+    if (alertBusy) return;
+    const target = Number(alertTarget);
+    if (!Number.isFinite(target) || target <= 0) {
+      setAlertStatus("Bitte ein gueltiges Alert-Level eingeben.");
+      return;
+    }
+    setAlertBusy(true);
+    try {
+      const response = await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: data.ticker,
+          direction: alertDirection,
+          target_price: target,
+          enabled: true,
+          cooldown_minutes: 5,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setAlertModalOpen(false);
+      setAlertStatus(`Alert gesetzt: ${data.ticker} ${alertDirection} ${target.toFixed(2)}`);
+    } catch {
+      setAlertStatus("Price Alert konnte nicht erstellt werden.");
+    } finally {
+      setAlertBusy(false);
+    }
+  };
 
   const exportToPDF = async () => {
     const { default: jsPDF } = await import("jspdf");
@@ -233,12 +336,35 @@ export default function AnalysisResult({
                     <Plus size={16} /> Portfolio hinzufügen
                   </button>
                   <button
+                    onClick={toggleWatchlist}
+                    disabled={watchlistBusy}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-all ${
+                      isInWatchlist
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-black/8 bg-white text-slate-700 hover:bg-black/[0.03]"
+                    }`}
+                  >
+                    <Plus size={14} />
+                    {isInWatchlist ? "Watchlist entfernen" : "Zur Watchlist"}
+                  </button>
+                  <button
+                    onClick={openAlertModal}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
+                  >
+                    Alert setzen
+                  </button>
+                  <button
                     onClick={onOpenChat}
                     className="flex items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
                   >
                     <FileText size={14} /> AI Desk
                   </button>
                 </div>
+                {alertStatus ? (
+                  <div className="rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600">
+                    {alertStatus}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -251,6 +377,66 @@ export default function AnalysisResult({
             initialTicker={data.ticker}
             initialPrice={price_data?.current_price}
           />
+
+          {alertModalOpen ? (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
+              <div className="surface-panel w-full max-w-md rounded-[1.6rem] p-6">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Price Alert
+                </div>
+                <h3 className="mt-2 text-2xl text-slate-900">{data.ticker} Alert setzen</h3>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={() => setAlertDirection("above")}
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                      alertDirection === "above"
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-black/8 bg-white text-slate-600"
+                    }`}
+                  >
+                    Above
+                  </button>
+                  <button
+                    onClick={() => setAlertDirection("below")}
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                      alertDirection === "below"
+                        ? "border-red-300 bg-red-50 text-red-700"
+                        : "border-black/8 bg-white text-slate-600"
+                    }`}
+                  >
+                    Below
+                  </button>
+                </div>
+                <div className="mt-4">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    Target Price
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={alertTarget}
+                    onChange={(e) => setAlertTarget(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
+                  />
+                </div>
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    onClick={() => setAlertModalOpen(false)}
+                    className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createPriceAlert}
+                    disabled={alertBusy}
+                    className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                  >
+                    {alertBusy ? "Speichert..." : "Alert speichern"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Risk Audit */}
           {data.risk_audit && (

@@ -224,7 +224,7 @@ function LoginScreen({
                     if (e.key === "Enter") submit();
                   }}
                   aria-label="6-digit workspace access code"
-                  className="w-full rounded-[1.2rem] border border-white/10 bg-white/8 px-4 py-3 text-sm font-semibold text-white placeholder:text-white/35"
+                  className="login-password-input w-full rounded-[1.2rem] border px-4 py-3 text-sm font-semibold"
                   placeholder="6-digit access code"
                 />
                 <button
@@ -280,6 +280,7 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showNotifHelp, setShowNotifHelp] = useState(false);
   const [auth, setAuth] = useState<AuthState>({
     loading: true,
     authenticated: false,
@@ -662,22 +663,23 @@ function AppContent() {
                   <button
                     onClick={() => {
                       if (push.state === "subscribed") push.unsubscribe();
+                      else if (push.state === "denied") setShowNotifHelp(true);
                       else push.subscribe();
                     }}
-                    disabled={push.loading || push.state === "denied"}
+                    disabled={push.loading}
                     aria-label="Toggle push notifications"
                     title={
                       push.state === "subscribed"
                         ? "Push aktiv — klicke zum Deaktivieren"
                         : push.state === "denied"
-                          ? "Notifications blockiert — erlaube in Browser-Settings"
+                          ? "Notifications blockiert — klicken für Hilfe"
                           : "Push Notifications aktivieren"
                     }
                     className={`rounded-[1rem] border p-2.5 transition-colors ${
                       push.state === "subscribed"
                         ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
                         : push.state === "denied"
-                          ? "border-red-500/20 bg-red-500/10 text-red-400 cursor-not-allowed"
+                          ? "cursor-pointer border-amber-500/20 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
                           : "border-[var(--line-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                     }`}
                   >
@@ -688,7 +690,7 @@ function AppContent() {
                     ) : push.state === "denied" ? (
                       <BellOff size={16} />
                     ) : (
-                      <BellOff size={16} />
+                      <Bell size={16} />
                     )}
                   </button>
                 )}
@@ -1061,6 +1063,48 @@ function AppContent() {
           <BrokerChat currentTicker={analysis?.ticker} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
         </Suspense>
       </ErrorBoundary>
+
+      {/* Push notifications blocked — help modal */}
+      {showNotifHelp && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowNotifHelp(false)}
+        >
+          <div
+            className="surface-panel mx-4 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-lg font-black text-[var(--text-primary)]">🔔 Benachrichtigungen entsperren</div>
+            <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
+              Dein Browser hat Benachrichtigungen für diese Seite blockiert. So entsperrst du sie:
+            </p>
+            <ol className="mt-4 space-y-3 text-sm text-[var(--text-primary)]">
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">1</span>
+                <span>Klicke auf das <strong>🔒 Schloss-Symbol</strong> links in der Adressleiste</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">2</span>
+                <span>Wähle <strong>„Benachrichtigungen"</strong></span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">3</span>
+                <span>Stelle es auf <strong>„Erlauben"</strong> um</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">4</span>
+                <span>Lade die Seite neu — die Glocke wird dann aktiv</span>
+              </li>
+            </ol>
+            <button
+              onClick={() => setShowNotifHelp(false)}
+              className="mt-6 w-full rounded-[1.2rem] bg-[var(--accent)] py-3 text-sm font-extrabold uppercase tracking-[0.16em] text-white hover:bg-[var(--accent-strong)]"
+            >
+              Verstanden
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

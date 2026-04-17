@@ -78,12 +78,37 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     setActiveIndex(0);
   }, [query, suggestions]);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
-      onSearch(query.trim().toUpperCase());
-      setShowDropdown(false);
+    const raw = query.trim();
+    if (!raw) return;
+    setShowDropdown(false);
+
+    // If there's exactly one suggestion match, use its ticker
+    if (flatSuggestions.length === 1) {
+      handleQuickSelect(flatSuggestions[0].value);
+      return;
     }
+
+    // If the query looks like a company name (has space, all lowercase, etc.)
+    // try to resolve via suggestions first
+    const looksLikeName = raw.includes(" ") || raw !== raw.toUpperCase() || raw.length > 5;
+    if (looksLikeName) {
+      try {
+        const data = await fetchJsonWithRetry<any>(
+          `/api/search/suggestions?q=${encodeURIComponent(raw)}`,
+          undefined,
+          { retries: 1, retryDelayMs: 300 },
+        );
+        if (data?.Ticker?.[0]) {
+          onSearch(data.Ticker[0]);
+          return;
+        }
+      } catch {
+        // fallthrough
+      }
+    }
+    onSearch(raw.toUpperCase());
   };
 
   const handleQuickSelect = (value: string) => {

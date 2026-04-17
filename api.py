@@ -512,19 +512,32 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             }
 
         # Check for company names or 'Name (TICKER)' format
-        resolved_ticker = ticker.upper()
-        
+        resolved_ticker = ticker.upper().strip()
+
         # If input contains brackets like 'Pfizer Inc. (PFE)', extract the ticker
         if "(" in ticker and ")" in ticker:
             import re
-            match = re.search(r'\((.*?)\)', ticker)
+            match = re.search(r'\(([A-Z0-9.\-^=]+)\)', ticker.upper())
             if match:
-                resolved_ticker = match.group(1).upper()
+                resolved_ticker = match.group(1)
                 print(f"Extracted ticker '{resolved_ticker}' from '{ticker}'")
-        elif len(ticker) > 5 or not ticker.isalnum():
-            suggestions = await get_discovery_service().search_ticker(ticker)
-            if suggestions:
-                resolved_ticker = suggestions[0]['ticker']
+        else:
+            # Always try to resolve via search for inputs that look like
+            # company names (contains space, too long, or lowercase letters)
+            looks_like_name = (
+                " " in ticker
+                or len(ticker) > 5
+                or not ticker.replace("-", "").replace(".", "").replace("^", "").replace("=", "").isalnum()
+                or ticker != ticker.upper()  # has lowercase = probably a name
+            )
+            if looks_like_name:
+                try:
+                    suggestions = await get_discovery_service().search_ticker(ticker)
+                    if suggestions:
+                        resolved_ticker = suggestions[0]['ticker']
+                        print(f"Resolved '{ticker}' -> '{resolved_ticker}'")
+                except Exception:
+                    pass
 
         # Original stock fetch data
         fetcher = DataFetcher(resolved_ticker)

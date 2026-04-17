@@ -171,6 +171,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
           onAnalyze={onAnalyze}
           realtimeQuotes={realtimeQuotes}
           realtimeConnected={realtimeConnected}
+          hideMap
         />
       ) : (
         <RadarPlaceholder

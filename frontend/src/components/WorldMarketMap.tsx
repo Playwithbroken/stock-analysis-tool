@@ -128,9 +128,13 @@ const positions: Record<
     cardOffsetY: number;
   }
 > = {
-  USA: { x: 18.5, y: 45.5, align: "left", cardWidth: 150, lineLength: 38, cardOffsetX: 52, cardOffsetY: -10 },
-  Europe: { x: 48.5, y: 39.5, align: "right", cardWidth: 148, lineLength: 34, cardOffsetX: 44, cardOffsetY: -42 },
-  Asia: { x: 73.5, y: 47.5, align: "right", cardWidth: 148, lineLength: 34, cardOffsetX: 44, cardOffsetY: -8 },
+  // x/y are percentage of the SVG viewport (0-100)
+  // USA ~75°W → x≈22%, central US lat ~38°N → y≈42%
+  USA: { x: 22, y: 42, align: "left", cardWidth: 150, lineLength: 38, cardOffsetX: 52, cardOffsetY: -10 },
+  // Europe center ~15°E → x≈51%, ~50°N → y≈36%
+  Europe: { x: 48, y: 36, align: "right", cardWidth: 148, lineLength: 34, cardOffsetX: 44, cardOffsetY: -42 },
+  // Asia center ~105°E → x≈74%, ~35°N → y≈40%
+  Asia: { x: 74, y: 40, align: "right", cardWidth: 148, lineLength: 34, cardOffsetX: 44, cardOffsetY: -8 },
 };
 
 const regionKeywords: Record<string, string[]> = {
@@ -140,36 +144,47 @@ const regionKeywords: Record<string, string[]> = {
 };
 
 const markerLayout = {
-  USA: { left: "22%", top: "47%" },
-  Europe: { left: "49.5%", top: "41.5%" },
-  Asia: { left: "74%", top: "48.5%" },
-  Global: { left: "58.5%", top: "60%" },
+  USA:    { left: "22%",   top: "42%" },
+  Europe: { left: "48%",   top: "36%" },
+  Asia:   { left: "74%",   top: "40%" },
+  Global: { left: "55%",   top: "55%" },
 };
 
+// Geo anchors use % of map container (left=longitude-based, top=latitude-based)
+// Wikimedia SVG: ~180°W→0% to ~180°E→100%, ~90°N→0% to ~90°S→100%
+// lon_pct = (lon + 180) / 360 * 100
+// lat_pct = (90 - lat) / 180 * 100
 const geoAnchors: Array<{ terms: string[]; anchor: MapAnchor }> = [
-  { terms: ["hungary", "budapest"], anchor: { left: "50.5%", top: "38%" } },
-  { terms: ["ukraine", "kyiv", "odesa"], anchor: { left: "53.4%", top: "34.7%" } },
-  { terms: ["poland", "warsaw"], anchor: { left: "49.5%", top: "34.5%" } },
-  { terms: ["germany", "berlin"], anchor: { left: "46.5%", top: "33.5%" } },
-  { terms: ["france", "paris"], anchor: { left: "44.5%", top: "35.5%" } },
-  { terms: ["uk ", "britain", "london", "england"], anchor: { left: "42.5%", top: "31.5%" } },
-  { terms: ["italy", "rome"], anchor: { left: "47.8%", top: "39.5%" } },
-  { terms: ["turkey", "ankara"], anchor: { left: "51.8%", top: "39.4%" } },
-  { terms: ["russia", "moscow"], anchor: { left: "57%", top: "28.5%" } },
-  { terms: ["lebanon", "beirut"], anchor: { left: "52.6%", top: "41.1%" } },
-  { terms: ["iran", "tehran"], anchor: { left: "56.8%", top: "42.2%" } },
-  { terms: ["israel", "gaza", "jerusalem"], anchor: { left: "52.8%", top: "42.9%" } },
-  { terms: ["saudi", "riyadh"], anchor: { left: "55.4%", top: "47.5%" } },
-  { terms: ["opec", "oil", "crude", "middle east", "gulf", "red sea", "brent"], anchor: { left: "55.8%", top: "46.6%" } },
-  { terms: ["india", "mumbai", "delhi"], anchor: { left: "65%", top: "48%" } },
-  { terms: ["china", "beijing", "shanghai"], anchor: { left: "73%", top: "40%" } },
-  { terms: ["taiwan", "taipei"], anchor: { left: "77.5%", top: "46.5%" } },
-  { terms: ["japan", "tokyo"], anchor: { left: "83.5%", top: "40.5%" } },
-  { terms: ["hong kong"], anchor: { left: "76%", top: "46%" } },
-  { terms: ["korea", "seoul"], anchor: { left: "79.5%", top: "40.5%" } },
-  { terms: ["australia", "sydney"], anchor: { left: "83%", top: "74%" } },
-  { terms: ["usa", "u.s.", "washington", "wall street", "new york"], anchor: { left: "23%", top: "42%" } },
-  { terms: ["california", "silicon valley"], anchor: { left: "16.5%", top: "45%" } },
+  { terms: ["hungary", "budapest"],              anchor: { left: "52%",   top: "33%" } },
+  { terms: ["ukraine", "kyiv", "odesa"],         anchor: { left: "53.5%", top: "30%" } },
+  { terms: ["poland", "warsaw"],                 anchor: { left: "50%",   top: "29%" } },
+  { terms: ["germany", "berlin"],                anchor: { left: "47.5%", top: "28%" } },
+  { terms: ["france", "paris"],                  anchor: { left: "45%",   top: "31%" } },
+  { terms: ["uk ", "britain", "london", "england"], anchor: { left: "43%", top: "27%" } },
+  { terms: ["spain", "madrid"],                  anchor: { left: "43%",   top: "36%" } },
+  { terms: ["italy", "rome"],                    anchor: { left: "48.5%", top: "36%" } },
+  { terms: ["turkey", "ankara"],                 anchor: { left: "53%",   top: "36%" } },
+  { terms: ["russia", "moscow"],                 anchor: { left: "57%",   top: "24%" } },
+  { terms: ["lebanon", "beirut"],                anchor: { left: "53.2%", top: "39%" } },
+  { terms: ["iran", "tehran"],                   anchor: { left: "57%",   top: "38%" } },
+  { terms: ["israel", "gaza", "jerusalem"],      anchor: { left: "53%",   top: "40%" } },
+  { terms: ["saudi", "riyadh"],                  anchor: { left: "55.5%", top: "44%" } },
+  { terms: ["opec", "oil", "crude", "middle east", "gulf", "red sea", "brent"], anchor: { left: "56%", top: "43%" } },
+  { terms: ["egypt", "cairo"],                   anchor: { left: "52%",   top: "41%" } },
+  { terms: ["india", "mumbai", "delhi"],         anchor: { left: "65%",   top: "44%" } },
+  { terms: ["china", "beijing", "shanghai"],     anchor: { left: "72%",   top: "36%" } },
+  { terms: ["taiwan", "taipei"],                 anchor: { left: "77%",   top: "42%" } },
+  { terms: ["japan", "tokyo"],                   anchor: { left: "80%",   top: "35%" } },
+  { terms: ["hong kong"],                        anchor: { left: "75.5%", top: "43%" } },
+  { terms: ["korea", "seoul"],                   anchor: { left: "78%",   top: "35%" } },
+  { terms: ["australia", "sydney"],              anchor: { left: "81%",   top: "70%" } },
+  { terms: ["brazil", "são paulo", "rio"],       anchor: { left: "32%",   top: "62%" } },
+  { terms: ["mexico", "mexico city"],            anchor: { left: "18%",   top: "47%" } },
+  { terms: ["canada"],                           anchor: { left: "21%",   top: "24%" } },
+  { terms: ["usa", "u.s.", "washington", "wall street", "new york", "federal reserve", "fed"], anchor: { left: "22%", top: "38%" } },
+  { terms: ["california", "silicon valley", "san francisco"], anchor: { left: "16%", top: "40%" } },
+  { terms: ["south africa", "johannesburg"],     anchor: { left: "51%",   top: "68%" } },
+  { terms: ["nigeria", "lagos"],                 anchor: { left: "47%",   top: "52%" } },
 ];
 
 const markerOffsets: Record<

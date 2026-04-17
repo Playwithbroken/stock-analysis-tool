@@ -809,6 +809,8 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                 loop.run_in_executor(pool, _fetch),
                 timeout=20.0,
             )
+        if not history:
+            raise HTTPException(status_code=404, detail="No history data available for this symbol and period")
         return convert_numpy_types(history)
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="History fetch timed out - yfinance did not respond in time")

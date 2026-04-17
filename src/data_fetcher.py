@@ -288,44 +288,62 @@ class DataFetcher:
 
     def get_history(self, period: str = "1mo", interval: str = "1d") -> list:
         """Get historical price data."""
-        try:
-            hist = self.stock.history(period=period, interval=interval, auto_adjust=False)
-            if hist.empty:
-                return []
-            hist = hist.reset_index()
-            ts_col = "Datetime" if "Datetime" in hist.columns else "Date"
-            if ts_col not in hist.columns:
-                ts_col = hist.columns[0]
+        fallback_windows = [
+            (period, interval),
+            ("5d", "15m"),
+            ("1mo", "1d"),
+            ("1y", "1wk"),
+        ]
+        fallback_windows = list(dict.fromkeys(fallback_windows))
 
-            is_intraday = any(token in interval.lower() for token in ["m", "h"])
-            result = []
-            for _, row in hist.iterrows():
-                ts_value = row.get(ts_col)
-                if isinstance(ts_value, pd.Timestamp):
-                    full_date = ts_value.isoformat()
-                    time_value = ts_value.strftime("%H:%M") if is_intraday else ts_value.strftime("%Y-%m-%d")
-                else:
-                    full_date = str(ts_value)
-                    time_value = str(ts_value)
-
-                close_value = row.get("Close")
-                if close_value is None or (isinstance(close_value, float) and np.isnan(close_value)):
+        last_error: Optional[Exception] = None
+        for current_period, current_interval in fallback_windows:
+            try:
+                hist = self.stock.history(period=current_period, interval=current_interval, auto_adjust=False)
+                if hist.empty:
                     continue
-                volume_value = row.get("Volume", 0)
-                if volume_value is None or (isinstance(volume_value, float) and np.isnan(volume_value)):
-                    volume_value = 0
 
-                result.append(
-                    {
-                        "time": time_value,
-                        "full_date": full_date,
-                        "price": float(close_value),
-                        "volume": float(volume_value),
-                    }
-                )
-            return result
-        except Exception:
-            return []
+                hist = hist.reset_index()
+                ts_col = "Datetime" if "Datetime" in hist.columns else "Date"
+                if ts_col not in hist.columns:
+                    ts_col = hist.columns[0]
+
+                is_intraday = any(token in current_interval.lower() for token in ["m", "h"])
+                result = []
+                for _, row in hist.iterrows():
+                    ts_value = row.get(ts_col)
+                    if isinstance(ts_value, pd.Timestamp):
+                        full_date = ts_value.isoformat()
+                        time_value = ts_value.strftime("%H:%M") if is_intraday else ts_value.strftime("%Y-%m-%d")
+                    else:
+                        full_date = str(ts_value)
+                        time_value = str(ts_value)
+
+                    close_value = row.get("Close")
+                    if close_value is None or (isinstance(close_value, float) and np.isnan(close_value)):
+                        continue
+                    volume_value = row.get("Volume", 0)
+                    if volume_value is None or (isinstance(volume_value, float) and np.isnan(volume_value)):
+                        volume_value = 0
+
+                    result.append(
+                        {
+                            "time": time_value,
+                            "full_date": full_date,
+                            "price": float(close_value),
+                            "volume": float(volume_value),
+                        }
+                    )
+
+                if result:
+                    return result
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        if last_error:
+            raise last_error
+        return []
 
     def get_all_data(self) -> Dict[str, Any]:
         """Fetch all data for comprehensive analysis."""

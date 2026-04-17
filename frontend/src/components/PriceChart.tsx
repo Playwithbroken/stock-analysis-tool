@@ -184,7 +184,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         const histData = await fetchJsonWithRetry<HistoryItem[]>(
           `/api/history/${tickerSymbol}?period=${period.id}&interval=${period.interval}`,
           { signal: controller.signal },
-          { retries: 1, retryDelayMs: 800 },
+          { retries: 1, retryDelayMs: 800, timeoutMs: 22000 },
         );
 
         if (requestIdRef.current !== requestId) return;
@@ -257,6 +257,10 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         const message = error instanceof Error ? error.message : "Kursdaten konnten nicht geladen werden.";
         if (message.includes("504")) {
           setFetchErrorMessage("Datenprovider-Timeout. Bitte mit Retry erneut laden.");
+        } else if (message.includes("401")) {
+          setFetchErrorMessage("Session abgelaufen. Bitte kurz neu einloggen und Retry klicken.");
+        } else if (message.includes("404")) {
+          setFetchErrorMessage("Keine Historie fuer diesen Zeitraum. Zeitraum wechseln oder Retry nutzen.");
         } else if (message.toLowerCase().includes("timeout")) {
           setFetchErrorMessage("Request-Timeout beim Laden des Kursverlaufs. Bitte Retry nutzen.");
         } else if (message.includes("Failed to fetch")) {
@@ -410,7 +414,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         minHeight={subPanels > 0 ? 520 : 320}
         fallback={
           <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
-            <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
+            <span className="text-sm text-slate-500">Chart-Layout wird vorbereitet...</span>
           </div>
         }
       >

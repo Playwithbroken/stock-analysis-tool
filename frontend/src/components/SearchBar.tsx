@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect, useRef, useMemo, RefObject } from "react";
+import { useState, FormEvent, useEffect, useRef, useMemo, RefObject, useCallback } from "react";
 import { Search, ArrowUpRight } from "lucide-react";
 import { fetchJsonWithRetry } from "../lib/api";
 
@@ -9,13 +9,25 @@ interface SearchBarProps {
   inputRef?: RefObject<HTMLInputElement | null>;
 }
 
+/** Extract ticker from suggestion strings like "Apple Inc. (AAPL)" → "AAPL" */
+function extractTicker(value: string): string {
+  if (value.includes("(") && value.includes(")")) {
+    const m = value.match(/\(([^)]+)\)/);
+    if (m) return m[1];
+  }
+  return value;
+}
+
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  /** Inline ghost-text completion (Google-style) */
+  const [ghostText, setGhostText] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceTimer = useRef<any>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const flatSuggestions = useMemo(
     () =>
       Object.entries(suggestions).flatMap(([category, values]) =>
@@ -24,6 +36,32 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     [suggestions],
   );
 
+  // Compute ghost-text: first flat suggestion that starts with query (case-insensitive)
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed || trimmed.length < 1) {
+      setGhostText("");
+      return;
+    }
+    const lower = trimmed.toLowerCase();
+    for (const { value } of flatSuggestions) {
+      const ticker = extractTicker(value);
+      if (ticker.toLowerCase().startsWith(lower) && ticker.toLowerCase() !== lower) {
+        setGhostText(ticker.slice(trimmed.length));
+        return;
+      }
+    }
+    // Also check full suggestion labels
+    for (const { value } of flatSuggestions) {
+      if (value.toLowerCase().startsWith(lower) && value.toLowerCase() !== lower) {
+        setGhostText(value.slice(trimmed.length));
+        return;
+      }
+    }
+    setGhostText("");
+  }, [query, flatSuggestions]);
+
+  // Load default suggestions on mount
   useEffect(() => {
     fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
       retries: 2,
@@ -33,10 +71,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       .catch(() => setSuggestions({}));
   }, []);
 
+  // Debounced live search
   useEffect(() => {
     const trimmedQuery = query.trim();
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
     if (trimmedQuery.length > 1) {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
         fetchJsonWithRetry<any>(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, undefined, {
           retries: 2,
@@ -45,12 +85,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           .then((data) => {
             if (data.Matches && data.Matches.length > 0) {
               setSuggestions({ Treffer: data.Matches });
-            } else if (trimmedQuery.length > 0) {
+            } else {
               setSuggestions({});
             }
           })
           .catch(() => setSuggestions({}));
-      }, 240);
+      }, 120); // faster than before (was 240ms)
     } else if (trimmedQuery.length === 0) {
       fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
         retries: 2,
@@ -61,12 +101,10 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     }
   }, [query]);
 
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
       }
     };
@@ -74,25 +112,38 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Reset active index when suggestions change
   useEffect(() => {
     setActiveIndex(0);
   }, [query, suggestions]);
+
+  const handleQuickSelect = useCallback(
+    (value: string) => {
+      const ticker = extractTicker(value);
+      setQuery(ticker);
+      setGhostText("");
+      onSearch(ticker);
+      setShowDropdown(false);
+    },
+    [onSearch],
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const raw = query.trim();
     if (!raw) return;
     setShowDropdown(false);
+    setGhostText("");
 
-    // If there's exactly one suggestion match, use its ticker
+    // Accept ghost text auto-complete if there is exactly one match
     if (flatSuggestions.length === 1) {
       handleQuickSelect(flatSuggestions[0].value);
       return;
     }
 
-    // If the query looks like a company name (has space, all lowercase, etc.)
-    // try to resolve via suggestions first
-    const looksLikeName = raw.includes(" ") || raw !== raw.toUpperCase() || raw.length > 5;
+    // If query looks like a company name, resolve to ticker first
+    const looksLikeName =
+      raw.includes(" ") || raw !== raw.toUpperCase() || raw.length > 5;
     if (looksLikeName) {
       try {
         const data = await fetchJsonWithRetry<any>(
@@ -111,24 +162,25 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     onSearch(raw.toUpperCase());
   };
 
-  const handleQuickSelect = (value: string) => {
-    let tickerToSearch = value;
-    if (value.includes("(") && value.includes(")")) {
-      const match = value.match(/\((.*?)\)/);
-      if (match) tickerToSearch = match[1];
-    }
-    setQuery(tickerToSearch);
-    onSearch(tickerToSearch);
-    setShowDropdown(false);
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showDropdown || flatSuggestions.length === 0) {
-      if (e.key === "Enter") {
-        handleSubmit(e as unknown as FormEvent);
+    // Tab or ArrowRight at end of input → accept ghost text
+    if ((e.key === "Tab" || e.key === "ArrowRight") && ghostText) {
+      const input = e.currentTarget;
+      if (e.key === "Tab" || input.selectionStart === input.value.length) {
+        e.preventDefault();
+        const completed = query.trim() + ghostText;
+        setQuery(completed);
+        setGhostText("");
+        setShowDropdown(true);
+        return;
       }
+    }
+
+    if (!showDropdown || flatSuggestions.length === 0) {
+      if (e.key === "Enter") handleSubmit(e as unknown as FormEvent);
       return;
     }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIndex((prev) => (prev + 1) % flatSuggestions.length);
@@ -140,6 +192,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       handleQuickSelect(flatSuggestions[activeIndex]?.value || query);
     } else if (e.key === "Escape") {
       setShowDropdown(false);
+      setGhostText("");
     }
   };
 
@@ -157,19 +210,43 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
               <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
                 Global Search
               </div>
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => setShowDropdown(true)}
-                onKeyDown={handleKeyDown}
-                placeholder="AAPL, NVDA, ASML, BTC-USD"
-                aria-label="Search for a stock, ETF, or crypto ticker"
-                className="mt-1 w-full border-0 bg-transparent p-0 text-lg font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0"
-                disabled={loading}
-              />
+              {/* Ghost-text overlay: shows query + ghost as overlaid read-only span */}
+              <div className="relative mt-1">
+                {ghostText && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 flex items-center text-lg font-semibold"
+                  >
+                    <span className="invisible">{query}</span>
+                    <span className="text-slate-300 dark:text-slate-600">{ghostText}</span>
+                  </span>
+                )}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={ghostText ? "" : "AAPL, NVDA, ASML, BTC-USD"}
+                  aria-label="Search for a stock, ETF, or crypto ticker"
+                  className="relative w-full border-0 bg-transparent p-0 text-lg font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0"
+                  style={{ caretColor: "currentColor" }}
+                  disabled={loading}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
             </div>
+            {/* Ghost-text hint pill */}
+            {ghostText && (
+              <span className="hidden shrink-0 rounded-md border border-black/8 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:inline">
+                Tab →
+              </span>
+            )}
           </div>
 
           <button
@@ -179,14 +256,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           >
             {loading ? (
               <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-20"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
+                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path
                   className="opacity-90"
                   fill="currentColor"
@@ -220,7 +290,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             <span className="rounded-full border border-black/8 bg-white/65 px-3 py-1 font-bold uppercase tracking-[0.14em] text-slate-600">
               Fast lane
             </span>
-            <span>Use quick picks or press enter for a full scan.</span>
+            <span>Tippe einen Namen oder Ticker — Tab vervollständigt automatisch.</span>
           </div>
           <div className="font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
             {loading ? "Deep scan running" : "Ready"}
@@ -265,7 +335,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
               ))}
             </div>
             <div className="flex items-center justify-between border-t border-black/6 bg-black/[0.02] px-4 py-3 text-[11px] text-slate-500">
-              <span>Suche nach Ticker, Unternehmen, ETF oder Marktsegment.</span>
+              <span>↑↓ navigieren · Enter auswählen · Tab vervollständigen</span>
               <button
                 type="button"
                 onClick={() => setShowDropdown(false)}

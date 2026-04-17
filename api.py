@@ -2042,10 +2042,26 @@ if os.path.exists("frontend/dist"):
                 media_type = ext_map.get(ext)
                 if full_path in _DIST_ROOT_FILES:
                     media_type = _DIST_ROOT_FILES[full_path]
-                return FileResponse(candidate, media_type=media_type)
+                response = FileResponse(candidate, media_type=media_type)
+                filename = os.path.basename(candidate)
+                is_sw_related = filename in {"sw.js", "registerSW.js"} or filename.startswith("workbox-")
+                is_hashed_asset = "/assets/" in candidate.replace("\\", "/") and "-" in filename
+                if is_sw_related:
+                    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                    response.headers["Pragma"] = "no-cache"
+                    response.headers["Expires"] = "0"
+                elif is_hashed_asset:
+                    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                else:
+                    response.headers["Cache-Control"] = "public, max-age=300"
+                return response
 
         # SPA fallback for client-side routes (/, /portfolio, etc.)
-        return FileResponse("frontend/dist/index.html", media_type="text/html")
+        response = FileResponse("frontend/dist/index.html", media_type="text/html")
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 else:
     print("Warning: frontend/dist folder not found. Run 'npm run build' in frontend directory.")
 

@@ -154,36 +154,40 @@ export default function PortfolioPerformance({
             </span>
           </div>
         ) : data.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-            <AreaChart data={data}>
-              <defs>
-                <linearGradient id="portfolioValue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0f766e" stopOpacity={0.26} />
-                  <stop offset="95%" stopColor="#0f766e" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(22,28,36,0.08)"
-                vertical={false}
-              />
-              <XAxis dataKey="time" hide />
-              <YAxis hide domain={["auto", "auto"]} />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }}
-              />
-              <Area
-                type="monotone"
-                dataKey="price"
-                stroke="#0f766e"
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#portfolioValue)"
-                animationDuration={1400}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <MeasuredChartFrame className="h-full w-full" minHeight={220}>
+            {(size) => (
+              <ResponsiveContainer width={size.w} height={size.h} minWidth={0} minHeight={220}>
+                <AreaChart data={data}>
+                  <defs>
+                    <linearGradient id="portfolioValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0f766e" stopOpacity={0.26} />
+                      <stop offset="95%" stopColor="#0f766e" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(22,28,36,0.08)"
+                    vertical={false}
+                  />
+                  <XAxis dataKey="time" hide />
+                  <YAxis hide domain={["auto", "auto"]} />
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke="#0f766e"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#portfolioValue)"
+                    animationDuration={1400}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </MeasuredChartFrame>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl border border-dashed border-black/8 bg-white/70 text-slate-500">
             <TrendingUp size={32} className="mb-2 opacity-20" />

@@ -219,42 +219,44 @@ export default function ETFComparison({
           </h3>
           {analysis.holdings.length > 0 ? (
             <MeasuredChartFrame className="h-64 w-full" minHeight={256}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                <PieChart>
-                  <RechartsTooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="rounded-lg border border-black/8 bg-white p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
-                            <div className="font-bold text-[var(--accent)]">
-                              {payload[0].name}
+              {(size) => (
+                <ResponsiveContainer width={size.w} height={size.h} minWidth={0} minHeight={220}>
+                  <PieChart>
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="rounded-lg border border-black/8 bg-white p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
+                              <div className="font-bold text-[var(--accent)]">
+                                {payload[0].name}
+                              </div>
+                              <div className="mb-1 text-[10px] text-slate-500">
+                                {payload[0].payload.fullName}
+                              </div>
+                              <div className="text-xs font-bold text-slate-900">
+                                {Number(payload[0].value).toFixed(2)}%
+                              </div>
                             </div>
-                            <div className="mb-1 text-[10px] text-slate-500">
-                              {payload[0].payload.fullName}
-                            </div>
-                            <div className="text-xs font-bold text-slate-900">
-                              {Number(payload[0].value).toFixed(2)}%
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={58}
-                    outerRadius={92}
-                    paddingAngle={2}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={58}
+                      outerRadius={92}
+                      paddingAngle={2}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </MeasuredChartFrame>
           ) : (
             <div className="text-sm text-slate-500">Keine Allokationsdaten vorhanden.</div>

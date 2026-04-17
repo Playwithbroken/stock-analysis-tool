@@ -98,16 +98,18 @@ export default function PortfolioHeatmap({ holdings }: PortfolioHeatmapProps) {
         className="relative h-[250px] w-full overflow-hidden rounded-xl border border-black/8 bg-white/72"
         minHeight={250}
       >
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-          <Treemap
-            data={data}
-            dataKey="size"
-            aspectRatio={4 / 3}
-            stroke="#ffffff"
-            fill="#0f766e"
-            content={<CustomizedContent formatPrice={formatPrice} />}
-          />
-        </ResponsiveContainer>
+        {(size) => (
+          <ResponsiveContainer width={size.w} height={size.h} minWidth={0} minHeight={220}>
+            <Treemap
+              data={data}
+              dataKey="size"
+              aspectRatio={4 / 3}
+              stroke="#ffffff"
+              fill="#0f766e"
+              content={<CustomizedContent formatPrice={formatPrice} />}
+            />
+          </ResponsiveContainer>
+        )}
       </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">

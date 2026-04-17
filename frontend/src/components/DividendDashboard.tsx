@@ -102,46 +102,48 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
       </div>
 
       <MeasuredChartFrame className="h-[200px] w-full" minHeight={200}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
-          <BarChart data={chartData}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(22,28,36,0.08)"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="month"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: "#7c848f", fontSize: 10 }}
-            />
-            <YAxis hide />
-            <Tooltip
-              cursor={{ fill: "rgba(15,118,110,0.05)" }}
-              content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  return (
-                    <div className="rounded-lg border border-black/8 bg-white p-2 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
-                      <p className="font-bold text-slate-900">
-                        {formatPrice(payload[0].value as number)}
-                      </p>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={entry.value > 0 ? "#0f766e" : "#cbd5e1"}
-                  fillOpacity={0.82}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {(size) => (
+          <ResponsiveContainer width={size.w} height={size.h} minWidth={0} minHeight={180}>
+            <BarChart data={chartData}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(22,28,36,0.08)"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="month"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#7c848f", fontSize: 10 }}
+              />
+              <YAxis hide />
+              <Tooltip
+                cursor={{ fill: "rgba(15,118,110,0.05)" }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="rounded-lg border border-black/8 bg-white p-2 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
+                        <p className="font-bold text-slate-900">
+                          {formatPrice(payload[0].value as number)}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.value > 0 ? "#0f766e" : "#cbd5e1"}
+                    fillOpacity={0.82}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </MeasuredChartFrame>
 
       <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/8 pt-4">

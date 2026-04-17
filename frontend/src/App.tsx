@@ -58,6 +58,34 @@ const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
   { id: "portfolio", label: "Portfolio", short: "Portfolio" },
 ];
 
+function scheduleIdle(task: () => void, timeout = 1500) {
+  const win = window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof win.requestIdleCallback === "function") {
+    const id = win.requestIdleCallback(task, { timeout });
+    return () => {
+      if (typeof win.cancelIdleCallback === "function") {
+        win.cancelIdleCallback(id);
+      }
+    };
+  }
+  const timer = window.setTimeout(task, Math.min(timeout, 1000));
+  return () => window.clearTimeout(timer);
+}
+
+function preloadLazyScreens() {
+  void import("./components/AnalysisResult");
+  void import("./components/DiscoveryPanel");
+  void import("./components/PortfolioView");
+  void import("./components/BrokerChat");
+  void import("./components/MyRadar");
+  void import("./components/WorldMarketMap");
+  void import("./components/TradingEdgePanel");
+  void import("./components/MorningBriefPanel");
+}
+
 function formatTickerPrice(value?: number | null) {
   if (value == null || !Number.isFinite(value)) return "...";
   if (Math.abs(value) >= 1000) return value.toFixed(0);
@@ -469,6 +497,55 @@ function AppContent() {
       window.clearInterval(interval);
     };
   }, [auth.authenticated]);
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+    let cancelled = false;
+
+    const warmBackgroundData = async () => {
+      const ticker = analysis?.ticker?.toUpperCase();
+      const historyPath = ticker
+        ? `/api/history/${encodeURIComponent(ticker)}?period=1mo&interval=1d`
+        : null;
+      const paths = [
+        "/api/market/morning-brief",
+        "/api/signals/scoreboard",
+        "/api/signals/watchlist",
+        `/api/discovery/gainers?window=${marketMoversWindow}`,
+        `/api/discovery/losers?window=${marketMoversWindow}`,
+        "/api/discovery/market-stars",
+        "/api/discovery/sentiment-heatmap",
+        "/api/radar/bootstrap?limit=8",
+        historyPath,
+      ].filter(Boolean) as string[];
+
+      await Promise.allSettled(
+        paths.map((path) =>
+          fetchJsonWithRetry<any>(path, undefined, {
+            retries: 0,
+            retryDelayMs: 250,
+            timeoutMs: 12000,
+          }),
+        ),
+      );
+      if (cancelled) return;
+      preloadLazyScreens();
+    };
+
+    const cancelIdle = scheduleIdle(() => {
+      void warmBackgroundData();
+    }, 1800);
+
+    const interval = window.setInterval(() => {
+      void warmBackgroundData();
+    }, 180000);
+
+    return () => {
+      cancelled = true;
+      cancelIdle();
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated, analysis?.ticker, marketMoversWindow]);
 
   useEffect(() => {
     if (!auth.authenticated) return;

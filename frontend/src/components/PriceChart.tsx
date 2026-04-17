@@ -1,8 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
+  Cell,
   CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -73,11 +79,39 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           onStatsUpdate?.({ change, changePct }, period.label);
         }
 
-        const rsi = histData.map(
-          (_: HistoryItem, i: number) => 30 + Math.sin(i * 0.2) * 20 + Math.random() * 10,
-        );
-        const macd = histData.map((_: HistoryItem, i: number) => Math.sin(i * 0.1) * 5);
-        setIndicators({ rsi, macd });
+        // Real RSI (14-period)
+        const prices = histData.map((d: HistoryItem) => d.price);
+        const rsiPeriod = 14;
+        const rsiValues: number[] = new Array(prices.length).fill(50);
+        if (prices.length > rsiPeriod) {
+          let avgGain = 0, avgLoss = 0;
+          for (let j = 1; j <= rsiPeriod; j++) {
+            const diff = prices[j] - prices[j - 1];
+            if (diff > 0) avgGain += diff; else avgLoss -= diff;
+          }
+          avgGain /= rsiPeriod;
+          avgLoss /= rsiPeriod;
+          rsiValues[rsiPeriod] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+          for (let j = rsiPeriod + 1; j < prices.length; j++) {
+            const diff = prices[j] - prices[j - 1];
+            avgGain = (avgGain * (rsiPeriod - 1) + (diff > 0 ? diff : 0)) / rsiPeriod;
+            avgLoss = (avgLoss * (rsiPeriod - 1) + (diff < 0 ? -diff : 0)) / rsiPeriod;
+            rsiValues[j] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+          }
+        }
+        // Real MACD (12/26/9 EMA)
+        const ema = (src: number[], span: number): number[] => {
+          const k = 2 / (span + 1);
+          const out: number[] = [src[0]];
+          for (let j = 1; j < src.length; j++) out.push(src[j] * k + out[j - 1] * (1 - k));
+          return out;
+        };
+        const ema12 = ema(prices, 12);
+        const ema26 = ema(prices, 26);
+        const macdLine = ema12.map((v, j) => v - ema26[j]);
+        const signal = ema(macdLine, 9);
+        const macdHist = macdLine.map((v, j) => v - signal[j]);
+        setIndicators({ rsi: rsiValues, macd: macdHist });
       } catch {
         setData([]);
       } finally {
@@ -104,22 +138,37 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
 
   const isPositive = stats.changePct >= 0;
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const chartData = useMemo(() => {
+    return data.map((d, i) => ({
+      ...d,
+      _rsi: indicators.rsi[i],
+      _macd: indicators.macd[i],
+    }));
+  }, [data, indicators]);
+
+  const CustomTooltip = useCallback(({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const d = payload[0].payload;
       return (
         <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
-          <p className="mb-1 text-xs text-slate-500">{payload[0].payload.full_date}</p>
+          <p className="mb-1 text-xs text-slate-500">{d.full_date}</p>
           <p className="text-lg font-bold text-slate-900">{formatPrice(payload[0].value)}</p>
-          {payload[0].payload.volume > 0 && (
+          {d.volume > 0 && (
             <p className="mt-1 text-[10px] text-slate-500">
-              Vol: {payload[0].payload.volume.toLocaleString()}
+              Vol: {d.volume.toLocaleString()}
             </p>
+          )}
+          {d._rsi != null && showRSI && (
+            <p className="mt-1 text-[10px] text-amber-600">RSI: {d._rsi.toFixed(1)}</p>
+          )}
+          {d._macd != null && showMACD && (
+            <p className="mt-1 text-[10px] text-sky-600">MACD: {d._macd.toFixed(3)}</p>
           )}
         </div>
       );
     }
     return null;
-  };
+  }, [formatPrice, showRSI, showMACD]);
 
   return (
     <div className="surface-panel rounded-[2rem] p-6">
@@ -196,8 +245,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       </div>
 
       <MeasuredChartFrame
-        className="h-[300px] w-full"
-        minHeight={300}
+        className={`w-full ${showRSI || showMACD ? "h-[440px]" : "h-[300px]"}`}
+        minHeight={showRSI || showMACD ? 440 : 300}
         fallback={
           <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
             <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
@@ -208,75 +257,65 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
             <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
           </div>
-        ) : data.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
-            <AreaChart data={data}>
-              <defs>
-                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor={isPositive ? "#0f766e" : "#dc2626"}
-                    stopOpacity={0.22}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor={isPositive ? "#0f766e" : "#dc2626"}
-                    stopOpacity={0}
-                  />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(22,28,36,0.08)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="time"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#7c848f", fontSize: 10 }}
-                minTickGap={30}
-              />
-              <YAxis hide domain={["auto", "auto"]} />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }}
-              />
-              <Area
-                type="monotone"
-                dataKey="price"
-                stroke={isPositive ? "#0f766e" : "#dc2626"}
-                strokeWidth={2.4}
-                fillOpacity={1}
-                fill="url(#colorPrice)"
-                animationDuration={1200}
-              />
-              {showRSI && (
-                <Area
-                  type="monotone"
-                  data={data.map((d, i) => ({ ...d, rsi: indicators.rsi[i] }))}
-                  dataKey="rsi"
-                  stroke="#d97706"
-                  fill="transparent"
-                  strokeWidth={1}
-                  strokeDasharray="5 5"
-                />
-              )}
-              {showMACD && (
-                <Area
-                  type="monotone"
-                  data={data.map((d, i) => ({
-                    ...d,
-                    macd: indicators.macd[i] + data[0].price * 0.95,
-                  }))}
-                  dataKey="macd"
-                  stroke="#2563eb"
-                  fill="transparent"
-                  strokeWidth={1}
-                />
-              )}
-            </AreaChart>
-          </ResponsiveContainer>
+        ) : chartData.length > 0 ? (
+          <div className="flex h-full w-full flex-col gap-1">
+            <div className={showRSI || showMACD ? "h-[60%]" : "h-full"}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={isPositive ? "#0f766e" : "#dc2626"} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={isPositive ? "#0f766e" : "#dc2626"} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.08)" vertical={false} />
+                  <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: "#7c848f", fontSize: 10 }} minTickGap={30} />
+                  <YAxis hide domain={["auto", "auto"]} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }} />
+                  <Area type="monotone" dataKey="price" stroke={isPositive ? "#0f766e" : "#dc2626"} strokeWidth={2.4} fillOpacity={1} fill="url(#colorPrice)" animationDuration={1200} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            {showRSI && (
+              <div className="h-[20%] min-h-[60px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
+                    <XAxis dataKey="time" hide />
+                    <YAxis domain={[0, 100]} hide />
+                    <ReferenceLine y={70} stroke="#dc2626" strokeDasharray="4 4" strokeOpacity={0.5} />
+                    <ReferenceLine y={30} stroke="#0f766e" strokeDasharray="4 4" strokeOpacity={0.5} />
+                    <Line type="monotone" dataKey="_rsi" stroke="#d97706" strokeWidth={1.5} dot={false} animationDuration={800} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="flex justify-between px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <span>RSI 14</span>
+                  <span className="text-red-400">70</span>
+                  <span className="text-emerald-500">30</span>
+                </div>
+              </div>
+            )}
+            {showMACD && (
+              <div className="h-[20%] min-h-[60px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
+                    <XAxis dataKey="time" hide />
+                    <YAxis hide />
+                    <ReferenceLine y={0} stroke="rgba(22,28,36,0.15)" />
+                    <Bar dataKey="_macd" animationDuration={800}>
+                      {chartData.map((entry, idx) => (
+                        <Cell key={idx} fill={(entry._macd ?? 0) >= 0 ? "#0f766e" : "#dc2626"} fillOpacity={0.7} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  MACD Histogram (12/26/9)
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center rounded-[1.4rem] border border-dashed border-black/8 bg-white/70 text-slate-500">
             <Calendar size={32} className="mb-2 opacity-30" />

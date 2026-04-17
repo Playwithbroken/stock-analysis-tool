@@ -1444,6 +1444,109 @@ async def get_exchange_rate():
         return {"rate": 0.92} # Fallback
 
 
+@app.get("/api/market/internals")
+async def get_market_internals():
+    """Market breadth, VIX term structure, put/call ratio, advance/decline."""
+    import yfinance as yf
+    from datetime import datetime, timedelta
+    result = {}
+    try:
+        # VIX + VIX futures proxy (VIX3M)
+        vix = yf.Ticker("^VIX")
+        vix_hist = vix.history(period="1mo")
+        vix_price = float(vix_hist["Close"].iloc[-1]) if len(vix_hist) > 0 else None
+        vix_5d = list(vix_hist["Close"].tail(5).round(2)) if len(vix_hist) >= 5 else []
+        vix3m = yf.Ticker("^VIX3M")
+        vix3m_hist = vix3m.history(period="5d")
+        vix3m_price = float(vix3m_hist["Close"].iloc[-1]) if len(vix3m_hist) > 0 else None
+        contango = None
+        if vix_price and vix3m_price:
+            contango = round((vix3m_price - vix_price) / vix_price * 100, 2)
+        result["vix"] = {
+            "current": round(vix_price, 2) if vix_price else None,
+            "vix3m": round(vix3m_price, 2) if vix3m_price else None,
+            "contango_pct": contango,
+            "term_structure": "contango" if (contango or 0) > 0 else "backwardation",
+            "history_5d": vix_5d,
+        }
+    except Exception:
+        result["vix"] = None
+    try:
+        # Put/Call ratio via CBOE index options proxy
+        pcr_ticker = yf.Ticker("^VIX")
+        pcr_info = pcr_ticker.info or {}
+        # Approximate from options if available
+        try:
+            opts = pcr_ticker.option_chain(pcr_ticker.options[0]) if pcr_ticker.options else None
+            if opts:
+                put_vol = int(opts.puts["volume"].sum())
+                call_vol = int(opts.calls["volume"].sum())
+                result["put_call_ratio"] = round(put_vol / max(call_vol, 1), 2)
+            else:
+                result["put_call_ratio"] = None
+        except Exception:
+            result["put_call_ratio"] = None
+    except Exception:
+        result["put_call_ratio"] = None
+    try:
+        # Advance/Decline proxy — compare % of S&P sector ETFs positive today
+        sectors = ["XLK","XLF","XLV","XLE","XLI","XLY","XLP","XLU","XLB","XLRE","XLC"]
+        adv, dec = 0, 0
+        sector_perfs = []
+        for sym in sectors:
+            try:
+                h = yf.Ticker(sym).history(period="5d")
+                if len(h) >= 2:
+                    chg = (h["Close"].iloc[-1] / h["Close"].iloc[-2] - 1) * 100
+                    sector_perfs.append({"symbol": sym, "change_1d": round(chg, 2)})
+                    if chg >= 0: adv += 1
+                    else: dec += 1
+            except Exception:
+                continue
+        result["breadth"] = {
+            "advancing_sectors": adv,
+            "declining_sectors": dec,
+            "total_sectors": len(sectors),
+            "ratio": round(adv / max(dec, 1), 2),
+            "sectors": sorted(sector_perfs, key=lambda x: x["change_1d"], reverse=True),
+        }
+    except Exception:
+        result["breadth"] = None
+    try:
+        # Fear & Greed (alternative.me crypto, but correlates)
+        import httpx
+        async with httpx.AsyncClient() as client:
+            resp = await client.get("https://api.alternative.me/fng/?limit=7", timeout=8)
+            if resp.status_code == 200:
+                fng_data = resp.json().get("data", [])
+                result["fear_greed"] = [
+                    {"value": int(d["value"]), "label": d["value_classification"], "date": d["timestamp"]}
+                    for d in fng_data[:7]
+                ]
+            else:
+                result["fear_greed"] = None
+    except Exception:
+        result["fear_greed"] = None
+    try:
+        # Yield curve (2Y vs 10Y)
+        t2y = yf.Ticker("^IRX")  # 13-week T-bill
+        t10y = yf.Ticker("^TNX")  # 10Y
+        t2y_hist = t2y.history(period="5d")
+        t10y_hist = t10y.history(period="5d")
+        y2 = float(t2y_hist["Close"].iloc[-1]) if len(t2y_hist) > 0 else None
+        y10 = float(t10y_hist["Close"].iloc[-1]) if len(t10y_hist) > 0 else None
+        spread = round(y10 - y2, 3) if y2 is not None and y10 is not None else None
+        result["yield_spread"] = {
+            "t13w": round(y2, 3) if y2 else None,
+            "t10y": round(y10, 3) if y10 else None,
+            "spread": spread,
+            "inverted": (spread or 0) < 0,
+        }
+    except Exception:
+        result["yield_spread"] = None
+    return result
+
+
 # --- Static Files & SPA Handling ---
 import os
 from fastapi.staticfiles import StaticFiles

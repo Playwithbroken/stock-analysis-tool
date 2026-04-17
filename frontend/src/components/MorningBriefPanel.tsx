@@ -14,6 +14,24 @@ function fmt(value?: number | null) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function regimeStyle(regime?: string) {
+  const r = (regime || "").toLowerCase();
+  if (r.includes("risk-on") || r.includes("on"))
+    return { icon: "↗", bg: "bg-emerald-500/10", text: "text-emerald-700", border: "border-emerald-500/20" };
+  if (r.includes("risk-off") || r.includes("off"))
+    return { icon: "↘", bg: "bg-red-500/10", text: "text-red-700", border: "border-red-500/20" };
+  return { icon: "⚖", bg: "bg-amber-500/10", text: "text-amber-700", border: "border-amber-500/20" };
+}
+
+function toneBadge(tone?: string) {
+  const t = (tone || "").toLowerCase();
+  if (t.includes("bullish") || t.includes("risk-on") || t.includes("on"))
+    return { icon: "▲", color: "text-emerald-700 bg-emerald-500/10" };
+  if (t.includes("bearish") || t.includes("risk-off") || t.includes("off"))
+    return { icon: "▼", color: "text-red-700 bg-red-500/10" };
+  return { icon: "◆", color: "text-amber-700 bg-amber-500/10" };
+}
+
 function actionTone(action?: string) {
   if (action === "hedge") return "bg-sky-500/10 text-sky-700";
   if (action === "reduce") return "bg-red-500/10 text-red-700";
@@ -97,9 +115,14 @@ export default function MorningBriefPanel({
           <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[var(--accent)]">
             Morning Brief
           </span>
-          <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-            {brief.macro_regime}
-          </span>
+          {(() => {
+            const rs = regimeStyle(brief.macro_regime);
+            return (
+              <span className={`rounded-full border ${rs.border} ${rs.bg} px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] ${rs.text}`}>
+                {rs.icon} {brief.macro_regime}
+              </span>
+            );
+          })()}
           <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
             Focus {selectedRegion}
           </span>
@@ -184,12 +207,17 @@ export default function MorningBriefPanel({
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                 {region.label}
               </div>
-              <button
-                onClick={() => setSelectedRegion(region.label)}
-                className="text-xs font-bold uppercase text-slate-600"
-              >
-                {region.tone}
-              </button>
+              {(() => {
+                const tb = toneBadge(region.tone);
+                return (
+                  <button
+                    onClick={() => setSelectedRegion(region.label)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] ${tb.color}`}
+                  >
+                    {tb.icon} {region.tone}
+                  </button>
+                );
+              })()}
             </div>
             <div className="mt-2 text-2xl font-black text-slate-900">
               {fmt(region.avg_change_1d)}

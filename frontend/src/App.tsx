@@ -753,11 +753,22 @@ function AppContent() {
                     sowie Squeeze-, Insider- und Options-Signale auf einen Blick.
                   </p>
                 </div>
-                {globalBrief?.macro_regime ? (
-                  <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    {globalBrief.macro_regime}
-                  </div>
-                ) : null}
+                {globalBrief?.macro_regime ? (() => {
+                  const r = (globalBrief.macro_regime || "").toLowerCase();
+                  const isOn = r.includes("risk-on") || r.includes("on");
+                  const isOff = r.includes("risk-off") || r.includes("off");
+                  const icon = isOn ? "↗" : isOff ? "↘" : "⚖";
+                  const cls = isOn
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                    : isOff
+                      ? "border-red-500/20 bg-red-500/10 text-red-700"
+                      : "border-amber-500/20 bg-amber-500/10 text-amber-700";
+                  return (
+                    <div className={`rounded-full border ${cls} px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]`}>
+                      {icon} {globalBrief.macro_regime}
+                    </div>
+                  );
+                })() : null}
               </div>
             </section>
 

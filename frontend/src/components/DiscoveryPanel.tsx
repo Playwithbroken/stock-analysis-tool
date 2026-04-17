@@ -52,7 +52,7 @@ interface SignalWatchlistData {
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab] = useState<
-    "overview" | "signals" | "ai" | "movers" | "alternative" | "etf"
+    "overview" | "signals" | "ai" | "movers" | "alternative" | "etf" | "internals"
   >("overview");
   const [stars, setStars] = useState<StarAssets | null>(null);
   const [publicSignals, setPublicSignals] = useState<PublicSignalsData | null>(
@@ -76,6 +76,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [internals, setInternals] = useState<any>(null);
+  const [internalsLoading, setInternalsLoading] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -145,6 +147,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     }
   };
 
+  // Lazy-load market internals when tab selected
+  useEffect(() => {
+    if (activeTab !== "internals" || internals) return;
+    let cancelled = false;
+    (async () => {
+      setInternalsLoading(true);
+      try {
+        const data = await fetchJsonWithRetry<any>("/api/market/internals", undefined, { retries: 1, retryDelayMs: 800 });
+        if (!cancelled) setInternals(data);
+      } catch { /* ignore */ }
+      if (!cancelled) setInternalsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, internals]);
+
   const refreshSignalWatchlist = async () => {
     try {
       const data = await fetchJsonWithRetry<SignalWatchlistData>("/api/signals/watchlist");
@@ -190,6 +207,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
     { id: "movers", label: "Top/Flop", icon: "TF" },
     { id: "etf", label: "ETF Welt", icon: "ETF" },
     { id: "alternative", label: "Alternativ", icon: "ALT" },
+    { id: "internals", label: "Internals", icon: "⚖" },
   ] as const;
 
   if (loading && !stars) {
@@ -925,6 +943,159 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
                 ))}
               </div>
             </section>
+          </div>
+        )}
+        {activeTab === "internals" && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            {internalsLoading ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="h-40 rounded-2xl border border-black/8 bg-white/75 animate-pulse" />
+                ))}
+              </div>
+            ) : internals ? (
+              <>
+                {/* VIX & Term Structure */}
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {internals.vix && (
+                    <div className="surface-panel rounded-[1.6rem] p-5">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">VIX</div>
+                      <div className={`mt-2 text-3xl font-black ${(internals.vix.current || 0) > 25 ? "text-red-700" : (internals.vix.current || 0) > 18 ? "text-amber-700" : "text-emerald-700"}`}>
+                        {internals.vix.current ?? "N/A"}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                          internals.vix.term_structure === "contango" ? "bg-emerald-500/10 text-emerald-700" : "bg-red-500/10 text-red-700"
+                        }`}>
+                          {internals.vix.term_structure}
+                        </span>
+                        {internals.vix.contango_pct != null && (
+                          <span className="text-xs text-slate-500">{internals.vix.contango_pct > 0 ? "+" : ""}{internals.vix.contango_pct}%</span>
+                        )}
+                      </div>
+                      {internals.vix.vix3m && (
+                        <div className="mt-2 text-xs text-slate-500">VIX3M: {internals.vix.vix3m}</div>
+                      )}
+                      {internals.vix.history_5d?.length > 0 && (
+                        <div className="mt-3 flex items-end gap-1 h-8">
+                          {internals.vix.history_5d.map((v: number, i: number) => {
+                            const max = Math.max(...internals.vix.history_5d);
+                            const min = Math.min(...internals.vix.history_5d);
+                            const range = max - min || 1;
+                            const h = 20 + ((v - min) / range) * 80;
+                            return (
+                              <div key={i} className={`w-full rounded-sm ${v > 25 ? "bg-red-400" : v > 18 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ height: `${h}%` }} />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {internals.fear_greed && internals.fear_greed[0] && (
+                    <div className="surface-panel rounded-[1.6rem] p-5">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Fear & Greed</div>
+                      <div className={`mt-2 text-3xl font-black ${
+                        internals.fear_greed[0].value > 60 ? "text-emerald-700" : internals.fear_greed[0].value < 40 ? "text-red-700" : "text-amber-700"
+                      }`}>
+                        {internals.fear_greed[0].value}
+                      </div>
+                      <div className="mt-1 text-xs font-bold uppercase text-slate-500">{internals.fear_greed[0].label}</div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            internals.fear_greed[0].value > 60 ? "bg-emerald-500" : internals.fear_greed[0].value < 40 ? "bg-red-500" : "bg-amber-400"
+                          }`}
+                          style={{ width: `${internals.fear_greed[0].value}%` }}
+                        />
+                      </div>
+                      <div className="mt-3 flex items-end gap-1 h-8">
+                        {internals.fear_greed.slice(0, 7).reverse().map((d: any, i: number) => (
+                          <div key={i} className={`w-full rounded-sm ${d.value > 60 ? "bg-emerald-400" : d.value < 40 ? "bg-red-400" : "bg-amber-300"}`} style={{ height: `${20 + d.value * 0.8}%` }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {internals.put_call_ratio != null && (
+                    <div className="surface-panel rounded-[1.6rem] p-5">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Put/Call Ratio</div>
+                      <div className={`mt-2 text-3xl font-black ${
+                        internals.put_call_ratio > 1.2 ? "text-red-700" : internals.put_call_ratio < 0.7 ? "text-emerald-700" : "text-amber-700"
+                      }`}>
+                        {internals.put_call_ratio}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        {internals.put_call_ratio > 1.2 ? "Bearish bias — more puts" : internals.put_call_ratio < 0.7 ? "Bullish bias — more calls" : "Neutral positioning"}
+                      </div>
+                    </div>
+                  )}
+                  {internals.yield_spread && (
+                    <div className="surface-panel rounded-[1.6rem] p-5">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Yield Spread</div>
+                      <div className={`mt-2 text-3xl font-black ${
+                        internals.yield_spread.inverted ? "text-red-700" : "text-emerald-700"
+                      }`}>
+                        {internals.yield_spread.spread != null ? `${internals.yield_spread.spread > 0 ? "+" : ""}${internals.yield_spread.spread}%` : "N/A"}
+                      </div>
+                      <div className={`mt-1 rounded-full inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                        internals.yield_spread.inverted ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"
+                      }`}>
+                        {internals.yield_spread.inverted ? "⚠ Inverted" : "Normal"}
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                        <div>13W: {internals.yield_spread.t13w ?? "N/A"}%</div>
+                        <div>10Y: {internals.yield_spread.t10y ?? "N/A"}%</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sector Breadth Heatmap */}
+                {internals.breadth && (
+                  <div className="surface-panel rounded-[2rem] p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                        Sector Breadth
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                          ▲ {internals.breadth.advancing_sectors}
+                        </span>
+                        <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                          ▼ {internals.breadth.declining_sectors}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-500">
+                          A/D {internals.breadth.ratio}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                      {(internals.breadth.sectors || []).map((s: any) => (
+                        <button
+                          key={s.symbol}
+                          onClick={() => onAnalyze(s.symbol)}
+                          className="rounded-[1.2rem] border border-black/8 bg-white/70 p-3 text-left transition-colors hover:bg-white"
+                        >
+                          <div className="text-xs font-black text-slate-900">{s.symbol}</div>
+                          <div className={`mt-1 text-lg font-black ${(s.change_1d || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                            {(s.change_1d || 0) >= 0 ? "+" : ""}{s.change_1d?.toFixed(2)}%
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={`h-full rounded-full ${(s.change_1d || 0) >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
+                              style={{ width: `${Math.min(Math.abs(s.change_1d || 0) * 20, 100)}%` }}
+                            />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="surface-panel rounded-[2rem] p-8 text-center text-sm text-slate-500">
+                Market Internals konnten nicht geladen werden.
+              </div>
+            )}
           </div>
         )}
       </div>

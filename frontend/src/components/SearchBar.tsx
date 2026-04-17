@@ -151,8 +151,23 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           undefined,
           { retries: 1, retryDelayMs: 300 },
         );
-        if (data?.Ticker?.[0]) {
-          onSearch(data.Ticker[0]);
+        const bestTicker = data?.Ticker?.[0] || extractTicker(data?.Matches?.[0] || "");
+        if (bestTicker) {
+          onSearch(bestTicker);
+          return;
+        }
+      } catch {
+        // fallthrough
+      }
+      try {
+        const direct = await fetchJsonWithRetry<any[]>(
+          `/api/search?q=${encodeURIComponent(raw)}`,
+          undefined,
+          { retries: 1, retryDelayMs: 300 },
+        );
+        const bestTicker = direct?.[0]?.ticker;
+        if (bestTicker) {
+          onSearch(bestTicker);
           return;
         }
       } catch {

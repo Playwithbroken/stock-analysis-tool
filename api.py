@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+import difflib
 import uvicorn
 import numpy as np
 import asyncio
@@ -76,6 +77,90 @@ _trading_intelligence_service = None
 _realtime_market_service = None
 _push_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
+
+SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
+    {"ticker": "AAPL", "name": "Apple"},
+    {"ticker": "MSFT", "name": "Microsoft"},
+    {"ticker": "NVDA", "name": "NVIDIA"},
+    {"ticker": "AMZN", "name": "Amazon"},
+    {"ticker": "GOOGL", "name": "Alphabet Google"},
+    {"ticker": "META", "name": "Meta Platforms Facebook"},
+    {"ticker": "TSLA", "name": "Tesla"},
+    {"ticker": "BRK-B", "name": "Berkshire Hathaway"},
+    {"ticker": "JPM", "name": "JPMorgan Chase"},
+    {"ticker": "V", "name": "Visa"},
+    {"ticker": "MA", "name": "Mastercard"},
+    {"ticker": "SAP", "name": "SAP"},
+    {"ticker": "ASML", "name": "ASML"},
+    {"ticker": "INTC", "name": "Intel"},
+    {"ticker": "AMD", "name": "Advanced Micro Devices"},
+    {"ticker": "NFLX", "name": "Netflix"},
+    {"ticker": "SPY", "name": "SPDR S&P 500 ETF"},
+    {"ticker": "QQQ", "name": "Invesco QQQ Nasdaq ETF"},
+    {"ticker": "DIA", "name": "SPDR Dow Jones ETF"},
+    {"ticker": "IWM", "name": "iShares Russell 2000 ETF"},
+    {"ticker": "GLD", "name": "SPDR Gold Shares ETF"},
+    {"ticker": "TLT", "name": "iShares 20+ Year Treasury ETF"},
+    {"ticker": "XLE", "name": "Energy Select Sector ETF"},
+    {"ticker": "USO", "name": "United States Oil Fund"},
+    {"ticker": "BTC-USD", "name": "Bitcoin"},
+    {"ticker": "ETH-USD", "name": "Ethereum"},
+    {"ticker": "SOL-USD", "name": "Solana"},
+]
+SEARCH_ALIASES: Dict[str, str] = {
+    "google": "GOOGL",
+    "alphabet": "GOOGL",
+    "facebook": "META",
+    "berkshire": "BRK-B",
+    "hathaway": "BRK-B",
+    "amazon": "AMZN",
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "nvidia": "NVDA",
+    "tesla": "TSLA",
+    "bitcoin": "BTC-USD",
+    "ethereum": "ETH-USD",
+}
+
+
+def _normalize_search_query(value: str) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _fuzzy_catalog_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    needle = _normalize_search_query(query)
+    if not needle:
+        return []
+
+    if needle in SEARCH_ALIASES:
+        ticker = SEARCH_ALIASES[needle]
+        exact = next((item for item in SEARCH_NAME_CATALOG if item["ticker"] == ticker), None)
+        if exact:
+            return [{"ticker": exact["ticker"], "name": exact["name"], "exchange": None, "type": "alias"}]
+
+    scored: List[tuple[float, Dict[str, Any]]] = []
+    for item in SEARCH_NAME_CATALOG:
+        ticker = item["ticker"]
+        name = item["name"]
+        ticker_norm = _normalize_search_query(ticker)
+        name_norm = _normalize_search_query(name)
+
+        if needle == ticker_norm:
+            score = 1.0
+        elif ticker_norm.startswith(needle) or name_norm.startswith(needle):
+            score = 0.95
+        elif needle in ticker_norm or needle in name_norm:
+            score = 0.88
+        else:
+            score = max(
+                difflib.SequenceMatcher(None, needle, ticker_norm).ratio(),
+                difflib.SequenceMatcher(None, needle, name_norm).ratio(),
+            )
+        if score >= 0.62:
+            scored.append((score, {"ticker": ticker, "name": name, "exchange": None, "type": "fuzzy"}))
+
+    scored.sort(key=lambda row: row[0], reverse=True)
+    return [row[1] for row in scored[:limit]]
 
 
 def get_app_password() -> str:
@@ -879,7 +964,10 @@ async def get_dividend_stocks():
 async def search_ticker(q: str):
     """Search for tickers."""
     try:
-        return await get_discovery_service().search_ticker(q)
+        results = await get_discovery_service().search_ticker(q)
+        if results:
+            return results
+        return _fuzzy_catalog_search(q, limit=6)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -899,6 +987,8 @@ async def get_search_suggestions(q: str = None):
     if q and len(q) > 1:
         # If user provides a query, prioritize name searches
         results = await get_discovery_service().search_ticker(q)
+        if not results:
+            results = _fuzzy_catalog_search(q, limit=6)
         return {
             "Matches": [f"{r['name']} ({r['ticker']})" for r in results[:5]],
             "Ticker": [r['ticker'] for r in results[:5]]

@@ -128,11 +128,16 @@ function clamp(value: number, min: number, max: number) {
 function anchorFromGeo(geo?: MapNewsItem["geo"]): MapAnchor | null {
   if (!geo) return null;
   if (!Number.isFinite(geo.lat) || !Number.isFinite(geo.lon)) return null;
-  const left = ((geo.lon + 180) / 360) * 100;
-  const top = ((90 - geo.lat) / 180) * 100;
+  // Calibrated bounds for the drawable part of the SVG map (avoids margin drift).
+  const xMin = 4;
+  const xMax = 96;
+  const yMin = 10;
+  const yMax = 88;
+  const left = xMin + ((geo.lon + 180) / 360) * (xMax - xMin);
+  const top = yMin + ((90 - geo.lat) / 180) * (yMax - yMin);
   return {
-    left: `${clamp(left, 2, 98).toFixed(2)}%`,
-    top: `${clamp(top, 3, 97).toFixed(2)}%`,
+    left: `${clamp(left, xMin, xMax).toFixed(2)}%`,
+    top: `${clamp(top, yMin, yMax).toFixed(2)}%`,
   };
 }
 
@@ -168,10 +173,10 @@ const regionKeywords: Record<string, string[]> = {
 };
 
 const markerLayout = {
-  USA:    { left: "22%",   top: "42%" },
-  Europe: { left: "48%",   top: "36%" },
-  Asia:   { left: "74%",   top: "40%" },
-  Global: { left: "55%",   top: "55%" },
+  USA:    { left: "22%",   top: "40%" },
+  Europe: { left: "49%",   top: "35%" },
+  Asia:   { left: "75%",   top: "39%" },
+  Global: { left: "55%",   top: "52%" },
 };
 
 // Geo anchors use % of map container (left=longitude-based, top=latitude-based)
@@ -751,8 +756,8 @@ export default function WorldMarketMap({
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
   const [sortMode, setSortMode] = useState<EventSort>("impact");
   const [timeLens, setTimeLens] = useState<TimeLens>("24h");
-  const [showLegend, setShowLegend] = useState(true);
-  const [showRegionCards, setShowRegionCards] = useState(true);
+  const [showLegend, setShowLegend] = useState(false);
+  const [showRegionCards, setShowRegionCards] = useState(false);
   const [showLiveAlert, setShowLiveAlert] = useState(true);
   const [showEventLayer, setShowEventLayer] = useState(true);
   const [selectedGeoPlace, setSelectedGeoPlace] = useState<string | null>(null);
@@ -1175,7 +1180,7 @@ export default function WorldMarketMap({
 
         <div className="grid items-stretch gap-5 xl:grid-cols-[1.64fr_0.36fr]">
           <div className="relative self-stretch h-full min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
-            <div className="relative w-full min-h-[320px] max-h-[700px] [aspect-ratio:16/9] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8]">
+            <div className="relative w-full min-h-[320px] max-h-[700px] [aspect-ratio:2/1] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
               <img
@@ -1187,7 +1192,7 @@ export default function WorldMarketMap({
                   height: "100%",
                   maxWidth: "100%",
                   maxHeight: "100%",
-                  objectFit: "cover",
+                  objectFit: "contain",
                   objectPosition: "50% 50%",
                 }}
                 draggable={false}

@@ -4,7 +4,7 @@ interface MeasuredChartFrameProps {
   className: string;
   minHeight?: number;
   fallback?: React.ReactNode;
-  children: React.ReactNode;
+  children: React.ReactNode | ((size: { w: number; h: number }) => React.ReactNode);
 }
 
 /**
@@ -76,7 +76,7 @@ export default function MeasuredChartFrame({
             height: size.h,
           }}
         >
-          {children}
+          {typeof children === "function" ? children(size) : children}
         </div>
       ) : (
         fallback ?? <div style={{ height: minHeight, width: "100%" }} />

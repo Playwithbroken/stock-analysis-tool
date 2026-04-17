@@ -412,7 +412,18 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           </div>
         }
       >
-        {loading ? (
+        {(size) => {
+          const totalHeight = Math.max(size.h, subPanels > 0 ? 520 : 320);
+          const gapPx = subPanels > 0 ? 8 * (subPanels + 1) : 0;
+          const availableHeight = Math.max(220, totalHeight - gapPx);
+          const mainHeightPx = subPanels > 0
+            ? Math.max(200, Math.floor((availableHeight * mainHeightPercent) / 100))
+            : availableHeight;
+          const subHeightPx = subPanels > 0
+            ? Math.max(74, Math.floor((availableHeight - mainHeightPx) / subPanels))
+            : 0;
+
+          return loading ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-black/8 bg-white/70">
             <svg className="h-6 w-6 animate-spin text-[var(--accent)]" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -436,8 +447,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           </div>
         ) : chartData.length > 0 ? (
           <div className="flex h-full w-full flex-col gap-2">
-            <div style={{ height: `${mainHeightPercent}%` }} className="min-h-[200px]">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+            <div style={{ height: mainHeightPx }} className="min-h-[200px]">
+              <ResponsiveContainer width={size.w} height={mainHeightPx} minWidth={0} minHeight={180}>
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
@@ -471,8 +482,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             </div>
 
             {showVolume ? (
-              <div style={{ height: `${subPanelHeightPercent}%` }} className="min-h-[74px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={74}>
+              <div style={{ height: subHeightPx }} className="min-h-[74px]">
+                <ResponsiveContainer width={size.w} height={subHeightPx} minWidth={0} minHeight={74}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
                     <XAxis dataKey="time" hide />
@@ -489,8 +500,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             ) : null}
 
             {showRSI ? (
-              <div style={{ height: `${subPanelHeightPercent}%` }} className="min-h-[74px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={74}>
+              <div style={{ height: subHeightPx }} className="min-h-[74px]">
+                <ResponsiveContainer width={size.w} height={subHeightPx} minWidth={0} minHeight={74}>
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
                     <XAxis dataKey="time" hide />
@@ -509,8 +520,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             ) : null}
 
             {showMACD ? (
-              <div style={{ height: `${subPanelHeightPercent}%` }} className="min-h-[74px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={74}>
+              <div style={{ height: subHeightPx }} className="min-h-[74px]">
+                <ResponsiveContainer width={size.w} height={subHeightPx} minWidth={0} minHeight={74}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
                     <XAxis dataKey="time" hide />
@@ -534,7 +545,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             <Calendar size={32} className="mb-2 opacity-30" />
             <p className="text-sm">Keine historischen Daten fuer diesen Zeitraum.</p>
           </div>
-        )}
+        );
+        }}
       </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">

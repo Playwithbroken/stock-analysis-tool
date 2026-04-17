@@ -8,8 +8,10 @@ via the Web Push protocol. Subscriptions are stored in a local JSON file.
 import json
 import os
 import threading
+import base64
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from py_vapid import Vapid
 
@@ -55,8 +57,19 @@ class PushService:
         vapid = Vapid()
         vapid.generate_keys()
         self._vapid_private = vapid.private_pem().decode("utf-8")
-        # applicationServerKey needs the raw uncompressed public key in urlsafe base64
-        self._vapid_public = vapid.public_key_urlsafe_base64()
+        # applicationServerKey needs the raw uncompressed public key in
+        # urlsafe base64. Older py_vapid exposed public_key_urlsafe_base64(),
+        # newer Vapid02 does not, so support both paths.
+        if hasattr(vapid, "public_key_urlsafe_base64"):
+            self._vapid_public = vapid.public_key_urlsafe_base64()
+        else:
+            public_bytes = vapid.public_key.public_bytes(
+                Encoding.X962,
+                PublicFormat.UncompressedPoint,
+            )
+            self._vapid_public = (
+                base64.urlsafe_b64encode(public_bytes).rstrip(b"=").decode("ascii")
+            )
         VAPID_KEY_FILE.write_text(json.dumps({
             "private_key": self._vapid_private,
             "public_key": self._vapid_public,

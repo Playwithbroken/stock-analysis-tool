@@ -283,9 +283,73 @@ class MorningBriefService:
             "google_news_extra": google_news_extra[:8],
             "trading_edge": trading_edge,
         }
+        brief["quality"] = self._build_quality_report(brief)
         self._cache = brief
         self._cache_time = now
         return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
+
+    def _build_quality_report(self, brief: Dict[str, Any]) -> Dict[str, Any]:
+        now_utc = datetime.now(timezone.utc)
+        generated_at_raw = brief.get("generated_at")
+        generated_at = None
+        if generated_at_raw:
+            try:
+                generated_at = datetime.fromisoformat(str(generated_at_raw).replace("Z", "+00:00"))
+            except Exception:
+                generated_at = None
+        age_minutes = (
+            int((now_utc - generated_at).total_seconds() // 60)
+            if generated_at is not None
+            else None
+        )
+
+        checks = [
+            {
+                "key": "regions_complete",
+                "label": "Regions data",
+                "ok": bool(brief.get("regions", {}).get("asia") and brief.get("regions", {}).get("europe") and brief.get("regions", {}).get("usa")),
+            },
+            {
+                "key": "event_layer_depth",
+                "label": "Event layer depth",
+                "ok": len(brief.get("event_layer") or []) >= 5,
+            },
+            {
+                "key": "trusted_news_depth",
+                "label": "Trusted news depth",
+                "ok": len(brief.get("top_news") or []) >= 6,
+            },
+            {
+                "key": "opening_timeline",
+                "label": "Opening timeline",
+                "ok": len(brief.get("opening_timeline") or []) >= 5,
+            },
+            {
+                "key": "action_board_depth",
+                "label": "Action board",
+                "ok": len(brief.get("action_board") or []) >= 4,
+            },
+            {
+                "key": "freshness",
+                "label": "Freshness",
+                "ok": age_minutes is not None and age_minutes <= 20,
+            },
+        ]
+
+        passed = sum(1 for check in checks if check["ok"])
+        total = len(checks)
+        score = round((passed / total) * 100) if total else 0
+        missing = [check["label"] for check in checks if not check["ok"]]
+        status = "ready" if score >= 84 and not missing else "partial"
+        return {
+            "status": status,
+            "score": score,
+            "passed": passed,
+            "total": total,
+            "age_minutes": age_minutes,
+            "missing": missing,
+            "checks": checks,
+        }
 
     def _collect_region(self, tickers: Sequence[tuple[str, str]], label: str) -> Dict[str, Any]:
         assets = self._collect_assets(tickers)

@@ -81,6 +81,8 @@ export default function MorningBriefPanel({
   hideMap = false,
 }: MorningBriefPanelProps) {
   if (!brief) return null;
+  const quality = brief.quality || null;
+  const qualityReady = quality?.status === "ready";
 
   const regions = [
     brief.regions?.asia,
@@ -140,12 +142,22 @@ export default function MorningBriefPanel({
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Opening Read
             </div>
+            {quality ? (
+              <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${qualityReady ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
+                {qualityReady ? "Brief Ready" : "Brief Partial"} · {quality.score}/100
+              </div>
+            ) : null}
             <div className="mt-3 text-sm leading-7 text-slate-700">
               {brief.headline}
             </div>
             <div className="mt-4 rounded-[1rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">
               {brief.opening_bias}
             </div>
+            {quality?.missing?.length ? (
+              <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/6 px-3 py-2 text-[11px] text-amber-800">
+                Missing: {quality.missing.slice(0, 3).join(" · ")}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -173,6 +185,11 @@ export default function MorningBriefPanel({
             <div className="mt-2 text-lg font-black text-slate-900">
               {new Date(brief.generated_at).toLocaleTimeString()}
             </div>
+            {quality?.age_minutes != null ? (
+              <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                age {quality.age_minutes}m
+              </div>
+            ) : null}
             <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
               {realtimeConnected ? "Live stream on" : "Snapshot mode"}
             </div>

@@ -26,7 +26,19 @@
     <meta property="og:type" content="website" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" data-boot-pending="1">
+      <div
+        style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f5f2;color:#1f2937;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;"
+      >
+        <div style="max-width:420px;width:100%;background:#ffffff;border:1px solid rgba(15,23,42,0.12);border-radius:18px;padding:20px;box-shadow:0 18px 38px rgba(15,23,42,0.08);">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#64748b;">Broker Freund</div>
+          <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">App wird gestartet…</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.5;color:#475569;">
+            Wenn der Start haengt, wird die Seite automatisch mit frischem Cache neu geladen.
+          </div>
+        </div>
+      </div>
+    </div>
     <script>
       // One-shot recovery: if a dynamic import fails (almost always means the
       // current page references stale chunk hashes from an old service worker),
@@ -34,8 +46,46 @@
       // visit so we don't loop.
       (function () {
         var KEY = '__bf_chunk_recover';
+        var BOOT_KEY = '__bf_boot_recover';
+        var done = false;
+
+        function hardRecover() {
+          if (done) return;
+          done = true;
+          try {
+            if ('caches' in window) {
+              caches.keys().then(function (keys) {
+                keys.forEach(function (k) { caches.delete(k); });
+              });
+            }
+            if (navigator.serviceWorker) {
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                regs.forEach(function (r) { r.unregister(); });
+                setTimeout(function () { location.reload(); }, 250);
+              });
+            } else {
+              location.reload();
+            }
+          } catch (_) { location.reload(); }
+        }
+
         window.addEventListener('error', function (ev) {
           var msg = (ev && ev.message) || '';
+          if (
+            (msg.indexOf('dynamically imported module') !== -1 ||
+              msg.indexOf('Importing a module script failed') !== -1 ||
+              msg.indexOf('Failed to fetch dynamically') !== -1 ||
+              msg.indexOf('Failed to load module script') !== -1 ||
+              msg.indexOf('Loading module from') !== -1) &&
+            !sessionStorage.getItem(KEY)
+          ) {
+            sessionStorage.setItem(KEY, '1');
+            hardRecover();
+          }
+        });
+
+        window.addEventListener('unhandledrejection', function (ev) {
+          var msg = String((ev && ev.reason && (ev.reason.message || ev.reason)) || '');
           if (
             (msg.indexOf('dynamically imported module') !== -1 ||
               msg.indexOf('Importing a module script failed') !== -1 ||
@@ -43,23 +93,18 @@
             !sessionStorage.getItem(KEY)
           ) {
             sessionStorage.setItem(KEY, '1');
-            try {
-              if ('caches' in window) {
-                caches.keys().then(function (keys) {
-                  keys.forEach(function (k) { caches.delete(k); });
-                });
-              }
-              if (navigator.serviceWorker) {
-                navigator.serviceWorker.getRegistrations().then(function (regs) {
-                  regs.forEach(function (r) { r.unregister(); });
-                  setTimeout(function () { location.reload(); }, 250);
-                });
-              } else {
-                location.reload();
-              }
-            } catch (_) { location.reload(); }
+            hardRecover();
           }
         });
+
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          var pending = root && root.getAttribute('data-boot-pending') === '1';
+          if (pending && !sessionStorage.getItem(BOOT_KEY)) {
+            sessionStorage.setItem(BOOT_KEY, '1');
+            hardRecover();
+          }
+        }, 5000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

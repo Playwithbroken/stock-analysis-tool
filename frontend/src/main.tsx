@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 
+const rootEl = document.getElementById('root')
+if (rootEl) {
+  rootEl.removeAttribute('data-boot-pending')
+}
+
 // Auto-reload when Vite lazy chunks fail to load after a new deploy (stale browser cache)
 window.addEventListener('vite:preloadError', () => {
   window.location.reload()
@@ -20,7 +25,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return response
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+ReactDOM.createRoot(rootEl!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

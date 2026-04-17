@@ -1148,8 +1148,8 @@ export default function WorldMarketMap({
         </div>
 
         <div className="grid items-stretch gap-5 xl:grid-cols-[1.58fr_0.42fr]">
-          <div className="relative self-stretch h-full min-h-[360px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
-            <div className="relative h-full w-full min-h-[320px] md:min-h-[380px] xl:min-h-[440px] [aspect-ratio:16/9] xl:[aspect-ratio:19/10]">
+          <div className="relative self-stretch h-full min-h-[320px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
+            <div className="relative w-full min-h-[220px] max-h-[560px] [aspect-ratio:2/1]">
             <div className="absolute inset-0 overflow-hidden opacity-80">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.58),transparent_28%)]" />
               <img
@@ -1161,7 +1161,7 @@ export default function WorldMarketMap({
                   height: "100%",
                   maxWidth: "100%",
                   maxHeight: "100%",
-                  objectFit: "cover",
+                  objectFit: "contain",
                   objectPosition: "50% 50%",
                 }}
                 draggable={false}

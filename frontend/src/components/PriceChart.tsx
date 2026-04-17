@@ -257,6 +257,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         const message = error instanceof Error ? error.message : "Kursdaten konnten nicht geladen werden.";
         if (message.includes("504")) {
           setFetchErrorMessage("Datenprovider-Timeout. Bitte mit Retry erneut laden.");
+        } else if (message.toLowerCase().includes("timeout")) {
+          setFetchErrorMessage("Request-Timeout beim Laden des Kursverlaufs. Bitte Retry nutzen.");
         } else if (message.includes("Failed to fetch")) {
           setFetchErrorMessage("Netzwerkproblem beim Laden der Historie.");
         } else {

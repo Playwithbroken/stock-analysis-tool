@@ -7,16 +7,40 @@ function sleep(ms: number) {
 export async function fetchJsonWithRetry<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
-  options?: { retries?: number; retryDelayMs?: number },
+  options?: { retries?: number; retryDelayMs?: number; timeoutMs?: number },
 ): Promise<T> {
   const retries = options?.retries ?? 2;
   const retryDelayMs = options?.retryDelayMs ?? 900;
+  const timeoutMs = options?.timeoutMs ?? 25000;
 
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const timeoutController = new AbortController();
+    const externalSignal = init?.signal;
+    let timeoutId: number | null = null;
+    let externalAbortHandler: (() => void) | null = null;
+
     try {
-      const response = await fetch(input, init);
+      if (timeoutMs > 0) {
+        timeoutId = window.setTimeout(() => {
+          timeoutController.abort();
+        }, timeoutMs);
+      }
+
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          timeoutController.abort();
+        } else {
+          externalAbortHandler = () => timeoutController.abort();
+          externalSignal.addEventListener("abort", externalAbortHandler, { once: true });
+        }
+      }
+
+      const response = await fetch(input, {
+        ...init,
+        signal: timeoutController.signal,
+      });
       if (!response.ok) {
         let detail = "";
         try {
@@ -44,12 +68,38 @@ export async function fetchJsonWithRetry<T>(
       return (await response.json()) as T;
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
+        if (externalSignal?.aborted) {
+          throw error;
+        }
+        lastError = new Error(`Request timeout after ${timeoutMs}ms`);
+        if (attempt < retries) {
+          await sleep(retryDelayMs * (attempt + 1));
+          continue;
+        }
+        throw lastError;
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        if (externalSignal?.aborted) {
+          throw error;
+        }
+        lastError = new Error(`Request timeout after ${timeoutMs}ms`);
+        if (attempt < retries) {
+          await sleep(retryDelayMs * (attempt + 1));
+          continue;
+        }
         throw error;
       }
       lastError = error instanceof Error ? error : new Error("Request failed");
       if (attempt < retries) {
         await sleep(retryDelayMs * (attempt + 1));
         continue;
+      }
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      if (externalSignal && externalAbortHandler) {
+        externalSignal.removeEventListener("abort", externalAbortHandler);
       }
     }
   }

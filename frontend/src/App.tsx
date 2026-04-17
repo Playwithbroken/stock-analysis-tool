@@ -49,6 +49,7 @@ interface WatchlistSnapshot {
 }
 
 type Tab = "dashboard" | "analyze" | "discovery" | "portfolio";
+type MoversWindow = "1d" | "1w" | "1m";
 
 const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
   { id: "dashboard", label: "Dashboard", short: "Home" },
@@ -304,6 +305,7 @@ function AppContent() {
   const [authStatus, setAuthStatus] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
+  const [marketMoversWindow, setMarketMoversWindow] = useState<MoversWindow>("1w");
   const [globalBrief, setGlobalBrief] = useState<any>(null);
   const [signalScoreContext, setSignalScoreContext] = useState<any>(null);
   const [tradingEdge, setTradingEdge] = useState<any>(null);
@@ -395,11 +397,11 @@ function AppContent() {
     const loadMovers = async () => {
       try {
         const [gainers, losers] = await Promise.all([
-          fetchJsonWithRetry<any[]>("/api/discovery/gainers", undefined, {
+          fetchJsonWithRetry<any[]>(`/api/discovery/gainers?window=${marketMoversWindow}`, undefined, {
             retries: 1,
             retryDelayMs: 700,
           }),
-          fetchJsonWithRetry<any[]>("/api/discovery/losers", undefined, {
+          fetchJsonWithRetry<any[]>(`/api/discovery/losers?window=${marketMoversWindow}`, undefined, {
             retries: 1,
             retryDelayMs: 700,
           }),
@@ -440,7 +442,7 @@ function AppContent() {
       window.clearInterval(interval);
       window.clearInterval(watchlistInterval);
     };
-  }, [auth.authenticated]);
+  }, [auth.authenticated, marketMoversWindow]);
 
   useEffect(() => {
     if (!auth.authenticated) return;
@@ -817,8 +819,26 @@ function AppContent() {
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                       Market movers
                     </div>
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                      Winners, losers, broad tape
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
+                        {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
+                          <button
+                            key={window}
+                            type="button"
+                            onClick={() => setMarketMoversWindow(window)}
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
+                              marketMoversWindow === window
+                                ? "bg-[#101114] text-white"
+                                : "text-slate-500 hover:text-slate-800"
+                            }`}
+                          >
+                            {window.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                        Winners, losers ({marketMoversWindow.toUpperCase()})
+                      </div>
                     </div>
                   </div>
                   <div className="ticker-marquee-track">

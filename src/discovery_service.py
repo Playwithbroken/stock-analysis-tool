@@ -62,11 +62,24 @@ class DiscoveryService:
             def fetch():
                 f = DataFetcher(ticker)
                 p = f.get_price_data()
+                change_1d = None
+                try:
+                    hist = f.stock.history(period="7d", interval="1d")
+                    if hist is not None and not hist.empty and len(hist["Close"]) >= 2:
+                        last_close = float(hist["Close"].iloc[-1])
+                        prev_close = float(hist["Close"].iloc[-2])
+                        if prev_close:
+                            change_1d = ((last_close / prev_close) - 1.0) * 100.0
+                except Exception:
+                    change_1d = None
                 return {
                     "ticker": ticker,
                     "name": f.info.get("longName", ticker),
                     "price": p.get("current_price"),
                     "change": p.get("change_1w"),
+                    "change_1d": change_1d,
+                    "change_1w": p.get("change_1w"),
+                    "change_1m": p.get("change_1m"),
                     "trend_context": "Market momentum"
                 }
             
@@ -75,10 +88,18 @@ class DiscoveryService:
         except:
             return None
 
-    async def get_market_movers(self, type: str = 'gainers') -> List[Dict[str, Any]]:
+    async def get_market_movers(self, type: str = 'gainers', window: str = "1w") -> List[Dict[str, Any]]:
         """Identify real-time top gainers or losers from the selection universe with caching."""
         now = datetime.now()
-        cache_key = f"movers_{type}"
+        normalized_window = (window or "1w").lower()
+        if normalized_window not in {"1d", "1w", "1m"}:
+            normalized_window = "1w"
+        change_key = {
+            "1d": "change_1d",
+            "1w": "change_1w",
+            "1m": "change_1m",
+        }[normalized_window]
+        cache_key = f"movers_{type}_{normalized_window}"
         if hasattr(self, '_movers_cache') and cache_key in self._movers_cache:
             cache_data, timestamp = self._movers_cache[cache_key]
             if (now - timestamp).total_seconds() < 600:
@@ -89,6 +110,8 @@ class DiscoveryService:
         import asyncio
         tasks = [self._fetch_stock_basic(t) for t in scan_pool]
         results = [r for r in await asyncio.gather(*tasks) if r]
+        for item in results:
+            item["change"] = item.get(change_key)
                 
         is_gainers = type == 'gainers'
         results.sort(key=lambda x: x['change'] or 0, reverse=is_gainers)

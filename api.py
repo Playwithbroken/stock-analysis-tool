@@ -1767,18 +1767,18 @@ async def websocket_realtime_feed(websocket: WebSocket):
             pass
 
 @app.get("/api/discovery/gainers")
-async def get_top_gainers():
+async def get_top_gainers(window: str = "1w"):
     """Get market-wide top performers."""
     try:
-        return await get_discovery_service().get_market_movers(type='gainers')
+        return await get_discovery_service().get_market_movers(type='gainers', window=window)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/discovery/losers")
-async def get_top_losers():
+async def get_top_losers(window: str = "1w"):
     """Get market-wide top laggards."""
     try:
-        return await get_discovery_service().get_market_movers(type='losers')
+        return await get_discovery_service().get_market_movers(type='losers', window=window)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

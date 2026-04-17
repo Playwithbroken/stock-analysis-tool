@@ -1179,7 +1179,7 @@ export default function WorldMarketMap({
         </div>
 
         <div className="grid items-start gap-5 xl:grid-cols-[1.64fr_0.36fr]">
-          <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
+          <div className="relative h-fit min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
             <div className="relative w-full min-h-[320px] max-h-[700px] [aspect-ratio:2/1] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
@@ -1449,7 +1449,7 @@ export default function WorldMarketMap({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 xl:max-h-[720px] xl:overflow-y-auto xl:pr-1">
             <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                 Map Status

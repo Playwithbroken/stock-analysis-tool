@@ -19,7 +19,13 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem("preferred_theme") as Theme) || "premium-light";
+    const saved = localStorage.getItem("preferred_theme") as Theme | null;
+    if (saved) return saved;
+    // Respect system preference
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+      return "dark";
+    }
+    return "premium-light";
   });
 
   const setTheme = (t: Theme) => {

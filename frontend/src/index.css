@@ -310,6 +310,85 @@ h3,
   color: #0f1117;
 }
 
+/* Header gradient — theme-aware */
+.header-gradient {
+  background: linear-gradient(180deg, rgba(250,248,243,0.98), rgba(250,248,243,0.94) 72%, rgba(250,248,243,0.82));
+}
+[data-theme="dark"] .header-gradient {
+  background: linear-gradient(180deg, rgba(15,17,23,0.98), rgba(15,17,23,0.94) 72%, rgba(15,17,23,0.82));
+}
+
+/* ── Dark mode: fix hardcoded Tailwind whites/slates ──────────────── */
+[data-theme="dark"] .text-slate-900 { color: #f1f3f7 !important; }
+[data-theme="dark"] .text-slate-800 { color: #e2e6ed !important; }
+[data-theme="dark"] .text-slate-700 { color: #c8d0dc !important; }
+[data-theme="dark"] .text-slate-600 { color: #9aa3b2 !important; }
+[data-theme="dark"] .text-slate-500 { color: #7c848f !important; }
+
+[data-theme="dark"] .bg-white\/70,
+[data-theme="dark"] .bg-white\/75,
+[data-theme="dark"] .bg-white\/78,
+[data-theme="dark"] .bg-white\/80,
+[data-theme="dark"] .bg-white\/88,
+[data-theme="dark"] .bg-white\/92,
+[data-theme="dark"] .bg-white {
+  background-color: rgba(255,255,255,0.06) !important;
+}
+
+[data-theme="dark"] .bg-slate-50,
+[data-theme="dark"] .bg-slate-100 {
+  background-color: rgba(255,255,255,0.04) !important;
+}
+
+[data-theme="dark"] .border-black\/8,
+[data-theme="dark"] .border-black\/6 {
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+[data-theme="dark"] .ring-black\/6,
+[data-theme="dark"] .ring-black\/8,
+[data-theme="dark"] .ring-black\/10 {
+  --tw-ring-color: rgba(255,255,255,0.08) !important;
+}
+
+[data-theme="dark"] .bg-\[\#101114\] {
+  background-color: #2dd4bf !important;
+}
+[data-theme="dark"] .bg-\[\#101114\] + div .text-slate-900,
+[data-theme="dark"] .bg-\[\#101114\] + div .text-lg {
+  color: #f1f3f7 !important;
+}
+
+/* Dark mode: login screen */
+[data-theme="dark"] .bg-\[rgba\(255\,255\,255\,0\.76\)\] {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+/* Dark mode: ticker marquee */
+[data-theme="dark"] .ticker-marquee-wrap::before {
+  background: linear-gradient(90deg, rgba(15,17,23,0.94), transparent) !important;
+}
+[data-theme="dark"] .ticker-marquee-wrap::after {
+  background: linear-gradient(270deg, rgba(15,17,23,0.94), transparent) !important;
+}
+[data-theme="dark"] .ticker-marquee-chip {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* Dark mode: bottom nav (mobile) */
+[data-theme="dark"] .bg-\[rgba\(255\,255\,255\,0\.9\)\] {
+  background: rgba(22,26,35,0.92) !important;
+}
+
+/* Dark mode: charts */
+[data-theme="dark"] .recharts-cartesian-grid line {
+  stroke: rgba(255,255,255,0.06) !important;
+}
+[data-theme="dark"] .recharts-xAxis .recharts-text {
+  fill: #7c848f !important;
+}
+
 .ticker-chip-flash-up {
   animation: ticker-flash-up 0.95s ease-out;
 }

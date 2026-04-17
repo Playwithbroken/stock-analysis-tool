@@ -4,10 +4,10 @@ import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
-import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Moon, Sun } from "lucide-react";
 
 const AnalysisResult = lazy(() => import("./components/AnalysisResult"));
 const PortfolioView = lazy(() => import("./components/PortfolioView"));
@@ -266,6 +266,8 @@ function LoginScreen({
 }
 
 function AppContent() {
+  const { theme, setTheme } = useTheme();
+  const toggleTheme = () => setTheme(theme === "dark" ? "premium-light" : "dark");
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     return (localStorage.getItem("activeTab") as Tab) || "dashboard";
   });
@@ -579,7 +581,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
-      <header className="sticky top-0 z-50 bg-[linear-gradient(180deg,rgba(250,248,243,0.98),rgba(250,248,243,0.94)_72%,rgba(250,248,243,0.82))] backdrop-blur-xl">
+      <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
         <div className="layout-shell px-4 pt-4 pb-3 sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header rounded-[2.1rem] px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between gap-3">
@@ -599,7 +601,7 @@ function AppContent() {
                 </div>
               </div>
 
-              <div className="hidden items-center gap-2 rounded-[1.2rem] bg-white/70 p-1.5 ring-1 ring-black/6 md:flex">
+              <div className="hidden items-center gap-2 rounded-[1.2rem] bg-[var(--bg-elevated)] p-1.5 ring-1 ring-[var(--line-subtle)] md:flex">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
@@ -617,7 +619,7 @@ function AppContent() {
 
               <div className="flex items-center gap-2">
                 {/* Desktop: full USD / EUR toggle */}
-                <div className="hidden rounded-[1.1rem] bg-white/70 p-1 ring-1 ring-black/6 sm:flex">
+                <div className="hidden rounded-[1.1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] sm:flex">
                   <button
                     onClick={() => setCurrency("USD")}
                     aria-label="Switch to USD"
@@ -641,23 +643,31 @@ function AppContent() {
                 <button
                   onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
                   aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
-                  className="rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-800 transition-colors hover:bg-white sm:hidden"
+                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors sm:hidden"
                 >
                   {currency}
                 </button>
+                {/* Theme toggle */}
+                <button
+                  onClick={toggleTheme}
+                  aria-label="Toggle dark mode"
+                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] p-2.5 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
                 {/* Username — visible on all screen sizes */}
-                <div className="rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-600">
+                <div className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                   {auth.profile?.display_name || "Private"}
                 </div>
                 <button
                   onClick={() => setIsChatOpen(true)}
-                  className="rounded-[1rem] border border-black/8 bg-white/70 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-800 transition-colors hover:bg-white"
+                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
                 >
                   AI Desk
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="rounded-[1rem] border border-black/8 bg-white/70 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-800 transition-colors hover:bg-white"
+                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
                 >
                   Lock
                 </button>

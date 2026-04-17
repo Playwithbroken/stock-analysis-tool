@@ -45,12 +45,14 @@ class EmailAlertService:
         morning_brief_service: MorningBriefService | None = None,
         session_list_service: SessionListService | None = None,
         signal_score_service: SignalScoreService | None = None,
+        push_service: "Any | None" = None,
     ) -> None:
         self.portfolio_manager = portfolio_manager
         self.public_signal_service = public_signal_service
         self.morning_brief_service = morning_brief_service or MorningBriefService()
         self.session_list_service = session_list_service or SessionListService()
         self.signal_score_service = signal_score_service or SignalScoreService()
+        self.push_service = push_service
 
     def get_config(self) -> EmailAlertConfig:
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -367,6 +369,13 @@ class EmailAlertService:
                     self._send_telegram_rich_brief(config, brief, str(job["session_label"]))
                 except Exception:
                     pass  # Fall back to legacy sender below
+                # Browser push notification
+                if self.push_service:
+                    try:
+                        headline = brief.get("headline") or brief.get("opening_bias") or "Neues Briefing"
+                        self.push_service.notify_brief(str(job["session_label"]), headline)
+                    except Exception:
+                        pass
                 # Still send email via the normal path (events → HTML email)
                 self._send_notifications(config, events, subject=str(job["subject"]), telegram=False)
             else:

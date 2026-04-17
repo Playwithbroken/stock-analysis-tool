@@ -73,6 +73,7 @@ _session_list_service = None
 _paper_trading_service = None
 _trading_intelligence_service = None
 _realtime_market_service = None
+_push_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 
 
@@ -155,6 +156,7 @@ def get_email_alert_service():
             get_morning_brief_service(),
             get_session_list_service(),
             get_signal_score_service(),
+            get_push_service(),
         )
     return _email_alert_service
 
@@ -194,6 +196,13 @@ def get_realtime_market_service():
     if _realtime_market_service is None:
         _realtime_market_service = RealtimeMarketService()
     return _realtime_market_service
+
+def get_push_service():
+    global _push_service
+    if _push_service is None:
+        from src.push_service import PushService
+        _push_service = PushService()
+    return _push_service
 
 
 @app.middleware("http")
@@ -1237,7 +1246,15 @@ async def send_telegram_brief_now(session: str = "global"):
     if session not in valid:
         raise HTTPException(status_code=400, detail=f"session must be one of {sorted(valid)}")
     try:
-        return get_email_alert_service().send_session_brief_now(session)
+        result = get_email_alert_service().send_session_brief_now(session)
+        # Also send browser push notification
+        try:
+            brief = get_morning_brief_service().get_brief()
+            headline = brief.get("headline") or brief.get("opening_bias") or "Neues Briefing verfuegbar"
+            get_push_service().notify_brief(session, headline)
+        except Exception:
+            pass
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1442,6 +1459,39 @@ async def get_exchange_rate():
     except Exception as e:
         print(f"Error fetching exchange rate: {e}")
         return {"rate": 0.92} # Fallback
+
+
+# ── Push Notifications ────────────────────────────────────────────────────
+
+@app.get("/api/push/vapid-key")
+async def get_vapid_public_key():
+    """Return the VAPID public key for push subscription."""
+    return {"publicKey": get_push_service().public_key}
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(request: Request):
+    """Register a push subscription."""
+    body = await request.json()
+    is_new = get_push_service().subscribe(body)
+    return {"ok": True, "new": is_new, "total": get_push_service().subscription_count}
+
+@app.post("/api/push/unsubscribe")
+async def push_unsubscribe(request: Request):
+    """Remove a push subscription."""
+    body = await request.json()
+    endpoint = body.get("endpoint", "")
+    removed = get_push_service().unsubscribe(endpoint)
+    return {"ok": True, "removed": removed}
+
+@app.post("/api/push/test")
+async def push_test():
+    """Send a test notification to all subscribers."""
+    result = get_push_service().send_notification(
+        title="Broker Freund",
+        body="Push Notifications sind aktiv! Du bekommst jetzt Briefings, Signale und Alerts direkt im Browser.",
+        tag="test",
+    )
+    return result
 
 
 @app.get("/api/market/internals")

@@ -18,6 +18,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
+        importScripts: ['/push-sw.js'],
         // Don't fall back to index.html for hashed asset 404s — let them
         // fail so the user gets a real error instead of a JS-as-HTML mess.
         navigateFallback: '/index.html',

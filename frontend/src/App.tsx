@@ -7,7 +7,8 @@ import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
-import { ArrowDownRight, ArrowUpRight, Moon, Sun } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bell, BellOff, BellRing, Moon, Sun } from "lucide-react";
+import usePushNotifications from "./hooks/usePushNotifications";
 
 const AnalysisResult = lazy(() => import("./components/AnalysisResult"));
 const PortfolioView = lazy(() => import("./components/PortfolioView"));
@@ -268,6 +269,7 @@ function LoginScreen({
 function AppContent() {
   const { theme, setTheme } = useTheme();
   const toggleTheme = () => setTheme(theme === "dark" ? "premium-light" : "dark");
+  const push = usePushNotifications();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     return (localStorage.getItem("activeTab") as Tab) || "dashboard";
   });
@@ -655,6 +657,41 @@ function AppContent() {
                 >
                   {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
                 </button>
+                {/* Push notifications toggle */}
+                {push.state !== "unsupported" && (
+                  <button
+                    onClick={() => {
+                      if (push.state === "subscribed") push.unsubscribe();
+                      else push.subscribe();
+                    }}
+                    disabled={push.loading || push.state === "denied"}
+                    aria-label="Toggle push notifications"
+                    title={
+                      push.state === "subscribed"
+                        ? "Push aktiv — klicke zum Deaktivieren"
+                        : push.state === "denied"
+                          ? "Notifications blockiert — erlaube in Browser-Settings"
+                          : "Push Notifications aktivieren"
+                    }
+                    className={`rounded-[1rem] border p-2.5 transition-colors ${
+                      push.state === "subscribed"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                        : push.state === "denied"
+                          ? "border-red-500/20 bg-red-500/10 text-red-400 cursor-not-allowed"
+                          : "border-[var(--line-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    {push.loading ? (
+                      <BellRing size={16} className="animate-pulse" />
+                    ) : push.state === "subscribed" ? (
+                      <Bell size={16} />
+                    ) : push.state === "denied" ? (
+                      <BellOff size={16} />
+                    ) : (
+                      <BellOff size={16} />
+                    )}
+                  </button>
+                )}
                 {/* Username — visible on all screen sizes */}
                 <div className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                   {auth.profile?.display_name || "Private"}

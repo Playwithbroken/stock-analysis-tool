@@ -609,16 +609,28 @@ async def get_basic_analysis(ticker: str):
 async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") -> List[Dict[str, Any]]:
     """
     Get historical price data for a ticker.
+    Runs the blocking yfinance call in a thread executor with a 20-second timeout
+    so it never hangs the event loop indefinitely.
     """
-    try:
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _fetch():
         fetcher = DataFetcher(ticker)
-        history = fetcher.get_history(period=period, interval=interval)
+        return fetcher.get_history(period=period, interval=interval)
+
+    try:
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            history = await asyncio.wait_for(
+                loop.run_in_executor(pool, _fetch),
+                timeout=20.0,
+            )
         return convert_numpy_types(history)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="History fetch timed out — yfinance did not respond in time")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch history: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
 
 @app.get("/api/quick/{ticker}")

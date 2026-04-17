@@ -48,6 +48,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const { formatPrice } = useCurrency();
   const [data, setData] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [period, setPeriod] = useState(PERIODS[2]);
   const [stats, setStats] = useState({ change: 0, changePct: 0 });
   const [showRSI, setShowRSI] = useState(false);
@@ -62,6 +63,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   useEffect(() => {
     const fetchHistory = async () => {
       setLoading(true);
+      setFetchError(false);
       try {
         const histData = await fetchJsonWithRetry<HistoryItem[]>(
           `/api/history/${ticker}?period=${period.id}&interval=${period.interval}`,
@@ -114,6 +116,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         setIndicators({ rsi: rsiValues, macd: macdHist });
       } catch {
         setData([]);
+        setFetchError(true);
       } finally {
         setLoading(false);
       }
@@ -254,8 +257,23 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }
       >
         {loading ? (
-          <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
-            <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-black/8 bg-white/70">
+            <svg className="h-6 w-6 animate-spin text-[var(--accent)]" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm text-slate-500">Lade Kursverlauf…</span>
+          </div>
+        ) : fetchError ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-dashed border-red-200 bg-red-50/60 text-slate-600">
+            <span className="text-2xl">⚠️</span>
+            <p className="text-sm font-semibold">Kursdaten konnten nicht geladen werden.</p>
+            <button
+              onClick={() => setPeriod({ ...period })}
+              className="rounded-[0.8rem] border border-black/8 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Erneut versuchen
+            </button>
           </div>
         ) : chartData.length > 0 ? (
           <div className="flex h-full w-full flex-col gap-1">

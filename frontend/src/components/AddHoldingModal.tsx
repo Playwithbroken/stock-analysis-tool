@@ -45,6 +45,30 @@ export default function AddHoldingModal({
 
   if (!isOpen) return null;
 
+  // No portfolios exist yet — show helpful message
+  if (portfolios.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm">
+        <div className="surface-panel w-full max-w-sm rounded-[2rem] p-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[var(--accent-soft)] text-[var(--accent)]">
+            <Plus size={24} />
+          </div>
+          <h3 className="text-xl font-black text-[var(--text-primary)]">Noch kein Portfolio</h3>
+          <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
+            Erstelle zuerst ein Portfolio im <strong>Portfolio-Tab</strong>, dann kannst du
+            Aktien direkt aus der Analyse hinzufügen.
+          </p>
+          <button
+            onClick={onClose}
+            className="mt-6 w-full rounded-[1.2rem] bg-[var(--accent)] py-3 text-sm font-extrabold uppercase tracking-[0.16em] text-white hover:bg-[var(--accent-strong)]"
+          >
+            Verstanden
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleAdd = () => {
     if (!ticker || !shares || !selectedPortfolioId) return;
 

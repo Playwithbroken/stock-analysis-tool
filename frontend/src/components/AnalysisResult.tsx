@@ -226,14 +226,12 @@ export default function AnalysisResult({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  {portfolios.length > 0 && (
-                    <button
-                      onClick={() => setIsModalOpen(true)}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
-                    >
-                      <Plus size={16} /> Portfolio hinzufuegen
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
+                  >
+                    <Plus size={16} /> Portfolio hinzufügen
+                  </button>
                   <button
                     onClick={onOpenChat}
                     className="flex items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"

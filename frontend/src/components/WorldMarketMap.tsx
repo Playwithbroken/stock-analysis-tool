@@ -254,10 +254,18 @@ function tonePillClass(tone: string) {
   return "bg-amber-500/10 text-amber-700";
 }
 
-function toneDotClass(tone: string) {
-  if (tone === "risk-on") return "bg-emerald-600";
-  if (tone === "risk-off") return "bg-red-600";
-  return "bg-amber-600";
+function regionBadgeColor(label: string) {
+  if (label === "USA") return "bg-sky-500";
+  if (label === "Europe") return "bg-indigo-500";
+  if (label === "Asia") return "bg-fuchsia-500";
+  return "bg-slate-500";
+}
+
+function regionFlag(label: string) {
+  if (label === "USA") return "US";
+  if (label === "Europe") return "EU";
+  if (label === "Asia") return "AS";
+  return "GL";
 }
 
 function textToneClass(tone: string) {
@@ -750,11 +758,9 @@ export default function WorldMarketMap({
   const [selectedGeoPlace, setSelectedGeoPlace] = useState<string | null>(null);
   const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
   const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
-  const [hoveredRegionLabel, setHoveredRegionLabel] = useState<string | null>(null);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
-  const displayRegion =
-    regions.find((region) => region.label === hoveredRegionLabel) || activeRegion;
+  const displayRegion = activeRegion;
 
   const activeRegionNews = useMemo(
     () => (activeRegion ? getRegionNews(news, activeRegion.label).slice(0, 4) : []),
@@ -1016,6 +1022,26 @@ export default function WorldMarketMap({
     };
   }, [focusRegionSignals, focusedPlaceSignals]);
 
+  const mapRegionCards = useMemo(
+    () =>
+      regions
+        .filter((region) => Boolean(positions[region.label]))
+        .map((region) => {
+          const pos = positions[region.label];
+          const leadAsset = (region.assets || [])[0];
+          return {
+            label: region.label,
+            top: `calc(${pos.y}% - 4.8rem)`,
+            left: `calc(${pos.x}% - 1.2rem)`,
+            avgChange: formatPct(region.avg_change_1d),
+            assetLabel: leadAsset?.label || "Macro basket",
+            assetTicker: leadAsset?.ticker || "MIX",
+            tone: region.tone,
+          };
+        }),
+    [regions],
+  );
+
   return (
     <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.06),transparent_26%)]" />
@@ -1147,26 +1173,79 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid items-stretch gap-5 xl:grid-cols-[1.58fr_0.42fr]">
-          <div className="relative self-stretch h-full min-h-[320px] overflow-hidden rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,240,232,0.96))] p-4 sm:p-5">
-            <div className="relative w-full min-h-[220px] max-h-[560px] [aspect-ratio:2/1]">
-            <div className="absolute inset-0 overflow-hidden opacity-80">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(239,233,223,0.58),transparent_28%)]" />
+        <div className="grid items-stretch gap-5 xl:grid-cols-[1.64fr_0.36fr]">
+          <div className="relative self-stretch h-full min-h-[420px] overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
+            <div className="relative w-full min-h-[320px] max-h-[700px] [aspect-ratio:16/9] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8]">
+            <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
               <img
                 src={worldMapSvg}
                 alt="World map"
-                className="absolute inset-0 block opacity-95 contrast-[1.05] saturate-[0.85]"
+                className="absolute inset-0 block opacity-95 contrast-[1.05] saturate-[0.88]"
                 style={{
                   width: "100%",
                   height: "100%",
                   maxWidth: "100%",
                   maxHeight: "100%",
-                  objectFit: "contain",
+                  objectFit: "cover",
                   objectPosition: "50% 50%",
                 }}
                 draggable={false}
               />
             </div>
+
+            <div className="absolute left-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
+              {["grid", "layer", "filter", "alert"].map((icon) => (
+                <button
+                  key={icon}
+                  type="button"
+                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 bg-white text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                >
+                  {icon.slice(0, 1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
+              {["+", "-", "1x"].map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 bg-white text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+
+            {showRegionCards
+              ? mapRegionCards.map((card) => (
+                  <button
+                    key={card.label}
+                    type="button"
+                    onClick={() => onSelectRegion(card.label)}
+                    className="absolute z-20 min-w-[160px] rounded-[0.95rem] border border-black/8 bg-white/95 px-3 py-2 text-left shadow-[0_16px_36px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-[1px]"
+                    style={{ left: card.left, top: card.top }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex h-6 min-w-[1.8rem] items-center justify-center rounded-[0.45rem] px-1 text-[9px] font-black text-white ${regionBadgeColor(card.label)}`}>
+                          {regionFlag(card.label)}
+                        </span>
+                        <div className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                          {card.label}
+                        </div>
+                      </div>
+                      <span className={`text-[11px] font-black ${textToneClass(card.tone)}`}>
+                        {card.avgChange}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[10px] font-bold text-slate-600">
+                      {card.assetTicker} · {card.assetLabel}
+                    </div>
+                  </button>
+                ))
+              : null}
 
             {showLegend ? (
             <div className="absolute bottom-4 left-4 z-30 flex max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
@@ -1237,82 +1316,6 @@ export default function WorldMarketMap({
                 </div>
               </div>
             ) : null}
-
-            {showRegionCards ? regions.map((region) => {
-              const pos = positions[region.label];
-              if (!pos) return null;
-              const isActive = region.label === selectedRegion;
-
-              return (
-                <button
-                  key={region.label}
-                  type="button"
-                  onClick={() => onSelectRegion(region.label)}
-                  onMouseEnter={() => setHoveredRegionLabel(region.label)}
-                  onMouseLeave={() => setHoveredRegionLabel(null)}
-                  onFocus={() => setHoveredRegionLabel(region.label)}
-                  onBlur={() => setHoveredRegionLabel(null)}
-                  className="absolute z-20 text-left group"
-                  style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                >
-                  <div className="relative">
-                    <div className="absolute -left-5 -top-5">
-                      <div
-                        className={`rounded-full ${toneDotClass(region.tone)} ${isActive ? "h-10 w-10 opacity-20 blur-md" : "h-8 w-8 opacity-15 blur-sm"}`}
-                      />
-                    </div>
-                    <div
-                      className={`h-3.5 w-3.5 rounded-full ${toneDotClass(region.tone)} ring-4 ring-white/80 shadow-[0_6px_24px_rgba(15,23,42,0.18)] ${isActive ? "scale-125" : ""}`}
-                    />
-                    <div
-                      className="absolute top-1/2 h-px w-16 bg-slate-400/55"
-                      style={{
-                        width: `${pos.lineLength}px`,
-                        ...(pos.align === "left" ? { left: 16 } : { right: 16 }),
-                      }}
-                    />
-                    <div
-                      className={`absolute top-1/2 -translate-y-1/2 rounded-[1rem] border p-2.5 backdrop-blur transition-all ${
-                        isActive
-                          ? "pointer-events-auto opacity-100 border-black/12 bg-white/94 shadow-[0_20px_40px_rgba(15,23,42,0.12)]"
-                          : "pointer-events-none opacity-0 scale-[0.98] border-black/8 bg-white/82 shadow-[0_14px_34px_rgba(15,23,42,0.08)] group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:scale-100"
-                      }`}
-                      style={{
-                        width: `${pos.cardWidth}px`,
-                        marginTop: `${pos.cardOffsetY}px`,
-                        ...(pos.align === "left"
-                          ? { left: `${pos.cardOffsetX}px` }
-                          : { right: `${pos.cardOffsetX}px` }),
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-                          {region.label}
-                        </div>
-                        <div
-                          className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(region.tone)}`}
-                        >
-                          {region.tone}
-                        </div>
-                      </div>
-                      <div className={`mt-2 text-sm font-black ${textToneClass(region.tone)}`}>
-                        {formatPct(region.avg_change_1d)}
-                      </div>
-                      <div className="mt-1.5 text-[10px] leading-4 text-slate-500">
-                        {(region.assets || []).slice(0, 2).map((asset) => asset.label).join(" | ") || "Macro mix"}
-                      </div>
-                    </div>
-                    {!isActive ? (
-                      <div className="pointer-events-none absolute top-1/2 hidden -translate-y-1/2 rounded-full border border-black/8 bg-white/90 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.08)] group-hover:block group-focus-visible:block"
-                        style={pos.align === "left" ? { left: `${pos.cardOffsetX - 2}px` } : { right: `${pos.cardOffsetX - 2}px` }}
-                      >
-                        {region.label}
-                      </div>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            }) : null}
 
             {positionedGeoSignals.map((item, index) => (
               <a

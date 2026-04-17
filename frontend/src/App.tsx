@@ -16,6 +16,7 @@ const BrokerChat = lazy(() => import("./components/BrokerChat"));
 const MyRadar = lazy(() => import("./components/MyRadar"));
 const WorldMarketMap = lazy(() => import("./components/WorldMarketMap"));
 const TradingEdgePanel = lazy(() => import("./components/TradingEdgePanel"));
+const MorningBriefPanel = lazy(() => import("./components/MorningBriefPanel"));
 
 interface AnalysisData {
   ticker: string;
@@ -794,6 +795,21 @@ function AppContent() {
                       setActiveTab("analyze");
                       handleSearch(t);
                     }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : null}
+
+            {globalBrief ? (
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingState />}>
+                  <MorningBriefPanel
+                    brief={globalBrief}
+                    onAnalyze={(t) => {
+                      setActiveTab("analyze");
+                      handleSearch(t);
+                    }}
+                    hideMap
                   />
                 </Suspense>
               </ErrorBoundary>

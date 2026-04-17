@@ -6,6 +6,7 @@ interface MorningBriefPanelProps {
   onAnalyze: (ticker: string) => void;
   realtimeQuotes?: Record<string, any>;
   realtimeConnected?: boolean;
+  hideMap?: boolean;
 }
 
 function fmt(value?: number | null) {
@@ -59,6 +60,7 @@ export default function MorningBriefPanel({
   onAnalyze,
   realtimeQuotes = {},
   realtimeConnected = false,
+  hideMap = false,
 }: MorningBriefPanelProps) {
   if (!brief) return null;
 
@@ -155,18 +157,20 @@ export default function MorningBriefPanel({
         </div>
       </section>
 
-      <WorldMarketMap
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onSelectRegion={setSelectedRegion}
-        news={brief.top_news || []}
-        eventLayer={brief.event_layer || []}
-        watchlistImpact={brief.watchlist_impact || []}
-        contrarianSignals={brief.contrarian_signals || []}
-        openingTimeline={brief.opening_timeline || []}
-        onAnalyze={onAnalyze}
-        focusTicker={brief.watchlist_impact?.[0]?.ticker}
-      />
+      {!hideMap && (
+        <WorldMarketMap
+          regions={regions}
+          selectedRegion={selectedRegion}
+          onSelectRegion={setSelectedRegion}
+          news={brief.top_news || []}
+          eventLayer={brief.event_layer || []}
+          watchlistImpact={brief.watchlist_impact || []}
+          contrarianSignals={brief.contrarian_signals || []}
+          openingTimeline={brief.opening_timeline || []}
+          onAnalyze={onAnalyze}
+          focusTicker={brief.watchlist_impact?.[0]?.ticker}
+        />
+      )}
 
       <section className="grid gap-4 xl:grid-cols-3">
         {regions.map((region: any) => (
@@ -734,8 +738,283 @@ export default function MorningBriefPanel({
           )}
         </div>
       </section>
+      {/* ── Reddit Hot Posts ─────────────────────────────────────────── */}
+      {(brief.reddit_posts || []).length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Reddit Pulse
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              WSB · r/stocks · r/investing
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(brief.reddit_posts || []).slice(0, 8).map((post: any, i: number) => {
+              const sentimentColor =
+                post.sentiment === "bullish"
+                  ? "bg-emerald-500/10 text-emerald-700"
+                  : post.sentiment === "bearish"
+                    ? "bg-red-500/10 text-red-700"
+                    : "bg-slate-500/10 text-slate-600";
+              return (
+                <a
+                  key={`reddit-${i}`}
+                  href={post.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 transition-colors hover:bg-white"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      {post.subreddit}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${sentimentColor}`}>
+                      {post.sentiment || "neutral"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-slate-900 line-clamp-2">
+                    {post.title}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                    <span>⬆ {post.score}</span>
+                    <span>💬 {post.num_comments}</span>
+                    {(post.ticker_matches || []).length > 0 && (
+                      <span className="font-bold text-slate-700">
+                        ${(post.ticker_matches || []).slice(0, 3).join(" $")}
+                      </span>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Stocktwits Sentiment ──────────────────────────────────────── */}
+      {(brief.stocktwits || []).length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Stocktwits Sentiment
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              Retail flow
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {(brief.stocktwits || []).map((st: any, i: number) => {
+              const bull = st.bull_ratio || 50;
+              const barColor =
+                bull >= 60
+                  ? "bg-emerald-500"
+                  : bull <= 40
+                    ? "bg-red-500"
+                    : "bg-amber-400";
+              return (
+                <div
+                  key={`st-${st.ticker || i}`}
+                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => st.ticker && onAnalyze(st.ticker)}
+                      className="text-sm font-black text-slate-900"
+                    >
+                      {st.ticker}
+                    </button>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                      st.sentiment_label === "bullish"
+                        ? "bg-emerald-500/10 text-emerald-700"
+                        : st.sentiment_label === "bearish"
+                          ? "bg-red-500/10 text-red-700"
+                          : "bg-slate-500/10 text-slate-600"
+                    }`}>
+                      {st.sentiment_label || "neutral"}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      <span>🐻 {st.bearish_count || 0}</span>
+                      <span>{bull}% bull</span>
+                      <span>🐂 {st.bullish_count || 0}</span>
+                    </div>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div className={`h-full rounded-full ${barColor}`} style={{ width: `${bull}%` }} />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-500">
+                    {st.message_count || 0} messages
+                  </div>
+                  {(st.top_messages || []).slice(0, 1).map((msg: any, mi: number) => (
+                    <div key={mi} className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs italic text-slate-600 line-clamp-2">
+                      {msg.text}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Polymarket Prediction Markets ─────────────────────────────── */}
+      {(brief.polymarket || []).length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Prediction Markets
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              Polymarket
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(brief.polymarket || []).slice(0, 8).map((pm: any, i: number) => {
+              const prob = pm.probability_yes != null ? Math.round(pm.probability_yes * 100) : null;
+              const vol = pm.volume_usd ? `$${(pm.volume_usd / 1e6).toFixed(1)}M` : null;
+              return (
+                <a
+                  key={`pm-${i}`}
+                  href={pm.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 transition-colors hover:bg-white"
+                >
+                  <div className="text-sm font-bold text-slate-900 line-clamp-2">
+                    {pm.question}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    {prob != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full ${prob >= 70 ? "bg-emerald-500" : prob <= 30 ? "bg-red-500" : "bg-amber-400"}`}
+                            style={{ width: `${prob}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-black text-slate-900">{prob}%</span>
+                      </div>
+                    )}
+                    {vol && (
+                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                        Vol {vol}
+                      </span>
+                    )}
+                  </div>
+                  {pm.end_date && (
+                    <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      Ends {pm.end_date}
+                    </div>
+                  )}
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Google News Extra ─────────────────────────────────────────── */}
+      {(brief.google_news_extra || []).length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Google News
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              Watchlist + Macro
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {(brief.google_news_extra || []).slice(0, 8).map((item: any, i: number) => (
+              <a
+                key={`gn-${i}`}
+                href={item.link}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between rounded-[1.2rem] border border-black/8 bg-white/70 p-4 transition-colors hover:bg-white"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-900 line-clamp-1">
+                    {item.title}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    {item.publisher && <span>{item.publisher}</span>}
+                    {item.query && (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5">
+                        {item.query}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {item.age_hours != null && (
+                  <div className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                    {item.age_hours < 1 ? "< 1h" : `${Math.round(item.age_hours)}h ago`}
+                  </div>
+                )}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Broad Earnings Calendar ───────────────────────────────────── */}
+      {(brief.broad_earnings || []).length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Upcoming Earnings
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              S&P 500 + Watchlist
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {(brief.broad_earnings || []).slice(0, 12).map((item: any, i: number) => (
+              <div
+                key={`be-${item.ticker}-${i}`}
+                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => onAnalyze(item.ticker)}
+                    className="text-sm font-black text-slate-900"
+                  >
+                    {item.ticker}
+                  </button>
+                  <div className="flex gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                      item.importance === "watchlist"
+                        ? "bg-sky-500/10 text-sky-700"
+                        : "bg-slate-500/10 text-slate-600"
+                    }`}>
+                      {item.importance}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      {item.session}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-slate-500 line-clamp-1">{item.company}</div>
+                <div className="mt-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <span>{item.date ? new Date(item.date).toLocaleDateString() : ""}</span>
+                  {item.days_until != null && (
+                    <span className={item.days_until <= 2 ? "text-amber-700" : ""}>
+                      {item.days_until === 0 ? "Today" : item.days_until === 1 ? "Tomorrow" : `in ${item.days_until}d`}
+                    </span>
+                  )}
+                </div>
+                {item.eps_estimate != null && (
+                  <div className="mt-1 text-[10px] text-slate-500">
+                    EPS est. {item.eps_estimate.toFixed(2)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
-
-

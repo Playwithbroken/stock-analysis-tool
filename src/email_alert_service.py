@@ -1131,25 +1131,38 @@ class EmailAlertService:
                 lines4.append(f"• {tag}<b>{setup}</b> — {trigger}")
 
         portfolio_brain = brief.get("portfolio_brain", {})
-        at_risk = (portfolio_brain.get("at_risk") or [])[:2]
-        beneficiaries = (portfolio_brain.get("beneficiaries") or [])[:2]
-        hedge_ideas = (portfolio_brain.get("hedge_ideas") or [])[:2]
+        pb_actions = portfolio_brain.get("actions") or []
+        at_risk = [a for a in pb_actions if a.get("bucket") == "at_risk"][:3]
+        beneficiaries = [a for a in pb_actions if a.get("bucket") == "beneficiaries"][:3]
+        hedge_ideas = [a for a in pb_actions if a.get("bucket") == "hedges"][:3]
+        pb_summary = portfolio_brain.get("summary") or {}
         if at_risk or beneficiaries or hedge_ideas:
             if lines4:
                 lines4.append("")
-            lines4.append("🧠 <b>Portfolio Brain</b>")
+            lines4.append(
+                f"🧠 <b>Portfolio Brain</b>"
+                f" — ⚠️{pb_summary.get('at_risk', 0)}"
+                f" ✅{pb_summary.get('beneficiaries', 0)}"
+                f" 🛡{pb_summary.get('hedges', 0)}"
+            )
             for card in at_risk:
-                h = self._tg_esc(card.get("holding") or card.get("ticker") or "")
+                h = self._tg_esc(card.get("ticker") or "")
                 r = self._tg_esc(card.get("reason") or card.get("trigger") or "")
-                lines4.append(f"⚠️ <code>{h}</code> — {r}")
+                act = self._tg_esc(card.get("portfolio_action") or "watch")
+                lines4.append(f"⚠️ <code>{h}</code> <b>{act}</b> — {r}")
             for card in beneficiaries:
-                h = self._tg_esc(card.get("holding") or card.get("ticker") or "")
+                h = self._tg_esc(card.get("ticker") or "")
                 r = self._tg_esc(card.get("reason") or card.get("trigger") or "")
-                lines4.append(f"✅ <code>{h}</code> — {r}")
+                act = self._tg_esc(card.get("portfolio_action") or "add")
+                lines4.append(f"✅ <code>{h}</code> <b>{act}</b> — {r}")
             for card in hedge_ideas:
-                h = self._tg_esc(card.get("label") or card.get("ticker") or "")
-                r = self._tg_esc(card.get("trigger") or card.get("reason") or "")
-                lines4.append(f"🛡 <code>{h}</code> — {r}")
+                h = self._tg_esc(card.get("ticker") or "")
+                r = self._tg_esc(card.get("reason") or card.get("trigger") or "")
+                hedges = card.get("hedge_candidates") or []
+                hedge_str = ", ".join(self._tg_esc(hc.get("ticker", "")) for hc in hedges[:2])
+                lines4.append(f"🛡 <code>{h}</code> hedge — {r}")
+                if hedge_str:
+                    lines4.append(f"   via {hedge_str}")
 
         contrarian = brief.get("contrarian_signals", [])
         if contrarian:

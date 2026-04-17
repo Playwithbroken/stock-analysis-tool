@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export interface Holding {
   ticker: string
@@ -13,9 +13,42 @@ export interface Portfolio {
   createdAt: string
 }
 
+const CACHE_KEY = 'portfolios_local_cache'
+const CACHE_VERSION = 1
+
+function saveToCache(portfolios: Portfolio[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ v: CACHE_VERSION, data: portfolios, ts: Date.now() }))
+  } catch {
+    // localStorage might be full or unavailable
+  }
+}
+
+function loadFromCache(): Portfolio[] {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (parsed?.v === CACHE_VERSION && Array.isArray(parsed.data)) return parsed.data
+  } catch { /* ignore */ }
+  return []
+}
+
+function clearCache() {
+  try { localStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
+}
+
 export function usePortfolios(enabled: boolean = true) {
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  // Seed from cache immediately so UI doesn't flash empty on load
+  const [portfolios, setPortfolios] = useState<Portfolio[]>(() => loadFromCache())
   const [loading, setLoading] = useState(true)
+  const [needsRestore, setNeedsRestore] = useState(false)
+  const pendingRestoreRef = useRef<Portfolio[]>([])
+
+  const syncCache = (data: Portfolio[]) => {
+    setPortfolios(data)
+    saveToCache(data)
+  }
 
   const fetchPortfolios = async () => {
     if (!enabled) {
@@ -27,16 +60,69 @@ export function usePortfolios(enabled: boolean = true) {
       const response = await fetch('/api/portfolios')
       const data = await response.json()
       if (Array.isArray(data)) {
-        setPortfolios(data)
+        if (data.length === 0) {
+          // Backend is empty — check if we have cached portfolios to restore
+          const cached = loadFromCache()
+          if (cached.length > 0) {
+            pendingRestoreRef.current = cached
+            setNeedsRestore(true)
+          } else {
+            syncCache([])
+          }
+        } else {
+          syncCache(data)
+          setNeedsRestore(false)
+        }
       } else {
-        console.error('Expected array of portfolios, got:', data)
-        setPortfolios([])
+        // Fallback to cache on bad response
+        const cached = loadFromCache()
+        if (cached.length > 0) setPortfolios(cached)
       }
-    } catch (err) {
-      console.error('Failed to fetch portfolios:', err)
+    } catch {
+      // Network error — use cache silently
+      const cached = loadFromCache()
+      if (cached.length > 0) setPortfolios(cached)
     } finally {
       setLoading(false)
     }
+  }
+
+  /** Re-create all portfolios from local cache on the backend */
+  const restoreFromCache = async () => {
+    const toRestore = pendingRestoreRef.current
+    if (!toRestore.length) return
+    setNeedsRestore(false)
+    const restored: Portfolio[] = []
+    for (const cached of toRestore) {
+      try {
+        const res = await fetch('/api/portfolios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: cached.name }),
+        })
+        const newP: Portfolio = await res.json()
+        // Re-add all holdings
+        for (const h of cached.holdings) {
+          await fetch(`/api/portfolios/${newP.id}/holdings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker: h.ticker, shares: h.shares, buy_price: h.buyPrice }),
+          })
+        }
+        restored.push({ ...newP, holdings: cached.holdings })
+      } catch {
+        // Keep cached version if restore fails
+        restored.push(cached)
+      }
+    }
+    syncCache(restored)
+  }
+
+  const discardRestore = () => {
+    pendingRestoreRef.current = []
+    setNeedsRestore(false)
+    clearCache()
+    syncCache([])
   }
 
   useEffect(() => {
@@ -50,13 +136,15 @@ export function usePortfolios(enabled: boolean = true) {
       body: JSON.stringify({ name }),
     })
     const newPortfolio = await response.json()
-    setPortfolios(prev => [...prev, newPortfolio])
+    const updated = [...portfolios, newPortfolio]
+    syncCache(updated)
     return newPortfolio
   }
 
   const deletePortfolio = async (id: string) => {
     await fetch(`/api/portfolios/${id}`, { method: 'DELETE' })
-    setPortfolios(prev => prev.filter(p => p.id !== id))
+    const updated = portfolios.filter(p => p.id !== id)
+    syncCache(updated)
   }
 
   const addHolding = async (portfolioId: string, holding: Holding) => {
@@ -69,7 +157,7 @@ export function usePortfolios(enabled: boolean = true) {
         buy_price: holding.buyPrice
       }),
     })
-    await fetchPortfolios() // Refresh to get merged/updated state
+    await fetchPortfolios()
   }
 
   const removeHolding = async (portfolioId: string, ticker: string) => {
@@ -82,10 +170,14 @@ export function usePortfolios(enabled: boolean = true) {
   return {
     portfolios,
     loading,
+    needsRestore,
+    cachedPortfolios: pendingRestoreRef.current,
     createPortfolio,
     deletePortfolio,
     addHolding,
     removeHolding,
-    refresh: fetchPortfolios
+    restoreFromCache,
+    discardRestore,
+    refresh: fetchPortfolios,
   }
 }

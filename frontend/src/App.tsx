@@ -302,6 +302,10 @@ function AppContent() {
     deletePortfolio,
     addHolding,
     removeHolding,
+    needsRestore,
+    cachedPortfolios,
+    restoreFromCache,
+    discardRestore,
   } = usePortfolios(auth.authenticated);
 
   const { currency, setCurrency } = useCurrency();
@@ -1019,6 +1023,37 @@ function AppContent() {
           </ErrorBoundary>
         ) : (
           <ErrorBoundary>
+            {needsRestore && cachedPortfolios.length > 0 && (
+              <div className="mb-4 rounded-[1.4rem] border border-amber-400/30 bg-amber-50 p-5 shadow-sm">
+                <div className="flex flex-wrap items-start gap-4">
+                  <div className="flex-1">
+                    <div className="text-sm font-extrabold text-amber-800">📦 Portfolios wiederherstellen</div>
+                    <p className="mt-1 text-sm text-amber-700">
+                      Der Server wurde neu gestartet und die Daten wurden zurückgesetzt.
+                      Es wurden <strong>{cachedPortfolios.length} Portfolio{cachedPortfolios.length > 1 ? "s" : ""}</strong> lokal gespeichert —
+                      sollen sie wiederhergestellt werden?
+                    </p>
+                    <div className="mt-1 text-xs text-amber-600">
+                      {cachedPortfolios.map(p => `${p.name} (${p.holdings.length} Positionen)`).join(" · ")}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={restoreFromCache}
+                      className="rounded-[0.9rem] bg-amber-500 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-white hover:bg-amber-600"
+                    >
+                      Wiederherstellen
+                    </button>
+                    <button
+                      onClick={discardRestore}
+                      className="rounded-[0.9rem] border border-amber-300 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-amber-700 hover:bg-amber-50"
+                    >
+                      Verwerfen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <Suspense fallback={<LoadingState />}>
               <PortfolioView
                 portfolios={portfolios}

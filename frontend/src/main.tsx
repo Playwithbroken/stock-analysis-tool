@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 
+// Auto-reload when Vite lazy chunks fail to load after a new deploy (stale browser cache)
+window.addEventListener('vite:preloadError', () => {
+  window.location.reload()
+})
+
 const nativeFetch = window.fetch.bind(window)
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const response = await nativeFetch(input, {

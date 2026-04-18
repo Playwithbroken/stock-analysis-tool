@@ -1551,7 +1551,7 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
     return {
         "watchlist": convert_numpy_types(snapshot),
         "history": convert_numpy_types(get_portfolio_manager().get_sent_signal_events(limit=limit)),
-        "brief": convert_numpy_types(get_morning_brief_service().get_brief(snapshot)),
+        "brief": convert_numpy_types(get_morning_brief_service().get_brief_fast(snapshot)),
         "scoreboard": convert_numpy_types(scoreboard),
         "session_lists": convert_numpy_types(await get_session_list_service().build_session_lists(snapshot)),
         "paper_dashboard": convert_numpy_types(get_paper_trading_service().build_dashboard(scoreboard, settings)),
@@ -1582,7 +1582,7 @@ async def get_morning_brief():
             snapshot = {"items": [], "ticker_signals": []}
         try:
             brief = await asyncio.wait_for(
-                asyncio.to_thread(service.get_brief, snapshot),
+                asyncio.to_thread(service.get_brief_fast, snapshot),
                 timeout=12.0,
             )
         except asyncio.TimeoutError:

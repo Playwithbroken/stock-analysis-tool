@@ -82,6 +82,38 @@ class DataFetcher:
             }
         except Exception as e:
             return {"error": str(e)}
+
+    def get_price_data_fast(self) -> Dict[str, Any]:
+        """Fast market snapshot without expensive info calls (used for dashboard brief)."""
+        try:
+            hist = self.stock.history(period="6mo", interval="1d", auto_adjust=False)
+            if hist.empty:
+                return {"error": "No price data available"}
+
+            current_price = float(hist["Close"].iloc[-1])
+
+            def safe_pct_change(start_idx: int) -> Optional[float]:
+                if len(hist) < abs(start_idx):
+                    return None
+                start_val = float(hist["Close"].iloc[start_idx])
+                if start_val == 0:
+                    return 0.0
+                return ((current_price / start_val) - 1) * 100
+
+            return {
+                "current_price": current_price,
+                "currency": "USD",
+                "change_1w": safe_pct_change(-6),
+                "change_1m": safe_pct_change(-22),
+                "change_6m": safe_pct_change(0),
+                "change_1y": None,
+                "high_52w": None,
+                "low_52w": None,
+                "from_52w_high": None,
+                "from_52w_low": None,
+            }
+        except Exception as e:
+            return {"error": str(e)}
     
     def get_volatility_data(self) -> Dict[str, Any]:
         """Calculate volatility metrics from cached history."""

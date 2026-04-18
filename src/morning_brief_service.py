@@ -376,6 +376,84 @@ class MorningBriefService:
         self._persist_snapshot(brief)
         return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
 
+    def get_brief_fast(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        """Fast brief path for API/dashboard rendering under strict latency budget."""
+        now = datetime.now(timezone.utc)
+        if (
+            self._cache is not None
+            and self._cache_time is not None
+            and (now - self._cache_time).total_seconds() < self._ttl_seconds
+        ):
+            return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
+
+        watchlist_tickers = [
+            (item.get("value") or "").upper()
+            for item in (watchlist_snapshot or {}).get("items", [])
+            if item.get("kind") == "ticker" and item.get("value")
+        ]
+
+        asia = self._collect_region(self.ASIA, "Asia", fast=True)
+        europe = self._collect_region(self.EUROPE, "Europe", fast=True)
+        usa = self._collect_region(self.USA, "USA", fast=True)
+        macro = self._collect_assets(self.MACRO, fast=True)
+        top_news = self._collect_news(extra_tickers=watchlist_tickers, fast=True)
+        event_layer = self._build_event_layer(top_news)
+        economic_calendar = self._build_economic_calendar(event_layer)
+        opening_timeline = self._build_opening_timeline(
+            [asia, europe, usa],
+            top_news,
+            event_layer,
+            economic_calendar,
+            [],
+        )
+        narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
+        action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
+
+        brief = {
+            "generated_at": now.isoformat(),
+            "macro_score": narrative["macro_score"],
+            "macro_regime": narrative["macro_regime"],
+            "opening_bias": narrative["opening_bias"],
+            "headline": narrative["headline"],
+            "summary_points": narrative["summary_points"],
+            "regions": {
+                "asia": asia,
+                "europe": europe,
+                "usa": usa,
+            },
+            "macro_assets": macro,
+            "top_news": top_news,
+            "crowd_signals": [],
+            "social_signals": [],
+            "source_policy": {
+                "trusted_publishers": sorted(self.TRUSTED_PUBLISHERS),
+                "allowed_domains": sorted(self.ALLOWED_DOMAINS),
+                "excluded_sources": sorted(self.EXCLUDED_SOURCE_TERMS),
+                "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
+                "note": "Fast brief mode: trusted sources prioritised, deep social layers deferred.",
+            },
+            "event_layer": event_layer,
+            "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
+            "economic_calendar": economic_calendar,
+            "earnings_calendar": [],
+            "broad_earnings": [],
+            "opening_timeline": opening_timeline,
+            "action_board": action_board,
+            "portfolio_brain": self._build_portfolio_brain(action_board),
+            "watchlist_impact": [],
+            "reddit_posts": [],
+            "stocktwits": [],
+            "polymarket": [],
+            "google_news_extra": [],
+            "trading_edge": {},
+        }
+        brief["quality"] = self._build_quality_report(brief)
+        brief["quality"]["mode"] = "fast"
+        self._cache = brief
+        self._cache_time = now
+        self._persist_snapshot(brief)
+        return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
+
     def _build_quality_report(self, brief: Dict[str, Any]) -> Dict[str, Any]:
         now_utc = datetime.now(timezone.utc)
         generated_at_raw = brief.get("generated_at")
@@ -439,8 +517,8 @@ class MorningBriefService:
             "checks": checks,
         }
 
-    def _collect_region(self, tickers: Sequence[tuple[str, str]], label: str) -> Dict[str, Any]:
-        assets = self._collect_assets(tickers)
+    def _collect_region(self, tickers: Sequence[tuple[str, str]], label: str, fast: bool = False) -> Dict[str, Any]:
+        assets = self._collect_assets(tickers, fast=fast)
         changes = [item["change_1d"] for item in assets if item.get("change_1d") is not None]
         avg_change = sum(changes) / len(changes) if changes else 0
         tone = "risk-on" if avg_change > 0.45 else "risk-off" if avg_change < -0.45 else "mixed"
@@ -451,11 +529,11 @@ class MorningBriefService:
             "assets": assets,
         }
 
-    def _collect_assets(self, tickers: Sequence[tuple[str, str]]) -> List[Dict[str, Any]]:
+    def _collect_assets(self, tickers: Sequence[tuple[str, str]], fast: bool = False) -> List[Dict[str, Any]]:
         assets = []
         for ticker, label in tickers:
             fetcher = DataFetcher(ticker)
-            price = fetcher.get_price_data()
+            price = fetcher.get_price_data_fast() if fast else fetcher.get_price_data()
             assets.append(
                 {
                     "ticker": ticker,
@@ -521,7 +599,7 @@ class MorningBriefService:
                 continue
         return items
 
-    def _collect_news(self, extra_tickers: List[str] | None = None) -> List[Dict[str, Any]]:
+    def _collect_news(self, extra_tickers: List[str] | None = None, fast: bool = False) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
         seen_titles: set = set()
 
@@ -534,15 +612,18 @@ class MorningBriefService:
                 items.append(item)
 
         # 2. Collect from yfinance per ticker (includes user watchlist tickers)
-        all_tickers = list(self.NEWS_TICKERS)
+        all_tickers = list(self.NEWS_TICKERS[:4] if fast else self.NEWS_TICKERS)
         if extra_tickers:
             for t in extra_tickers:
                 if t and t not in all_tickers:
                     all_tickers.append(t)
+        if fast:
+            all_tickers = all_tickers[:6]
 
+        per_ticker_limit = 2 if fast else 3
         for ticker in all_tickers:
             news = DataFetcher(ticker).get_news()
-            for item in news[:3]:
+            for item in news[:per_ticker_limit]:
                 title = item.get("title") or ""
                 if not title or title in seen_titles:
                     continue

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType, LazyExoticComponent } from "react";
 import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -10,15 +11,51 @@ import { fetchJsonWithRetry } from "./lib/api";
 import { ArrowDownRight, ArrowUpRight, Bell, BellOff, BellRing, Moon, Sun } from "lucide-react";
 import usePushNotifications from "./hooks/usePushNotifications";
 
-const AnalysisResult = lazy(() => import("./components/AnalysisResult"));
-const PortfolioView = lazy(() => import("./components/PortfolioView"));
-const DiscoveryPanel = lazy(() => import("./components/DiscoveryPanel"));
-const BrokerChat = lazy(() => import("./components/BrokerChat"));
-const MyRadar = lazy(() => import("./components/MyRadar"));
-const WorldMarketMap = lazy(() => import("./components/WorldMarketMap"));
-const TradingEdgePanel = lazy(() => import("./components/TradingEdgePanel"));
-const MorningBriefPanel = lazy(() => import("./components/MorningBriefPanel"));
-const OnboardingWizard = lazy(() => import("./components/OnboardingWizard"));
+const CHUNK_RELOAD_GUARD_KEY = "brokerfreund:chunk-reload-once";
+
+function lazyWithChunkRetry<T extends ComponentType<any>>(
+  loader: () => Promise<{ default: T }>,
+): LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      const mod = await loader();
+      try {
+        sessionStorage.removeItem(CHUNK_RELOAD_GUARD_KEY);
+      } catch {
+        // Ignore sessionStorage failures in hardened browsers.
+      }
+      return mod;
+    } catch (error) {
+      const message = String((error as { message?: string } | null)?.message ?? error ?? "");
+      const isChunkError = /ChunkLoadError|Loading chunk|dynamically imported module|Failed to fetch/i.test(message);
+      if (isChunkError) {
+        let alreadyReloaded = false;
+        try {
+          alreadyReloaded = sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY) === "1";
+          if (!alreadyReloaded) {
+            sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, "1");
+            window.location.reload();
+            await new Promise<never>(() => {});
+          }
+        } catch {
+          window.location.reload();
+          await new Promise<never>(() => {});
+        }
+      }
+      throw error;
+    }
+  }) as LazyExoticComponent<T>;
+}
+
+const AnalysisResult = lazyWithChunkRetry(() => import("./components/AnalysisResult"));
+const PortfolioView = lazyWithChunkRetry(() => import("./components/PortfolioView"));
+const DiscoveryPanel = lazyWithChunkRetry(() => import("./components/DiscoveryPanel"));
+const BrokerChat = lazyWithChunkRetry(() => import("./components/BrokerChat"));
+const MyRadar = lazyWithChunkRetry(() => import("./components/MyRadar"));
+const WorldMarketMap = lazyWithChunkRetry(() => import("./components/WorldMarketMap"));
+const TradingEdgePanel = lazyWithChunkRetry(() => import("./components/TradingEdgePanel"));
+const MorningBriefPanel = lazyWithChunkRetry(() => import("./components/MorningBriefPanel"));
+const OnboardingWizard = lazyWithChunkRetry(() => import("./components/OnboardingWizard"));
 
 interface AnalysisData {
   ticker: string;

@@ -159,6 +159,11 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
 
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const onStatsUpdateRef = useRef(onStatsUpdate);
+
+  useEffect(() => {
+    onStatsUpdateRef.current = onStatsUpdate;
+  }, [onStatsUpdate]);
 
   useEffect(() => {
     return () => {
@@ -211,10 +216,10 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           const change = last - first;
           const changePct = first !== 0 ? (change / first) * 100 : 0;
           setStats({ change, changePct });
-          onStatsUpdate?.({ change, changePct }, period.label);
+          onStatsUpdateRef.current?.({ change, changePct }, period.label);
         } else {
           setStats({ change: 0, changePct: 0 });
-          onStatsUpdate?.({ change: 0, changePct: 0 }, period.label);
+          onStatsUpdateRef.current?.({ change: 0, changePct: 0 }, period.label);
         }
 
         const prices = normalized.map((item) => item.price);
@@ -281,7 +286,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     return () => {
       controller.abort();
     };
-  }, [tickerSymbol, period, onStatsUpdate, retryCounter]);
+  }, [tickerSymbol, period, retryCounter]);
 
   const chartData = useMemo(() => {
     const livePrice =

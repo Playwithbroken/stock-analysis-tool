@@ -72,12 +72,12 @@ export default function AnalysisResult({
   const { formatPrice } = useCurrency();
   const { quotes: realtimeQuotes, connected: realtimeConnected } = useRealtimeFeed([data.ticker], true);
 
-  const handleStatsUpdate = (
+  const handleStatsUpdate = React.useCallback((
     stats: { change: number; changePct: number },
     label: string,
   ) => {
     setChartStats({ changePct: stats.changePct, label });
-  };
+  }, []);
 
   const {
     price_data,

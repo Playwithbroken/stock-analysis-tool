@@ -339,6 +339,8 @@ function AppContent() {
   const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
   const [marketMoversWindow, setMarketMoversWindow] = useState<MoversWindow>("1w");
   const [globalBrief, setGlobalBrief] = useState<any>(null);
+  const [globalBriefStatus, setGlobalBriefStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [briefReloadTick, setBriefReloadTick] = useState(0);
   const [signalScoreContext, setSignalScoreContext] = useState<any>(null);
   const [tradingEdge, setTradingEdge] = useState<any>(null);
   const [tradingEdgeLoading, setTradingEdgeLoading] = useState(false);
@@ -559,6 +561,7 @@ function AppContent() {
     let cancelled = false;
 
     const loadGlobalBrief = async () => {
+      if (!cancelled) setGlobalBriefStatus("loading");
       try {
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
           retries: 1,
@@ -567,10 +570,12 @@ function AppContent() {
         if (!cancelled) {
           setGlobalBrief(payload);
           setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
+          setGlobalBriefStatus("ready");
         }
       } catch {
         if (!cancelled) {
           setGlobalBrief(null);
+          setGlobalBriefStatus("error");
         }
       }
     };
@@ -581,7 +586,7 @@ function AppContent() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [auth.authenticated]);
+  }, [auth.authenticated, briefReloadTick]);
 
   // Trading edge — heavy payload, loaded separately with own spinner.
   // Refresh every 5 min; backend caches per-component (10min – 6h).
@@ -1088,9 +1093,28 @@ function AppContent() {
                   />
                 </Suspense>
               </ErrorBoundary>
-            ) : !globalBrief ? (
+            ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
               <LoadingState />
-            ) : null}
+            ) : (
+              <section className="surface-panel rounded-[2rem] p-6">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  World Map Feed
+                </div>
+                <div className="mt-3 text-base font-semibold text-slate-800">
+                  Live-Morning-Brief aktuell nicht verfuegbar.
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Datenquelle antwortet gerade langsam oder unvollstaendig. Du kannst sofort neu laden.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBriefReloadTick((prev) => prev + 1)}
+                  className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
+                >
+                  Retry Feed
+                </button>
+              </section>
+            )}
 
             {(tradingEdge || tradingEdgeLoading) ? (
               <ErrorBoundary>

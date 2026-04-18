@@ -1773,23 +1773,35 @@ async def get_realtime_snapshot(symbols: str):
 
 @app.websocket("/ws/realtime")
 async def websocket_realtime_feed(websocket: WebSocket):
+    await websocket.accept()
+
     password = get_app_password()
     secret = get_session_secret()
     if not password or not secret:
-        await websocket.close(code=1011)
+        try:
+            await websocket.send_json(
+                {"type": "error", "reason": "realtime_not_configured", "message": "Realtime stream not configured"}
+            )
+        except Exception:
+            pass
+        await websocket.close(code=1011, reason="realtime_not_configured")
         return
 
     session_value = websocket.cookies.get(SESSION_COOKIE_NAME)
     if not is_valid_session(session_value):
-        await websocket.close(code=1008)
+        try:
+            await websocket.send_json(
+                {"type": "error", "reason": "unauthorized", "message": "Authentication required for realtime stream"}
+            )
+        except Exception:
+            pass
+        await websocket.close(code=1008, reason="unauthorized")
         return
 
     symbols_param = websocket.query_params.get("symbols", "")
     symbols = [item.strip() for item in symbols_param.split(",") if item.strip()]
     if not symbols:
         symbols = ["SPY", "QQQ", "BTC-USD", "AAPL"]
-
-    await websocket.accept()
     service = get_realtime_market_service()
 
     try:

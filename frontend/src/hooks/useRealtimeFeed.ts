@@ -109,7 +109,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     const scheduleReconnect = () => {
       if (closed || retry != null || wsDisabledRef.current) return;
       const attempt = reconnectAttemptRef.current;
-      if (attempt >= 5) {
+      if (attempt >= 4) {
         wsDisabledRef.current = true;
         return;
       }
@@ -129,8 +129,14 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         wsDisabledRef.current = false;
         scheduleStaleCheck();
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         setConnected(false);
+        // Auth/permission/configuration close codes should switch to snapshot mode
+        // instead of retrying websocket forever.
+        if (event.code === 1008 || event.code === 1011) {
+          wsDisabledRef.current = true;
+          return;
+        }
         scheduleReconnect();
       };
       socket.onerror = () => setConnected(false);

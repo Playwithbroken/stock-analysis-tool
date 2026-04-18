@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { fetchJsonWithRetry } from "../lib/api";
 
 type Currency = "USD" | "EUR";
@@ -17,13 +11,9 @@ interface CurrencyContextType {
   formatPrice: (amount: number, forceCurrency?: Currency) => string;
 }
 
-const CurrencyContext = createContext<CurrencyContextType | undefined>(
-  undefined,
-);
+const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
-export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
+export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currency, setCurrency] = useState<Currency>(() => {
     return (localStorage.getItem("preferred_currency") as Currency) || "USD";
   });
@@ -45,13 +35,25 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({
           setExchangeRate(data.rate);
         }
       } catch {
-        // Silently fall back to default rate (0.92) — not critical
+        // Keep default rate when endpoint is unavailable.
       }
     };
-    fetchRate();
-    // Refresh every hour
-    const interval = setInterval(fetchRate, 3600000);
-    return () => clearInterval(interval);
+
+    let interval: number | null = null;
+    const onAuthState = (event: Event) => {
+      const custom = event as CustomEvent<{ authenticated?: boolean }>;
+      if (!custom.detail?.authenticated) return;
+      void fetchRate();
+      if (interval == null) {
+        interval = window.setInterval(fetchRate, 3600000);
+      }
+    };
+
+    window.addEventListener("app:auth-state", onAuthState);
+    return () => {
+      window.removeEventListener("app:auth-state", onAuthState);
+      if (interval != null) window.clearInterval(interval);
+    };
   }, []);
 
   const convert = (amount: number, from: "USD" | "EUR" = "USD"): number => {
@@ -68,7 +70,7 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({
 
   const formatPrice = (amount: number, forceCurrency?: Currency): string => {
     const activeCurrency = forceCurrency || currency;
-    const value = convert(amount, "USD"); // Assuming input is always USD/Base
+    const value = convert(amount, "USD");
 
     return new Intl.NumberFormat("de-DE", {
       style: "currency",
@@ -79,9 +81,7 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   return (
-    <CurrencyContext.Provider
-      value={{ currency, setCurrency, exchangeRate, convert, formatPrice }}
-    >
+    <CurrencyContext.Provider value={{ currency, setCurrency, exchangeRate, convert, formatPrice }}>
       {children}
     </CurrencyContext.Provider>
   );

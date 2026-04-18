@@ -48,17 +48,26 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [theme]);
 
-  // Sync from backend on mount
+  // Sync from backend after auth is confirmed to avoid 401 noise on login screen.
   useEffect(() => {
-    fetch("/api/settings/profile")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.theme === "dark") {
-          setThemeState("dark");
-          localStorage.setItem("preferred_theme", "dark");
-        }
-      })
-      .catch(() => {});
+    const onAuthState = (event: Event) => {
+      const custom = event as CustomEvent<{ authenticated?: boolean }>;
+      if (!custom.detail?.authenticated) return;
+      fetch("/api/settings/profile")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.theme === "dark") {
+            setThemeState("dark");
+            localStorage.setItem("preferred_theme", "dark");
+          }
+        })
+        .catch(() => {});
+    };
+
+    window.addEventListener("app:auth-state", onAuthState);
+    return () => {
+      window.removeEventListener("app:auth-state", onAuthState);
+    };
   }, []);
 
   return (

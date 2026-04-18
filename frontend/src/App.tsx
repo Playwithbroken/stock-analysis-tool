@@ -636,6 +636,14 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("app:auth-state", {
+        detail: { authenticated: auth.authenticated },
+      }),
+    );
+  }, [auth.authenticated]);
+
+  useEffect(() => {
     // Silent start: onboarding should never auto-block app opening.
     setShowOnboarding(false);
   }, [auth.authenticated, auth.profile]);

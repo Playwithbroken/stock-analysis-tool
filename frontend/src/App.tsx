@@ -349,6 +349,7 @@ function AppContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchRequestIdRef = useRef(0);
+  const briefRequestIdRef = useRef(0);
 
   const {
     portfolios,
@@ -561,22 +562,31 @@ function AppContent() {
     let cancelled = false;
 
     const loadGlobalBrief = async () => {
+      const requestId = briefRequestIdRef.current + 1;
+      briefRequestIdRef.current = requestId;
       if (!cancelled) setGlobalBriefStatus("loading");
+      const timeoutGuard = window.setTimeout(() => {
+        if (!cancelled && briefRequestIdRef.current === requestId) {
+          setGlobalBriefStatus("error");
+        }
+      }, 12000);
       try {
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
           retries: 1,
           retryDelayMs: 700,
         });
-        if (!cancelled) {
+        if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBrief(payload);
           setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
           setGlobalBriefStatus("ready");
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBrief(null);
           setGlobalBriefStatus("error");
         }
+      } finally {
+        window.clearTimeout(timeoutGuard);
       }
     };
 

@@ -76,14 +76,17 @@ function scheduleIdle(task: () => void, timeout = 1500) {
 }
 
 function preloadLazyScreens() {
-  void import("./components/AnalysisResult");
-  void import("./components/DiscoveryPanel");
-  void import("./components/PortfolioView");
-  void import("./components/BrokerChat");
-  void import("./components/MyRadar");
-  void import("./components/WorldMarketMap");
-  void import("./components/TradingEdgePanel");
-  void import("./components/MorningBriefPanel");
+  const safeImport = (loader: () => Promise<unknown>) => {
+    void loader().catch(() => undefined);
+  };
+  safeImport(() => import("./components/AnalysisResult"));
+  safeImport(() => import("./components/DiscoveryPanel"));
+  safeImport(() => import("./components/PortfolioView"));
+  safeImport(() => import("./components/BrokerChat"));
+  safeImport(() => import("./components/MyRadar"));
+  safeImport(() => import("./components/WorldMarketMap"));
+  safeImport(() => import("./components/TradingEdgePanel"));
+  safeImport(() => import("./components/MorningBriefPanel"));
 }
 
 function formatTickerPrice(value?: number | null) {
@@ -309,6 +312,7 @@ function LoginScreen({
 function AppContent() {
   const ONBOARDING_DISMISSED_AT_KEY = "onboardingDismissedAt";
   const ONBOARDING_DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+  const ONBOARDING_NUDGE_ENABLED = false;
   const { theme, setTheme } = useTheme();
   const toggleTheme = () => setTheme(theme === "dark" ? "premium-light" : "dark");
   const push = usePushNotifications();
@@ -341,6 +345,8 @@ function AppContent() {
   const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
   const [watchlist, setWatchlist] = useState<WatchlistSnapshot | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchRequestIdRef = useRef(0);
 
   const {
     portfolios,
@@ -653,6 +659,12 @@ function AppContent() {
     }
   }, [analysis]);
 
+  useEffect(() => {
+    return () => {
+      searchAbortRef.current?.abort();
+    };
+  }, []);
+
   const handleLogin = async (password: string, rememberDevice: boolean) => {
     setAuthStatus("");
     const payload = await fetchJsonWithRetry<any>(
@@ -691,31 +703,39 @@ function AppContent() {
   };
 
   const handleSearch = async (ticker: string) => {
+    const searchTicker = ticker.trim().toUpperCase();
+    if (!searchTicker) return;
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     setLoading(true);
     setError(null);
     setAnalysis(null);
     setActiveTab("analyze");
 
     try {
-      const response = await fetch(`/api/analyze/${ticker}`);
-
-      if (!response.ok) {
-        let errorMsg = "Failed to fetch analysis";
-        try {
-          const errData = await response.json();
-          errorMsg = errData.detail || errorMsg;
-        } catch {
-          errorMsg = `Server Error: ${response.status} ${response.statusText}`;
-        }
-        throw new Error(errorMsg);
-      }
-
-      const data = await response.json();
+      const data = await fetchJsonWithRetry<any>(
+        `/api/analyze/${encodeURIComponent(searchTicker)}`,
+        { signal: controller.signal },
+        { retries: 1, retryDelayMs: 700, timeoutMs: 22000 },
+      );
+      if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
       setAnalysis(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
+      const message = err instanceof Error ? err.message : "An error occurred";
+      if (message.toLowerCase().includes("timeout")) {
+        setError("Analyse-Request Timeout. Bitte erneut versuchen.");
+      } else {
+        setError(message);
+      }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && searchRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -747,6 +767,7 @@ function AppContent() {
     onboardingDismissedAt > 0 &&
     Date.now() - onboardingDismissedAt < ONBOARDING_DISMISS_COOLDOWN_MS;
   const showOnboardingNudge = !onboardingDone && !onboardingInCooldown && !hideOnboardingNudge;
+  const shouldShowOnboardingNudge = ONBOARDING_NUDGE_ENABLED && showOnboardingNudge;
 
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
@@ -972,7 +993,7 @@ function AppContent() {
       >
         {activeTab === "dashboard" ? (
           <div className="space-y-8">
-            {showOnboardingNudge ? (
+            {shouldShowOnboardingNudge ? (
               <section className="rounded-[1.6rem] border border-[var(--accent)]/16 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.9))] p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>

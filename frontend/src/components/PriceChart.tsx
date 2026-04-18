@@ -172,6 +172,20 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   }, []);
 
   useEffect(() => {
+    if (!loading || fetchError) return;
+    const timeoutGuard = window.setTimeout(() => {
+      abortRef.current?.abort();
+      setFetchError(true);
+      setFetchErrorMessage("Kursverlauf hat zu lange geladen. Bitte Retry klicken.");
+      setData([]);
+      setLoading(false);
+    }, 30000);
+    return () => {
+      window.clearTimeout(timeoutGuard);
+    };
+  }, [loading, fetchError, tickerSymbol, period.id]);
+
+  useEffect(() => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     abortRef.current?.abort();

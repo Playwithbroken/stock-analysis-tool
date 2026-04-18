@@ -19,6 +19,11 @@ interface RealtimePayload {
   quotes: RealtimeQuote[];
 }
 
+const WS_UNAVAILABLE_UNTIL_KEY = "brokerfreund:ws-unavailable-until";
+const WS_FAILURE_THRESHOLD = 2;
+const WS_SUSPEND_MS = 6 * 60 * 60 * 1000; // 6h
+let globalWsFailures = 0;
+
 function buildRealtimeUrl(symbols: string[]) {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const params = new URLSearchParams({ symbols: symbols.join(",") });
@@ -38,6 +43,33 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const reconnectAttemptRef = useRef<number>(0);
   const wsDisabledRef = useRef<boolean>(false);
 
+  const clearWsUnavailable = () => {
+    try {
+      localStorage.removeItem(WS_UNAVAILABLE_UNTIL_KEY);
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const markWsUnavailable = () => {
+    try {
+      localStorage.setItem(WS_UNAVAILABLE_UNTIL_KEY, String(Date.now() + WS_SUSPEND_MS));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const isWsUnavailable = () => {
+    try {
+      const raw = localStorage.getItem(WS_UNAVAILABLE_UNTIL_KEY);
+      if (!raw) return false;
+      const until = Number(raw);
+      return Number.isFinite(until) && until > Date.now();
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!enabled || cleaned.length === 0) return;
 
@@ -52,7 +84,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     setConnected(false);
     lastFrameRef.current = 0;
     reconnectAttemptRef.current = 0;
-    wsDisabledRef.current = false;
+    wsDisabledRef.current = isWsUnavailable();
 
     const allowedSymbols = new Set(cleaned);
 
@@ -126,6 +158,8 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
       socket = new WebSocket(buildRealtimeUrl(cleaned));
       socket.onopen = () => {
         reconnectAttemptRef.current = 0;
+        globalWsFailures = 0;
+        clearWsUnavailable();
         wsDisabledRef.current = false;
         scheduleStaleCheck();
       };
@@ -135,7 +169,16 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         // instead of retrying websocket forever.
         if (event.code === 1008 || event.code === 1011) {
           wsDisabledRef.current = true;
+          markWsUnavailable();
           return;
+        }
+        if (event.code === 1005 || event.code === 1006 || event.code === 1015) {
+          globalWsFailures += 1;
+          if (globalWsFailures >= WS_FAILURE_THRESHOLD) {
+            wsDisabledRef.current = true;
+            markWsUnavailable();
+            return;
+          }
         }
         scheduleReconnect();
       };

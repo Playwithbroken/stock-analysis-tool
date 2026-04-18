@@ -11,6 +11,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
+import json
+import os
 
 import pandas as pd
 import requests
@@ -31,6 +33,7 @@ class MorningBriefService:
     _cache: Dict[str, Any] | None = None
     _cache_time: datetime | None = None
     _ttl_seconds = 60 * 10
+    _snapshot_path = os.path.join("data", "morning_brief_snapshot.json")
 
     ASIA = [
         ("^N225", "Nikkei 225"),
@@ -154,6 +157,90 @@ class MorningBriefService:
     _holding_profile_cache: Dict[str, Dict[str, Any]] = {}
     _social_service: SocialIntelligenceService = SocialIntelligenceService()
     _signals_service: TradingSignalsService = TradingSignalsService()
+
+    def _persist_snapshot(self, brief: Dict[str, Any]) -> None:
+        try:
+            os.makedirs(os.path.dirname(self._snapshot_path), exist_ok=True)
+            with open(self._snapshot_path, "w", encoding="utf-8") as fh:
+                json.dump(brief, fh, ensure_ascii=True)
+        except Exception:
+            pass
+
+    def _load_persisted_snapshot(self) -> Dict[str, Any] | None:
+        try:
+            if not os.path.exists(self._snapshot_path):
+                return None
+            with open(self._snapshot_path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            return payload if isinstance(payload, dict) else None
+        except Exception:
+            return None
+
+    def get_cached_or_last_brief(
+        self,
+        watchlist_snapshot: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any] | None:
+        if self._cache is not None:
+            return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
+        persisted = self._load_persisted_snapshot()
+        if persisted is not None:
+            return self._merge_watchlist_impact(dict(persisted), watchlist_snapshot)
+        return None
+
+    def build_empty_brief(self, reason: str = "degraded") -> Dict[str, Any]:
+        now = datetime.now(timezone.utc).isoformat()
+        empty_regions = {
+            "asia": {"label": "Asia", "tone": "mixed", "avg_change_1d": 0.0, "assets": []},
+            "europe": {"label": "Europe", "tone": "mixed", "avg_change_1d": 0.0, "assets": []},
+            "usa": {"label": "USA", "tone": "mixed", "avg_change_1d": 0.0, "assets": []},
+        }
+        return {
+            "generated_at": now,
+            "macro_score": 0,
+            "macro_regime": "mixed",
+            "opening_bias": "Data loading fallback active",
+            "headline": "Morning brief temporarily degraded",
+            "summary_points": [
+                "Data providers are currently slow.",
+                "Retry in a few moments for full event depth.",
+            ],
+            "regions": empty_regions,
+            "macro_assets": [],
+            "top_news": [],
+            "crowd_signals": [],
+            "social_signals": [],
+            "source_policy": {
+                "trusted_publishers": sorted(self.TRUSTED_PUBLISHERS),
+                "allowed_domains": sorted(self.ALLOWED_DOMAINS),
+                "excluded_sources": sorted(self.EXCLUDED_SOURCE_TERMS),
+                "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
+                "note": "Fallback response due to upstream timeout.",
+            },
+            "event_layer": [],
+            "contrarian_signals": [],
+            "economic_calendar": [],
+            "earnings_calendar": [],
+            "broad_earnings": [],
+            "opening_timeline": [],
+            "action_board": [],
+            "portfolio_brain": [],
+            "watchlist_impact": [],
+            "reddit_posts": [],
+            "stocktwits": [],
+            "polymarket": [],
+            "google_news_extra": [],
+            "trading_edge": {},
+            "quality": {
+                "status": "partial",
+                "score": 0,
+                "passed": 0,
+                "total": 0,
+                "age_minutes": None,
+                "missing": ["upstream_data"],
+                "checks": [],
+                "fallback": reason,
+            },
+        }
 
     def get_trading_edge(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Heavy trading-signals payload (squeeze, insider, options, etc.).
@@ -286,6 +373,7 @@ class MorningBriefService:
         brief["quality"] = self._build_quality_report(brief)
         self._cache = brief
         self._cache_time = now
+        self._persist_snapshot(brief)
         return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
 
     def _build_quality_report(self, brief: Dict[str, Any]) -> Dict[str, Any]:

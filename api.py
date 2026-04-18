@@ -1568,12 +1568,49 @@ async def get_radar_bootstrap(limit: int = 8):
 
 @app.get("/api/market/morning-brief")
 async def get_morning_brief():
+    service = get_morning_brief_service()
     try:
         items = get_portfolio_manager().get_signal_watch_items()
-        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
-        return convert_numpy_types(get_morning_brief_service().get_brief(snapshot))
+        try:
+            snapshot = await asyncio.wait_for(
+                asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
+                timeout=4.0,
+            )
+        except asyncio.TimeoutError:
+            snapshot = {"items": [], "ticker_signals": []}
+        except Exception:
+            snapshot = {"items": [], "ticker_signals": []}
+        try:
+            brief = await asyncio.wait_for(
+                asyncio.to_thread(service.get_brief, snapshot),
+                timeout=12.0,
+            )
+        except asyncio.TimeoutError:
+            fallback = service.get_cached_or_last_brief(snapshot)
+            if fallback is None:
+                fallback = service.build_empty_brief("timeout")
+            quality = fallback.setdefault("quality", {})
+            quality["status"] = "partial"
+            quality["fallback"] = "timeout"
+            return convert_numpy_types(fallback)
+        except Exception:
+            fallback = service.get_cached_or_last_brief(snapshot)
+            if fallback is None:
+                fallback = service.build_empty_brief("error")
+            quality = fallback.setdefault("quality", {})
+            quality["status"] = "partial"
+            quality["fallback"] = "error"
+            return convert_numpy_types(fallback)
+
+        return convert_numpy_types(brief)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        fallback = service.get_cached_or_last_brief()
+        if fallback is not None:
+            quality = fallback.setdefault("quality", {})
+            quality["status"] = "partial"
+            quality["fallback"] = "server_error"
+            return convert_numpy_types(fallback)
+        return convert_numpy_types(service.build_empty_brief("server_error"))
 
 
 @app.get("/api/market/trading-edge")

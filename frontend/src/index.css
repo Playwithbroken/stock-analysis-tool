@@ -75,12 +75,12 @@ h3,
 }
 
 .layout-shell {
-  width: min(100%, 1680px);
+  width: 100%;
   margin-inline: auto;
 }
 
 .content-shell {
-  width: min(100%, 1760px);
+  width: 100%;
   margin-inline: auto;
 }
 

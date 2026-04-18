@@ -574,6 +574,7 @@ function AppContent() {
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
           retries: 1,
           retryDelayMs: 700,
+          timeoutMs: 12000,
         });
         if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBrief(payload);
@@ -609,6 +610,7 @@ function AppContent() {
         const payload = await fetchJsonWithRetry<any>("/api/market/trading-edge", undefined, {
           retries: 1,
           retryDelayMs: 1000,
+          timeoutMs: 15000,
         });
         if (!cancelled) setTradingEdge(payload);
       } catch {

@@ -73,6 +73,35 @@ function sectorHeatProfile(sector: string, action?: string) {
   return { level, toneClass };
 }
 
+type PingFilter = "all" | "conflict" | "central_bank" | "energy" | "election" | "policy" | "disaster" | "macro";
+
+function pingSeverityTone(severity?: string) {
+  const s = (severity || "").toLowerCase();
+  if (s === "critical") return "bg-red-500/10 text-red-700";
+  if (s === "elevated") return "bg-amber-500/10 text-amber-700";
+  return "bg-slate-500/10 text-slate-600";
+}
+
+function pingTypeLabel(type?: string) {
+  const t = String(type || "macro").toLowerCase();
+  const labels: Record<string, string> = {
+    conflict: "War/Conflict",
+    central_bank: "Central Bank",
+    energy: "Energy",
+    election: "Vote/Election",
+    policy: "Policy",
+    disaster: "Natural Event",
+    macro: "Macro",
+  };
+  return labels[t] || t.replace("_", " ");
+}
+
+function extractTickerCandidates(text?: string) {
+  if (!text) return [];
+  const matches = text.match(/\b[A-Z]{1,5}(?:-[A-Z]{1,5})?\b/g) || [];
+  return [...new Set(matches)];
+}
+
 export default function MorningBriefPanel({
   brief,
   onAnalyze,
@@ -93,6 +122,7 @@ export default function MorningBriefPanel({
   const [selectedRegion, setSelectedRegion] = useState<string>(
     brief.regions?.europe?.label || regions[0]?.label || "USA",
   );
+  const [pingFilter, setPingFilter] = useState<PingFilter>("all");
 
   const regionNews = useMemo(() => {
     const keywords: Record<string, string[]> = {
@@ -106,6 +136,54 @@ export default function MorningBriefPanel({
       return terms.some((term) => haystack.includes(term));
     });
   }, [brief.top_news, selectedRegion]);
+
+  const eventPingQueue = useMemo(() => {
+    const source = Array.isArray(brief.event_pings) ? brief.event_pings : [];
+    const severityWeight: Record<string, number> = { critical: 100, elevated: 70, normal: 45 };
+    const typeWeight: Record<string, number> = {
+      conflict: 28,
+      central_bank: 24,
+      energy: 22,
+      election: 18,
+      policy: 16,
+      disaster: 14,
+      macro: 10,
+    };
+
+    const rows = source.map((ping: any, idx: number) => {
+      const type = String(ping?.type || "macro").toLowerCase();
+      const severity = String(ping?.severity || "normal").toLowerCase();
+      const confidence = Number.isFinite(Number(ping?.confidence)) ? Number(ping.confidence) : 50;
+      const startedAt = ping?.started_at ? Date.parse(ping.started_at) : NaN;
+      const ageMinutes = Number.isFinite(startedAt) ? Math.max(0, Math.round((Date.now() - startedAt) / 60000)) : 120;
+      const recencyScore = ageMinutes <= 30 ? 25 : ageMinutes <= 120 ? 14 : 6;
+      const symbols = (Array.isArray(ping?.trade_impact?.symbols) && ping.trade_impact.symbols.length
+        ? ping.trade_impact.symbols
+        : ping?.symbols || []).filter(Boolean);
+      const hedgeCandidates = extractTickerCandidates(ping?.trade_impact?.hedge_idea);
+      const score =
+        (severityWeight[severity] || severityWeight.normal) +
+        (typeWeight[type] || typeWeight.macro) +
+        confidence * 0.45 +
+        recencyScore;
+      return {
+        ...ping,
+        type,
+        severity,
+        confidence,
+        symbols,
+        hedgeCandidates,
+        ageMinutes,
+        priorityScore: Math.round(score),
+        rankKey: `${type}-${severity}-${idx}`,
+      };
+    });
+
+    const filtered: any[] = pingFilter === "all" ? rows : rows.filter((row: any) => row.type === pingFilter);
+    return filtered
+      .sort((a: any, b: any) => b.priorityScore - a.priorityScore || a.ageMinutes - b.ageMinutes)
+      .slice(0, 8);
+  }, [brief.event_pings, pingFilter]);
 
   return (
     <div className="space-y-6">
@@ -613,6 +691,125 @@ export default function MorningBriefPanel({
               )}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="surface-panel rounded-[2rem] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Event Ping Inbox
+          </div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+            Priority queue
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              { key: "all", label: "All" },
+              { key: "conflict", label: "War" },
+              { key: "central_bank", label: "CB" },
+              { key: "energy", label: "Oil" },
+              { key: "election", label: "Vote" },
+              { key: "policy", label: "Policy" },
+            ] as Array<{ key: PingFilter; label: string }>
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setPingFilter(item.key)}
+              className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                pingFilter === item.key
+                  ? "bg-[#101114] text-white"
+                  : "border border-black/8 bg-white text-slate-600"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {eventPingQueue.length ? (
+            eventPingQueue.map((ping: any, idx: number) => (
+              <div
+                key={ping.id || ping.rankKey}
+                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      #{idx + 1}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${pingSeverityTone(ping.severity)}`}>
+                      {ping.severity}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      {pingTypeLabel(ping.type)}
+                    </span>
+                  </div>
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    score {ping.priorityScore}
+                  </span>
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">
+                  {ping.title || "Event signal"}
+                </div>
+                <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                  <div>Region: {ping.region || "global"}</div>
+                  <div>Confidence: {ping.confidence}</div>
+                  <div>Age: {ping.ageMinutes}m</div>
+                  <div>Window: {ping?.trade_impact?.window || "open+60m"}</div>
+                </div>
+                {ping?.trade_impact?.baseline_scenario ? (
+                  <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white px-3 py-2 text-xs leading-6 text-slate-700">
+                    {ping.trade_impact.baseline_scenario}
+                  </div>
+                ) : null}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {ping?.trade_impact?.action ? (
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${actionTone(ping.trade_impact.action)}`}>
+                      {ping.trade_impact.action}
+                    </span>
+                  ) : null}
+                  {ping.symbols?.slice(0, 3).map((symbol: string) => (
+                    <button
+                      key={symbol}
+                      onClick={() => onAnalyze(symbol)}
+                      className="rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+                    >
+                      Analyze {symbol}
+                    </button>
+                  ))}
+                  {ping.hedgeCandidates?.[0] ? (
+                    <button
+                      onClick={() => onAnalyze(ping.hedgeCandidates[0])}
+                      className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                    >
+                      Hedge {ping.hedgeCandidates[0]}
+                    </button>
+                  ) : null}
+                </div>
+                {ping?.trade_impact?.trigger || ping?.trade_impact?.invalidation ? (
+                  <div className="mt-3 space-y-2 text-xs text-slate-500">
+                    {ping.trade_impact?.trigger ? (
+                      <div className="rounded-[0.9rem] border border-black/8 bg-white px-3 py-2">
+                        Trigger: {ping.trade_impact.trigger}
+                      </div>
+                    ) : null}
+                    {ping.trade_impact?.invalidation ? (
+                      <div className="rounded-[0.9rem] border border-black/8 bg-white px-3 py-2">
+                        Invalidation: {ping.trade_impact.invalidation}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500 xl:col-span-2">
+              Keine Event-Pings im aktuellen Filter.
+            </div>
+          )}
         </div>
       </section>
 

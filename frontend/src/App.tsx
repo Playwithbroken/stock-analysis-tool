@@ -796,7 +796,7 @@ function AppContent() {
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
         { signal: controller.signal },
-        { retries: 1, retryDelayMs: 700, timeoutMs: 22000 },
+        { retries: 0, retryDelayMs: 400, timeoutMs: 15000 },
       );
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
       setAnalysis(data);
@@ -818,6 +818,14 @@ function AppContent() {
   const handleDiscoveryAnalyze = (ticker: string) => {
     if (Date.now() < discoveryAnalyzeEnabledAtRef.current) return;
     void handleSearch(ticker);
+  };
+
+  const selectTab = (tab: Tab) => {
+    if (tab === "discovery") {
+      // Reset click-through guard on every explicit discovery tab click.
+      discoveryAnalyzeEnabledAtRef.current = Date.now() + 1500;
+    }
+    setActiveTab(tab);
   };
 
   if (auth.loading) {
@@ -876,7 +884,7 @@ function AppContent() {
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => selectTab(item.id)}
                     className={`rounded-[1rem] px-4 py-2.5 text-sm font-bold transition-all ${
                       activeTab === item.id
                         ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
@@ -1412,7 +1420,7 @@ function AppContent() {
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => selectTab(item.id)}
               className={`rounded-[1.1rem] px-3 py-3 text-center text-[11px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                 activeTab === item.id ? "bg-[#101114] text-white" : "text-slate-500 hover:bg-black/[0.04]"
               }`}

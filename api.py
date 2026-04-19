@@ -725,12 +725,21 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
         # Original stock fetch data
         fetcher = DataFetcher(resolved_ticker)
         data = fetcher.get_all_data()
-        
-        if "error" in data.get("price_data", {}):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Could not fetch data for ticker '{ticker}'. Please verify the symbol."
-            )
+
+        price_data = data.get("price_data", {}) or {}
+        degraded_price_source = False
+
+        # Do not fail hard on transient provider errors: degrade to fast snapshot pricing first.
+        if "error" in price_data:
+            fast_price_data = fetcher.get_price_data_fast()
+            if "error" not in (fast_price_data or {}):
+                data["price_data"] = fast_price_data
+                degraded_price_source = True
+            else:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Market data for ticker '{ticker}' is temporarily unavailable. Please retry shortly."
+                )
         
         # Analyze
         analyzer = StockAnalyzer(data)
@@ -746,6 +755,10 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "company_name": data.get("company_name"),
             "fetch_time": data.get("fetch_time"),
             "price_data": data.get("price_data"),
+            "data_quality": {
+                "price_source": "fast_snapshot" if degraded_price_source else "full",
+                "degraded": degraded_price_source,
+            },
             "volatility": data.get("volatility"),
             "fundamentals": data.get("fundamentals"),
             "analyst_data": data.get("analyst_data"),

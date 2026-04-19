@@ -736,10 +736,72 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                 data["price_data"] = fast_price_data
                 degraded_price_source = True
             else:
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"Market data for ticker '{ticker}' is temporarily unavailable. Please retry shortly."
-                )
+                info = fetcher.info or {}
+                current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+                fallback_price_data = {
+                    "current_price": current_price,
+                    "currency": info.get("currency", "USD"),
+                    "change_1w": None,
+                    "change_1m": None,
+                    "change_6m": None,
+                    "change_1y": None,
+                    "high_52w": info.get("fiftyTwoWeekHigh"),
+                    "low_52w": info.get("fiftyTwoWeekLow"),
+                    "from_52w_high": None,
+                    "from_52w_low": None,
+                }
+                fallback_analysis = {
+                    "technical": {
+                        "category": "Technical Analysis",
+                        "score": 0.0,
+                        "summary": "Insufficient live market data. Retry for full signal quality.",
+                        "findings": [
+                            {"metric": "Data State", "value": "Insufficient signal", "rating": "neutral"}
+                        ],
+                    },
+                    "fundamental": {
+                        "category": "Fundamental Analysis",
+                        "score": 0.0,
+                        "summary": "Live market pricing is temporarily degraded.",
+                        "findings": [
+                            {"metric": "Coverage", "value": "Partial", "rating": "neutral"}
+                        ],
+                    },
+                    "sentiment": {
+                        "category": "Sentiment Analysis",
+                        "score": 0.0,
+                        "summary": "Signal feed unavailable for this moment.",
+                        "findings": [
+                            {"metric": "Confidence", "value": "Low", "rating": "neutral"}
+                        ],
+                    },
+                }
+                return convert_numpy_types({
+                    "ticker": resolved_ticker,
+                    "company_name": info.get("longName", resolved_ticker),
+                    "fetch_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "price_data": fallback_price_data,
+                    "data_quality": {
+                        "price_source": "unavailable_fallback",
+                        "degraded": True,
+                        "insufficient_signal": True,
+                    },
+                    "volatility": {},
+                    "fundamentals": {},
+                    "analyst_data": {},
+                    "short_interest": {},
+                    "news": [],
+                    "comparison": {},
+                    "analysis": fallback_analysis,
+                    "etf_analysis": None,
+                    "recommendation": {
+                        "action": "HOLD",
+                        "reason": "Insufficient live market signal. Retry shortly.",
+                    },
+                    "valuation": Valuation.FAIRLY_VALUED.value,
+                    "total_score": 0,
+                    "verdict": "Insufficient signal quality right now. Please retry for a full analysis.",
+                })
         
         # Analyze
         analyzer = StockAnalyzer(data)

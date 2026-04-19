@@ -63,9 +63,13 @@ function pushEvent(message) {
 
 async function findTabButton(page, patterns) {
   for (const pattern of patterns) {
-    const locator = page.getByRole("button", { name: pattern }).first();
-    if (await locator.count()) {
-      return locator;
+    const locator = page.getByRole("button", { name: pattern });
+    const count = await locator.count();
+    for (let i = 0; i < count; i += 1) {
+      const candidate = locator.nth(i);
+      if (await candidate.isVisible()) {
+        return candidate;
+      }
     }
   }
   return null;
@@ -177,20 +181,56 @@ async function runTickerChecks(page, viewportName) {
     await page.waitForTimeout(1000);
   }
 
-  const searchInput = page.getByPlaceholder(/AAPL|NVDA|BTC-USD|search/i).first();
+  const searchInput = page.locator('input[aria-label="Search for a stock, ETF, or crypto ticker"]').first();
   if (!(await searchInput.count())) {
     pushIssue({ kind: "ui", viewport: viewportName, text: "Analyzer search input not found" });
     return;
   }
 
+  const waitSearchReady = async (ticker) => {
+    const started = Date.now();
+    while (Date.now() - started < 35000) {
+      const exists = await searchInput.count();
+      if (!exists) {
+        await page.waitForTimeout(250);
+        continue;
+      }
+      const disabled = await searchInput.isDisabled();
+      if (!disabled) return true;
+      await page.waitForTimeout(250);
+    }
+    pushIssue({
+      kind: "ui",
+      viewport: viewportName,
+      text: `Search input remained disabled before ${ticker}`,
+    });
+    return false;
+  };
+
+  const hasVisibleChartLoading = async () => {
+    const loadingTexts = page.getByText(/Lade Kursverlauf|Chart-Layout wird vorbereitet/i);
+    const count = await loadingTexts.count();
+    for (let i = 0; i < count; i += 1) {
+      if (await loadingTexts.nth(i).isVisible()) return true;
+    }
+    return false;
+  };
+
   for (const ticker of TICKERS) {
+    const ready = await waitSearchReady(ticker);
+    if (!ready) continue;
     await searchInput.fill(ticker);
     await page.keyboard.press("Enter");
     await page.waitForTimeout(5200);
     summary.metrics.tickerRuns += 1;
 
-    const loadingChart = await page.getByText(/Lade Kursverlauf|Chart-Layout wird vorbereitet/i).count();
-    if (loadingChart > 0) {
+    let loadingChartVisible = await hasVisibleChartLoading();
+    if (loadingChartVisible) {
+      // one extra grace window to avoid false positives from transient redraws
+      await page.waitForTimeout(3000);
+      loadingChartVisible = await hasVisibleChartLoading();
+    }
+    if (loadingChartVisible) {
       summary.metrics.chartStillLoading += 1;
       pushIssue({
         kind: "ui",

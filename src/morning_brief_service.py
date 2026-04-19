@@ -767,27 +767,47 @@ class MorningBriefService:
             self._event_ping_cooldown[cooldown_key] = now
 
             event_intelligence = event.get("event_intelligence") or {}
+            affected_assets = list(event_intelligence.get("affected_assets") or [])
+            base_symbols = [event.get("ticker")] + affected_assets
+            symbols = list(dict.fromkeys([symbol for symbol in base_symbols if symbol]))[:4]
+            trade_action = str(event_intelligence.get("action") or "watch")
+            baseline_scenario = (
+                event_intelligence.get("why_now")
+                or event.get("thesis")
+                or event.get("title")
+                or "Macro catalyst active."
+            )
+            hedge_idea = (
+                (event.get("portfolio_exposure") or {}).get("hedge_candidates", [{}])[0].get("ticker")
+                if isinstance(event.get("portfolio_exposure"), dict)
+                else None
+            )
+            if not hedge_idea:
+                if event_type in {"conflict", "energy"}:
+                    hedge_idea = "GLD / XLE"
+                elif event_type in {"central_bank", "policy"}:
+                    hedge_idea = "TLT / cash buffer"
+                else:
+                    hedge_idea = "Reduce gross exposure"
             pings.append(
                 {
                     "id": f"{cooldown_key}:{int(now.timestamp())}",
                     "type": event_type,
                     "severity": event.get("severity") or "normal",
                     "region": event.get("region") or "global",
-                    "symbols": list(
-                        dict.fromkeys(
-                            [
-                                symbol
-                                for symbol in (
-                                    [event.get("ticker")]
-                                    + list(event_intelligence.get("affected_assets") or [])
-                                )
-                                if symbol
-                            ]
-                        )
-                    )[:4],
+                    "symbols": symbols,
                     "started_at": now.isoformat(),
                     "confidence": int(event_intelligence.get("confidence_score") or 0),
                     "title": event.get("title"),
+                    "trade_impact": {
+                        "action": trade_action,
+                        "baseline_scenario": baseline_scenario,
+                        "symbols": symbols,
+                        "trigger": event_intelligence.get("trigger"),
+                        "invalidation": event_intelligence.get("invalidation"),
+                        "window": event_intelligence.get("execution_window") or "open+60m",
+                        "hedge_idea": hedge_idea,
+                    },
                 }
             )
         return pings[:8]
@@ -820,6 +840,12 @@ class MorningBriefService:
             )
             confidence = int(intelligence.get("confidence_score") or 55)
             score = round((impact_value * relevance * recency * trust * confidence), 2)
+            expected_move = item.get("impact") or "medium"
+            expected_move_map = {
+                "high": "1.5-3.0%",
+                "medium": "0.8-1.8%",
+                "low": "0.3-1.0%",
+            }
             scored.append(
                 {
                     "symbol": ticker,
@@ -828,14 +854,17 @@ class MorningBriefService:
                     "invalidation": item.get("risk") or intelligence.get("invalidation") or "Invalid if first impulse fully reverses.",
                     "window": intelligence.get("execution_window") or "open+60m",
                     "confidence": confidence,
-                    "expected_move": item.get("impact") or "medium",
+                    "expected_move": expected_move_map.get(str(expected_move), str(expected_move)),
                     "catalysts": [value for value in [item.get("event_type"), item.get("region"), item.get("source")] if value],
                     "_score": score,
                 }
             )
 
         scored.sort(key=lambda row: (row["_score"], row["confidence"]), reverse=True)
-        for row in scored:
+        for index, row in enumerate(scored, start=1):
+            row["rank"] = index
+            row["rank_score"] = round(float(row.get("_score") or 0), 2)
+            row["setup_id"] = f"{row.get('symbol','UNK')}-{index}"
             row.pop("_score", None)
         return scored[:5]
 

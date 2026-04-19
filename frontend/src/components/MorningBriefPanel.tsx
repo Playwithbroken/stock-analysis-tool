@@ -285,15 +285,25 @@ export default function MorningBriefPanel({
                 className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setup.symbol && onAnalyze(setup.symbol)}
-                    className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"
-                  >
-                    {setup.symbol}
-                  </button>
-                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    confidence {setup.confidence}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      #{setup.rank ?? idx + 1}
+                    </span>
+                    <button
+                      onClick={() => setup.symbol && onAnalyze(setup.symbol)}
+                      className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"
+                    >
+                      {setup.symbol}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      score {setup.rank_score ?? "n/a"}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      confidence {setup.confidence}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">{setup.thesis}</div>
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">

@@ -92,6 +92,15 @@ interface EventPingItem {
   started_at?: string;
   confidence?: number;
   title?: string;
+  trade_impact?: {
+    action?: string;
+    baseline_scenario?: string;
+    symbols?: string[];
+    trigger?: string;
+    invalidation?: string;
+    window?: string;
+    hedge_idea?: string;
+  };
 }
 
 interface WorldMarketMapProps {
@@ -808,6 +817,7 @@ export default function WorldMarketMap({
         };
         const event_type = eventTypeMap[type] || type || "macro";
         const symbols = Array.isArray(ping.symbols) ? ping.symbols.filter(Boolean) : [];
+        const tradeImpact = ping.trade_impact || {};
         return {
           title: ping.title || `${event_type.replace("_", " ")} signal`,
           region: ping.region || "global",
@@ -821,12 +831,22 @@ export default function WorldMarketMap({
             impact_score: severity === "critical" ? 90 : severity === "elevated" ? 74 : 58,
             confidence_score: Number.isFinite(Number(ping.confidence)) ? Number(ping.confidence) : 60,
             decay: "developing",
-            affected_assets: symbols,
-            action: "watch",
+            affected_assets: Array.isArray(tradeImpact.symbols) && tradeImpact.symbols.length ? tradeImpact.symbols : symbols,
+            action: tradeImpact.action || "watch",
             leverage: "avoid",
-            trigger: "Monitor first reaction after open.",
-            invalidation: "Signal invalid if first move fully reverses.",
+            trigger: tradeImpact.trigger || "Monitor first reaction after open.",
+            invalidation: tradeImpact.invalidation || "Signal invalid if first move fully reverses.",
+            execution_window: tradeImpact.window || "open+60m",
+            why_now: tradeImpact.baseline_scenario || "Macro catalyst active.",
           },
+          portfolio_exposure: tradeImpact.hedge_idea
+            ? {
+                status: "watch",
+                note: `Hedge idea: ${tradeImpact.hedge_idea}`,
+                action: "hedge",
+                exposure_strength: "medium",
+              }
+            : undefined,
         };
       }),
     [eventPings],

@@ -157,6 +157,9 @@ class MorningBriefService:
     _holding_profile_cache: Dict[str, Dict[str, Any]] = {}
     _social_service: SocialIntelligenceService = SocialIntelligenceService()
     _signals_service: TradingSignalsService = TradingSignalsService()
+    _event_ping_cooldown: Dict[str, datetime] = {}
+    _event_ping_cooldown_seconds = 60 * 30
+    _kalshi_enabled = str(os.getenv("KALSHI_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}
 
     def _persist_snapshot(self, brief: Dict[str, Any]) -> None:
         try:
@@ -217,17 +220,25 @@ class MorningBriefService:
                 "note": "Fallback response due to upstream timeout.",
             },
             "event_layer": [],
+            "event_pings": [],
             "contrarian_signals": [],
             "economic_calendar": [],
             "earnings_calendar": [],
             "broad_earnings": [],
             "opening_timeline": [],
             "action_board": [],
+            "trade_setups": [],
+            "trade_setups_status": "insufficient_signal",
             "portfolio_brain": [],
             "watchlist_impact": [],
             "reddit_posts": [],
             "stocktwits": [],
             "polymarket": [],
+            "prediction_signals": [],
+            "prediction_markets": {
+                "kalshi_enabled": self._kalshi_enabled,
+                "status": "data_delayed",
+            },
             "google_news_extra": [],
             "trading_edge": {},
             "quality": {
@@ -318,6 +329,7 @@ class MorningBriefService:
         trading_edge: Dict[str, Any] = {}
 
         event_layer = self._build_event_layer(top_news)
+        event_pings = self._build_event_pings(event_layer)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
         economic_calendar = self._build_economic_calendar(event_layer)
@@ -330,6 +342,8 @@ class MorningBriefService:
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
+        trade_setups = self._build_trade_setups(action_board, top_news)
+        prediction_signals = self._build_prediction_signals(polymarket_events)
 
         brief = {
             "generated_at": now.isoformat(),
@@ -355,18 +369,26 @@ class MorningBriefService:
                 "note": "Top News zeigt nur priorisierte serioese Quellen. Social/X und Reddit laufen separat ueber Social und Crowd Radar, nicht im Trusted-News-Block.",
             },
             "event_layer": event_layer,
+            "event_pings": event_pings,
             "contrarian_signals": contrarian_signals,
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
             "broad_earnings": broad_earnings,
             "opening_timeline": opening_timeline,
             "action_board": action_board,
+            "trade_setups": trade_setups,
+            "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
             "portfolio_brain": self._build_portfolio_brain(action_board),
             "watchlist_impact": [],
             # Social intelligence
             "reddit_posts": reddit_posts[:10],
             "stocktwits": stocktwits_data,
             "polymarket": polymarket_events[:8],
+            "prediction_signals": prediction_signals,
+            "prediction_markets": {
+                "kalshi_enabled": self._kalshi_enabled,
+                "status": "live" if prediction_signals else "data_delayed",
+            },
             "google_news_extra": google_news_extra[:8],
             "trading_edge": trading_edge,
         }
@@ -398,6 +420,7 @@ class MorningBriefService:
         macro = self._collect_assets(self.MACRO, fast=True)
         top_news = self._collect_news(extra_tickers=watchlist_tickers, fast=True)
         event_layer = self._build_event_layer(top_news)
+        event_pings = self._build_event_pings(event_layer)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
             [asia, europe, usa],
@@ -408,6 +431,7 @@ class MorningBriefService:
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
+        trade_setups = self._build_trade_setups(action_board, top_news)
 
         brief = {
             "generated_at": now.isoformat(),
@@ -433,17 +457,25 @@ class MorningBriefService:
                 "note": "Fast brief mode: trusted sources prioritised, deep social layers deferred.",
             },
             "event_layer": event_layer,
+            "event_pings": event_pings,
             "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
             "economic_calendar": economic_calendar,
             "earnings_calendar": [],
             "broad_earnings": [],
             "opening_timeline": opening_timeline,
             "action_board": action_board,
+            "trade_setups": trade_setups,
+            "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
             "portfolio_brain": self._build_portfolio_brain(action_board),
             "watchlist_impact": [],
             "reddit_posts": [],
             "stocktwits": [],
             "polymarket": [],
+            "prediction_signals": [],
+            "prediction_markets": {
+                "kalshi_enabled": self._kalshi_enabled,
+                "status": "data_delayed",
+            },
             "google_news_extra": [],
             "trading_edge": {},
         }
@@ -494,6 +526,11 @@ class MorningBriefService:
                 "key": "action_board_depth",
                 "label": "Action board",
                 "ok": len(brief.get("action_board") or []) >= 4,
+            },
+            {
+                "key": "trade_setups",
+                "label": "Trade setups",
+                "ok": len(brief.get("trade_setups") or []) >= 3,
             },
             {
                 "key": "freshness",
@@ -705,6 +742,150 @@ class MorningBriefService:
                 }
             )
         return layer[:8]
+
+    def _build_event_pings(self, event_layer: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        now = datetime.now(timezone.utc)
+        dedup: Dict[tuple[str, str], Dict[str, Any]] = {}
+        for event in event_layer:
+            event_type = str(event.get("event_type") or "macro").lower()
+            geo = event.get("geo") if isinstance(event.get("geo"), dict) else {}
+            place = str(geo.get("place") or event.get("region") or "Global")
+            key = (event_type, place.lower())
+            map_priority = int(event.get("map_priority") or 100)
+            if key not in dedup or map_priority < int(dedup[key].get("map_priority") or 100):
+                dedup[key] = event
+
+        pings: List[Dict[str, Any]] = []
+        for event in sorted(dedup.values(), key=lambda item: int(item.get("map_priority") or 100)):
+            event_type = str(event.get("event_type") or "macro").lower()
+            geo = event.get("geo") if isinstance(event.get("geo"), dict) else {}
+            place = str(geo.get("place") or event.get("region") or "Global")
+            cooldown_key = f"{event_type}:{place.lower()}"
+            last_seen = self._event_ping_cooldown.get(cooldown_key)
+            if last_seen and (now - last_seen).total_seconds() < self._event_ping_cooldown_seconds:
+                continue
+            self._event_ping_cooldown[cooldown_key] = now
+
+            event_intelligence = event.get("event_intelligence") or {}
+            pings.append(
+                {
+                    "id": f"{cooldown_key}:{int(now.timestamp())}",
+                    "type": event_type,
+                    "severity": event.get("severity") or "normal",
+                    "region": event.get("region") or "global",
+                    "symbols": list(
+                        dict.fromkeys(
+                            [
+                                symbol
+                                for symbol in (
+                                    [event.get("ticker")]
+                                    + list(event_intelligence.get("affected_assets") or [])
+                                )
+                                if symbol
+                            ]
+                        )
+                    )[:4],
+                    "started_at": now.isoformat(),
+                    "confidence": int(event_intelligence.get("confidence_score") or 0),
+                    "title": event.get("title"),
+                }
+            )
+        return pings[:8]
+
+    def _build_trade_setups(
+        self,
+        action_board: List[Dict[str, Any]],
+        news: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        source_lookup: Dict[str, Dict[str, Any]] = {}
+        for item in news:
+            ticker = str(item.get("ticker") or "").upper()
+            if ticker and ticker not in source_lookup:
+                source_lookup[ticker] = item
+
+        scored: List[Dict[str, Any]] = []
+        for item in action_board:
+            ticker = str(item.get("ticker") or "").upper()
+            if not ticker:
+                continue
+            intelligence = item.get("event_intelligence") or {}
+            source_item = source_lookup.get(ticker, {})
+            impact_value = {"high": 1.0, "medium": 0.65, "low": 0.35}.get(str(item.get("impact") or "low"), 0.35)
+            relevance = self._event_relevance_score(item)
+            decay = str(intelligence.get("decay") or "active")
+            recency = {"developing": 1.0, "active": 0.85, "fading": 0.55}.get(decay, 0.7)
+            trust = {"tier_1": 1.0, "tier_2": 0.78, "crowd": 0.45, "excluded": 0.2}.get(
+                str(source_item.get("source_quality") or "tier_2"),
+                0.7,
+            )
+            confidence = int(intelligence.get("confidence_score") or 55)
+            score = round((impact_value * relevance * recency * trust * confidence), 2)
+            scored.append(
+                {
+                    "symbol": ticker,
+                    "thesis": item.get("thesis") or item.get("title") or "Set-up requires confirmation.",
+                    "trigger": item.get("trigger") or intelligence.get("trigger") or "Wait for structure confirmation.",
+                    "invalidation": item.get("risk") or intelligence.get("invalidation") or "Invalid if first impulse fully reverses.",
+                    "window": intelligence.get("execution_window") or "open+60m",
+                    "confidence": confidence,
+                    "expected_move": item.get("impact") or "medium",
+                    "catalysts": [value for value in [item.get("event_type"), item.get("region"), item.get("source")] if value],
+                    "_score": score,
+                }
+            )
+
+        scored.sort(key=lambda row: (row["_score"], row["confidence"]), reverse=True)
+        for row in scored:
+            row.pop("_score", None)
+        return scored[:5]
+
+    def _build_prediction_signals(self, polymarket_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        signals: List[Dict[str, Any]] = []
+        for event in polymarket_events or []:
+            question = str(event.get("question") or "").strip()
+            if not question:
+                continue
+            probability = self._normalize_probability(event.get("probability_yes"))
+            if probability is None:
+                continue
+            volume_usd = self._safe_float(event.get("volume_usd")) or 0.0
+            relevance = max(10, min(100, int(self._event_relevance_score({"title": question}) * 60 + (volume_usd / 2_000_000))))
+            if relevance < 28:
+                continue
+            signals.append(
+                {
+                    "source": "polymarket",
+                    "market": question,
+                    "probability": probability,
+                    "delta_24h": None,
+                    "relevance": relevance,
+                }
+            )
+
+        signals.sort(key=lambda row: row.get("relevance", 0), reverse=True)
+        return signals[:8]
+
+    def _normalize_probability(self, value: Any) -> float | None:
+        parsed = self._safe_float(value)
+        if parsed is None:
+            return None
+        if parsed > 1.0:
+            parsed = parsed / 100.0
+        parsed = max(0.0, min(1.0, parsed))
+        return round(parsed, 4)
+
+    def _event_relevance_score(self, item: Dict[str, Any]) -> float:
+        title = str(item.get("title") or item.get("thesis") or "").lower()
+        ticker = str(item.get("ticker") or item.get("symbol") or "").upper()
+        event_type = str(item.get("event_type") or "").lower()
+        score = 1.0
+        if ticker:
+            score += 0.35
+        if event_type in {"conflict", "central_bank", "policy", "energy", "macro_data"}:
+            score += 0.4
+        if any(keyword in title for keyword in ["fed", "opec", "oil", "war", "inflation", "rates", "earnings", "guidance", "election"]):
+            score += 0.3
+        return min(2.0, score)
 
     def _resolve_event_geo(self, item: Dict[str, Any]) -> Dict[str, Any]:
         # Priority 1: upstream/provider geo values if present.

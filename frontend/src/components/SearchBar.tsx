@@ -212,7 +212,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
+    <form onSubmit={handleSubmit} className="mx-auto max-w-5xl">
       <div className="surface-panel relative overflow-hidden rounded-[2rem] p-3">
         <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-black/10 to-transparent" />
 

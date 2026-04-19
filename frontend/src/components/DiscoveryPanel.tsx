@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import MarketSentiment from "./MarketSentiment";
 import PublicSignalsPanel from "./PublicSignalsPanel";
 import SignalWatchlistPanel from "./SignalWatchlistPanel";
@@ -60,8 +60,9 @@ interface ScreenerRow {
   low52_proximity?: number;
 }
 
-const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
+const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw }) => {
   const { formatPrice } = useCurrency();
+  const [marketView, setMarketView] = useState<"movers" | "explorer">("movers");
   const [activeTab, setActiveTab] = useState<
     "overview" | "signals" | "ai" | "movers" | "screener" | "alternative" | "etf" | "internals"
   >("overview");
@@ -97,6 +98,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   const [screenerLow52, setScreenerLow52] = useState("");
   const [screenerSortBy, setScreenerSortBy] = useState<"rsi_14" | "market_cap" | "high52_proximity" | "low52_proximity">("rsi_14");
   const [screenerSortDirection, setScreenerSortDirection] = useState<"asc" | "desc">("asc");
+  const analyzeEnabledAtRef = useRef(0);
+
+  const onAnalyze = (ticker: string) => {
+    const symbol = (ticker || "").trim().toUpperCase();
+    if (!symbol) return;
+    if (Date.now() < analyzeEnabledAtRef.current) return;
+    onAnalyzeRaw(symbol);
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -244,15 +253,28 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
   };
 
   const tabs = [
-    { id: "signals", label: "Signals", icon: "SG" },
-    { id: "overview", label: "Markt-Puls", icon: "MP" },
-    { id: "ai", label: "AI Chancen", icon: "AI" },
-    { id: "movers", label: "Top/Flop", icon: "TF" },
-    { id: "screener", label: "Screener", icon: "SC" },
-    { id: "etf", label: "ETF Welt", icon: "ETF" },
-    { id: "alternative", label: "Alternativ", icon: "ALT" },
-    { id: "internals", label: "Internals", icon: "⚖" },
+    { id: "signals", label: "Signals", icon: "SG", view: "explorer" as const },
+    { id: "overview", label: "Markt-Puls", icon: "MP", view: "movers" as const },
+    { id: "ai", label: "AI Chancen", icon: "AI", view: "movers" as const },
+    { id: "movers", label: "Top/Flop", icon: "TF", view: "movers" as const },
+    { id: "screener", label: "Screener", icon: "SC", view: "explorer" as const },
+    { id: "etf", label: "ETF Welt", icon: "ETF", view: "explorer" as const },
+    { id: "alternative", label: "Alternativ", icon: "ALT", view: "movers" as const },
+    { id: "internals", label: "Internals", icon: "⚖", view: "explorer" as const },
   ] as const;
+  const visibleTabs = tabs.filter((tab) => tab.view === marketView);
+
+  useEffect(() => {
+    const activeVisible = visibleTabs.some((tab) => tab.id === activeTab);
+    if (!activeVisible) {
+      setActiveTab(visibleTabs[0]?.id ?? "overview");
+    }
+  }, [activeTab, marketView, visibleTabs]);
+
+  useEffect(() => {
+    // Defensive click-through guard when switching discovery modes/tabs.
+    analyzeEnabledAtRef.current = Date.now() + 1200;
+  }, [activeTab, marketView]);
 
   const sortedScreenerRows = [...screenerRows].sort((a, b) => {
     const aValue = Number(a?.[screenerSortBy] ?? 0);
@@ -301,10 +323,36 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze }) => {
 
   return (
     <div className="space-y-8 pb-20">
+      <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-3">
+        <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+          Discovery Mode
+        </div>
+        <div className="rounded-full border border-black/8 bg-white/75 p-1">
+          <button
+            type="button"
+            onClick={() => setMarketView("movers")}
+            className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
+              marketView === "movers" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            Top Movers
+          </button>
+          <button
+            type="button"
+            onClick={() => setMarketView("explorer")}
+            className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
+              marketView === "explorer" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            Market Explorer
+          </button>
+        </div>
+      </div>
+
       {/* Tab Navigation */}
       <div className="no-scrollbar sticky top-20 z-40 -mx-1 overflow-x-auto px-1">
         <div className="surface-panel mx-auto flex w-max min-w-full items-center gap-2 rounded-2xl p-1.5 lg:mx-0 lg:min-w-0">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}

@@ -153,8 +153,9 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const [showVWAP, setShowVWAP] = useState(false);
   const [retryCounter, setRetryCounter] = useState(0);
   const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
+  const [historyState, setHistoryState] = useState<"loading" | "ready" | "stale" | "unavailable">("loading");
   const tickerSymbol = ticker.toUpperCase();
-  const { quotes, connected, lastUpdated } = useRealtimeFeed([ticker], true);
+  const { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError } = useRealtimeFeed([ticker], true);
   const realtimeQuote = quotes[tickerSymbol];
 
   const requestIdRef = useRef(0);
@@ -176,10 +177,11 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     const timeoutGuard = window.setTimeout(() => {
       abortRef.current?.abort();
       setFetchError(true);
-      setFetchErrorMessage("Kursverlauf hat zu lange geladen. Bitte Retry klicken.");
+      setFetchErrorMessage("Kursverlauf braucht zu lange. Bitte Retry klicken.");
       setData([]);
       setLoading(false);
-    }, 30000);
+      setHistoryState("unavailable");
+    }, 12000);
     return () => {
       window.clearTimeout(timeoutGuard);
     };
@@ -194,36 +196,93 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
 
     const fetchHistory = async () => {
       setLoading(true);
+      setHistoryState("loading");
       setFetchError(false);
       setFetchErrorMessage("");
       setData([]);
       setIndicators(emptyIndicators());
 
       try {
-        const histData = await fetchJsonWithRetry<HistoryItem[]>(
+        const normalizeHistory = (raw: any[]): HistoryItem[] =>
+          (raw || [])
+            .map((item) => {
+              const priceNum = Number(item?.price);
+              const volumeNum = Number(item?.volume);
+              return {
+                time: String(item?.time ?? ""),
+                full_date: item?.full_date ? String(item.full_date) : undefined,
+                price: priceNum,
+                volume: Number.isFinite(volumeNum) ? volumeNum : 0,
+              } as HistoryItem;
+            })
+            .filter((item) => item.time && Number.isFinite(item.price));
+
+        const historyRequests = [
           `/api/history/${tickerSymbol}?period=${period.id}&interval=${period.interval}`,
-          { signal: controller.signal },
-          { retries: 1, retryDelayMs: 800, timeoutMs: 22000 },
-        );
+          `/api/history/${tickerSymbol}?period=1mo&interval=1d`,
+          `/api/history/${tickerSymbol}?period=5d&interval=15m`,
+        ];
+
+        let normalized: HistoryItem[] = [];
+        let lastRequestError: unknown = null;
+        let usedSnapshotFallback = false;
+        for (const url of historyRequests) {
+          try {
+            const histData = await fetchJsonWithRetry<HistoryItem[]>(
+              url,
+              { signal: controller.signal },
+              { retries: 0, retryDelayMs: 300, timeoutMs: 7000 },
+            );
+            normalized = normalizeHistory(histData as any[]);
+            if (normalized.length > 0) break;
+          } catch (error) {
+            lastRequestError = error;
+          }
+        }
+
+        if (normalized.length === 0 && lastRequestError) {
+          try {
+            const snapshot = await fetchJsonWithRetry<any>(
+              `/api/realtime/snapshot?symbols=${encodeURIComponent(tickerSymbol)}`,
+              { signal: controller.signal },
+              { retries: 0, retryDelayMs: 300, timeoutMs: 5000 },
+            );
+            const quote = Array.isArray(snapshot?.quotes)
+              ? snapshot.quotes.find((item: any) => String(item?.symbol || "").toUpperCase() === tickerSymbol)
+              : null;
+            const fallbackPrice = Number(quote?.price);
+            if (Number.isFinite(fallbackPrice)) {
+              const nowStamp = new Date().toISOString();
+              normalized = [
+                { time: "fallback", full_date: nowStamp, price: fallbackPrice, volume: Number(quote?.volume ?? 0) || 0 },
+              ];
+              usedSnapshotFallback = true;
+            }
+          } catch {
+            // ignore and throw original history error
+          }
+          if (normalized.length === 0) {
+            throw lastRequestError;
+          }
+        }
 
         if (requestIdRef.current !== requestId) return;
-
-        const normalized = (histData || [])
-          .filter((item) => item && Number.isFinite(item.price))
-          .map((item) => ({
-            ...item,
-            full_date: item.full_date || item.time,
-            volume: Number.isFinite(item.volume as number) ? Number(item.volume) : 0,
-          }));
+        normalized = normalized.map((item) => ({
+          ...item,
+          full_date: item.full_date || item.time,
+          volume: Number.isFinite(item.volume as number) ? Number(item.volume) : 0,
+        }));
 
         if (!normalized.length) {
           setData([]);
           setFetchError(true);
           setFetchErrorMessage("Keine Kursdaten erhalten. Bitte erneut versuchen.");
+          setHistoryState("unavailable");
           return;
         }
 
         setData(normalized);
+        setHistoryState(usedSnapshotFallback ? "stale" : "ready");
         if (normalized.length > 1) {
           const first = normalized[0].price;
           const last = normalized[normalized.length - 1].price;
@@ -289,6 +348,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }
         setData([]);
         setFetchError(true);
+        setHistoryState("unavailable");
       } finally {
         if (!controller.signal.aborted && requestIdRef.current === requestId) {
           setLoading(false);
@@ -382,7 +442,20 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 connected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"
               }`}
             >
-              {connected ? "Live" : "Polling"}
+              {connected ? "Live" : transportMode === "snapshot" ? "Snapshot" : "Polling"}
+            </span>
+            <span
+              className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                historyState === "ready"
+                  ? "bg-emerald-500/10 text-emerald-700"
+                  : historyState === "stale"
+                    ? "bg-amber-500/10 text-amber-700"
+                    : historyState === "unavailable"
+                      ? "bg-red-500/10 text-red-700"
+                      : "bg-slate-500/10 text-slate-500"
+              }`}
+            >
+              {historyState}
             </span>
           </div>
           <div className="flex items-baseline gap-3">
@@ -585,6 +658,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             : "YFinance-Engine v2.0"}
         </div>
       </div>
+      {(historyState === "stale" || connectionState !== "live" || lastError) ? (
+        <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-700">
+          Datenmodus: {connectionState} • Feed: {transportMode}
+          {typeof staleSeconds?.[tickerSymbol] === "number" ? ` • stale ${staleSeconds[tickerSymbol]}s` : ""}
+          {lastError ? ` • ${lastError}` : ""}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -17,10 +17,32 @@ class RealtimeMarketService:
                 cleaned.append(normalized)
         cleaned = cleaned[: self.MAX_SYMBOLS]
 
+        now = datetime.now(timezone.utc)
         quotes = [item for item in (self._build_quote(symbol) for symbol in cleaned) if item]
+        stale_seconds: Dict[str, int] = {}
+        for quote in quotes:
+            symbol = str(quote.get("symbol") or "").upper()
+            updated_raw = quote.get("updated_at")
+            if not symbol or not updated_raw:
+                continue
+            try:
+                updated_at = datetime.fromisoformat(str(updated_raw).replace("Z", "+00:00"))
+                stale_seconds[symbol] = max(0, int((now - updated_at).total_seconds()))
+            except Exception:
+                continue
+
+        if not quotes:
+            connection_state = "degraded"
+        elif any(seconds > 20 for seconds in stale_seconds.values()):
+            connection_state = "snapshot"
+        else:
+            connection_state = "live"
+
         return {
             "type": "realtime_snapshot",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": now.isoformat(),
+            "connection_state": connection_state,
+            "stale_seconds": stale_seconds,
             "quotes": quotes,
         }
 

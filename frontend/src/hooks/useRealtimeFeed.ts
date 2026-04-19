@@ -16,18 +16,34 @@ interface RealtimeQuote {
 interface RealtimePayload {
   type: string;
   generated_at: string;
+  connection_state?: "live" | "degraded" | "snapshot";
+  stale_seconds?: Record<string, number>;
   quotes: RealtimeQuote[];
 }
 
 const WS_UNAVAILABLE_UNTIL_KEY = "brokerfreund:ws-unavailable-until";
-const WS_FAILURE_THRESHOLD = 2;
+const WS_FAILURE_THRESHOLD = 1;
 const WS_SUSPEND_MS = 6 * 60 * 60 * 1000; // 6h
 let globalWsFailures = 0;
+let globalWsUnavailable = false;
 
 function buildRealtimeUrl(symbols: string[]) {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const params = new URLSearchParams({ symbols: symbols.join(",") });
   return `${protocol}://${window.location.host}/ws/realtime?${params.toString()}`;
+}
+
+function shouldPreferSnapshotOnly() {
+  const host = (window.location.hostname || "").toLowerCase();
+  const forceWs = (() => {
+    try {
+      return localStorage.getItem("brokerfreund:force-ws") === "1";
+    } catch {
+      return false;
+    }
+  })();
+  if (forceWs) return false;
+  return host.endsWith("railway.app");
 }
 
 export default function useRealtimeFeed(symbols: string[], enabled = true) {
@@ -39,6 +55,10 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const [quotes, setQuotes] = useState<Record<string, RealtimeQuote>>({});
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<"live" | "degraded" | "snapshot">("snapshot");
+  const [staleSeconds, setStaleSeconds] = useState<Record<string, number>>({});
+  const [transportMode, setTransportMode] = useState<"ws" | "snapshot">("snapshot");
+  const [lastError, setLastError] = useState<string | null>(null);
   const lastFrameRef = useRef<number>(0);
   const reconnectAttemptRef = useRef<number>(0);
   const wsDisabledRef = useRef<boolean>(false);
@@ -46,6 +66,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const clearWsUnavailable = () => {
     try {
       localStorage.removeItem(WS_UNAVAILABLE_UNTIL_KEY);
+      globalWsUnavailable = false;
     } catch {
       // ignore storage errors
     }
@@ -54,6 +75,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const markWsUnavailable = () => {
     try {
       localStorage.setItem(WS_UNAVAILABLE_UNTIL_KEY, String(Date.now() + WS_SUSPEND_MS));
+      globalWsUnavailable = true;
     } catch {
       // ignore storage errors
     }
@@ -82,9 +104,13 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     setQuotes({});
     setLastUpdated(null);
     setConnected(false);
+    setConnectionState("snapshot");
+    setStaleSeconds({});
+    setTransportMode("snapshot");
+    setLastError(null);
     lastFrameRef.current = 0;
     reconnectAttemptRef.current = 0;
-    wsDisabledRef.current = isWsUnavailable();
+    wsDisabledRef.current = globalWsUnavailable || isWsUnavailable() || shouldPreferSnapshotOnly();
 
     const allowedSymbols = new Set(cleaned);
 
@@ -119,15 +145,21 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
       if (closed || cleaned.length === 0) return;
       try {
         const response = await fetch(`/api/realtime/snapshot?symbols=${encodeURIComponent(cleaned.join(","))}`);
-        if (!response.ok) return;
+        if (!response.ok) {
+          setLastError(`snapshot_http_${response.status}`);
+          return;
+        }
         const payload = (await response.json()) as RealtimePayload;
         mergeQuotes(payload.quotes || []);
         setLastUpdated(payload.generated_at);
+        setConnectionState(payload.connection_state || "snapshot");
+        setStaleSeconds(payload.stale_seconds || {});
+        setTransportMode("snapshot");
         if ((payload.quotes || []).length > 0) {
           setConnected(true);
         }
       } catch {
-        // ignore snapshot fallback errors
+        setLastError("snapshot_fetch_failed");
       }
     };
 
@@ -143,6 +175,9 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
       const attempt = reconnectAttemptRef.current;
       if (attempt >= 4) {
         wsDisabledRef.current = true;
+        markWsUnavailable();
+        setTransportMode("snapshot");
+        setConnectionState("snapshot");
         return;
       }
       const waitMs = getBackoffDelayMs(attempt);
@@ -161,15 +196,20 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         globalWsFailures = 0;
         clearWsUnavailable();
         wsDisabledRef.current = false;
+        setLastError(null);
+        setTransportMode("ws");
         scheduleStaleCheck();
       };
       socket.onclose = (event) => {
         setConnected(false);
+        setTransportMode("snapshot");
         // Auth/permission/configuration close codes should switch to snapshot mode
         // instead of retrying websocket forever.
         if (event.code === 1008 || event.code === 1011) {
           wsDisabledRef.current = true;
           markWsUnavailable();
+          setConnectionState("snapshot");
+          setLastError(`ws_closed_${event.code}`);
           return;
         }
         if (event.code === 1005 || event.code === 1006 || event.code === 1015) {
@@ -177,19 +217,34 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
           if (globalWsFailures >= WS_FAILURE_THRESHOLD) {
             wsDisabledRef.current = true;
             markWsUnavailable();
+            setConnectionState("snapshot");
+            setLastError(`ws_closed_${event.code}`);
             return;
           }
         }
+        setLastError(`ws_closed_${event.code || 0}`);
         scheduleReconnect();
       };
-      socket.onerror = () => setConnected(false);
+      socket.onerror = () => {
+        setConnected(false);
+        setLastError("ws_error");
+        if (globalWsFailures >= WS_FAILURE_THRESHOLD - 1) {
+          wsDisabledRef.current = true;
+          markWsUnavailable();
+          setConnectionState("snapshot");
+          socket?.close();
+        }
+      };
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data) as RealtimePayload;
           lastFrameRef.current = Date.now();
           setConnected(true);
+          setTransportMode("ws");
           mergeQuotes(payload.quotes || []);
           setLastUpdated(payload.generated_at);
+          setConnectionState(payload.connection_state || "live");
+          setStaleSeconds(payload.stale_seconds || {});
           scheduleStaleCheck();
         } catch {
           // ignore malformed frames
@@ -197,7 +252,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
       };
     };
 
-    connect();
+    if (!wsDisabledRef.current) connect();
     fetchSnapshot();
     pollTimer = window.setInterval(() => {
       const stale = !lastFrameRef.current || Date.now() - lastFrameRef.current > 12000;
@@ -209,6 +264,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     return () => {
       closed = true;
       setConnected(false);
+      setTransportMode("snapshot");
       if (retry) window.clearTimeout(retry);
       if (staleTimer) window.clearTimeout(staleTimer);
       if (pollTimer) window.clearInterval(pollTimer);
@@ -216,5 +272,5 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     };
   }, [symbolKey, enabled]);
 
-  return { quotes, connected, lastUpdated };
+  return { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError };
 }

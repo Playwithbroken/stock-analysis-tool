@@ -83,12 +83,24 @@ interface ContrarianSignalItem {
   link?: string;
 }
 
+interface EventPingItem {
+  id?: string;
+  type?: string;
+  severity?: string;
+  region?: string;
+  symbols?: string[];
+  started_at?: string;
+  confidence?: number;
+  title?: string;
+}
+
 interface WorldMarketMapProps {
   regions: RegionSummary[];
   selectedRegion: string;
   onSelectRegion: (regionLabel: string) => void;
   news?: MapNewsItem[];
   eventLayer?: MapNewsItem[];
+  eventPings?: EventPingItem[];
   watchlistImpact?: WatchlistImpactItem[];
   contrarianSignals?: ContrarianSignalItem[];
   openingTimeline?: Array<{
@@ -747,6 +759,7 @@ export default function WorldMarketMap({
   onSelectRegion,
   news = [],
   eventLayer = [],
+  eventPings = [],
   watchlistImpact = [],
   contrarianSignals = [],
   openingTimeline = [],
@@ -772,9 +785,56 @@ export default function WorldMarketMap({
     [activeRegion, news],
   );
 
+  const normalizedPingLayer = useMemo<MapNewsItem[]>(
+    () =>
+      (eventPings || []).map((ping) => {
+        const type = String(ping.type || "macro").toLowerCase();
+        const severity = String(ping.severity || "normal").toLowerCase();
+        const impact =
+          severity === "critical" ? "high" : severity === "elevated" ? "medium" : "low";
+        const eventTypeMap: Record<string, string> = {
+          war: "conflict",
+          conflict: "conflict",
+          cb: "central_bank",
+          central_bank: "central_bank",
+          oil: "energy",
+          energy: "energy",
+          vote: "election",
+          election: "election",
+          nat: "disaster",
+          disaster: "disaster",
+          pol: "policy",
+          policy: "policy",
+        };
+        const event_type = eventTypeMap[type] || type || "macro";
+        const symbols = Array.isArray(ping.symbols) ? ping.symbols.filter(Boolean) : [];
+        return {
+          title: ping.title || `${event_type.replace("_", " ")} signal`,
+          region: ping.region || "global",
+          impact,
+          event_type,
+          severity,
+          ticker: symbols[0],
+          publisher: "Event Ping",
+          map_priority: severity === "critical" ? 10 : severity === "elevated" ? 20 : 40,
+          event_intelligence: {
+            impact_score: severity === "critical" ? 90 : severity === "elevated" ? 74 : 58,
+            confidence_score: Number.isFinite(Number(ping.confidence)) ? Number(ping.confidence) : 60,
+            decay: "developing",
+            affected_assets: symbols,
+            action: "watch",
+            leverage: "avoid",
+            trigger: "Monitor first reaction after open.",
+            invalidation: "Signal invalid if first move fully reverses.",
+          },
+        };
+      }),
+    [eventPings],
+  );
+
   const geoSignals = useMemo(
     () =>
-      (eventLayer.length ? eventLayer : news)
+      ((eventLayer.length ? [...eventLayer, ...normalizedPingLayer] : [...news, ...normalizedPingLayer]))
         .flatMap(classifyGeoEvents)
         .filter((item) => item!.impact === "high" || item!.impact === "medium")
         .sort((a, b) => {
@@ -782,7 +842,7 @@ export default function WorldMarketMap({
           return (impactRank[a!.impact as keyof typeof impactRank] ?? 3) - (impactRank[b!.impact as keyof typeof impactRank] ?? 3);
         })
         .slice(0, 12) as GeoEvent[],
-    [eventLayer, news],
+    [eventLayer, news, normalizedPingLayer],
   );
 
   const filteredGeoSignals = useMemo(
@@ -1178,9 +1238,9 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.64fr_0.36fr]">
+        <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
           <div className="relative h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
-            <div className="relative w-full min-h-[260px] max-h-[min(68vh,620px)] [aspect-ratio:1404/601] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px]">
+            <div className="relative w-full min-h-[360px] max-h-[min(82vh,860px)] [aspect-ratio:16/9] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[420px] xl:min-h-[560px]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
               <img

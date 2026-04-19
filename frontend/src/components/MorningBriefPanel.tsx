@@ -204,6 +204,7 @@ export default function MorningBriefPanel({
           onSelectRegion={setSelectedRegion}
           news={brief.top_news || []}
           eventLayer={brief.event_layer || []}
+          eventPings={brief.event_pings || []}
           watchlistImpact={brief.watchlist_impact || []}
           contrarianSignals={brief.contrarian_signals || []}
           openingTimeline={brief.opening_timeline || []}
@@ -268,6 +269,60 @@ export default function MorningBriefPanel({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Top 5 Trade Setups
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              trader-first
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {(brief.trade_setups || []).slice(0, 5).map((setup: any, idx: number) => (
+              <div
+                key={`${setup.symbol}-${idx}`}
+                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setup.symbol && onAnalyze(setup.symbol)}
+                    className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"
+                  >
+                    {setup.symbol}
+                  </button>
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    confidence {setup.confidence}
+                  </span>
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-900">{setup.thesis}</div>
+                <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                  <div>Trigger: {setup.trigger}</div>
+                  <div>Window: {setup.window}</div>
+                  <div>Invalidation: {setup.invalidation}</div>
+                  <div>Expected move: {setup.expected_move}</div>
+                </div>
+                {setup.catalysts?.length ? (
+                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    {setup.catalysts.slice(0, 3).map((c: string) => (
+                      <span key={c} className="rounded-full border border-black/8 bg-white px-2 py-0.5">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {!(brief.trade_setups || []).length ? (
+              <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
+                {brief.trade_setups_status === "insufficient_signal"
+                  ? "Insufficient signal: aktuell keine belastbaren Setups."
+                  : "Keine belastbaren Setups im aktuellen Feed."}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
@@ -905,6 +960,58 @@ export default function MorningBriefPanel({
       )}
 
       {/* ── Polymarket Prediction Markets ─────────────────────────────── */}
+      <section className="surface-panel rounded-[2rem] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Prediction Markets
+          </div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+            Polymarket
+          </div>
+        </div>
+        {(brief.prediction_signals || []).length > 0 ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(brief.prediction_signals || []).slice(0, 8).map((pm: any, i: number) => {
+              const probabilityRaw = Number(pm.probability);
+              const probability = Number.isFinite(probabilityRaw)
+                ? (probabilityRaw > 1 ? probabilityRaw / 100 : probabilityRaw)
+                : null;
+              const prob = probability != null ? Math.round(probability * 100) : null;
+              return (
+                <div
+                  key={`pm-signal-${i}`}
+                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                >
+                  <div className="text-sm font-bold text-slate-900 line-clamp-2">
+                    {pm.market}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    {prob != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full ${prob >= 70 ? "bg-emerald-500" : prob <= 30 ? "bg-red-500" : "bg-amber-400"}`}
+                            style={{ width: `${prob}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-black text-slate-900">{prob}%</span>
+                      </div>
+                    )}
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      relevance {pm.relevance ?? "n/a"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-[1rem] border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700">
+            Polymarket-Daten aktuell verzoegert. Abschnitt bleibt sichtbar und wird automatisch wieder aktualisiert.
+          </div>
+        )}
+      </section>
+
       {(brief.polymarket || []).length > 0 && (
         <section className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
@@ -917,7 +1024,11 @@ export default function MorningBriefPanel({
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {(brief.polymarket || []).slice(0, 8).map((pm: any, i: number) => {
-              const prob = pm.probability_yes != null ? Math.round(pm.probability_yes * 100) : null;
+              const probabilityRaw = Number(pm.probability_yes);
+              const probability = Number.isFinite(probabilityRaw)
+                ? (probabilityRaw > 1 ? probabilityRaw / 100 : probabilityRaw)
+                : null;
+              const prob = probability != null ? Math.round(probability * 100) : null;
               const vol = pm.volume_usd ? `$${(pm.volume_usd / 1e6).toFixed(1)}M` : null;
               return (
                 <a

@@ -387,6 +387,7 @@ function AppContent() {
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchRequestIdRef = useRef(0);
   const briefRequestIdRef = useRef(0);
+  const discoveryAnalyzeEnabledAtRef = useRef(0);
 
   const {
     portfolios,
@@ -417,7 +418,12 @@ function AppContent() {
   ).slice(0, 10);
   const headerFallbackSymbols = ["SPY", "QQQ", "AAPL", "NVDA", "BTC-USD", "GLD"];
   const favoriteSymbols = headerSymbols.length ? headerSymbols : headerFallbackSymbols;
-  const { quotes: headerQuotes, connected: headerRealtimeConnected } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
+  const {
+    quotes: headerQuotes,
+    connected: headerRealtimeConnected,
+    connectionState: headerConnectionState,
+    transportMode: headerTransportMode,
+  } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
   const portfolioSnapshotForChat = useMemo(() => {
     const holdings = portfolios.flatMap((portfolio) =>
       (portfolio.holdings || []).map((holding) => ({
@@ -559,7 +565,7 @@ function AppContent() {
         "/api/signals/watchlist",
         `/api/discovery/gainers?window=${marketMoversWindow}`,
         `/api/discovery/losers?window=${marketMoversWindow}`,
-        "/api/discovery/market-stars",
+        "/api/discovery/stars",
         "/api/discovery/sentiment-heatmap",
         "/api/radar/bootstrap?limit=8",
         historyPath,
@@ -716,6 +722,14 @@ function AppContent() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab === "discovery") {
+      // Guard against click-through when switching tabs:
+      // prevents accidental immediate jump into Analyze.
+      discoveryAnalyzeEnabledAtRef.current = Date.now() + 1500;
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (analysis) {
       localStorage.setItem("lastAnalysis", JSON.stringify(analysis));
     }
@@ -799,6 +813,11 @@ function AppContent() {
         setLoading(false);
       }
     }
+  };
+
+  const handleDiscoveryAnalyze = (ticker: string) => {
+    if (Date.now() < discoveryAnalyzeEnabledAtRef.current) return;
+    void handleSearch(ticker);
   };
 
   if (auth.loading) {
@@ -965,7 +984,7 @@ function AppContent() {
               <div className="overflow-x-auto no-scrollbar">
                 <div className="flex min-w-max items-center gap-2">
                   <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
-                    {headerRealtimeConnected ? "Favorites feed" : "Favorites snapshot"}
+                    {headerRealtimeConnected ? `Favorites ${headerConnectionState}` : `Favorites ${headerTransportMode}`}
                   </div>
                   {favoriteSymbols.map((symbol) => (
                     <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
@@ -1131,6 +1150,7 @@ function AppContent() {
                     onSelectRegion={setSelectedGeoRegion}
                     news={globalBrief.top_news || []}
                     eventLayer={globalBrief.event_layer || []}
+                    eventPings={globalBrief.event_pings || []}
                     watchlistImpact={globalBrief.watchlist_impact || []}
                     contrarianSignals={globalBrief.contrarian_signals || []}
                     openingTimeline={globalBrief.opening_timeline || []}
@@ -1334,7 +1354,7 @@ function AppContent() {
         ) : activeTab === "discovery" ? (
           <ErrorBoundary>
             <Suspense fallback={<LoadingState />}>
-              <DiscoveryPanel onAnalyze={handleSearch} />
+              <DiscoveryPanel onAnalyze={handleDiscoveryAnalyze} />
             </Suspense>
           </ErrorBoundary>
         ) : (

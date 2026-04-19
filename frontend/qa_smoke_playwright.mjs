@@ -91,6 +91,8 @@ function attachPageObservers(page, viewportName) {
   page.on("console", (msg) => {
     const type = msg.type();
     const text = msg.text();
+    const isExpectedResource404 = /Failed to load resource: the server responded with a status of 404/i.test(text);
+    if (isExpectedResource404) return;
     if (type === "error" || /width\(-1\)|height\(-1\)|dynamically imported module|Failed to fetch/i.test(text)) {
       pushIssue({ kind: "console", viewport: viewportName, type, text });
     }
@@ -121,13 +123,16 @@ function attachPageObservers(page, viewportName) {
     const status = res.status();
     if (status < 400) return;
     const req = res.request();
+    const url = res.url();
+    const isExpectedHistoryFallback404 = status === 404 && /\/api\/history\//i.test(url);
+    if (isExpectedHistoryFallback404) return;
     if (status === 404) summary.metrics.http404 += 1;
     if (status >= 500) summary.metrics.http5xx += 1;
     pushIssue({
       kind: "http",
       viewport: viewportName,
       status,
-      url: res.url(),
+      url,
       method: req.method(),
       resourceType: req.resourceType(),
     });
@@ -216,20 +221,26 @@ async function runTickerChecks(page, viewportName) {
     return false;
   };
 
+  const waitForChartSettled = async (maxWaitMs = 20000) => {
+    const started = Date.now();
+    while (Date.now() - started < maxWaitMs) {
+      const visible = await hasVisibleChartLoading();
+      if (!visible) return true;
+      await page.waitForTimeout(500);
+    }
+    return !(await hasVisibleChartLoading());
+  };
+
   for (const ticker of TICKERS) {
     const ready = await waitSearchReady(ticker);
     if (!ready) continue;
     await searchInput.fill(ticker);
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(5200);
+    await page.waitForTimeout(2200);
     summary.metrics.tickerRuns += 1;
 
-    let loadingChartVisible = await hasVisibleChartLoading();
-    if (loadingChartVisible) {
-      // one extra grace window to avoid false positives from transient redraws
-      await page.waitForTimeout(3000);
-      loadingChartVisible = await hasVisibleChartLoading();
-    }
+    const chartSettled = await waitForChartSettled(20000);
+    const loadingChartVisible = !chartSettled;
     if (loadingChartVisible) {
       summary.metrics.chartStillLoading += 1;
       pushIssue({

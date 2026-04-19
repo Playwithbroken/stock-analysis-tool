@@ -220,7 +220,6 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         const historyRequests = [
           `/api/history/${tickerSymbol}?period=${period.id}&interval=${period.interval}`,
           `/api/history/${tickerSymbol}?period=1mo&interval=1d`,
-          `/api/history/${tickerSymbol}?period=5d&interval=15m`,
         ];
 
         let normalized: HistoryItem[] = [];
@@ -231,7 +230,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             const histData = await fetchJsonWithRetry<HistoryItem[]>(
               url,
               { signal: controller.signal },
-              { retries: 0, retryDelayMs: 300, timeoutMs: 7000 },
+              { retries: 0, retryDelayMs: 250, timeoutMs: 3500 },
             );
             normalized = normalizeHistory(histData as any[]);
             if (normalized.length > 0) break;
@@ -245,7 +244,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             const snapshot = await fetchJsonWithRetry<any>(
               `/api/realtime/snapshot?symbols=${encodeURIComponent(tickerSymbol)}`,
               { signal: controller.signal },
-              { retries: 0, retryDelayMs: 300, timeoutMs: 5000 },
+              { retries: 0, retryDelayMs: 250, timeoutMs: 2500 },
             );
             const quote = Array.isArray(snapshot?.quotes)
               ? snapshot.quotes.find((item: any) => String(item?.symbol || "").toUpperCase() === tickerSymbol)

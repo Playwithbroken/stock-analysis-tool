@@ -873,24 +873,65 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
 
-    def _fetch():
-        fetcher = DataFetcher(ticker)
-        return fetcher.get_history(period=period, interval=interval)
+    normalized_ticker = ticker.upper().strip()
+    attempts: List[tuple[str, str]] = [
+        (period, interval),
+        ("1mo", "1d"),
+        ("5d", "15m"),
+    ]
+    seen_attempts = set()
+    last_error: Optional[Exception] = None
 
+    loop = asyncio.get_event_loop()
+
+    for try_period, try_interval in attempts:
+        key = (try_period, try_interval)
+        if key in seen_attempts:
+            continue
+        seen_attempts.add(key)
+
+        def _fetch():
+            fetcher = DataFetcher(normalized_ticker)
+            return fetcher.get_history(period=try_period, interval=try_interval)
+
+        try:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                history = await asyncio.wait_for(
+                    loop.run_in_executor(pool, _fetch),
+                    timeout=12.0,
+                )
+            if history:
+                return convert_numpy_types(history)
+        except asyncio.TimeoutError as e:
+            last_error = e
+            continue
+        except Exception as e:
+            last_error = e
+            continue
+
+    # Snapshot fallback: return one synthetic datapoint instead of hard failure.
     try:
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            history = await asyncio.wait_for(
-                loop.run_in_executor(pool, _fetch),
-                timeout=20.0,
-            )
-        if not history:
-            raise HTTPException(status_code=404, detail="No history data available for this symbol and period")
-        return convert_numpy_types(history)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="History fetch timed out - yfinance did not respond in time")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
+        snapshot = get_realtime_market_service().build_snapshot([normalized_ticker])
+        quotes = snapshot.get("quotes", [])
+        quote = next(
+            (item for item in quotes if str(item.get("symbol", "")).upper() == normalized_ticker),
+            None,
+        )
+        price = float(quote.get("price")) if quote and quote.get("price") is not None else None
+        if price is not None:
+            fallback_history = [{
+                "time": "fallback",
+                "full_date": datetime.now().isoformat(),
+                "price": price,
+                "volume": float(quote.get("volume") or 0),
+            }]
+            return convert_numpy_types(fallback_history)
+    except Exception:
+        pass
+
+    if isinstance(last_error, asyncio.TimeoutError):
+        raise HTTPException(status_code=504, detail="History fetch timed out - data provider not responding")
+    raise HTTPException(status_code=404, detail="No history data available for this symbol right now")
 
 
 @app.get("/api/quick/{ticker}")

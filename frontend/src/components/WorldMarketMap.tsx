@@ -1260,7 +1260,7 @@ export default function WorldMarketMap({
 
         <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
           <div className="relative h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
-            <div className="relative w-full min-h-[360px] max-h-[min(82vh,860px)] [aspect-ratio:16/9] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[420px] xl:min-h-[560px]">
+            <div className="relative w-full min-h-[300px] max-h-[min(80vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[360px] xl:min-h-[430px]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
               <img

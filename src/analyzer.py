@@ -446,6 +446,128 @@ class StockAnalyzer:
                 "rating": rating,
                 "interpretation": interp
             })
+
+        statements = fund.get("financial_statements", {}) if isinstance(fund.get("financial_statements"), dict) else {}
+        trends = statements.get("trends", {}) if isinstance(statements.get("trends"), dict) else {}
+        annual_rows = statements.get("annual", []) if isinstance(statements.get("annual"), list) else []
+
+        statement_revenue_yoy = trends.get("revenue_yoy")
+        if statement_revenue_yoy is not None:
+            yoy_pct = statement_revenue_yoy * 100
+            if yoy_pct > 15:
+                rating = Rating.VERY_POSITIVE
+                interp = "Reported annual revenue is accelerating strongly"
+                score += 12
+            elif yoy_pct > 5:
+                rating = Rating.POSITIVE
+                interp = "Reported annual revenue is growing"
+                score += 6
+            elif yoy_pct > -3:
+                rating = Rating.NEUTRAL
+                interp = "Reported annual revenue is broadly stable"
+            elif yoy_pct > -12:
+                rating = Rating.NEGATIVE
+                interp = "Reported annual revenue is declining"
+                score -= 8
+            else:
+                rating = Rating.VERY_NEGATIVE
+                interp = "Reported annual revenue is falling sharply"
+                score -= 16
+            findings.append({
+                "metric": "Reported Revenue YoY",
+                "value": f"{yoy_pct:.1f}%",
+                "rating": rating,
+                "interpretation": interp,
+            })
+
+        revenue_cagr = trends.get("revenue_cagr")
+        if revenue_cagr is not None:
+            cagr_pct = revenue_cagr * 100
+            if cagr_pct > 12:
+                rating = Rating.POSITIVE
+                interp = "Multi-year revenue compound growth supports the thesis"
+                score += 8
+            elif cagr_pct >= 0:
+                rating = Rating.NEUTRAL
+                interp = "Multi-year revenue trend is positive but not exceptional"
+            else:
+                rating = Rating.NEGATIVE
+                interp = "Multi-year revenue trend is negative"
+                score -= 8
+            findings.append({
+                "metric": "Revenue CAGR",
+                "value": f"{cagr_pct:.1f}%",
+                "rating": rating,
+                "interpretation": interp,
+            })
+
+        quarterly_revenue_yoy = trends.get("quarterly_revenue_yoy")
+        if quarterly_revenue_yoy is not None:
+            q_pct = quarterly_revenue_yoy * 100
+            if q_pct > 10:
+                rating = Rating.POSITIVE
+                interp = "Latest quarterly revenue confirms near-term demand"
+                score += 6
+            elif q_pct > -5:
+                rating = Rating.NEUTRAL
+                interp = "Latest quarterly revenue is not a major signal"
+            else:
+                rating = Rating.NEGATIVE
+                interp = "Latest quarterly revenue weakens the near-term setup"
+                score -= 8
+            findings.append({
+                "metric": "Quarterly Revenue YoY",
+                "value": f"{q_pct:.1f}%",
+                "rating": rating,
+                "interpretation": interp,
+            })
+
+        latest_annual = annual_rows[0] if annual_rows else {}
+        fcf_margin = latest_annual.get("fcf_margin") if isinstance(latest_annual, dict) else None
+        if fcf_margin is not None:
+            fcf_margin_pct = fcf_margin * 100
+            if fcf_margin_pct > 15:
+                rating = Rating.VERY_POSITIVE
+                interp = "High free-cash-flow margin shows strong cash conversion"
+                score += 10
+            elif fcf_margin_pct > 5:
+                rating = Rating.POSITIVE
+                interp = "Positive free-cash-flow margin supports quality"
+                score += 5
+            elif fcf_margin_pct >= 0:
+                rating = Rating.NEUTRAL
+                interp = "Free-cash-flow conversion is thin"
+            else:
+                rating = Rating.NEGATIVE
+                interp = "Negative free-cash-flow margin signals cash burn"
+                score -= 10
+            findings.append({
+                "metric": "FCF Margin",
+                "value": f"{fcf_margin_pct:.1f}%",
+                "rating": rating,
+                "interpretation": interp,
+            })
+
+        operating_margin_change = trends.get("operating_margin_change")
+        if operating_margin_change is not None:
+            change_pct = operating_margin_change * 100
+            if change_pct > 2:
+                rating = Rating.POSITIVE
+                interp = "Operating leverage is improving"
+                score += 5
+            elif change_pct < -2:
+                rating = Rating.NEGATIVE
+                interp = "Operating margin is deteriorating"
+                score -= 6
+            else:
+                rating = Rating.NEUTRAL
+                interp = "Operating margin is stable"
+            findings.append({
+                "metric": "Operating Margin Change",
+                "value": f"{change_pct:+.1f} pts",
+                "rating": rating,
+                "interpretation": interp,
+            })
         
         # Debt analysis
         debt_equity = fund.get("debt_to_equity")

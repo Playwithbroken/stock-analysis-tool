@@ -34,6 +34,13 @@ const formatPercent = (value: number | null | undefined): string => {
   return `${sign}${value.toFixed(2)}%`;
 };
 
+const formatRatioPercent = (value: number | null | undefined): string => {
+  if (value == null || !Number.isFinite(value)) return "N/A";
+  const percent = Math.abs(value) <= 1 ? value * 100 : value;
+  const sign = percent >= 0 ? "+" : "";
+  return `${sign}${percent.toFixed(1)}%`;
+};
+
 const getRatingColor = (rating: string): string => {
   const colors: Record<string, string> = {
     very_positive: "text-emerald-700",
@@ -98,6 +105,12 @@ export default function AnalysisResult({
         : "bg-amber-500/12 text-amber-700";
   const technicalScore = clampScore(analysis?.technical?.score ?? total_score);
   const fundamentalScore = clampScore(analysis?.fundamental?.score ?? total_score);
+  const financialStatements = fundamentals?.financial_statements || {};
+  const annualFinancials = Array.isArray(financialStatements?.annual)
+    ? financialStatements.annual
+    : [];
+  const financialTrends = financialStatements?.trends || {};
+  const latestAnnual = annualFinancials[0] || {};
 
   React.useEffect(() => {
     let cancelled = false;
@@ -255,12 +268,12 @@ export default function AnalysisResult({
         ],
         [
           "Rev Growth",
-          formatPercent(fundamentals?.revenue_growth),
+          formatRatioPercent(fundamentals?.revenue_growth),
           fundamentals?.revenue_growth > 0.15 ? "High Growth" : "Moderate",
         ],
         [
           "Profit Margin",
-          formatPercent(fundamentals?.profit_margin),
+          formatRatioPercent(fundamentals?.profit_margin),
           fundamentals?.profit_margin > 0.1 ? "Efficient" : "Thin",
         ],
       ],
@@ -504,15 +517,95 @@ export default function AnalysisResult({
             />
             <MetricCard
               label="Rev Growth"
-              value={formatPercent(fundamentals?.revenue_growth)}
+              value={formatRatioPercent(fundamentals?.revenue_growth)}
               trend="up"
             />
             <MetricCard
               label="Margin"
-              value={formatPercent(fundamentals?.profit_margin)}
+              value={formatRatioPercent(fundamentals?.profit_margin)}
               trend="up"
             />
           </div>
+
+          {annualFinancials.length > 0 && (
+            <section className="surface-panel rounded-[1.6rem] p-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Financial Statement Intelligence
+                  </div>
+                  <h3 className="mt-2 text-2xl font-black text-slate-900">
+                    Umsatz, Margen und Cashflow
+                  </h3>
+                </div>
+                <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                  {financialStatements?.coverage?.annual_periods || annualFinancials.length} Jahresperioden
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                <MetricCard
+                  label="Umsatz"
+                  value={formatBigNumber(latestAnnual?.revenue, formatPrice)}
+                  info={latestAnnual?.period}
+                />
+                <MetricCard
+                  label="Umsatz YoY"
+                  value={formatRatioPercent(financialTrends?.revenue_yoy)}
+                  trend={(financialTrends?.revenue_yoy || 0) >= 0 ? "up" : "down"}
+                />
+                <MetricCard
+                  label="Umsatz CAGR"
+                  value={formatRatioPercent(financialTrends?.revenue_cagr)}
+                  trend={(financialTrends?.revenue_cagr || 0) >= 0 ? "up" : "down"}
+                />
+                <MetricCard
+                  label="Quartal YoY"
+                  value={formatRatioPercent(financialTrends?.quarterly_revenue_yoy)}
+                  trend={(financialTrends?.quarterly_revenue_yoy || 0) >= 0 ? "up" : "down"}
+                />
+                <MetricCard
+                  label="FCF-Marge"
+                  value={formatRatioPercent(latestAnnual?.fcf_margin)}
+                  trend={(latestAnnual?.fcf_margin || 0) >= 0 ? "up" : "down"}
+                />
+                <MetricCard
+                  label="Op. Marge"
+                  value={formatRatioPercent(latestAnnual?.operating_margin)}
+                  trend={(latestAnnual?.operating_margin || 0) >= 0 ? "up" : "down"}
+                />
+              </div>
+
+              <div className="mt-5 overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-black/8 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      <th className="py-2 pr-4">Periode</th>
+                      <th className="py-2 pr-4">Umsatz</th>
+                      <th className="py-2 pr-4">Bruttomarge</th>
+                      <th className="py-2 pr-4">Op. Marge</th>
+                      <th className="py-2 pr-4">Nettoergebnis</th>
+                      <th className="py-2 pr-4">Free Cashflow</th>
+                      <th className="py-2 pr-4">Net Debt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {annualFinancials.slice(0, 5).map((row: any) => (
+                      <tr key={row.period} className="border-b border-black/5 text-slate-700">
+                        <td className="py-3 pr-4 font-bold text-slate-900">{row.period}</td>
+                        <td className="py-3 pr-4 font-mono">{formatBigNumber(row.revenue, formatPrice)}</td>
+                        <td className="py-3 pr-4 font-mono">{formatRatioPercent(row.gross_margin)}</td>
+                        <td className="py-3 pr-4 font-mono">{formatRatioPercent(row.operating_margin)}</td>
+                        <td className="py-3 pr-4 font-mono">{formatBigNumber(row.net_income, formatPrice)}</td>
+                        <td className="py-3 pr-4 font-mono">{formatBigNumber(row.free_cashflow, formatPrice)}</td>
+                        <td className="py-3 pr-4 font-mono">{formatBigNumber(row.net_debt, formatPrice)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Specialized Analysis (Potential & Rebound) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

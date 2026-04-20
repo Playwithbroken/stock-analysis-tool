@@ -149,6 +149,26 @@ async function ensureLoggedIn(page, viewportName) {
   }
 }
 
+async function ensureNavigationAfterLogin(page, viewportName) {
+  await ensureLoggedIn(page, viewportName);
+  await page.waitForTimeout(1600);
+  if (await waitForNavigationShell(page, 18000)) {
+    return true;
+  }
+
+  await page.screenshot({
+    path: path.join(runDir, `${viewportName}-post-login-retry-before.png`),
+    fullPage: true,
+  });
+  pushEvent(`[${viewportName}] Login shell not ready; retrying once`);
+
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 45000 });
+  await page.waitForTimeout(1200);
+  await ensureLoggedIn(page, viewportName);
+  await page.waitForTimeout(2200);
+  return waitForNavigationShell(page, 22000);
+}
+
 async function runMarketsStress(page, viewportName) {
   const marketsTab = await findTabButton(page, [/^Markets$/i]);
   const analyzerTab = await findTabButton(page, [/^Analyzer$/i, /^Analyze$/i]);
@@ -288,10 +308,12 @@ async function runViewportScenario(browser, viewport) {
       pushIssue({ kind: "ui", viewport: viewportName, text: "Root appears blank on initial load" });
     }
 
-    await ensureLoggedIn(page, viewportName);
-    await page.waitForTimeout(1600);
-    const navReady = await waitForNavigationShell(page, 14000);
+    const navReady = await ensureNavigationAfterLogin(page, viewportName);
     if (!navReady) {
+      await page.screenshot({
+        path: path.join(runDir, `${viewportName}-post-login-failed.png`),
+        fullPage: true,
+      });
       pushIssue({ kind: "ui", viewport: viewportName, text: "Navigation shell did not appear after login window" });
       return;
     }

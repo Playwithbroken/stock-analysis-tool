@@ -143,11 +143,161 @@ class DataFetcher:
             }
         except Exception as e:
             return {"error": str(e)}
+
+    def _safe_number(self, value: Any) -> Optional[float]:
+        """Normalize yfinance/numpy scalar values into finite floats."""
+        try:
+            if value is None or pd.isna(value):
+                return None
+            number = float(value)
+            return number if np.isfinite(number) else None
+        except Exception:
+            return None
+
+    def _statement_series(
+        self,
+        statement: Any,
+        labels: List[str],
+        limit: int = 8,
+    ) -> List[Dict[str, Any]]:
+        if statement is None or not isinstance(statement, pd.DataFrame) or statement.empty:
+            return []
+
+        normalized_index = {str(idx).strip().lower(): idx for idx in statement.index}
+        row = None
+        for label in labels:
+            matched = normalized_index.get(label.strip().lower())
+            if matched is not None:
+                row = statement.loc[matched]
+                break
+        if row is None:
+            return []
+
+        series: List[Dict[str, Any]] = []
+        for period, value in row.items():
+            number = self._safe_number(value)
+            if number is None:
+                continue
+            period_value = period.strftime("%Y-%m-%d") if isinstance(period, pd.Timestamp) else str(period)
+            series.append({"period": period_value, "value": number})
+        return series[:limit]
+
+    def _build_statement_rows(
+        self,
+        income_stmt: Any,
+        cashflow_stmt: Any,
+        balance_stmt: Any,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        metrics = {
+            "revenue": self._statement_series(income_stmt, ["Total Revenue", "Operating Revenue"], limit),
+            "gross_profit": self._statement_series(income_stmt, ["Gross Profit"], limit),
+            "operating_income": self._statement_series(income_stmt, ["Operating Income"], limit),
+            "net_income": self._statement_series(income_stmt, ["Net Income", "Net Income Common Stockholders"], limit),
+            "ebitda": self._statement_series(income_stmt, ["EBITDA", "Normalized EBITDA"], limit),
+            "operating_cashflow": self._statement_series(cashflow_stmt, ["Operating Cash Flow", "Total Cash From Operating Activities"], limit),
+            "free_cashflow": self._statement_series(cashflow_stmt, ["Free Cash Flow"], limit),
+            "capital_expenditure": self._statement_series(cashflow_stmt, ["Capital Expenditure", "Capital Expenditures"], limit),
+            "total_debt": self._statement_series(balance_stmt, ["Total Debt"], limit),
+            "cash": self._statement_series(balance_stmt, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"], limit),
+        }
+
+        periods: List[str] = []
+        for values in metrics.values():
+            for item in values:
+                if item["period"] not in periods:
+                    periods.append(item["period"])
+
+        rows: List[Dict[str, Any]] = []
+        for period in periods[:limit]:
+            row: Dict[str, Any] = {"period": period}
+            for key, values in metrics.items():
+                match = next((item for item in values if item["period"] == period), None)
+                if match:
+                    row[key] = match["value"]
+
+            revenue = self._safe_number(row.get("revenue"))
+            if revenue and revenue != 0:
+                for source, target in [
+                    ("gross_profit", "gross_margin"),
+                    ("operating_income", "operating_margin"),
+                    ("net_income", "net_margin"),
+                    ("free_cashflow", "fcf_margin"),
+                ]:
+                    value = self._safe_number(row.get(source))
+                    if value is not None:
+                        row[target] = value / revenue
+
+            debt = self._safe_number(row.get("total_debt"))
+            cash = self._safe_number(row.get("cash"))
+            if debt is not None and cash is not None:
+                row["net_debt"] = debt - cash
+            rows.append(row)
+        return rows
+
+    def _calculate_statement_trends(
+        self,
+        annual_rows: List[Dict[str, Any]],
+        quarterly_rows: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        def pct_change(latest: Any, previous: Any) -> Optional[float]:
+            latest_num = self._safe_number(latest)
+            previous_num = self._safe_number(previous)
+            if latest_num is None or previous_num in (None, 0):
+                return None
+            return (latest_num - previous_num) / abs(previous_num)
+
+        trends: Dict[str, Any] = {}
+        if len(annual_rows) >= 2:
+            latest = annual_rows[0]
+            previous = annual_rows[1]
+            trends["revenue_yoy"] = pct_change(latest.get("revenue"), previous.get("revenue"))
+            trends["net_income_yoy"] = pct_change(latest.get("net_income"), previous.get("net_income"))
+            trends["free_cashflow_yoy"] = pct_change(latest.get("free_cashflow"), previous.get("free_cashflow"))
+            for key in ["gross_margin", "operating_margin", "net_margin", "fcf_margin"]:
+                if latest.get(key) is not None and previous.get(key) is not None:
+                    trends[f"{key}_change"] = latest[key] - previous[key]
+
+        if len(annual_rows) >= 3:
+            latest_revenue = self._safe_number(annual_rows[0].get("revenue"))
+            oldest_revenue = self._safe_number(annual_rows[-1].get("revenue"))
+            years = max(1, len(annual_rows) - 1)
+            if latest_revenue and oldest_revenue and latest_revenue > 0 and oldest_revenue > 0:
+                trends["revenue_cagr"] = (latest_revenue / oldest_revenue) ** (1 / years) - 1
+
+        if len(quarterly_rows) >= 5:
+            trends["quarterly_revenue_yoy"] = pct_change(
+                quarterly_rows[0].get("revenue"),
+                quarterly_rows[4].get("revenue"),
+            )
+        return trends
     
     def get_fundamentals(self) -> Dict[str, Any]:
         """Get fundamental data."""
         try:
             info = self.info
+            annual_rows: List[Dict[str, Any]] = []
+            quarterly_rows: List[Dict[str, Any]] = []
+            statement_trends: Dict[str, Any] = {}
+            try:
+                annual_rows = self._build_statement_rows(
+                    getattr(self.stock, "income_stmt", None),
+                    getattr(self.stock, "cashflow", None),
+                    getattr(self.stock, "balance_sheet", None),
+                    limit=5,
+                )
+                quarterly_rows = self._build_statement_rows(
+                    getattr(self.stock, "quarterly_income_stmt", None),
+                    getattr(self.stock, "quarterly_cashflow", None),
+                    getattr(self.stock, "quarterly_balance_sheet", None),
+                    limit=8,
+                )
+                statement_trends = self._calculate_statement_trends(annual_rows, quarterly_rows)
+            except Exception:
+                annual_rows = []
+                quarterly_rows = []
+                statement_trends = {}
+
             return {
                 "market_cap": info.get("marketCap"),
                 "enterprise_value": info.get("enterpriseValue"),
@@ -186,6 +336,15 @@ class DataFetcher:
                 "total_assets": info.get("totalAssets"),
                 "category": info.get("category"),
                 "fund_family": info.get("fundFamily"),
+                "financial_statements": {
+                    "annual": annual_rows,
+                    "quarterly": quarterly_rows,
+                    "trends": statement_trends,
+                    "coverage": {
+                        "annual_periods": len(annual_rows),
+                        "quarterly_periods": len(quarterly_rows),
+                    },
+                },
             }
         except Exception as e:
             return {"error": str(e)}

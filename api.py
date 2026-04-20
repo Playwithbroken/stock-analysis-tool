@@ -1385,39 +1385,101 @@ async def get_portfolio_history(p_id: str, period: str = "1mo"):
     """
     Calculate historical value of the entire portfolio.
     """
-    try:
-        # Get portfolio holdings
-        portfolios = get_portfolio_manager().get_portfolios()
-        portfolio = next((p for p in portfolios if p['id'] == p_id), None)
-        
-        if not portfolio or not portfolio['holdings']:
-            return []
-            
-        combined_history = {} # date -> total_value
-        
-        for holding in portfolio['holdings']:
-            ticker = holding['ticker']
-            shares = holding['shares']
-            
-            fetcher = DataFetcher(ticker)
-            # Use '1d' interval for periods > 1d, '5m' for 1d
-            interval = "1d" if period != "1d" else "5m"
-            history = fetcher.get_history(period=period, interval=interval)
-            
-            for entry in history:
-                date = entry['time']
-                val = entry['price'] * shares
-                combined_history[date] = combined_history.get(date, 0) + val
-                
-        # Convert back to sorted list
-        result = [
-            {"time": d, "price": v} 
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings") or []
+    if not holdings:
+        return []
+
+    interval = "1d" if period != "1d" else "5m"
+    combined_history: Dict[str, float] = {}
+    fallback_value = 0.0
+    symbols: List[str] = []
+
+    async def _fetch_holding_history(ticker: str) -> List[Dict[str, Any]]:
+        def _fetch() -> List[Dict[str, Any]]:
+            return DataFetcher(ticker).get_history(period=period, interval=interval)
+
+        return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=14.0)
+
+    for holding in holdings:
+        ticker = str(holding.get("ticker") or "").upper().strip()
+        if not ticker:
+            continue
+        symbols.append(ticker)
+
+        try:
+            shares = float(holding.get("shares") or 0)
+        except (TypeError, ValueError):
+            shares = 0.0
+        if shares <= 0:
+            continue
+
+        buy_price = holding.get("buyPrice", holding.get("buy_price"))
+        try:
+            fallback_value += shares * float(buy_price or 0)
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            history = await _fetch_holding_history(ticker)
+        except Exception:
+            history = []
+
+        for entry in history or []:
+            try:
+                price = float(entry.get("price"))
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(price):
+                continue
+
+            date = str(entry.get("time") or entry.get("full_date") or "")
+            if not date:
+                continue
+            combined_history[date] = combined_history.get(date, 0.0) + (price * shares)
+
+    if combined_history:
+        return convert_numpy_types([
+            {"time": d, "price": v}
             for d, v in sorted(combined_history.items())
-        ]
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            if math.isfinite(v)
+        ])
+
+    # Last-resort snapshot fallback keeps portfolio widgets from turning provider issues into HTTP 500s.
+    try:
+        snapshot = get_realtime_market_service().build_snapshot(symbols)
+        quotes = {
+            str(item.get("symbol") or "").upper(): item
+            for item in snapshot.get("quotes", [])
+            if isinstance(item, dict)
+        }
+        snapshot_value = 0.0
+        for holding in holdings:
+            ticker = str(holding.get("ticker") or "").upper().strip()
+            quote = quotes.get(ticker)
+            if not quote:
+                continue
+            try:
+                shares = float(holding.get("shares") or 0)
+                price = float(quote.get("price"))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(shares) and math.isfinite(price):
+                snapshot_value += shares * price
+        if snapshot_value > 0:
+            return [{"time": "snapshot", "price": snapshot_value, "stale": True}]
+    except Exception:
+        pass
+
+    if fallback_value > 0:
+        return [{"time": "cost_basis", "price": fallback_value, "stale": True}]
+
+    return []
 
 @app.get("/api/portfolio/{p_id}/export/csv")
 async def export_portfolio_csv(p_id: str):

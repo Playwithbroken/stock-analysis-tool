@@ -62,10 +62,10 @@ interface ScreenerRow {
 
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw }) => {
   const { formatPrice } = useCurrency();
-  const [marketView, setMarketView] = useState<"movers" | "explorer">("movers");
+  const [marketView, setMarketView] = useState<"movers" | "explorer">("explorer");
   const [activeTab, setActiveTab] = useState<
     "overview" | "signals" | "ai" | "movers" | "screener" | "alternative" | "etf" | "internals"
-  >("overview");
+  >("signals");
   const [stars, setStars] = useState<StarAssets | null>(null);
   const [publicSignals, setPublicSignals] = useState<PublicSignalsData | null>(
     null,
@@ -81,6 +81,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   const [cryptos, setCryptos] = useState<DiscoveryStock[]>([]);
   const [commodities, setCommodities] = useState<DiscoveryStock[]>([]);
   const [etfs, setEtfs] = useState<any[]>([]);
+  const [selectedEtfDetail, setSelectedEtfDetail] = useState<any | null>(null);
   const [selectedEtfs, setSelectedEtfs] = useState<any[]>([]);
   const [isComparing, setIsComparing] = useState(false);
   const [highRiskOpps, setHighRiskOpps] = useState<any[]>([]);
@@ -98,6 +99,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   const [screenerLow52, setScreenerLow52] = useState("");
   const [screenerSortBy, setScreenerSortBy] = useState<"rsi_14" | "market_cap" | "high52_proximity" | "low52_proximity">("rsi_14");
   const [screenerSortDirection, setScreenerSortDirection] = useState<"asc" | "desc">("asc");
+  const [selectedMarketDetail, setSelectedMarketDetail] = useState<DiscoveryStock | null>(null);
+  const [selectedMarketDetailScope, setSelectedMarketDetailScope] = useState<"movers" | "ai" | "alternative" | null>(null);
   const analyzeEnabledAtRef = useRef(0);
 
   const onAnalyze = (ticker: string) => {
@@ -105,6 +108,26 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     if (!symbol) return;
     if (Date.now() < analyzeEnabledAtRef.current) return;
     onAnalyzeRaw(symbol);
+  };
+
+  const openMarketDetails = (
+    stock: DiscoveryStock,
+    scope: "movers" | "ai" | "alternative" = "movers",
+  ) => {
+    if (!stock?.ticker) return;
+    setSelectedMarketDetail(stock);
+    setSelectedMarketDetailScope(scope);
+  };
+
+  const toggleEtfCompare = (etf: any) => {
+    const isSelected = selectedEtfs.some((s) => s.ticker === etf.ticker);
+    if (isSelected) {
+      setSelectedEtfs(selectedEtfs.filter((s) => s.ticker !== etf.ticker));
+      return;
+    }
+    if (selectedEtfs.length < 3) {
+      setSelectedEtfs([...selectedEtfs, etf]);
+    }
   };
 
   useEffect(() => {
@@ -274,7 +297,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   useEffect(() => {
     // Defensive click-through guard when switching discovery modes/tabs.
     analyzeEnabledAtRef.current = Date.now() + 1200;
-  }, [activeTab, marketView]);
+    if (activeTab !== "etf") {
+      setSelectedEtfDetail(null);
+    }
+    if (activeTab !== "movers" && activeTab !== "ai" && activeTab !== "alternative") {
+      setSelectedMarketDetail(null);
+      setSelectedMarketDetailScope(null);
+      return;
+    }
+    if (selectedMarketDetailScope && selectedMarketDetailScope !== activeTab) {
+      setSelectedMarketDetail(null);
+      setSelectedMarketDetailScope(null);
+    }
+  }, [activeTab, marketView, selectedMarketDetailScope]);
 
   const sortedScreenerRows = [...screenerRows].sort((a, b) => {
     const aValue = Number(a?.[screenerSortBy] ?? 0);
@@ -497,12 +532,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Day Winner */}
-                  <div
-                    onClick={() =>
-                      stars.day_winner && onAnalyze(stars.day_winner.ticker)
-                    }
-                    className="surface-panel group relative cursor-pointer rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-green-500/20"
-                  >
+                  <div className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-green-500/20">
                     <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                       Day Winner
@@ -516,15 +546,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     <div className="text-2xl font-mono font-bold text-emerald-700">
                       +{stars.day_winner?.change?.toFixed(2) || "0.00"}%
                     </div>
+                    {stars.day_winner?.ticker ? (
+                      <button
+                        type="button"
+                        onClick={() => onAnalyze(stars.day_winner!.ticker)}
+                        className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                      >
+                        Analyze
+                      </button>
+                    ) : null}
                   </div>
 
                   {/* Week Winner */}
-                  <div
-                    onClick={() =>
-                      stars.week_winner && onAnalyze(stars.week_winner.ticker)
-                    }
-                    className="surface-panel group relative cursor-pointer rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-[var(--accent)]/20"
-                  >
+                  <div className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-[var(--accent)]/20">
                     <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">
                       <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
                       Week Winner
@@ -538,6 +572,15 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     <div className="text-2xl font-mono font-bold text-[var(--accent)]">
                       +{stars.week_winner?.change?.toFixed(2) || "0.00"}%
                     </div>
+                    {stars.week_winner?.ticker ? (
+                      <button
+                        type="button"
+                        onClick={() => onAnalyze(stars.week_winner!.ticker)}
+                        className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                      >
+                        Analyze
+                      </button>
+                    ) : null}
                   </div>
 
                   {/* Personalized picks */}
@@ -545,8 +588,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     stars.for_you.slice(0, 2).map((stock, idx) => (
                       <div
                         key={stock.ticker || idx}
-                        onClick={() => onAnalyze(stock.ticker)}
-                        className="surface-panel group relative cursor-pointer rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-sky-500/20"
+                        className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-sky-500/20"
                       >
                         <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-sky-700">
                           Picked for you
@@ -563,6 +605,15 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           {stock.change && stock.change > 0 ? "+" : ""}
                           {stock.change?.toFixed(2)}%
                         </div>
+                        {stock.ticker ? (
+                          <button
+                            type="button"
+                            onClick={() => onAnalyze(stock.ticker)}
+                            className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                          >
+                            Analyze
+                          </button>
+                        ) : null}
                       </div>
                     ))
                   ) : (
@@ -594,6 +645,50 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
         {activeTab === "ai" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
+            {selectedMarketDetail && selectedMarketDetailScope === "ai" ? (
+              <section className="surface-panel rounded-[1.8rem] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      AI Details
+                    </div>
+                    <div className="mt-2 text-3xl font-black text-slate-900">
+                      {selectedMarketDetail.ticker}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {selectedMarketDetail.name}
+                    </div>
+                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
+                      {(selectedMarketDetail.change || 0).toFixed(2)}%
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "No additional context"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMarketDetail(null);
+                        setSelectedMarketDetailScope(null);
+                      }}
+                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onAnalyze(selectedMarketDetail.ticker)}
+                      className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                    >
+                      Analyze
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <section className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -613,7 +708,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {highRiskOpps.map((opp: any) => (
                   <div
                     key={opp.ticker}
-                    onClick={() => onAnalyze(opp.ticker)}
+                    onClick={() =>
+                      openMarketDetails(
+                        {
+                          ticker: opp.ticker,
+                          name: opp.name || opp.ticker,
+                          change: typeof opp.change === "number" ? opp.change : 0,
+                          score: typeof opp.opportunity_score === "number" ? opp.opportunity_score : undefined,
+                          trend_context: opp.recommendation || "AI opportunity setup",
+                          reason: Array.isArray(opp.reasons) ? opp.reasons.slice(0, 2).join(" | ") : undefined,
+                        },
+                        "ai",
+                      )
+                    }
                     className="surface-panel group cursor-pointer rounded-[2rem] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-red-500/18"
                   >
                     <div className="mb-6 flex items-start justify-between gap-4">
@@ -704,7 +811,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {(moonshots.length > 0 ? moonshots : []).map((stock) => (
                   <div
                     key={stock.ticker}
-                    onClick={() => onAnalyze(stock.ticker)}
+                    onClick={() => openMarketDetails(stock, "ai")}
                     className="surface-panel cursor-pointer rounded-[2rem] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500/18"
                   >
                     <div className="mb-6 flex items-start justify-between gap-4">
@@ -744,6 +851,50 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
         {activeTab === "movers" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
+            {selectedMarketDetail && selectedMarketDetailScope === "movers" ? (
+              <section className="surface-panel rounded-[1.8rem] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Market Details
+                    </div>
+                    <div className="mt-2 text-3xl font-black text-slate-900">
+                      {selectedMarketDetail.ticker}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {selectedMarketDetail.name}
+                    </div>
+                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
+                      {(selectedMarketDetail.change || 0).toFixed(2)}%
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "No additional context"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMarketDetail(null);
+                        setSelectedMarketDetailScope(null);
+                      }}
+                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onAnalyze(selectedMarketDetail.ticker)}
+                      className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                    >
+                      Analyze
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <section className="space-y-6">
               <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
                 <span className="text-emerald-700">Up</span> MARKET GAINERS
@@ -752,7 +903,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {gainers.map((stock) => (
                   <div
                     key={stock.ticker}
-                    onClick={() => onAnalyze(stock.ticker)}
+                    onClick={() => openMarketDetails(stock)}
                     className="surface-panel flex cursor-pointer items-center justify-between rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-emerald-500/20"
                   >
                     <div>
@@ -784,7 +935,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {losers.map((stock) => (
                   <div
                     key={stock.ticker}
-                    onClick={() => onAnalyze(stock.ticker)}
+                    onClick={() => openMarketDetails(stock)}
                     className="surface-panel flex cursor-pointer items-center justify-between rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-red-500/20"
                   >
                     <div>
@@ -884,6 +1035,53 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
                   <span className="text-indigo-500">🏢</span> ETF EXPLORER
                 </h2>
+                {selectedEtfDetail ? (
+                  <div className="surface-panel rounded-[1.8rem] p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                          ETF Details
+                        </div>
+                        <div className="mt-2 text-3xl font-black text-slate-900">
+                          {selectedEtfDetail.ticker}
+                        </div>
+                        <div className="mt-1 text-sm text-slate-500">
+                          {selectedEtfDetail.name}
+                        </div>
+                        <div className={`mt-3 text-xl font-black ${(selectedEtfDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {(selectedEtfDetail.change || 0) >= 0 ? "+" : ""}
+                          {(selectedEtfDetail.change || 0).toFixed(2)}%
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Category: {selectedEtfDetail.category || "Diverse"} · TER: {selectedEtfDetail.ter ? `${selectedEtfDetail.ter.toFixed(2)}%` : "N/A"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEtfDetail(null)}
+                          className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                        >
+                          Close
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleEtfCompare(selectedEtfDetail)}
+                          className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                        >
+                          {selectedEtfs.some((s) => s.ticker === selectedEtfDetail.ticker) ? "Remove Compare" : "Add Compare"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onAnalyze(selectedEtfDetail.ticker)}
+                          className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                        >
+                          Analyze
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {etfs.map((etf) => {
                     const isSelected = selectedEtfs.some(
@@ -892,17 +1090,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     return (
                       <div
                         key={etf.ticker}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedEtfs(
-                              selectedEtfs.filter(
-                                (s) => s.ticker !== etf.ticker,
-                              ),
-                            );
-                          } else if (selectedEtfs.length < 3) {
-                            setSelectedEtfs([...selectedEtfs, etf]);
-                          }
-                        }}
+                        onClick={() => setSelectedEtfDetail(etf)}
                         className={`p-6 rounded-3xl border transition-all group relative cursor-pointer ${
                           isSelected
                             ? "bg-[var(--accent-soft)] border-[var(--accent)] animate-pulse-slow"
@@ -961,6 +1149,28 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           <div className="truncate text-sm font-bold text-slate-900">
                             {etf.category || "Diverse"}
                           </div>
+                        </div>
+                        <div className="mt-4 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleEtfCompare(etf);
+                            }}
+                            className="rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                          >
+                            {isSelected ? "Remove Compare" : "Add Compare"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAnalyze(etf.ticker);
+                            }}
+                            className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                          >
+                            Analyze
+                          </button>
                         </div>
                       </div>
                     );
@@ -1124,6 +1334,50 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
         {activeTab === "alternative" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
+            {selectedMarketDetail && selectedMarketDetailScope === "alternative" ? (
+              <section className="surface-panel rounded-[1.8rem] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Alternative Details
+                    </div>
+                    <div className="mt-2 text-3xl font-black text-slate-900">
+                      {selectedMarketDetail.ticker}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {selectedMarketDetail.name}
+                    </div>
+                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
+                      {(selectedMarketDetail.change || 0).toFixed(2)}%
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "No additional context"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMarketDetail(null);
+                        setSelectedMarketDetailScope(null);
+                      }}
+                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onAnalyze(selectedMarketDetail.ticker)}
+                      className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                    >
+                      Analyze
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <section className="space-y-6">
               <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
                 <span className="text-amber-600">Alt</span> CRYPTO ASSETS
@@ -1132,7 +1386,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {cryptos.map((coin) => (
                   <div
                     key={coin.ticker}
-                    onClick={() => onAnalyze(coin.ticker)}
+                    onClick={() => openMarketDetails(coin, "alternative")}
                     className="surface-panel cursor-pointer rounded-3xl p-6 transition-all hover:border-amber-500/20"
                   >
                     <div className="mb-1 text-2xl font-black text-slate-900">
@@ -1165,7 +1419,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {commodities.map((item) => (
                   <div
                     key={item.ticker}
-                    onClick={() => onAnalyze(item.ticker)}
+                    onClick={() => openMarketDetails(item, "alternative")}
                     className="surface-panel cursor-pointer rounded-3xl p-6 transition-all hover:border-yellow-500/20"
                   >
                     <div className="mb-1 text-2xl font-black text-slate-900">

@@ -110,6 +110,7 @@ class EmailAlertService:
                 "midday": os.getenv("MIDDAY_BRIEF_TIME", "12:30"),
                 "us_open": os.getenv("US_OPEN_BRIEF_TIME", "15:10"),
                 "close_recap": os.getenv("CLOSE_RECAP_TIME", "21:45"),
+                "delivery_grace_minutes": int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "120")),
             },
         }
 
@@ -402,15 +403,15 @@ class EmailAlertService:
                     pass
                 try:
                     self._send_telegram_rich_brief(config, brief, str(job["session_label"]))
-                except Exception:
-                    pass  # Fall back to legacy sender below
+                except Exception as exc:
+                    print(f"Scheduled Telegram brief failed for {job['job_key']}: {exc}")
                 # Browser push notification
                 if self.push_service:
                     try:
                         headline = brief.get("headline") or brief.get("opening_bias") or "Neues Briefing"
                         self.push_service.notify_brief(str(job["session_label"]), headline)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"Scheduled push brief failed for {job['job_key']}: {exc}")
                 # Still send email via the normal path (events → HTML email)
                 self._send_notifications(config, events, subject=str(job["subject"]), telegram=False)
             else:
@@ -464,7 +465,10 @@ class EmailAlertService:
         except Exception:
             return False
         loop_minutes = max(2, int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15")))
-        return now.hour == hour and minute <= now.minute < minute + loop_minutes
+        grace_minutes = max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "120")))
+        scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        delta_minutes = (now - scheduled).total_seconds() / 60
+        return 0 <= delta_minutes < grace_minutes
 
     def _build_open_brief_events(self, session_label: str) -> List[Dict[str, Any]]:
         items = self.portfolio_manager.get_signal_watch_items()

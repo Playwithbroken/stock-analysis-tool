@@ -968,6 +968,12 @@ class EmailAlertService:
                     "Telegram rejected the message with 400. Check TELEGRAM_CHAT_ID and whether the bot "
                     "has been started in that chat."
                 ) from exc
+            if status == 403:
+                raise RuntimeError(
+                    "Telegram rejected the bot with 403. The bot is not allowed to send to this chat. "
+                    "Open Telegram, start the bot with /start, and if this is a group/channel add the bot "
+                    "as a member/admin; then verify TELEGRAM_CHAT_ID points to that chat."
+                ) from exc
             raise
 
     def _tg_esc(self, text: str) -> str:

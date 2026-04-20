@@ -18,6 +18,43 @@ class DataFetcher:
     # Class-level cache
     _global_cache = {}
     _cache_ttl = 300  # 5 minutes
+    _etf_info_overrides: Dict[str, Dict[str, Any]] = {
+        "SPY": {
+            "longName": "SPDR S&P 500 ETF Trust",
+            "quoteType": "ETF",
+            "sector": "Broad Market",
+            "industry": "US Large Cap",
+            "currency": "USD",
+        },
+        "QQQ": {
+            "longName": "Invesco QQQ Trust",
+            "quoteType": "ETF",
+            "sector": "Growth",
+            "industry": "Nasdaq 100",
+            "currency": "USD",
+        },
+        "GLD": {
+            "longName": "SPDR Gold Shares",
+            "quoteType": "ETF",
+            "sector": "Commodities",
+            "industry": "Gold",
+            "currency": "USD",
+        },
+        "TLT": {
+            "longName": "iShares 20+ Year Treasury Bond ETF",
+            "quoteType": "ETF",
+            "sector": "Rates",
+            "industry": "US Treasuries",
+            "currency": "USD",
+        },
+        "XLE": {
+            "longName": "Energy Select Sector SPDR Fund",
+            "quoteType": "ETF",
+            "sector": "Energy",
+            "industry": "Energy Equities",
+            "currency": "USD",
+        },
+    }
 
     def __init__(self, ticker: str):
         self.ticker = ticker.upper()
@@ -35,6 +72,11 @@ class DataFetcher:
             val, ts = DataFetcher._global_cache[cache_key]
             if (now - ts).total_seconds() < DataFetcher._cache_ttl:
                 return val
+
+        if self.ticker in self._etf_info_overrides:
+            val = self._etf_info_overrides[self.ticker]
+            DataFetcher._global_cache[cache_key] = (val, now)
+            return val
         
         try:
             # yfinance info can be slow or hang

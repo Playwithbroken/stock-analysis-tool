@@ -319,10 +319,11 @@ async def require_single_user_auth(request: Request, call_next):
 
 async def _signal_alert_loop():
     interval_minutes = int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15"))
+    await asyncio.sleep(5)
     while True:
         try:
-            get_email_alert_service().check_and_send_alerts(force=False)
-            get_email_alert_service().send_scheduled_open_briefs()
+            await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
+            await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs)
         except Exception as e:
             print(f"Signal alert loop error: {e}")
         await asyncio.sleep(max(1, interval_minutes) * 60)
@@ -339,13 +340,14 @@ def _is_alert_in_cooldown(last_triggered_at: Optional[str], cooldown_minutes: in
 
 
 async def _price_alert_loop():
+    await asyncio.sleep(8)
     while True:
         try:
             manager = get_portfolio_manager()
-            alerts = manager.list_price_alerts(enabled_only=True)
+            alerts = await asyncio.to_thread(manager.list_price_alerts, True)
             if alerts:
                 symbols = sorted({str(alert.get("symbol", "")).upper() for alert in alerts if alert.get("symbol")})
-                snapshot = get_realtime_market_service().build_snapshot(symbols)
+                snapshot = await asyncio.to_thread(get_realtime_market_service().build_snapshot, symbols)
                 quote_map = {
                     str(item.get("symbol", "")).upper(): item
                     for item in snapshot.get("quotes", [])

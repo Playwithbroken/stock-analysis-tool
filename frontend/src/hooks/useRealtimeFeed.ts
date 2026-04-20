@@ -35,6 +35,8 @@ function buildRealtimeUrl(symbols: string[]) {
 
 function shouldPreferSnapshotOnly() {
   const host = (window.location.hostname || "").toLowerCase();
+  const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const wsEnabledByEnv = import.meta.env.VITE_ENABLE_REALTIME_WS === "true";
   const forceWs = (() => {
     try {
       return localStorage.getItem("brokerfreund:force-ws") === "1";
@@ -43,7 +45,8 @@ function shouldPreferSnapshotOnly() {
     }
   })();
   if (forceWs) return false;
-  return host.endsWith("railway.app");
+  if (isLocalHost || wsEnabledByEnv) return false;
+  return true;
 }
 
 export default function useRealtimeFeed(symbols: string[], enabled = true) {

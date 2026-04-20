@@ -885,18 +885,31 @@ class EmailAlertService:
         subject: str,
         telegram: bool = True,
     ) -> None:
-        self._send_email(config, events, subject)
+        errors: List[str] = []
+        delivered = False
+
+        try:
+            delivered = self._send_email(config, events, subject) or delivered
+        except Exception as exc:
+            errors.append(f"email failed: {exc}")
+
         if telegram:
-            self._send_telegram(config, events, subject)
+            try:
+                delivered = self._send_telegram(config, events, subject) or delivered
+            except Exception as exc:
+                errors.append(f"telegram failed: {exc}")
+
+        if not delivered and errors:
+            raise RuntimeError("; ".join(errors))
 
     def _send_email(
         self,
         config: EmailAlertConfig,
         events: List[Dict[str, Any]],
         subject: str,
-    ) -> None:
+    ) -> bool:
         if not (config.smtp_host and config.smtp_from and config.smtp_to):
-            return
+            return False
         msg = EmailMessage()
         msg["From"] = config.smtp_from
         msg["To"] = config.smtp_to
@@ -928,6 +941,7 @@ class EmailAlertService:
             if config.smtp_user:
                 server.login(config.smtp_user, config.smtp_password)
             server.send_message(msg)
+        return True
 
     def _tg_post(self, token: str, chat_id: str, text: str, disable_preview: bool = True) -> None:
         """Send a single Telegram message (HTML parse mode)."""
@@ -1361,14 +1375,14 @@ class EmailAlertService:
         config: "EmailAlertConfig",
         events: List[Dict[str, Any]],
         subject: str,
-    ) -> None:
+    ) -> bool:
         """Legacy plain-text Telegram sender (used for signal alerts, not for briefs)."""
         if not (
             config.telegram_enabled
             and config.telegram_bot_token
             and config.telegram_chat_id
         ):
-            return
+            return False
 
         lines = [f"<b>{self._tg_esc(subject)}</b>", ""]
         current_section = ""
@@ -1394,6 +1408,7 @@ class EmailAlertService:
             lines.append(rendered_line)
 
         self._tg_post(config.telegram_bot_token, config.telegram_chat_id, "\n".join(lines))
+        return True
 
     def _build_html_email(self, subject: str, events: List[Dict[str, Any]]) -> str:
         generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

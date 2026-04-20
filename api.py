@@ -1702,6 +1702,10 @@ async def save_signal_score_settings(payload: Dict[str, Any]):
 async def send_daily_brief():
     try:
         return get_email_alert_service().send_daily_brief()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1926,6 +1930,10 @@ async def get_market_session_lists():
 async def send_morning_brief():
     try:
         return get_email_alert_service().send_morning_brief()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

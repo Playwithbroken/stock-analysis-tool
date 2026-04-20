@@ -3,6 +3,20 @@ import { fetchJsonWithRetry } from "../lib/api";
 
 type PushState = "unsupported" | "default" | "denied" | "granted" | "subscribed";
 
+async function getPushRegistration(): Promise<ServiceWorkerRegistration> {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  for (const registration of registrations) {
+    const scriptUrl = registration.active?.scriptURL
+      || registration.waiting?.scriptURL
+      || registration.installing?.scriptURL
+      || "";
+    if (scriptUrl && !scriptUrl.endsWith("/push-sw.js")) {
+      await registration.unregister();
+    }
+  }
+  return navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -26,8 +40,7 @@ export default function usePushNotifications() {
       setState("denied");
       return;
     }
-    // Check if already subscribed
-    navigator.serviceWorker.ready.then((reg) => {
+    getPushRegistration().then((reg) => {
       reg.pushManager.getSubscription().then((sub) => {
         setState(sub ? "subscribed" : perm === "granted" ? "granted" : "default");
       });
@@ -52,7 +65,7 @@ export default function usePushNotifications() {
         { retries: 1, retryDelayMs: 500 },
       );
 
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await getPushRegistration();
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
@@ -77,7 +90,7 @@ export default function usePushNotifications() {
 
   const unsubscribe = useCallback(async () => {
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await getPushRegistration();
       const subscription = await reg.pushManager.getSubscription();
       if (subscription) {
         const endpoint = subscription.endpoint;

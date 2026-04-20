@@ -217,7 +217,7 @@ class EmailAlertService:
                  close, usa_close. Defaults to 'global' (full morning brief).
         """
         config = self.get_config()
-        self._validate_config(config)
+        self._validate_telegram_config(config)
         items = self.portfolio_manager.get_signal_watch_items()
         snapshot = self.public_signal_service.build_watchlist_snapshot(items)
         brief = dict(self.morning_brief_service.get_brief(snapshot))
@@ -1558,3 +1558,18 @@ class EmailAlertService:
         raise ValueError(
             "Missing notification config: set SMTP_* / ALERT_EMAIL_TO or Telegram bot settings."
         )
+
+    def _validate_telegram_config(self, config: EmailAlertConfig) -> None:
+        missing = []
+        if not config.telegram_enabled:
+            missing.append("TELEGRAM_ALERTS_ENABLED=true")
+        if not config.telegram_bot_token:
+            missing.append("TELEGRAM_BOT_TOKEN")
+        if not config.telegram_chat_id:
+            missing.append("TELEGRAM_CHAT_ID")
+        if missing:
+            raise ValueError(
+                "Missing Telegram notification config: set "
+                + ", ".join(missing)
+                + " in Railway environment variables."
+            )

@@ -1826,6 +1826,8 @@ async def send_telegram_brief_now(session: str = "global"):
         except Exception:
             pass
         return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

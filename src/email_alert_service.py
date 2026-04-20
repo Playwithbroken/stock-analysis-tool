@@ -9,6 +9,7 @@ from datetime import datetime
 import asyncio
 from html import escape
 import os
+import re
 import smtplib
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
@@ -85,7 +86,9 @@ class EmailAlertService:
                 "yes",
                 "on",
             },
-            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
+            telegram_bot_token=self._normalize_telegram_bot_token(
+                os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+            ),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         )
 
@@ -228,7 +231,7 @@ class EmailAlertService:
         try:
             self._send_telegram_rich_brief(config, brief, session)
         except Exception as e:
-            return {"status": "error", "message": f"Telegram send failed: {e}"}
+            raise RuntimeError(f"Telegram send failed: {e}") from e
         return {"status": "ok", "message": f"Session brief '{session}' sent to Telegram."}
 
     async def send_a_setup_digest_async(self) -> Dict[str, Any]:
@@ -928,16 +931,30 @@ class EmailAlertService:
 
     def _tg_post(self, token: str, chat_id: str, text: str, disable_preview: bool = True) -> None:
         """Send a single Telegram message (HTML parse mode)."""
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={
-                "chat_id": chat_id,
-                "text": text[:4096],
-                "parse_mode": "HTML",
-                "disable_web_page_preview": disable_preview,
-            },
-            timeout=20,
-        ).raise_for_status()
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": text[:4096],
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": disable_preview,
+                },
+                timeout=20,
+            ).raise_for_status()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status == 404:
+                raise RuntimeError(
+                    "Telegram rejected the bot token with 404. Check TELEGRAM_BOT_TOKEN in Railway; "
+                    "use the raw token from BotFather, for example 123456:ABC..., not the API URL."
+                ) from exc
+            if status == 400:
+                raise RuntimeError(
+                    "Telegram rejected the message with 400. Check TELEGRAM_CHAT_ID and whether the bot "
+                    "has been started in that chat."
+                ) from exc
+            raise
 
     def _tg_esc(self, text: str) -> str:
         """Escape text for Telegram HTML mode."""
@@ -1559,6 +1576,12 @@ class EmailAlertService:
             "Missing notification config: set SMTP_* / ALERT_EMAIL_TO or Telegram bot settings."
         )
 
+    def _normalize_telegram_bot_token(self, token: str) -> str:
+        token = (token or "").strip()
+        if token.lower().startswith("bot") and ":" in token[3:]:
+            return token[3:].strip()
+        return token
+
     def _validate_telegram_config(self, config: EmailAlertConfig) -> None:
         missing = []
         if not config.telegram_enabled:
@@ -1572,4 +1595,9 @@ class EmailAlertService:
                 "Missing Telegram notification config: set "
                 + ", ".join(missing)
                 + " in Railway environment variables."
+            )
+        if not re.match(r"^\d+:[A-Za-z0-9_-]{20,}$", config.telegram_bot_token):
+            raise ValueError(
+                "Invalid TELEGRAM_BOT_TOKEN format. Use the raw BotFather token, for example "
+                "123456789:ABCDEF..., not https://api.telegram.org/bot.../sendMessage."
             )

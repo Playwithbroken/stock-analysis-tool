@@ -117,7 +117,7 @@ class EmailAlertService:
                 "midday": os.getenv("MIDDAY_BRIEF_TIME", "12:30"),
                 "us_open": os.getenv("US_OPEN_BRIEF_TIME", "15:10"),
                 "close_recap": os.getenv("CLOSE_RECAP_TIME", "21:45"),
-                "delivery_grace_minutes": int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "120")),
+                "delivery_grace_minutes": int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "360")),
             },
         }
 
@@ -490,7 +490,7 @@ class EmailAlertService:
         except Exception:
             return False
         loop_minutes = max(2, int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15")))
-        grace_minutes = max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "120")))
+        grace_minutes = max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "360")))
         scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         delta_minutes = (now - scheduled).total_seconds() / 60
         return 0 <= delta_minutes < grace_minutes

@@ -94,6 +94,7 @@ export default function AnalysisResult({
     valuation,
     total_score,
     news,
+    earnings_history,
   } = data;
   const liveQuote = realtimeQuotes[data.ticker];
   const scoreValue = clampScore(total_score);
@@ -111,6 +112,8 @@ export default function AnalysisResult({
     : [];
   const financialTrends = financialStatements?.trends || {};
   const latestAnnual = annualFinancials[0] || {};
+  const earningsHistory = Array.isArray(earnings_history) ? earnings_history : [];
+  const latestEarnings = earningsHistory[0] || null;
 
   React.useEffect(() => {
     let cancelled = false;
@@ -526,6 +529,57 @@ export default function AnalysisResult({
               trend="up"
             />
           </div>
+
+          {earningsHistory.length > 0 && (
+            <section className="surface-panel rounded-[1.6rem] p-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    Earnings vs Erwartung
+                  </div>
+                  <h3 className="mt-2 text-2xl font-black text-slate-900">
+                    Ergebnis, Schätzung und Surprise
+                  </h3>
+                </div>
+                <div
+                  className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                    latestEarnings?.status === "beat"
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                      : latestEarnings?.status === "miss"
+                        ? "border-red-500/20 bg-red-500/10 text-red-700"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                  }`}
+                >
+                  {latestEarnings?.status === "beat"
+                    ? "Beat"
+                    : latestEarnings?.status === "miss"
+                      ? "Miss"
+                      : "In line"}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard
+                  label="Reported EPS"
+                  value={latestEarnings?.reported_eps != null ? latestEarnings.reported_eps.toFixed(2) : "N/A"}
+                  info={latestEarnings?.period}
+                />
+                <MetricCard
+                  label="EPS Estimate"
+                  value={latestEarnings?.eps_estimate != null ? latestEarnings.eps_estimate.toFixed(2) : "N/A"}
+                />
+                <MetricCard
+                  label="EPS Surprise"
+                  value={formatPercent(latestEarnings?.eps_surprise_pct)}
+                  trend={(latestEarnings?.eps_surprise_pct || 0) >= 0 ? "up" : "down"}
+                />
+                <MetricCard
+                  label="4Q Pattern"
+                  value={`${earningsHistory.filter((item: any) => item.status === "beat").length} Beat / ${earningsHistory.filter((item: any) => item.status === "miss").length} Miss`}
+                />
+              </div>
+            </section>
+          )}
 
           {annualFinancials.length > 0 && (
             <section className="surface-panel rounded-[1.6rem] p-5">

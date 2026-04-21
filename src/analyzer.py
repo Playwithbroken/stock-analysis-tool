@@ -653,6 +653,166 @@ class StockAnalyzer:
             summary = "Poor fundamentals - significant risks present"
         
         return AnalysisResult("Fundamental Analysis", findings, max(-100, min(100, score)), summary)
+
+    def analyze_earnings_quality(self) -> AnalysisResult:
+        """Analyze whether recent earnings beat, met, or missed market expectations."""
+        fund = self.data.get("fundamentals", {}) if isinstance(self.data.get("fundamentals"), dict) else {}
+        earnings_history = self.data.get("earnings_history", [])
+        statements = fund.get("financial_statements", {}) if isinstance(fund.get("financial_statements"), dict) else {}
+        trends = statements.get("trends", {}) if isinstance(statements.get("trends"), dict) else {}
+        findings: List[Dict[str, Any]] = []
+        score = 0
+
+        latest = earnings_history[0] if isinstance(earnings_history, list) and earnings_history else {}
+        latest_surprise = latest.get("eps_surprise_pct") if isinstance(latest, dict) else None
+        latest_status = latest.get("status") if isinstance(latest, dict) else None
+        reported_eps = latest.get("reported_eps") if isinstance(latest, dict) else None
+        eps_estimate = latest.get("eps_estimate") if isinstance(latest, dict) else None
+
+        if latest_surprise is not None:
+            if latest_surprise >= 8:
+                rating = Rating.VERY_POSITIVE
+                interp = "EPS came in materially above expectations"
+                score += 22
+            elif latest_surprise >= 3:
+                rating = Rating.POSITIVE
+                interp = "EPS beat expectations"
+                score += 12
+            elif latest_surprise > -3:
+                rating = Rating.NEUTRAL
+                interp = "EPS was broadly in line with expectations"
+                score += 2
+            elif latest_surprise > -8:
+                rating = Rating.NEGATIVE
+                interp = "EPS missed expectations"
+                score -= 14
+            else:
+                rating = Rating.VERY_NEGATIVE
+                interp = "EPS missed expectations materially"
+                score -= 25
+            findings.append(
+                {
+                    "metric": "EPS vs Erwartung",
+                    "value": f"{latest_surprise:+.1f}%",
+                    "rating": rating,
+                    "interpretation": interp,
+                }
+            )
+        elif latest_status:
+            findings.append(
+                {
+                    "metric": "EPS vs Erwartung",
+                    "value": str(latest_status).title(),
+                    "rating": Rating.NEUTRAL,
+                    "interpretation": "Estimate data is partial; treat the signal as informational.",
+                }
+            )
+
+        if reported_eps is not None or eps_estimate is not None:
+            findings.append(
+                {
+                    "metric": "Reported / Estimate EPS",
+                    "value": f"{reported_eps if reported_eps is not None else 'N/A'} / {eps_estimate if eps_estimate is not None else 'N/A'}",
+                    "rating": Rating.NEUTRAL,
+                    "interpretation": "Latest available earnings print.",
+                }
+            )
+
+        beats = 0
+        misses = 0
+        for item in earnings_history[:4] if isinstance(earnings_history, list) else []:
+            status = str(item.get("status") or "").lower() if isinstance(item, dict) else ""
+            if status == "beat":
+                beats += 1
+            elif status == "miss":
+                misses += 1
+        if beats or misses:
+            beat_rate = beats / max(1, beats + misses)
+            if beat_rate >= 0.75 and beats >= 2:
+                rating = Rating.POSITIVE
+                score += 8
+                interp = "Recent reporting pattern is reliable."
+            elif misses >= 2:
+                rating = Rating.NEGATIVE
+                score -= 8
+                interp = "Recent reporting pattern is fragile."
+            else:
+                rating = Rating.NEUTRAL
+                interp = "Mixed recent reporting pattern."
+            findings.append(
+                {
+                    "metric": "4Q Beat/Miss Pattern",
+                    "value": f"{beats} beats / {misses} misses",
+                    "rating": rating,
+                    "interpretation": interp,
+                }
+            )
+
+        quarterly_revenue_yoy = trends.get("quarterly_revenue_yoy")
+        if quarterly_revenue_yoy is not None:
+            q_pct = quarterly_revenue_yoy * 100
+            if q_pct >= 10:
+                rating = Rating.POSITIVE
+                score += 8
+                interp = "Revenue trend supports the earnings quality."
+            elif q_pct >= 0:
+                rating = Rating.NEUTRAL
+                interp = "Revenue trend is stable."
+            else:
+                rating = Rating.NEGATIVE
+                score -= 10
+                interp = "Revenue trend is weaker than desired."
+            findings.append(
+                {
+                    "metric": "Umsatztrend Quartal YoY",
+                    "value": f"{q_pct:+.1f}%",
+                    "rating": rating,
+                    "interpretation": interp,
+                }
+            )
+
+        forward_eps = fund.get("forward_eps")
+        trailing_eps = fund.get("eps")
+        if forward_eps is not None and trailing_eps not in (None, 0):
+            forward_delta = ((forward_eps / trailing_eps) - 1) * 100
+            if forward_delta >= 8:
+                rating = Rating.POSITIVE
+                score += 8
+                interp = "Forward EPS implies improving earnings power."
+            elif forward_delta <= -8:
+                rating = Rating.NEGATIVE
+                score -= 8
+                interp = "Forward EPS implies weaker earnings power."
+            else:
+                rating = Rating.NEUTRAL
+                interp = "Forward EPS is broadly stable."
+            findings.append(
+                {
+                    "metric": "Forward EPS Trend",
+                    "value": f"{forward_delta:+.1f}%",
+                    "rating": rating,
+                    "interpretation": interp,
+                }
+            )
+
+        if not findings:
+            findings.append(
+                {
+                    "metric": "Earnings Coverage",
+                    "value": "N/A",
+                    "rating": Rating.NEUTRAL,
+                    "interpretation": "No reliable estimate/surprise data available for this symbol.",
+                }
+            )
+            summary = "Earnings expectation data unavailable; recommendation relies on fundamentals, price and risk."
+        elif score >= 15:
+            summary = "Earnings quality supports a stronger buy/accumulate case."
+        elif score <= -12:
+            summary = "Earnings quality weakens the buy case; wait for repair or guidance confirmation."
+        else:
+            summary = "Earnings quality is mixed or in line; do not upgrade without price confirmation."
+
+        return AnalysisResult("Earnings Quality", findings, max(-100, min(100, score)), summary)
     
     def analyze_fear_factors(self) -> AnalysisResult:
         """Identify risk factors and fear indicators."""
@@ -1174,14 +1334,16 @@ class StockAnalyzer:
         fund_analysis = self.analyze_fundamentals()
         fear_analysis = self.analyze_fear_factors()
         opp_analysis = self.analyze_opportunities()
+        earnings_analysis = self.analyze_earnings_quality()
         news_analysis = self.analyze_news_sentiment()
         valuation = self.determine_valuation()
         
         # Calculate overall score
         weights = {
-            "fundamentals": 0.35,
+            "fundamentals": 0.30,
+            "earnings": 0.12,
             "fear": 0.25,
-            "opportunities": 0.20,
+            "opportunities": 0.18,
             "price": 0.10,
             "volatility": 0.05,
             "news": 0.05
@@ -1189,6 +1351,7 @@ class StockAnalyzer:
         
         total_score = (
             fund_analysis.score * weights["fundamentals"] +
+            earnings_analysis.score * weights["earnings"] +
             fear_analysis.score * weights["fear"] +
             opp_analysis.score * weights["opportunities"] +
             price_analysis.score * weights["price"] +
@@ -1223,6 +1386,7 @@ class StockAnalyzer:
                 "price_performance": price_analysis,
                 "volatility": vol_analysis,
                 "fundamentals": fund_analysis,
+                "earnings_quality": earnings_analysis,
                 "fear_factors": fear_analysis,
                 "opportunities": opp_analysis,
                 "news": news_analysis,

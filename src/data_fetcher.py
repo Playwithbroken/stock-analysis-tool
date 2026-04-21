@@ -487,7 +487,55 @@ class DataFetcher:
         return []
     
     def get_earnings_history(self) -> list:
-        return []
+        """Return recent earnings results with EPS estimate/actual surprise where available."""
+        try:
+            earnings_dates = None
+            try:
+                earnings_dates = self.stock.get_earnings_dates(limit=8)
+            except Exception:
+                earnings_dates = getattr(self.stock, "earnings_dates", None)
+
+            if earnings_dates is None or not isinstance(earnings_dates, pd.DataFrame) or earnings_dates.empty:
+                return []
+
+            rows: List[Dict[str, Any]] = []
+            for idx, row in earnings_dates.iterrows():
+                reported_eps = self._safe_number(
+                    row.get("Reported EPS")
+                    if hasattr(row, "get")
+                    else None
+                )
+                eps_estimate = self._safe_number(row.get("EPS Estimate") if hasattr(row, "get") else None)
+                surprise_pct = self._safe_number(row.get("Surprise(%)") if hasattr(row, "get") else None)
+                if surprise_pct is not None and abs(surprise_pct) <= 1:
+                    surprise_pct *= 100
+                if surprise_pct is None and reported_eps is not None and eps_estimate not in (None, 0):
+                    surprise_pct = ((reported_eps / eps_estimate) - 1) * 100
+
+                if reported_eps is None and eps_estimate is None and surprise_pct is None:
+                    continue
+
+                period = idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx)
+                status = "inline"
+                if surprise_pct is not None:
+                    if surprise_pct >= 3:
+                        status = "beat"
+                    elif surprise_pct <= -3:
+                        status = "miss"
+
+                rows.append(
+                    {
+                        "period": period,
+                        "eps_estimate": eps_estimate,
+                        "reported_eps": reported_eps,
+                        "eps_surprise_pct": surprise_pct,
+                        "status": status,
+                    }
+                )
+            return rows[:8]
+        except Exception as e:
+            print(f"Error fetching earnings history for {self.ticker}: {e}")
+            return []
     
     def get_insider_transactions(self) -> list:
         return []
@@ -590,6 +638,7 @@ class DataFetcher:
             "short_interest": self.get_short_interest(),
             "news": self.get_news(),
             "comparison": self.get_comparison_data(),
+            "earnings_history": self.get_earnings_history(),
             "etf_holdings": self.get_etf_holdings() if self.info.get("quoteType") == "ETF" else [],
             "fetch_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }

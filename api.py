@@ -820,6 +820,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                     "short_interest": {},
                     "news": [],
                     "comparison": {},
+                    "earnings_history": [],
                     "analysis": fallback_analysis,
                     "etf_analysis": None,
                     "recommendation": {
@@ -855,6 +856,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "short_interest": data.get("short_interest"),
             "news": data.get("news", []),
             "comparison": data.get("comparison"),
+            "earnings_history": data.get("earnings_history", []),
             "analysis": analyses,
             "etf_analysis": analyzer.analyze_etf() if data.get("fundamentals", {}).get("quote_type") == "ETF" else None,
             "recommendation": result.get("recommendation"),

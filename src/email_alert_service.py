@@ -385,8 +385,12 @@ class EmailAlertService:
             },
         ]
         results: List[Dict[str, Any]] = []
+        max_jobs_per_run = max(1, int(os.getenv("BRIEF_MAX_JOBS_PER_RUN", "1")))
+        sent_this_run = 0
 
         for job in jobs:
+            if sent_this_run >= max_jobs_per_run:
+                break
             event_key = f"{job['job_key']}:{now.date().isoformat()}"
             if event_key in sent_keys:
                 continue
@@ -451,6 +455,7 @@ class EmailAlertService:
                 ]
             )
             results.append({"job": job["job_key"], "status": "sent"})
+            sent_this_run += 1
 
         return results
 
@@ -1110,7 +1115,7 @@ class EmailAlertService:
             if t and t not in seen_titles:
                 seen_titles.add(t)
                 all_news.append(item)
-        for item in all_news[:10]:
+        for item in all_news[:7]:
             title = self._tg_esc(item.get("title") or "")
             link = (item.get("link") or "").strip()
             publisher = self._tg_esc(item.get("publisher") or "")
@@ -1135,7 +1140,11 @@ class EmailAlertService:
                 lines2.append(f"• {tag}{summary}")
 
         # Earnings calendar (broad S&P500 + watchlist)
-        earnings = brief.get("broad_earnings") or brief.get("earnings_calendar", [])
+        raw_earnings = brief.get("broad_earnings") or brief.get("earnings_calendar", [])
+        earnings = [
+            item for item in raw_earnings
+            if not isinstance(item.get("days_until"), int) or item.get("days_until") >= 0
+        ]
         if earnings:
             lines2.extend(["", "📅 <b>Earnings nächste 14 Tage</b>"])
             for item in earnings[:6]:
@@ -1228,15 +1237,45 @@ class EmailAlertService:
 
         # ── MSG 4: Action Board + Portfolio Brain + Contrarian ──────────────
         lines4: List[str] = []
+        trade_setups = brief.get("trade_setups") or []
+        if trade_setups:
+            lines4.append("🎯 <b>Aktien-Ideen / Setups</b>")
+            for setup_item in trade_setups[:5]:
+                symbol = self._tg_esc(setup_item.get("symbol") or "")
+                confidence = setup_item.get("confidence")
+                thesis = self._tg_esc((setup_item.get("thesis") or "")[:120])
+                trigger = self._tg_esc((setup_item.get("trigger") or "")[:120])
+                invalidation = self._tg_esc((setup_item.get("invalidation") or "")[:100])
+                move = self._tg_esc(setup_item.get("expected_move") or "")
+                confidence_text = f" · {confidence}% conf" if isinstance(confidence, int) else ""
+                move_text = f" · move {move}" if move else ""
+                lines4.append(f"• <code>{symbol}</code>{confidence_text}{move_text} — {thesis}")
+                if trigger:
+                    lines4.append(f"   Trigger: {trigger}")
+                if invalidation:
+                    lines4.append(f"   Invalid: {invalidation}")
+
         action_board = brief.get("action_board", [])
-        if action_board:
+        action_rows = []
+        seen_action_lines: set[str] = set()
+        for item in action_board:
+            setup = str(item.get("setup") or "watch").lower()
+            ticker = self._tg_esc(item.get("ticker") or "Macro")
+            trigger = self._tg_esc(item.get("trigger") or "")
+            impact = str(item.get("impact") or "")
+            if setup == "watch" and ticker == "Macro" and impact != "high":
+                continue
+            line_key = f"{ticker}:{setup}:{trigger}"
+            if line_key in seen_action_lines:
+                continue
+            seen_action_lines.add(line_key)
+            tag = f"<code>{ticker}</code> " if ticker != "Macro" else ""
+            action_rows.append(f"• {tag}<b>{self._tg_esc(setup)}</b> — {trigger}")
+        if action_rows:
+            if lines4:
+                lines4.append("")
             lines4.append("⚡ <b>Action Board</b>")
-            for item in action_board[:5]:
-                ticker = self._tg_esc(item.get("ticker") or "Macro")
-                setup = self._tg_esc(item.get("setup") or "watch")
-                trigger = self._tg_esc(item.get("trigger") or "")
-                tag = f"<code>{ticker}</code> " if ticker != "Macro" else ""
-                lines4.append(f"• {tag}<b>{setup}</b> — {trigger}")
+            lines4.extend(action_rows[:5])
 
         portfolio_brain = brief.get("portfolio_brain", {})
         pb_actions = portfolio_brain.get("actions") or []

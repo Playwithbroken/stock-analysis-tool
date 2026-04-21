@@ -689,9 +689,13 @@ class MorningBriefService:
                     }
                 )
 
-        trusted_items = [item for item in items if item.get("is_trusted_source")]
+        trusted_items = [
+            item for item in items
+            if item.get("is_trusted_source") and self._news_relevance_score(item) > 0
+        ]
         trusted_items.sort(
             key=lambda item: (
+                -self._news_relevance_score(item),
                 0 if item.get("source_quality") == "tier_1" else 1,
                 0 if item["impact"] == "high" else 1 if item["impact"] == "medium" else 2,
                 0 if item.get("severity") == "critical" else 1 if item.get("severity") == "elevated" else 2,
@@ -699,6 +703,30 @@ class MorningBriefService:
             )
         )
         return trusted_items[:16]
+
+    def _news_relevance_score(self, item: Dict[str, Any]) -> int:
+        title = str(item.get("title") or "").lower()
+        ticker = str(item.get("ticker") or "").upper()
+        event_type = str(item.get("event_type") or "").lower()
+        score = 0
+        if ticker:
+            score += 3
+        if event_type in {"conflict", "central_bank", "energy", "policy", "macro_data", "earnings"}:
+            score += 4
+        if any(term in title for term in [
+            "fed", "rate", "yield", "inflation", "cpi", "ppi", "jobs", "payrolls",
+            "earnings", "guidance", "upgrade", "downgrade", "oil", "opec", "war",
+            "tariff", "sanction", "market", "stock", "futures", "nasdaq", "s&p",
+            "dow", "dollar", "gold", "bitcoin", "crypto",
+        ]):
+            score += 3
+        if any(term in title for term in [
+            "retire", "retirees", "inherit", "estate", "adviser", "advisor",
+            "irs", "tax", "401", "credit card", "mortgage", "personal finance",
+            "student loan",
+        ]):
+            score -= 6
+        return score
 
     def _build_event_layer(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         layer = []
@@ -1240,19 +1268,22 @@ class MorningBriefService:
             unique_tickers.append(normalized)
 
         entries: List[Dict[str, Any]] = []
-        horizon = datetime.now(timezone.utc) + timedelta(days=21)
+        now = datetime.now(timezone.utc)
+        horizon = now + timedelta(days=21)
         for ticker in unique_tickers[:12]:
             try:
                 info = DataFetcher(ticker).info
                 earnings_at = self._extract_earnings_datetime(info)
-                if not earnings_at or earnings_at > horizon:
+                if not earnings_at or earnings_at > horizon or earnings_at < now - timedelta(hours=8):
                     continue
+                days_until = (earnings_at.date() - now.date()).days
                 entries.append(
                     {
                         "ticker": ticker,
                         "company": info.get("shortName") or info.get("longName") or ticker,
                         "scheduled_for": earnings_at.isoformat(),
                         "session": self._classify_earnings_session(earnings_at),
+                        "days_until": days_until,
                         "importance": "watchlist" if ticker in watched_tickers else "market",
                         "region": self._region_from_country(info.get("country")),
                     }
@@ -1448,10 +1479,13 @@ class MorningBriefService:
             if item.get("kind") == "ticker"
         }
         board: List[Dict[str, Any]] = []
+        seen_signatures: set[str] = set()
         for item in news[:10]:
             ticker = str(item.get("ticker") or "").upper() or None
             event_type = item.get("event_type") or "macro"
             impact = item.get("impact") or "low"
+            if impact == "low" and not ticker:
+                continue
             setup = "watch"
             leverage = "avoid"
             trigger = "Wait for confirmation after the open."
@@ -1491,6 +1525,12 @@ class MorningBriefService:
 
             if ticker and ticker in watched_tickers:
                 trigger = f"Watch {ticker} first. It is already on your radar."
+            if setup == "watch" and not ticker and impact != "high":
+                continue
+            signature = f"{ticker or 'macro'}:{setup}:{trigger}"
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
 
             intelligence = self._build_event_intelligence(
                 event_type=event_type,

@@ -16,6 +16,7 @@ import hashlib
 import hmac
 import secrets
 import math
+import requests
 from datetime import datetime, timedelta
 
 from src.data_fetcher import DataFetcher
@@ -1861,6 +1862,110 @@ async def send_telegram_brief_now(session: str = "global"):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/telegram-diagnostics")
+async def telegram_diagnostics():
+    """Diagnose Telegram bot/chat configuration without exposing the token."""
+    config = get_email_alert_service().get_config()
+    result: Dict[str, Any] = {
+        "telegram_enabled": config.telegram_enabled,
+        "token_configured": bool(config.telegram_bot_token),
+        "chat_id_configured": bool(config.telegram_chat_id),
+        "configured_chat_id": config.telegram_chat_id or None,
+        "bot": None,
+        "configured_chat_sendable": None,
+        "recent_chats": [],
+        "next_steps": [],
+    }
+    if not config.telegram_enabled:
+        result["next_steps"].append("Set TELEGRAM_ALERTS_ENABLED=true in Railway.")
+    if not config.telegram_bot_token:
+        result["next_steps"].append("Set TELEGRAM_BOT_TOKEN to the raw BotFather token.")
+    if not config.telegram_chat_id:
+        result["next_steps"].append("Set TELEGRAM_CHAT_ID to the chat id shown in recent_chats.")
+    if not (config.telegram_bot_token and config.telegram_enabled):
+        return result
+
+    base_url = f"https://api.telegram.org/bot{config.telegram_bot_token}"
+
+    def telegram_payload(method: str, **kwargs: Any) -> Dict[str, Any]:
+        try:
+            response = requests.request(
+                kwargs.pop("http_method", "GET"),
+                f"{base_url}/{method}",
+                timeout=12,
+                **kwargs,
+            )
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {"ok": False, "description": "Telegram returned a non-JSON response."}
+            if not response.ok:
+                return {
+                    "ok": False,
+                    "error_code": response.status_code,
+                    "description": payload.get("description") or response.reason,
+                }
+            return payload
+        except Exception as exc:
+            return {"ok": False, "description": exc.__class__.__name__}
+
+    me = telegram_payload("getMe")
+    if me.get("ok") and isinstance(me.get("result"), dict):
+        bot = me["result"]
+        result["bot"] = {
+            "id": bot.get("id"),
+            "username": bot.get("username"),
+            "first_name": bot.get("first_name"),
+        }
+    else:
+        result["bot"] = me
+        result["next_steps"].append("Bot token is not accepted by Telegram. Regenerate it in BotFather.")
+        return result
+
+    updates = telegram_payload("getUpdates", params={"limit": 20, "timeout": 0})
+    chats: Dict[str, Dict[str, Any]] = {}
+    if updates.get("ok") and isinstance(updates.get("result"), list):
+        for update in updates["result"]:
+            for key in ("message", "channel_post", "edited_message", "my_chat_member"):
+                event = update.get(key)
+                chat = event.get("chat") if isinstance(event, dict) else None
+                if not isinstance(chat, dict) or chat.get("id") is None:
+                    continue
+                chat_id = str(chat.get("id"))
+                chats[chat_id] = {
+                    "chat_id": chat_id,
+                    "type": chat.get("type"),
+                    "title": chat.get("title") or chat.get("username") or chat.get("first_name"),
+                }
+    result["recent_chats"] = list(chats.values())[:10]
+
+    if config.telegram_chat_id:
+        send_check = telegram_payload(
+            "sendChatAction",
+            http_method="POST",
+            json={"chat_id": config.telegram_chat_id, "action": "typing"},
+        )
+        if send_check.get("ok"):
+            result["configured_chat_sendable"] = {"ok": True}
+        else:
+            result["configured_chat_sendable"] = send_check
+            error_code = send_check.get("error_code")
+            if error_code == 403:
+                result["next_steps"].append(
+                    "Open the bot in Telegram and send /start, or add it to the configured group/channel with send rights."
+                )
+            elif error_code == 400:
+                result["next_steps"].append(
+                    "TELEGRAM_CHAT_ID is wrong. Use one of recent_chats after sending /start to the bot."
+                )
+
+    if not result["recent_chats"]:
+        result["next_steps"].append(
+            "Send /start to the bot in Telegram, then reload this diagnostic endpoint so getUpdates can show the chat id."
+        )
+    return result
 
 @app.get("/api/signals/scoreboard")
 async def get_signal_scoreboard():

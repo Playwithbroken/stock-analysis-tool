@@ -708,6 +708,8 @@ class MorningBriefService:
         title = str(item.get("title") or "").lower()
         ticker = str(item.get("ticker") or "").upper()
         event_type = str(item.get("event_type") or "").lower()
+        publisher = str(item.get("publisher") or "").lower()
+        source_quality = str(item.get("source_quality") or "").lower()
         score = 0
         if ticker:
             score += 3
@@ -726,6 +728,19 @@ class MorningBriefService:
             "student loan",
         ]):
             score -= 6
+        if "video" in publisher:
+            score -= 2
+        rumor_terms = [
+            "stepping down",
+            "steps down",
+            "replacing",
+            "successor",
+            "names new ceo",
+            "named ceo",
+            "leaving",
+        ]
+        if "ceo" in title and any(term in title for term in rumor_terms) and source_quality != "tier_1":
+            score -= 8
         return score
 
     def _build_event_layer(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -884,6 +899,8 @@ class MorningBriefService:
                     "confidence": confidence,
                     "expected_move": expected_move_map.get(str(expected_move), str(expected_move)),
                     "catalysts": [value for value in [item.get("event_type"), item.get("region"), item.get("source")] if value],
+                    "setup_type": item.get("setup_source") or "single_name",
+                    "direction": item.get("setup"),
                     "_score": score,
                 }
             )
@@ -895,6 +912,78 @@ class MorningBriefService:
             row["setup_id"] = f"{row.get('symbol','UNK')}-{index}"
             row.pop("_score", None)
         return scored[:5]
+
+    def _is_direct_single_name_signal(self, item: Dict[str, Any], ticker: str | None) -> bool:
+        if not ticker:
+            return False
+        title = str(item.get("title") or "").lower()
+        event_type = str(item.get("event_type") or "").lower()
+        ticker_l = ticker.lower()
+        if event_type == "earnings":
+            return True
+        stock_terms = [
+            "earnings",
+            "revenue",
+            "sales",
+            "guidance",
+            "profit",
+            "margin",
+            "eps",
+            "upgrade",
+            "downgrade",
+            "price target",
+            "initiates",
+            "beats",
+            "misses",
+            "forecast",
+            "outlook",
+            "sec filing",
+            "13f",
+            "insider",
+        ]
+        if ticker_l in title and any(term in title for term in stock_terms):
+            return True
+        return False
+
+    def _macro_proxy_symbol(self, event_type: str, setup: str, macro_regime: str) -> str | None:
+        event_type = (event_type or "macro").lower()
+        setup = (setup or "watch").lower()
+        if event_type == "conflict":
+            return "GLD" if setup == "hedge" else "XLE"
+        if event_type == "energy":
+            return "XLE" if setup in {"long", "watch"} else "USO"
+        if event_type == "central_bank":
+            if macro_regime == "risk-on":
+                return "QQQ"
+            if macro_regime == "risk-off":
+                return "TLT"
+            return "SPY"
+        if event_type == "macro_data":
+            if macro_regime == "risk-on":
+                return "SPY"
+            if macro_regime == "risk-off":
+                return "TLT"
+            return "QQQ"
+        if event_type == "policy":
+            return "SMH"
+        if event_type == "election":
+            return "SPY"
+        if event_type == "disaster":
+            return "XLI"
+        return None
+
+    def _macro_proxy_thesis(self, event_type: str, symbol: str | None, macro_regime: str) -> str:
+        if not symbol:
+            return self._action_thesis(event_type, macro_regime, None)
+        if event_type == "conflict":
+            return f"{symbol} is the cleaner conflict-risk expression than forcing a random single-stock trade."
+        if event_type == "energy":
+            return f"{symbol} tracks the energy impulse directly. Confirm crude strength before acting."
+        if event_type in {"central_bank", "macro_data"}:
+            return f"{symbol} is the macro proxy. Direction depends on rates, dollar and futures confirming together."
+        if event_type == "policy":
+            return f"{symbol} is the sector proxy for policy risk. Avoid single-name conviction until details are clear."
+        return f"{symbol} is the broad-market proxy for this event. Wait for confirmation."
 
     def _build_prediction_signals(self, polymarket_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         signals: List[Dict[str, Any]] = []
@@ -1481,7 +1570,8 @@ class MorningBriefService:
         board: List[Dict[str, Any]] = []
         seen_signatures: set[str] = set()
         for item in news[:10]:
-            ticker = str(item.get("ticker") or "").upper() or None
+            raw_ticker = str(item.get("ticker") or "").upper() or None
+            ticker = raw_ticker
             event_type = item.get("event_type") or "macro"
             impact = item.get("impact") or "low"
             if impact == "low" and not ticker:
@@ -1523,11 +1613,30 @@ class MorningBriefService:
                 trigger = "Wait for price to hold above or below the first impulse."
                 risk = "Single-name moves fail often without volume confirmation."
 
-            if ticker and ticker in watched_tickers:
+            direct_single_name = self._is_direct_single_name_signal(item, raw_ticker)
+            setup_source = "single_name" if direct_single_name else "macro_proxy"
+            if raw_ticker and not direct_single_name:
+                proxy = self._macro_proxy_symbol(str(event_type), setup, macro_regime)
+                ticker = proxy
+                if ticker:
+                    thesis = f"{item.get('title') or 'Macro event'}"
+                    trigger = self._macro_proxy_trigger(str(event_type), setup)
+                    risk = self._macro_proxy_risk(str(event_type))
+                else:
+                    ticker = None
+                    setup_source = "macro"
+            elif not raw_ticker:
+                ticker = self._macro_proxy_symbol(str(event_type), setup, macro_regime)
+                setup_source = "macro_proxy" if ticker else "macro"
+                if ticker:
+                    trigger = self._macro_proxy_trigger(str(event_type), setup)
+                    risk = self._macro_proxy_risk(str(event_type))
+
+            if raw_ticker and direct_single_name and raw_ticker in watched_tickers:
                 trigger = f"Watch {ticker} first. It is already on your radar."
             if setup == "watch" and not ticker and impact != "high":
                 continue
-            signature = f"{ticker or 'macro'}:{setup}:{trigger}"
+            signature = f"{ticker or 'macro'}:{setup}:{event_type}:{trigger}"
             if signature in seen_signatures:
                 continue
             seen_signatures.add(signature)
@@ -1539,22 +1648,34 @@ class MorningBriefService:
                 source_quality=item.get("source_quality") or "tier_2",
                 ticker=ticker,
             )
+            action_thesis = (
+                self._action_thesis(str(event_type), macro_regime, ticker)
+                if setup_source == "single_name"
+                else self._macro_proxy_thesis(str(event_type), ticker, macro_regime)
+            )
             board.append(
                 {
                     "title": thesis,
                     "region": item.get("region") or "usa",
                     "ticker": ticker,
+                    "original_ticker": raw_ticker,
                     "event_type": event_type,
                     "impact": impact,
                     "setup": setup,
+                    "setup_source": setup_source,
                     "leverage": leverage,
-                    "thesis": self._action_thesis(event_type, macro_regime, ticker),
+                    "thesis": action_thesis,
                     "trigger": trigger,
                     "risk": risk,
                     "source": item.get("publisher"),
+                    "source_quality": item.get("source_quality"),
                     "link": item.get("link"),
                     "event_intelligence": intelligence,
-                    "portfolio_exposure": self._build_portfolio_exposure(ticker, watchlist_snapshot, intelligence),
+                    "portfolio_exposure": self._build_portfolio_exposure(
+                        raw_ticker if setup_source == "single_name" else ticker,
+                        watchlist_snapshot,
+                        intelligence,
+                    ),
                 }
             )
 
@@ -1589,6 +1710,32 @@ class MorningBriefService:
                     }
                 )
         return board[:8]
+
+    def _macro_proxy_trigger(self, event_type: str, setup: str) -> str:
+        event_type = (event_type or "macro").lower()
+        if event_type == "conflict":
+            return "Act only if gold/oil hold the first impulse and index breadth weakens or defense bid confirms."
+        if event_type == "energy":
+            return "Crude and XLE should hold above the opening impulse; avoid chasing if both fade."
+        if event_type in {"central_bank", "macro_data"}:
+            return "Use only after yields, dollar and index futures confirm in the same direction."
+        if event_type == "policy":
+            return "Wait for sector ETF confirmation before selecting single names."
+        if event_type == "election":
+            return "Wait for index breadth and rates to confirm the first political headline reaction."
+        if event_type == "disaster":
+            return "Trade only after affected sectors show volume confirmation, not the first panic print."
+        return "Wait for market structure to confirm direction."
+
+    def _macro_proxy_risk(self, event_type: str) -> str:
+        event_type = (event_type or "macro").lower()
+        if event_type in {"conflict", "policy", "election"}:
+            return "Headline reversals can invalidate the setup quickly."
+        if event_type == "energy":
+            return "Oil spikes often fade on policy or supply headlines."
+        if event_type in {"central_bank", "macro_data"}:
+            return "No trade if bonds, dollar and futures disagree after the release."
+        return "Invalid if the first impulse fully reverses."
 
     def _build_portfolio_brain(self, action_board: List[Dict[str, Any]]) -> Dict[str, Any]:
         summary = {

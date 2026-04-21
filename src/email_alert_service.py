@@ -1175,9 +1175,24 @@ class EmailAlertService:
         lines3: List[str] = []
 
         reddit = brief.get("reddit_posts", [])
-        if reddit:
+        filtered_reddit = []
+        for post in reddit:
+            title_l = str(post.get("title") or "").lower()
+            score = int(post.get("score") or 0)
+            comments = int(post.get("num_comments") or 0)
+            is_ceo_rumor = "ceo" in title_l and any(
+                term in title_l
+                for term in ["stepping down", "steps down", "replacing", "successor", "names new ceo", "named ceo"]
+            )
+            if is_ceo_rumor:
+                continue
+            if score < 250 and comments < 80:
+                continue
+            filtered_reddit.append(post)
+
+        if filtered_reddit:
             lines3.append("🤖 <b>Reddit Hot Posts</b>")
-            for post in reddit[:5]:
+            for post in filtered_reddit[:4]:
                 title = self._tg_esc((post.get("title") or "")[:120])
                 sub = self._tg_esc(post.get("subreddit") or "")
                 score = post.get("score") or 0
@@ -1198,7 +1213,7 @@ class EmailAlertService:
             if lines3:
                 lines3.append("")
             lines3.append("💬 <b>Stocktwits Sentiment</b>")
-            for item in stocktwits:
+            for item in stocktwits[:4]:
                 t = self._tg_esc(item.get("ticker") or "")
                 bull = item.get("bull_ratio") or 0
                 label = item.get("sentiment_label") or "neutral"
@@ -1207,11 +1222,6 @@ class EmailAlertService:
                 bar_filled = round(bull / 10)
                 bar = "█" * bar_filled + "░" * (10 - bar_filled)
                 lines3.append(f"{icon_s} <code>{t}</code> {bar} {bull}% bullish · {msgs} msgs")
-                # Show top message
-                tops = item.get("top_messages") or []
-                if tops:
-                    top_txt = self._tg_esc((tops[0].get("text") or "")[:100])
-                    lines3.append(f'   <i>"{top_txt}"</i>')
 
         polymarket = brief.get("polymarket", [])
         if polymarket:

@@ -80,7 +80,10 @@
               msg.indexOf('Importing a module script failed') !== -1 ||
               msg.indexOf('Failed to fetch dynamically') !== -1 ||
               msg.indexOf('Failed to load module script') !== -1 ||
-              msg.indexOf('Loading module from') !== -1) &&
+              msg.indexOf('Loading module from') !== -1 ||
+              msg.indexOf('Laden des Moduls') !== -1 ||
+              msg.indexOf('MIME') !== -1 ||
+              msg.indexOf('nicht freigegebenen MIME') !== -1) &&
             !sessionStorage.getItem(KEY)
           ) {
             sessionStorage.setItem(KEY, '1');
@@ -93,7 +96,12 @@
           if (
             (msg.indexOf('dynamically imported module') !== -1 ||
               msg.indexOf('Importing a module script failed') !== -1 ||
-              msg.indexOf('Failed to fetch dynamically') !== -1) &&
+              msg.indexOf('Failed to fetch dynamically') !== -1 ||
+              msg.indexOf('Failed to load module script') !== -1 ||
+              msg.indexOf('Loading module from') !== -1 ||
+              msg.indexOf('Laden des Moduls') !== -1 ||
+              msg.indexOf('MIME') !== -1 ||
+              msg.indexOf('nicht freigegebenen MIME') !== -1) &&
             !sessionStorage.getItem(KEY)
           ) {
             sessionStorage.setItem(KEY, '1');

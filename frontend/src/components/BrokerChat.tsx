@@ -48,7 +48,7 @@ export default function BrokerChat({
         role: "oracle",
         content:
           initialMessage ||
-          "Hallo. Ich bin dein Broker Freund Desk. Ich kenne dein Portfolio, deine Signale und den Markt. Was willst du zuerst einordnen?",
+          "Hallo. Ich bin dein Broker Freund Desk. Ich kann dir Portfolio, Live-Kurse, Morning Brief, Signale, Risiken und konkrete Trigger erklaeren. Frag mich z.B. warum ein Setup wichtig ist, was du beobachten sollst oder wo dein Risiko liegt.",
       },
     ]);
   }, [initialMessage]);
@@ -163,7 +163,7 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : `surface-panel fixed inset-x-3 top-auto z-50 flex w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-3 h-[min(86vh,52rem)]" : "bottom-24 h-[min(62vh,38rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
+          : `surface-panel fixed inset-x-3 top-auto z-50 flex w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] h-[min(86vh,52rem)]" : "bottom-[calc(6rem+env(safe-area-inset-bottom))] h-[min(62vh,38rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
       }`}
     >
       {!isInline && (
@@ -332,7 +332,7 @@ export default function BrokerChat({
       </div>
 
       <div
-        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-6"}`}
+        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6"}`}
       >
         {currentTicker && !isInline && (
           <div className="mb-4 flex items-center gap-2">
@@ -383,7 +383,7 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-24 left-4 right-4 z-40${isOpen ? " hidden" : ""} flex h-[4.4rem] items-center justify-between rounded-[1.6rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0 sm:bottom-28 sm:left-6 sm:right-6 md:sm:right-8 md:sm:left-auto`}
+        className={`group fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 right-4 z-40${isOpen ? " hidden" : ""} flex h-[4.4rem] items-center justify-between rounded-[1.6rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0 sm:bottom-[calc(7rem+env(safe-area-inset-bottom))] sm:left-6 sm:right-6 md:sm:right-8 md:sm:left-auto`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>

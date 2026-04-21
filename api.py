@@ -1205,7 +1205,17 @@ async def oracle_chat(req: OracleRequest):
     portfolio_summary = profile.get("summary", {}) if isinstance(profile, dict) else {}
     holdings_count = int(portfolio_summary.get("num_holdings") or 0)
     total_value = float(portfolio_summary.get("total_value") or 0)
-    gain_loss_pct = float(portfolio_summary.get("gain_loss_pct") or 0)
+    gain_loss_pct = float(
+        portfolio_summary.get("return_since_buy_pct")
+        or portfolio_summary.get("gain_loss_pct")
+        or 0
+    )
+    portfolio_holdings = profile.get("holdings", []) if isinstance(profile, dict) else []
+    holding_names = [
+        str(item.get("ticker") or "").upper()
+        for item in portfolio_holdings
+        if isinstance(item, dict) and item.get("ticker")
+    ][:6]
 
     brief = req.morning_brief_summary or {}
     macro_regime = brief.get("macro_regime") if isinstance(brief, dict) else None
@@ -1269,13 +1279,40 @@ async def oracle_chat(req: OracleRequest):
     if headline:
         levels.append(f"Brief-Headline: {headline}")
 
+    explain_lines = []
+    if primary:
+        explain_lines.append(
+            f"{symbol} wird aus Score, Wochenmomentum, Live-Preis und aktuellem Marktregime eingeordnet."
+        )
+    else:
+        explain_lines.append(
+            "Ohne Einzelticker ordne ich zuerst Marktregime, Portfolio-Risiko und die besten Signale ein."
+        )
+    if holdings_count > 0:
+        explain_lines.append(
+            f"Dein Portfolio-Kontext ist aktiv ({holdings_count} Positionen"
+            + (f": {', '.join(holding_names)}" if holding_names else "")
+            + ")."
+        )
+    if top_signal:
+        explain_lines.append("Das Signalboard fliesst als Priorisierung ein, nicht als blinder Kaufbefehl.")
+
+    next_steps = [
+        "1. Erst den Trigger abwarten, nicht vor der Bestaetigung handeln.",
+        "2. Positionsgroesse klein halten, wenn Regime oder Newsflow gemischt sind.",
+        "3. Bei Gegenreaktion sofort Invalidierung pruefen.",
+    ]
+
     response = (
         f"These: {thesis}\n"
+        f"Erklaerung: {' '.join(explain_lines)}\n"
         f"Risiko: {' | '.join(risk_line_parts)}\n"
         f"Trigger: {trigger_line}\n"
         f"Invalidierung: {invalidation_line}\n"
         "Beobachtbare Levels:\n"
         + "\n".join([f"- {line}" for line in levels])
+        + "\nNaechste Schritte:\n"
+        + "\n".join([f"- {line}" for line in next_steps])
     )
     return {"response": response}
 

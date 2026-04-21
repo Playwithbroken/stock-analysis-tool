@@ -1415,7 +1415,7 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[1.8rem] border border-black/8 bg-[rgba(255,255,255,0.9)] p-2 shadow-[0_20px_60px_rgba(17,24,39,0.14)] backdrop-blur-xl md:hidden">
+      <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[1.8rem] border border-black/8 bg-[rgba(255,255,255,0.9)] p-2 shadow-[0_20px_60px_rgba(17,24,39,0.14)] backdrop-blur-xl md:hidden">
         <div className="grid grid-cols-3 gap-1">
           {NAV_ITEMS.map((item) => (
             <button

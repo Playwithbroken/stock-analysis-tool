@@ -69,6 +69,7 @@ _public_signal_service = None
 _email_alert_service = None
 _signal_alert_task = None
 _price_alert_task = None
+_brief_warmup_task = None
 _morning_brief_service = None
 _signal_score_service = None
 _session_list_service = None
@@ -77,6 +78,10 @@ _trading_intelligence_service = None
 _realtime_market_service = None
 _push_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
+
+
+def _env_enabled(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "AAPL", "name": "Apple"},
@@ -322,11 +327,33 @@ async def _signal_alert_loop():
     await asyncio.sleep(5)
     while True:
         try:
-            await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
+            if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
+                await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
             await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs)
         except Exception as e:
             print(f"Signal alert loop error: {e}")
         await asyncio.sleep(max(1, interval_minutes) * 60)
+
+
+async def _brief_warmup_loop():
+    if not _env_enabled("BRIEF_WARMUP_ENABLED", "true"):
+        return
+    await asyncio.sleep(12)
+    while True:
+        try:
+            items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
+            snapshot = await asyncio.wait_for(
+                asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
+                timeout=float(os.getenv("BRIEF_WARMUP_SNAPSHOT_TIMEOUT_SECONDS", "5")),
+            )
+            await asyncio.wait_for(
+                asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot),
+                timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "20")),
+            )
+        except Exception as e:
+            print(f"Brief warmup loop error: {e}")
+        interval_seconds = int(os.getenv("BRIEF_WARMUP_INTERVAL_SECONDS", "300"))
+        await asyncio.sleep(max(60, interval_seconds))
 
 
 def _is_alert_in_cooldown(last_triggered_at: Optional[str], cooldown_minutes: int) -> bool:
@@ -403,15 +430,13 @@ async def _price_alert_loop():
 
 @app.on_event("startup")
 async def startup_event():
-    global _signal_alert_task, _price_alert_task
-    enabled = os.getenv("SIGNAL_ALERTS_ENABLED", "false").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    if enabled and _signal_alert_task is None:
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task
+    alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
+    scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
+    if (alerts_enabled or scheduled_briefs_enabled) and _signal_alert_task is None:
         _signal_alert_task = asyncio.create_task(_signal_alert_loop())
+    if scheduled_briefs_enabled and _brief_warmup_task is None:
+        _brief_warmup_task = asyncio.create_task(_brief_warmup_loop())
     if _price_alert_task is None:
         _price_alert_task = asyncio.create_task(_price_alert_loop())
 

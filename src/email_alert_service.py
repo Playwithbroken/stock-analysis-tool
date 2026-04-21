@@ -1374,18 +1374,26 @@ class EmailAlertService:
                     )
 
             analyst = edge.get("analyst") or []
-            if analyst:
+            analyst_lines: List[str] = []
+            for a in analyst[:5]:
+                tk = self._tg_esc(a.get("ticker", ""))
+                latest = a.get("actions", [])[-3:]
+                for act in latest:
+                    firm = self._tg_esc((act.get("firm") or "").strip())[:28]
+                    to = self._tg_esc((act.get("to") or "").strip())
+                    frm = self._tg_esc((act.get("from") or "").strip())
+                    action = self._tg_esc((act.get("action") or "").strip())
+                    if not (firm or to or frm or action):
+                        continue
+                    if not (to or action):
+                        continue
+                    transition = f"{frm or 'n/a'} → <b>{to}</b>" if to else action
+                    suffix = f" ({action})" if action and action not in transition else ""
+                    analyst_lines.append(f"• <code>{tk}</code> {firm or 'Analyst'}: {transition}{suffix}")
+            if analyst_lines:
                 lines5.append("")
                 lines5.append("🏦 <b>Analyst Actions (14d)</b>")
-                for a in analyst[:5]:
-                    tk = a["ticker"]
-                    latest = a["actions"][-3:]
-                    for act in latest:
-                        firm = self._tg_esc(act.get("firm", ""))[:28]
-                        to = self._tg_esc(act.get("to", ""))
-                        frm = self._tg_esc(act.get("from", ""))
-                        action = self._tg_esc(act.get("action", ""))
-                        lines5.append(f"• <code>{tk}</code> {firm}: {frm} → <b>{to}</b> ({action})")
+                lines5.extend(analyst_lines[:8])
 
             insider = edge.get("insider") or []
             if insider:

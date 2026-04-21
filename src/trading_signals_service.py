@@ -200,13 +200,23 @@ class TradingSignalsService:
             recent = recs[recs.index >= cutoff] if hasattr(recs.index, "to_pydatetime") else recs.tail(10)
             actions = []
             for idx, row in recent.iterrows():
+                firm = str(row.get("Firm", "") or "").strip()
+                to_grade = str(row.get("To Grade", row.get("toGrade", "")) or "").strip()
+                from_grade = str(row.get("From Grade", row.get("fromGrade", "")) or "").strip()
+                action = str(row.get("Action", "") or "").strip()
+                if not (firm or to_grade or from_grade or action):
+                    continue
+                if not (to_grade or action):
+                    continue
                 actions.append({
                     "date": str(idx)[:10],
-                    "firm": str(row.get("Firm", "")),
-                    "to": str(row.get("To Grade", row.get("toGrade", ""))),
-                    "from": str(row.get("From Grade", row.get("fromGrade", ""))),
-                    "action": str(row.get("Action", "")),
+                    "firm": firm,
+                    "to": to_grade,
+                    "from": from_grade,
+                    "action": action,
                 })
+            if not actions:
+                return None
             payload = {"ticker": ticker, "actions": actions[-8:]}
             self._c_analyst[ticker] = _Cache(time.time(), payload)
             return payload

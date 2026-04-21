@@ -36,6 +36,7 @@ class EmailAlertConfig:
     telegram_enabled: bool
     telegram_bot_token: str
     telegram_chat_id: str
+    scheduled_briefs_enabled: bool
 
 
 class EmailAlertService:
@@ -90,6 +91,8 @@ class EmailAlertService:
                 os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
             ),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
+            scheduled_briefs_enabled=os.getenv("SCHEDULED_BRIEFS_ENABLED", "true").strip().lower()
+            not in {"0", "false", "no", "off"},
         )
 
     def get_notification_status(self) -> Dict[str, Any]:
@@ -106,6 +109,7 @@ class EmailAlertService:
                 "configured": bool(config.telegram_bot_token and config.telegram_chat_id),
             },
             "schedule": {
+                "enabled": config.scheduled_briefs_enabled,
                 "timezone": os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
                 "morning": os.getenv("MORNING_BRIEF_TIME", "07:15"),
@@ -300,9 +304,8 @@ class EmailAlertService:
 
     def send_scheduled_open_briefs(self) -> List[Dict[str, Any]]:
         config = self.get_config()
-        if not config.enabled:
+        if not config.scheduled_briefs_enabled:
             return []
-        self._validate_config(config)
 
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
         if not self._schedule_day_matches(now):
@@ -390,7 +393,9 @@ class EmailAlertService:
             if not self._time_window_matches(now, str(job["scheduled_time"])):
                 continue
 
+            self._validate_config(config)
             events = job["build_events"]()
+            delivered = False
 
             # For scheduled briefs: send rich multi-part Telegram message + email
             if job.get("is_brief"):
@@ -406,6 +411,11 @@ class EmailAlertService:
                     pass
                 try:
                     self._send_telegram_rich_brief(config, brief, str(job["session_label"]))
+                    delivered = bool(
+                        config.telegram_enabled
+                        and config.telegram_bot_token
+                        and config.telegram_chat_id
+                    )
                 except Exception as exc:
                     print(f"Scheduled Telegram brief failed for {job['job_key']}: {exc}")
                 # Browser push notification
@@ -416,9 +426,21 @@ class EmailAlertService:
                     except Exception as exc:
                         print(f"Scheduled push brief failed for {job['job_key']}: {exc}")
                 # Still send email via the normal path (events → HTML email)
-                self._send_notifications(config, events, subject=str(job["subject"]), telegram=False)
+                delivered = (
+                    self._send_notifications(config, events, subject=str(job["subject"]), telegram=False)
+                    or delivered
+                )
             else:
-                self._send_notifications(config, events, subject=str(job["subject"]))
+                delivered = self._send_notifications(config, events, subject=str(job["subject"]))
+            if not delivered:
+                results.append(
+                    {
+                        "job": job["job_key"],
+                        "status": "failed",
+                        "message": "No notification channel delivered; will retry within the grace window.",
+                    }
+                )
+                continue
             self.portfolio_manager.mark_signal_events_sent(
                 [
                     {
@@ -884,7 +906,7 @@ class EmailAlertService:
         events: List[Dict[str, Any]],
         subject: str,
         telegram: bool = True,
-    ) -> None:
+    ) -> bool:
         errors: List[str] = []
         delivered = False
 
@@ -901,6 +923,7 @@ class EmailAlertService:
 
         if not delivered and errors:
             raise RuntimeError("; ".join(errors))
+        return delivered
 
     def _send_email(
         self,

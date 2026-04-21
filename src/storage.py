@@ -172,12 +172,28 @@ class PortfolioManager:
         cursor = conn.cursor()
         
         # Check if holding already exists for this ticker
-        cursor.execute('SELECT id, shares FROM holdings WHERE portfolio_id = ? AND ticker = ?', (portfolio_id, ticker.upper()))
+        cursor.execute(
+            'SELECT id, shares, buy_price FROM holdings WHERE portfolio_id = ? AND ticker = ?',
+            (portfolio_id, ticker.upper()),
+        )
         existing = cursor.fetchone()
         
         if existing:
-            new_shares = existing[1] + shares
-            cursor.execute('UPDATE holdings SET shares = ? WHERE id = ?', (new_shares, existing[0]))
+            existing_shares = float(existing[1] or 0)
+            existing_buy_price = existing[2]
+            new_shares = existing_shares + shares
+            new_buy_price = existing_buy_price
+            if new_shares > 0:
+                if existing_buy_price is not None and buy_price is not None:
+                    new_buy_price = (
+                        (existing_shares * float(existing_buy_price)) + (shares * float(buy_price))
+                    ) / new_shares
+                elif buy_price is not None:
+                    new_buy_price = buy_price
+            cursor.execute(
+                'UPDATE holdings SET shares = ?, buy_price = ? WHERE id = ?',
+                (new_shares, new_buy_price, existing[0]),
+            )
         else:
             cursor.execute('INSERT INTO holdings (id, portfolio_id, ticker, shares, buy_price) VALUES (?, ?, ?, ?, ?)',
                            (holding_id, portfolio_id, ticker.upper(), shares, buy_price))

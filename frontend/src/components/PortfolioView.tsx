@@ -25,6 +25,8 @@ interface PortfolioAnalysis {
     total_cost: number;
     gain_loss: number;
     gain_loss_pct: number;
+    return_since_buy?: number;
+    return_since_buy_pct?: number;
     num_holdings: number;
     avg_score: number;
     sector_allocation: Record<string, number>;
@@ -227,6 +229,9 @@ export default function PortfolioView({
   const scoreTone = (score: number) =>
     score > 10 ? "text-emerald-700" : score < -10 ? "text-red-700" : "text-amber-700";
 
+  const returnValue = analysis?.summary.return_since_buy ?? analysis?.summary.gain_loss ?? 0;
+  const returnPct = analysis?.summary.return_since_buy_pct ?? analysis?.summary.gain_loss_pct ?? 0;
+
   return (
     <div className="space-y-6">
       <section className="surface-panel rounded-[2.4rem] p-6 sm:p-8">
@@ -367,7 +372,7 @@ export default function PortfolioView({
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    Total cost
+                    Investiert
                   </div>
                   <div className="mt-2 text-3xl font-black text-slate-900">
                     {formatPrice(analysis.summary.total_cost)}
@@ -375,13 +380,13 @@ export default function PortfolioView({
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    Gain / loss
+                    Rendite seit Kauf
                   </div>
-                  <div className={`mt-2 text-3xl font-black ${analysis.summary.gain_loss >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                    {formatPrice(analysis.summary.gain_loss)}
+                  <div className={`mt-2 text-3xl font-black ${returnValue >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatPrice(returnValue)}
                   </div>
-                  <div className={`mt-1 text-sm font-bold ${analysis.summary.gain_loss_pct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                    {formatPercent(analysis.summary.gain_loss_pct)}
+                  <div className={`mt-1 text-sm font-bold ${returnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatPercent(returnPct)}
                   </div>
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
@@ -597,17 +602,21 @@ export default function PortfolioView({
                       <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                         <th className="px-6 py-4">Stock</th>
                         <th className="px-4 py-4 text-right">Shares</th>
-                        <th className="px-4 py-4 text-right">Entry</th>
+                        <th className="px-4 py-4 text-right">Kaufkurs</th>
                         <th className="px-4 py-4 text-right">Price</th>
                         <th className="px-4 py-4 text-right">Value</th>
-                        <th className="px-4 py-4 text-right">Gain/Loss</th>
+                        <th className="px-4 py-4 text-right">Seit Kauf</th>
                         <th className="px-4 py-4 text-right">Score</th>
                         <th className="px-4 py-4 text-center">Action</th>
                         <th className="px-6 py-4 text-right">Manage</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {analysis.holdings.map((holding) => (
+                      {analysis.holdings.map((holding) => {
+                        const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
+                        const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
+                        const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
+                        return (
                         <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02]">
                           <td className="px-6 py-4">
                             <div className="font-extrabold text-slate-900">{holding.ticker}</div>
@@ -617,7 +626,7 @@ export default function PortfolioView({
                             {holding.shares}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {holding.buy_price != null ? formatPrice(holding.buy_price) : "-"}
+                            {hasEntry ? formatPrice(holding.buy_price) : "Aktueller Kurs"}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                             {formatPrice(holding.current_price || 0)}
@@ -626,12 +635,17 @@ export default function PortfolioView({
                             {formatPrice(holding.position_value || 0)}
                           </td>
                           <td className="px-4 py-4 text-right">
-                            <div className={`text-sm font-extrabold ${holding.gain_loss >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                              {formatPrice(holding.gain_loss || 0)}
+                            <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              {formatPrice(holdingReturn)}
                             </div>
-                            <div className={`text-xs font-bold ${holding.gain_loss_pct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                              {formatPercent(holding.gain_loss_pct || 0)}
+                            <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              {formatPercent(holdingReturnPct)}
                             </div>
+                            {!hasEntry && (
+                              <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                Kaufkurs fehlt
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-4 text-right">
                             <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
@@ -668,7 +682,7 @@ export default function PortfolioView({
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>

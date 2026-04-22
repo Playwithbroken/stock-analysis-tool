@@ -1159,6 +1159,28 @@ class EmailAlertService:
                 cap_str = f" ${cap/1e9:.0f}B" if cap and cap > 1e9 else ""
                 lines2.append(f"• <code>{t}</code> {company}{cap_str} — {date_str} {session_emoji}{days_str}")
 
+        earnings_results = brief.get("earnings_results") or []
+        if earnings_results:
+            lines2.extend(["", "<b>Earnings vs Erwartung</b>"])
+            for item in earnings_results[:5]:
+                ticker = self._tg_esc(item.get("ticker") or "")
+                status = str(item.get("status") or "inline").lower()
+                icon = "BEAT" if status == "beat" else "MISS" if status == "miss" else "INLINE"
+                surprise = item.get("eps_surprise_pct")
+                surprise_str = f"{surprise:+.1f}%" if isinstance(surprise, (int, float)) else "n/a"
+                reported = item.get("reported_eps")
+                estimate = item.get("eps_estimate")
+                reported_str = f"{reported:.2f}" if isinstance(reported, (int, float)) else "n/a"
+                estimate_str = f"{estimate:.2f}" if isinstance(estimate, (int, float)) else "n/a"
+                period = self._tg_esc(str(item.get("period") or "")[:10])
+                summary = self._tg_esc(item.get("summary") or item.get("action_hint") or "")
+                lines2.append(
+                    f"{icon} <code>{ticker}</code> {status.upper()} {surprise_str} "
+                    f"- EPS {reported_str} / Est {estimate_str} {period}"
+                )
+                if summary:
+                    lines2.append(f"   {summary}")
+
         # Economic macro windows
         econ = [e for e in brief.get("economic_calendar", []) if e.get("category") != "session"]
         if econ:

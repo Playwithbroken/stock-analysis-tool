@@ -58,6 +58,7 @@ class MorningBriefService:
         ("DX-Y.NYB", "US Dollar Index"),
     ]
     NEWS_TICKERS = ["SPY", "QQQ", "GLD", "TLT", "XLE", "NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "META", "GOOGL"]
+    FUNDAMENTAL_EXCLUDED_TICKERS = {"SPY", "QQQ", "GLD", "TLT", "XLE", "XLK", "XLY", "XLV", "XLU", "XLRE", "IWM"}
 
     # Free RSS feeds for real-time headlines
     RSS_FEEDS = [
@@ -225,6 +226,7 @@ class MorningBriefService:
             "economic_calendar": [],
             "earnings_calendar": [],
             "broad_earnings": [],
+            "earnings_results": [],
             "opening_timeline": [],
             "action_board": [],
             "trade_setups": [],
@@ -332,6 +334,7 @@ class MorningBriefService:
         event_pings = self._build_event_pings(event_layer)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
+        earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
             [asia, europe, usa],
@@ -374,6 +377,7 @@ class MorningBriefService:
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
             "broad_earnings": broad_earnings,
+            "earnings_results": earnings_results,
             "opening_timeline": opening_timeline,
             "action_board": action_board,
             "trade_setups": trade_setups,
@@ -462,6 +466,7 @@ class MorningBriefService:
             "economic_calendar": economic_calendar,
             "earnings_calendar": [],
             "broad_earnings": [],
+            "earnings_results": [],
             "opening_timeline": opening_timeline,
             "action_board": action_board,
             "trade_setups": trade_setups,
@@ -1382,6 +1387,118 @@ class MorningBriefService:
 
         entries.sort(key=lambda item: item["scheduled_for"])
         return entries[:8]
+
+    def _collect_earnings_results(
+        self,
+        watchlist_snapshot: Dict[str, Any] | None,
+        earnings_calendar: List[Dict[str, Any]] | None = None,
+        broad_earnings: List[Dict[str, Any]] | None = None,
+    ) -> List[Dict[str, Any]]:
+        tickers: List[str] = []
+        if watchlist_snapshot:
+            for item in watchlist_snapshot.get("items", []):
+                if item.get("kind") == "ticker":
+                    tickers.append(item.get("value", ""))
+
+        for source in (earnings_calendar or [])[:8]:
+            tickers.append(source.get("ticker", ""))
+        for source in (broad_earnings or [])[:8]:
+            tickers.append(source.get("ticker", ""))
+        tickers.extend(["NVDA", "AAPL", "MSFT", "AMZN", "META", "GOOGL", "TSLA"])
+
+        unique_tickers: List[str] = []
+        seen = set()
+        for ticker in tickers:
+            normalized = (ticker or "").upper().strip()
+            if (
+                not normalized
+                or normalized in seen
+                or normalized in self.FUNDAMENTAL_EXCLUDED_TICKERS
+                or normalized.startswith("^")
+                or normalized.endswith("=F")
+                or normalized.endswith("-USD")
+            ):
+                continue
+            seen.add(normalized)
+            unique_tickers.append(normalized)
+
+        results: List[Dict[str, Any]] = []
+        for ticker in unique_tickers[:10]:
+            try:
+                fetcher = DataFetcher(ticker)
+                history = fetcher.get_earnings_history()
+                reported_rows = [
+                    row for row in history
+                    if row.get("reported_eps") is not None or row.get("eps_surprise_pct") is not None
+                ]
+                latest = reported_rows[0] if reported_rows else (history[0] if history else None)
+                if not latest:
+                    continue
+
+                surprise = latest.get("eps_surprise_pct")
+                reported = latest.get("reported_eps")
+                estimate = latest.get("eps_estimate")
+                if surprise is None and reported is None and estimate is None:
+                    continue
+
+                status = latest.get("status") or self._earnings_result_status(surprise)
+                action_hint, summary = self._earnings_result_action(status, surprise)
+                info = fetcher.info or {}
+                results.append(
+                    {
+                        "ticker": ticker,
+                        "company": info.get("shortName") or info.get("longName") or ticker,
+                        "period": latest.get("period"),
+                        "reported_eps": reported,
+                        "eps_estimate": estimate,
+                        "eps_surprise_pct": surprise,
+                        "status": status,
+                        "action_hint": action_hint,
+                        "summary": summary,
+                        "source": "yfinance_earnings_dates",
+                    }
+                )
+            except Exception:
+                continue
+
+        def sort_key(item: Dict[str, Any]) -> tuple:
+            surprise = item.get("eps_surprise_pct")
+            surprise_abs = abs(float(surprise)) if isinstance(surprise, (int, float)) else 0.0
+            status_rank = {"beat": 3, "miss": 2, "inline": 1}.get(str(item.get("status")), 0)
+            return (status_rank, surprise_abs)
+
+        results.sort(key=sort_key, reverse=True)
+        return results[:6]
+
+    def _earnings_result_status(self, surprise: Any) -> str:
+        if isinstance(surprise, (int, float)):
+            if surprise >= 3:
+                return "beat"
+            if surprise <= -3:
+                return "miss"
+        return "inline"
+
+    def _earnings_result_action(self, status: str, surprise: Any) -> tuple[str, str]:
+        surprise_value = float(surprise) if isinstance(surprise, (int, float)) else 0.0
+        if status == "beat" and surprise_value >= 8:
+            return (
+                "watch_pullback_or_follow_through",
+                "Deutlicher EPS-Beat. Kauf nur bei Guidance-Qualitaet und Preis-Follow-through, nicht blind in den ersten Spike.",
+            )
+        if status == "beat":
+            return (
+                "constructive_watch",
+                "EPS ueber Erwartung. Setup wird interessanter, muss aber durch Guidance, Umsatztrend und Kursreaktion bestaetigt werden.",
+            )
+        if status == "miss":
+            return (
+                "caution_until_repair",
+                "EPS unter Erwartung. Erst beobachten, bis Management-Ausblick und Kursstruktur wieder Stabilitaet zeigen.",
+            )
+        return (
+            "needs_guidance_confirmation",
+            "EPS nahe Erwartung. Kein Upgrade ohne starke Guidance, Umsatzbeschleunigung oder klare Marktreaktion.",
+        )
 
     def _build_economic_calendar(self, event_layer: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         tz = ZoneInfo(self.DEFAULT_BRIEF_TIMEZONE)

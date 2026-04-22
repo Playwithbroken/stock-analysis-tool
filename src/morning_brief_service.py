@@ -1687,6 +1687,13 @@ class MorningBriefService:
                 latest = reported_rows[0] if reported_rows else (history[0] if history else None)
                 if not latest:
                     continue
+                period_dt = self._parse_earnings_period(latest.get("period"))
+                if period_dt is None:
+                    continue
+                now_utc = datetime.now(timezone.utc)
+                days_since = (now_utc.date() - period_dt.date()).days
+                if days_since < 0 or days_since > int(os.getenv("BRIEF_EARNINGS_RESULT_MAX_AGE_DAYS", "10")):
+                    continue
 
                 surprise = latest.get("eps_surprise_pct")
                 reported = latest.get("reported_eps")
@@ -1702,6 +1709,8 @@ class MorningBriefService:
                         "ticker": ticker,
                         "company": info.get("shortName") or info.get("longName") or ticker,
                         "period": latest.get("period"),
+                        "reported_at": period_dt.isoformat(),
+                        "days_since": days_since,
                         "reported_eps": reported,
                         "eps_estimate": estimate,
                         "eps_surprise_pct": surprise,
@@ -1722,6 +1731,20 @@ class MorningBriefService:
 
         results.sort(key=sort_key, reverse=True)
         return results[:6]
+
+    def _parse_earnings_period(self, value: Any) -> datetime | None:
+        if not value:
+            return None
+        try:
+            if isinstance(value, datetime):
+                dt = value
+            else:
+                dt = datetime.fromisoformat(str(value)[:10])
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
 
     def _earnings_result_status(self, surprise: Any) -> str:
         if isinstance(surprise, (int, float)):

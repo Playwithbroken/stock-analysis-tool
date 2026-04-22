@@ -1254,10 +1254,12 @@ class EmailAlertService:
                 reported_str = f"{reported:.2f}" if isinstance(reported, (int, float)) else "n/a"
                 estimate_str = f"{estimate:.2f}" if isinstance(estimate, (int, float)) else "n/a"
                 period = self._tg_esc(str(item.get("period") or "")[:10])
+                days_since = item.get("days_since")
+                freshness = f" · vor {days_since}d" if isinstance(days_since, int) else ""
                 summary = self._tg_esc(item.get("summary") or item.get("action_hint") or "")
                 lines2.append(
                     f"{icon} <code>{ticker}</code> {status.upper()} {surprise_str} "
-                    f"- EPS {reported_str} / Est {estimate_str} {period}"
+                    f"- EPS {reported_str} / Est {estimate_str} {period}{freshness}"
                 )
                 if summary:
                     lines2.append(f"   {summary}")

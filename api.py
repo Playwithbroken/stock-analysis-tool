@@ -343,19 +343,43 @@ async def _brief_warmup_loop():
     await asyncio.sleep(12)
     while True:
         try:
-            items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
-            snapshot = await asyncio.wait_for(
-                asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
-                timeout=float(os.getenv("BRIEF_WARMUP_SNAPSHOT_TIMEOUT_SECONDS", "5")),
-            )
-            await asyncio.wait_for(
-                asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot),
-                timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "20")),
-            )
+            await _warm_brief_once()
         except Exception as e:
             print(f"Brief warmup loop error: {e}")
         interval_seconds = int(os.getenv("BRIEF_WARMUP_INTERVAL_SECONDS", "300"))
         await asyncio.sleep(max(60, interval_seconds))
+
+
+async def _warm_brief_once() -> Dict[str, Any]:
+    started = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
+    items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
+    snapshot = await asyncio.wait_for(
+        asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
+        timeout=float(os.getenv("BRIEF_WARMUP_SNAPSHOT_TIMEOUT_SECONDS", "5")),
+    )
+    brief = await asyncio.wait_for(
+        asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot),
+        timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "20")),
+    )
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(get_morning_brief_service().get_trading_edge, snapshot),
+            timeout=float(os.getenv("BRIEF_WARMUP_EDGE_TIMEOUT_SECONDS", "18")),
+        )
+    except Exception:
+        # Trading Edge is heavy and optional for delivery. The brief cache is still useful without it.
+        pass
+    elapsed_ms = int((datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))) - started).total_seconds() * 1000)
+    return {
+        "status": "ok",
+        "started_at": started.isoformat(),
+        "elapsed_ms": elapsed_ms,
+        "watch_items": len(items or []),
+        "snapshot_items": len(snapshot.get("items") or []),
+        "generated_at": brief.get("generated_at"),
+        "quality": brief.get("quality"),
+        "headline": brief.get("headline") or brief.get("opening_bias"),
+    }
 
 
 def _is_alert_in_cooldown(last_triggered_at: Optional[str], cooldown_minutes: int) -> bool:
@@ -1904,6 +1928,21 @@ async def send_telegram_brief_now(session: str = "global"):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/warm-brief")
+async def warm_brief_now():
+    """Precompute the market brief cache on demand.
+
+    This is useful before a scheduled Telegram send or when the dashboard
+    should become responsive immediately after a deploy/restart.
+    """
+    try:
+        return convert_numpy_types(await _warm_brief_once())
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Brief warmup timed out.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

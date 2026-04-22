@@ -22,6 +22,8 @@ function fmtDate(value?: string | null) {
 export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelProps) {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [warming, setWarming] = useState(false);
+  const [warmupResult, setWarmupResult] = useState<any>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -36,6 +38,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
       setError(err instanceof Error ? err.message : "Health center failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const warmBrief = async () => {
+    setWarming(true);
+    setError("");
+    setWarmupResult(null);
+    try {
+      const res = await fetch("/api/admin/warm-brief", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Brief warmup failed");
+      setWarmupResult(data);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Brief warmup failed");
+    } finally {
+      setWarming(false);
     }
   };
 
@@ -72,10 +91,18 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <button
               type="button"
               onClick={load}
-              disabled={loading}
+              disabled={loading || warming}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
               {loading ? "Refreshing" : "Refresh"}
+            </button>
+            <button
+              type="button"
+              onClick={warmBrief}
+              disabled={loading || warming}
+              className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+            >
+              {warming ? "Warming" : "Warm Brief Now"}
             </button>
             <button
               type="button"
@@ -91,6 +118,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           {error ? (
             <div className="mb-4 rounded-[1.2rem] border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-700">
               {error}
+            </div>
+          ) : null}
+
+          {warmupResult ? (
+            <div className="mb-4 rounded-[1.2rem] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800">
+              <span className="font-extrabold">Brief cache warmed.</span>{" "}
+              {warmupResult.headline || "Snapshot ready"} - {warmupResult.elapsed_ms ?? "n/a"}ms,
+              {warmupResult.snapshot_items ?? 0} signal items, generated {fmtDate(warmupResult.generated_at)}.
             </div>
           ) : null}
 

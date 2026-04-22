@@ -74,6 +74,15 @@ class MorningBriefService:
         "META": ["meta", "quest", "ray-ban", "instagram", "whatsapp", "facebook"],
         "GOOGL": ["google", "android", "pixel", "gemini", "waymo", "youtube"],
     }
+    MARKET_MOVER_UNIVERSE = [
+        "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA", "AVGO", "ADBE", "COST",
+        "PEP", "NFLX", "AMD", "TMUS", "INTC", "CSCO", "CMCSA", "AMAT", "QCOM", "ISRG",
+        "MU", "TXN", "AMGN", "HON", "INTU", "BKNG", "SBUX", "VRTX", "MDLZ", "REGN",
+        "PANW", "SNPS", "ASML", "LRCX", "ADI", "MELI", "CDNS", "KLAC", "PDD", "PYPL",
+        "SOFI", "HOOD", "PLTR", "ARM", "SMCI", "RKLB", "LUNR", "OKLO", "UPST", "PATH",
+        "UNH", "DHR", "GE", "RTX", "ISRG", "PM", "CRM", "ORCL", "BLK", "PEP", "ABT",
+        "BMW.DE", "TTWO",
+    ]
 
     # Free RSS feeds for real-time headlines
     RSS_FEEDS = [
@@ -175,6 +184,8 @@ class MorningBriefService:
     _signals_service: TradingSignalsService = TradingSignalsService()
     _event_ping_cooldown: Dict[str, datetime] = {}
     _event_ping_cooldown_seconds = 60 * 30
+    _market_movers_cache: tuple[Dict[str, Any], datetime] | None = None
+    _market_movers_ttl_seconds = 60 * 15
     _kalshi_enabled = str(os.getenv("KALSHI_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}
 
     def _persist_snapshot(self, brief: Dict[str, Any]) -> None:
@@ -238,6 +249,7 @@ class MorningBriefService:
             "event_layer": [],
             "event_pings": [],
             "product_catalysts": [],
+            "market_movers": {"gainers": [], "losers": []},
             "contrarian_signals": [],
             "economic_calendar": [],
             "earnings_calendar": [],
@@ -349,6 +361,7 @@ class MorningBriefService:
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
         product_catalysts = self._build_product_catalysts(top_news)
+        market_movers = self._collect_market_movers(watchlist_tickers)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
         earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings)
@@ -362,7 +375,7 @@ class MorningBriefService:
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
-        trade_setups = self._build_trade_setups(action_board, top_news)
+        trade_setups = self._build_trade_setups(action_board, top_news, market_movers)
         prediction_signals = self._build_prediction_signals(polymarket_events)
 
         brief = {
@@ -391,6 +404,7 @@ class MorningBriefService:
             "event_layer": event_layer,
             "event_pings": event_pings,
             "product_catalysts": product_catalysts,
+            "market_movers": market_movers,
             "contrarian_signals": contrarian_signals,
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
@@ -453,7 +467,7 @@ class MorningBriefService:
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
-        trade_setups = self._build_trade_setups(action_board, top_news)
+        trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []})
 
         brief = {
             "generated_at": now.isoformat(),
@@ -481,6 +495,7 @@ class MorningBriefService:
             "event_layer": event_layer,
             "event_pings": event_pings,
             "product_catalysts": self._build_product_catalysts(top_news),
+            "market_movers": {"gainers": [], "losers": []},
             "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
             "economic_calendar": economic_calendar,
             "earnings_calendar": [],
@@ -918,10 +933,71 @@ class MorningBriefService:
             )
         return catalysts[:6]
 
+    def _collect_market_movers(self, extra_tickers: List[str] | None = None) -> Dict[str, List[Dict[str, Any]]]:
+        now = datetime.now(timezone.utc)
+        if (
+            self._market_movers_cache is not None
+            and (now - self._market_movers_cache[1]).total_seconds() < self._market_movers_ttl_seconds
+        ):
+            return self._market_movers_cache[0]
+
+        symbols = list(dict.fromkeys([*(extra_tickers or []), *self.MARKET_MOVER_UNIVERSE]))
+        rows: List[Dict[str, Any]] = []
+        for symbol in symbols[:48]:
+            normalized = (symbol or "").upper().strip()
+            if not normalized or normalized.startswith("^") or normalized.endswith("=F") or normalized.endswith("-USD"):
+                continue
+            try:
+                fetcher = DataFetcher(normalized)
+                info = fetcher.info or {}
+                price = fetcher.get_price_data()
+                change_1d = None
+                try:
+                    hist = fetcher.stock.history(period="7d", interval="1d")
+                    if hist is not None and not hist.empty and len(hist["Close"]) >= 2:
+                        last_close = float(hist["Close"].iloc[-1])
+                        prev_close = float(hist["Close"].iloc[-2])
+                        if prev_close:
+                            change_1d = ((last_close / prev_close) - 1.0) * 100.0
+                except Exception:
+                    change_1d = None
+
+                change_1w = price.get("change_1w")
+                if change_1d is None and change_1w is None:
+                    continue
+                rows.append(
+                    {
+                        "ticker": normalized,
+                        "name": info.get("shortName") or info.get("longName") or normalized,
+                        "price": price.get("current_price"),
+                        "change_1d": change_1d,
+                        "change_1w": change_1w,
+                        "change_1m": price.get("change_1m"),
+                        "market_cap": info.get("marketCap"),
+                        "sector": info.get("sector"),
+                    }
+                )
+            except Exception:
+                continue
+
+        def move_value(item: Dict[str, Any]) -> float:
+            value = item.get("change_1d")
+            if isinstance(value, (int, float)):
+                return float(value)
+            value = item.get("change_1w")
+            return float(value) if isinstance(value, (int, float)) else 0.0
+
+        gainers = sorted([row for row in rows if move_value(row) > 0], key=move_value, reverse=True)[:8]
+        losers = sorted([row for row in rows if move_value(row) < 0], key=move_value)[:8]
+        payload = {"gainers": gainers, "losers": losers}
+        self._market_movers_cache = (payload, now)
+        return payload
+
     def _build_trade_setups(
         self,
         action_board: List[Dict[str, Any]],
         news: List[Dict[str, Any]],
+        market_movers: Dict[str, List[Dict[str, Any]]] | None = None,
     ) -> List[Dict[str, Any]]:
         source_lookup: Dict[str, Dict[str, Any]] = {}
         for item in news:
@@ -977,6 +1053,56 @@ class MorningBriefService:
                     "_score": score,
                 }
             )
+
+        mover_payload = market_movers or {"gainers": [], "losers": []}
+        existing_symbols = {str(row.get("symbol") or "").upper() for row in scored}
+        for bucket, direction in (("gainers", "long_watch"), ("losers", "rebound_or_avoid")):
+            for mover in (mover_payload.get(bucket) or [])[:4]:
+                symbol = str(mover.get("ticker") or "").upper()
+                if not symbol or symbol in existing_symbols:
+                    continue
+                change = mover.get("change_1d")
+                if not isinstance(change, (int, float)):
+                    change = mover.get("change_1w")
+                if not isinstance(change, (int, float)):
+                    continue
+                abs_move = abs(float(change))
+                confidence = min(82, max(52, int(48 + min(abs_move, 12) * 3)))
+                is_gainer = bucket == "gainers"
+                scored.append(
+                    {
+                        "symbol": symbol,
+                        "thesis": (
+                            f"{symbol} is one of today's strongest movers. Momentum can work, but only if it holds VWAP/first pullback."
+                            if is_gainer
+                            else f"{symbol} is one of today's weakest movers. Treat as rebound candidate only after capitulation stabilizes."
+                        ),
+                        "trigger": (
+                            "Price should hold the first pullback and keep relative strength versus the index."
+                            if is_gainer
+                            else "Wait for selling pressure to slow, then require a reclaim of intraday support before any rebound trade."
+                        ),
+                        "invalidation": (
+                            "Invalid if the mover gives back the first impulse or volume fades."
+                            if is_gainer
+                            else "Invalid if new lows continue without stabilization."
+                        ),
+                        "window": "today / next session",
+                        "confidence": confidence,
+                        "expected_move": f"{abs_move:.1f}% observed move",
+                        "catalysts": ["market_mover", bucket, mover.get("sector") or "broad_universe"],
+                        "setup_type": "market_mover",
+                        "direction": direction,
+                        "market_mover": {
+                            "change_1d": mover.get("change_1d"),
+                            "change_1w": mover.get("change_1w"),
+                            "price": mover.get("price"),
+                            "name": mover.get("name"),
+                        },
+                        "_score": round(52 + min(abs_move, 15) * 2.2 + (6 if is_gainer else 3), 2),
+                    }
+                )
+                existing_symbols.add(symbol)
 
         scored.sort(key=lambda row: (row["_score"], row["confidence"]), reverse=True)
         for index, row in enumerate(scored, start=1):

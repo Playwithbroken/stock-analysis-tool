@@ -1143,6 +1143,23 @@ class EmailAlertService:
                 if title:
                     lines2.append(f"   {title[:180]}")
 
+        market_movers = brief.get("market_movers") or {}
+        gainers = market_movers.get("gainers") or []
+        losers = market_movers.get("losers") or []
+        if gainers or losers:
+            lines2.extend(["", "<b>Biggest Winners / Losers</b>"])
+            for label, rows in (("WIN", gainers[:4]), ("LOSE", losers[:4])):
+                for item in rows:
+                    ticker = self._tg_esc(item.get("ticker") or "")
+                    name = self._tg_esc((item.get("name") or ticker)[:28])
+                    chg = item.get("change_1d")
+                    if not isinstance(chg, (int, float)):
+                        chg = item.get("change_1w")
+                    chg_str = f"{chg:+.2f}%" if isinstance(chg, (int, float)) else "n/a"
+                    price = item.get("price")
+                    price_str = f" ${price:,.2f}" if isinstance(price, (int, float)) else ""
+                    lines2.append(f"{label} <code>{ticker}</code> {name} {chg_str}{price_str}")
+
         # Watchlist impact
         watchlist_impact = brief.get("watchlist_impact", [])
         if watchlist_impact:

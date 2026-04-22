@@ -102,6 +102,11 @@ function extractTickerCandidates(text?: string) {
   return [...new Set(matches)];
 }
 
+function moveLabel(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return "n/a";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
 export default function MorningBriefPanel({
   brief,
   onAnalyze,
@@ -184,6 +189,11 @@ export default function MorningBriefPanel({
       .sort((a: any, b: any) => b.priorityScore - a.priorityScore || a.ageMinutes - b.ageMinutes)
       .slice(0, 8);
   }, [brief.event_pings, pingFilter]);
+
+  const marketMovers = brief.market_movers || {};
+  const topGainers = Array.isArray(marketMovers.gainers) ? marketMovers.gainers.slice(0, 4) : [];
+  const topLosers = Array.isArray(marketMovers.losers) ? marketMovers.losers.slice(0, 4) : [];
+  const productCatalysts = Array.isArray(brief.product_catalysts) ? brief.product_catalysts.slice(0, 4) : [];
 
   return (
     <div className="space-y-6">
@@ -290,6 +300,111 @@ export default function MorningBriefPanel({
           focusTicker={brief.watchlist_impact?.[0]?.ticker}
         />
       )}
+
+      {(topGainers.length || topLosers.length || productCatalysts.length) ? (
+        <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+          <div className="surface-panel rounded-[2rem] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Biggest Winners / Losers
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Broad universe, not only mega caps.
+                </div>
+              </div>
+              <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                movers
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                  Winners
+                </div>
+                {topGainers.map((item: any) => {
+                  const chg = typeof item.change_1d === "number" ? item.change_1d : item.change_1w;
+                  return (
+                    <button
+                      key={`gainer-${item.ticker}`}
+                      type="button"
+                      onClick={() => item.ticker && onAnalyze(item.ticker)}
+                      className="w-full rounded-[1.1rem] border border-emerald-500/10 bg-emerald-500/[0.06] p-3 text-left transition-colors hover:bg-emerald-500/10"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-extrabold text-slate-900">{item.ticker}</span>
+                        <span className="text-sm font-bold text-emerald-700">{moveLabel(chg)}</span>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-slate-500">{item.name || item.sector || "Market mover"}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="space-y-2">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-red-700">
+                  Losers
+                </div>
+                {topLosers.map((item: any) => {
+                  const chg = typeof item.change_1d === "number" ? item.change_1d : item.change_1w;
+                  return (
+                    <button
+                      key={`loser-${item.ticker}`}
+                      type="button"
+                      onClick={() => item.ticker && onAnalyze(item.ticker)}
+                      className="w-full rounded-[1.1rem] border border-red-500/10 bg-red-500/[0.06] p-3 text-left transition-colors hover:bg-red-500/10"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-extrabold text-slate-900">{item.ticker}</span>
+                        <span className="text-sm font-bold text-red-700">{moveLabel(chg)}</span>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-slate-500">{item.name || item.sector || "Market mover"}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="surface-panel rounded-[2rem] p-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Product Catalyst Radar
+            </div>
+            <div className="mt-1 text-sm text-slate-500">
+              Launches, delays, GPUs, iPhone, autos, games.
+            </div>
+            <div className="mt-4 space-y-3">
+              {productCatalysts.length ? productCatalysts.map((item: any) => (
+                <div key={`${item.ticker}-${item.title}`} className="rounded-[1.1rem] border border-black/8 bg-white/70 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => item.ticker && onAnalyze(item.ticker)}
+                      className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                    >
+                      {item.ticker}
+                    </button>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                      item.direction_hint === "negative"
+                        ? "bg-red-500/10 text-red-700"
+                        : item.direction_hint === "positive_watch"
+                          ? "bg-emerald-500/10 text-emerald-700"
+                          : "bg-amber-500/10 text-amber-700"
+                    }`}>
+                      {item.catalyst_type || "product"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-slate-900">{item.theme}</div>
+                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.title}</div>
+                </div>
+              )) : (
+                <div className="rounded-[1.1rem] border border-black/8 bg-white/70 p-3 text-sm text-slate-500">
+                  No strong product catalyst in the current trusted feed.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-3">
         {regions.map((region: any) => (

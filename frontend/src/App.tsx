@@ -1149,79 +1149,87 @@ function AppContent() {
               </div>
             </section>
 
-            {globalBrief && geoRegions.length ? (
-              <ErrorBoundary>
-                <Suspense fallback={<LoadingState />}>
-                  <WorldMarketMap
-                    regions={geoRegions}
-                    selectedRegion={selectedGeoRegion}
-                    onSelectRegion={setSelectedGeoRegion}
-                    news={globalBrief.top_news || []}
-                    eventLayer={globalBrief.event_layer || []}
-                    eventPings={globalBrief.event_pings || []}
-                    watchlistImpact={globalBrief.watchlist_impact || []}
-                    contrarianSignals={globalBrief.contrarian_signals || []}
-                    openingTimeline={globalBrief.opening_timeline || []}
-                    onAnalyze={(t) => {
-                      setActiveTab("analyze");
-                      handleSearch(t);
-                    }}
-                    focusTicker={analysis?.ticker}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
-              <LoadingState />
-            ) : (
-              <section className="surface-panel rounded-[2rem] p-6">
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  World Map Feed
-                </div>
-                <div className="mt-3 text-base font-semibold text-slate-800">
-                  Live-Morning-Brief aktuell nicht verfuegbar.
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Datenquelle antwortet gerade langsam oder unvollstaendig. Du kannst sofort neu laden.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setBriefReloadTick((prev) => prev + 1)}
-                  className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
-                >
-                  Retry Feed
-                </button>
-              </section>
-            )}
+            <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(440px,0.65fr)]">
+              <div className="space-y-6">
+                {globalBrief && geoRegions.length ? (
+                  <ErrorBoundary>
+                    <Suspense fallback={<LoadingState />}>
+                      <WorldMarketMap
+                        regions={geoRegions}
+                        selectedRegion={selectedGeoRegion}
+                        onSelectRegion={setSelectedGeoRegion}
+                        news={globalBrief.top_news || []}
+                        eventLayer={globalBrief.event_layer || []}
+                        eventPings={globalBrief.event_pings || []}
+                        watchlistImpact={globalBrief.watchlist_impact || []}
+                        contrarianSignals={globalBrief.contrarian_signals || []}
+                        openingTimeline={globalBrief.opening_timeline || []}
+                        onAnalyze={(t) => {
+                          setActiveTab("analyze");
+                          handleSearch(t);
+                        }}
+                        focusTicker={analysis?.ticker}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
+                  <LoadingState />
+                ) : (
+                  <section className="surface-panel rounded-[2rem] p-6">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                      World Map Feed
+                    </div>
+                    <div className="mt-3 text-base font-semibold text-slate-800">
+                      Live-Morning-Brief aktuell nicht verfuegbar.
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Datenquelle antwortet gerade langsam oder unvollstaendig. Du kannst sofort neu laden.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBriefReloadTick((prev) => prev + 1)}
+                      className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
+                    >
+                      Retry Feed
+                    </button>
+                  </section>
+                )}
 
-            {(tradingEdge || tradingEdgeLoading) ? (
-              <ErrorBoundary>
-                <Suspense fallback={<LoadingState />}>
-                  <TradingEdgePanel
-                    edge={tradingEdge}
-                    loading={tradingEdgeLoading && !tradingEdge}
-                    onSelectTicker={(t) => {
-                      setActiveTab("analyze");
-                      handleSearch(t);
-                    }}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            ) : null}
+                {(tradingEdge || tradingEdgeLoading) ? (
+                  <ErrorBoundary>
+                    <Suspense fallback={<LoadingState />}>
+                      <TradingEdgePanel
+                        edge={tradingEdge}
+                        loading={tradingEdgeLoading && !tradingEdge}
+                        onSelectTicker={(t) => {
+                          setActiveTab("analyze");
+                          handleSearch(t);
+                        }}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : null}
+              </div>
 
-            {globalBrief ? (
-              <ErrorBoundary>
-                <Suspense fallback={<LoadingState />}>
-                  <MorningBriefPanel
-                    brief={globalBrief}
-                    onAnalyze={(t) => {
-                      setActiveTab("analyze");
-                      handleSearch(t);
-                    }}
-                    hideMap
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            ) : null}
+              <div className="space-y-6 2xl:sticky 2xl:top-40">
+                {globalBrief ? (
+                  <ErrorBoundary>
+                    <Suspense fallback={<LoadingState />}>
+                      <MorningBriefPanel
+                        brief={globalBrief}
+                        onAnalyze={(t) => {
+                          setActiveTab("analyze");
+                          handleSearch(t);
+                        }}
+                        hideMap
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : (
+                  <LoadingState />
+                )}
+              </div>
+            </div>
           </div>
         ) : activeTab === "analyze" ? (
           <>

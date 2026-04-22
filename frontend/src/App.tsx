@@ -3,6 +3,7 @@ import type { ComponentType, LazyExoticComponent } from "react";
 import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
+import AdminHealthPanel from "./components/AdminHealthPanel";
 import { usePortfolios } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
@@ -363,6 +364,7 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isHealthOpen, setIsHealthOpen] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
   const [hideOnboardingNudge, setHideOnboardingNudge] = useState(false);
   const [auth, setAuth] = useState<AuthState>({
@@ -981,6 +983,12 @@ function AppContent() {
                   AI Desk
                 </button>
                 <button
+                  onClick={() => setIsHealthOpen(true)}
+                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
+                >
+                  Health
+                </button>
+                <button
                   onClick={handleLogout}
                   className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
                 >
@@ -1458,6 +1466,8 @@ function AppContent() {
           />
         </Suspense>
       </ErrorBoundary>
+
+      <AdminHealthPanel isOpen={isHealthOpen} onClose={() => setIsHealthOpen(false)} />
 
       <Suspense fallback={null}>
         <OnboardingWizard

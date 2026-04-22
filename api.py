@@ -18,6 +18,7 @@ import secrets
 import math
 import requests
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from src.data_fetcher import DataFetcher
 from src.analyzer import StockAnalyzer, Rating, Valuation
@@ -2009,6 +2010,151 @@ async def telegram_diagnostics():
             "Send /start to the bot in Telegram, then reload this diagnostic endpoint so getUpdates can show the chat id."
         )
     return result
+
+def _brief_schedule_jobs_for_health() -> List[Dict[str, str]]:
+    return [
+        {"job_key": "morning-brief", "label": "Morning Brief", "session": "global", "time": os.getenv("MORNING_BRIEF_TIME", "07:15")},
+        {"job_key": "open-brief:europe", "label": "Europe Open", "session": "europe", "time": os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40")},
+        {"job_key": "midday-brief", "label": "Midday Update", "session": "midday", "time": os.getenv("MIDDAY_BRIEF_TIME", "12:30")},
+        {"job_key": "open-brief:usa", "label": "US Open", "session": "usa", "time": os.getenv("US_OPEN_BRIEF_TIME", "15:10")},
+        {"job_key": "close-brief:europe", "label": "Europe Close", "session": "europe_close", "time": os.getenv("EUROPE_CLOSE_BRIEF_TIME", "17:30")},
+        {"job_key": "close-recap", "label": "Daily Recap", "session": "close", "time": os.getenv("CLOSE_RECAP_TIME", "21:45")},
+        {"job_key": "close-brief:usa", "label": "US Close", "session": "usa_close", "time": os.getenv("US_CLOSE_BRIEF_TIME", "22:15")},
+    ]
+
+
+def _next_schedule_time(now: datetime, raw_time: str, weekdays: set[int]) -> datetime | None:
+    try:
+        hour, minute = [int(part) for part in str(raw_time).split(":", 1)]
+    except Exception:
+        return None
+    for offset in range(0, 8):
+        day = (now + timedelta(days=offset)).date()
+        candidate = datetime.combine(day, datetime.min.time(), tzinfo=now.tzinfo).replace(hour=hour, minute=minute)
+        if candidate.weekday() not in weekdays:
+            continue
+        if candidate > now:
+            return candidate
+    return None
+
+
+def _telegram_health_check() -> Dict[str, Any]:
+    config = get_email_alert_service().get_config()
+    payload: Dict[str, Any] = {
+        "enabled": config.telegram_enabled,
+        "token_configured": bool(config.telegram_bot_token),
+        "chat_id_configured": bool(config.telegram_chat_id),
+        "chat_id": config.telegram_chat_id or None,
+        "sendable": False,
+        "status": "disabled" if not config.telegram_enabled else "missing_config",
+        "error": None,
+    }
+    if not (config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id):
+        return payload
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{config.telegram_bot_token}/sendChatAction",
+            json={"chat_id": config.telegram_chat_id, "action": "typing"},
+            timeout=8,
+        )
+        if response.ok:
+            payload.update({"sendable": True, "status": "ok"})
+        else:
+            detail = response.json().get("description") if response.headers.get("content-type", "").startswith("application/json") else response.text
+            payload.update({"status": "error", "error": detail or response.reason})
+    except Exception as exc:
+        payload.update({"status": "error", "error": exc.__class__.__name__})
+    return payload
+
+
+@app.get("/api/admin/health-center")
+async def admin_health_center():
+    """Operational health for launch: delivery, scheduler and data feeds."""
+    now_utc = datetime.utcnow()
+    tz_name = os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("Europe/Berlin")
+        tz_name = "Europe/Berlin"
+    now_local = datetime.now(tz)
+    notification_status = get_email_alert_service().get_notification_status()
+    sent_events = get_portfolio_manager().get_sent_signal_events(limit=80)
+    sent_keys = {event.get("event_key") for event in sent_events}
+    weekdays_raw = os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri").lower().split(",")
+    weekday_map = {"mon": 0, "monday": 0, "tue": 1, "tuesday": 1, "wed": 2, "wednesday": 2, "thu": 3, "thursday": 3, "fri": 4, "friday": 4, "sat": 5, "saturday": 5, "sun": 6, "sunday": 6}
+    weekdays = {weekday_map.get(day.strip(), 0) for day in weekdays_raw if day.strip()}
+    if not weekdays:
+        weekdays = {0, 1, 2, 3, 4}
+
+    schedule_jobs = []
+    for job in _brief_schedule_jobs_for_health():
+        event_key = f"{job['job_key']}:{now_local.date().isoformat()}"
+        last_event = next((event for event in sent_events if str(event.get("event_key", "")).startswith(job["job_key"])), None)
+        next_due = _next_schedule_time(now_local, job["time"], weekdays)
+        schedule_jobs.append(
+            {
+                **job,
+                "sent_today": event_key in sent_keys,
+                "event_key_today": event_key,
+                "last_sent_at": last_event.get("sent_at") if last_event else None,
+                "next_due_at": next_due.isoformat() if next_due else None,
+            }
+        )
+
+    brief_snapshot = get_morning_brief_service().get_cached_or_last_brief()
+    data_feeds: Dict[str, Any] = {
+        "morning_brief": {
+            "status": "ok" if brief_snapshot else "missing",
+            "generated_at": brief_snapshot.get("generated_at") if brief_snapshot else None,
+            "quality": brief_snapshot.get("quality") if brief_snapshot else None,
+        }
+    }
+    try:
+        aapl = DataFetcher("AAPL").get_price_data()
+        data_feeds["yfinance"] = {
+            "status": "ok" if aapl.get("current_price") else "degraded",
+            "sample": "AAPL",
+            "price": aapl.get("current_price"),
+        }
+    except Exception as exc:
+        data_feeds["yfinance"] = {"status": "error", "error": exc.__class__.__name__}
+    try:
+        snapshot = get_realtime_market_service().build_snapshot(["AAPL"])
+        data_feeds["realtime"] = {
+            "status": snapshot.get("connection_state") or "unknown",
+            "quotes": len(snapshot.get("quotes") or []),
+            "stale_seconds": snapshot.get("stale_seconds") or {},
+        }
+    except Exception as exc:
+        data_feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
+
+    telegram = _telegram_health_check()
+    problems = []
+    if telegram.get("status") != "ok":
+        problems.append("telegram")
+    if data_feeds.get("yfinance", {}).get("status") not in {"ok"}:
+        problems.append("yfinance")
+    if not notification_status.get("schedule", {}).get("enabled"):
+        problems.append("schedule_disabled")
+    overall = "ok" if not problems else "degraded"
+    return convert_numpy_types(
+        {
+            "status": overall,
+            "generated_at": now_utc.isoformat(),
+            "timezone": tz_name,
+            "telegram": telegram,
+            "notifications": notification_status,
+            "schedule": {
+                "enabled": notification_status.get("schedule", {}).get("enabled"),
+                "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
+                "jobs": schedule_jobs,
+            },
+            "data_feeds": data_feeds,
+            "recent_deliveries": sent_events[:12],
+            "problems": problems,
+        }
+    )
 
 @app.get("/api/signals/scoreboard")
 async def get_signal_scoreboard():

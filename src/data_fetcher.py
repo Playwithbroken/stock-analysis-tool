@@ -450,11 +450,27 @@ class DataFetcher:
                     title = content.get("title") or item.get("title") or ""
                     publisher = content.get("provider", {}).get("displayName") or item.get("publisher") or ""
                     link = content.get("canonicalUrl", {}).get("url") or item.get("link") or ""
+                    raw_timestamp = (
+                        content.get("pubDate")
+                        or content.get("displayTime")
+                        or item.get("providerPublishTime")
+                        or item.get("pubDate")
+                        or item.get("timestamp")
+                    )
+                    published_at = ""
+                    if isinstance(raw_timestamp, (int, float)):
+                        try:
+                            published_at = datetime.utcfromtimestamp(raw_timestamp).isoformat() + "Z"
+                        except Exception:
+                            published_at = ""
+                    elif isinstance(raw_timestamp, str):
+                        published_at = raw_timestamp
                     processed_news.append({
                         "title": title,
                         "publisher": publisher,
                         "link": link,
-                        "timestamp": "", # Simplified for discovery speed
+                        "timestamp": published_at,
+                        "published_at": published_at,
                     })
                 return processed_news
             return []

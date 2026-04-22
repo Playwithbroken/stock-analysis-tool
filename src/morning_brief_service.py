@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
 import json
 import os
+import re
 
 import pandas as pd
 import requests
@@ -642,12 +643,18 @@ class MorningBriefService:
                         age_hours = (_time.time() - _time.mktime(published)) / 3600
                         if age_hours > 18:
                             continue
+                        published_at = datetime.fromtimestamp(_time.mktime(published), timezone.utc).isoformat()
+                    else:
+                        age_hours = None
+                        published_at = None
                     seen_titles.add(title)
                     text = title.lower()
                     source_meta = self._source_meta(feed_publisher, link)
                     classification = self._classify_news_signal(text)
                     product_catalyst = self._classify_product_catalyst(text)
                     if source_meta["exclude"]:
+                        continue
+                    if self._is_high_risk_unverified_headline(title, source_meta):
                         continue
                     # Try to associate with a known ticker
                     ticker = None
@@ -667,6 +674,8 @@ class MorningBriefService:
                             "source_type": source_meta["source_type"],
                             "source_quality": source_meta["quality"],
                             "is_trusted_source": source_meta["trusted"],
+                            "published_at": published_at,
+                            "age_hours": round(age_hours, 2) if isinstance(age_hours, (int, float)) else None,
                             "impact": classification["impact"],
                             "region": classification["region"],
                             "event_type": classification["event_type"],
@@ -687,8 +696,9 @@ class MorningBriefService:
         rss_items = self._collect_rss_news()
         for item in rss_items:
             title = item.get("title") or ""
-            if title and title not in seen_titles:
-                seen_titles.add(title)
+            identity = self._news_identity(title)
+            if title and identity not in seen_titles:
+                seen_titles.add(identity)
                 items.append(item)
 
         # 2. Collect from yfinance per ticker (includes user watchlist tickers)
@@ -705,9 +715,9 @@ class MorningBriefService:
             news = DataFetcher(ticker).get_news()
             for item in news[:per_ticker_limit]:
                 title = item.get("title") or ""
-                if not title or title in seen_titles:
+                identity = self._news_identity(title)
+                if not title or identity in seen_titles:
                     continue
-                seen_titles.add(title)
                 text = title.lower()
                 publisher = item.get("publisher") or ""
                 link = item.get("link")
@@ -716,6 +726,12 @@ class MorningBriefService:
                 product_catalyst = self._classify_product_catalyst(text)
                 if source_meta["exclude"]:
                     continue
+                if self._is_high_risk_unverified_headline(title, source_meta):
+                    continue
+                age_hours, published_at = self._news_age(item.get("published_at") or item.get("timestamp"))
+                if age_hours is not None and age_hours > 30:
+                    continue
+                seen_titles.add(identity)
                 items.append(
                     {
                         "ticker": ticker,
@@ -726,6 +742,8 @@ class MorningBriefService:
                         "source_type": source_meta["source_type"],
                         "source_quality": source_meta["quality"],
                         "is_trusted_source": source_meta["trusted"],
+                        "published_at": published_at,
+                        "age_hours": round(age_hours, 2) if isinstance(age_hours, (int, float)) else None,
                         "impact": classification["impact"],
                         "region": classification["region"],
                         "event_type": classification["event_type"],
@@ -748,6 +766,45 @@ class MorningBriefService:
             )
         )
         return trusted_items[:16]
+
+    def _news_identity(self, title: str) -> str:
+        text = re.sub(r"[^a-z0-9 ]+", " ", str(title or "").lower())
+        stop = {"the", "a", "an", "to", "of", "and", "or", "for", "on", "in", "with", "as", "at", "is"}
+        tokens = [token for token in text.split() if token not in stop]
+        return " ".join(tokens[:12])
+
+    def _news_age(self, value: Any) -> tuple[float | None, str | None]:
+        if not value:
+            return None, None
+        try:
+            if isinstance(value, (int, float)):
+                dt = datetime.fromtimestamp(value, timezone.utc)
+            else:
+                raw = str(value).strip().replace("Z", "+00:00")
+                dt = datetime.fromisoformat(raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 3600
+            return max(0.0, age_hours), dt.astimezone(timezone.utc).isoformat()
+        except Exception:
+            return None, str(value)
+
+    def _is_high_risk_unverified_headline(self, title: str, source_meta: Dict[str, Any]) -> bool:
+        text = str(title or "").lower()
+        high_risk_terms = [
+            "ceo stepping down",
+            "ceo to step down",
+            "leaving as ceo",
+            "replacing",
+            "succeeded by",
+            "bankruptcy",
+            "files for bankruptcy",
+            "takeover",
+            "acquisition talks",
+        ]
+        if not any(term in text for term in high_risk_terms):
+            return False
+        return source_meta.get("quality") != "tier_1"
 
     def _news_relevance_score(self, item: Dict[str, Any]) -> int:
         title = str(item.get("title") or "").lower()

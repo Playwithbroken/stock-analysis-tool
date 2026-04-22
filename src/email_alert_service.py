@@ -1046,6 +1046,12 @@ class EmailAlertService:
             return ""
         return text
 
+    def _brief_line_identity(self, text: str) -> str:
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", str(text or "").lower())
+        stop_words = {"the", "a", "an", "to", "of", "and", "or", "for", "on", "in", "with", "as", "at", "is"}
+        tokens = [token for token in normalized.split() if token not in stop_words]
+        return " ".join(tokens[:12])
+
     def _tg_arrow(self, change: float | None) -> str:
         if change is None:
             return "⬜"
@@ -1150,8 +1156,9 @@ class EmailAlertService:
         all_news: List[Dict[str, Any]] = []
         for item in brief.get("top_news", []) + brief.get("google_news_extra", []):
             t = item.get("title") or ""
-            if t and t not in seen_titles:
-                seen_titles.add(t)
+            identity = self._brief_line_identity(t)
+            if t and identity and identity not in seen_titles:
+                seen_titles.add(identity)
                 all_news.append(item)
         for item in all_news[:7]:
             title = self._tg_esc(item.get("title") or "")
@@ -1170,11 +1177,16 @@ class EmailAlertService:
         product_catalysts = brief.get("product_catalysts") or []
         if product_catalysts:
             lines2.extend(["", "<b>Product Catalyst Radar</b>"])
+            seen_catalysts: set[str] = set()
             for item in product_catalysts[:5]:
                 ticker = self._tg_esc(item.get("ticker") or "")
                 theme = self._tg_esc(str(item.get("theme") or "product"))
                 catalyst_type = self._tg_esc(str(item.get("catalyst_type") or "news").replace("_", " "))
                 title = self._tg_esc(item.get("title") or "")
+                identity = self._brief_line_identity(f"{ticker} {theme} {title}")
+                if identity in seen_catalysts:
+                    continue
+                seen_catalysts.add(identity)
                 hint = str(item.get("direction_hint") or "watch")
                 label = "NEGATIVE" if hint == "negative" else "POSITIVE WATCH" if hint == "positive_watch" else "WATCH"
                 lines2.append(f"{label} <code>{ticker}</code> {theme} - {catalyst_type}")
@@ -1340,6 +1352,7 @@ class EmailAlertService:
         lines4: List[str] = []
         trade_setups = brief.get("trade_setups") or []
         if trade_setups:
+            seen_setups: set[str] = set()
             lines4.append("🎯 <b>Aktien-Ideen / Setups</b>")
             for setup_item in trade_setups[:5]:
                 symbol = self._tg_esc(setup_item.get("symbol") or "")
@@ -1348,6 +1361,10 @@ class EmailAlertService:
                 trigger = self._tg_esc((setup_item.get("trigger") or "")[:120])
                 invalidation = self._tg_esc((setup_item.get("invalidation") or "")[:100])
                 move = self._tg_esc(setup_item.get("expected_move") or "")
+                identity = self._brief_line_identity(f"{symbol} {thesis} {trigger}")
+                if not symbol or identity in seen_setups:
+                    continue
+                seen_setups.add(identity)
                 confidence_text = f" · {confidence}% conf" if isinstance(confidence, int) else ""
                 move_text = f" · move {move}" if move else ""
                 lines4.append(f"• <code>{symbol}</code>{confidence_text}{move_text} — {thesis}")

@@ -57,8 +57,23 @@ class MorningBriefService:
         ("^TNX", "US 10Y Yield"),
         ("DX-Y.NYB", "US Dollar Index"),
     ]
-    NEWS_TICKERS = ["SPY", "QQQ", "GLD", "TLT", "XLE", "NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "META", "GOOGL"]
+    NEWS_TICKERS = [
+        "SPY", "QQQ", "GLD", "TLT", "XLE",
+        "NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "META", "GOOGL",
+        "TTWO", "BMW.DE",
+    ]
     FUNDAMENTAL_EXCLUDED_TICKERS = {"SPY", "QQQ", "GLD", "TLT", "XLE", "XLK", "XLY", "XLV", "XLU", "XLRE", "IWM"}
+    PRODUCT_CATALYST_ALIASES = {
+        "NVDA": ["nvidia", "geforce", "rtx", "blackwell", "gpu", "graphics card", "ai chip"],
+        "AAPL": ["apple", "iphone", "ipad", "macbook", "vision pro", "ios"],
+        "TTWO": ["take-two", "take two", "rockstar", "gta", "grand theft auto", "gta 6", "gta vi"],
+        "BMW.DE": ["bmw", "mini cooper", "rolls-royce", "neue klasse"],
+        "TSLA": ["tesla", "model y", "model 3", "cybertruck", "robotaxi"],
+        "MSFT": ["microsoft", "xbox", "copilot", "windows", "azure"],
+        "AMZN": ["amazon", "aws", "kindle", "alexa", "anthropic"],
+        "META": ["meta", "quest", "ray-ban", "instagram", "whatsapp", "facebook"],
+        "GOOGL": ["google", "android", "pixel", "gemini", "waymo", "youtube"],
+    }
 
     # Free RSS feeds for real-time headlines
     RSS_FEEDS = [
@@ -222,6 +237,7 @@ class MorningBriefService:
             },
             "event_layer": [],
             "event_pings": [],
+            "product_catalysts": [],
             "contrarian_signals": [],
             "economic_calendar": [],
             "earnings_calendar": [],
@@ -332,6 +348,7 @@ class MorningBriefService:
 
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
+        product_catalysts = self._build_product_catalysts(top_news)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
         earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings)
@@ -373,6 +390,7 @@ class MorningBriefService:
             },
             "event_layer": event_layer,
             "event_pings": event_pings,
+            "product_catalysts": product_catalysts,
             "contrarian_signals": contrarian_signals,
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
@@ -462,6 +480,7 @@ class MorningBriefService:
             },
             "event_layer": event_layer,
             "event_pings": event_pings,
+            "product_catalysts": self._build_product_catalysts(top_news),
             "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
             "economic_calendar": economic_calendar,
             "earnings_calendar": [],
@@ -612,6 +631,7 @@ class MorningBriefService:
                     text = title.lower()
                     source_meta = self._source_meta(feed_publisher, link)
                     classification = self._classify_news_signal(text)
+                    product_catalyst = self._classify_product_catalyst(text)
                     if source_meta["exclude"]:
                         continue
                     # Try to associate with a known ticker
@@ -620,6 +640,8 @@ class MorningBriefService:
                         if t.lower() in text:
                             ticker = t
                             break
+                    if not ticker and product_catalyst:
+                        ticker = product_catalyst.get("ticker")
                     items.append(
                         {
                             "ticker": ticker,
@@ -634,6 +656,7 @@ class MorningBriefService:
                             "region": classification["region"],
                             "event_type": classification["event_type"],
                             "severity": classification["severity"],
+                            "product_catalyst": product_catalyst,
                             "source": "rss",
                         }
                     )
@@ -675,6 +698,7 @@ class MorningBriefService:
                 link = item.get("link")
                 source_meta = self._source_meta(publisher, link)
                 classification = self._classify_news_signal(text)
+                product_catalyst = self._classify_product_catalyst(text)
                 if source_meta["exclude"]:
                     continue
                 items.append(
@@ -691,6 +715,7 @@ class MorningBriefService:
                         "region": classification["region"],
                         "event_type": classification["event_type"],
                         "severity": classification["severity"],
+                        "product_catalyst": product_catalyst,
                     }
                 )
 
@@ -718,13 +743,14 @@ class MorningBriefService:
         score = 0
         if ticker:
             score += 3
-        if event_type in {"conflict", "central_bank", "energy", "policy", "macro_data", "earnings"}:
+        if event_type in {"conflict", "central_bank", "energy", "policy", "macro_data", "earnings", "product_catalyst"}:
             score += 4
         if any(term in title for term in [
             "fed", "rate", "yield", "inflation", "cpi", "ppi", "jobs", "payrolls",
             "earnings", "guidance", "upgrade", "downgrade", "oil", "opec", "war",
             "tariff", "sanction", "market", "stock", "futures", "nasdaq", "s&p",
-            "dow", "dollar", "gold", "bitcoin", "crypto",
+            "dow", "dollar", "gold", "bitcoin", "crypto", "launch", "unveil", "delay",
+            "postpone", "iphone", "gpu", "gta", "model", "product", "preorder",
         ]):
             score += 3
         if any(term in title for term in [
@@ -778,6 +804,7 @@ class MorningBriefService:
                     "publisher": item.get("publisher"),
                     "source_quality": item.get("source_quality"),
                     "ticker": item.get("ticker"),
+                    "product_catalyst": item.get("product_catalyst"),
                     "geo": geo,
                     "map_priority": max(1, map_priority),
                     "event_intelligence": self._build_event_intelligence(
@@ -860,6 +887,37 @@ class MorningBriefService:
             )
         return pings[:8]
 
+    def _build_product_catalysts(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        catalysts: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in news:
+            product = item.get("product_catalyst")
+            if not product:
+                continue
+            ticker = str(product.get("ticker") or item.get("ticker") or "").upper()
+            title = item.get("title") or ""
+            key = f"{ticker}:{title.lower()[:80]}"
+            if not ticker or key in seen:
+                continue
+            seen.add(key)
+            catalyst_type = product.get("catalyst_type") or "product_news"
+            catalysts.append(
+                {
+                    "ticker": ticker,
+                    "title": title,
+                    "theme": product.get("theme") or ticker,
+                    "catalyst_type": catalyst_type,
+                    "direction_hint": product.get("direction_hint") or "watch",
+                    "publisher": item.get("publisher"),
+                    "link": item.get("link"),
+                    "impact": item.get("impact") or "medium",
+                    "confidence": 78 if item.get("source_quality") == "tier_1" else 64,
+                    "trigger": "Official confirmation plus price/volume follow-through.",
+                    "invalidation": "Rumour fades, company denies it, or first impulse fully reverses.",
+                }
+            )
+        return catalysts[:6]
+
     def _build_trade_setups(
         self,
         action_board: List[Dict[str, Any]],
@@ -903,7 +961,17 @@ class MorningBriefService:
                     "window": intelligence.get("execution_window") or "open+60m",
                     "confidence": confidence,
                     "expected_move": expected_move_map.get(str(expected_move), str(expected_move)),
-                    "catalysts": [value for value in [item.get("event_type"), item.get("region"), item.get("source")] if value],
+                    "catalysts": [
+                        value
+                        for value in [
+                            item.get("event_type"),
+                            item.get("region"),
+                            item.get("source"),
+                            (item.get("product_catalyst") or {}).get("theme"),
+                        ]
+                        if value
+                    ],
+                    "product_catalyst": item.get("product_catalyst"),
                     "setup_type": item.get("setup_source") or "single_name",
                     "direction": item.get("setup"),
                     "_score": score,
@@ -925,6 +993,8 @@ class MorningBriefService:
         event_type = str(item.get("event_type") or "").lower()
         ticker_l = ticker.lower()
         if event_type == "earnings":
+            return True
+        if event_type == "product_catalyst":
             return True
         stock_terms = [
             "earnings",
@@ -1729,6 +1799,13 @@ class MorningBriefService:
                 leverage = "conditional" if impact == "medium" else "avoid"
                 trigger = "Wait for price to hold above or below the first impulse."
                 risk = "Single-name moves fail often without volume confirmation."
+            elif event_type == "product_catalyst":
+                catalyst = item.get("product_catalyst") or {}
+                catalyst_type = catalyst.get("catalyst_type")
+                setup = "short" if catalyst_type == "delay" else "watch"
+                leverage = "conditional"
+                trigger = "Wait for price, volume and analyst/channel checks to confirm the product headline."
+                risk = "Product headlines are often rumour-driven; invalid if official confirmation or price follow-through fails."
 
             direct_single_name = self._is_direct_single_name_signal(item, raw_ticker)
             setup_source = "single_name" if direct_single_name else "macro_proxy"
@@ -1786,6 +1863,7 @@ class MorningBriefService:
                     "risk": risk,
                     "source": item.get("publisher"),
                     "source_quality": item.get("source_quality"),
+                    "product_catalyst": item.get("product_catalyst"),
                     "link": item.get("link"),
                     "event_intelligence": intelligence,
                     "portfolio_exposure": self._build_portfolio_exposure(
@@ -2006,6 +2084,10 @@ class MorningBriefService:
                 "sectors": ["Growth", "Consumer", "Financials"],
                 "assets": ["Treasuries", "Dollar", "Index futures"],
             },
+            "product_catalyst": {
+                "sectors": ["Single-name growth", "Semis", "Consumer discretionary"],
+                "assets": ["Product owner stock", "Peers", "Options IV"],
+            },
         }
         payload = mapping.get(event_type, {"sectors": ["Broad market"], "assets": ["Index futures", "Dollar"]})
         if ticker:
@@ -2069,6 +2151,15 @@ class MorningBriefService:
                 "trigger": "Use only if affected sectors lose support and broad tape confirms the policy shock.",
                 "invalidation": "No short if the market absorbs the headline within the first impulse.",
                 "execution_window": "Headline to first trend confirmation",
+            }
+        if event_type == "product_catalyst":
+            return {
+                "action": "watch",
+                "leverage": "conditional",
+                "why_now": "Product news can change demand expectations, but the first headline is often incomplete.",
+                "trigger": "Act only if official confirmation, volume and analyst/channel checks support the move.",
+                "invalidation": "Skip if the company, reliable press or price action does not confirm the headline.",
+                "execution_window": "Headline to next session",
             }
         return {
             "action": "watch",
@@ -2400,6 +2491,8 @@ class MorningBriefService:
             return "Natural disasters matter when they hit supply chains, insurers, commodities or transport routes."
         if event_type == "earnings" and ticker:
             return f"{ticker} needs follow-through, not just the headline."
+        if event_type == "product_catalyst" and ticker:
+            return f"{ticker} product catalyst. Treat it as a tradeable watch item only after official confirmation, volume and price reaction align."
         if macro_regime == "risk-off":
             return "Protect first. Shorts or hedges matter more than chasing momentum."
         if macro_regime == "risk-on":
@@ -2549,6 +2642,19 @@ class MorningBriefService:
             event_type = "earnings"
             impact = "medium"
             severity = "normal"
+        elif self._classify_product_catalyst(text):
+            product = self._classify_product_catalyst(text) or {}
+            event_type = "product_catalyst"
+            impact = "medium"
+            severity = "elevated" if any(term in text for term in ["delay", "delayed", "postpone", "postponed", "launch", "unveil", "release"]) else "normal"
+            product_region = {"BMW.DE": "europe"}.get(str(product.get("ticker") or ""))
+            if product_region:
+                return {
+                    "impact": impact,
+                    "region": product_region,
+                    "event_type": event_type,
+                    "severity": severity,
+                }
         elif any(term in text for term in ["china", "japan", "hong kong", "taiwan"]):
             event_type = "regional_macro"
             impact = "medium"
@@ -2559,6 +2665,38 @@ class MorningBriefService:
             "region": self._infer_region(text),
             "event_type": event_type,
             "severity": severity,
+        }
+
+    def _classify_product_catalyst(self, text: str) -> Dict[str, str] | None:
+        normalized = (text or "").lower()
+        if not normalized:
+            return None
+
+        matched_ticker = None
+        matched_theme = None
+        for ticker, aliases in self.PRODUCT_CATALYST_ALIASES.items():
+            for alias in aliases:
+                if alias in normalized:
+                    matched_ticker = ticker
+                    matched_theme = alias
+                    break
+            if matched_ticker:
+                break
+        if not matched_ticker:
+            return None
+
+        delay_terms = ["delay", "delayed", "postpone", "postponed", "pushed back", "misses launch", "slips"]
+        launch_terms = ["launch", "unveil", "release", "preorder", "new", "next-gen", "upgrade", "ship", "debut"]
+        catalyst_type = "delay" if any(term in normalized for term in delay_terms) else "launch" if any(term in normalized for term in launch_terms) else "product_news"
+        if catalyst_type == "product_news" and matched_theme in {"gpu", "iphone", "gta", "gta 6", "gta vi", "model y", "neue klasse"}:
+            catalyst_type = "launch"
+
+        direction_hint = "negative" if catalyst_type == "delay" else "positive_watch" if catalyst_type == "launch" else "watch"
+        return {
+            "ticker": matched_ticker,
+            "theme": matched_theme or matched_ticker,
+            "catalyst_type": catalyst_type,
+            "direction_hint": direction_hint,
         }
 
     def _infer_region(self, text: str) -> str:

@@ -1129,6 +1129,20 @@ class EmailAlertService:
         if not all_news:
             lines2.append("<i>Keine aktuellen Meldungen.</i>")
 
+        product_catalysts = brief.get("product_catalysts") or []
+        if product_catalysts:
+            lines2.extend(["", "<b>Product Catalyst Radar</b>"])
+            for item in product_catalysts[:5]:
+                ticker = self._tg_esc(item.get("ticker") or "")
+                theme = self._tg_esc(str(item.get("theme") or "product"))
+                catalyst_type = self._tg_esc(str(item.get("catalyst_type") or "news").replace("_", " "))
+                title = self._tg_esc(item.get("title") or "")
+                hint = str(item.get("direction_hint") or "watch")
+                label = "NEGATIVE" if hint == "negative" else "POSITIVE WATCH" if hint == "positive_watch" else "WATCH"
+                lines2.append(f"{label} <code>{ticker}</code> {theme} - {catalyst_type}")
+                if title:
+                    lines2.append(f"   {title[:180]}")
+
         # Watchlist impact
         watchlist_impact = brief.get("watchlist_impact", [])
         if watchlist_impact:

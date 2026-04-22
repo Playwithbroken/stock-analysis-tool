@@ -385,17 +385,36 @@ class EmailAlertService:
             },
         ]
         results: List[Dict[str, Any]] = []
-        max_jobs_per_run = max(1, int(os.getenv("BRIEF_MAX_JOBS_PER_RUN", "1")))
+        max_jobs_per_run = max(1, int(os.getenv("BRIEF_MAX_JOBS_PER_RUN", "3")))
         sent_this_run = 0
+        due_jobs: List[Dict[str, Any]] = []
 
         for job in jobs:
-            if sent_this_run >= max_jobs_per_run:
-                break
             event_key = f"{job['job_key']}:{now.date().isoformat()}"
             if event_key in sent_keys:
                 continue
             if not self._time_window_matches(now, str(job["scheduled_time"])):
                 continue
+            scheduled_at = self._scheduled_datetime(now, str(job["scheduled_time"]))
+            if scheduled_at is None:
+                continue
+            due_jobs.append(
+                {
+                    **job,
+                    "event_key": event_key,
+                    "scheduled_at": scheduled_at,
+                    "minutes_late": max(0, int((now - scheduled_at).total_seconds() // 60)),
+                }
+            )
+
+        # Prioritize the current/recent slot first. This prevents an unsent
+        # morning brief from blocking the midday or US-open brief after a restart.
+        due_jobs.sort(key=lambda item: (item["minutes_late"], item["scheduled_at"]), reverse=False)
+
+        for job in due_jobs:
+            if sent_this_run >= max_jobs_per_run:
+                break
+            event_key = str(job["event_key"])
 
             self._validate_config(config)
             events = job["build_events"]()
@@ -454,7 +473,15 @@ class EmailAlertService:
                     }
                 ]
             )
-            results.append({"job": job["job_key"], "status": "sent"})
+            results.append(
+                {
+                    "job": job["job_key"],
+                    "status": "sent",
+                    "scheduled_at": job["scheduled_at"].isoformat(),
+                    "minutes_late": job["minutes_late"],
+                    "catchup": job["minutes_late"] > 5,
+                }
+            )
             sent_this_run += 1
 
         return results
@@ -490,15 +517,20 @@ class EmailAlertService:
         return now.weekday() in allowed_days
 
     def _time_window_matches(self, now: datetime, scheduled_hhmm: str) -> bool:
-        try:
-            hour, minute = [int(part) for part in scheduled_hhmm.split(":", 1)]
-        except Exception:
+        scheduled = self._scheduled_datetime(now, scheduled_hhmm)
+        if scheduled is None:
             return False
         loop_minutes = max(2, int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15")))
         grace_minutes = max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "360")))
-        scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         delta_minutes = (now - scheduled).total_seconds() / 60
         return 0 <= delta_minutes < grace_minutes
+
+    def _scheduled_datetime(self, now: datetime, scheduled_hhmm: str) -> datetime | None:
+        try:
+            hour, minute = [int(part) for part in scheduled_hhmm.split(":", 1)]
+            return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        except Exception:
+            return None
 
     def _build_open_brief_events(self, session_label: str) -> List[Dict[str, Any]]:
         items = self.portfolio_manager.get_signal_watch_items()

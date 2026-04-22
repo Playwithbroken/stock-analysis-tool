@@ -1040,6 +1040,12 @@ class EmailAlertService:
         """Escape text for Telegram HTML mode."""
         return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+    def _clean_text_value(self, value: Any) -> str:
+        text = str(value or "").strip()
+        if text.lower() in {"nan", "none", "null", "n/a", "na", "-", "--"}:
+            return ""
+        return text
+
     def _tg_arrow(self, change: float | None) -> str:
         if change is None:
             return "⬜"
@@ -1513,10 +1519,14 @@ class EmailAlertService:
                 tk = self._tg_esc(a.get("ticker", ""))
                 latest = a.get("actions", [])[-3:]
                 for act in latest:
-                    firm = self._tg_esc((act.get("firm") or "").strip())[:28]
-                    to = self._tg_esc((act.get("to") or "").strip())
-                    frm = self._tg_esc((act.get("from") or "").strip())
-                    action = self._tg_esc((act.get("action") or "").strip())
+                    firm_raw = self._clean_text_value(act.get("firm"))[:28]
+                    to_raw = self._clean_text_value(act.get("to"))
+                    frm_raw = self._clean_text_value(act.get("from"))
+                    action_raw = self._clean_text_value(act.get("action"))
+                    firm = self._tg_esc(firm_raw)
+                    to = self._tg_esc(to_raw)
+                    frm = self._tg_esc(frm_raw)
+                    action = self._tg_esc(action_raw)
                     if not (firm or to or frm or action):
                         continue
                     if not (to or action):

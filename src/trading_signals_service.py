@@ -185,6 +185,12 @@ class TradingSignalsService:
             return None
 
     # ---------- 4. Analyst Actions ----------
+    def _clean_analyst_value(self, value: Any) -> str:
+        text = str(value or "").strip()
+        if text.lower() in {"nan", "none", "null", "n/a", "na", "-", "--"}:
+            return ""
+        return text
+
     def get_analyst_actions(self, ticker: str) -> Optional[Dict[str, Any]]:
         if not yf:
             return None
@@ -200,13 +206,15 @@ class TradingSignalsService:
             recent = recs[recs.index >= cutoff] if hasattr(recs.index, "to_pydatetime") else recs.tail(10)
             actions = []
             for idx, row in recent.iterrows():
-                firm = str(row.get("Firm", "") or "").strip()
-                to_grade = str(row.get("To Grade", row.get("toGrade", "")) or "").strip()
-                from_grade = str(row.get("From Grade", row.get("fromGrade", "")) or "").strip()
-                action = str(row.get("Action", "") or "").strip()
+                firm = self._clean_analyst_value(row.get("Firm", ""))
+                to_grade = self._clean_analyst_value(row.get("To Grade", row.get("toGrade", "")))
+                from_grade = self._clean_analyst_value(row.get("From Grade", row.get("fromGrade", "")))
+                action = self._clean_analyst_value(row.get("Action", ""))
                 if not (firm or to_grade or from_grade or action):
                     continue
                 if not (to_grade or action):
+                    continue
+                if not firm and not from_grade and action.lower() in {"main", "reit", "init", "up", "down"}:
                     continue
                 actions.append({
                     "date": str(idx)[:10],

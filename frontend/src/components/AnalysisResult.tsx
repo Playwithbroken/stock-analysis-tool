@@ -95,6 +95,7 @@ export default function AnalysisResult({
     total_score,
     news,
     earnings_history,
+    guidance_signal,
   } = data;
   const liveQuote = realtimeQuotes[data.ticker];
   const scoreValue = clampScore(total_score);
@@ -114,6 +115,8 @@ export default function AnalysisResult({
   const latestAnnual = annualFinancials[0] || {};
   const earningsHistory = Array.isArray(earnings_history) ? earnings_history : [];
   const latestEarnings = earningsHistory[0] || null;
+  const guidanceSignal = guidance_signal || {};
+  const quarterlyRevenueYoY = financialTrends?.quarterly_revenue_yoy;
 
   React.useEffect(() => {
     let cancelled = false;
@@ -577,6 +580,34 @@ export default function AnalysisResult({
                   label="4Q Pattern"
                   value={`${earningsHistory.filter((item: any) => item.status === "beat").length} Beat / ${earningsHistory.filter((item: any) => item.status === "miss").length} Miss`}
                 />
+                <MetricCard
+                  label="Revenue YoY"
+                  value={formatRatioPercent(quarterlyRevenueYoY)}
+                  trend={(quarterlyRevenueYoY || 0) >= 0 ? "up" : "down"}
+                />
+                <MetricCard
+                  label="Forward EPS"
+                  value={fundamentals?.forward_eps != null ? fundamentals.forward_eps.toFixed(2) : "N/A"}
+                />
+                <div className="surface-panel rounded-xl p-5">
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    Guidance
+                  </div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {guidanceSignal?.label || "No signal"}
+                  </div>
+                  {guidanceSignal?.sentiment === "positive" ? (
+                    <div className="mt-2 text-[10px] font-bold text-emerald-700">↑ konstruktiv</div>
+                  ) : guidanceSignal?.sentiment === "negative" ? (
+                    <div className="mt-2 text-[10px] font-bold text-red-700">↓ Vorsicht</div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-white/72 p-4 text-sm leading-7 text-slate-600">
+                {guidanceSignal?.summary
+                  ? guidanceSignal.summary
+                  : "Kein klares Guidance-Signal aus den juengsten Headline-Quellen. Deshalb EPS immer zusammen mit Umsatztrend und Preisreaktion lesen."}
               </div>
             </section>
           )}

@@ -488,6 +488,7 @@ class PortfolioHolding(BaseModel):
     ticker: str
     shares: float
     buy_price: Optional[float] = None
+    purchase_date: Optional[str] = None
 
 
 class PortfolioRequest(BaseModel):
@@ -500,6 +501,7 @@ class AddHoldingRequest(BaseModel):
     ticker: str
     shares: float
     buy_price: Optional[float] = None
+    purchase_date: Optional[str] = None
 
 class OracleRequest(BaseModel):
     message: str
@@ -846,6 +848,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                     "news": [],
                     "comparison": {},
                     "earnings_history": [],
+                    "guidance_signal": {},
                     "analysis": fallback_analysis,
                     "etf_analysis": None,
                     "recommendation": {
@@ -882,6 +885,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "news": data.get("news", []),
             "comparison": data.get("comparison"),
             "earnings_history": data.get("earnings_history", []),
+            "guidance_signal": data.get("guidance_signal", {}),
             "analysis": analyses,
             "etf_analysis": analyzer.analyze_etf() if data.get("fundamentals", {}).get("quote_type") == "ETF" else None,
             "recommendation": result.get("recommendation"),
@@ -1363,7 +1367,7 @@ async def delete_portfolio(p_id: str):
 
 @app.post("/api/portfolios/{p_id}/holdings")
 async def add_holding(p_id: str, req: AddHoldingRequest):
-    get_portfolio_manager().add_holding(p_id, req.ticker, req.shares, req.buy_price)
+    get_portfolio_manager().add_holding(p_id, req.ticker, req.shares, req.buy_price, req.purchase_date)
     return {"status": "added"}
 
 @app.delete("/api/portfolios/{p_id}/holdings/{ticker}")
@@ -1395,6 +1399,15 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
                 fetcher = DataFetcher(holding.ticker)
                 info = fetcher.info
                 price_data = fetcher.get_price_data()
+                purchase_date = str(holding.purchase_date or "").strip() or None
+                holding_days = None
+                if purchase_date:
+                    try:
+                        purchase_dt = datetime.fromisoformat(purchase_date[:10]).date()
+                        holding_days = max(0, (datetime.now(timezone.utc).date() - purchase_dt).days)
+                        purchase_date = purchase_dt.isoformat()
+                    except Exception:
+                        purchase_date = None
                 
                 current_price = price_data.get("current_price") or 0
                 position_value = current_price * holding.shares
@@ -1419,6 +1432,8 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
                     "shares": holding.shares,
                     "current_price": current_price,
                     "buy_price": holding.buy_price,
+                    "purchase_date": purchase_date,
+                    "holding_days": holding_days,
                     "position_value": position_value,
                     "cost_basis": cost_basis,
                     "gain_loss": gain_loss,
@@ -1448,6 +1463,7 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
         portfolio_gain_loss = total_value - total_cost
         portfolio_gain_loss_pct = ((total_value / total_cost) - 1) * 100 if total_cost > 0 else 0
         avg_score = weighted_score / total_value if total_value > 0 else 0
+        holding_day_values = [float(h.get("holding_days")) for h in holdings_data if h.get("holding_days") is not None]
         
         # Convert sector allocation to percentages
         sector_pct = {}
@@ -1465,6 +1481,7 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
                 "return_since_buy_pct": portfolio_gain_loss_pct,
                 "num_holdings": len([h for h in holdings_data if "error" not in h]),
                 "avg_score": avg_score,
+                "avg_holding_days": (sum(holding_day_values) / len(holding_day_values)) if holding_day_values else None,
                 "sector_allocation": sector_pct,
             }
         })
@@ -1592,10 +1609,10 @@ async def export_portfolio_csv(p_id: str):
         
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Ticker", "Shares", "Buy Price"])
+    writer.writerow(["Ticker", "Shares", "Buy Price", "Purchase Date"])
     
     for h in portfolio['holdings']:
-        writer.writerow([h['ticker'], h['shares'], h.get('buyPrice', 'N/A')])
+        writer.writerow([h['ticker'], h['shares'], h.get('buyPrice', 'N/A'), h.get('purchaseDate', '')])
         
     output.seek(0)
     return StreamingResponse(

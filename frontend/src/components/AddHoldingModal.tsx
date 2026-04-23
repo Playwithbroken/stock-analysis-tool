@@ -24,6 +24,7 @@ export default function AddHoldingModal({
   const [ticker, setTicker] = useState(initialTicker);
   const [shares, setShares] = useState("1");
   const [buyPrice, setBuyPrice] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(
     portfolios[0]?.id || "",
   );
@@ -37,6 +38,7 @@ export default function AddHoldingModal({
     } else {
       setBuyPrice("");
     }
+    setPurchaseDate(new Date().toISOString().slice(0, 10));
 
     if (portfolios.length > 0 && !selectedPortfolioId) {
       setSelectedPortfolioId(portfolios[0].id);
@@ -81,6 +83,7 @@ export default function AddHoldingModal({
       ticker: ticker.toUpperCase(),
       shares: parseFloat(shares),
       buyPrice: priceInUSD,
+      purchaseDate: purchaseDate || undefined,
     });
     onClose();
   };
@@ -145,6 +148,15 @@ export default function AddHoldingModal({
               onChange={(e) => setBuyPrice(e.target.value)}
               placeholder="0.00"
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
+            />
+          </Field>
+
+          <Field label="Kaufdatum">
+            <input
+              type="date"
+              value={purchaseDate}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/20"
             />
           </Field>
         </div>

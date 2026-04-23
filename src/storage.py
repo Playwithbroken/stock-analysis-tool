@@ -28,6 +28,7 @@ def init_db():
         ticker TEXT NOT NULL,
         shares REAL NOT NULL,
         buy_price REAL,
+        purchase_date TEXT,
         FOREIGN KEY (portfolio_id) REFERENCES portfolios (id) ON DELETE CASCADE
     )
     ''')
@@ -97,6 +98,10 @@ def init_db():
     )
     ''')
     try:
+        cursor.execute('ALTER TABLE holdings ADD COLUMN purchase_date TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
         cursor.execute('ALTER TABLE paper_trades ADD COLUMN exit_reason TEXT')
     except sqlite3.OperationalError:
         pass
@@ -128,6 +133,37 @@ class PortfolioManager:
     def __init__(self):
         init_db()
 
+    def _normalize_purchase_date(self, value: Optional[str]) -> Optional[str]:
+        raw = str(value or '').strip()
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw[:10]).date().isoformat()
+        except Exception:
+            return None
+
+    def _merge_purchase_date(
+        self,
+        existing_purchase_date: Optional[str],
+        new_purchase_date: Optional[str],
+        existing_shares: float,
+        added_shares: float,
+    ) -> Optional[str]:
+        existing_norm = self._normalize_purchase_date(existing_purchase_date)
+        new_norm = self._normalize_purchase_date(new_purchase_date)
+        if existing_norm and new_norm and existing_shares > 0 and added_shares > 0:
+            try:
+                existing_dt = datetime.fromisoformat(existing_norm)
+                new_dt = datetime.fromisoformat(new_norm)
+                weighted_ts = (
+                    existing_dt.timestamp() * existing_shares
+                    + new_dt.timestamp() * added_shares
+                ) / (existing_shares + added_shares)
+                return datetime.fromtimestamp(weighted_ts).date().isoformat()
+            except Exception:
+                return existing_norm or new_norm
+        return new_norm or existing_norm
+
     def create_portfolio(self, name: str) -> Dict[str, Any]:
         portfolio_id = str(uuid.uuid4())
         created_at = datetime.now().isoformat()
@@ -150,7 +186,10 @@ class PortfolioManager:
         portfolios = [dict(row) for row in cursor.fetchall()]
         
         for p in portfolios:
-            cursor.execute('SELECT ticker, shares, buy_price as buyPrice FROM holdings WHERE portfolio_id = ?', (p['id'],))
+            cursor.execute(
+                'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE portfolio_id = ?',
+                (p['id'],),
+            )
             p['holdings'] = [dict(row) for row in cursor.fetchall()]
             # Rename for frontend compatibility
             p['createdAt'] = p.pop('created_at')
@@ -166,14 +205,22 @@ class PortfolioManager:
         conn.commit()
         conn.close()
 
-    def add_holding(self, portfolio_id: str, ticker: str, shares: float, buy_price: Optional[float] = None):
+    def add_holding(
+        self,
+        portfolio_id: str,
+        ticker: str,
+        shares: float,
+        buy_price: Optional[float] = None,
+        purchase_date: Optional[str] = None,
+    ):
         holding_id = str(uuid.uuid4())
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        normalized_purchase_date = self._normalize_purchase_date(purchase_date)
         
         # Check if holding already exists for this ticker
         cursor.execute(
-            'SELECT id, shares, buy_price FROM holdings WHERE portfolio_id = ? AND ticker = ?',
+            'SELECT id, shares, buy_price, purchase_date FROM holdings WHERE portfolio_id = ? AND ticker = ?',
             (portfolio_id, ticker.upper()),
         )
         existing = cursor.fetchone()
@@ -181,6 +228,7 @@ class PortfolioManager:
         if existing:
             existing_shares = float(existing[1] or 0)
             existing_buy_price = existing[2]
+            existing_purchase_date = existing[3]
             new_shares = existing_shares + shares
             new_buy_price = existing_buy_price
             if new_shares > 0:
@@ -190,13 +238,21 @@ class PortfolioManager:
                     ) / new_shares
                 elif buy_price is not None:
                     new_buy_price = buy_price
+            merged_purchase_date = self._merge_purchase_date(
+                existing_purchase_date,
+                normalized_purchase_date,
+                existing_shares,
+                shares,
+            )
             cursor.execute(
-                'UPDATE holdings SET shares = ?, buy_price = ? WHERE id = ?',
-                (new_shares, new_buy_price, existing[0]),
+                'UPDATE holdings SET shares = ?, buy_price = ?, purchase_date = ? WHERE id = ?',
+                (new_shares, new_buy_price, merged_purchase_date, existing[0]),
             )
         else:
-            cursor.execute('INSERT INTO holdings (id, portfolio_id, ticker, shares, buy_price) VALUES (?, ?, ?, ?, ?)',
-                           (holding_id, portfolio_id, ticker.upper(), shares, buy_price))
+            cursor.execute(
+                'INSERT INTO holdings (id, portfolio_id, ticker, shares, buy_price, purchase_date) VALUES (?, ?, ?, ?, ?, ?)',
+                (holding_id, portfolio_id, ticker.upper(), shares, buy_price, normalized_purchase_date),
+            )
                            
         conn.commit()
         conn.close()

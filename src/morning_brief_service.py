@@ -1702,7 +1702,17 @@ class MorningBriefService:
                     continue
 
                 status = latest.get("status") or self._earnings_result_status(surprise)
-                action_hint, summary = self._earnings_result_action(status, surprise)
+                fundamentals = fetcher.get_fundamentals() or {}
+                trends = ((fundamentals.get("financial_statements") or {}).get("trends") or {})
+                revenue_yoy = trends.get("quarterly_revenue_yoy")
+                guidance_signal = fetcher.get_guidance_signal() or {}
+                guidance_sentiment = str(guidance_signal.get("sentiment") or "unknown").lower()
+                action_hint, summary = self._earnings_result_action(
+                    status,
+                    surprise,
+                    revenue_yoy,
+                    guidance_sentiment,
+                )
                 info = fetcher.info or {}
                 results.append(
                     {
@@ -1714,6 +1724,9 @@ class MorningBriefService:
                         "reported_eps": reported,
                         "eps_estimate": estimate,
                         "eps_surprise_pct": surprise,
+                        "revenue_yoy": revenue_yoy,
+                        "guidance_label": guidance_signal.get("label"),
+                        "guidance_sentiment": guidance_sentiment,
                         "status": status,
                         "action_hint": action_hint,
                         "summary": summary,
@@ -1754,22 +1767,47 @@ class MorningBriefService:
                 return "miss"
         return "inline"
 
-    def _earnings_result_action(self, status: str, surprise: Any) -> tuple[str, str]:
+    def _earnings_result_action(
+        self,
+        status: str,
+        surprise: Any,
+        revenue_yoy: Any = None,
+        guidance_sentiment: str = "unknown",
+    ) -> tuple[str, str]:
         surprise_value = float(surprise) if isinstance(surprise, (int, float)) else 0.0
-        if status == "beat" and surprise_value >= 8:
+        revenue_value = float(revenue_yoy) if isinstance(revenue_yoy, (int, float)) else None
+        has_positive_revenue = revenue_value is not None and revenue_value >= 0.08
+        has_negative_revenue = revenue_value is not None and revenue_value < 0
+
+        if status == "beat" and surprise_value >= 8 and guidance_sentiment == "positive":
             return (
-                "watch_pullback_or_follow_through",
-                "Deutlicher EPS-Beat. Kauf nur bei Guidance-Qualitaet und Preis-Follow-through, nicht blind in den ersten Spike.",
+                "constructive_if_follow_through",
+                "Deutlicher EPS-Beat mit positiver Guidance. Kauf nur bei sauberem Preis-Follow-through, nicht blind in den ersten Spike.",
+            )
+        if status == "beat" and (has_positive_revenue or guidance_sentiment == "positive"):
+            return (
+                "constructive_watch",
+                "EPS ueber Erwartung. Setup wird konstruktiver, weil Guidance oder Umsatztrend mitziehen. Jetzt nur noch Preisreaktion bestaetigen.",
             )
         if status == "beat":
             return (
-                "constructive_watch",
-                "EPS ueber Erwartung. Setup wird interessanter, muss aber durch Guidance, Umsatztrend und Kursreaktion bestaetigt werden.",
+                "watch_pullback_or_follow_through",
+                "EPS-Beat ohne klare Guidance-Bestaetigung. Kein Chase, erst Reaktion und Umsatztrend bestaetigen.",
+            )
+        if status == "miss" and (guidance_sentiment == "negative" or has_negative_revenue):
+            return (
+                "avoid_until_repair",
+                "EPS-Miss plus schwache Guidance oder negatives Umsatzmomentum. Kein Kauf, bis Management und Preisstruktur die Schaeden reparieren.",
             )
         if status == "miss":
             return (
                 "caution_until_repair",
                 "EPS unter Erwartung. Erst beobachten, bis Management-Ausblick und Kursstruktur wieder Stabilitaet zeigen.",
+            )
+        if guidance_sentiment == "positive" and has_positive_revenue:
+            return (
+                "constructive_watch",
+                "EPS nahe Erwartung, aber Guidance und Umsatztrend bleiben stabil. Watchlist-Kandidat statt aggressiver Einstieg.",
             )
         return (
             "needs_guidance_confirmation",

@@ -1438,6 +1438,72 @@ export default function MorningBriefPanel({
       )}
 
       {/* ── Broad Earnings Calendar ───────────────────────────────────── */}
+      {(brief.earnings_results || []).length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Earnings Results
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              beat / miss / guidance
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {(brief.earnings_results || []).slice(0, 6).map((item: any, i: number) => (
+              <div
+                key={`er-${item.ticker}-${i}`}
+                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => onAnalyze(item.ticker)}
+                    className="text-sm font-black text-slate-900"
+                  >
+                    {item.ticker}
+                  </button>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                    item.status === "beat"
+                      ? "bg-emerald-500/10 text-emerald-700"
+                      : item.status === "miss"
+                        ? "bg-red-500/10 text-red-700"
+                        : "bg-amber-500/10 text-amber-700"
+                  }`}>
+                    {item.status}
+                  </span>
+                </div>
+                <div className="mt-1 line-clamp-1 text-xs text-slate-500">{item.company}</div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                    EPS {item.reported_eps != null ? item.reported_eps.toFixed(2) : "n/a"}
+                  </div>
+                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                    Est {item.eps_estimate != null ? item.eps_estimate.toFixed(2) : "n/a"}
+                  </div>
+                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                    Surprise {item.eps_surprise_pct != null ? `${item.eps_surprise_pct >= 0 ? "+" : ""}${item.eps_surprise_pct.toFixed(1)}%` : "n/a"}
+                  </div>
+                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                    Revenue {item.revenue_yoy != null ? `${item.revenue_yoy >= 0 ? "+" : ""}${(item.revenue_yoy * 100).toFixed(1)}%` : "n/a"}
+                  </div>
+                </div>
+                {item.guidance_label && (
+                  <div className={`mt-3 rounded-[0.95rem] border px-3 py-2 text-[11px] font-bold ${
+                    item.guidance_sentiment === "positive"
+                      ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-700"
+                      : item.guidance_sentiment === "negative"
+                        ? "border-red-500/20 bg-red-500/8 text-red-700"
+                        : "border-black/8 bg-white text-slate-600"
+                  }`}>
+                    {item.guidance_label}
+                  </div>
+                )}
+                <div className="mt-3 text-xs leading-6 text-slate-600">{item.summary}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {(brief.broad_earnings || []).length > 0 && (
         <section className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">

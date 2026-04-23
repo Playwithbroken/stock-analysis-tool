@@ -4,6 +4,7 @@ export interface Holding {
   ticker: string
   shares: number
   buyPrice?: number
+  purchaseDate?: string
 }
 
 export interface Portfolio {
@@ -14,7 +15,7 @@ export interface Portfolio {
 }
 
 const CACHE_KEY = 'portfolios_local_cache'
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 
 function saveToCache(portfolios: Portfolio[]) {
   try {
@@ -106,7 +107,7 @@ export function usePortfolios(enabled: boolean = true) {
           await fetch(`/api/portfolios/${newP.id}/holdings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticker: h.ticker, shares: h.shares, buy_price: h.buyPrice }),
+            body: JSON.stringify({ ticker: h.ticker, shares: h.shares, buy_price: h.buyPrice, purchase_date: h.purchaseDate }),
           })
         }
         restored.push({ ...newP, holdings: cached.holdings })
@@ -154,7 +155,8 @@ export function usePortfolios(enabled: boolean = true) {
       body: JSON.stringify({
         ticker: holding.ticker,
         shares: holding.shares,
-        buy_price: holding.buyPrice
+        buy_price: holding.buyPrice,
+        purchase_date: holding.purchaseDate
       }),
     })
     await fetchPortfolios()

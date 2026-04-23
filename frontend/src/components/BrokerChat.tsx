@@ -163,7 +163,7 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : `surface-panel fixed inset-x-3 top-auto z-50 flex w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] h-[min(86vh,52rem)]" : "bottom-[calc(6rem+env(safe-area-inset-bottom))] h-[min(62vh,38rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
+          : `surface-panel fixed inset-x-3 top-auto z-50 flex w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] h-[min(82dvh,52rem)]" : "bottom-[calc(5.5rem+env(safe-area-inset-bottom))] h-[min(56dvh,34rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
       }`}
     >
       {!isInline && (

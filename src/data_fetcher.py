@@ -476,6 +476,65 @@ class DataFetcher:
             return []
         except Exception:
             return []
+
+    def get_guidance_signal(self) -> Dict[str, Any]:
+        """Infer management guidance tone from recent trusted headlines."""
+        try:
+            titles = " ".join(
+                str(item.get("title") or "").lower()
+                for item in self.get_news()[:8]
+                if item.get("title")
+            )
+            if not titles:
+                return {"label": "No guidance signal", "sentiment": "unknown", "summary": ""}
+
+            positive_patterns = [
+                "raises guidance",
+                "raises outlook",
+                "boosts forecast",
+                "lifts outlook",
+                "strong guidance",
+                "upbeat outlook",
+                "better than expected outlook",
+            ]
+            negative_patterns = [
+                "cuts guidance",
+                "cuts outlook",
+                "lowers guidance",
+                "lowers outlook",
+                "weak guidance",
+                "soft outlook",
+                "withdraws guidance",
+                "warns on",
+            ]
+            neutral_patterns = [
+                "reaffirms guidance",
+                "maintains guidance",
+                "in line guidance",
+                "guidance in line",
+            ]
+
+            if any(pattern in titles for pattern in positive_patterns):
+                return {
+                    "label": "Raised / strong guidance",
+                    "sentiment": "positive",
+                    "summary": "Recent headlines suggest management raised or strengthened guidance.",
+                }
+            if any(pattern in titles for pattern in negative_patterns):
+                return {
+                    "label": "Cut / weak guidance",
+                    "sentiment": "negative",
+                    "summary": "Recent headlines suggest management cut guidance or flagged weak outlook.",
+                }
+            if any(pattern in titles for pattern in neutral_patterns):
+                return {
+                    "label": "Guidance maintained",
+                    "sentiment": "neutral",
+                    "summary": "Recent headlines point to maintained or in-line guidance.",
+                }
+            return {"label": "No clear guidance read", "sentiment": "unknown", "summary": ""}
+        except Exception as e:
+            return {"error": str(e), "label": "No guidance signal", "sentiment": "unknown", "summary": ""}
     
     def get_comparison_data(self, index_ticker: str = "^GSPC") -> Dict[str, Any]:
         """Compare stock performance with S&P 500 from cached history."""
@@ -655,6 +714,7 @@ class DataFetcher:
             "news": self.get_news(),
             "comparison": self.get_comparison_data(),
             "earnings_history": self.get_earnings_history(),
+            "guidance_signal": self.get_guidance_signal(),
             "etf_holdings": self.get_etf_holdings() if self.info.get("quoteType") == "ETF" else [],
             "fetch_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }

@@ -29,6 +29,7 @@ interface PortfolioAnalysis {
     return_since_buy_pct?: number;
     num_holdings: number;
     avg_score: number;
+    avg_holding_days?: number | null;
     sector_allocation: Record<string, number>;
   };
 }
@@ -46,6 +47,24 @@ interface PriceAlert {
 const formatPercent = (value: number): string => {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
+};
+
+const formatPurchaseDate = (value?: string | null): string => {
+  if (!value) return "Kein Kaufdatum";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Kein Kaufdatum";
+  return date.toLocaleDateString();
+};
+
+const formatHoldingPeriod = (days?: number | null): string => {
+  if (days == null || !Number.isFinite(days)) return "n/a";
+  if (days <= 0) return "Heute";
+  if (days < 30) return `${Math.round(days)}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}m`;
+  const years = Math.floor(months / 12);
+  const restMonths = months % 12;
+  return restMonths > 0 ? `${years}y ${restMonths}m` : `${years}y`;
 };
 
 export default function PortfolioView({
@@ -203,6 +222,7 @@ export default function PortfolioView({
             ticker: h.ticker,
             shares: h.shares,
             buy_price: h.buyPrice,
+            purchase_date: h.purchaseDate,
           })),
         }),
       });
@@ -231,6 +251,7 @@ export default function PortfolioView({
 
   const returnValue = analysis?.summary.return_since_buy ?? analysis?.summary.gain_loss ?? 0;
   const returnPct = analysis?.summary.return_since_buy_pct ?? analysis?.summary.gain_loss_pct ?? 0;
+  const avgHoldingDays = analysis?.summary.avg_holding_days;
 
   return (
     <div className="space-y-6">
@@ -404,6 +425,11 @@ export default function PortfolioView({
                   <div className="mt-2 text-3xl font-black text-slate-900">
                     {analysis.summary.num_holdings}
                   </div>
+                  {avgHoldingDays != null && (
+                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                      Ø Haltedauer {formatHoldingPeriod(avgHoldingDays)}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -596,12 +622,101 @@ export default function PortfolioView({
                     Holdings
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="space-y-3 p-4 md:hidden">
+                  {analysis.holdings.map((holding) => {
+                    const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
+                    const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
+                    const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
+                    return (
+                      <div
+                        key={`mobile-${holding.ticker}`}
+                        className="rounded-[1.3rem] border border-black/8 bg-white/80 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-extrabold text-slate-900">{holding.ticker}</div>
+                            <div className="truncate text-sm text-slate-500">{holding.name}</div>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                            holding.recommendation?.includes("BUY")
+                              ? "bg-emerald-500/10 text-emerald-700"
+                              : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
+                                ? "bg-red-500/10 text-red-700"
+                                : "bg-amber-500/10 text-amber-700"
+                          }`}>
+                            {holding.recommendation}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Shares</div>
+                            <div className="mt-1 font-bold text-slate-900">{holding.shares}</div>
+                          </div>
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Value</div>
+                            <div className="mt-1 font-bold text-slate-900">{formatPrice(holding.position_value || 0)}</div>
+                          </div>
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Kaufkurs</div>
+                            <div className="mt-1 font-bold text-slate-900">
+                              {hasEntry ? formatPrice(holding.buy_price) : "Kurs fehlt"}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Aktuell</div>
+                            <div className="mt-1 font-bold text-slate-900">{formatPrice(holding.current_price || 0)}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          <span className="rounded-full border border-black/8 bg-white px-3 py-1">
+                            Kaufdatum {formatPurchaseDate(holding.purchase_date)}
+                          </span>
+                          <span className="rounded-full border border-black/8 bg-white px-3 py-1">
+                            Seit Kauf {formatHoldingPeriod(holding.holding_days)}
+                          </span>
+                          <span className={`rounded-full px-3 py-1 ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
+                            Score {(holding.score || 0).toFixed(0)}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex items-end justify-between gap-3">
+                          <div>
+                            <div className={`text-base font-extrabold ${holdingReturn >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              {formatPrice(holdingReturn)}
+                            </div>
+                            <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              {formatPercent(holdingReturnPct)}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => onAnalyzeStock(holding.ticker)}
+                              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                            >
+                              Analyze
+                            </button>
+                            <button
+                              onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full">
                     <thead>
                       <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                         <th className="px-6 py-4">Stock</th>
                         <th className="px-4 py-4 text-right">Shares</th>
+                        <th className="px-4 py-4 text-right">Kaufdatum</th>
+                        <th className="px-4 py-4 text-right">Haltedauer</th>
                         <th className="px-4 py-4 text-right">Kaufkurs</th>
                         <th className="px-4 py-4 text-right">Price</th>
                         <th className="px-4 py-4 text-right">Value</th>
@@ -624,6 +739,12 @@ export default function PortfolioView({
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                             {holding.shares}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {formatPurchaseDate(holding.purchase_date)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            {formatHoldingPeriod(holding.holding_days)}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                             {hasEntry ? formatPrice(holding.buy_price) : "Aktueller Kurs"}

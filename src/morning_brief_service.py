@@ -1079,6 +1079,14 @@ class MorningBriefService:
             )
             confidence = int(intelligence.get("confidence_score") or 55)
             score = round((impact_value * relevance * recency * trust * confidence), 2)
+            decision_quality = str(intelligence.get("decision_quality") or "tactical only")
+            size_guidance = str(intelligence.get("size_guidance") or "small risk")
+            conviction_rank = {
+                "high conviction": 3,
+                "selective": 2,
+                "tactical only": 1,
+            }.get(decision_quality, 1)
+            confidence = min(99, confidence + (6 if conviction_rank == 3 else 2 if conviction_rank == 2 else 0))
             expected_move = item.get("impact") or "medium"
             expected_move_map = {
                 "high": "1.5-3.0%",
@@ -1093,6 +1101,8 @@ class MorningBriefService:
                     "invalidation": item.get("risk") or intelligence.get("invalidation") or "Invalid if first impulse fully reverses.",
                     "window": intelligence.get("execution_window") or "open+60m",
                     "confidence": confidence,
+                    "decision_quality": decision_quality,
+                    "size_guidance": size_guidance,
                     "expected_move": expected_move_map.get(str(expected_move), str(expected_move)),
                     "catalysts": [
                         value
@@ -1107,7 +1117,7 @@ class MorningBriefService:
                     "product_catalyst": item.get("product_catalyst"),
                     "setup_type": item.get("setup_source") or "single_name",
                     "direction": item.get("setup"),
-                    "_score": score,
+                    "_score": round(score + conviction_rank * 8 + (4 if setup_source == "single_name" else 0), 2),
                 }
             )
 
@@ -1146,6 +1156,8 @@ class MorningBriefService:
                         ),
                         "window": "today / next session",
                         "confidence": confidence,
+                        "decision_quality": "selective" if is_gainer else "tactical only",
+                        "size_guidance": "reduced risk" if is_gainer else "small risk",
                         "expected_move": f"{abs_move:.1f}% observed move",
                         "catalysts": ["market_mover", bucket, mover.get("sector") or "broad_universe"],
                         "setup_type": "market_mover",

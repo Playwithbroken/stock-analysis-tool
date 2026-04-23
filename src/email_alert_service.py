@@ -1374,7 +1374,7 @@ class EmailAlertService:
         trade_setups = brief.get("trade_setups") or []
         if trade_setups:
             seen_setups: set[str] = set()
-            lines4.append("🎯 <b>Aktien-Ideen / Setups</b>")
+            lines4.append("🎯 <b>Highest Conviction Setups</b>")
             for setup_item in trade_setups[:5]:
                 symbol = self._tg_esc(setup_item.get("symbol") or "")
                 confidence = setup_item.get("confidence")
@@ -1382,13 +1382,21 @@ class EmailAlertService:
                 trigger = self._tg_esc((setup_item.get("trigger") or "")[:120])
                 invalidation = self._tg_esc((setup_item.get("invalidation") or "")[:100])
                 move = self._tg_esc(setup_item.get("expected_move") or "")
+                quality = self._tg_esc(str(setup_item.get("decision_quality") or "").strip())
+                sizing = self._tg_esc(str(setup_item.get("size_guidance") or "").strip())
+                window = self._tg_esc(str(setup_item.get("window") or "").strip())
+                rank = setup_item.get("rank")
                 identity = self._brief_line_identity(f"{symbol} {thesis} {trigger}")
                 if not symbol or identity in seen_setups:
                     continue
                 seen_setups.add(identity)
+                rank_text = f"#{rank} " if isinstance(rank, int) else ""
                 confidence_text = f" · {confidence}% conf" if isinstance(confidence, int) else ""
                 move_text = f" · move {move}" if move else ""
-                lines4.append(f"• <code>{symbol}</code>{confidence_text}{move_text} — {thesis}")
+                lines4.append(f"• {rank_text}<code>{symbol}</code>{confidence_text}{move_text} — {thesis}")
+                meta_parts = [part for part in [quality, sizing, window] if part]
+                if meta_parts:
+                    lines4.append(f"   {' | '.join(meta_parts)}")
                 if trigger:
                     lines4.append(f"   Trigger: {trigger}")
                 if invalidation:

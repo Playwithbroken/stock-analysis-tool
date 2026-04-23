@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import React, { Fragment, useState, useEffect } from "react";
 import PortfolioPerformance from "./PortfolioPerformance";
 import PortfolioHeatmap from "./PortfolioHeatmap";
 import DividendDashboard from "./DividendDashboard";
 import RiskCorrelationMatrix from "./RiskCorrelationMatrix";
 import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
-import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Pencil } from "lucide-react";
+import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X } from "lucide-react";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
 
@@ -108,7 +108,7 @@ export default function PortfolioView({
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
     : undefined;
-  const editingHolding = currentPortfolio?.holdings.find((holding) => holding.ticker === editingHoldingTicker);
+  const isEditingHolding = (ticker?: string) => !!ticker && editingHoldingTicker === ticker;
 
   useEffect(() => {
     if (!selectedPortfolio && portfolios.length > 0) {
@@ -700,6 +700,7 @@ export default function PortfolioView({
                     const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
                     const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
                     const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
+                    const isEditing = isEditingHolding(holding.ticker);
                     return (
                       <div
                         key={`mobile-${holding.ticker}`}
@@ -777,9 +778,13 @@ export default function PortfolioView({
                                 buyPrice: holding.buy_price,
                                 purchaseDate: holding.purchase_date,
                               })}
-                              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                              className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] ${
+                                isEditing
+                                  ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
+                                  : "border-black/8 bg-white text-slate-700"
+                              }`}
                             >
-                              Edit
+                              {isEditing ? "Editing" : "Edit"}
                             </button>
                             <button
                               onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
@@ -789,6 +794,72 @@ export default function PortfolioView({
                             </button>
                           </div>
                         </div>
+
+                        {isEditing && (
+                          <div className="mt-4 rounded-[1.2rem] border border-[var(--accent)]/20 bg-[var(--accent-soft)]/40 p-4">
+                            <div className="grid gap-3">
+                              <label className="block">
+                                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                  Shares
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.0001"
+                                  value={editHoldingShares}
+                                  onChange={(e) => setEditHoldingShares(e.target.value)}
+                                  className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                />
+                              </label>
+                              <label className="block">
+                                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                  Kaufkurs (USD)
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.0001"
+                                  value={editHoldingBuyPrice}
+                                  onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
+                                  placeholder="Optional"
+                                  className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                />
+                              </label>
+                              <label className="block">
+                                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                  Kaufdatum
+                                </div>
+                                <input
+                                  type="date"
+                                  value={editHoldingPurchaseDate}
+                                  onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
+                                  className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                />
+                              </label>
+                            </div>
+                            <div className="mt-4 flex justify-end gap-2">
+                              <button
+                                onClick={closeEditHolding}
+                                className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  <X size={12} />
+                                  Cancel
+                                </span>
+                              </button>
+                              <button
+                                onClick={saveHoldingEdit}
+                                disabled={savingHoldingEdit || !editHoldingShares.trim()}
+                                className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  <Check size={12} />
+                                  {savingHoldingEdit ? "Saving" : "Save"}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -815,89 +886,163 @@ export default function PortfolioView({
                         const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
                         const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
                         const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
+                        const isEditing = isEditingHolding(holding.ticker);
                         return (
-                        <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02]">
-                          <td className="px-6 py-4">
-                            <div className="font-extrabold text-slate-900">{holding.ticker}</div>
-                            <div className="max-w-[220px] truncate text-sm text-slate-500">{holding.name}</div>
-                          </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {holding.shares}
-                          </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {formatPurchaseDate(holding.purchase_date)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {formatHoldingPeriod(holding.holding_days)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {hasEntry ? formatPrice(holding.buy_price) : "Aktueller Kurs"}
-                          </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {formatPrice(holding.current_price || 0)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-sm font-extrabold text-slate-900">
-                            {formatPrice(holding.position_value || 0)}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                              {formatPrice(holdingReturn)}
-                            </div>
-                            <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                              {formatPercent(holdingReturnPct)}
-                            </div>
-                            {!hasEntry && (
-                              <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
-                                Kaufkurs fehlt
+                        <Fragment key={`desktop-${holding.ticker}`}>
+                          <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02]">
+                            <td className="px-6 py-4">
+                              <div className="font-extrabold text-slate-900">{holding.ticker}</div>
+                              <div className="max-w-[220px] truncate text-sm text-slate-500">{holding.name}</div>
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                              {holding.shares}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                              {formatPurchaseDate(holding.purchase_date)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                              {formatHoldingPeriod(holding.holding_days)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                              {hasEntry ? formatPrice(holding.buy_price) : "Aktueller Kurs"}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                              {formatPrice(holding.current_price || 0)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-extrabold text-slate-900">
+                              {formatPrice(holding.position_value || 0)}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                                {formatPrice(holdingReturn)}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
-                              {(holding.score || 0).toFixed(0)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <span
-                              className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
-                                holding.recommendation?.includes("BUY")
-                                  ? "bg-emerald-500/10 text-emerald-700"
-                                  : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
-                                    ? "bg-red-500/10 text-red-700"
-                                    : "bg-amber-500/10 text-amber-700"
-                              }`}
-                            >
-                              {holding.recommendation}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => onAnalyzeStock(holding.ticker)}
-                                className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                              <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                                {formatPercent(holdingReturnPct)}
+                              </div>
+                              {!hasEntry && (
+                                <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                  Kaufkurs fehlt
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
+                                {(holding.score || 0).toFixed(0)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span
+                                className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                                  holding.recommendation?.includes("BUY")
+                                    ? "bg-emerald-500/10 text-emerald-700"
+                                    : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
+                                      ? "bg-red-500/10 text-red-700"
+                                      : "bg-amber-500/10 text-amber-700"
+                                }`}
                               >
-                                Analyze
-                              </button>
-                              <button
-                                onClick={() => openEditHolding({
-                                  ticker: holding.ticker,
-                                  shares: holding.shares,
-                                  buyPrice: holding.buy_price,
-                                  purchaseDate: holding.purchase_date,
-                                })}
-                                className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
-                                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                                {holding.recommendation}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => onAnalyzeStock(holding.ticker)}
+                                  className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                >
+                                  Analyze
+                                </button>
+                                <button
+                                  onClick={() => openEditHolding({
+                                    ticker: holding.ticker,
+                                    shares: holding.shares,
+                                    buyPrice: holding.buy_price,
+                                    purchaseDate: holding.purchase_date,
+                                  })}
+                                  className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] ${
+                                    isEditing
+                                      ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
+                                      : "border-black/8 bg-white text-slate-700"
+                                  }`}
+                                >
+                                  {isEditing ? "Editing" : "Edit"}
+                                </button>
+                                <button
+                                  onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
+                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {isEditing && (
+                            <tr className="border-b border-black/6 bg-[var(--accent-soft)]/30">
+                              <td colSpan={10} className="px-6 py-4">
+                                <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+                                  <label className="block">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                      Shares
+                                    </div>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      value={editHoldingShares}
+                                      onChange={(e) => setEditHoldingShares(e.target.value)}
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                      Kaufkurs (USD)
+                                    </div>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      value={editHoldingBuyPrice}
+                                      onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
+                                      placeholder="Optional"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                      Kaufdatum
+                                    </div>
+                                    <input
+                                      type="date"
+                                      value={editHoldingPurchaseDate}
+                                      onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                    />
+                                  </label>
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={closeEditHolding}
+                                      className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        <X size={12} />
+                                        Cancel
+                                      </span>
+                                    </button>
+                                    <button
+                                      onClick={saveHoldingEdit}
+                                      disabled={savingHoldingEdit || !editHoldingShares.trim()}
+                                      className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        <Check size={12} />
+                                        {savingHoldingEdit ? "Saving" : "Save"}
+                                      </span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )})}
                     </tbody>
                   </table>
@@ -997,82 +1142,6 @@ export default function PortfolioView({
         initialPrice={parseFloat(newHolding.buyPrice) || undefined}
       />
 
-      {editingHolding && currentPortfolio && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="surface-panel w-full max-w-md rounded-[2rem] p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] bg-[var(--accent-soft)] text-[var(--accent)]">
-                <Pencil size={18} />
-              </div>
-              <div>
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Holding Edit
-                </div>
-                <h3 className="mt-1 text-2xl text-slate-900">{editingHolding.ticker}</h3>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4">
-              <label className="block">
-                <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Shares
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  value={editHoldingShares}
-                  onChange={(e) => setEditHoldingShares(e.target.value)}
-                  className="w-full rounded-[1.1rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
-                />
-              </label>
-
-              <label className="block">
-                <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Kaufkurs (USD)
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  value={editHoldingBuyPrice}
-                  onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full rounded-[1.1rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
-                />
-              </label>
-
-              <label className="block">
-                <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Kaufdatum
-                </div>
-                <input
-                  type="date"
-                  value={editHoldingPurchaseDate}
-                  onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
-                  className="w-full rounded-[1.1rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
-                />
-              </label>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={closeEditHolding}
-                className="rounded-[1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveHoldingEdit}
-                disabled={savingHoldingEdit || !editHoldingShares.trim()}
-                className="rounded-[1rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
-              >
-                {savingHoldingEdit ? "Saving" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

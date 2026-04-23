@@ -170,7 +170,7 @@ export function usePortfolios(enabled: boolean = true) {
   }
 
   const updateHolding = async (portfolioId: string, ticker: string, patch: Partial<Holding>) => {
-    await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
+    const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -179,6 +179,16 @@ export function usePortfolios(enabled: boolean = true) {
         purchase_date: patch.purchaseDate,
       }),
     })
+    if (!response.ok) {
+      let message = `Failed to update holding (${response.status})`
+      try {
+        const payload = await response.json()
+        if (payload?.detail) message = payload.detail
+      } catch {
+        // ignore malformed error payload
+      }
+      throw new Error(message)
+    }
     await fetchPortfolios()
   }
 

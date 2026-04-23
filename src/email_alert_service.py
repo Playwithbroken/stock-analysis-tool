@@ -1247,6 +1247,15 @@ class EmailAlertService:
                 ticker = self._tg_esc(item.get("ticker") or "")
                 status = str(item.get("status") or "inline").lower()
                 icon = "BEAT" if status == "beat" else "MISS" if status == "miss" else "INLINE"
+                action_hint = str(item.get("action_hint") or "").strip().lower()
+                trade_label = {
+                    "constructive_if_follow_through": "Trade: nur Long bei Follow-through",
+                    "constructive_watch": "Trade: konstruktiv, Reaktion bestaetigen",
+                    "watch_pullback_or_follow_through": "Trade: kein Chase, nur Pullback oder Follow-through",
+                    "avoid_until_repair": "Trade: vermeiden bis Reparatur",
+                    "caution_until_repair": "Trade: vorsichtig, erst Stabilisierung",
+                    "needs_guidance_confirmation": "Trade: erst Guidance/Preis bestaetigen",
+                }.get(action_hint, "")
                 surprise = item.get("eps_surprise_pct")
                 surprise_str = f"{surprise:+.1f}%" if isinstance(surprise, (int, float)) else "n/a"
                 reported = item.get("reported_eps")
@@ -1268,7 +1277,7 @@ class EmailAlertService:
                     f"{icon} <code>{ticker}</code> {status.upper()} {surprise_str} "
                     f"- EPS {reported_str} / Est {estimate_str} {period}{freshness}"
                 )
-                details = " | ".join(part for part in [revenue_str, guidance_label] if part)
+                details = " | ".join(part for part in [revenue_str, guidance_label, trade_label] if part)
                 if details:
                     lines2.append(f"   {details}")
                 if summary:

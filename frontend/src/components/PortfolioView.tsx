@@ -86,6 +86,10 @@ export default function PortfolioView({
   const [editHoldingBuyPrice, setEditHoldingBuyPrice] = useState("");
   const [editHoldingPurchaseDate, setEditHoldingPurchaseDate] = useState("");
   const [savingHoldingEdit, setSavingHoldingEdit] = useState(false);
+  const [holdingEditNotice, setHoldingEditNotice] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [newPortfolioName, setNewPortfolioName] = useState("");
   const [newHolding, setNewHolding] = useState({
     ticker: "",
@@ -255,6 +259,7 @@ export default function PortfolioView({
   };
 
   const openEditHolding = (holding: Holding) => {
+    setHoldingEditNotice(null);
     setEditingHoldingTicker(holding.ticker);
     setEditHoldingShares(String(holding.shares ?? ""));
     setEditHoldingBuyPrice(
@@ -287,7 +292,16 @@ export default function PortfolioView({
         buyPrice: parsedBuyPrice,
         purchaseDate: editHoldingPurchaseDate || undefined,
       });
+      setHoldingEditNotice({
+        type: "success",
+        message: `${editingHoldingTicker} wurde aktualisiert.`,
+      });
       closeEditHolding();
+    } catch (error) {
+      setHoldingEditNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Holding konnte nicht aktualisiert werden.",
+      });
     } finally {
       setSavingHoldingEdit(false);
     }
@@ -478,6 +492,18 @@ export default function PortfolioView({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {holdingEditNotice && (
+              <div
+                className={`mt-6 rounded-[1.2rem] border px-4 py-3 text-sm font-semibold ${
+                  holdingEditNotice.type === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                {holdingEditNotice.message}
               </div>
             )}
 

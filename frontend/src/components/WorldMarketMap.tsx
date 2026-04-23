@@ -1128,7 +1128,7 @@ export default function WorldMarketMap({
   );
 
   return (
-    <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
+    <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-5 sm:p-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.06),transparent_26%)]" />
 
       <div className="relative space-y-6">
@@ -1137,7 +1137,7 @@ export default function WorldMarketMap({
             <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
               Market Map
             </div>
-            <h3 className="mt-2 text-4xl text-slate-900">Overnight world flow</h3>
+            <h3 className="mt-2 text-3xl text-slate-900 sm:text-4xl">Overnight world flow</h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
               Regionen, Makro-Ton, geopolitische Events und der Hand-off bis zur US-Eroeffnung
               in einer kompakten Macro-Ansicht.
@@ -1260,7 +1260,7 @@ export default function WorldMarketMap({
 
         <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
           <div className="relative h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
-            <div className="relative w-full min-h-[300px] max-h-[min(80vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[360px] xl:min-h-[430px]">
+            <div className="relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
               <img
@@ -1309,7 +1309,7 @@ export default function WorldMarketMap({
                     key={card.label}
                     type="button"
                     onClick={() => onSelectRegion(card.label)}
-                    className="absolute z-20 min-w-[160px] rounded-[0.95rem] border border-black/8 bg-white/95 px-3 py-2 text-left shadow-[0_16px_36px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-[1px]"
+                    className="absolute z-20 hidden min-w-[160px] rounded-[0.95rem] border border-black/8 bg-white/95 px-3 py-2 text-left shadow-[0_16px_36px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-[1px] md:block"
                     style={{ left: card.left, top: card.top }}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1333,7 +1333,7 @@ export default function WorldMarketMap({
               : null}
 
             {showLegend ? (
-            <div className="absolute bottom-4 left-4 z-30 flex max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+            <div className="absolute bottom-4 left-4 z-30 hidden max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] sm:flex">
               {[
                 { icon: "WAR", label: "Conflict", tone: "red" as const },
                 { icon: "CB", label: "Central Bank", tone: "blue" as const },
@@ -1356,7 +1356,7 @@ export default function WorldMarketMap({
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.28),rgba(15,23,42,0))] lg:block" />
 
             {activeGeoEvent ? (
-              <div className="absolute left-4 top-4 z-30 max-w-[18rem] rounded-[1.1rem] border border-black/8 bg-white/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)]">
+              <div className="absolute left-4 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/8 bg-white/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)] sm:block">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                     Focus
@@ -1434,7 +1434,7 @@ export default function WorldMarketMap({
                     <span className={`h-1.5 w-1.5 rounded-full ${markerAccentClass(item.markerTone)}`} />
                     <span>{item.markerIcon}</span>
                   </div>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                         {item.geoPlace && item.geoPlace !== item.regionKey
@@ -1488,7 +1488,7 @@ export default function WorldMarketMap({
                 href={activePulseEvent.link}
                 target="_blank"
                 rel="noreferrer"
-                className="absolute right-4 bottom-4 z-30 max-w-[15rem] rounded-[1rem] border border-black/8 bg-white/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)]"
+                className="absolute right-4 bottom-4 z-30 hidden max-w-[15rem] rounded-[1rem] border border-black/8 bg-white/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)] sm:block"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
@@ -1526,6 +1526,62 @@ export default function WorldMarketMap({
                 ) : null}
               </a>
             ) : null}
+            </div>
+
+            <div className="mt-4 space-y-3 sm:hidden">
+              {activeGeoEvent ? (
+                <div className="rounded-[1.05rem] border border-black/8 bg-white/90 px-4 py-3 shadow-[0_12px_24px_rgba(15,23,42,0.08)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Focus
+                    </div>
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activeGeoEvent.markerTone)}`}>
+                      <span className={`h-2 w-2 rounded-full ${markerAccentClass(activeGeoEvent.markerTone)}`} />
+                      {activeGeoEvent.markerIcon}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm font-bold leading-5 text-slate-900">
+                    {activeGeoEvent.title}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      {activeGeoEvent.region || "Global"}
+                    </span>
+                    {activeGeoEvent.event_intelligence?.action ? (
+                      <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[var(--accent)]">
+                        {activeGeoEvent.event_intelligence.action}
+                      </span>
+                    ) : null}
+                    {activeGeoEvent.event_intelligence?.impact_score ? (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                        impact {activeGeoEvent.event_intelligence.impact_score}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {showLiveAlert && activePulseEvent && hoveredEventIndex == null ? (
+                <a
+                  href={activePulseEvent.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-[1.05rem] border border-black/8 bg-white/90 p-4 shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
+                      <span className={`h-2 w-2 rounded-full ${markerAccentClass(activePulseEvent.markerTone)}`} />
+                      Live alert
+                    </span>
+                    <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      {activePulseEvent.region || "Global"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm font-semibold leading-5 text-slate-800">
+                    {activePulseEvent.title}
+                  </div>
+                </a>
+              ) : null}
             </div>
           </div>
 

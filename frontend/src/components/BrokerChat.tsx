@@ -63,6 +63,17 @@ export default function BrokerChat({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isInline || !isOpen || typeof window === "undefined") return;
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+    if (isDesktop) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isInline, isOpen]);
+
   const submitMessage = async (rawMessage: string) => {
     const userMsg = rawMessage.trim();
     if (!userMsg || loading) return;
@@ -163,7 +174,7 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : `surface-panel fixed inset-x-3 top-auto z-50 flex w-auto flex-col overflow-hidden rounded-[2rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] h-[min(82dvh,52rem)]" : "bottom-[calc(5.5rem+env(safe-area-inset-bottom))] h-[min(56dvh,34rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
+          : `surface-panel fixed inset-x-2 top-auto z-50 flex w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.5rem+env(safe-area-inset-bottom))] h-[min(86dvh,56rem)]" : "bottom-[calc(5.9rem+env(safe-area-inset-bottom))] h-[min(50dvh,31rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
       }`}
     >
       {!isInline && (
@@ -180,7 +191,7 @@ export default function BrokerChat({
         </div>
       )}
       <div
-        className={`flex items-center justify-between border-b border-black/8 bg-[linear-gradient(90deg,rgba(15,118,110,0.08),transparent)] p-6 ${isInline ? "px-0 pt-0" : ""}`}
+        className={`flex items-center justify-between border-b border-black/8 bg-[linear-gradient(90deg,rgba(15,118,110,0.08),transparent)] p-4 sm:p-6 ${isInline ? "px-0 pt-0" : ""}`}
       >
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-[var(--accent)]/15 bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -210,7 +221,7 @@ export default function BrokerChat({
       </div>
 
       <div
-        className={`flex-1 overflow-y-auto ${isInline ? "px-0 py-4" : "p-6"} space-y-6 scrollbar-hide`}
+        className={`flex-1 overflow-y-auto ${isInline ? "px-0 py-4" : "p-4 sm:p-6"} space-y-6 scrollbar-hide`}
       >
         {!isInline && mobileSheetMode === "peek" ? (
           <div className="space-y-4 md:hidden">
@@ -332,7 +343,7 @@ export default function BrokerChat({
       </div>
 
       <div
-        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6"}`}
+        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6"}`}
       >
         {currentTicker && !isInline && (
           <div className="mb-4 flex items-center gap-2">
@@ -383,7 +394,7 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[calc(5.7rem+env(safe-area-inset-bottom))] right-3 z-40${isOpen ? " hidden" : ""} flex h-[3.25rem] items-center gap-3 rounded-[1.2rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-3 text-white shadow-[0_20px_44px_rgba(15,118,110,0.24)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
+        className={`group fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-3 z-40${isOpen ? " hidden" : ""} flex h-[3.2rem] max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-[1.2rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-3 text-white shadow-[0_20px_44px_rgba(15,118,110,0.24)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
@@ -420,7 +431,20 @@ export default function BrokerChat({
         </div>
       </button>
 
-      {isOpen && chatContent}
+      {isOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close broker desk backdrop"
+            onClick={() => {
+              setIsOpen(false);
+              onClose?.();
+            }}
+            className="fixed inset-0 z-40 bg-black/12 backdrop-blur-[1px] md:hidden"
+          />
+          {chatContent}
+        </>
+      ) : null}
     </>
   );
 }

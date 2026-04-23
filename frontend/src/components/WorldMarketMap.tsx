@@ -541,6 +541,22 @@ function buildHedgeIdeas(event: GeoEvent | null) {
   return Array.from(ideas.values()).slice(0, 4);
 }
 
+function tradeImpactActionClass(action?: string) {
+  if (action === "long") return "bg-emerald-500/10 text-emerald-700";
+  if (action === "short" || action === "watch-short") return "bg-red-500/10 text-red-700";
+  if (action === "hedge") return "bg-amber-500/10 text-amber-700";
+  if (action === "rebound_or_avoid") return "bg-orange-500/10 text-orange-700";
+  return "bg-slate-500/10 text-slate-600";
+}
+
+function tradeImpactActionLabel(action?: string) {
+  if (action === "long") return "Long bias";
+  if (action === "short" || action === "watch-short") return "Short / risk bias";
+  if (action === "hedge") return "Protect first";
+  if (action === "rebound_or_avoid") return "Avoid weak rebounds";
+  return "Wait for confirmation";
+}
+
 function exposureToneClass(value?: string) {
   if (value === "high") return "bg-red-500/10 text-red-700";
   if (value === "medium") return "bg-amber-500/10 text-amber-700";
@@ -785,6 +801,7 @@ export default function WorldMarketMap({
   const [selectedGeoPlace, setSelectedGeoPlace] = useState<string | null>(null);
   const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
   const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
+  const [impactDrawerOpen, setImpactDrawerOpen] = useState(false);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
   const displayRegion = activeRegion;
@@ -1036,10 +1053,43 @@ export default function WorldMarketMap({
     [activeGeoEvent],
   );
 
+  const tradeImpactAssets = useMemo(
+    () => compactList(activeGeoEvent?.event_intelligence?.affected_assets, 4),
+    [activeGeoEvent],
+  );
+
+  const tradeImpactCards = useMemo(() => {
+    if (!activeGeoEvent?.event_intelligence) return [];
+    const intelligence = activeGeoEvent.event_intelligence;
+    return [
+      {
+        label: "Action",
+        value: tradeImpactActionLabel(intelligence.action),
+        tone: tradeImpactActionClass(intelligence.action),
+      },
+      {
+        label: "Window",
+        value: intelligence.execution_window || "open+60m",
+        tone: "bg-sky-500/10 text-sky-700",
+      },
+      {
+        label: "Risk",
+        value: intelligence.invalidation || "Headline reversal invalidates the move.",
+        tone: "bg-slate-500/10 text-slate-600",
+      },
+    ];
+  }, [activeGeoEvent]);
+
   const activeVariantLabel = useMemo(
     () => describeEventVariant(activeGeoEvent),
     [activeGeoEvent],
   );
+
+  useEffect(() => {
+    if (!activeGeoEvent) {
+      setImpactDrawerOpen(false);
+    }
+  }, [activeGeoEvent]);
 
   const whyItMatters = useMemo(() => {
     const lines: string[] = [];
@@ -1420,7 +1470,10 @@ export default function WorldMarketMap({
                 onMouseLeave={() => setHoveredEventIndex(null)}
                 onFocus={() => setHoveredEventIndex(index)}
                 onBlur={() => setHoveredEventIndex(null)}
-                onClick={() => setPinnedEventIndex(index)}
+                onClick={() => {
+                  setPinnedEventIndex(index);
+                  setImpactDrawerOpen(true);
+                }}
               >
                 <div className="relative">
                   {item.pulse && (
@@ -1524,6 +1577,16 @@ export default function WorldMarketMap({
                     ))}
                   </div>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setImpactDrawerOpen(true);
+                  }}
+                  className="mt-3 rounded-full border border-black/8 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
+                >
+                  Trade impact
+                </button>
               </a>
             ) : null}
             </div>
@@ -1558,6 +1621,13 @@ export default function WorldMarketMap({
                       </span>
                     ) : null}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setImpactDrawerOpen(true)}
+                    className="mt-3 rounded-full border border-black/8 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
+                  >
+                    Trade impact
+                  </button>
                 </div>
               ) : null}
 
@@ -1779,6 +1849,7 @@ export default function WorldMarketMap({
                           onClick={() => {
                             const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
                             if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                            setImpactDrawerOpen(true);
                           }}
                           className="rounded-[0.95rem] border border-black/8 bg-white px-3 py-2 text-left transition-colors hover:bg-[var(--accent-soft)]"
                         >
@@ -1872,16 +1943,44 @@ export default function WorldMarketMap({
             {activeGeoEvent ? (
               <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Event Decision
+                  <div>
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                      Trade Impact
+                    </div>
+                    <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                      Decision panel
+                    </div>
                   </div>
-                  <div className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(activeGeoEvent.markerTone)}`}>
-                    {activeGeoEvent.markerIcon}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setImpactDrawerOpen(true)}
+                      className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)] lg:hidden"
+                    >
+                      Open
+                    </button>
+                    <div className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${markerClass(activeGeoEvent.markerTone)}`}>
+                      {activeGeoEvent.markerIcon}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-3 line-clamp-3 text-sm font-bold leading-6 text-slate-900">
                   {activeGeoEvent.title}
                 </div>
+                {tradeImpactCards.length ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {tradeImpactCards.map((card) => (
+                      <div key={card.label} className="rounded-[0.95rem] border border-black/8 bg-white/80 px-3 py-2">
+                        <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          {card.label}
+                        </div>
+                        <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
+                          {card.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
                   {activeVariantLabel ? (
                     <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
@@ -2143,6 +2242,7 @@ export default function WorldMarketMap({
                       onClick={() => {
                         const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
                         if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
+                        setImpactDrawerOpen(true);
                       }}
                       className={`block rounded-[1rem] border p-3 transition-colors hover:bg-white ${
                         activeGeoEvent?.title === item.title
@@ -2407,6 +2507,126 @@ export default function WorldMarketMap({
           </div>
         </div>
       </div>
+
+      {impactDrawerOpen && activeGeoEvent ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close trade impact drawer"
+            onClick={() => setImpactDrawerOpen(false)}
+            className="fixed inset-0 z-[70] bg-black/18 backdrop-blur-[1px] lg:hidden"
+          />
+          <div className="fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-[71] max-h-[min(78dvh,42rem)] overflow-y-auto rounded-[1.6rem] border border-black/8 bg-[rgba(250,248,244,0.98)] p-4 shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl lg:hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Trade Impact
+                </div>
+                <div className="mt-1 text-base font-black text-slate-900">
+                  {activeVariantLabel || activeGeoEvent.markerLabel}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImpactDrawerOpen(false)}
+                className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-3 text-sm font-bold leading-6 text-slate-900">
+              {activeGeoEvent.title}
+            </div>
+
+            {tradeImpactCards.length ? (
+              <div className="mt-4 grid gap-2">
+                {tradeImpactCards.map((card) => (
+                  <div key={card.label} className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      {card.label}
+                    </div>
+                    <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
+                      {card.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeGeoEvent.event_intelligence?.why_now ? (
+              <div className="mt-4 rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  Baseline scenario
+                </div>
+                <div className="mt-2">{activeGeoEvent.event_intelligence.why_now}</div>
+              </div>
+            ) : null}
+
+            <div className="mt-4 space-y-2">
+              {activeGeoEvent.event_intelligence?.trigger ? (
+                <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Trigger</span>
+                  <div className="mt-2">{activeGeoEvent.event_intelligence.trigger}</div>
+                </div>
+              ) : null}
+              {activeGeoEvent.event_intelligence?.invalidation ? (
+                <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Invalidation</span>
+                  <div className="mt-2">{activeGeoEvent.event_intelligence.invalidation}</div>
+                </div>
+              ) : null}
+              {activeGeoEvent.event_intelligence?.execution_bias ? (
+                <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Execution</span>
+                  <div className="mt-2">
+                    {activeGeoEvent.event_intelligence.execution_bias}
+                    {activeGeoEvent.event_intelligence.size_guidance ? ` | ${activeGeoEvent.event_intelligence.size_guidance}` : ""}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {tradeImpactAssets.length ? (
+              <div className="mt-4">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  Affected assets
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {tradeImpactAssets.map((asset) => (
+                    <button
+                      key={asset}
+                      onClick={() => onAnalyze(asset)}
+                      className="rounded-full border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+                    >
+                      {asset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {hedgeIdeas.length ? (
+              <div className="mt-4">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  Hedge ideas
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {hedgeIdeas.map((idea) => (
+                    <button
+                      key={idea.ticker}
+                      onClick={() => onAnalyze(idea.ticker)}
+                      className="rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      {idea.ticker} - {idea.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

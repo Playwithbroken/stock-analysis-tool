@@ -385,8 +385,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
       </div>
 
       {/* Tab Navigation */}
-      <div className="no-scrollbar sticky top-20 z-40 -mx-1 overflow-x-auto px-1">
-        <div className="surface-panel mx-auto flex w-max min-w-full items-center gap-2 rounded-2xl p-1.5 lg:mx-0 lg:min-w-0">
+      <div className="no-scrollbar sticky top-16 z-40 -mx-1 overflow-x-auto px-1 md:top-20">
+        <div className="surface-panel inline-flex min-w-max items-center gap-2 rounded-2xl p-1.5">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
@@ -407,8 +407,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
       </div>
 
       {activeTab === "etf" && (
-        <div className="surface-panel flex items-center justify-between rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-4">
+        <div className="surface-panel flex flex-col gap-4 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4 sm:items-center">
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isComparing ? "bg-[var(--accent)] text-white" : "bg-[var(--bg-soft)] text-slate-500"}`}
             >
@@ -423,11 +423,11 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             {selectedEtfs.length > 0 && (
               <button
                 onClick={() => setSelectedEtfs([])}
-                className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                className="text-left text-xs font-bold text-slate-500 transition-colors hover:text-slate-900 sm:text-right"
               >
                 Auswahl leeren
               </button>
@@ -435,7 +435,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             <button
               onClick={() => setIsComparing(!isComparing)}
               disabled={selectedEtfs.length < 2 && !isComparing}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              className={`w-full rounded-xl px-6 py-2.5 text-sm font-bold transition-all sm:w-auto ${
                 isComparing
                   ? "bg-[var(--accent)] text-white"
                   : selectedEtfs.length >= 2
@@ -450,7 +450,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
       )}
 
       {activeTab === "etf" && !isComparing && (
-        <div className="relative max-w-2xl mx-auto lg:mx-0">
+        <div className="relative w-full max-w-2xl lg:mx-0">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <span className="text-slate-500">🔍</span>
           </div>
@@ -1266,7 +1266,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full">
+                <table className="min-w-[860px] text-sm">
                   <thead>
                     <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                       <th className="px-5 py-3">Ticker</th>

@@ -1257,10 +1257,20 @@ class EmailAlertService:
                 days_since = item.get("days_since")
                 freshness = f" · vor {days_since}d" if isinstance(days_since, int) else ""
                 summary = self._tg_esc(item.get("summary") or item.get("action_hint") or "")
+                revenue_yoy = item.get("revenue_yoy")
+                revenue_str = (
+                    f"{float(revenue_yoy):+.1f}% YoY"
+                    if isinstance(revenue_yoy, (int, float))
+                    else ""
+                )
+                guidance_label = self._tg_esc(str(item.get("guidance_label") or "").strip())
                 lines2.append(
                     f"{icon} <code>{ticker}</code> {status.upper()} {surprise_str} "
                     f"- EPS {reported_str} / Est {estimate_str} {period}{freshness}"
                 )
+                details = " | ".join(part for part in [revenue_str, guidance_label] if part)
+                if details:
+                    lines2.append(f"   {details}")
                 if summary:
                     lines2.append(f"   {summary}")
 

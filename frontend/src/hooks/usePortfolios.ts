@@ -169,6 +169,19 @@ export function usePortfolios(enabled: boolean = true) {
     await fetchPortfolios()
   }
 
+  const updateHolding = async (portfolioId: string, ticker: string, patch: Partial<Holding>) => {
+    await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shares: patch.shares,
+        buy_price: patch.buyPrice,
+        purchase_date: patch.purchaseDate,
+      }),
+    })
+    await fetchPortfolios()
+  }
+
   return {
     portfolios,
     loading,
@@ -177,6 +190,7 @@ export function usePortfolios(enabled: boolean = true) {
     createPortfolio,
     deletePortfolio,
     addHolding,
+    updateHolding,
     removeHolding,
     restoreFromCache,
     discardRestore,

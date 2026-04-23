@@ -396,6 +396,7 @@ function AppContent() {
     createPortfolio,
     deletePortfolio,
     addHolding,
+    updateHolding,
     removeHolding,
     needsRestore,
     cachedPortfolios,
@@ -1420,6 +1421,7 @@ function AppContent() {
                 onCreatePortfolio={createPortfolio}
                 onDeletePortfolio={deletePortfolio}
                 onAddHolding={addHolding}
+                onUpdateHolding={updateHolding}
                 onRemoveHolding={removeHolding}
                 onAnalyzeStock={(ticker) => {
                   setActiveTab("analyze");

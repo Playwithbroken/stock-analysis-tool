@@ -264,6 +264,47 @@ class PortfolioManager:
         conn.commit()
         conn.close()
 
+    def update_holding(
+        self,
+        portfolio_id: str,
+        ticker: str,
+        shares: Optional[float] = None,
+        buy_price: Optional[float] = None,
+        purchase_date: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, ticker, shares, buy_price, purchase_date FROM holdings WHERE portfolio_id = ? AND ticker = ?',
+            (portfolio_id, ticker.upper()),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            conn.close()
+            return None
+
+        updated_shares = float(shares) if shares is not None else float(existing['shares'] or 0)
+        updated_buy_price = buy_price if buy_price is not None else existing['buy_price']
+        updated_purchase_date = (
+            self._normalize_purchase_date(purchase_date)
+            if purchase_date is not None
+            else existing['purchase_date']
+        )
+
+        cursor.execute(
+            'UPDATE holdings SET shares = ?, buy_price = ?, purchase_date = ? WHERE id = ?',
+            (updated_shares, updated_buy_price, updated_purchase_date, existing['id']),
+        )
+        conn.commit()
+        cursor.execute(
+            'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE id = ?',
+            (existing['id'],),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
     def get_signal_watch_items(self) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row

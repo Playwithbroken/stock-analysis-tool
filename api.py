@@ -503,6 +503,12 @@ class AddHoldingRequest(BaseModel):
     buy_price: Optional[float] = None
     purchase_date: Optional[str] = None
 
+
+class UpdateHoldingRequest(BaseModel):
+    shares: Optional[float] = None
+    buy_price: Optional[float] = None
+    purchase_date: Optional[str] = None
+
 class OracleRequest(BaseModel):
     message: str
     context_ticker: Optional[str] = None
@@ -1369,6 +1375,19 @@ async def delete_portfolio(p_id: str):
 async def add_holding(p_id: str, req: AddHoldingRequest):
     get_portfolio_manager().add_holding(p_id, req.ticker, req.shares, req.buy_price, req.purchase_date)
     return {"status": "added"}
+
+@app.patch("/api/portfolios/{p_id}/holdings/{ticker}")
+async def update_holding(p_id: str, ticker: str, req: UpdateHoldingRequest):
+    updated = get_portfolio_manager().update_holding(
+        p_id,
+        ticker,
+        shares=req.shares,
+        buy_price=req.buy_price,
+        purchase_date=req.purchase_date,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    return updated
 
 @app.delete("/api/portfolios/{p_id}/holdings/{ticker}")
 async def remove_holding(p_id: str, ticker: str):

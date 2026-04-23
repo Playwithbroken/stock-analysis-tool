@@ -51,13 +51,6 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         return;
       }
     }
-    // Also check full suggestion labels
-    for (const { value } of flatSuggestions) {
-      if (value.toLowerCase().startsWith(lower) && value.toLowerCase() !== lower) {
-        setGhostText(value.slice(trimmed.length));
-        return;
-      }
-    }
     setGhostText("");
   }, [query, flatSuggestions]);
 
@@ -153,6 +146,8 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         );
         const bestTicker = data?.Ticker?.[0] || extractTicker(data?.Matches?.[0] || "");
         if (bestTicker) {
+          setQuery(bestTicker);
+          setGhostText("");
           onSearch(bestTicker);
           return;
         }
@@ -167,6 +162,8 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         );
         const bestTicker = direct?.[0]?.ticker;
         if (bestTicker) {
+          setQuery(bestTicker);
+          setGhostText("");
           onSearch(bestTicker);
           return;
         }
@@ -213,12 +210,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[1320px]">
-      <div className="surface-panel relative overflow-hidden rounded-[2rem] p-3">
+      <div className="surface-panel relative overflow-hidden rounded-[1.6rem] p-3 sm:rounded-[2rem]">
         <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-black/10 to-transparent" />
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="flex flex-1 items-center gap-4 rounded-[1.5rem] bg-white/70 px-5 py-4 ring-1 ring-black/5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+          <div className="flex flex-1 items-center gap-3 rounded-[1.3rem] bg-white/70 px-4 py-3 ring-1 ring-black/5 sm:gap-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] sm:h-11 sm:w-11 sm:rounded-2xl">
               <Search size={18} />
             </div>
             <div className="min-w-0 flex-1">
@@ -230,10 +227,10 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                 {ghostText && (
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 flex items-center text-lg font-semibold"
+                    className="pointer-events-none absolute inset-0 flex items-center overflow-hidden text-base font-semibold sm:text-lg"
                   >
-                    <span className="invisible">{query}</span>
-                    <span className="text-slate-300 dark:text-slate-600">{ghostText}</span>
+                    <span className="invisible whitespace-nowrap">{query}</span>
+                    <span className="truncate whitespace-nowrap text-slate-300 dark:text-slate-600">{ghostText}</span>
                   </span>
                 )}
                 <input
@@ -248,7 +245,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   onKeyDown={handleKeyDown}
                   placeholder={ghostText ? "" : "AAPL, NVDA, ASML, BTC-USD"}
                   aria-label="Search for a stock, ETF, or crypto ticker"
-                  className="relative w-full border-0 bg-transparent p-0 text-lg font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0"
+                  className="relative w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0 sm:text-lg"
                   style={{ caretColor: "currentColor" }}
                   disabled={loading}
                   autoComplete="off"
@@ -267,7 +264,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="flex h-[60px] min-w-[160px] items-center justify-center gap-2 rounded-[1.4rem] bg-[var(--accent)] px-6 text-sm font-extrabold uppercase tracking-[0.18em] text-white transition-all hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-14 min-w-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--accent)] px-5 text-sm font-extrabold uppercase tracking-[0.16em] text-white transition-all hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50 md:h-[60px] md:min-w-[160px] md:rounded-[1.4rem] md:px-6 md:tracking-[0.18em]"
           >
             {loading ? (
               <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">

@@ -863,8 +863,8 @@ function AppContent() {
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
-        <div className="layout-shell px-4 pt-4 pb-3 sm:px-6 xl:px-8 2xl:px-10">
-          <div className="app-shell app-shell-header rounded-[2.1rem] px-4 py-3 sm:px-5">
+        <div className="layout-shell px-3 pt-3 pb-3 sm:px-6 xl:px-8 2xl:px-10">
+          <div className="app-shell app-shell-header rounded-[1.7rem] px-3 py-3 sm:rounded-[2.1rem] sm:px-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#101114] text-white">
@@ -898,7 +898,7 @@ function AppContent() {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 md:flex-nowrap">
                 {/* Desktop: full USD / EUR toggle */}
                 <div className="hidden rounded-[1.1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] sm:flex">
                   <button
@@ -973,24 +973,24 @@ function AppContent() {
                   </button>
                 )}
                 {/* Username — visible on all screen sizes */}
-                <div className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
+                <div className="max-w-[7.5rem] truncate rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)] sm:max-w-none sm:text-xs">
                   {auth.profile?.display_name || "Private"}
                 </div>
                 <button
                   onClick={() => setIsChatOpen(true)}
-                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
+                  className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
                 >
                   AI Desk
                 </button>
                 <button
                   onClick={() => setIsHealthOpen(true)}
-                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
+                  className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
                 >
                   Health
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)]"
+                  className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
                 >
                   Lock
                 </button>
@@ -1009,12 +1009,12 @@ function AppContent() {
               </div>
 
               {tapeMovers.length ? (
-                <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-3 py-2">
-                  <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-2 sm:px-3">
+                  <div className="mb-2 flex flex-col items-start gap-2 px-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                       Market movers
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
                       <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
                         {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
                           <button
@@ -1084,7 +1084,7 @@ function AppContent() {
       </header>
 
       <main
-        className={`content-shell px-4 py-6 transition-all duration-300 sm:px-6 xl:px-8 2xl:px-10 ${
+        className={`content-shell px-4 pb-[11rem] pt-6 transition-all duration-300 sm:px-6 sm:pb-8 xl:px-8 2xl:px-10 ${
           isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
         }`}
       >
@@ -1431,13 +1431,13 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[1.8rem] border border-black/8 bg-[rgba(255,255,255,0.9)] p-2 shadow-[0_20px_60px_rgba(17,24,39,0.14)] backdrop-blur-xl md:hidden">
-        <div className="grid grid-cols-3 gap-1">
+      <nav className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.6rem] border border-black/8 bg-[rgba(255,255,255,0.94)] p-2 shadow-[0_20px_60px_rgba(17,24,39,0.14)] backdrop-blur-xl md:hidden">
+        <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => selectTab(item.id)}
-              className={`rounded-[1.1rem] px-3 py-3 text-center text-[11px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+              className={`min-w-0 rounded-[1rem] px-2 py-3 text-center text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all ${
                 activeTab === item.id ? "bg-[#101114] text-white" : "text-slate-500 hover:bg-black/[0.04]"
               }`}
             >

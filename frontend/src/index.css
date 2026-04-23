@@ -498,6 +498,29 @@ h3,
   white-space: nowrap;
 }
 
+@media (max-width: 640px) {
+  .ticker-marquee-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ticker-marquee-wrap::before,
+  .ticker-marquee-wrap::after {
+    display: none;
+  }
+
+  .ticker-marquee-track {
+    animation: none;
+    width: max-content;
+    min-width: max-content;
+    padding-right: 0.4rem;
+  }
+
+  .ticker-marquee-chip {
+    padding: 0.4rem 0.7rem;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

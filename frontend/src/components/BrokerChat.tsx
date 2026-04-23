@@ -383,25 +383,22 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 right-4 z-40${isOpen ? " hidden" : ""} flex h-[4.4rem] items-center justify-between rounded-[1.6rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-4 text-white shadow-[0_24px_54px_rgba(15,118,110,0.26)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0 sm:bottom-[calc(7rem+env(safe-area-inset-bottom))] sm:left-6 sm:right-6 md:sm:right-8 md:sm:left-auto`}
+        className={`group fixed bottom-[calc(5.7rem+env(safe-area-inset-bottom))] right-3 z-40${isOpen ? " hidden" : ""} flex h-[3.25rem] items-center gap-3 rounded-[1.2rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-3 text-white shadow-[0_20px_44px_rgba(15,118,110,0.24)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
         <div className="absolute -top-2 right-3 rounded-full border border-white/15 bg-[#0b1216]/70 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.16)] md:hidden">
           Live
         </div>
-        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-white/16 bg-white/14">
-          <Bot size={22} />
+        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/16 bg-white/14 md:h-11 md:w-11 md:rounded-[1rem]">
+          <Bot size={20} />
         </div>
-        <div className="relative min-w-0 flex-1 px-3 text-left md:hidden">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+        <div className="relative min-w-0 pr-1 text-left md:hidden">
+          <div className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-white/70">
             Broker Freund
           </div>
           <div className="truncate text-sm font-bold text-white">
             {isOpen ? "Desk Live" : "Open Desk"}
-          </div>
-          <div className="truncate text-[11px] leading-4 text-white/72">
-            {isOpen ? "Slide up for full context" : "Signals, news, macro and crowd"}
           </div>
         </div>
         <div className="relative hidden rounded-full border border-white/14 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/80">

@@ -1371,6 +1371,23 @@ class EmailAlertService:
 
         # ── MSG 4: Action Board + Portfolio Brain + Contrarian ──────────────
         lines4: List[str] = []
+        setup_board = brief.get("setup_board") or {}
+        setup_now = setup_board.get("now") or []
+        setup_next = setup_board.get("next") or []
+        setup_avoid = setup_board.get("avoid") or []
+        if setup_now or setup_next or setup_avoid:
+            lines4.append("🚦 <b>Top Now / Next / Avoid</b>")
+            for label, rows in (("NOW", setup_now[:3]), ("NEXT", setup_next[:3]), ("AVOID", setup_avoid[:3])):
+                if not rows:
+                    continue
+                rendered = []
+                for row in rows:
+                    symbol = self._tg_esc(row.get("symbol") or "")
+                    thesis = self._tg_esc((row.get("thesis") or "")[:80])
+                    rendered.append(f"<code>{symbol}</code> {thesis}")
+                if rendered:
+                    lines4.append(f"• <b>{label}</b> — {' | '.join(rendered)}")
+            lines4.append("")
         trade_setups = brief.get("trade_setups") or []
         if trade_setups:
             seen_setups: set[str] = set()

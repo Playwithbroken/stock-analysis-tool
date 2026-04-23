@@ -260,6 +260,7 @@ class MorningBriefService:
             "action_board": [],
             "trade_setups": [],
             "trade_setups_status": "insufficient_signal",
+            "setup_board": {"now": [], "next": [], "avoid": []},
             "portfolio_brain": [],
             "watchlist_impact": [],
             "reddit_posts": [],
@@ -377,6 +378,7 @@ class MorningBriefService:
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
         trade_setups = self._build_trade_setups(action_board, top_news, market_movers)
+        setup_board = self._build_setup_board(trade_setups)
         prediction_signals = self._build_prediction_signals(polymarket_events)
 
         brief = {
@@ -415,6 +417,7 @@ class MorningBriefService:
             "action_board": action_board,
             "trade_setups": trade_setups,
             "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
+            "setup_board": setup_board,
             "portfolio_brain": self._build_portfolio_brain(action_board),
             "watchlist_impact": [],
             # Social intelligence
@@ -469,6 +472,7 @@ class MorningBriefService:
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
         trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []})
+        setup_board = self._build_setup_board(trade_setups)
 
         brief = {
             "generated_at": now.isoformat(),
@@ -506,6 +510,7 @@ class MorningBriefService:
             "action_board": action_board,
             "trade_setups": trade_setups,
             "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
+            "setup_board": setup_board,
             "portfolio_brain": self._build_portfolio_brain(action_board),
             "watchlist_impact": [],
             "reddit_posts": [],
@@ -1180,6 +1185,37 @@ class MorningBriefService:
             row["setup_id"] = f"{row.get('symbol','UNK')}-{index}"
             row.pop("_score", None)
         return scored[:5]
+
+    def _build_setup_board(self, trade_setups: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        buckets: Dict[str, List[Dict[str, Any]]] = {"now": [], "next": [], "avoid": []}
+        for setup in trade_setups or []:
+            direction = str(setup.get("direction") or "").lower()
+            quality = str(setup.get("decision_quality") or "").lower()
+            confidence = int(setup.get("confidence") or 0)
+            if direction in {"short", "watch-short", "hedge", "rebound_or_avoid"}:
+                target_bucket = "avoid"
+            elif quality == "high conviction" and confidence >= 80:
+                target_bucket = "now"
+            else:
+                target_bucket = "next"
+
+            if len(buckets[target_bucket]) >= 3:
+                continue
+            buckets[target_bucket].append(
+                {
+                    "symbol": setup.get("symbol"),
+                    "thesis": setup.get("thesis"),
+                    "trigger": setup.get("trigger"),
+                    "invalidation": setup.get("invalidation"),
+                    "confidence": setup.get("confidence"),
+                    "decision_quality": setup.get("decision_quality"),
+                    "size_guidance": setup.get("size_guidance"),
+                    "expected_move": setup.get("expected_move"),
+                    "rank": setup.get("rank"),
+                    "window": setup.get("window"),
+                }
+            )
+        return buckets
 
     def _is_direct_single_name_signal(self, item: Dict[str, Any], ticker: str | None) -> bool:
         if not ticker:

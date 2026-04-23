@@ -52,6 +52,12 @@ function decisionTone(value?: string) {
   return "bg-slate-500/10 text-slate-600";
 }
 
+function setupBucketTone(bucket: "now" | "next" | "avoid") {
+  if (bucket === "now") return "border-emerald-500/16 bg-emerald-500/5 text-emerald-700";
+  if (bucket === "avoid") return "border-red-500/16 bg-red-500/5 text-red-700";
+  return "border-amber-500/16 bg-amber-500/5 text-amber-700";
+}
+
 function sectorHeatProfile(sector: string, action?: string) {
   const sectorKey = sector.toLowerCase();
   const longish = action === "long";
@@ -194,6 +200,7 @@ export default function MorningBriefPanel({
   const topGainers = Array.isArray(marketMovers.gainers) ? marketMovers.gainers.slice(0, 4) : [];
   const topLosers = Array.isArray(marketMovers.losers) ? marketMovers.losers.slice(0, 4) : [];
   const productCatalysts = Array.isArray(brief.product_catalysts) ? brief.product_catalysts.slice(0, 4) : [];
+  const setupBoard = brief.setup_board || { now: [], next: [], avoid: [] };
 
   return (
     <div className="space-y-6">
@@ -461,7 +468,76 @@ export default function MorningBriefPanel({
         ))}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Top Now / Next / Avoid
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              compressed brief
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {(["now", "next", "avoid"] as const).map((bucket) => {
+              const rows = setupBoard[bucket] || [];
+              const title = bucket === "now" ? "Now" : bucket === "next" ? "Next" : "Avoid";
+              const tone = setupBucketTone(bucket);
+              return (
+                <div key={bucket} className={`rounded-[1.2rem] border p-4 ${tone}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.18em]">
+                      {title}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-70">
+                      {rows.length} setups
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {rows.length ? rows.slice(0, 3).map((item: any, idx: number) => (
+                      <div key={`${bucket}-${item.symbol}-${idx}`} className="rounded-[1rem] border border-black/8 bg-white/80 p-3 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => item.symbol && onAnalyze(item.symbol)}
+                            className="font-black text-slate-900"
+                          >
+                            {item.symbol}
+                          </button>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] ${decisionTone(item.decision_quality)}`}>
+                            {item.decision_quality || "setup"}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs leading-6 text-slate-600">{item.thesis}</div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                          {item.confidence != null ? (
+                            <span className="rounded-full border border-black/8 bg-white px-2 py-0.5">
+                              {item.confidence}% conf
+                            </span>
+                          ) : null}
+                          {item.size_guidance ? (
+                            <span className="rounded-full border border-black/8 bg-white px-2 py-0.5">
+                              {item.size_guidance}
+                            </span>
+                          ) : null}
+                          {item.expected_move ? (
+                            <span className="rounded-full border border-black/8 bg-white px-2 py-0.5">
+                              move {item.expected_move}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="rounded-[1rem] border border-black/8 bg-white/80 p-3 text-sm text-slate-500">
+                        Keine klaren {title.toLowerCase()}-Setups.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">

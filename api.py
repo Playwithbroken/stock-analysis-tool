@@ -335,16 +335,36 @@ async def require_single_user_auth(request: Request, call_next):
     return await call_next(request)
 
 async def _signal_alert_loop():
-    interval_minutes = int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15"))
+    interval_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
     await asyncio.sleep(5)
     while True:
         try:
+            get_portfolio_manager().set_app_setting(
+                "brief_scheduler_loop_seen_at",
+                datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+            )
             if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
                 await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
             await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs)
         except Exception as e:
             print(f"Signal alert loop error: {e}")
+            try:
+                get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", str(e))
+            except Exception:
+                pass
+        interval_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
         await asyncio.sleep(max(1, interval_minutes) * 60)
+
+
+def _safe_int_env(name: str, default: int, minimum: int | None = None) -> int:
+    raw_value = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw_value)
+    except Exception:
+        value = default
+    if minimum is not None:
+        value = max(minimum, value)
+    return value
 
 
 async def _brief_warmup_loop():
@@ -945,9 +965,6 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
     Runs the blocking yfinance call in a thread executor with a 20-second timeout
     so it never hangs the event loop indefinitely.
     """
-    import asyncio
-    from concurrent.futures import ThreadPoolExecutor
-
     normalized_ticker = ticker.upper().strip()
     attempts: List[tuple[str, str]] = [
         (period, interval),
@@ -957,24 +974,18 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
     seen_attempts = set()
     last_error: Optional[Exception] = None
 
-    loop = asyncio.get_event_loop()
-
     for try_period, try_interval in attempts:
         key = (try_period, try_interval)
         if key in seen_attempts:
             continue
         seen_attempts.add(key)
 
-        def _fetch():
+        def _fetch(fetch_period: str = try_period, fetch_interval: str = try_interval):
             fetcher = DataFetcher(normalized_ticker)
-            return fetcher.get_history(period=try_period, interval=try_interval)
+            return fetcher.get_history(period=fetch_period, interval=fetch_interval)
 
         try:
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                history = await asyncio.wait_for(
-                    loop.run_in_executor(pool, _fetch),
-                    timeout=12.0,
-                )
+            history = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=12.0)
             if history:
                 return convert_numpy_types(history)
         except asyncio.TimeoutError as e:
@@ -986,7 +997,10 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
 
     # Snapshot fallback: return one synthetic datapoint instead of hard failure.
     try:
-        snapshot = get_realtime_market_service().build_snapshot([normalized_ticker])
+        snapshot = await asyncio.wait_for(
+            asyncio.to_thread(get_realtime_market_service().build_snapshot, [normalized_ticker]),
+            timeout=4.0,
+        )
         quotes = snapshot.get("quotes", [])
         quote = next(
             (item for item in quotes if str(item.get("symbol", "")).upper() == normalized_ticker),
@@ -994,12 +1008,19 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
         )
         price = float(quote.get("price")) if quote and quote.get("price") is not None else None
         if price is not None:
-            fallback_history = [{
-                "time": "fallback",
-                "full_date": datetime.now().isoformat(),
-                "price": price,
-                "volume": float(quote.get("volume") or 0),
-            }]
+            now = datetime.now()
+            fallback_history = []
+            for offset in range(4, -1, -1):
+                ts = now - timedelta(minutes=offset * 15)
+                fallback_history.append(
+                    {
+                        "time": ts.strftime("%H:%M"),
+                        "full_date": ts.isoformat(),
+                        "price": price,
+                        "volume": float(quote.get("volume") or 0),
+                        "source": "snapshot_fallback",
+                    }
+                )
             return convert_numpy_types(fallback_history)
     except Exception:
         pass
@@ -1994,15 +2015,18 @@ async def warm_brief_now():
 
 
 @app.post("/api/admin/run-scheduled-briefs")
-async def run_scheduled_briefs_now():
+async def run_scheduled_briefs_now(include_missed: bool = False):
     """Run the scheduled brief dispatcher immediately.
 
-    It only sends jobs that are due in the configured grace window and have
-    not already been marked as delivered today.
+    By default it only sends jobs that are due in the configured grace window.
+    With include_missed=true it also catches up already missed jobs from today.
     """
     try:
         return convert_numpy_types(
-            await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs)
+            await asyncio.to_thread(
+                get_email_alert_service().send_scheduled_open_briefs,
+                include_missed,
+            )
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2271,6 +2295,8 @@ async def admin_health_center():
 
     telegram = _telegram_health_check()
     scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
+    scheduler_loop_seen_at = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
+    scheduler_loop_error = get_portfolio_manager().get_app_setting("brief_scheduler_loop_error")
     raw_scheduler_result = get_portfolio_manager().get_app_setting("brief_scheduler_last_result", "[]")
     try:
         scheduler_last_result = json.loads(raw_scheduler_result or "[]")
@@ -2283,6 +2309,8 @@ async def admin_health_center():
         problems.append("yfinance")
     if not notification_status.get("schedule", {}).get("enabled"):
         problems.append("schedule_disabled")
+    if notification_status.get("schedule", {}).get("enabled") and not scheduler_loop_seen_at:
+        problems.append("scheduler_not_seen")
     if any(job.get("missed_today") for job in schedule_jobs):
         problems.append("brief_missed_today")
     overall = "ok" if not problems else "degraded"
@@ -2297,6 +2325,8 @@ async def admin_health_center():
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
                 "last_checked_at": scheduler_last_checked_at,
+                "loop_seen_at": scheduler_loop_seen_at,
+                "loop_error": scheduler_loop_error,
                 "last_result": scheduler_last_result,
                 "delivery_grace_minutes": grace_minutes,
                 "jobs": schedule_jobs,

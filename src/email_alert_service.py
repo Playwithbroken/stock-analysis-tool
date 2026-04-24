@@ -312,14 +312,22 @@ class EmailAlertService:
     def send_session_list_alert(self, region: str, phase: str) -> Dict[str, Any]:
         return asyncio.run(self.send_session_list_alert_async(region, phase))
 
-    def send_scheduled_open_briefs(self) -> List[Dict[str, Any]]:
+    def send_scheduled_open_briefs(self, include_missed: bool = False) -> List[Dict[str, Any]]:
         config = self.get_config()
         if not config.scheduled_briefs_enabled:
+            self.portfolio_manager.set_app_setting(
+                "brief_scheduler_last_result",
+                json.dumps([{"status": "disabled", "message": "Scheduled briefs are disabled."}]),
+            )
             return []
 
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
         self.portfolio_manager.set_app_setting("brief_scheduler_last_checked_at", now.isoformat())
         if not self._schedule_day_matches(now):
+            self.portfolio_manager.set_app_setting(
+                "brief_scheduler_last_result",
+                json.dumps([{"status": "skipped", "message": "Today is outside BRIEF_SCHEDULE_WEEKDAYS."}]),
+            )
             return []
 
         sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
@@ -396,7 +404,7 @@ class EmailAlertService:
             },
         ]
         results: List[Dict[str, Any]] = []
-        max_jobs_per_run = max(1, int(os.getenv("BRIEF_MAX_JOBS_PER_RUN", "3")))
+        max_jobs_per_run = self._safe_int_env("BRIEF_MAX_JOBS_PER_RUN", 3, minimum=1)
         sent_this_run = 0
         due_jobs: List[Dict[str, Any]] = []
 
@@ -404,10 +412,13 @@ class EmailAlertService:
             event_key = f"{job['job_key']}:{now.date().isoformat()}"
             if event_key in sent_keys:
                 continue
-            if not self._time_window_matches(now, str(job["scheduled_time"])):
-                continue
             scheduled_at = self._scheduled_datetime(now, str(job["scheduled_time"]))
             if scheduled_at is None:
+                continue
+            if include_missed:
+                if now < scheduled_at:
+                    continue
+            elif not self._time_window_matches(now, str(job["scheduled_time"])):
                 continue
             due_jobs.append(
                 {
@@ -495,6 +506,14 @@ class EmailAlertService:
             )
             sent_this_run += 1
 
+        if not results:
+            results.append(
+                {
+                    "status": "idle",
+                    "message": "No scheduled brief is due inside the current grace window.",
+                    "checked_at": now.isoformat(),
+                }
+            )
         self.portfolio_manager.set_app_setting("brief_scheduler_last_result", json.dumps(results[-5:]))
         return results
 
@@ -537,8 +556,18 @@ class EmailAlertService:
         return 0 <= delta_minutes < grace_minutes
 
     def _brief_delivery_grace_minutes(self) -> int:
-        loop_minutes = max(2, int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15")))
-        return max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "720")))
+        loop_minutes = self._safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=2)
+        return max(loop_minutes, self._safe_int_env("BRIEF_DELIVERY_GRACE_MINUTES", 720, minimum=loop_minutes))
+
+    def _safe_int_env(self, name: str, default: int, minimum: int | None = None) -> int:
+        raw_value = os.getenv(name, str(default)).strip()
+        try:
+            value = int(raw_value)
+        except Exception:
+            value = default
+        if minimum is not None:
+            value = max(minimum, value)
+        return value
 
     def _scheduled_datetime(self, now: datetime, scheduled_hhmm: str) -> datetime | None:
         try:

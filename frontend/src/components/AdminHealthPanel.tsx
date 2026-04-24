@@ -65,7 +65,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     setError("");
     setRunResult(null);
     try {
-      const res = await fetch("/api/admin/run-scheduled-briefs", { method: "POST" });
+      const res = await fetch("/api/admin/run-scheduled-briefs?include_missed=true", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Scheduled brief run failed");
       setRunResult(data);
@@ -121,7 +121,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
-              {runningDue ? "Running" : "Run Due Briefs"}
+              {runningDue ? "Running" : "Run Due/Missed"}
             </button>
             <button
               type="button"
@@ -210,8 +210,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     Timezone {health?.timezone || "Europe/Berlin"} - {health?.schedule?.weekdays}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    Last check {fmtDate(health?.schedule?.last_checked_at)} Â- grace {health?.schedule?.delivery_grace_minutes ?? "n/a"}m
+                    Last check {fmtDate(health?.schedule?.last_checked_at)} - loop {fmtDate(health?.schedule?.loop_seen_at)} - grace {health?.schedule?.delivery_grace_minutes ?? "n/a"}m
                   </div>
+                  {health?.schedule?.loop_error ? (
+                    <div className="mt-1 text-xs font-semibold text-red-700">
+                      Scheduler error: {health.schedule.loop_error}
+                    </div>
+                  ) : null}
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${health?.schedule?.enabled ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
                   {health?.schedule?.enabled ? "enabled" : "disabled"}
@@ -235,7 +240,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                       </span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">Plan {job.time} - next {fmtDate(job.next_due_at)}</div>
-                    <div className="mt-1 text-xs text-slate-500">Due today {fmtDate(job.scheduled_at_today)} Â- grace until {fmtDate(job.grace_until)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Due today {fmtDate(job.scheduled_at_today)} - grace until {fmtDate(job.grace_until)}</div>
                     {job.minutes_late != null ? (
                       <div className="mt-1 text-xs text-slate-500">{job.minutes_late} minutes late</div>
                     ) : null}

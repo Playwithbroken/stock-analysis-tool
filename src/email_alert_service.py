@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import asyncio
 from html import escape
+import json
 import os
 import re
 import smtplib
@@ -21,6 +22,15 @@ from src.session_list_service import SessionListService
 from src.signal_score_service import SignalScoreService
 from src.storage import PortfolioManager
 from src.morning_brief_service import MorningBriefService
+
+
+DEFAULT_MORNING_BRIEF_TIME = "08:30"
+DEFAULT_EUROPE_OPEN_BRIEF_TIME = "08:40"
+DEFAULT_MIDDAY_BRIEF_TIME = "12:30"
+DEFAULT_US_OPEN_BRIEF_TIME = "15:10"
+DEFAULT_EUROPE_CLOSE_BRIEF_TIME = "17:30"
+DEFAULT_CLOSE_RECAP_TIME = "21:45"
+DEFAULT_US_CLOSE_BRIEF_TIME = "22:15"
 
 
 @dataclass
@@ -112,12 +122,12 @@ class EmailAlertService:
                 "enabled": config.scheduled_briefs_enabled,
                 "timezone": os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
-                "morning": os.getenv("MORNING_BRIEF_TIME", "07:15"),
-                "europe_open": os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40"),
-                "midday": os.getenv("MIDDAY_BRIEF_TIME", "12:30"),
-                "us_open": os.getenv("US_OPEN_BRIEF_TIME", "15:10"),
-                "close_recap": os.getenv("CLOSE_RECAP_TIME", "21:45"),
-                "delivery_grace_minutes": int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "360")),
+                "morning": os.getenv("MORNING_BRIEF_TIME", DEFAULT_MORNING_BRIEF_TIME),
+                "europe_open": os.getenv("EUROPE_OPEN_BRIEF_TIME", DEFAULT_EUROPE_OPEN_BRIEF_TIME),
+                "midday": os.getenv("MIDDAY_BRIEF_TIME", DEFAULT_MIDDAY_BRIEF_TIME),
+                "us_open": os.getenv("US_OPEN_BRIEF_TIME", DEFAULT_US_OPEN_BRIEF_TIME),
+                "close_recap": os.getenv("CLOSE_RECAP_TIME", DEFAULT_CLOSE_RECAP_TIME),
+                "delivery_grace_minutes": self._brief_delivery_grace_minutes(),
             },
         }
 
@@ -308,6 +318,7 @@ class EmailAlertService:
             return []
 
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
+        self.portfolio_manager.set_app_setting("brief_scheduler_last_checked_at", now.isoformat())
         if not self._schedule_day_matches(now):
             return []
 
@@ -315,7 +326,7 @@ class EmailAlertService:
         jobs = [
             {
                 "job_key": "morning-brief",
-                "scheduled_time": os.getenv("MORNING_BRIEF_TIME", "07:15"),
+                "scheduled_time": os.getenv("MORNING_BRIEF_TIME", DEFAULT_MORNING_BRIEF_TIME),
                 "subject": "Morning Brief: Global macro, news and setup",
                 "title": "Morning Brief",
                 "category": "scheduled_brief",
@@ -325,7 +336,7 @@ class EmailAlertService:
             },
             {
                 "job_key": "open-brief:europe",
-                "scheduled_time": os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40"),
+                "scheduled_time": os.getenv("EUROPE_OPEN_BRIEF_TIME", DEFAULT_EUROPE_OPEN_BRIEF_TIME),
                 "subject": "Europe Open Brief: Market opening setup",
                 "title": "Europe Open Brief",
                 "category": "open_brief",
@@ -335,7 +346,7 @@ class EmailAlertService:
             },
             {
                 "job_key": "midday-brief",
-                "scheduled_time": os.getenv("MIDDAY_BRIEF_TIME", "12:30"),
+                "scheduled_time": os.getenv("MIDDAY_BRIEF_TIME", DEFAULT_MIDDAY_BRIEF_TIME),
                 "subject": "Midday Update: What changed since the open",
                 "title": "Midday Update",
                 "category": "scheduled_brief",
@@ -345,7 +356,7 @@ class EmailAlertService:
             },
             {
                 "job_key": "open-brief:usa",
-                "scheduled_time": os.getenv("US_OPEN_BRIEF_TIME", "15:10"),
+                "scheduled_time": os.getenv("US_OPEN_BRIEF_TIME", DEFAULT_US_OPEN_BRIEF_TIME),
                 "subject": "US Open Brief: Market opening setup",
                 "title": "US Open Brief",
                 "category": "open_brief",
@@ -355,7 +366,7 @@ class EmailAlertService:
             },
             {
                 "job_key": "close-brief:europe",
-                "scheduled_time": os.getenv("EUROPE_CLOSE_BRIEF_TIME", "17:30"),
+                "scheduled_time": os.getenv("EUROPE_CLOSE_BRIEF_TIME", DEFAULT_EUROPE_CLOSE_BRIEF_TIME),
                 "subject": "Europe Close Brief: Session wrap + US watch",
                 "title": "Europe Close Brief",
                 "category": "close_brief",
@@ -365,7 +376,7 @@ class EmailAlertService:
             },
             {
                 "job_key": "close-brief:usa",
-                "scheduled_time": os.getenv("US_CLOSE_BRIEF_TIME", "22:15"),
+                "scheduled_time": os.getenv("US_CLOSE_BRIEF_TIME", DEFAULT_US_CLOSE_BRIEF_TIME),
                 "subject": "US Close Brief: Session wrap + overnight watch",
                 "title": "US Close Brief",
                 "category": "close_brief",
@@ -375,7 +386,7 @@ class EmailAlertService:
             },
             {
                 "job_key": "close-recap",
-                "scheduled_time": os.getenv("CLOSE_RECAP_TIME", "21:45"),
+                "scheduled_time": os.getenv("CLOSE_RECAP_TIME", DEFAULT_CLOSE_RECAP_TIME),
                 "subject": "End of Day Recap: Stocks, macro and next risks",
                 "title": "End of Day Recap",
                 "category": "scheduled_brief",
@@ -484,6 +495,7 @@ class EmailAlertService:
             )
             sent_this_run += 1
 
+        self.portfolio_manager.set_app_setting("brief_scheduler_last_result", json.dumps(results[-5:]))
         return results
 
     def _schedule_day_matches(self, now: datetime) -> bool:
@@ -520,10 +532,13 @@ class EmailAlertService:
         scheduled = self._scheduled_datetime(now, scheduled_hhmm)
         if scheduled is None:
             return False
-        loop_minutes = max(2, int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15")))
-        grace_minutes = max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "360")))
+        grace_minutes = self._brief_delivery_grace_minutes()
         delta_minutes = (now - scheduled).total_seconds() / 60
         return 0 <= delta_minutes < grace_minutes
+
+    def _brief_delivery_grace_minutes(self) -> int:
+        loop_minutes = max(2, int(os.getenv("SIGNAL_ALERTS_INTERVAL_MINUTES", "15")))
+        return max(loop_minutes, int(os.getenv("BRIEF_DELIVERY_GRACE_MINUTES", "720")))
 
     def _scheduled_datetime(self, now: datetime, scheduled_hhmm: str) -> datetime | None:
         try:

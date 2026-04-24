@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import difflib
+import json
 import uvicorn
 import numpy as np
 import asyncio
@@ -23,7 +24,16 @@ from zoneinfo import ZoneInfo
 from src.data_fetcher import DataFetcher
 from src.analyzer import StockAnalyzer, Rating, Valuation
 from src.discovery_service import DiscoveryService
-from src.email_alert_service import EmailAlertService
+from src.email_alert_service import (
+    DEFAULT_CLOSE_RECAP_TIME,
+    DEFAULT_EUROPE_CLOSE_BRIEF_TIME,
+    DEFAULT_EUROPE_OPEN_BRIEF_TIME,
+    DEFAULT_MIDDAY_BRIEF_TIME,
+    DEFAULT_MORNING_BRIEF_TIME,
+    DEFAULT_US_CLOSE_BRIEF_TIME,
+    DEFAULT_US_OPEN_BRIEF_TIME,
+    EmailAlertService,
+)
 from src.morning_brief_service import MorningBriefService
 from src.paper_trading_service import PaperTradingService
 from src.signal_score_service import SignalScoreService
@@ -1983,6 +1993,23 @@ async def warm_brief_now():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/admin/run-scheduled-briefs")
+async def run_scheduled_briefs_now():
+    """Run the scheduled brief dispatcher immediately.
+
+    It only sends jobs that are due in the configured grace window and have
+    not already been marked as delivered today.
+    """
+    try:
+        return convert_numpy_types(
+            await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/admin/telegram-diagnostics")
 async def telegram_diagnostics():
     """Diagnose Telegram bot/chat configuration without exposing the token."""
@@ -2088,13 +2115,13 @@ async def telegram_diagnostics():
 
 def _brief_schedule_jobs_for_health() -> List[Dict[str, str]]:
     return [
-        {"job_key": "morning-brief", "label": "Morning Brief", "session": "global", "time": os.getenv("MORNING_BRIEF_TIME", "07:15")},
-        {"job_key": "open-brief:europe", "label": "Europe Open", "session": "europe", "time": os.getenv("EUROPE_OPEN_BRIEF_TIME", "08:40")},
-        {"job_key": "midday-brief", "label": "Midday Update", "session": "midday", "time": os.getenv("MIDDAY_BRIEF_TIME", "12:30")},
-        {"job_key": "open-brief:usa", "label": "US Open", "session": "usa", "time": os.getenv("US_OPEN_BRIEF_TIME", "15:10")},
-        {"job_key": "close-brief:europe", "label": "Europe Close", "session": "europe_close", "time": os.getenv("EUROPE_CLOSE_BRIEF_TIME", "17:30")},
-        {"job_key": "close-recap", "label": "Daily Recap", "session": "close", "time": os.getenv("CLOSE_RECAP_TIME", "21:45")},
-        {"job_key": "close-brief:usa", "label": "US Close", "session": "usa_close", "time": os.getenv("US_CLOSE_BRIEF_TIME", "22:15")},
+        {"job_key": "morning-brief", "label": "Morning Brief", "session": "global", "time": os.getenv("MORNING_BRIEF_TIME", DEFAULT_MORNING_BRIEF_TIME)},
+        {"job_key": "open-brief:europe", "label": "Europe Open", "session": "europe", "time": os.getenv("EUROPE_OPEN_BRIEF_TIME", DEFAULT_EUROPE_OPEN_BRIEF_TIME)},
+        {"job_key": "midday-brief", "label": "Midday Update", "session": "midday", "time": os.getenv("MIDDAY_BRIEF_TIME", DEFAULT_MIDDAY_BRIEF_TIME)},
+        {"job_key": "open-brief:usa", "label": "US Open", "session": "usa", "time": os.getenv("US_OPEN_BRIEF_TIME", DEFAULT_US_OPEN_BRIEF_TIME)},
+        {"job_key": "close-brief:europe", "label": "Europe Close", "session": "europe_close", "time": os.getenv("EUROPE_CLOSE_BRIEF_TIME", DEFAULT_EUROPE_CLOSE_BRIEF_TIME)},
+        {"job_key": "close-recap", "label": "Daily Recap", "session": "close", "time": os.getenv("CLOSE_RECAP_TIME", DEFAULT_CLOSE_RECAP_TIME)},
+        {"job_key": "close-brief:usa", "label": "US Close", "session": "usa_close", "time": os.getenv("US_CLOSE_BRIEF_TIME", DEFAULT_US_CLOSE_BRIEF_TIME)},
     ]
 
 
@@ -2111,6 +2138,14 @@ def _next_schedule_time(now: datetime, raw_time: str, weekdays: set[int]) -> dat
         if candidate > now:
             return candidate
     return None
+
+
+def _schedule_time_for_day(now: datetime, raw_time: str) -> datetime | None:
+    try:
+        hour, minute = [int(part) for part in str(raw_time).split(":", 1)]
+    except Exception:
+        return None
+    return datetime.combine(now.date(), datetime.min.time(), tzinfo=now.tzinfo).replace(hour=hour, minute=minute)
 
 
 def _telegram_health_check() -> Dict[str, Any]:
@@ -2154,6 +2189,8 @@ async def admin_health_center():
         tz_name = "Europe/Berlin"
     now_local = datetime.now(tz)
     notification_status = get_email_alert_service().get_notification_status()
+    schedule_status = notification_status.get("schedule", {})
+    grace_minutes = int(schedule_status.get("delivery_grace_minutes") or 720)
     sent_events = get_portfolio_manager().get_sent_signal_events(limit=80)
     sent_keys = {event.get("event_key") for event in sent_events}
     weekdays_raw = os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri").lower().split(",")
@@ -2166,14 +2203,42 @@ async def admin_health_center():
     for job in _brief_schedule_jobs_for_health():
         event_key = f"{job['job_key']}:{now_local.date().isoformat()}"
         last_event = next((event for event in sent_events if str(event.get("event_key", "")).startswith(job["job_key"])), None)
+        scheduled_today = _schedule_time_for_day(now_local, job["time"])
         next_due = _next_schedule_time(now_local, job["time"], weekdays)
+        minutes_late = (
+            max(0, int((now_local - scheduled_today).total_seconds() // 60))
+            if scheduled_today and now_local >= scheduled_today
+            else None
+        )
+        grace_until = scheduled_today + timedelta(minutes=grace_minutes) if scheduled_today else None
+        sent_today = event_key in sent_keys
+        due_now = (
+            bool(scheduled_today)
+            and now_local.weekday() in weekdays
+            and not sent_today
+            and now_local >= scheduled_today
+            and bool(grace_until)
+            and now_local < grace_until
+        )
+        missed_today = (
+            bool(scheduled_today)
+            and now_local.weekday() in weekdays
+            and not sent_today
+            and bool(grace_until)
+            and now_local >= grace_until
+        )
         schedule_jobs.append(
             {
                 **job,
-                "sent_today": event_key in sent_keys,
+                "sent_today": sent_today,
+                "due_now": due_now,
+                "missed_today": missed_today,
+                "scheduled_at_today": scheduled_today.isoformat() if scheduled_today else None,
                 "event_key_today": event_key,
                 "last_sent_at": last_event.get("sent_at") if last_event else None,
                 "next_due_at": next_due.isoformat() if next_due else None,
+                "minutes_late": minutes_late,
+                "grace_until": grace_until.isoformat() if grace_until else None,
             }
         )
 
@@ -2205,6 +2270,12 @@ async def admin_health_center():
         data_feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
 
     telegram = _telegram_health_check()
+    scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
+    raw_scheduler_result = get_portfolio_manager().get_app_setting("brief_scheduler_last_result", "[]")
+    try:
+        scheduler_last_result = json.loads(raw_scheduler_result or "[]")
+    except Exception:
+        scheduler_last_result = []
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -2212,6 +2283,8 @@ async def admin_health_center():
         problems.append("yfinance")
     if not notification_status.get("schedule", {}).get("enabled"):
         problems.append("schedule_disabled")
+    if any(job.get("missed_today") for job in schedule_jobs):
+        problems.append("brief_missed_today")
     overall = "ok" if not problems else "degraded"
     return convert_numpy_types(
         {
@@ -2223,6 +2296,9 @@ async def admin_health_center():
             "schedule": {
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
+                "last_checked_at": scheduler_last_checked_at,
+                "last_result": scheduler_last_result,
+                "delivery_grace_minutes": grace_minutes,
                 "jobs": schedule_jobs,
             },
             "data_feeds": data_feeds,

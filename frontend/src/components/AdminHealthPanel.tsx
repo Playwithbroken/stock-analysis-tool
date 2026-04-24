@@ -23,7 +23,9 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [warming, setWarming] = useState(false);
+  const [runningDue, setRunningDue] = useState(false);
   const [warmupResult, setWarmupResult] = useState<any>(null);
+  const [runResult, setRunResult] = useState<any>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -55,6 +57,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
       setError(err instanceof Error ? err.message : "Brief warmup failed");
     } finally {
       setWarming(false);
+    }
+  };
+
+  const runDueBriefs = async () => {
+    setRunningDue(true);
+    setError("");
+    setRunResult(null);
+    try {
+      const res = await fetch("/api/admin/run-scheduled-briefs", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Scheduled brief run failed");
+      setRunResult(data);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scheduled brief run failed");
+    } finally {
+      setRunningDue(false);
     }
   };
 
@@ -91,15 +110,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <button
               type="button"
               onClick={load}
-              disabled={loading || warming}
+              disabled={loading || warming || runningDue}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
               {loading ? "Refreshing" : "Refresh"}
             </button>
             <button
               type="button"
+              onClick={runDueBriefs}
+              disabled={loading || warming || runningDue}
+              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+            >
+              {runningDue ? "Running" : "Run Due Briefs"}
+            </button>
+            <button
+              type="button"
               onClick={warmBrief}
-              disabled={loading || warming}
+              disabled={loading || warming || runningDue}
               className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
               {warming ? "Warming" : "Warm Brief Now"}
@@ -126,6 +153,15 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <span className="font-extrabold">Brief cache warmed.</span>{" "}
               {warmupResult.headline || "Snapshot ready"} - {warmupResult.elapsed_ms ?? "n/a"}ms,
               {warmupResult.snapshot_items ?? 0} signal items, generated {fmtDate(warmupResult.generated_at)}.
+            </div>
+          ) : null}
+
+          {runResult ? (
+            <div className="mb-4 rounded-[1.2rem] border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-sky-800">
+              <span className="font-extrabold">Scheduled dispatcher ran.</span>{" "}
+              {Array.isArray(runResult) && runResult.length
+                ? runResult.map((item: any) => `${item.job}: ${item.status}`).join(", ")
+                : "No due brief inside the current grace window."}
             </div>
           ) : null}
 
@@ -171,7 +207,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <div>
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Scheduled Briefs</div>
                   <div className="mt-1 text-sm text-slate-500">
-                    Timezone {health?.timezone || "Europe/Berlin"} · {health?.schedule?.weekdays}
+                    Timezone {health?.timezone || "Europe/Berlin"} - {health?.schedule?.weekdays}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Last check {fmtDate(health?.schedule?.last_checked_at)} Â- grace {health?.schedule?.delivery_grace_minutes ?? "n/a"}m
                   </div>
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${health?.schedule?.enabled ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
@@ -183,11 +222,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   <div key={job.job_key} className="rounded-[1.1rem] border border-black/8 bg-white p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-extrabold text-slate-900">{job.label}</div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${job.sent_today ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
-                        {job.sent_today ? "sent today" : "pending"}
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                        job.sent_today
+                          ? "bg-emerald-500/10 text-emerald-700"
+                          : job.due_now
+                            ? "bg-amber-500/10 text-amber-700"
+                            : job.missed_today
+                              ? "bg-red-500/10 text-red-700"
+                              : "bg-slate-500/10 text-slate-500"
+                      }`}>
+                        {job.sent_today ? "sent today" : job.due_now ? "due now" : job.missed_today ? "missed" : "pending"}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} · next {fmtDate(job.next_due_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} - next {fmtDate(job.next_due_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Due today {fmtDate(job.scheduled_at_today)} Â- grace until {fmtDate(job.grace_until)}</div>
+                    {job.minutes_late != null ? (
+                      <div className="mt-1 text-xs text-slate-500">{job.minutes_late} minutes late</div>
+                    ) : null}
                     <div className="mt-1 text-xs text-slate-500">Last {fmtDate(job.last_sent_at)}</div>
                   </div>
                 ))}
@@ -202,7 +253,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 {deliveries.length ? deliveries.map((item: any) => (
                   <div key={item.event_key} className="rounded-[1rem] border border-black/8 bg-white p-3">
                     <div className="text-sm font-bold text-slate-900">{item.title}</div>
-                    <div className="mt-1 text-xs text-slate-500">{item.category} · {fmtDate(item.sent_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">{item.category} - {fmtDate(item.sent_at)}</div>
                   </div>
                 )) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white p-3 text-sm text-slate-500">

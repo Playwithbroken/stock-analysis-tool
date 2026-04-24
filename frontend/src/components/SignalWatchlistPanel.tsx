@@ -56,8 +56,16 @@ interface PoliticianSignal {
   playbook?: {
     setup?: string;
     leverage?: string;
+    signal_grade?: string;
+    freshness?: string;
+    confidence?: number;
+    estimated_exposure_label?: string;
+    top_tickers?: string[];
     thesis?: string;
     trigger?: string;
+    next_action?: string;
+    invalidation?: string;
+    compliance_note?: string;
     copy_text?: string;
   } | null;
 }
@@ -560,12 +568,49 @@ export default function SignalWatchlistPanel({
                       <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                         leverage {signal.playbook.leverage}
                       </span>
+                      {signal.playbook.signal_grade ? (
+                        <span className="rounded-full border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">
+                          {signal.playbook.signal_grade.replace(/_/g, " ")}
+                        </span>
+                      ) : null}
+                      {signal.playbook.confidence != null ? (
+                        <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                          {signal.playbook.confidence}% conf
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-3 text-sm font-bold text-slate-900">{signal.playbook.thesis}</div>
                     <div className="mt-2 text-sm text-slate-600">{signal.playbook.trigger}</div>
+                    {signal.playbook.next_action ? (
+                      <div className="mt-3 rounded-xl border border-[var(--accent)]/12 bg-[var(--accent-soft)] p-3 text-xs font-semibold text-[var(--accent)]">
+                        Next: {signal.playbook.next_action}
+                      </div>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {signal.playbook.estimated_exposure_label ? (
+                        <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                          exposure {signal.playbook.estimated_exposure_label}
+                        </span>
+                      ) : null}
+                      {(signal.playbook.top_tickers || []).slice(0, 4).map((ticker) => (
+                        <button
+                          key={ticker}
+                          type="button"
+                          onClick={() => onAnalyze(ticker)}
+                          className="rounded-full border border-black/8 bg-white px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                        >
+                          {ticker}
+                        </button>
+                      ))}
+                    </div>
                     <div className="mt-3 rounded-xl border border-black/8 bg-white p-3 text-xs text-slate-600">
                       {signal.playbook.copy_text}
                     </div>
+                    {signal.playbook.compliance_note ? (
+                      <div className="mt-2 text-[11px] leading-5 text-slate-500">
+                        {signal.playbook.compliance_note}
+                      </div>
+                    ) : null}
                   </div>
                 ) : signal.trades.length ? (
                   <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-white/75 p-4">

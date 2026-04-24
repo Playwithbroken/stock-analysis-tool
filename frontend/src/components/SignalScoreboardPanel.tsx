@@ -13,8 +13,25 @@ function ScoreCard({
   item: any;
   onAnalyze: (ticker: string) => void;
 }) {
+  const isCongress =
+    item.bucket === "politics" ||
+    String(item.source_label || "").toLowerCase().includes("house");
+  const congressBadges = [
+    isCongress ? "Congress Watch" : null,
+    item.freshness ? String(item.freshness).replace("_", " ") : null,
+    item.delay_days != null ? `delay ${item.delay_days}d` : null,
+    item.amount_range || item.estimated_exposure_label,
+    item.signal_grade ? String(item.signal_grade).replace(/_/g, " ") : null,
+  ].filter(Boolean);
+
   return (
-    <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+    <div
+      className={`rounded-[1.4rem] border p-4 ${
+        isCongress
+          ? "border-[var(--accent)]/18 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.86))]"
+          : "border-black/8 bg-white/75"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-black text-slate-900">{item.label}</div>
@@ -24,6 +41,18 @@ function ScoreCard({
           {item.total_score}
         </div>
       </div>
+      {congressBadges.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {congressBadges.slice(0, 5).map((badge) => (
+            <span
+              key={String(badge)}
+              className="rounded-full border border-black/8 bg-white/76 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-600"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-4 grid grid-cols-3 gap-2">
         <div className="rounded-xl border border-black/8 bg-white p-2">
           <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Source</div>
@@ -39,7 +68,9 @@ function ScoreCard({
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
-        <div className="text-xs text-slate-500">{item.detail}</div>
+        <div className="min-w-0 text-xs text-slate-500">
+          {item.next_action || item.detail}
+        </div>
         {item.ticker && (
           <button
             onClick={() => onAnalyze(item.ticker)}
@@ -49,6 +80,11 @@ function ScoreCard({
           </button>
         )}
       </div>
+      {isCongress && item.compliance_note ? (
+        <div className="mt-3 rounded-xl border border-black/8 bg-white/70 p-3 text-[11px] leading-5 text-slate-500">
+          {item.compliance_note}
+        </div>
+      ) : null}
     </div>
   );
 }

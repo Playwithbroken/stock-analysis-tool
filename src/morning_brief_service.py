@@ -1095,8 +1095,8 @@ class MorningBriefService:
             relevance = self._event_relevance_score(item)
             decay = str(intelligence.get("decay") or "active")
             recency = {"developing": 1.0, "active": 0.85, "fading": 0.55}.get(decay, 0.7)
-            trust = {"tier_1": 1.0, "tier_2": 0.78, "crowd": 0.45, "excluded": 0.2}.get(
-                str(source_item.get("source_quality") or "tier_2"),
+            trust = {"tier_1": 1.0, "official_house_ptr": 0.92, "tier_2": 0.78, "crowd": 0.45, "excluded": 0.2}.get(
+                str(item.get("source_quality") or source_item.get("source_quality") or "tier_2"),
                 0.7,
             )
             confidence = int(intelligence.get("confidence_score") or 55)
@@ -1133,11 +1133,13 @@ class MorningBriefService:
                             item.get("event_type"),
                             item.get("region"),
                             item.get("source"),
+                            (item.get("congress_signal") or {}).get("signal_grade"),
                             (item.get("product_catalyst") or {}).get("theme"),
                         ]
                         if value
                     ],
                     "product_catalyst": item.get("product_catalyst"),
+                    "congress_signal": item.get("congress_signal"),
                     "setup_type": setup_source,
                     "direction": item.get("setup"),
                     "_score": round(score + conviction_rank * 8 + (4 if setup_source == "single_name" else 0), 2),
@@ -2184,6 +2186,14 @@ class MorningBriefService:
                 }
             )
 
+        congress_items = self._build_congress_action_items(watchlist_snapshot)
+        for item in congress_items:
+            signature = f"{item.get('ticker') or 'congress'}:{item.get('setup')}:{item.get('event_type')}:{item.get('title')}"
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
+            board.append(item)
+
         if not board and event_layer:
             for item in event_layer[:4]:
                 board.append(
@@ -2214,7 +2224,106 @@ class MorningBriefService:
                         ),
                     }
                 )
+        board.sort(
+            key=lambda item: (
+                0 if item.get("source_quality") == "official_house_ptr" else 1,
+                0 if item.get("impact") == "high" else 1 if item.get("impact") == "medium" else 2,
+                -int((item.get("event_intelligence") or {}).get("confidence_score") or 0),
+            )
+        )
         return board[:8]
+
+    def _build_congress_action_items(
+        self,
+        watchlist_snapshot: Dict[str, Any] | None,
+    ) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        snapshot = watchlist_snapshot or {}
+        for signal in (snapshot.get("politician_signals") or [])[:8]:
+            trades = signal.get("trades") or []
+            if not trades:
+                continue
+            latest = trades[0]
+            ticker = str(latest.get("ticker") or "").upper()
+            if not ticker:
+                continue
+            playbook = signal.get("playbook") or {}
+            setup_raw = str(playbook.get("setup") or "watch").lower()
+            setup = {
+                "copy-long": "long",
+                "watch-short": "short",
+            }.get(setup_raw, "watch")
+            delay = latest.get("delay_days")
+            amount_midpoint = latest.get("amount_midpoint")
+            is_large = isinstance(amount_midpoint, (int, float)) and amount_midpoint >= 50_000
+            is_fresh = isinstance(delay, int) and delay <= 20
+            impact = "high" if is_fresh and is_large else "medium" if is_fresh or is_large else "low"
+            severity = "elevated" if impact in {"high", "medium"} else "normal"
+            intelligence = self._build_event_intelligence(
+                event_type="congress_trade",
+                impact=impact,
+                severity=severity,
+                source_quality="official_house_ptr",
+                ticker=ticker,
+            )
+            confidence = int(playbook.get("confidence") or intelligence.get("confidence_score") or 68)
+            intelligence["confidence_score"] = max(intelligence.get("confidence_score") or 0, confidence)
+            if setup in {"long", "short"}:
+                intelligence["action"] = setup
+                intelligence["decision_quality"] = "selective" if confidence >= 72 else "tactical only"
+                intelligence["size_guidance"] = "reduced risk"
+                intelligence["execution_bias"] = "follow strength" if setup == "long" else "fade weakness"
+            intelligence["trigger"] = playbook.get("trigger") or intelligence.get("trigger")
+            intelligence["invalidation"] = playbook.get("invalidation") or intelligence.get("invalidation")
+            intelligence["why_now"] = playbook.get("thesis") or intelligence.get("why_now")
+            intelligence["execution_window"] = "today / next 3 sessions"
+            name = signal.get("name") or "Congress member"
+            action = str(latest.get("action") or "trade").upper()
+            amount = latest.get("amount_range") or playbook.get("estimated_exposure_label") or "amount n/a"
+            items.append(
+                {
+                    "title": f"Congress Watch: {name} {action} {ticker} ({amount})",
+                    "region": "usa",
+                    "ticker": ticker,
+                    "original_ticker": ticker,
+                    "event_type": "congress_trade",
+                    "impact": impact,
+                    "setup": setup,
+                    "setup_source": "congress_ptr",
+                    "leverage": playbook.get("leverage") or "avoid",
+                    "thesis": playbook.get("thesis") or f"Official delayed PTR filing touches {ticker}.",
+                    "trigger": playbook.get("next_action") or playbook.get("trigger") or "Compare current price versus the reported trade date before acting.",
+                    "risk": playbook.get("invalidation") or "Official PTR data is delayed; invalid if the move already played out.",
+                    "source": "Official House PTR",
+                    "source_quality": "official_house_ptr",
+                    "link": latest.get("source_url") or signal.get("source_url"),
+                    "congress_signal": {
+                        "name": name,
+                        "action": latest.get("action"),
+                        "trade_date": latest.get("trade_date"),
+                        "notification_date": latest.get("notification_date"),
+                        "delay_days": delay,
+                        "amount_range": latest.get("amount_range"),
+                        "signal_grade": playbook.get("signal_grade"),
+                        "freshness": playbook.get("freshness"),
+                        "top_tickers": playbook.get("top_tickers") or [],
+                        "compliance_note": playbook.get("compliance_note"),
+                    },
+                    "event_intelligence": intelligence,
+                    "portfolio_exposure": self._build_portfolio_exposure(
+                        ticker,
+                        watchlist_snapshot,
+                        intelligence,
+                    ),
+                }
+            )
+        items.sort(
+            key=lambda item: (
+                0 if item.get("impact") == "high" else 1 if item.get("impact") == "medium" else 2,
+                -int((item.get("event_intelligence") or {}).get("confidence_score") or 0),
+            )
+        )
+        return items[:4]
 
     def _macro_proxy_trigger(self, event_type: str, setup: str) -> str:
         event_type = (event_type or "macro").lower()
@@ -2324,6 +2433,7 @@ class MorningBriefService:
         impact_score = {"high": 88, "medium": 68, "low": 48}.get(impact, 50)
         confidence = {
             "tier_1": 86,
+            "official_house_ptr": 82,
             "tier_2": 74,
             "crowd": 46,
             "excluded": 32,
@@ -2398,6 +2508,10 @@ class MorningBriefService:
                 "sectors": ["Single-name growth", "Semis", "Consumer discretionary"],
                 "assets": ["Product owner stock", "Peers", "Options IV"],
             },
+            "congress_trade": {
+                "sectors": ["Single-name equities", "Policy-sensitive sectors", "Options flow"],
+                "assets": ["PTR ticker", "Peers", "Sector ETF"],
+            },
         }
         payload = mapping.get(event_type, {"sectors": ["Broad market"], "assets": ["Index futures", "Dollar"]})
         if ticker:
@@ -2470,6 +2584,15 @@ class MorningBriefService:
                 "trigger": "Act only if official confirmation, volume and analyst/channel checks support the move.",
                 "invalidation": "Skip if the company, reliable press or price action does not confirm the headline.",
                 "execution_window": "Headline to next session",
+            }
+        if event_type == "congress_trade":
+            return {
+                "action": "watch",
+                "leverage": "avoid",
+                "why_now": "Official delayed PTR filing can confirm a theme, but price confirmation matters more than the disclosure alone.",
+                "trigger": "Compare current price to trade date and require trend, volume and sector confirmation.",
+                "invalidation": "Ignore if the move already played out or the stock fails relative strength after the filing.",
+                "execution_window": "Today to next 3 sessions",
             }
         return {
             "action": "watch",

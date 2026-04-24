@@ -126,29 +126,67 @@ class SignalScoreService:
                 continue
             latest = trades[0]
             summary = signal.get("summary", {})
+            playbook = signal.get("playbook") or {}
             source_quality = 88
+            delay = latest.get("delay_days")
             avg_delay = summary.get("avg_delay_days")
-            timing_quality = max(10, 100 - int(avg_delay or 45) * 2)
+            timing_quality = max(15, 100 - int(delay if delay is not None else avg_delay or 45) * 2)
             conviction = 45
             conviction += min(20, int(summary.get("buy_count") or 0) * 8)
             conviction += min(10, int(summary.get("report_count") or 0) * 3)
             if latest.get("action") == "buy":
                 conviction += 10
+            exposure = float(summary.get("estimated_exposure") or playbook.get("estimated_exposure") or latest.get("amount_midpoint") or 0)
+            if exposure >= 250_000:
+                conviction += 12
+            elif exposure >= 50_000:
+                conviction += 7
+            elif exposure >= 15_000:
+                conviction += 3
+            same_ticker_count = sum(
+                1
+                for trade in trades
+                if trade.get("ticker") and trade.get("ticker") == latest.get("ticker")
+            )
+            if same_ticker_count >= 3:
+                conviction += 8
+            elif same_ticker_count >= 2:
+                conviction += 4
+            if playbook.get("signal_grade") == "fresh_copy_candidate":
+                timing_quality = max(timing_quality, 72)
+                conviction += 6
+            elif playbook.get("signal_grade") == "watch_only":
+                conviction -= 6
             total = self._weighted_total(source_quality, timing_quality, min(conviction, 100), weights)
+            target = latest.get("ticker") or latest.get("asset")
+            next_action = playbook.get("next_action") or (
+                f"Open {latest.get('ticker')} and compare price versus trade date."
+                if latest.get("ticker")
+                else "Treat as delayed theme intelligence."
+            )
             scored.append(
                 {
                     "ticker": latest.get("ticker"),
                     "label": signal.get("name"),
-                    "headline": f"{latest.get('action', '').upper()} {latest.get('ticker') or latest.get('asset')}",
+                    "headline": f"Congress PTR {latest.get('action', '').upper()} {target}",
                     "source_quality": source_quality,
                     "timing_quality": timing_quality,
                     "conviction_score": min(conviction, 100),
                     "total_score": total,
                     "source_label": "Official House PTR",
                     "trade_date": latest.get("trade_date"),
-                    "delay_days": latest.get("delay_days"),
+                    "delay_days": delay,
                     "action": latest.get("action"),
-                    "detail": f"{summary.get('buy_count', 0)} buys / {summary.get('sell_count', 0)} sells",
+                    "amount_range": latest.get("amount_range"),
+                    "estimated_exposure": exposure,
+                    "estimated_exposure_label": summary.get("estimated_exposure_label") or playbook.get("estimated_exposure_label"),
+                    "top_tickers": summary.get("top_tickers") or playbook.get("top_tickers") or [],
+                    "signal_grade": playbook.get("signal_grade"),
+                    "freshness": playbook.get("freshness"),
+                    "next_action": next_action,
+                    "playbook": playbook,
+                    "compliance_note": playbook.get("compliance_note") or "Official PTR data is delayed.",
+                    "detail": f"{summary.get('buy_count', 0)} buys / {summary.get('sell_count', 0)} sells · {latest.get('amount_range') or 'amount n/a'}",
                 }
             )
         return sorted(scored, key=lambda item: item["total_score"], reverse=True)

@@ -315,6 +315,12 @@ class PublicSignalService:
                 buy_count = sum(1 for trade in trades if trade.get("action") == "buy")
                 sell_count = sum(1 for trade in trades if trade.get("action") == "sell")
                 latest_trade_date = next((trade.get("trade_date") for trade in trades if trade.get("trade_date")), None)
+                estimated_exposure = sum(
+                    float(trade.get("amount_midpoint") or 0)
+                    for trade in trades[:8]
+                    if isinstance(trade.get("amount_midpoint"), (int, float))
+                )
+                top_tickers = self._top_trade_tickers(trades[:8])
                 avg_delay_days = (
                     round(
                         sum(trade.get("delay_days") or 0 for trade in trades if trade.get("delay_days") is not None)
@@ -339,8 +345,17 @@ class PublicSignalService:
                             "sell_count": sell_count,
                             "latest_trade_date": latest_trade_date,
                             "avg_delay_days": avg_delay_days,
+                            "estimated_exposure": estimated_exposure,
+                            "estimated_exposure_label": self._format_money(estimated_exposure),
+                            "top_tickers": top_tickers,
                         },
-                        "playbook": self._build_politician_playbook(name, trades[:8], avg_delay_days),
+                        "playbook": self._build_politician_playbook(
+                            name,
+                            trades[:8],
+                            avg_delay_days,
+                            estimated_exposure,
+                            top_tickers,
+                        ),
                     }
                 )
             except Exception as exc:
@@ -370,6 +385,8 @@ class PublicSignalService:
         name: str,
         trades: List[Dict[str, Any]],
         avg_delay_days: float | None,
+        estimated_exposure: float = 0,
+        top_tickers: List[str] | None = None,
     ) -> Dict[str, Any] | None:
         if not trades:
             return None
@@ -378,14 +395,22 @@ class PublicSignalService:
         sell_count = sum(1 for trade in trades if trade.get("action") == "sell")
         ticker = latest.get("ticker")
         delay = latest.get("delay_days")
+        top_tickers = top_tickers or []
+        freshness = "fresh" if delay is not None and delay <= 20 else "delayed" if delay is not None and delay <= 45 else "stale"
+        net_bias = "buy" if buy_count > sell_count else "sell" if sell_count > buy_count else "mixed"
         setup = "watch"
         leverage = "avoid"
+        signal_grade = "watch_only"
         if latest.get("action") == "buy" and (delay is not None and delay <= 20):
             setup = "copy-long"
             leverage = "conditional"
+            signal_grade = "fresh_copy_candidate"
         elif latest.get("action") == "sell" and (delay is not None and delay <= 20):
             setup = "watch-short"
             leverage = "avoid"
+            signal_grade = "sell_pressure"
+        elif ticker and freshness == "delayed":
+            signal_grade = "delayed_theme"
         thesis = (
             f"{name} has more buys than sells in the visible PTR window."
             if buy_count >= sell_count
@@ -399,11 +424,37 @@ class PublicSignalService:
             if ticker
             else "Use this as a theme clue, not a blind copy signal."
         )
+        next_action = (
+            f"Open {ticker}, compare price versus trade date, and require trend/volume confirmation."
+            if ticker
+            else "Map the disclosed asset to a liquid ticker before any trade decision."
+        )
+        confidence = 58
+        if freshness == "fresh":
+            confidence += 16
+        elif freshness == "delayed":
+            confidence += 6
+        if estimated_exposure >= 250_000:
+            confidence += 8
+        elif estimated_exposure >= 50_000:
+            confidence += 4
+        if buy_count + sell_count >= 4:
+            confidence += 5
         return {
             "setup": setup,
             "leverage": leverage,
+            "signal_grade": signal_grade,
+            "freshness": freshness,
+            "net_bias": net_bias,
+            "estimated_exposure": estimated_exposure,
+            "estimated_exposure_label": self._format_money(estimated_exposure),
+            "top_tickers": top_tickers,
+            "confidence": min(88, confidence),
             "thesis": thesis,
             "trigger": trigger,
+            "next_action": next_action,
+            "invalidation": "Invalid if the stock no longer respects the post-filing trend or the move already fully played out.",
+            "compliance_note": "Official PTR data is delayed. Treat it as a research signal, not a blind copy trade.",
             "copy_text": f"{name}: {latest.get('action')} {ticker or latest.get('asset')} on {latest.get('trade_date')} with {delay or 'n/a'}d delay.",
         }
 
@@ -500,6 +551,8 @@ class PublicSignalService:
             transaction = " ".join(match.group("transaction").split())
             action = "buy" if transaction.startswith("P") else "sell" if transaction.startswith("S") else "other"
             ticker_match = re.search(r"\(([A-Z.\-]+)\)", asset)
+            amount_range = " ".join(match.group("amount").split())
+            amount_stats = self._parse_amount_range(amount_range)
             trades.append(
                 {
                     "asset": asset,
@@ -508,7 +561,8 @@ class PublicSignalService:
                     "transaction_label": transaction,
                     "trade_date": self._normalize_us_date(match.group("trade_date")),
                     "notification_date": self._normalize_us_date(match.group("notification_date")),
-                    "amount_range": " ".join(match.group("amount").split()),
+                    "amount_range": amount_range,
+                    **amount_stats,
                     "delay_days": self._delay_days(
                         self._normalize_us_date(match.group("trade_date")),
                         self._normalize_us_date(match.group("notification_date")),
@@ -518,6 +572,33 @@ class PublicSignalService:
                 }
             )
         return trades
+
+    def _parse_amount_range(self, amount_range: str) -> Dict[str, Optional[float]]:
+        values = [
+            float(match.replace(",", ""))
+            for match in re.findall(r"\$([\d,]+)", amount_range or "")
+        ]
+        if not values:
+            return {"amount_min": None, "amount_max": None, "amount_midpoint": None}
+        amount_min = min(values)
+        amount_max = max(values)
+        return {
+            "amount_min": amount_min,
+            "amount_max": amount_max,
+            "amount_midpoint": (amount_min + amount_max) / 2,
+        }
+
+    def _top_trade_tickers(self, trades: List[Dict[str, Any]]) -> List[str]:
+        scores: Dict[str, float] = {}
+        for trade in trades:
+            ticker = str(trade.get("ticker") or "").upper()
+            if not ticker:
+                continue
+            scores[ticker] = scores.get(ticker, 0) + float(trade.get("amount_midpoint") or 1)
+        return [
+            ticker
+            for ticker, _score in sorted(scores.items(), key=lambda item: item[1], reverse=True)[:5]
+        ]
 
     def _get_company_ticker_map(self) -> Dict[str, Dict[str, Any]]:
         now = datetime.now(timezone.utc)

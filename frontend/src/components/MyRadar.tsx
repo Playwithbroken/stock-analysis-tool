@@ -138,6 +138,8 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
 
   const topTicker = watchlist?.ticker_signals?.find((item: any) => item.events?.length);
   const topPolitical = watchlist?.politician_signals?.find((item: any) => item.trades?.length);
+  const topPoliticalTrade = topPolitical?.trades?.[0];
+  const topPoliticalPlaybook = topPolitical?.playbook;
 
   if (initialLoading && !hasRadarData) {
     return (
@@ -245,9 +247,19 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
                   : "Noch keine Insider-Signale in deiner Watchlist."}
               </div>
               <div className="rounded-[1.4rem] border border-black/8 bg-white/78 p-4 text-sm text-slate-700">
-                {topPolitical?.trades?.[0]
-                  ? `${topPolitical.name}: ${topPolitical.trades[0].action} ${topPolitical.trades[0].ticker || topPolitical.trades[0].asset} on ${topPolitical.trades[0].trade_date}`
+                {topPoliticalTrade
+                  ? `${topPolitical.name}: ${topPoliticalPlaybook?.setup || topPoliticalTrade.action} ${topPoliticalTrade.ticker || topPoliticalTrade.asset} · ${topPoliticalTrade.amount_range || "amount n/a"} · delay ${topPoliticalTrade.delay_days ?? "n/a"}d`
                   : "Noch keine Congress-Signale in deiner Watchlist."}
+                {topPoliticalTrade && topPoliticalPlaybook?.next_action ? (
+                  <div className="mt-2 rounded-xl border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+                    {topPoliticalPlaybook.next_action}
+                  </div>
+                ) : null}
+                {topPoliticalTrade && topPoliticalPlaybook?.compliance_note ? (
+                  <div className="mt-2 text-[11px] leading-5 text-slate-500">
+                    {topPoliticalPlaybook.compliance_note}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -321,5 +333,4 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
     </div>
   );
 }
-
 

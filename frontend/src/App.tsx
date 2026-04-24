@@ -860,11 +860,164 @@ function AppContent() {
     Date.now() - onboardingDismissedAt < ONBOARDING_DISMISS_COOLDOWN_MS;
   const showOnboardingNudge = !onboardingDone && !onboardingInCooldown && !hideOnboardingNudge;
   const shouldShowOnboardingNudge = ONBOARDING_NUDGE_ENABLED && showOnboardingNudge;
+  const activeNavItem = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
+  const headerStatusLabel = headerRealtimeConnected ? headerConnectionState : headerTransportMode;
+  const favoriteTape = (
+    <div className="overflow-x-auto no-scrollbar">
+      <div className="flex min-w-max items-center gap-2">
+        <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
+          {headerRealtimeConnected ? `Favorites ${headerConnectionState}` : `Favorites ${headerTransportMode}`}
+        </div>
+        {favoriteSymbols.map((symbol) => (
+          <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
+        ))}
+      </div>
+    </div>
+  );
+  const moversTape = tapeMovers.length ? (
+    <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-2 sm:px-3">
+      <div className="mb-2 flex flex-col items-start gap-2 px-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          Market movers
+        </div>
+        <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
+          <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
+            {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
+              <button
+                key={window}
+                type="button"
+                onClick={() => setMarketMoversWindow(window)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
+                  marketMoversWindow === window
+                    ? "bg-[#101114] text-white"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {window.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Winners, losers ({marketMoversWindow.toUpperCase()})
+          </div>
+        </div>
+      </div>
+      <div className="ticker-marquee-track">
+        {[...tapeMovers, ...tapeMovers].map((item, index) => {
+          const isWinner = item.side === "winner";
+          const ArrowIcon = isWinner ? ArrowUpRight : ArrowDownRight;
+          return (
+            <div
+              key={`${item.side}-${item.symbol}-${index}`}
+              className="ticker-marquee-chip"
+            >
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+                  isWinner
+                    ? "bg-emerald-500/10 text-emerald-700"
+                    : "bg-red-500/10 text-red-700"
+                }`}
+              >
+                {isWinner ? "Winner" : "Loser"}
+              </span>
+              <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                {item.symbol}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-bold ${
+                  isWinner ? "text-emerald-700" : "text-red-700"
+                }`}
+              >
+                <ArrowIcon size={12} />
+                {typeof item.change === "number"
+                  ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}%`
+                  : "Move"}
+              </span>
+              {item.price != null ? (
+                <span className="text-xs font-semibold text-slate-500">
+                  {formatTickerPrice(item.price)}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+  const mobileMarketTape = (
+    <section className="mobile-market-tape md:hidden">
+      <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.06)] backdrop-blur-xl">
+        {favoriteTape}
+        {activeTab === "dashboard" && moversTape ? (
+          <div className="mt-2 max-h-[8.5rem] overflow-hidden">
+            {moversTape}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
 
   return (
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
-        <div className="layout-shell px-3 pt-3 pb-3 sm:px-6 xl:px-8 2xl:px-10">
+        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] md:hidden">
+          <div className="mobile-topbar flex h-[58px] items-center justify-between gap-2 rounded-[1.25rem] border border-white/70 bg-white/86 px-3 shadow-[0_14px_34px_rgba(17,24,39,0.09)] backdrop-blur-xl">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] bg-[#101114] text-white">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l5-5 4 4 7-8" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                  Broker Freund
+                </div>
+                <div className="truncate text-[15px] font-black leading-tight text-slate-950">
+                  {activeNavItem.label}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span
+                className={`flex h-2.5 w-2.5 rounded-full ${
+                  headerRealtimeConnected ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" : "bg-amber-500"
+                }`}
+                title={`Market data: ${headerStatusLabel}`}
+              />
+              <button
+                onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
+                aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
+                className="rounded-full border border-black/8 bg-white/76 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-800"
+              >
+                {currency}
+              </button>
+              <button
+                onClick={toggleTheme}
+                aria-label="Toggle dark mode"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 text-slate-600"
+              >
+                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+              <button
+                onClick={() => setIsHealthOpen(true)}
+                aria-label="Open health center"
+                className="flex h-8 items-center justify-center rounded-full border border-black/8 bg-white/76 px-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+              >
+                Health
+              </button>
+              <button
+                onClick={handleLogout}
+                aria-label="Lock workspace"
+                className="flex h-8 items-center justify-center rounded-full bg-[#101114] px-2.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-white"
+              >
+                Lock
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="layout-shell hidden px-3 pt-3 pb-3 md:block sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header rounded-[1.7rem] px-3 py-3 sm:rounded-[2.1rem] sm:px-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
@@ -998,97 +1151,19 @@ function AppContent() {
               </div>
             </div>
             <div className="mt-3 space-y-2">
-              <div className="overflow-x-auto no-scrollbar">
-                <div className="flex min-w-max items-center gap-2">
-                  <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
-                    {headerRealtimeConnected ? `Favorites ${headerConnectionState}` : `Favorites ${headerTransportMode}`}
-                  </div>
-                  {favoriteSymbols.map((symbol) => (
-                    <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />
-                  ))}
-                </div>
-              </div>
-
-              {tapeMovers.length ? (
-                <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-2 sm:px-3">
-                  <div className="mb-2 flex flex-col items-start gap-2 px-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                      Market movers
-                    </div>
-                    <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
-                      <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
-                        {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
-                          <button
-                            key={window}
-                            type="button"
-                            onClick={() => setMarketMoversWindow(window)}
-                            className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
-                              marketMoversWindow === window
-                                ? "bg-[#101114] text-white"
-                                : "text-slate-500 hover:text-slate-800"
-                            }`}
-                          >
-                            {window.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        Winners, losers ({marketMoversWindow.toUpperCase()})
-                      </div>
-                    </div>
-                  </div>
-                  <div className="ticker-marquee-track">
-                    {[...tapeMovers, ...tapeMovers].map((item, index) => {
-                      const isWinner = item.side === "winner";
-                      const ArrowIcon = isWinner ? ArrowUpRight : ArrowDownRight;
-                      return (
-                        <div
-                          key={`${item.side}-${item.symbol}-${index}`}
-                          className="ticker-marquee-chip"
-                        >
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
-                              isWinner
-                                ? "bg-emerald-500/10 text-emerald-700"
-                                : "bg-red-500/10 text-red-700"
-                            }`}
-                          >
-                            {isWinner ? "Winner" : "Loser"}
-                          </span>
-                          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700">
-                            {item.symbol}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 text-xs font-bold ${
-                              isWinner ? "text-emerald-700" : "text-red-700"
-                            }`}
-                          >
-                            <ArrowIcon size={12} />
-                            {typeof item.change === "number"
-                              ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}%`
-                              : "Move"}
-                          </span>
-                          {item.price != null ? (
-                            <span className="text-xs font-semibold text-slate-500">
-                              {formatTickerPrice(item.price)}
-                            </span>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
+              {favoriteTape}
+              {moversTape}
             </div>
           </div>
         </div>
       </header>
 
       <main
-        className={`content-shell px-4 pb-[11rem] pt-6 transition-all duration-300 sm:px-6 sm:pb-8 xl:px-8 2xl:px-10 ${
+        className={`content-shell px-4 pb-[11rem] pt-3 transition-all duration-300 sm:px-6 sm:pb-8 md:pt-6 xl:px-8 2xl:px-10 ${
           isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
         }`}
       >
+        {mobileMarketTape}
         {activeTab === "dashboard" ? (
           <div className="space-y-8">
             {shouldShowOnboardingNudge ? (

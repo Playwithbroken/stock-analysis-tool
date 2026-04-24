@@ -167,6 +167,19 @@ h3,
   pointer-events: none;
 }
 
+.mobile-topbar-shell {
+  width: 100%;
+  margin-inline: auto;
+}
+
+.mobile-topbar {
+  min-height: 58px;
+}
+
+.mobile-market-tape {
+  margin-bottom: 1rem;
+}
+
 .score-bar,
 .analysis-card {
   transition: all 220ms ease;
@@ -499,6 +512,20 @@ h3,
 }
 
 @media (max-width: 640px) {
+  .header-gradient {
+    background:
+      linear-gradient(180deg, rgba(250, 248, 243, 0.96), rgba(250, 248, 243, 0.78) 72%, rgba(250, 248, 243, 0));
+  }
+
+  .mobile-market-tape .ticker-marquee-wrap {
+    border-radius: 1rem;
+    padding: 0.45rem;
+  }
+
+  .mobile-market-tape .ticker-marquee-wrap > div:first-child {
+    margin-bottom: 0.45rem;
+  }
+
   .ticker-marquee-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

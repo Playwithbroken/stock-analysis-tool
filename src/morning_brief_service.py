@@ -211,12 +211,22 @@ class MorningBriefService:
         self,
         watchlist_snapshot: Dict[str, Any] | None = None,
     ) -> Dict[str, Any] | None:
-        if self._cache is not None:
+        if self._cache is not None and self._is_usable_brief(self._cache):
             return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
         persisted = self._load_persisted_snapshot()
-        if persisted is not None:
+        if persisted is not None and self._is_usable_brief(persisted):
             return self._merge_watchlist_impact(dict(persisted), watchlist_snapshot)
         return None
+
+    def _is_usable_brief(self, brief: Dict[str, Any] | None) -> bool:
+        if not isinstance(brief, dict):
+            return False
+        quality = brief.get("quality") if isinstance(brief.get("quality"), dict) else {}
+        if quality.get("fallback") or int(quality.get("score") or 0) <= 0:
+            return False
+        regions = brief.get("regions") if isinstance(brief.get("regions"), dict) else {}
+        has_region_assets = any((region or {}).get("assets") for region in regions.values())
+        return has_region_assets or bool(brief.get("top_news")) or bool(brief.get("trade_setups"))
 
     def build_empty_brief(self, reason: str = "degraded") -> Dict[str, Any]:
         now = datetime.now(timezone.utc).isoformat()
@@ -438,12 +448,19 @@ class MorningBriefService:
         self._persist_snapshot(brief)
         return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
 
-    def get_brief_fast(self, watchlist_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    def get_brief_fast(
+        self,
+        watchlist_snapshot: Dict[str, Any] | None = None,
+        force_refresh: bool = False,
+    ) -> Dict[str, Any]:
         """Fast brief path for API/dashboard rendering under strict latency budget."""
         now = datetime.now(timezone.utc)
         if (
+            not force_refresh
+            and
             self._cache is not None
             and self._cache_time is not None
+            and self._is_usable_brief(self._cache)
             and (now - self._cache_time).total_seconds() < self._ttl_seconds
         ):
             return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)

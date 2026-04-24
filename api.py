@@ -388,8 +388,8 @@ async def _warm_brief_once() -> Dict[str, Any]:
         timeout=float(os.getenv("BRIEF_WARMUP_SNAPSHOT_TIMEOUT_SECONDS", "5")),
     )
     brief = await asyncio.wait_for(
-        asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot),
-        timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "20")),
+        asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot, True),
+        timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "30")),
     )
     try:
         await asyncio.wait_for(
@@ -1928,7 +1928,7 @@ async def get_morning_brief():
         try:
             brief = await asyncio.wait_for(
                 asyncio.to_thread(service.get_brief_fast, snapshot),
-                timeout=12.0,
+                timeout=float(os.getenv("MORNING_BRIEF_API_TIMEOUT_SECONDS", "20")),
             )
         except asyncio.TimeoutError:
             fallback = service.get_cached_or_last_brief(snapshot)

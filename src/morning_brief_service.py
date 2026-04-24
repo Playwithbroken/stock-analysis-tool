@@ -1098,6 +1098,7 @@ class MorningBriefService:
                 "medium": "0.8-1.8%",
                 "low": "0.3-1.0%",
             }
+            setup_source = str(item.get("setup_source") or "single_name")
             scored.append(
                 {
                     "symbol": ticker,
@@ -1120,7 +1121,7 @@ class MorningBriefService:
                         if value
                     ],
                     "product_catalyst": item.get("product_catalyst"),
-                    "setup_type": item.get("setup_source") or "single_name",
+                    "setup_type": setup_source,
                     "direction": item.get("setup"),
                     "_score": round(score + conviction_rank * 8 + (4 if setup_source == "single_name" else 0), 2),
                 }

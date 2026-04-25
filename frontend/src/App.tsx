@@ -1528,10 +1528,18 @@ function AppContent() {
         <Suspense fallback={null}>
           <BrokerChat
             currentTicker={analysis?.ticker}
+            activeTab={activeTab}
+            contextSymbols={favoriteSymbols}
             portfolioSnapshot={portfolioSnapshotForChat}
             liveQuotes={headerQuotes}
             signalScore={signalScoreContext}
             morningBriefSummary={briefSummaryForChat}
+            onAnalyzeTicker={(ticker) => {
+              setIsChatOpen(false);
+              setActiveTab("analyze");
+              handleSearch(ticker);
+            }}
+            onOpenTab={(tab) => selectTab(tab as Tab)}
             isOpen={isChatOpen}
             setIsOpen={setIsChatOpen}
           />

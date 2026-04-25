@@ -8,10 +8,15 @@ interface Message {
 
 interface BrokerChatProps {
   currentTicker?: string | string[];
+  activeTab?: string;
+  contextSymbols?: string[];
   portfolioSnapshot?: any;
   liveQuotes?: Record<string, any>;
   signalScore?: any;
   morningBriefSummary?: any;
+  learningSummary?: any;
+  onAnalyzeTicker?: (ticker: string) => void;
+  onOpenTab?: (tab: string) => void;
   isInline?: boolean;
   initialMessage?: string;
   onClose?: () => void;
@@ -21,10 +26,15 @@ interface BrokerChatProps {
 
 export default function BrokerChat({
   currentTicker,
+  activeTab,
+  contextSymbols,
   portfolioSnapshot,
   liveQuotes,
   signalScore,
   morningBriefSummary,
+  learningSummary,
+  onAnalyzeTicker,
+  onOpenTab,
   isInline = false,
   initialMessage,
   onClose,
@@ -91,10 +101,13 @@ export default function BrokerChat({
           context_ticker: Array.isArray(currentTicker)
             ? currentTicker.join(",")
             : currentTicker,
+          active_tab: activeTab,
+          context_symbols: contextSymbols,
           portfolio_snapshot: portfolioSnapshot,
           live_quotes: liveQuotes,
           signal_score: signalScore,
           morning_brief_summary: morningBriefSummary,
+          learning_summary: learningSummary,
         }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -126,10 +139,22 @@ export default function BrokerChat({
     [...messages].reverse().find((message) => message.role === "oracle")?.content ||
     "Broker Freund analysiert gerade Markt, Signale und dein Setup.";
 
+  const topSignalTicker =
+    signalScore?.top_ideas?.find((item: any) => item?.ticker || item?.symbol)?.ticker ||
+    signalScore?.top_ideas?.find((item: any) => item?.ticker || item?.symbol)?.symbol ||
+    contextSymbols?.[0] ||
+    (liveQuotes ? Object.keys(liveQuotes)[0] : "");
+  const primaryTicker = Array.isArray(currentTicker) ? currentTicker[0] : currentTicker || topSignalTicker;
+
   const quickActions = [
     currentTicker
       ? `Was ist heute der wichtigste Trigger fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}?`
-      : "Was ist heute das wichtigste Setup?",
+      : activeTab === "discovery"
+        ? "Welche Market-Idee ist jetzt am besten und warum?"
+        : activeTab === "portfolio"
+          ? "Pruefe mein Portfolio: groesstes Risiko und beste naechste Aktion?"
+          : "Was ist heute das wichtigste Setup?",
+    "Welche Quelle oder Prognose lag zuletzt daneben?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];
@@ -138,7 +163,9 @@ export default function BrokerChat({
     ? Array.isArray(currentTicker)
       ? currentTicker.join(", ")
       : currentTicker
-    : "Market overview";
+    : activeTab
+      ? `${activeTab} context`
+      : "Market overview";
 
   const peekCards = [
     {
@@ -278,6 +305,32 @@ export default function BrokerChat({
               ))}
             </div>
             <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                {primaryTicker && onAnalyzeTicker ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileSheetMode("full");
+                      onAnalyzeTicker(String(primaryTicker).toUpperCase());
+                    }}
+                    className="rounded-[1.1rem] bg-[var(--accent)] px-4 py-3 text-left text-xs font-extrabold uppercase tracking-[0.14em] text-white"
+                  >
+                    {String(primaryTicker).toUpperCase()} analysieren
+                  </button>
+                ) : null}
+                {onOpenTab ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileSheetMode("full");
+                      onOpenTab(activeTab === "discovery" ? "analyze" : "discovery");
+                    }}
+                    className="rounded-[1.1rem] border border-black/8 bg-white/78 px-4 py-3 text-left text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                  >
+                    {activeTab === "discovery" ? "Analyze oeffnen" : "Markets oeffnen"}
+                  </button>
+                ) : null}
+              </div>
               {quickActions.map((action) => (
                 <button
                   key={action}
@@ -353,13 +406,24 @@ export default function BrokerChat({
           </div>
         )}
         {!isInline && mobileSheetMode === "peek" ? (
-          <button
-            type="button"
-            onClick={() => setMobileSheetMode("full")}
-            className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-[var(--accent-soft)] md:hidden"
-          >
-            Vollstaendige Desk-Ansicht oeffnen
-          </button>
+          <div className="grid gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileSheetMode("full")}
+              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-[var(--accent-soft)]"
+            >
+              Vollstaendige Desk-Ansicht oeffnen
+            </button>
+            {primaryTicker && onAnalyzeTicker ? (
+              <button
+                type="button"
+                onClick={() => onAnalyzeTicker(String(primaryTicker).toUpperCase())}
+                className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-extrabold uppercase tracking-[0.14em] text-white"
+              >
+                {String(primaryTicker).toUpperCase()} analysieren
+              </button>
+            ) : null}
+          </div>
         ) : (
           <div className="relative">
             <input

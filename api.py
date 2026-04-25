@@ -576,6 +576,8 @@ class UpdateHoldingRequest(BaseModel):
 class OracleRequest(BaseModel):
     message: str
     context_ticker: Optional[str] = None
+    active_tab: Optional[str] = None
+    context_symbols: Optional[List[str]] = None
     portfolio_snapshot: Optional[Dict[str, Any]] = None
     live_quotes: Optional[Dict[str, Any]] = None
     signal_score: Optional[Dict[str, Any]] = None
@@ -1268,6 +1270,12 @@ async def oracle_chat(req: OracleRequest):
         for item in ticker_raw.split(",")
         if item and item.strip()
     ][:3]
+    if not tickers and req.context_symbols:
+        tickers = [
+            str(item).strip().upper()
+            for item in req.context_symbols
+            if str(item).strip()
+        ][:3]
 
     ticker_context: List[Dict[str, Any]] = []
     for symbol in tickers:
@@ -1338,7 +1346,8 @@ async def oracle_chat(req: OracleRequest):
         else:
             thesis = f"{symbol} ist aktuell neutral, Setup nur bei klarem Trigger handeln."
     else:
-        thesis = "Ohne konkreten Ticker liegt der Fokus auf Regime, Risiko und bestätigten Triggern."
+        active_area = (req.active_tab or "app").title()
+        thesis = f"Im Bereich {active_area} liegt der Fokus auf Regime, Risiko und bestaetigten Triggern."
 
     if "short" in msg or "sell" in msg or "verkauf" in msg:
         thesis = f"{thesis} Short-Ideen nur mit bestätigtem Bruch und engem Risikorahmen."
@@ -1348,6 +1357,8 @@ async def oracle_chat(req: OracleRequest):
     risk_line_parts: List[str] = []
     if macro_regime:
         risk_line_parts.append(f"Regime: {macro_regime}")
+    if req.active_tab:
+        risk_line_parts.append(f"App-Kontext: {req.active_tab}")
     if holdings_count > 0:
         risk_line_parts.append(
             f"Portfolio {holdings_count} Positionen, P&L {gain_loss_pct:+.2f}% auf {total_value:,.0f} Gesamtwert"
@@ -1399,7 +1410,7 @@ async def oracle_chat(req: OracleRequest):
         )
     else:
         explain_lines.append(
-            "Ohne Einzelticker ordne ich zuerst Marktregime, Portfolio-Risiko und die besten Signale ein."
+            "Ohne manuell gewaehlten Einzelticker nutze ich aktive Seite, Watchlist, Portfolio und Signalboard als Kontext."
         )
     if holdings_count > 0:
         explain_lines.append(

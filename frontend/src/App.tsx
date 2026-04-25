@@ -1131,12 +1131,6 @@ function AppContent() {
                   {auth.profile?.display_name || "Private"}
                 </div>
                 <button
-                  onClick={() => setIsChatOpen(true)}
-                  className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
-                >
-                  AI Desk
-                </button>
-                <button
                   onClick={() => setIsHealthOpen(true)}
                   className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
                 >
@@ -1225,7 +1219,7 @@ function AppContent() {
                       ? "border-red-500/20 bg-red-500/10 text-red-700"
                       : "border-amber-500/20 bg-amber-500/10 text-amber-700";
                   return (
-                    <div className={`rounded-full border ${cls} px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]`}>
+                    <div className={`rounded-full border ${cls} px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em]`}>
                       {icon} {globalBrief.macro_regime}
                     </div>
                   );

@@ -23,6 +23,10 @@ function regimeStyle(regime?: string) {
   return { icon: "⚖", bg: "bg-amber-500/10", text: "text-amber-700", border: "border-amber-500/20" };
 }
 
+function formatRegimeLabel(regime?: string) {
+  return String(regime || "mixed").replace("-", " ");
+}
+
 function toneBadge(tone?: string) {
   const t = (tone || "").toLowerCase();
   if (t.includes("bullish") || t.includes("risk-on") || t.includes("on"))
@@ -215,8 +219,8 @@ export default function MorningBriefPanel({
           {(() => {
             const rs = regimeStyle(brief.macro_regime);
             return (
-              <span className={`rounded-full border ${rs.border} ${rs.bg} px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] ${rs.text}`}>
-                {rs.icon} {brief.macro_regime}
+              <span className={`rounded-full border ${rs.border} ${rs.bg} px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${rs.text}`}>
+                {rs.icon} {formatRegimeLabel(brief.macro_regime)}
               </span>
             );
           })()}
@@ -269,8 +273,15 @@ export default function MorningBriefPanel({
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Regime
             </div>
-            <div className="mt-2 text-3xl font-black text-slate-900">
-              {brief.macro_regime}
+            <div className="mt-3">
+              {(() => {
+                const rs = regimeStyle(brief.macro_regime);
+                return (
+                  <span className={`inline-flex rounded-full border ${rs.border} ${rs.bg} px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] ${rs.text}`}>
+                    {rs.icon} {formatRegimeLabel(brief.macro_regime)}
+                  </span>
+                );
+              })()}
             </div>
           </div>
           <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-5">

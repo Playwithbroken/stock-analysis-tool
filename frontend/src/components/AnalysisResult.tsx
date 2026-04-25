@@ -57,6 +57,18 @@ const clampScore = (value: number | null | undefined): number => {
   return Math.max(-100, Math.min(100, value));
 };
 
+const scoreTone = (value: number | null | undefined): string => {
+  const score = clampScore(value);
+  if (score >= 65) return "border-emerald-500/20 bg-emerald-500/10 text-emerald-800";
+  if (score <= 35) return "border-red-500/20 bg-red-500/10 text-red-800";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-800";
+};
+
+const metricTone = (value: number | null | undefined, positiveAbove = 0): string => {
+  if (value == null || !Number.isFinite(value)) return "text-slate-500";
+  return value >= positiveAbove ? "text-emerald-700" : "text-red-700";
+};
+
 export default function AnalysisResult({
   data,
   portfolios,
@@ -117,6 +129,57 @@ export default function AnalysisResult({
   const latestEarnings = earningsHistory[0] || null;
   const guidanceSignal = guidance_signal || {};
   const quarterlyRevenueYoY = financialTrends?.quarterly_revenue_yoy;
+  const analystData = data.analyst_data || {};
+  const shortInterest = data.short_interest || {};
+  const currentPrice = Number(liveQuote?.price ?? price_data?.current_price ?? 0);
+  const targetMeanPrice = Number(analystData?.target_mean_price ?? analystData?.targetMeanPrice ?? 0);
+  const analystUpside =
+    currentPrice > 0 && targetMeanPrice > 0 ? ((targetMeanPrice / currentPrice) - 1) * 100 : null;
+  const netDebt = latestAnnual?.net_debt;
+  const freeCashflow = latestAnnual?.free_cashflow ?? fundamentals?.free_cashflow;
+  const fcfYield =
+    fundamentals?.market_cap && freeCashflow ? (Number(freeCashflow) / Number(fundamentals.market_cap)) * 100 : null;
+  const qualityScore = Math.round(
+    [
+      fundamentals?.profit_margin != null && fundamentals.profit_margin > 0 ? 18 : 0,
+      fundamentals?.revenue_growth != null && fundamentals.revenue_growth > 0 ? 18 : 0,
+      fundamentals?.free_cashflow != null && fundamentals.free_cashflow > 0 ? 18 : 0,
+      financialTrends?.revenue_cagr != null && financialTrends.revenue_cagr > 0 ? 16 : 0,
+      fundamentals?.debt_to_equity != null && fundamentals.debt_to_equity < 120 ? 14 : 0,
+      latestEarnings?.status === "beat" ? 16 : latestEarnings?.status === "miss" ? -10 : 0,
+    ].reduce((sum, value) => sum + value, 10),
+  );
+  const valuationPressure = [
+    fundamentals?.pe_ratio && fundamentals.pe_ratio > 35 ? "P/E hoch, Bewertung braucht Wachstum." : null,
+    fundamentals?.ps_ratio && fundamentals.ps_ratio > 8 ? "Sales-Multiple hoch, Umsatz muss liefern." : null,
+    fundamentals?.peg_ratio && fundamentals.peg_ratio > 2 ? "PEG deutet auf teure Wachstumserwartung." : null,
+  ].filter(Boolean);
+  const dossierCatalysts = [
+    latestEarnings
+      ? `Letzte Earnings: ${latestEarnings.status || "n/a"} (${formatPercent(latestEarnings.eps_surprise_pct)} EPS surprise).`
+      : null,
+    guidanceSignal?.label && guidanceSignal.label !== "No signal"
+      ? `Guidance: ${guidanceSignal.label}.`
+      : null,
+    quarterlyRevenueYoY != null ? `Quartalsumsatz YoY: ${formatRatioPercent(quarterlyRevenueYoY)}.` : null,
+    analystUpside != null ? `Analysten-Upside zum Mittelziel: ${formatPercent(analystUpside)}.` : null,
+    news?.[0]?.title ? `Top-News: ${news[0].title}` : null,
+  ].filter(Boolean);
+  const dossierRisks = [
+    valuationPressure[0],
+    financialTrends?.revenue_yoy != null && financialTrends.revenue_yoy < 0 ? "Jahresumsatz ruecklaeufig." : null,
+    fundamentals?.earnings_growth != null && fundamentals.earnings_growth < 0 ? "Gewinnwachstum negativ." : null,
+    latestEarnings?.status === "miss" ? "Letzte Earnings lagen unter Erwartung." : null,
+    shortInterest?.short_percent_float != null && shortInterest.short_percent_float > 8
+      ? "Erhoehtes Short Interest kann Volatilitaet treiben."
+      : null,
+  ].filter(Boolean);
+  const dossierQuestions = [
+    "Wachsen Umsatz und Margen gleichzeitig oder nur eines von beiden?",
+    "Ist der naechste Kursimpuls earnings-, produkt- oder makrogetrieben?",
+    "Rechtfertigt die Bewertung das aktuelle Wachstumstempo?",
+    "Wo liegt die technische Invalidierung, falls der Markt gegen das Setup dreht?",
+  ];
 
   React.useEffect(() => {
     let cancelled = false;
@@ -500,6 +563,111 @@ export default function AnalysisResult({
 
           {/* Price Chart */}
           <PriceChart ticker={data.ticker} onStatsUpdate={handleStatsUpdate} />
+
+          <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Dossier Intelligence
+                </div>
+                <h3 className="mt-2 text-3xl text-slate-900">
+                  Was fuer diese Aktie wirklich wichtig ist
+                </h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  Kompakte Investment-Story aus Fundamentaldaten, Earnings, Bewertung, Analysten, News und Risiko.
+                  Keine Kaufempfehlung, sondern ein besserer Entscheidungsrahmen.
+                </p>
+              </div>
+              <div className={`rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${scoreTone(qualityScore)}`}>
+                Quality {Math.max(0, Math.min(100, qualityScore))}/100
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-[1.5rem] border border-emerald-500/16 bg-emerald-500/8 p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                    Bull Case
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    {fundamentals?.revenue_growth && fundamentals.revenue_growth > 0
+                      ? `Wachstum bleibt sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Revenue Growth), dazu spricht positive Kurs-/Score-Struktur fuer selektive Staerke.`
+                      : "Bull Case braucht frische Umsatz- oder Margenbestaetigung, sonst bleibt das Setup nur taktisch."}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] border border-amber-500/16 bg-amber-500/8 p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
+                    Base Case
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    {recommendation?.action
+                      ? `Aktueller App-Case: ${recommendation.action}. Entscheidend ist, ob Trigger und naechster Earnings-/News-Impuls zusammenpassen.`
+                      : "Neutraler Case: erst Preisreaktion und Datenbestaetigung abwarten."}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] border border-red-500/16 bg-red-500/8 p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-red-700">
+                    Bear Case
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    {dossierRisks.length
+                      ? dossierRisks.slice(0, 2).join(" ")
+                      : "Bear Case entsteht vor allem bei schwacher Anschlussdynamik, negativer Guidance oder breitem Risk-off."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MetricCard label="Revenue Growth" value={formatRatioPercent(fundamentals?.revenue_growth)} trend={(fundamentals?.revenue_growth || 0) >= 0 ? "up" : "down"} />
+                <MetricCard label="FCF Yield" value={formatPercent(fcfYield)} trend={(fcfYield || 0) >= 0 ? "up" : "down"} />
+                <MetricCard label="Analyst Upside" value={formatPercent(analystUpside)} trend={(analystUpside || 0) >= 0 ? "up" : "down"} />
+                <MetricCard label="Net Debt" value={formatBigNumber(netDebt, formatPrice)} />
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-[1.5rem] border border-black/8 bg-white/74 p-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Katalysatoren
+                </div>
+                <div className="mt-3 space-y-2">
+                  {dossierCatalysts.length ? dossierCatalysts.slice(0, 5).map((item: any, index: number) => (
+                    <div key={`${item}-${index}`} className="rounded-xl bg-black/[0.025] px-3 py-2 text-sm leading-6 text-slate-700">
+                      {item}
+                    </div>
+                  )) : (
+                    <div className="text-sm text-slate-500">Keine starken Katalysatoren im aktuellen Datenpaket.</div>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-[1.5rem] border border-black/8 bg-white/74 p-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Risiken / Red Flags
+                </div>
+                <div className="mt-3 space-y-2">
+                  {dossierRisks.length ? dossierRisks.slice(0, 5).map((item: any, index: number) => (
+                    <div key={`${item}-${index}`} className="rounded-xl bg-red-500/7 px-3 py-2 text-sm leading-6 text-slate-700">
+                      {item}
+                    </div>
+                  )) : (
+                    <div className="text-sm text-slate-500">Keine harten Red Flags aus den Kernkennzahlen erkannt.</div>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-[1.5rem] border border-black/8 bg-white/74 p-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Fragen vor Trade / Kauf
+                </div>
+                <div className="mt-3 space-y-2">
+                  {dossierQuestions.map((item) => (
+                    <div key={item} className="rounded-xl bg-[var(--accent-soft)] px-3 py-2 text-sm leading-6 text-slate-700">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
 
           {/* ETF Analysis Section */}
           {data.etf_analysis && (

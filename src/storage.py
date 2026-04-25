@@ -97,6 +97,45 @@ def init_db():
         lessons_learned TEXT
     )
     ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS signal_forecasts (
+        id TEXT PRIMARY KEY,
+        signal_key TEXT UNIQUE NOT NULL,
+        symbol TEXT NOT NULL,
+        direction TEXT,
+        setup_type TEXT,
+        session_label TEXT,
+        source_label TEXT,
+        thesis TEXT,
+        trigger TEXT,
+        invalidation TEXT,
+        confidence REAL,
+        rank_score REAL,
+        expected_move TEXT,
+        entry_price REAL,
+        forecast_time TEXT NOT NULL,
+        metadata_json TEXT,
+        created_at TEXT NOT NULL
+    )
+    ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS signal_forecast_outcomes (
+        id TEXT PRIMARY KEY,
+        forecast_id TEXT NOT NULL,
+        horizon_hours INTEGER NOT NULL,
+        due_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        result TEXT,
+        checked_at TEXT,
+        exit_price REAL,
+        performance_pct REAL,
+        notes TEXT,
+        UNIQUE(forecast_id, horizon_hours),
+        FOREIGN KEY (forecast_id) REFERENCES signal_forecasts (id) ON DELETE CASCADE
+    )
+    ''')
     try:
         cursor.execute('ALTER TABLE holdings ADD COLUMN purchase_date TEXT')
     except sqlite3.OperationalError:
@@ -263,6 +302,165 @@ class PortfolioManager:
         cursor.execute('DELETE FROM holdings WHERE portfolio_id = ? AND ticker = ?', (portfolio_id, ticker.upper()))
         conn.commit()
         conn.close()
+
+    def upsert_signal_forecast(
+        self,
+        forecast: Dict[str, Any],
+        outcomes: List[Dict[str, Any]],
+    ) -> bool:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT OR IGNORE INTO signal_forecasts (
+                id, signal_key, symbol, direction, setup_type, session_label,
+                source_label, thesis, trigger, invalidation, confidence,
+                rank_score, expected_move, entry_price, forecast_time,
+                metadata_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                forecast.get("id"),
+                forecast.get("signal_key"),
+                forecast.get("symbol"),
+                forecast.get("direction"),
+                forecast.get("setup_type"),
+                forecast.get("session_label"),
+                forecast.get("source_label"),
+                forecast.get("thesis"),
+                forecast.get("trigger"),
+                forecast.get("invalidation"),
+                forecast.get("confidence"),
+                forecast.get("rank_score"),
+                forecast.get("expected_move"),
+                forecast.get("entry_price"),
+                forecast.get("forecast_time"),
+                forecast.get("metadata_json"),
+                forecast.get("created_at"),
+            ),
+        )
+        inserted = cursor.rowcount > 0
+        for outcome in outcomes:
+            cursor.execute(
+                '''
+                INSERT OR IGNORE INTO signal_forecast_outcomes (
+                    id, forecast_id, horizon_hours, due_at, status,
+                    result, checked_at, exit_price, performance_pct, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    outcome.get("id"),
+                    outcome.get("forecast_id"),
+                    outcome.get("horizon_hours"),
+                    outcome.get("due_at"),
+                    outcome.get("status"),
+                    outcome.get("result"),
+                    outcome.get("checked_at"),
+                    outcome.get("exit_price"),
+                    outcome.get("performance_pct"),
+                    outcome.get("notes"),
+                ),
+            )
+        conn.commit()
+        conn.close()
+        return inserted
+
+    def list_due_signal_forecast_outcomes(self, limit: int = 50) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT
+                o.*,
+                f.symbol,
+                f.direction,
+                f.setup_type,
+                f.session_label,
+                f.source_label,
+                f.entry_price,
+                f.confidence,
+                f.forecast_time,
+                f.thesis,
+                f.trigger,
+                f.invalidation
+            FROM signal_forecast_outcomes o
+            JOIN signal_forecasts f ON f.id = o.forecast_id
+            WHERE o.status IN ('pending', 'pending_data') AND o.due_at <= ?
+            ORDER BY o.due_at ASC
+            LIMIT ?
+            ''',
+            (datetime.utcnow().isoformat(), int(limit)),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def update_signal_forecast_outcome(self, outcome_id: str, updates: Dict[str, Any]) -> None:
+        allowed = {
+            "status",
+            "result",
+            "checked_at",
+            "exit_price",
+            "performance_pct",
+            "notes",
+        }
+        fields = [key for key in updates.keys() if key in allowed]
+        if not fields:
+            return
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        assignments = ", ".join(f"{field} = ?" for field in fields)
+        values = [updates[field] for field in fields]
+        values.append(outcome_id)
+        cursor.execute(
+            f"UPDATE signal_forecast_outcomes SET {assignments} WHERE id = ?",
+            values,
+        )
+        conn.commit()
+        conn.close()
+
+    def list_signal_forecasts(self, limit: int = 200) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT * FROM signal_forecasts
+            ORDER BY forecast_time DESC
+            LIMIT ?
+            ''',
+            (int(limit),),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def list_signal_forecast_outcomes(self, limit: int = 800) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT
+                o.*,
+                f.symbol,
+                f.direction,
+                f.setup_type,
+                f.session_label,
+                f.source_label,
+                f.confidence,
+                f.forecast_time
+            FROM signal_forecast_outcomes o
+            JOIN signal_forecasts f ON f.id = o.forecast_id
+            ORDER BY o.due_at DESC
+            LIMIT ?
+            ''',
+            (int(limit),),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
 
     def update_holding(
         self,

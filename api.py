@@ -36,6 +36,7 @@ from src.email_alert_service import (
 )
 from src.morning_brief_service import MorningBriefService
 from src.paper_trading_service import PaperTradingService
+from src.forecast_learning_service import ForecastLearningService
 from src.signal_score_service import SignalScoreService
 from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
@@ -88,6 +89,8 @@ _session_list_service = None
 _paper_trading_service = None
 _trading_intelligence_service = None
 _realtime_market_service = None
+_forecast_learning_service = None
+_forecast_learning_task = None
 _push_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 
@@ -260,8 +263,16 @@ def get_email_alert_service():
             get_session_list_service(),
             get_signal_score_service(),
             get_push_service(),
+            get_forecast_learning_service(),
         )
     return _email_alert_service
+
+def get_forecast_learning_service():
+    global _forecast_learning_service
+    if _forecast_learning_service is None:
+        print("Initializing ForecastLearningService...")
+        _forecast_learning_service = ForecastLearningService(get_portfolio_manager())
+    return _forecast_learning_service
 
 def get_morning_brief_service():
     global _morning_brief_service
@@ -380,6 +391,27 @@ async def _brief_warmup_loop():
         await asyncio.sleep(max(60, interval_seconds))
 
 
+async def _forecast_learning_loop():
+    if not _env_enabled("FORECAST_LEARNING_ENABLED", "true"):
+        return
+    await asyncio.sleep(20)
+    while True:
+        try:
+            result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
+            get_portfolio_manager().set_app_setting(
+                "forecast_learning_last_result",
+                json.dumps({"checked_at": datetime.utcnow().isoformat(), **result}),
+            )
+        except Exception as e:
+            print(f"Forecast learning loop error: {e}")
+            try:
+                get_portfolio_manager().set_app_setting("forecast_learning_loop_error", str(e))
+            except Exception:
+                pass
+        interval_minutes = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", 30, minimum=5)
+        await asyncio.sleep(interval_minutes * 60)
+
+
 async def _warm_brief_once() -> Dict[str, Any]:
     started = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
     items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
@@ -486,7 +518,7 @@ async def _price_alert_loop():
 
 @app.on_event("startup")
 async def startup_event():
-    global _signal_alert_task, _price_alert_task, _brief_warmup_task
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task
     alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
     scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
     if (alerts_enabled or scheduled_briefs_enabled) and _signal_alert_task is None:
@@ -495,6 +527,8 @@ async def startup_event():
         _brief_warmup_task = asyncio.create_task(_brief_warmup_loop())
     if _price_alert_task is None:
         _price_alert_task = asyncio.create_task(_price_alert_loop())
+    if _forecast_learning_task is None:
+        _forecast_learning_task = asyncio.create_task(_forecast_learning_loop())
 
 # Response Models
 class AnalysisResponse(BaseModel):
@@ -546,6 +580,7 @@ class OracleRequest(BaseModel):
     live_quotes: Optional[Dict[str, Any]] = None
     signal_score: Optional[Dict[str, Any]] = None
     morning_brief_summary: Optional[Dict[str, Any]] = None
+    learning_summary: Optional[Dict[str, Any]] = None
 
 
 class PriceAlertCreateRequest(BaseModel):
@@ -1347,6 +1382,16 @@ async def oracle_chat(req: OracleRequest):
     if headline:
         levels.append(f"Brief-Headline: {headline}")
 
+    learning_context = req.learning_summary
+    if not isinstance(learning_context, dict):
+        try:
+            learning_context = get_forecast_learning_service().build_dashboard()
+        except Exception:
+            learning_context = {}
+    learning_summary = learning_context.get("summary", {}) if isinstance(learning_context, dict) else {}
+    source_quality = learning_context.get("by_source", []) if isinstance(learning_context, dict) else []
+    recent_forecasts = learning_context.get("recent_forecasts", []) if isinstance(learning_context, dict) else []
+
     explain_lines = []
     if primary:
         explain_lines.append(
@@ -1364,6 +1409,23 @@ async def oracle_chat(req: OracleRequest):
         )
     if top_signal:
         explain_lines.append("Das Signalboard fliesst als Priorisierung ein, nicht als blinder Kaufbefehl.")
+    if learning_summary.get("forecasts"):
+        explain_lines.append(
+            f"Learning Loop aktiv: {learning_summary.get('forecasts')} gespeicherte Setups, "
+            f"{learning_summary.get('evaluated', 0)} Outcomes, Trefferquote {learning_summary.get('hit_rate', 0)}%."
+        )
+
+    if any(token in msg for token in ["falsch", "fehler", "treffer", "quelle", "learning", "gelernt"]):
+        best_source = source_quality[0] if source_quality else None
+        latest = recent_forecasts[0] if recent_forecasts else None
+        if best_source:
+            levels.append(
+                f"Beste Quelle bisher: {best_source.get('label')} ({best_source.get('hit_rate')}% hit-rate)"
+            )
+        if latest:
+            levels.append(
+                f"Letztes gespeichertes Setup: {latest.get('symbol')} / {latest.get('direction')}"
+            )
 
     next_steps = [
         "1. Erst den Trigger abwarten, nicht vor der Bestaetigung handeln.",
@@ -1901,6 +1963,7 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
         "session_lists": convert_numpy_types(await get_session_list_service().build_session_lists(snapshot)),
         "paper_dashboard": convert_numpy_types(get_paper_trading_service().build_dashboard(scoreboard, settings)),
         "trading_intelligence": convert_numpy_types(get_trading_intelligence_service().build_snapshot(snapshot)),
+        "learning": convert_numpy_types(get_forecast_learning_service().build_dashboard()),
     }
 
 
@@ -1908,6 +1971,27 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
 async def get_radar_bootstrap(limit: int = 8):
     try:
         return await build_radar_bootstrap(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/learning/forecasts")
+async def get_forecast_learning_dashboard():
+    try:
+        return convert_numpy_types(get_forecast_learning_service().build_dashboard())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/learning/evaluate")
+async def evaluate_forecast_learning():
+    try:
+        result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
+        get_portfolio_manager().set_app_setting(
+            "forecast_learning_last_result",
+            json.dumps({"checked_at": datetime.utcnow().isoformat(), **result}),
+        )
+        return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2293,6 +2377,25 @@ async def admin_health_center():
     except Exception as exc:
         data_feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
 
+    try:
+        learning_dashboard = get_forecast_learning_service().build_dashboard()
+        learning_last_result_raw = get_portfolio_manager().get_app_setting(
+            "forecast_learning_last_result",
+            "{}",
+        )
+        try:
+            learning_last_result = json.loads(learning_last_result_raw or "{}")
+        except Exception:
+            learning_last_result = {}
+        data_feeds["forecast_learning"] = {
+            "status": "ok",
+            "summary": learning_dashboard.get("summary"),
+            "last_result": learning_last_result,
+        }
+    except Exception as exc:
+        learning_dashboard = {"summary": {}}
+        data_feeds["forecast_learning"] = {"status": "error", "error": exc.__class__.__name__}
+
     telegram = _telegram_health_check()
     scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
     scheduler_loop_seen_at = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
@@ -2331,6 +2434,7 @@ async def admin_health_center():
                 "delivery_grace_minutes": grace_minutes,
                 "jobs": schedule_jobs,
             },
+            "learning": learning_dashboard,
             "data_feeds": data_feeds,
             "recent_deliveries": sent_events[:12],
             "problems": problems,

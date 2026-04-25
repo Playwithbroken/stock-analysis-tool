@@ -4,6 +4,7 @@ import PaperTradingPanel from "./PaperTradingPanel";
 import SignalScoreboardPanel from "./SignalScoreboardPanel";
 import SessionListsPanel from "./SessionListsPanel";
 import TradingIntelligencePanel from "./TradingIntelligencePanel";
+import LearningBoardPanel from "./LearningBoardPanel";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "../lib/api";
 
@@ -54,6 +55,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
   const [sessionLists, setSessionLists] = useState<any>(null);
   const [paperDashboard, setPaperDashboard] = useState<any>(null);
   const [tradingIntelligence, setTradingIntelligence] = useState<any>(null);
+  const [learning, setLearning] = useState<any>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -99,6 +101,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
       setSessionLists(payload.session_lists || null);
       setPaperDashboard(payload.paper_dashboard || null);
       setTradingIntelligence(payload.trading_intelligence || null);
+      setLearning(payload.learning || null);
     } catch {
       setLoadError("Radar wird gerade aufgeweckt. Die Daten werden automatisch erneut geladen.");
     } finally {
@@ -307,6 +310,15 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
           compact
         />
       )}
+      {learning ? (
+        <LearningBoardPanel data={learning} />
+      ) : (
+        <RadarPlaceholder
+          label="Learning Board"
+          description="Forecast-Tracking wird geladen. Nach den naechsten Briefings misst die App automatisch Treffer, Fehler und beste Signalquellen."
+          compact
+        />
+      )}
       {paperDashboard ? (
         <PaperTradingPanel data={paperDashboard} onAnalyze={onAnalyze} onRefresh={() => fetchData(true)} />
       ) : (
@@ -333,4 +345,3 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
     </div>
   );
 }
-

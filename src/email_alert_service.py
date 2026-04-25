@@ -58,6 +58,7 @@ class EmailAlertService:
         session_list_service: SessionListService | None = None,
         signal_score_service: SignalScoreService | None = None,
         push_service: "Any | None" = None,
+        forecast_learning_service: "Any | None" = None,
     ) -> None:
         self.portfolio_manager = portfolio_manager
         self.public_signal_service = public_signal_service
@@ -65,6 +66,7 @@ class EmailAlertService:
         self.session_list_service = session_list_service or SessionListService()
         self.signal_score_service = signal_score_service or SignalScoreService()
         self.push_service = push_service
+        self.forecast_learning_service = forecast_learning_service
 
     def get_config(self) -> EmailAlertConfig:
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -246,7 +248,16 @@ class EmailAlertService:
             self._send_telegram_rich_brief(config, brief, session)
         except Exception as e:
             raise RuntimeError(f"Telegram send failed: {e}") from e
-        return {"status": "ok", "message": f"Session brief '{session}' sent to Telegram."}
+        learning = self._record_brief_forecasts(
+            brief,
+            session,
+            f"manual-brief:{session}:{datetime.utcnow().isoformat()}",
+        )
+        return {
+            "status": "ok",
+            "message": f"Session brief '{session}' sent to Telegram.",
+            "forecasts_recorded": learning.get("recorded", 0),
+        }
 
     async def send_a_setup_digest_async(self) -> Dict[str, Any]:
         config = self.get_config()
@@ -441,11 +452,16 @@ class EmailAlertService:
             self._validate_config(config)
             events = job["build_events"]()
             delivered = False
+            brief = None
 
             # For scheduled briefs: send rich multi-part Telegram message + email
             if job.get("is_brief"):
                 items = self.portfolio_manager.get_signal_watch_items()
                 snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+                try:
+                    self.morning_brief_service.get_brief_fast(snapshot, True)
+                except Exception as exc:
+                    print(f"Brief warm-cache failed before {job['job_key']}: {exc}")
                 brief = self.morning_brief_service.get_brief(snapshot)
                 # Trading edge is decoupled from the cached brief — fetch
                 # fresh here so scheduled briefs always include MSG 5.
@@ -495,6 +511,15 @@ class EmailAlertService:
                     }
                 ]
             )
+            learning = (
+                self._record_brief_forecasts(
+                    brief,
+                    str(job["session_label"]),
+                    event_key,
+                )
+                if isinstance(brief, dict)
+                else {"recorded": 0, "skipped": 0}
+            )
             results.append(
                 {
                     "job": job["job_key"],
@@ -502,6 +527,7 @@ class EmailAlertService:
                     "scheduled_at": job["scheduled_at"].isoformat(),
                     "minutes_late": job["minutes_late"],
                     "catchup": job["minutes_late"] > 5,
+                    "forecasts_recorded": learning.get("recorded", 0),
                 }
             )
             sent_this_run += 1
@@ -516,6 +542,24 @@ class EmailAlertService:
             )
         self.portfolio_manager.set_app_setting("brief_scheduler_last_result", json.dumps(results[-5:]))
         return results
+
+    def _record_brief_forecasts(
+        self,
+        brief: Dict[str, Any] | None,
+        session_label: str,
+        delivery_key: str,
+    ) -> Dict[str, Any]:
+        if not self.forecast_learning_service or not isinstance(brief, dict):
+            return {"status": "disabled", "recorded": 0, "skipped": 0}
+        try:
+            return self.forecast_learning_service.record_brief_forecasts(
+                brief=brief,
+                session_label=session_label,
+                delivery_key=delivery_key,
+            )
+        except Exception as exc:
+            print(f"Forecast recording failed for {delivery_key}: {exc}")
+            return {"status": "error", "recorded": 0, "skipped": 0, "error": str(exc)}
 
     def _schedule_day_matches(self, now: datetime) -> bool:
         raw_value = os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri")

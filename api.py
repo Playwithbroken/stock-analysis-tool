@@ -1292,6 +1292,12 @@ async def oracle_chat(req: OracleRequest):
                     "change_1w": price_data.get("change_1w"),
                     "score": float(recommendation.get("total_score", 0)),
                     "verdict": analyzer.get_one_sentence_verdict(),
+                    "fundamentals": data.get("fundamentals", {}) or {},
+                    "analyst_data": data.get("analyst_data", {}) or {},
+                    "earnings_history": data.get("earnings_history", []) or [],
+                    "guidance_signal": data.get("guidance_signal", {}) or {},
+                    "news": data.get("news", []) or [],
+                    "short_interest": data.get("short_interest", {}) or {},
                 }
             )
         except Exception:
@@ -1337,6 +1343,108 @@ async def oracle_chat(req: OracleRequest):
     symbol = primary.get("symbol") if primary else "MARKET"
     week_change = float(primary.get("change_1w") or 0) if primary else 0.0
     price = primary.get("price") if primary else None
+    primary_fundamentals = primary.get("fundamentals", {}) if primary else {}
+    primary_analysts = primary.get("analyst_data", {}) if primary else {}
+    primary_earnings = primary.get("earnings_history", []) if primary else []
+    primary_guidance = primary.get("guidance_signal", {}) if primary else {}
+    primary_news = primary.get("news", []) if primary else []
+    primary_short = primary.get("short_interest", {}) if primary else {}
+
+    def _safe_float(value: Any) -> Optional[float]:
+        try:
+            if value in (None, "", "N/A"):
+                return None
+            parsed = float(value)
+            if not math.isfinite(parsed):
+                return None
+            return parsed
+        except Exception:
+            return None
+
+    def _pick_number(source: Dict[str, Any], *keys: str) -> Optional[float]:
+        for key in keys:
+            value = _safe_float(source.get(key))
+            if value is not None:
+                return value
+        return None
+
+    def _format_pct(value: Optional[float]) -> str:
+        if value is None:
+            return "n/a"
+        normalized = value * 100 if abs(value) <= 1 else value
+        return f"{normalized:+.1f}%"
+
+    def _format_compact_money(value: Optional[float]) -> str:
+        if value is None:
+            return "n/a"
+        abs_value = abs(value)
+        if abs_value >= 1_000_000_000_000:
+            return f"${value / 1_000_000_000_000:.1f}T"
+        if abs_value >= 1_000_000_000:
+            return f"${value / 1_000_000_000:.1f}B"
+        if abs_value >= 1_000_000:
+            return f"${value / 1_000_000:.1f}M"
+        return f"${value:,.0f}"
+
+    revenue_growth = _pick_number(
+        primary_fundamentals,
+        "revenue_growth",
+        "revenueGrowth",
+        "quarterly_revenue_growth",
+    )
+    profit_margin = _pick_number(primary_fundamentals, "profit_margin", "profitMargins")
+    gross_margin = _pick_number(primary_fundamentals, "gross_margin", "grossMargins")
+    free_cashflow = _pick_number(
+        primary_fundamentals,
+        "free_cashflow",
+        "freeCashflow",
+        "free_cash_flow",
+    )
+    market_cap = _pick_number(primary_fundamentals, "market_cap", "marketCap")
+    fcf_yield = (free_cashflow / market_cap * 100) if free_cashflow and market_cap else None
+    pe_ratio = _pick_number(primary_fundamentals, "pe_ratio", "trailingPE", "trailing_pe")
+    forward_pe = _pick_number(primary_fundamentals, "forward_pe", "forwardPE")
+    debt_to_equity = _pick_number(primary_fundamentals, "debt_to_equity", "debtToEquity")
+    target_mean = _pick_number(
+        primary_analysts,
+        "target_mean_price",
+        "targetMeanPrice",
+        "mean_target_price",
+    )
+    analyst_upside = None
+    if target_mean is not None and price:
+        current_price = _safe_float(price)
+        if current_price:
+            analyst_upside = (target_mean / current_price - 1) * 100
+    latest_earning = primary_earnings[0] if isinstance(primary_earnings, list) and primary_earnings else {}
+    latest_surprise = (
+        _pick_number(latest_earning, "surprise_percent", "eps_surprise_percent", "surprise")
+        if isinstance(latest_earning, dict)
+        else None
+    )
+    latest_earning_label = ""
+    if isinstance(latest_earning, dict):
+        latest_earning_label = str(
+            latest_earning.get("date")
+            or latest_earning.get("period")
+            or latest_earning.get("quarter")
+            or ""
+        )
+    guidance_label = ""
+    guidance_score = None
+    if isinstance(primary_guidance, dict):
+        guidance_label = str(
+            primary_guidance.get("label")
+            or primary_guidance.get("tone")
+            or primary_guidance.get("summary")
+            or ""
+        )
+        guidance_score = _pick_number(primary_guidance, "score", "sentiment_score")
+    short_percent = (
+        _pick_number(primary_short, "short_percent_float", "shortPercentOfFloat", "short_float")
+        if isinstance(primary_short, dict)
+        else None
+    )
 
     if primary:
         if score >= 30 and week_change >= 0:
@@ -1367,6 +1475,17 @@ async def oracle_chat(req: OracleRequest):
         risk_line_parts.append(
             f"Top-Signal: {top_signal.get('label', 'Idea')} (Score {float(top_signal.get('total_score') or 0):.0f})"
         )
+    if primary:
+        if revenue_growth is not None and revenue_growth < 0:
+            risk_line_parts.append(f"Umsatz schrumpft ({_format_pct(revenue_growth)})")
+        if profit_margin is not None and profit_margin < 0:
+            risk_line_parts.append(f"Negative Profit-Marge ({_format_pct(profit_margin)})")
+        if pe_ratio is not None and pe_ratio > 45 and revenue_growth is not None and revenue_growth < 0.15:
+            risk_line_parts.append(f"Hohe Bewertung ohne starkes Wachstum (P/E {pe_ratio:.1f})")
+        if latest_surprise is not None and latest_surprise < -2:
+            risk_line_parts.append(f"Letzter Earnings-Surprise negativ ({latest_surprise:+.1f}%)")
+        if short_percent is not None and short_percent > 12:
+            risk_line_parts.append(f"Erhoehte Short-Quote ({_format_pct(short_percent)})")
     if not risk_line_parts:
         risk_line_parts.append("Keine erweiterten Risiko-Metadaten, Standard-Risikobudget nutzen.")
 
@@ -1392,6 +1511,24 @@ async def oracle_chat(req: OracleRequest):
 
     if headline:
         levels.append(f"Brief-Headline: {headline}")
+    if target_mean is not None:
+        analyst_text = f"Analysten-Ziel: {target_mean:.2f}"
+        if analyst_upside is not None:
+            analyst_text += f" ({analyst_upside:+.1f}% vs Spot)"
+        levels.append(analyst_text)
+    if latest_surprise is not None:
+        suffix = f" ({latest_earning_label})" if latest_earning_label else ""
+        levels.append(f"Letztes Earnings-Signal: {latest_surprise:+.1f}% Surprise{suffix}")
+    if guidance_label:
+        guidance_suffix = f", Score {guidance_score:+.1f}" if guidance_score is not None else ""
+        levels.append(f"Guidance: {guidance_label}{guidance_suffix}")
+    if isinstance(primary_news, list) and primary_news:
+        top_news = primary_news[0]
+        if isinstance(top_news, dict):
+            title = str(top_news.get("title") or top_news.get("headline") or "").strip()
+            source = str(top_news.get("source") or top_news.get("publisher") or "").strip()
+            if title:
+                levels.append(f"Top-News: {title[:120]}" + (f" ({source})" if source else ""))
 
     learning_context = req.learning_summary
     if not isinstance(learning_context, dict):
@@ -1408,6 +1545,23 @@ async def oracle_chat(req: OracleRequest):
         explain_lines.append(
             f"{symbol} wird aus Score, Wochenmomentum, Live-Preis und aktuellem Marktregime eingeordnet."
         )
+        dossier_parts = []
+        if revenue_growth is not None:
+            dossier_parts.append(f"Umsatzwachstum {_format_pct(revenue_growth)}")
+        if profit_margin is not None:
+            dossier_parts.append(f"Profit-Marge {_format_pct(profit_margin)}")
+        elif gross_margin is not None:
+            dossier_parts.append(f"Bruttomarge {_format_pct(gross_margin)}")
+        if fcf_yield is not None:
+            dossier_parts.append(f"FCF-Yield {fcf_yield:+.1f}%")
+        if pe_ratio is not None:
+            dossier_parts.append(f"P/E {pe_ratio:.1f}")
+        if forward_pe is not None:
+            dossier_parts.append(f"Forward P/E {forward_pe:.1f}")
+        if analyst_upside is not None:
+            dossier_parts.append(f"Analysten-Upside {analyst_upside:+.1f}%")
+        if dossier_parts:
+            explain_lines.append("Finanzprofil: " + ", ".join(dossier_parts) + ".")
     else:
         explain_lines.append(
             "Ohne manuell gewaehlten Einzelticker nutze ich aktive Seite, Watchlist, Portfolio und Signalboard als Kontext."
@@ -1424,6 +1578,55 @@ async def oracle_chat(req: OracleRequest):
         explain_lines.append(
             f"Learning Loop aktiv: {learning_summary.get('forecasts')} gespeicherte Setups, "
             f"{learning_summary.get('evaluated', 0)} Outcomes, Trefferquote {learning_summary.get('hit_rate', 0)}%."
+        )
+
+    wants_dossier = any(
+        token in msg
+        for token in [
+            "dossier",
+            "finanz",
+            "umsatz",
+            "marge",
+            "cashflow",
+            "bewertung",
+            "earnings",
+            "guidance",
+            "zahlen",
+            "erklaer",
+            "erklär",
+        ]
+    )
+    dossier_lines: List[str] = []
+    if primary and wants_dossier:
+        dossier_lines.append(
+            f"Quality: Wachstum {_format_pct(revenue_growth)}, Profit-Marge {_format_pct(profit_margin)}, "
+            f"FCF-Yield {fcf_yield:+.1f}%" if fcf_yield is not None else
+            f"Quality: Wachstum {_format_pct(revenue_growth)}, Profit-Marge {_format_pct(profit_margin)}, FCF-Yield n/a"
+        )
+        valuation_bits = []
+        if pe_ratio is not None:
+            valuation_bits.append(f"P/E {pe_ratio:.1f}")
+        if forward_pe is not None:
+            valuation_bits.append(f"Forward P/E {forward_pe:.1f}")
+        if analyst_upside is not None:
+            valuation_bits.append(f"Analysten-Upside {analyst_upside:+.1f}%")
+        if market_cap is not None:
+            valuation_bits.append(f"Market Cap {_format_compact_money(market_cap)}")
+        dossier_lines.append("Bewertung: " + (", ".join(valuation_bits) if valuation_bits else "keine belastbaren Bewertungsdaten"))
+        if latest_surprise is not None or guidance_label:
+            dossier_lines.append(
+                "Zahlen/Guidance: "
+                + (f"Surprise {latest_surprise:+.1f}% " if latest_surprise is not None else "")
+                + (f"Guidance {guidance_label}" if guidance_label else "")
+            )
+        balance_bits = []
+        if debt_to_equity is not None:
+            balance_bits.append(f"Debt/Equity {debt_to_equity:.1f}")
+        if short_percent is not None:
+            balance_bits.append(f"Short Float {_format_pct(short_percent)}")
+        dossier_lines.append("Bilanz/Risiko: " + (", ".join(balance_bits) if balance_bits else "keine roten Zusatzdaten im aktuellen Snapshot"))
+        dossier_lines.append(
+            "Interpretation: stark wird das Setup erst, wenn Finanzprofil, Kurs-Trigger und Newsflow gleichzeitig in dieselbe Richtung zeigen."
         )
 
     if any(token in msg for token in ["falsch", "fehler", "treffer", "quelle", "learning", "gelernt"]):
@@ -1443,6 +1646,9 @@ async def oracle_chat(req: OracleRequest):
         "2. Positionsgroesse klein halten, wenn Regime oder Newsflow gemischt sind.",
         "3. Bei Gegenreaktion sofort Invalidierung pruefen.",
     ]
+    if primary and wants_dossier:
+        next_steps.append("4. Bei der naechsten Quartalszahl zuerst Umsatzwachstum, Marge und Guidance gegen die Erwartung pruefen.")
+        next_steps.append("5. Analysten-Ziel nur als Kontext nutzen; Kursreaktion und Volumen muessen es bestaetigen.")
 
     response = (
         f"These: {thesis}\n"
@@ -1450,6 +1656,8 @@ async def oracle_chat(req: OracleRequest):
         f"Risiko: {' | '.join(risk_line_parts)}\n"
         f"Trigger: {trigger_line}\n"
         f"Invalidierung: {invalidation_line}\n"
+        + (("Dossier:\n" + "\n".join([f"- {line}" for line in dossier_lines]) + "\n") if dossier_lines else "")
+        +
         "Beobachtbare Levels:\n"
         + "\n".join([f"- {line}" for line in levels])
         + "\nNaechste Schritte:\n"

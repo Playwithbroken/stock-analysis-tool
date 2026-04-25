@@ -154,7 +154,9 @@ export default function BrokerChat({
         : activeTab === "portfolio"
           ? "Pruefe mein Portfolio: groesstes Risiko und beste naechste Aktion?"
           : "Was ist heute das wichtigste Setup?",
-    "Welche Quelle oder Prognose lag zuletzt daneben?",
+    currentTicker
+      ? `Erklaere das Dossier fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}: Umsatz, Margen, Bewertung und Risiken.`
+      : "Welche Quelle oder Prognose lag zuletzt daneben?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];

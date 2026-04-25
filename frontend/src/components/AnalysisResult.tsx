@@ -350,6 +350,68 @@ export default function AnalysisResult({
       headStyles: { fillColor: [123, 44, 191] },
     });
 
+    const afterFundamentalsY = (doc as any).lastAutoTable?.finalY || 155;
+    doc.setFontSize(16);
+    doc.text("Dossier Intelligence", 14, afterFundamentalsY + 14);
+    doc.setFontSize(10);
+    doc.text(
+      `Quality Score: ${Math.max(0, Math.min(100, qualityScore))}/100 | FCF Yield: ${formatPercent(fcfYield)} | Analyst Upside: ${formatPercent(analystUpside)}`,
+      14,
+      afterFundamentalsY + 21,
+      { maxWidth: pageWidth - 28 },
+    );
+
+    autoTable(doc, {
+      startY: afterFundamentalsY + 30,
+      head: [["Case", "Interpretation"]],
+      body: [
+        [
+          "Bull Case",
+          fundamentals?.revenue_growth && fundamentals.revenue_growth > 0
+            ? `Wachstum sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Revenue Growth) und Score/Kursstruktur bleiben konstruktiv.`
+            : "Bull Case braucht frische Umsatz- oder Margenbestaetigung.",
+        ],
+        [
+          "Base Case",
+          recommendation?.action
+            ? `Aktueller App-Case: ${recommendation.action}. Trigger und naechster Earnings-/News-Impuls muessen zusammenpassen.`
+            : "Neutraler Case: erst Preisreaktion und Datenbestaetigung abwarten.",
+        ],
+        [
+          "Bear Case",
+          dossierRisks.length
+            ? dossierRisks.slice(0, 3).join(" ")
+            : "Bear Case entsteht bei schwacher Anschlussdynamik, negativer Guidance oder Risk-off.",
+        ],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [15, 118, 110] },
+    });
+
+    const afterCasesY = (doc as any).lastAutoTable?.finalY || afterFundamentalsY + 80;
+    autoTable(doc, {
+      startY: afterCasesY + 10,
+      head: [["Katalysatoren", "Risiken / Fragen"]],
+      body: [
+        [
+          dossierCatalysts.length ? dossierCatalysts.slice(0, 5).join("\n") : "Keine starken Katalysatoren im aktuellen Datenpaket.",
+          [
+            ...(dossierRisks.length ? dossierRisks.slice(0, 4) : ["Keine harten Red Flags aus Kernkennzahlen erkannt."]),
+            "",
+            "Vor Trade pruefen:",
+            ...dossierQuestions.slice(0, 4),
+          ].join("\n"),
+        ],
+      ],
+      theme: "grid",
+      styles: { cellWidth: "wrap", valign: "top" },
+      columnStyles: {
+        0: { cellWidth: (pageWidth - 28) / 2 },
+        1: { cellWidth: (pageWidth - 28) / 2 },
+      },
+      headStyles: { fillColor: [16, 17, 20] },
+    });
+
     doc.save(`${data.ticker}_Research_Dossier.pdf`);
   };
 
@@ -439,7 +501,7 @@ export default function AnalysisResult({
                     onClick={onOpenChat}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
                   >
-                    <FileText size={14} /> AI Desk
+                    <FileText size={14} /> Dossier erklaeren
                   </button>
                 </div>
                 {alertStatus ? (

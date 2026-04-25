@@ -147,6 +147,7 @@ function HeaderTickerChip({
   symbol: string;
   quote: any;
 }) {
+  const { formatPrice } = useCurrency();
   const previousPriceRef = useRef<number | null>(null);
   const [priceDirection, setPriceDirection] = useState<"up" | "down" | null>(null);
 
@@ -185,7 +186,7 @@ function HeaderTickerChip({
             className={priceDirection === "up" ? "text-emerald-700" : "text-red-700"}
           />
         ) : null}
-        {formatTickerPrice(quote?.price)}
+        {typeof quote?.price === "number" ? formatPrice(quote.price) : "..."}
       </span>
       {move != null ? (
         <span className={moveTone}>
@@ -404,7 +405,7 @@ function AppContent() {
     discardRestore,
   } = usePortfolios(auth.authenticated);
 
-  const { currency, setCurrency } = useCurrency();
+  const { currency, setCurrency, formatPrice } = useCurrency();
   const watchlistTickerSymbols = (watchlist?.items || [])
     .filter((item) => item.kind === "ticker" && item.value)
     .map((item) => (item.value || "").toUpperCase());
@@ -414,7 +415,6 @@ function AppContent() {
     .filter(Boolean);
   const headerSymbols = Array.from(
     new Set([
-      analysis?.ticker?.toUpperCase(),
       ...watchlistTickerSymbols,
       ...portfolioTickerSymbols,
     ].filter(Boolean) as string[]),
@@ -935,7 +935,7 @@ function AppContent() {
               </span>
               {item.price != null ? (
                 <span className="text-xs font-semibold text-slate-500">
-                  {formatTickerPrice(item.price)}
+                  {formatPrice(item.price)}
                 </span>
               ) : null}
             </div>

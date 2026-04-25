@@ -158,6 +158,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         setConnectionState(payload.connection_state || "snapshot");
         setStaleSeconds(payload.stale_seconds || {});
         setTransportMode("snapshot");
+        setLastError(null);
         if ((payload.quotes || []).length > 0) {
           setConnected(true);
         }

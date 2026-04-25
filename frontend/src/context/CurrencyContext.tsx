@@ -70,7 +70,7 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const formatPrice = (amount: number, forceCurrency?: Currency): string => {
     const activeCurrency = forceCurrency || currency;
-    const value = convert(amount, "USD");
+    const value = activeCurrency === "EUR" ? amount * exchangeRate : amount;
 
     return new Intl.NumberFormat("de-DE", {
       style: "currency",

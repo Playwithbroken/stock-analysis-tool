@@ -1641,6 +1641,43 @@ class EmailAlertService:
                     lines4.append(f"   Trigger: {trigger}")
                 if invalidation:
                     lines4.append(f"   Invalid: {invalidation}")
+            learning_rows = []
+            for setup_item in trade_setups[:5]:
+                adjustment = setup_item.get("learning_adjustment") or {}
+                try:
+                    delta = float(adjustment.get("score_delta") or 0)
+                except Exception:
+                    delta = 0.0
+                if not delta:
+                    continue
+                symbol = self._tg_esc(setup_item.get("symbol") or "")
+                reason = self._tg_esc(str(adjustment.get("reason") or "")[:130])
+                source_hit = adjustment.get("source_hit_rate")
+                setup_hit = adjustment.get("setup_hit_rate")
+                hit_bits = []
+                if source_hit is not None:
+                    hit_bits.append(f"source {source_hit}%")
+                if setup_hit is not None:
+                    hit_bits.append(f"setup {setup_hit}%")
+                hit_text = f" ({', '.join(hit_bits)})" if hit_bits else ""
+                sign = "+" if delta > 0 else ""
+                learning_rows.append(
+                    f"• <code>{symbol}</code> learning {sign}{delta:.1f}{self._tg_esc(hit_text)} — {reason}"
+                )
+            if learning_rows:
+                lines4.append("")
+                lines4.append("🧠 <b>Learning applied</b>")
+                lines4.extend(learning_rows[:4])
+            learning_adjustments = brief.get("learning_adjustments") or []
+            if learning_adjustments and not learning_rows:
+                lines4.append("")
+                lines4.append("🧠 <b>Learning applied</b>")
+                for item in learning_adjustments[:4]:
+                    label = self._tg_esc(item.get("label") or "")
+                    axis = self._tg_esc(item.get("axis") or "signal")
+                    delta = item.get("score_delta")
+                    hit_rate = item.get("hit_rate")
+                    lines4.append(f"• {axis} <b>{label}</b>: {hit_rate}% hit-rate, rank {delta:+}")
 
         action_board = brief.get("action_board", [])
         action_rows = []

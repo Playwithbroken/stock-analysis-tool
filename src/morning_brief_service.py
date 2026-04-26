@@ -270,6 +270,7 @@ class MorningBriefService:
             "action_board": [],
             "congress_watch": [],
             "trade_setups": [],
+            "learning_adjustments": [],
             "trade_setups_status": "insufficient_signal",
             "setup_board": {"now": [], "next": [], "avoid": []},
             "portfolio_brain": [],
@@ -389,7 +390,8 @@ class MorningBriefService:
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
         congress_watch = self._build_congress_watch(action_board)
-        trade_setups = self._build_trade_setups(action_board, top_news, market_movers)
+        learning_bias = self._build_learning_bias()
+        trade_setups = self._build_trade_setups(action_board, top_news, market_movers, learning_bias)
         setup_board = self._build_setup_board(trade_setups)
         prediction_signals = self._build_prediction_signals(polymarket_events)
 
@@ -429,6 +431,7 @@ class MorningBriefService:
             "action_board": action_board,
             "congress_watch": congress_watch,
             "trade_setups": trade_setups,
+            "learning_adjustments": learning_bias.get("summary", []),
             "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
             "setup_board": setup_board,
             "portfolio_brain": self._build_portfolio_brain(action_board),
@@ -492,7 +495,8 @@ class MorningBriefService:
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
         congress_watch = self._build_congress_watch(action_board)
-        trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []})
+        learning_bias = self._build_learning_bias()
+        trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []}, learning_bias)
         setup_board = self._build_setup_board(trade_setups)
 
         brief = {
@@ -531,6 +535,7 @@ class MorningBriefService:
             "action_board": action_board,
             "congress_watch": congress_watch,
             "trade_setups": trade_setups,
+            "learning_adjustments": learning_bias.get("summary", []),
             "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
             "setup_board": setup_board,
             "portfolio_brain": self._build_portfolio_brain(action_board),
@@ -1077,12 +1082,127 @@ class MorningBriefService:
         self._market_movers_cache = (payload, now)
         return payload
 
+    def _build_learning_bias(self) -> Dict[str, Any]:
+        """Build transparent ranking nudges from evaluated forecast outcomes."""
+        try:
+            outcomes = self._get_portfolio_manager().list_signal_forecast_outcomes(limit=1000)
+        except Exception:
+            return {"source": {}, "setup_type": {}, "summary": []}
+
+        evaluated = [item for item in outcomes if item.get("status") == "evaluated"]
+        if not evaluated:
+            return {"source": {}, "setup_type": {}, "summary": []}
+
+        source_bias = self._quality_bias(evaluated, "source_label")
+        setup_bias = self._quality_bias(evaluated, "setup_type")
+        summary: List[Dict[str, Any]] = []
+        for label, payload in sorted(source_bias.items(), key=lambda row: abs(row[1].get("score_delta", 0)), reverse=True)[:4]:
+            if payload.get("evaluated", 0) < 3:
+                continue
+            summary.append(
+                {
+                    "axis": "source",
+                    "label": label,
+                    "hit_rate": payload.get("hit_rate"),
+                    "score_delta": payload.get("score_delta"),
+                    "reason": payload.get("reason"),
+                }
+            )
+        for label, payload in sorted(setup_bias.items(), key=lambda row: abs(row[1].get("score_delta", 0)), reverse=True)[:4]:
+            if payload.get("evaluated", 0) < 3:
+                continue
+            summary.append(
+                {
+                    "axis": "setup_type",
+                    "label": label,
+                    "hit_rate": payload.get("hit_rate"),
+                    "score_delta": payload.get("score_delta"),
+                    "reason": payload.get("reason"),
+                }
+            )
+        return {"source": source_bias, "setup_type": setup_bias, "summary": summary[:6]}
+
+    def _quality_bias(self, outcomes: List[Dict[str, Any]], key: str) -> Dict[str, Dict[str, Any]]:
+        buckets: Dict[str, List[Dict[str, Any]]] = {}
+        for item in outcomes:
+            buckets.setdefault(str(item.get(key) or "unknown"), []).append(item)
+
+        bias: Dict[str, Dict[str, Any]] = {}
+        for label, items in buckets.items():
+            hits = [item for item in items if item.get("result") == "hit"]
+            misses = [item for item in items if item.get("result") == "miss"]
+            hit_base = len(hits) + len(misses)
+            if len(items) < 3 or hit_base == 0:
+                delta = 0.0
+                reason = "Not enough evaluated outcomes yet."
+            else:
+                hit_rate = (len(hits) / hit_base) * 100
+                if hit_rate >= 65:
+                    delta = 5.0
+                    reason = "Recent outcomes support a higher ranking."
+                elif hit_rate <= 35:
+                    delta = -6.0
+                    reason = "Recent outcomes require stricter confirmation."
+                else:
+                    delta = 0.0
+                    reason = "Recent outcomes are neutral."
+            hit_rate = round((len(hits) / max(1, hit_base)) * 100, 1)
+            bias[label] = {
+                "evaluated": len(items),
+                "hit_rate": hit_rate,
+                "score_delta": delta,
+                "reason": reason,
+            }
+        return bias
+
+    def _learning_adjustment(
+        self,
+        learning_bias: Dict[str, Any],
+        setup_type: str,
+        source_label: str,
+    ) -> Dict[str, Any]:
+        source_payload = (learning_bias.get("source") or {}).get(source_label) or {}
+        setup_payload = (learning_bias.get("setup_type") or {}).get(setup_type) or {}
+        source_delta = float(source_payload.get("score_delta") or 0)
+        setup_delta = float(setup_payload.get("score_delta") or 0)
+        score_delta = max(-8.0, min(8.0, source_delta + setup_delta))
+        reasons = [
+            value
+            for value in [
+                source_payload.get("reason") if source_delta else None,
+                setup_payload.get("reason") if setup_delta else None,
+            ]
+            if value
+        ]
+        return {
+            "source_label": source_label,
+            "setup_type": setup_type,
+            "score_delta": round(score_delta, 2),
+            "source_hit_rate": source_payload.get("hit_rate"),
+            "setup_hit_rate": setup_payload.get("hit_rate"),
+            "reason": " ".join(reasons) if reasons else "No learning bias applied yet.",
+        }
+
+    def _infer_setup_source_label(self, item: Dict[str, Any]) -> str:
+        if item.get("congress_signal"):
+            return "congress_watch"
+        if item.get("product_catalyst"):
+            return "product_news"
+        setup_source = str(item.get("setup_source") or item.get("source") or "").lower()
+        if "earning" in setup_source:
+            return "earnings"
+        if setup_source:
+            return setup_source
+        return "morning_brief"
+
     def _build_trade_setups(
         self,
         action_board: List[Dict[str, Any]],
         news: List[Dict[str, Any]],
         market_movers: Dict[str, List[Dict[str, Any]]] | None = None,
+        learning_bias: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
+        learning_bias = learning_bias or {"source": {}, "setup_type": {}, "summary": []}
         source_lookup: Dict[str, Dict[str, Any]] = {}
         for item in news:
             ticker = str(item.get("ticker") or "").upper()
@@ -1121,6 +1241,7 @@ class MorningBriefService:
                 "low": "0.3-1.0%",
             }
             setup_source = str(item.get("setup_source") or "single_name")
+            learning_adjustment = self._learning_adjustment(learning_bias, setup_source, self._infer_setup_source_label(item))
             scored.append(
                 {
                     "symbol": ticker,
@@ -1146,8 +1267,15 @@ class MorningBriefService:
                     "product_catalyst": item.get("product_catalyst"),
                     "congress_signal": item.get("congress_signal"),
                     "setup_type": setup_source,
+                    "learning_adjustment": learning_adjustment,
                     "direction": item.get("setup"),
-                    "_score": round(score + conviction_rank * 8 + (4 if setup_source == "single_name" else 0), 2),
+                    "_score": round(
+                        score
+                        + conviction_rank * 8
+                        + (4 if setup_source == "single_name" else 0)
+                        + float(learning_adjustment.get("score_delta") or 0),
+                        2,
+                    ),
                 }
             )
 
@@ -1166,6 +1294,7 @@ class MorningBriefService:
                 abs_move = abs(float(change))
                 confidence = min(82, max(52, int(48 + min(abs_move, 12) * 3)))
                 is_gainer = bucket == "gainers"
+                learning_adjustment = self._learning_adjustment(learning_bias, "market_mover", "market_mover")
                 scored.append(
                     {
                         "symbol": symbol,
@@ -1198,7 +1327,14 @@ class MorningBriefService:
                             "price": mover.get("price"),
                             "name": mover.get("name"),
                         },
-                        "_score": round(52 + min(abs_move, 15) * 2.2 + (6 if is_gainer else 3), 2),
+                        "learning_adjustment": learning_adjustment,
+                        "_score": round(
+                            52
+                            + min(abs_move, 15) * 2.2
+                            + (6 if is_gainer else 3)
+                            + float(learning_adjustment.get("score_delta") or 0),
+                            2,
+                        ),
                     }
                 )
                 existing_symbols.add(symbol)

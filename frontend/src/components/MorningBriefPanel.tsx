@@ -586,6 +586,16 @@ export default function MorningBriefPanel({
                   </div>
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">{setup.thesis}</div>
+                {Number(setup.learning_adjustment?.score_delta || 0) !== 0 ? (
+                  <div className={`mt-2 rounded-[0.9rem] border px-3 py-2 text-[11px] font-bold ${
+                    Number(setup.learning_adjustment.score_delta) > 0
+                      ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-800"
+                      : "border-red-500/20 bg-red-500/8 text-red-800"
+                  }`}>
+                    Learning bias {Number(setup.learning_adjustment.score_delta) > 0 ? "+" : ""}
+                    {setup.learning_adjustment.score_delta}: {setup.learning_adjustment.reason}
+                  </div>
+                ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>Trigger: {setup.trigger}</div>
                   <div>Window: {setup.window}</div>
@@ -611,6 +621,26 @@ export default function MorningBriefPanel({
               </div>
             ) : null}
           </div>
+          {(brief.learning_adjustments || []).length ? (
+            <div className="mt-4 rounded-[1.2rem] border border-[var(--accent)]/14 bg-[var(--accent-soft)]/60 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                Learning applied to ranking
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {(brief.learning_adjustments || []).slice(0, 4).map((item: any, index: number) => (
+                  <div key={`${item.axis}-${item.label}-${index}`} className="rounded-[1rem] border border-black/8 bg-white/78 px-3 py-2 text-xs text-slate-700">
+                    <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      {item.axis}: {item.label}
+                    </div>
+                    <div className="mt-1">
+                      hit {item.hit_rate}% - ranking {Number(item.score_delta) > 0 ? "+" : ""}
+                      {item.score_delta}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="surface-panel rounded-[2rem] p-5">

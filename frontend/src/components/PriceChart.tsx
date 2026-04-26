@@ -27,6 +27,18 @@ interface HistoryItem {
   volume?: number;
 }
 
+interface HistoryPayload {
+  items?: HistoryItem[];
+  meta?: {
+    mode?: "live" | "fallback" | "snapshot" | string;
+    stale?: boolean;
+    source?: string;
+    period?: string;
+    interval?: string;
+    points?: number;
+  };
+}
+
 interface PriceChartProps {
   ticker: string;
   onStatsUpdate?: (
@@ -153,7 +165,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const [showVWAP, setShowVWAP] = useState(false);
   const [retryCounter, setRetryCounter] = useState(0);
   const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
-  const [historyState, setHistoryState] = useState<"loading" | "ready" | "stale" | "unavailable">("loading");
+  const [historyState, setHistoryState] = useState<"loading" | "ready" | "stale" | "snapshot" | "unavailable">("loading");
+  const [historyMeta, setHistoryMeta] = useState<HistoryPayload["meta"] | null>(null);
   const tickerSymbol = ticker.toUpperCase();
   const { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError } = useRealtimeFeed([ticker], true);
   const realtimeQuote = quotes[tickerSymbol];
@@ -200,9 +213,20 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       setFetchError(false);
       setFetchErrorMessage("");
       setData([]);
+      setHistoryMeta(null);
       setIndicators(emptyIndicators());
 
       try {
+        const unpackHistoryPayload = (payload: HistoryItem[] | HistoryPayload): { items: any[]; meta: HistoryPayload["meta"] | null } => {
+          if (Array.isArray(payload)) {
+            return { items: payload, meta: null };
+          }
+          if (payload && Array.isArray((payload as HistoryPayload).items)) {
+            return { items: (payload as HistoryPayload).items || [], meta: (payload as HistoryPayload).meta || null };
+          }
+          return { items: [], meta: null };
+        };
+
         const normalizeHistory = (raw: any[]): HistoryItem[] =>
           (raw || [])
             .map((item) => {
@@ -223,16 +247,19 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         ];
 
         let normalized: HistoryItem[] = [];
+        let responseMeta: HistoryPayload["meta"] | null = null;
         let lastRequestError: unknown = null;
         let usedSnapshotFallback = false;
         for (const url of historyRequests) {
           try {
-            const histData = await fetchJsonWithRetry<HistoryItem[]>(
+            const histData = await fetchJsonWithRetry<HistoryItem[] | HistoryPayload>(
               url,
               { signal: controller.signal },
               { retries: 0, retryDelayMs: 250, timeoutMs: 3500 },
             );
-            normalized = normalizeHistory(histData as any[]);
+            const unpacked = unpackHistoryPayload(histData);
+            normalized = normalizeHistory(unpacked.items);
+            responseMeta = unpacked.meta;
             if (normalized.length > 0) break;
           } catch (error) {
             lastRequestError = error;
@@ -256,6 +283,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 { time: "fallback", full_date: nowStamp, price: fallbackPrice, volume: Number(quote?.volume ?? 0) || 0 },
               ];
               usedSnapshotFallback = true;
+              responseMeta = {
+                mode: "snapshot",
+                stale: true,
+                source: "realtime_snapshot",
+                period: "snapshot",
+                interval: "snapshot",
+                points: normalized.length,
+              };
             }
           } catch {
             // ignore and throw original history error
@@ -281,7 +316,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }
 
         setData(normalized);
-        setHistoryState(usedSnapshotFallback ? "stale" : "ready");
+        setHistoryMeta(responseMeta);
+        if (usedSnapshotFallback || responseMeta?.mode === "snapshot") {
+          setHistoryState("snapshot");
+        } else if (responseMeta?.stale || responseMeta?.mode === "fallback") {
+          setHistoryState("stale");
+        } else {
+          setHistoryState("ready");
+        }
         if (normalized.length > 1) {
           const first = normalized[0].price;
           const last = normalized[normalized.length - 1].price;
@@ -346,6 +388,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           setFetchErrorMessage(message);
         }
         setData([]);
+        setHistoryMeta(null);
         setFetchError(true);
         setHistoryState("unavailable");
       } finally {
@@ -449,12 +492,20 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   ? "bg-emerald-500/10 text-emerald-700"
                   : historyState === "stale"
                     ? "bg-amber-500/10 text-amber-700"
+                    : historyState === "snapshot"
+                      ? "bg-sky-500/10 text-sky-700"
                     : historyState === "unavailable"
                       ? "bg-red-500/10 text-red-700"
                       : "bg-slate-500/10 text-slate-500"
               }`}
             >
-              {historyState}
+              {historyState === "ready"
+                ? "ready"
+                : historyState === "stale"
+                  ? "fallback"
+                  : historyState === "snapshot"
+                    ? "snapshot"
+                    : historyState}
             </span>
           </div>
           <div className="flex items-baseline gap-3">
@@ -657,11 +708,17 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             : "YFinance-Engine v2.0"}
         </div>
       </div>
-      {(historyState === "stale" || connectionState !== "live" || lastError) ? (
+      {(historyState === "stale" || historyState === "snapshot" || connectionState !== "live" || lastError) ? (
         <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-700">
           Datenmodus: {connectionState} • Feed: {transportMode}
           {typeof staleSeconds?.[tickerSymbol] === "number" ? ` • stale ${staleSeconds[tickerSymbol]}s` : ""}
           {lastError ? ` • ${lastError}` : ""}
+        </div>
+      ) : null}
+      {historyMeta ? (
+        <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
+          History: {historyMeta.source || "unknown"} · {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
+          {typeof historyMeta.points === "number" ? ` · ${historyMeta.points} Punkte` : ""}
         </div>
       ) : null}
     </div>

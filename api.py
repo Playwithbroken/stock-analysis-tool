@@ -996,7 +996,7 @@ async def get_basic_analysis(ticker: str):
 
 
 @app.get("/api/history/{ticker}")
-async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") -> List[Dict[str, Any]]:
+async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
     """
     Get historical price data for a ticker.
     Runs the blocking yfinance call in a thread executor with a 20-second timeout
@@ -1024,7 +1024,23 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
         try:
             history = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=12.0)
             if history:
-                return convert_numpy_types(history)
+                mode = "live" if (try_period, try_interval) == (period, interval) else "fallback"
+                return convert_numpy_types(
+                    {
+                        "items": history,
+                        "meta": {
+                            "symbol": normalized_ticker,
+                            "mode": mode,
+                            "stale": mode != "live",
+                            "source": "yfinance",
+                            "period": try_period,
+                            "interval": try_interval,
+                            "points": len(history),
+                            "requested_period": period,
+                            "requested_interval": interval,
+                        },
+                    }
+                )
         except asyncio.TimeoutError as e:
             last_error = e
             continue
@@ -1058,7 +1074,22 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                         "source": "snapshot_fallback",
                     }
                 )
-            return convert_numpy_types(fallback_history)
+            return convert_numpy_types(
+                {
+                    "items": fallback_history,
+                    "meta": {
+                        "symbol": normalized_ticker,
+                        "mode": "snapshot",
+                        "stale": True,
+                        "source": "realtime_snapshot",
+                        "period": "snapshot",
+                        "interval": "snapshot",
+                        "points": len(fallback_history),
+                        "requested_period": period,
+                        "requested_interval": interval,
+                    },
+                }
+            )
     except Exception:
         pass
 

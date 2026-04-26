@@ -2558,9 +2558,11 @@ async def admin_health_center():
         weekdays = {0, 1, 2, 3, 4}
 
     schedule_jobs = []
+    alert_service = get_email_alert_service()
     for job in _brief_schedule_jobs_for_health():
         event_key = f"{job['job_key']}:{now_local.date().isoformat()}"
         last_event = next((event for event in sent_events if str(event.get("event_key", "")).startswith(job["job_key"])), None)
+        job_status = alert_service.get_brief_job_status(job["job_key"])
         scheduled_today = _schedule_time_for_day(now_local, job["time"])
         next_due = _next_schedule_time(now_local, job["time"], weekdays)
         minutes_late = (
@@ -2594,6 +2596,10 @@ async def admin_health_center():
                 "scheduled_at_today": scheduled_today.isoformat() if scheduled_today else None,
                 "event_key_today": event_key,
                 "last_sent_at": last_event.get("sent_at") if last_event else None,
+                "last_success_at": job_status.get("last_success_at") or (last_event.get("sent_at") if last_event else None),
+                "last_error": job_status.get("last_error"),
+                "last_status": job_status.get("status"),
+                "last_status_updated_at": job_status.get("updated_at"),
                 "next_due_at": next_due.isoformat() if next_due else None,
                 "minutes_late": minutes_late,
                 "grace_until": grace_until.isoformat() if grace_until else None,

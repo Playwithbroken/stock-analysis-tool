@@ -244,7 +244,19 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     {job.minutes_late != null ? (
                       <div className="mt-1 text-xs text-slate-500">{job.minutes_late} minutes late</div>
                     ) : null}
-                    <div className="mt-1 text-xs text-slate-500">Last {fmtDate(job.last_sent_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Last success {fmtDate(job.last_success_at || job.last_sent_at)}
+                    </div>
+                    {job.last_status ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        Last status {job.last_status} · {fmtDate(job.last_status_updated_at)}
+                      </div>
+                    ) : null}
+                    {job.last_error ? (
+                      <div className="mt-2 rounded-lg border border-red-500/15 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-700">
+                        {job.last_error}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

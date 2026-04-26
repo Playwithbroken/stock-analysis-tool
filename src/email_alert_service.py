@@ -239,12 +239,17 @@ class EmailAlertService:
         self._validate_telegram_config(config)
         items = self.portfolio_manager.get_signal_watch_items()
         snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        try:
+            self.morning_brief_service.get_brief_fast(snapshot, True)
+        except Exception as exc:
+            print(f"Brief warm-cache failed before manual {session}: {exc}")
         brief = dict(self.morning_brief_service.get_brief(snapshot))
         try:
             brief["trading_edge"] = self.morning_brief_service.get_trading_edge(snapshot)
         except Exception:
             brief["trading_edge"] = {}
         try:
+            self._telegram_preflight(config)
             self._send_telegram_rich_brief(config, brief, session)
         except Exception as e:
             raise RuntimeError(f"Telegram send failed: {e}") from e
@@ -450,7 +455,30 @@ class EmailAlertService:
             event_key = str(job["event_key"])
 
             self._validate_config(config)
-            events = job["build_events"]()
+            self._set_brief_job_status(
+                str(job["job_key"]),
+                {
+                    "status": "running",
+                    "event_key": event_key,
+                    "scheduled_at": job["scheduled_at"].isoformat(),
+                    "started_at": datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+                    "message": "Building and warming scheduled brief.",
+                },
+            )
+            try:
+                events = job["build_events"]()
+            except Exception as exc:
+                failure = {
+                    "job": job["job_key"],
+                    "status": "failed",
+                    "event_key": event_key,
+                    "scheduled_at": job["scheduled_at"].isoformat(),
+                    "minutes_late": job["minutes_late"],
+                    "error": f"build_failed: {exc}",
+                }
+                self._set_brief_job_status(str(job["job_key"]), failure)
+                results.append(failure)
+                continue
             delivered = False
             brief = None
 
@@ -470,14 +498,21 @@ class EmailAlertService:
                     brief["trading_edge"] = self.morning_brief_service.get_trading_edge(snapshot)
                 except Exception:
                     pass
+                telegram_required = bool(
+                    config.telegram_enabled
+                    and config.telegram_bot_token
+                    and config.telegram_chat_id
+                )
+                telegram_delivered = False
+                telegram_error = None
                 try:
+                    if telegram_required:
+                        self._telegram_preflight(config)
                     self._send_telegram_rich_brief(config, brief, str(job["session_label"]))
-                    delivered = bool(
-                        config.telegram_enabled
-                        and config.telegram_bot_token
-                        and config.telegram_chat_id
-                    )
+                    telegram_delivered = telegram_required
+                    delivered = telegram_delivered or delivered
                 except Exception as exc:
+                    telegram_error = str(exc)
                     print(f"Scheduled Telegram brief failed for {job['job_key']}: {exc}")
                 # Browser push notification
                 if self.push_service:
@@ -491,16 +526,33 @@ class EmailAlertService:
                     self._send_notifications(config, events, subject=str(job["subject"]), telegram=False)
                     or delivered
                 )
+                if telegram_required and not telegram_delivered:
+                    failure = {
+                        "job": job["job_key"],
+                        "status": "failed",
+                        "event_key": event_key,
+                        "scheduled_at": job["scheduled_at"].isoformat(),
+                        "minutes_late": job["minutes_late"],
+                        "error": telegram_error or "telegram_not_delivered",
+                        "email_delivered": delivered,
+                        "message": "Telegram delivery failed; job will retry within the grace window.",
+                    }
+                    self._set_brief_job_status(str(job["job_key"]), failure)
+                    results.append(failure)
+                    continue
             else:
                 delivered = self._send_notifications(config, events, subject=str(job["subject"]))
             if not delivered:
-                results.append(
-                    {
-                        "job": job["job_key"],
-                        "status": "failed",
-                        "message": "No notification channel delivered; will retry within the grace window.",
-                    }
-                )
+                failure = {
+                    "job": job["job_key"],
+                    "status": "failed",
+                    "event_key": event_key,
+                    "scheduled_at": job["scheduled_at"].isoformat(),
+                    "minutes_late": job["minutes_late"],
+                    "message": "No notification channel delivered; will retry within the grace window.",
+                }
+                self._set_brief_job_status(str(job["job_key"]), failure)
+                results.append(failure)
                 continue
             self.portfolio_manager.mark_signal_events_sent(
                 [
@@ -520,16 +572,18 @@ class EmailAlertService:
                 if isinstance(brief, dict)
                 else {"recorded": 0, "skipped": 0}
             )
-            results.append(
-                {
-                    "job": job["job_key"],
-                    "status": "sent",
-                    "scheduled_at": job["scheduled_at"].isoformat(),
-                    "minutes_late": job["minutes_late"],
-                    "catchup": job["minutes_late"] > 5,
-                    "forecasts_recorded": learning.get("recorded", 0),
-                }
-            )
+            success = {
+                "job": job["job_key"],
+                "status": "sent",
+                "event_key": event_key,
+                "scheduled_at": job["scheduled_at"].isoformat(),
+                "sent_at": datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+                "minutes_late": job["minutes_late"],
+                "catchup": job["minutes_late"] > 5,
+                "forecasts_recorded": learning.get("recorded", 0),
+            }
+            self._set_brief_job_status(str(job["job_key"]), success)
+            results.append(success)
             sent_this_run += 1
 
         if not results:
@@ -542,6 +596,34 @@ class EmailAlertService:
             )
         self.portfolio_manager.set_app_setting("brief_scheduler_last_result", json.dumps(results[-5:]))
         return results
+
+    def get_brief_job_status(self, job_key: str) -> Dict[str, Any]:
+        raw = self.portfolio_manager.get_app_setting(self._brief_status_key(job_key), "{}")
+        try:
+            payload = json.loads(raw or "{}")
+            return payload if isinstance(payload, dict) else {}
+        except Exception:
+            return {}
+
+    def _brief_status_key(self, job_key: str) -> str:
+        safe_key = re.sub(r"[^a-zA-Z0-9:_-]+", "_", str(job_key or "unknown"))
+        return f"brief_scheduler_job_status:{safe_key}"
+
+    def _set_brief_job_status(self, job_key: str, payload: Dict[str, Any]) -> None:
+        previous = self.get_brief_job_status(job_key)
+        status = str(payload.get("status") or "")
+        enriched = {
+            **previous,
+            **payload,
+            "job": payload.get("job") or job_key,
+            "updated_at": datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+        }
+        if status == "sent":
+            enriched["last_success_at"] = payload.get("sent_at") or enriched["updated_at"]
+            enriched["last_error"] = None
+        elif status == "failed":
+            enriched["last_error"] = payload.get("error") or payload.get("message") or "failed"
+        self.portfolio_manager.set_app_setting(self._brief_status_key(job_key), json.dumps(enriched))
 
     def _record_brief_forecasts(
         self,
@@ -1123,6 +1205,37 @@ class EmailAlertService:
                     "as a member/admin; then verify TELEGRAM_CHAT_ID points to that chat."
                 ) from exc
             raise
+
+    def _telegram_preflight(self, config: EmailAlertConfig) -> None:
+        """Validate that Telegram can send to the configured chat before a scheduled brief."""
+        self._validate_telegram_config(config)
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{config.telegram_bot_token}/sendChatAction",
+                json={"chat_id": config.telegram_chat_id, "action": "typing"},
+                timeout=10,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status == 403:
+                raise RuntimeError(
+                    "Telegram preflight failed with 403: bot is not allowed to send to this chat. "
+                    "Open the bot and send /start, or add it to the group/channel with send rights."
+                ) from exc
+            if status == 400:
+                raise RuntimeError(
+                    "Telegram preflight failed with 400: TELEGRAM_CHAT_ID is wrong or the chat is unavailable."
+                ) from exc
+            if status == 404:
+                raise RuntimeError(
+                    "Telegram preflight failed with 404: TELEGRAM_BOT_TOKEN is invalid."
+                ) from exc
+            raise RuntimeError(f"Telegram preflight failed with HTTP {status}") from exc
+        except Exception as exc:
+            if isinstance(exc, RuntimeError):
+                raise
+            raise RuntimeError(f"Telegram preflight failed: {exc}") from exc
 
     def _tg_esc(self, text: str) -> str:
         """Escape text for Telegram HTML mode."""

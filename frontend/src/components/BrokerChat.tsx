@@ -161,6 +161,37 @@ export default function BrokerChat({
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];
 
+  const deskActions = [
+    primaryTicker && onAnalyzeTicker
+      ? {
+          label: `${String(primaryTicker).toUpperCase()} analysieren`,
+          action: () => onAnalyzeTicker(String(primaryTicker).toUpperCase()),
+          tone: "bg-[var(--accent)] text-white border-[var(--accent)]",
+        }
+      : null,
+    onOpenTab && activeTab !== "discovery"
+      ? {
+          label: "Markets oeffnen",
+          action: () => onOpenTab("discovery"),
+          tone: "bg-white text-slate-700 border-black/8",
+        }
+      : null,
+    onOpenTab && activeTab !== "portfolio"
+      ? {
+          label: "Portfolio pruefen",
+          action: () => onOpenTab("portfolio"),
+          tone: "bg-white text-slate-700 border-black/8",
+        }
+      : null,
+    onOpenTab && activeTab !== "analyze"
+      ? {
+          label: "Analyze Desk",
+          action: () => onOpenTab("analyze"),
+          tone: "bg-white text-slate-700 border-black/8",
+        }
+      : null,
+  ].filter(Boolean) as Array<{ label: string; action: () => void; tone: string }>;
+
   const contextLabel = currentTicker
     ? Array.isArray(currentTicker)
       ? currentTicker.join(", ")
@@ -407,6 +438,20 @@ export default function BrokerChat({
             </span>
           </div>
         )}
+        {!isInline && mobileSheetMode === "full" && deskActions.length ? (
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {deskActions.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={item.action}
+                className={`shrink-0 rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] ${item.tone}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {!isInline && mobileSheetMode === "peek" ? (
           <div className="grid gap-2 md:hidden">
             <button

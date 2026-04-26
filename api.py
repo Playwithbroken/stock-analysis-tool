@@ -1368,6 +1368,7 @@ async def oracle_chat(req: OracleRequest):
     brief = req.morning_brief_summary or {}
     macro_regime = brief.get("macro_regime") if isinstance(brief, dict) else None
     headline = brief.get("headline") if isinstance(brief, dict) else None
+    opening_bias = brief.get("opening_bias") if isinstance(brief, dict) else None
 
     primary = ticker_context[0] if ticker_context else None
     score = float(primary.get("score", 0)) if primary else 0.0
@@ -1542,6 +1543,8 @@ async def oracle_chat(req: OracleRequest):
 
     if headline:
         levels.append(f"Brief-Headline: {headline}")
+    if opening_bias:
+        levels.append(f"Opening Bias: {opening_bias}")
     if target_mean is not None:
         analyst_text = f"Analysten-Ziel: {target_mean:.2f}"
         if analyst_upside is not None:
@@ -1672,6 +1675,50 @@ async def oracle_chat(req: OracleRequest):
                 f"Letztes gespeichertes Setup: {latest.get('symbol')} / {latest.get('direction')}"
             )
 
+    wants_briefing = any(
+        token in msg
+        for token in ["brief", "briefing", "morgen", "midday", "telegram", "scheduler", "health", "status"]
+    )
+    if wants_briefing:
+        try:
+            alert_service = get_email_alert_service()
+            brief_statuses = [
+                alert_service.get_brief_job_status(job["job_key"])
+                for job in _brief_schedule_jobs_for_health()
+            ]
+            last_success = next(
+                (
+                    item
+                    for item in sorted(
+                        [status for status in brief_statuses if status.get("last_success_at")],
+                        key=lambda status: str(status.get("last_success_at")),
+                        reverse=True,
+                    )
+                ),
+                None,
+            )
+            last_failure = next(
+                (
+                    item
+                    for item in sorted(
+                        [status for status in brief_statuses if status.get("last_error")],
+                        key=lambda status: str(status.get("updated_at")),
+                        reverse=True,
+                    )
+                ),
+                None,
+            )
+            if last_success:
+                levels.append(
+                    f"Letztes Briefing erfolgreich: {last_success.get('job')} um {last_success.get('last_success_at')}"
+                )
+            if last_failure:
+                levels.append(
+                    f"Letzter Briefing-Fehler: {last_failure.get('job')} - {last_failure.get('last_error')}"
+                )
+        except Exception:
+            levels.append("Briefing-Status konnte gerade nicht geladen werden.")
+
     next_steps = [
         "1. Erst den Trigger abwarten, nicht vor der Bestaetigung handeln.",
         "2. Positionsgroesse klein halten, wenn Regime oder Newsflow gemischt sind.",
@@ -1680,6 +1727,21 @@ async def oracle_chat(req: OracleRequest):
     if primary and wants_dossier:
         next_steps.append("4. Bei der naechsten Quartalszahl zuerst Umsatzwachstum, Marge und Guidance gegen die Erwartung pruefen.")
         next_steps.append("5. Analysten-Ziel nur als Kontext nutzen; Kursreaktion und Volumen muessen es bestaetigen.")
+
+    active_tab = (req.active_tab or "").lower()
+    app_actions: List[str] = []
+    if primary:
+        app_actions.append(f"Analyze: {symbol} Kursverlauf, Dossier und Trigger pruefen.")
+    elif tickers:
+        app_actions.append(f"Analyze: {tickers[0]} als Fokus-Ticker oeffnen.")
+    if active_tab != "discovery":
+        app_actions.append("Markets: Top Movers, Market Explorer und Event-Pings gegenchecken.")
+    if active_tab != "portfolio":
+        app_actions.append("Portfolio: Exposure, Rendite seit Kauf und Hedge-Bedarf pruefen.")
+    if wants_briefing:
+        app_actions.append("Health: Scheduler/Telegram im Health Center pruefen, falls ein Brief fehlt.")
+    if learning_summary.get("forecasts"):
+        app_actions.append("Learning Board: letzte Treffer/Misses ansehen, bevor ein Signal hoeher gewichtet wird.")
 
     response = (
         f"These: {thesis}\n"
@@ -1693,6 +1755,8 @@ async def oracle_chat(req: OracleRequest):
         + "\n".join([f"- {line}" for line in levels])
         + "\nNaechste Schritte:\n"
         + "\n".join([f"- {line}" for line in next_steps])
+        + "\nApp-Aktionen:\n"
+        + "\n".join([f"- {line}" for line in app_actions])
     )
     return {"response": response}
 

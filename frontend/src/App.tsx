@@ -382,6 +382,7 @@ function AppContent() {
   const [globalBriefStatus, setGlobalBriefStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [briefReloadTick, setBriefReloadTick] = useState(0);
   const [signalScoreContext, setSignalScoreContext] = useState<any>(null);
+  const [learningContext, setLearningContext] = useState<any>(null);
   const [tradingEdge, setTradingEdge] = useState<any>(null);
   const [tradingEdgeLoading, setTradingEdgeLoading] = useState(false);
   const [selectedGeoRegion, setSelectedGeoRegion] = useState("Europe");
@@ -451,6 +452,11 @@ function AppContent() {
             headline: globalBrief.headline,
             opening_bias: globalBrief.opening_bias,
             macro_regime: globalBrief.macro_regime,
+            trade_setups: (globalBrief.trade_setups || []).slice(0, 5),
+            setup_board: globalBrief.setup_board || null,
+            learning_adjustments: globalBrief.learning_adjustments || [],
+            congress_watch: (globalBrief.congress_watch || []).slice(0, 5),
+            event_pings: (globalBrief.event_pings || []).slice(0, 5),
           }
         : null,
     [globalBrief],
@@ -547,6 +553,34 @@ function AppContent() {
     };
     loadSignalContext();
     const interval = window.setInterval(loadSignalContext, 120000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated]);
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+
+    let cancelled = false;
+    const loadLearningContext = async () => {
+      try {
+        const payload = await fetchJsonWithRetry<any>("/api/learning/forecasts", undefined, {
+          retries: 1,
+          retryDelayMs: 700,
+          timeoutMs: 12000,
+        });
+        if (!cancelled) {
+          setLearningContext(payload);
+        }
+      } catch {
+        if (!cancelled) {
+          setLearningContext(null);
+        }
+      }
+    };
+    loadLearningContext();
+    const interval = window.setInterval(loadLearningContext, 180000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -1534,6 +1568,7 @@ function AppContent() {
             liveQuotes={headerQuotes}
             signalScore={signalScoreContext}
             morningBriefSummary={briefSummaryForChat}
+            learningSummary={learningContext}
             onAnalyzeTicker={(ticker) => {
               setIsChatOpen(false);
               setActiveTab("analyze");

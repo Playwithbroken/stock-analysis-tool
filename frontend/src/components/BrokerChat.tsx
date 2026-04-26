@@ -157,6 +157,8 @@ export default function BrokerChat({
     currentTicker
       ? `Erklaere das Dossier fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}: Umsatz, Margen, Bewertung und Risiken.`
       : "Welche Quelle oder Prognose lag zuletzt daneben?",
+    "Warum wurde das aktuelle Briefing so gerankt?",
+    "Welche Learnings verbessern heute die Signale?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];

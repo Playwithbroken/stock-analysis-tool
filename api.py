@@ -1572,7 +1572,13 @@ async def oracle_chat(req: OracleRequest):
             learning_context = {}
     learning_summary = learning_context.get("summary", {}) if isinstance(learning_context, dict) else {}
     source_quality = learning_context.get("by_source", []) if isinstance(learning_context, dict) else []
+    weak_sources = learning_context.get("weak_sources", []) if isinstance(learning_context, dict) else []
+    weak_setup_types = learning_context.get("weak_setup_types", []) if isinstance(learning_context, dict) else []
+    learning_lessons = learning_context.get("lessons", []) if isinstance(learning_context, dict) else []
     recent_forecasts = learning_context.get("recent_forecasts", []) if isinstance(learning_context, dict) else []
+    current_setups = brief.get("trade_setups", []) if isinstance(brief, dict) else []
+    current_learning_adjustments = brief.get("learning_adjustments", []) if isinstance(brief, dict) else []
+    current_congress_watch = brief.get("congress_watch", []) if isinstance(brief, dict) else []
 
     explain_lines = []
     if primary:
@@ -1613,6 +1619,21 @@ async def oracle_chat(req: OracleRequest):
             f"Learning Loop aktiv: {learning_summary.get('forecasts')} gespeicherte Setups, "
             f"{learning_summary.get('evaluated', 0)} Outcomes, Trefferquote {learning_summary.get('hit_rate', 0)}%."
         )
+    if current_learning_adjustments:
+        promoted = [item for item in current_learning_adjustments if float(item.get("score_delta") or 0) > 0]
+        downgraded = [item for item in current_learning_adjustments if float(item.get("score_delta") or 0) < 0]
+        if promoted:
+            explain_lines.append(
+                "Aktuelles Briefing hebt bewaehrte Muster an: "
+                + ", ".join(f"{item.get('label')} ({item.get('score_delta'):+})" for item in promoted[:3])
+                + "."
+            )
+        if downgraded:
+            explain_lines.append(
+                "Aktuelles Briefing stuft schwache Muster vorsichtiger ein: "
+                + ", ".join(f"{item.get('label')} ({item.get('score_delta'):+})" for item in downgraded[:3])
+                + "."
+            )
 
     wants_dossier = any(
         token in msg
@@ -1665,15 +1686,47 @@ async def oracle_chat(req: OracleRequest):
 
     if any(token in msg for token in ["falsch", "fehler", "treffer", "quelle", "learning", "gelernt"]):
         best_source = source_quality[0] if source_quality else None
+        weak_source = weak_sources[0] if weak_sources else None
+        weak_setup = weak_setup_types[0] if weak_setup_types else None
         latest = recent_forecasts[0] if recent_forecasts else None
         if best_source:
             levels.append(
                 f"Beste Quelle bisher: {best_source.get('label')} ({best_source.get('hit_rate')}% hit-rate)"
             )
+        if weak_source:
+            levels.append(
+                f"Schwaechste Quelle zuletzt: {weak_source.get('label')} ({weak_source.get('hit_rate')}% hit-rate)"
+            )
+        if weak_setup:
+            levels.append(
+                f"Setup-Typ mit strengeren Triggern: {weak_setup.get('label')} ({weak_setup.get('hit_rate')}% hit-rate)"
+            )
         if latest:
             levels.append(
                 f"Letztes gespeichertes Setup: {latest.get('symbol')} / {latest.get('direction')}"
             )
+        for lesson in learning_lessons[:3]:
+            if isinstance(lesson, dict) and lesson.get("message"):
+                levels.append(f"Learning Lesson: {lesson.get('message')}")
+
+    if any(token in msg for token in ["warum", "setup", "ranking", "oben", "priorisiert", "briefing"]):
+        for setup in current_setups[:3]:
+            if not isinstance(setup, dict):
+                continue
+            adjustment = setup.get("learning_adjustment") or {}
+            delta = float(adjustment.get("score_delta") or 0)
+            if delta:
+                levels.append(
+                    f"{setup.get('symbol')} Ranking-Bias {delta:+.1f}: {adjustment.get('reason')}"
+                )
+        if current_congress_watch:
+            symbols = [
+                str(item.get("symbol") or item.get("ticker") or "").upper()
+                for item in current_congress_watch
+                if isinstance(item, dict) and (item.get("symbol") or item.get("ticker"))
+            ][:4]
+            if symbols:
+                levels.append(f"Congress Watch aktiv fuer: {', '.join(symbols)}")
 
     wants_briefing = any(
         token in msg

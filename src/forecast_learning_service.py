@@ -26,13 +26,13 @@ class ForecastLearningService:
         delivery_key: Optional[str] = None,
         limit: int = 8,
     ) -> Dict[str, Any]:
-        setups = [item for item in (brief.get("trade_setups") or []) if item and item.get("symbol")]
+        setups = self._collect_forecast_setups(brief, limit=max(1, int(limit)))
         generated_at = str(brief.get("generated_at") or datetime.utcnow().isoformat())
         created_at = datetime.utcnow().isoformat()
         recorded = 0
         skipped = 0
 
-        for index, setup in enumerate(setups[: max(1, int(limit))]):
+        for index, setup in enumerate(setups):
             symbol = str(setup.get("symbol") or "").strip().upper()
             if not symbol:
                 skipped += 1
@@ -171,7 +171,11 @@ class ForecastLearningService:
 
         by_setup_type = self._group_quality(evaluated, "setup_type")
         by_source = self._group_quality(evaluated, "source_label")
+        weak_setup_types = self._group_quality(evaluated, "setup_type", weakest=True)
+        weak_sources = self._group_quality(evaluated, "source_label", weakest=True)
         recent = self._build_recent_forecasts(forecasts[:12], outcomes)
+        pending_by_horizon = self._pending_by_horizon(pending)
+        lessons = self._build_lessons(by_source, weak_sources, by_setup_type, weak_setup_types, pending_by_horizon)
 
         return {
             "summary": {
@@ -187,9 +191,68 @@ class ForecastLearningService:
             },
             "by_setup_type": by_setup_type,
             "by_source": by_source,
+            "weak_setup_types": weak_setup_types,
+            "weak_sources": weak_sources,
+            "pending_by_horizon": pending_by_horizon,
+            "lessons": lessons,
             "recent_forecasts": recent,
             "last_updated": datetime.utcnow().isoformat(),
         }
+
+    def _collect_forecast_setups(self, brief: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+        collected: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def add(setup: Dict[str, Any]) -> None:
+            symbol = str(setup.get("symbol") or setup.get("ticker") or "").strip().upper()
+            if not symbol:
+                return
+            setup = dict(setup)
+            setup["symbol"] = symbol
+            key = f"{symbol}:{setup.get('setup_type') or setup.get('direction') or setup.get('action') or ''}:{setup.get('trigger') or setup.get('thesis') or ''}"
+            if key in seen:
+                return
+            seen.add(key)
+            collected.append(setup)
+
+        for setup in brief.get("trade_setups") or []:
+            if isinstance(setup, dict):
+                add(setup)
+            if len(collected) >= limit:
+                break
+
+        congress_limit = 4
+        for item in brief.get("congress_watch") or []:
+            if not isinstance(item, dict):
+                continue
+            symbol = str(item.get("symbol") or item.get("ticker") or "").strip().upper()
+            if not symbol:
+                continue
+            action = str(item.get("action") or item.get("direction") or item.get("setup_type") or "watch").lower()
+            add(
+                {
+                    "symbol": symbol,
+                    "direction": self._map_action_to_direction(action),
+                    "setup_type": "congress_watch",
+                    "setup_source": "congress_watch",
+                    "source": "congress_watch",
+                    "thesis": item.get("thesis")
+                    or item.get("summary")
+                    or item.get("reason")
+                    or f"Congress/PTR signal for {symbol}.",
+                    "trigger": item.get("trigger") or "Confirm with price, volume and sector reaction.",
+                    "invalidation": item.get("invalidation") or "Invalidate if follow-through fails or filing context weakens.",
+                    "confidence": item.get("confidence"),
+                    "rank_score": item.get("impact_score") or item.get("rank_score"),
+                    "expected_move": item.get("expected_move"),
+                    "congress_signal": item,
+                }
+            )
+            congress_limit -= 1
+            if congress_limit <= 0:
+                break
+
+        return collected[: limit + 4]
 
     def _build_recent_forecasts(
         self,
@@ -229,7 +292,7 @@ class ForecastLearningService:
             )
         return recent
 
-    def _group_quality(self, outcomes: List[Dict[str, Any]], key: str) -> List[Dict[str, Any]]:
+    def _group_quality(self, outcomes: List[Dict[str, Any]], key: str, weakest: bool = False) -> List[Dict[str, Any]]:
         buckets: Dict[str, List[Dict[str, Any]]] = {}
         for item in outcomes:
             buckets.setdefault(str(item.get(key) or "unknown"), []).append(item)
@@ -245,7 +308,76 @@ class ForecastLearningService:
                     "avg_performance_pct": self._avg([item.get("performance_pct") for item in items]),
                 }
             )
+        if weakest:
+            return sorted(
+                rows,
+                key=lambda item: (item["evaluated"] < 3, item["hit_rate"], -(item["evaluated"])),
+            )[:8]
         return sorted(rows, key=lambda item: (item["evaluated"], item["hit_rate"]), reverse=True)[:8]
+
+    def _pending_by_horizon(self, pending: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        buckets: Dict[int, int] = {}
+        for item in pending:
+            horizon = int(item.get("horizon_hours") or 0)
+            buckets[horizon] = buckets.get(horizon, 0) + 1
+        return [{"horizon_hours": horizon, "count": count} for horizon, count in sorted(buckets.items())]
+
+    def _build_lessons(
+        self,
+        sources: List[Dict[str, Any]],
+        weak_sources: List[Dict[str, Any]],
+        setup_types: List[Dict[str, Any]],
+        weak_setup_types: List[Dict[str, Any]],
+        pending_by_horizon: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        lessons: List[Dict[str, Any]] = []
+        best_source = next((item for item in sources if item.get("evaluated", 0) >= 3), None)
+        weak_source = next((item for item in weak_sources if item.get("evaluated", 0) >= 3), None)
+        best_setup = next((item for item in setup_types if item.get("evaluated", 0) >= 3), None)
+        weak_setup = next((item for item in weak_setup_types if item.get("evaluated", 0) >= 3), None)
+
+        if best_source:
+            lessons.append(
+                {
+                    "type": "promote_source",
+                    "label": best_source["label"],
+                    "message": f"Promote {best_source['label']}: {best_source['hit_rate']}% hit rate across {best_source['evaluated']} evaluated outcomes.",
+                }
+            )
+        if weak_source:
+            lessons.append(
+                {
+                    "type": "downgrade_source",
+                    "label": weak_source["label"],
+                    "message": f"Downgrade {weak_source['label']} until confirmed: {weak_source['hit_rate']}% hit rate across {weak_source['evaluated']} outcomes.",
+                }
+            )
+        if best_setup:
+            lessons.append(
+                {
+                    "type": "promote_setup",
+                    "label": best_setup["label"],
+                    "message": f"Setup type {best_setup['label']} is working best recently; keep it higher in briefing ranking.",
+                }
+            )
+        if weak_setup:
+            lessons.append(
+                {
+                    "type": "tighten_setup",
+                    "label": weak_setup["label"],
+                    "message": f"Setup type {weak_setup['label']} needs stricter triggers or lower confidence until performance improves.",
+                }
+            )
+        if pending_by_horizon:
+            pending_text = ", ".join(f"{item['horizon_hours']}h:{item['count']}" for item in pending_by_horizon[:4])
+            lessons.append(
+                {
+                    "type": "pending_checks",
+                    "label": "pending",
+                    "message": f"Open outcome checks by horizon: {pending_text}. Do not judge these signals before the window closes.",
+                }
+            )
+        return lessons[:6]
 
     def _score_result(self, performance_pct: float, direction: str, horizon_hours: int) -> tuple[str, str]:
         threshold = 0.25 if horizon_hours <= 1 else 0.5
@@ -270,13 +402,24 @@ class ForecastLearningService:
         return None
 
     def _normalize_direction(self, setup: Dict[str, Any]) -> str:
-        raw = str(setup.get("direction") or setup.get("setup_type") or "watch").strip().lower()
+        raw = str(setup.get("direction") or setup.get("action") or setup.get("setup_type") or "watch").strip().lower()
         if raw in {"long", "short", "hedge", "watch"}:
             return raw
+        mapped = self._map_action_to_direction(raw)
+        if mapped != "watch":
+            return mapped
         if "hedge" in raw or "short" in raw or "avoid" in raw:
             return "hedge"
         if "long" in raw or "benefit" in raw or "winner" in raw:
             return "long"
+        return "watch"
+
+    def _map_action_to_direction(self, action: str) -> str:
+        raw = (action or "").lower()
+        if any(token in raw for token in ("buy", "add", "long", "accumulate", "benefit")):
+            return "long"
+        if any(token in raw for token in ("sell", "reduce", "short", "hedge", "avoid")):
+            return "hedge"
         return "watch"
 
     def _infer_source(self, setup: Dict[str, Any]) -> str:

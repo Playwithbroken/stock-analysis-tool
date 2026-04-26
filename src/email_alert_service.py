@@ -823,6 +823,28 @@ class EmailAlertService:
             lines.append("- Keine frischen A-Setups seit dem Open.")
 
         lines.extend(["", "Portfolio Brain:"])
+        congress_watch = brief.get("congress_watch") or []
+        if congress_watch:
+            if lines4:
+                lines4.append("")
+            lines4.append("Congress Watch")
+            for item in congress_watch[:4]:
+                ticker = self._tg_esc(item.get("ticker") or "")
+                name = self._tg_esc(str(item.get("name") or "PTR")[:36])
+                action = self._tg_esc(str(item.get("action") or item.get("setup") or "watch"))
+                amount = self._tg_esc(str(item.get("amount_range") or "amount n/a"))
+                delay = item.get("delay_days")
+                conf = item.get("confidence")
+                delay_text = f" | delay {delay}d" if delay is not None else ""
+                conf_text = f" | {conf}% conf" if isinstance(conf, int) else ""
+                lines4.append(f"- <code>{ticker}</code> {action} - {name} ({amount}){delay_text}{conf_text}")
+                trigger = self._tg_esc(str(item.get("trigger") or "")[:110])
+                invalidation = self._tg_esc(str(item.get("invalidation") or "")[:100])
+                if trigger:
+                    lines4.append(f"   Trigger: {trigger}")
+                if invalidation:
+                    lines4.append(f"   Invalid: {invalidation}")
+
         portfolio_brain = brief.get("portfolio_brain", {})
         cards = (
             (portfolio_brain.get("at_risk") or [])[:2]

@@ -739,6 +739,79 @@ export default function MorningBriefPanel({
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              Congress Watch
+            </div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+              PTR · delayed official filings
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {(brief.congress_watch || []).length ? (
+              (brief.congress_watch || []).slice(0, 5).map((item: any, index: number) => (
+                <div
+                  key={`${item.name}-${item.ticker}-${index}`}
+                  className="rounded-[1.25rem] border border-[var(--accent)]/16 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.82))] p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                        {item.impact} impact · {item.freshness}
+                      </div>
+                      <div className="mt-1 text-sm font-black text-slate-900">{item.name}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {item.ticker ? (
+                        <button
+                          onClick={() => onAnalyze(item.ticker)}
+                          className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                        >
+                          {item.ticker}
+                        </button>
+                      ) : null}
+                      <span className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                        {item.confidence || "n/a"} conf
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                    <div>Action: {item.action || item.setup}</div>
+                    <div>Amount: {item.amount_range || "n/a"}</div>
+                    <div>Trade date: {item.trade_date || "n/a"}</div>
+                    <div>Delay: {item.delay_days != null ? `${item.delay_days}d` : "n/a"}</div>
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-slate-800">{item.thesis}</div>
+                  <div className="mt-3 grid gap-2 text-xs text-slate-500">
+                    <div>Trigger: {item.trigger}</div>
+                    <div>Invalidierung: {item.invalidation}</div>
+                  </div>
+                  {item.cluster?.length ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {item.cluster.slice(0, 5).map((ticker: string) => (
+                        <span
+                          key={ticker}
+                          className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                        >
+                          {ticker}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white/70 p-3 text-[11px] leading-5 text-slate-500">
+                    {item.compliance_note}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
+                Keine priorisierten Congress-PTR-Signale im aktuellen Brief.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="surface-panel rounded-[2rem] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Top News
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">

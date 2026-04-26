@@ -268,6 +268,7 @@ class MorningBriefService:
             "earnings_results": [],
             "opening_timeline": [],
             "action_board": [],
+            "congress_watch": [],
             "trade_setups": [],
             "trade_setups_status": "insufficient_signal",
             "setup_board": {"now": [], "next": [], "avoid": []},
@@ -387,6 +388,7 @@ class MorningBriefService:
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
+        congress_watch = self._build_congress_watch(action_board)
         trade_setups = self._build_trade_setups(action_board, top_news, market_movers)
         setup_board = self._build_setup_board(trade_setups)
         prediction_signals = self._build_prediction_signals(polymarket_events)
@@ -425,6 +427,7 @@ class MorningBriefService:
             "earnings_results": earnings_results,
             "opening_timeline": opening_timeline,
             "action_board": action_board,
+            "congress_watch": congress_watch,
             "trade_setups": trade_setups,
             "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
             "setup_board": setup_board,
@@ -488,6 +491,7 @@ class MorningBriefService:
         )
         narrative = self._build_narrative(asia, europe, usa, macro, event_layer)
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
+        congress_watch = self._build_congress_watch(action_board)
         trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []})
         setup_board = self._build_setup_board(trade_setups)
 
@@ -525,6 +529,7 @@ class MorningBriefService:
             "earnings_results": [],
             "opening_timeline": opening_timeline,
             "action_board": action_board,
+            "congress_watch": congress_watch,
             "trade_setups": trade_setups,
             "trade_setups_status": "ready" if trade_setups else "insufficient_signal",
             "setup_board": setup_board,
@@ -2324,6 +2329,52 @@ class MorningBriefService:
             )
         )
         return items[:4]
+
+    def _build_congress_watch(self, action_board: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        congress_items = [
+            item for item in action_board
+            if item.get("setup_source") == "congress_ptr" or item.get("event_type") == "congress_trade"
+        ]
+        watch: List[Dict[str, Any]] = []
+        for item in congress_items[:6]:
+            signal = item.get("congress_signal") or {}
+            intelligence = item.get("event_intelligence") or {}
+            delay = signal.get("delay_days")
+            confidence = int(intelligence.get("confidence_score") or 0)
+            ticker = item.get("ticker")
+            setup = item.get("setup") or "watch"
+            action = signal.get("action") or setup
+            amount = signal.get("amount_range") or "amount n/a"
+            freshness = signal.get("freshness") or ("fresh" if isinstance(delay, int) and delay <= 20 else "delayed")
+            watch.append(
+                {
+                    "ticker": ticker,
+                    "name": signal.get("name") or item.get("title"),
+                    "action": action,
+                    "setup": setup,
+                    "impact": item.get("impact") or "medium",
+                    "confidence": confidence,
+                    "trade_date": signal.get("trade_date"),
+                    "notification_date": signal.get("notification_date"),
+                    "delay_days": delay,
+                    "amount_range": amount,
+                    "freshness": freshness,
+                    "cluster": signal.get("top_tickers") or ([ticker] if ticker else []),
+                    "trigger": item.get("trigger") or intelligence.get("trigger"),
+                    "invalidation": item.get("risk") or intelligence.get("invalidation"),
+                    "thesis": item.get("thesis") or intelligence.get("why_now"),
+                    "compliance_note": signal.get("compliance_note") or "Official PTR data is delayed; use as research signal, not blind copy.",
+                    "link": item.get("link"),
+                }
+            )
+        watch.sort(
+            key=lambda item: (
+                0 if item.get("impact") == "high" else 1 if item.get("impact") == "medium" else 2,
+                -(item.get("confidence") or 0),
+                item.get("delay_days") if item.get("delay_days") is not None else 999,
+            )
+        )
+        return watch[:5]
 
     def _macro_proxy_trigger(self, event_type: str, setup: str) -> str:
         event_type = (event_type or "macro").lower()

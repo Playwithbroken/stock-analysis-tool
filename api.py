@@ -2383,9 +2383,17 @@ async def evaluate_forecast_learning():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/market/morning-brief")
-async def get_morning_brief():
+async def get_morning_brief(fast: bool = False):
     service = get_morning_brief_service()
     try:
+        if fast:
+            fallback = service.get_cached_or_last_brief()
+            if fallback is None:
+                fallback = service.build_empty_brief("warming_up")
+            quality = fallback.setdefault("quality", {})
+            quality["cache_mode"] = "fast_cached"
+            return convert_numpy_types(fallback)
+
         items = get_portfolio_manager().get_signal_watch_items()
         try:
             snapshot = await asyncio.wait_for(

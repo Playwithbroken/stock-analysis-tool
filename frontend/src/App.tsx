@@ -470,8 +470,9 @@ function AppContent() {
     const loadWatchlist = async () => {
       try {
         const payload = await fetchJsonWithRetry<WatchlistSnapshot>("/api/signals/watchlist", undefined, {
-          retries: 1,
-          retryDelayMs: 700,
+          retries: 0,
+          retryDelayMs: 250,
+          timeoutMs: 4500,
         });
         if (!cancelled) {
           setWatchlist(payload || { items: [] });
@@ -487,12 +488,14 @@ function AppContent() {
       try {
         const [gainers, losers] = await Promise.all([
           fetchJsonWithRetry<any[]>(`/api/discovery/gainers?window=${marketMoversWindow}`, undefined, {
-            retries: 1,
-            retryDelayMs: 700,
+            retries: 0,
+            retryDelayMs: 250,
+            timeoutMs: 4500,
           }),
           fetchJsonWithRetry<any[]>(`/api/discovery/losers?window=${marketMoversWindow}`, undefined, {
-            retries: 1,
-            retryDelayMs: 700,
+            retries: 0,
+            retryDelayMs: 250,
+            timeoutMs: 4500,
           }),
         ]);
 
@@ -551,10 +554,11 @@ function AppContent() {
         }
       }
     };
-    loadSignalContext();
+    const cancelIdle = scheduleIdle(loadSignalContext, 3500);
     const interval = window.setInterval(loadSignalContext, 120000);
     return () => {
       cancelled = true;
+      cancelIdle();
       window.clearInterval(interval);
     };
   }, [auth.authenticated]);
@@ -579,10 +583,11 @@ function AppContent() {
         }
       }
     };
-    loadLearningContext();
+    const cancelIdle = scheduleIdle(loadLearningContext, 5000);
     const interval = window.setInterval(loadLearningContext, 180000);
     return () => {
       cancelled = true;
+      cancelIdle();
       window.clearInterval(interval);
     };
   }, [auth.authenticated]);
@@ -597,11 +602,6 @@ function AppContent() {
         ? `/api/history/${encodeURIComponent(ticker)}?period=1mo&interval=1d`
         : null;
       const paths = [
-        "/api/market/morning-brief",
-        "/api/signals/scoreboard",
-        "/api/signals/watchlist",
-        `/api/discovery/gainers?window=${marketMoversWindow}`,
-        `/api/discovery/losers?window=${marketMoversWindow}`,
         "/api/discovery/stars",
         "/api/discovery/sentiment-heatmap",
         "/api/radar/bootstrap?limit=8",
@@ -623,11 +623,11 @@ function AppContent() {
 
     const cancelIdle = scheduleIdle(() => {
       void warmBackgroundData();
-    }, 1800);
+    }, 8000);
 
     const interval = window.setInterval(() => {
       void warmBackgroundData();
-    }, 180000);
+    }, 600000);
 
     return () => {
       cancelled = true;
@@ -649,12 +649,23 @@ function AppContent() {
         if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBriefStatus("error");
         }
-      }, 12000);
+      }, 6500);
       try {
+        const fastPayload = await fetchJsonWithRetry<any>("/api/market/morning-brief?fast=true", undefined, {
+          retries: 0,
+          retryDelayMs: 250,
+          timeoutMs: 2500,
+        });
+        if (!cancelled && briefRequestIdRef.current === requestId) {
+          setGlobalBrief(fastPayload);
+          setSelectedGeoRegion(fastPayload?.regions?.europe?.label || fastPayload?.regions?.usa?.label || "Europe");
+          setGlobalBriefStatus(fastPayload?.quality?.fallback ? "error" : "ready");
+        }
+
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
-          retries: 1,
-          retryDelayMs: 700,
-          timeoutMs: 12000,
+          retries: 0,
+          retryDelayMs: 250,
+          timeoutMs: 8500,
         });
         if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBrief(payload);
@@ -663,7 +674,6 @@ function AppContent() {
         }
       } catch {
         if (!cancelled && briefRequestIdRef.current === requestId) {
-          setGlobalBrief(null);
           setGlobalBriefStatus("error");
         }
       } finally {
@@ -682,7 +692,7 @@ function AppContent() {
   // Trading edge — heavy payload, loaded separately with own spinner.
   // Refresh every 5 min; backend caches per-component (10min – 6h).
   useEffect(() => {
-    if (!auth.authenticated) return;
+    if (!auth.authenticated || activeTab !== "dashboard") return;
     let cancelled = false;
     const loadEdge = async () => {
       setTradingEdgeLoading(true);
@@ -699,13 +709,14 @@ function AppContent() {
         if (!cancelled) setTradingEdgeLoading(false);
       }
     };
-    loadEdge();
+    const cancelIdle = scheduleIdle(loadEdge, 6000);
     const interval = window.setInterval(loadEdge, 300000);
     return () => {
       cancelled = true;
+      cancelIdle();
       window.clearInterval(interval);
     };
-  }, [auth.authenticated]);
+  }, [auth.authenticated, activeTab]);
 
   const refreshAuth = async () => {
     const payload = await fetchJsonWithRetry<any>("/api/auth/status", undefined, {

@@ -67,6 +67,20 @@ const PERIODS = [
   { id: "max", label: "MAX", interval: "1mo" },
 ];
 
+const HISTORY_STATUS_LABELS: Record<"loading" | "ready" | "stale" | "snapshot" | "unavailable", string> = {
+  loading: "loading",
+  ready: "live history",
+  stale: "fallback history",
+  snapshot: "snapshot fallback",
+  unavailable: "unavailable",
+};
+
+const friendlyRealtimeError = (error: string) => {
+  if (error === "snapshot_fetch_failed") return "Realtime snapshot kurz nicht verfuegbar";
+  if (error === "ws_unavailable" || error === "websocket_unavailable") return "Realtime-Verbindung nicht verfuegbar";
+  return error.replaceAll("_", " ");
+};
+
 const emptyIndicators = (): IndicatorSeries => ({
   rsi: [],
   macd: [],
@@ -278,10 +292,17 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               : null;
             const fallbackPrice = Number(quote?.price);
             if (Number.isFinite(fallbackPrice)) {
-              const nowStamp = new Date().toISOString();
-              normalized = [
-                { time: "fallback", full_date: nowStamp, price: fallbackPrice, volume: Number(quote?.volume ?? 0) || 0 },
-              ];
+              const now = Date.now();
+              const fallbackVolume = Number(quote?.volume ?? 0) || 0;
+              normalized = Array.from({ length: 5 }, (_, idx) => {
+                const stamp = new Date(now - (4 - idx) * 15 * 60 * 1000);
+                return {
+                  time: stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  full_date: stamp.toISOString(),
+                  price: fallbackPrice,
+                  volume: fallbackVolume,
+                };
+              });
               usedSnapshotFallback = true;
               responseMeta = {
                 mode: "snapshot",
@@ -431,6 +452,16 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const subPanels = [showVolume, showRSI, showMACD].filter(Boolean).length;
   const mainHeightPercent = subPanels > 0 ? Math.max(40, 100 - subPanels * 20) : 100;
   const subPanelHeightPercent = subPanels > 0 ? Math.max(18, Math.floor((100 - mainHeightPercent) / subPanels)) : 0;
+  const hasUsableHistory = data.length > 0 && historyState !== "unavailable";
+  const benignRealtimeError = lastError === "snapshot_fetch_failed" && hasUsableHistory;
+  const displayedRealtimeError = benignRealtimeError ? "" : lastError;
+  const staleForTicker = staleSeconds?.[tickerSymbol];
+  const shouldShowDataStatus =
+    historyState === "stale" ||
+    historyState === "snapshot" ||
+    historyState === "unavailable" ||
+    connectionState !== "live" ||
+    Boolean(displayedRealtimeError);
   const indicatorToggles: Array<{
     label: string;
     active: boolean;
@@ -708,17 +739,23 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             : "YFinance-Engine v2.0"}
         </div>
       </div>
-      {(historyState === "stale" || historyState === "snapshot" || connectionState !== "live" || lastError) ? (
-        <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-700">
-          Datenmodus: {connectionState} • Feed: {transportMode}
-          {typeof staleSeconds?.[tickerSymbol] === "number" ? ` • stale ${staleSeconds[tickerSymbol]}s` : ""}
-          {lastError ? ` • ${lastError}` : ""}
+      {shouldShowDataStatus ? (
+        <div
+          className={`mt-3 rounded-[0.9rem] border px-3 py-2 text-[11px] font-semibold ${
+            historyState === "unavailable"
+              ? "border-red-500/20 bg-red-500/10 text-red-700"
+              : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+          }`}
+        >
+          Kursverlauf: {HISTORY_STATUS_LABELS[historyState]} - Realtime: {connectionState} - Feed: {transportMode}
+          {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
+          {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>
       ) : null}
       {historyMeta ? (
         <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
-          History: {historyMeta.source || "unknown"} · {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
-          {typeof historyMeta.points === "number" ? ` · ${historyMeta.points} Punkte` : ""}
+          History: {historyMeta.source || "unknown"} - {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
+          {typeof historyMeta.points === "number" ? ` - ${historyMeta.points} Punkte` : ""}
         </div>
       ) : null}
     </div>

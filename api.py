@@ -1246,10 +1246,20 @@ async def get_dividend_stocks():
 async def search_ticker(q: str):
     """Search for tickers."""
     try:
-        results = await get_discovery_service().search_ticker(q)
-        if results:
-            return results
-        return _fuzzy_catalog_search(q, limit=6)
+        catalog_results = _fuzzy_catalog_search(q, limit=6)
+        results: List[Dict[str, Any]] = []
+        try:
+            results = await asyncio.wait_for(get_discovery_service().search_ticker(q), timeout=1.2)
+        except Exception:
+            results = []
+        merged: List[Dict[str, Any]] = []
+        seen = set()
+        for item in [*catalog_results, *results]:
+            ticker = str(item.get("ticker", "")).upper()
+            if ticker and ticker not in seen:
+                seen.add(ticker)
+                merged.append(item)
+        return merged[:6]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1267,10 +1277,20 @@ async def get_sentiment_heatmap():
 async def get_search_suggestions(q: str = None):
     """Aggregate trending, moonshot, and commodity suggestions for search."""
     if q and len(q) > 1:
-        # If user provides a query, prioritize name searches
-        results = await get_discovery_service().search_ticker(q)
-        if not results:
-            results = _fuzzy_catalog_search(q, limit=6)
+        catalog_results = _fuzzy_catalog_search(q, limit=6)
+        results: List[Dict[str, Any]] = []
+        try:
+            results = await asyncio.wait_for(get_discovery_service().search_ticker(q), timeout=1.2)
+        except Exception:
+            results = []
+        merged: List[Dict[str, Any]] = []
+        seen = set()
+        for item in [*catalog_results, *results]:
+            ticker = str(item.get("ticker", "")).upper()
+            if ticker and ticker not in seen:
+                seen.add(ticker)
+                merged.append(item)
+        results = merged[:6]
         return {
             "Matches": [f"{r['name']} ({r['ticker']})" for r in results[:5]],
             "Ticker": [r['ticker'] for r in results[:5]]

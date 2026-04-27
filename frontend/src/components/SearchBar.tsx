@@ -2,6 +2,39 @@ import { useState, FormEvent, useEffect, useRef, useMemo, RefObject, useCallback
 import { Search, ArrowUpRight } from "lucide-react";
 import { fetchJsonWithRetry } from "../lib/api";
 
+const LOCAL_SEARCH_ASSETS = [
+  "Apple Inc. (AAPL)",
+  "Microsoft Corporation (MSFT)",
+  "NVIDIA Corporation (NVDA)",
+  "Amazon.com Inc. (AMZN)",
+  "Alphabet Inc. (GOOGL)",
+  "Meta Platforms Inc. (META)",
+  "Tesla Inc. (TSLA)",
+  "Advanced Micro Devices Inc. (AMD)",
+  "Broadcom Inc. (AVGO)",
+  "Berkshire Hathaway Inc. (BRK-B)",
+  "JPMorgan Chase & Co. (JPM)",
+  "Visa Inc. (V)",
+  "Mastercard Incorporated (MA)",
+  "SAP SE (SAP)",
+  "ASML Holding N.V. (ASML)",
+  "Intel Corporation (INTC)",
+  "Netflix Inc. (NFLX)",
+  "Salesforce Inc. (CRM)",
+  "Oracle Corporation (ORCL)",
+  "Palantir Technologies Inc. (PLTR)",
+  "SPDR S&P 500 ETF Trust (SPY)",
+  "Invesco QQQ Trust (QQQ)",
+  "iShares Russell 2000 ETF (IWM)",
+  "SPDR Gold Shares (GLD)",
+  "iShares 20+ Year Treasury Bond ETF (TLT)",
+  "Energy Select Sector SPDR Fund (XLE)",
+  "United States Oil Fund (USO)",
+  "Bitcoin USD (BTC-USD)",
+  "Ethereum USD (ETH-USD)",
+  "Solana USD (SOL-USD)",
+];
+
 interface SearchBarProps {
   onSearch: (ticker: string) => void;
   loading: boolean;
@@ -18,6 +51,14 @@ function extractTicker(value: string): string {
   return value;
 }
 
+function buildLocalMatches(query: string): string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return LOCAL_SEARCH_ASSETS
+    .filter((value) => value.toLowerCase().includes(needle) || extractTicker(value).toLowerCase().startsWith(needle))
+    .slice(0, 6);
+}
+
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
@@ -27,6 +68,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const [ghostText, setGhostText] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestRef = useRef(0);
 
   const flatSuggestions = useMemo(
     () =>
@@ -70,20 +112,31 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
     if (trimmedQuery.length > 1) {
+      const localMatches = buildLocalMatches(trimmedQuery);
+      if (localMatches.length > 0) {
+        setSuggestions({ Treffer: localMatches });
+        setShowDropdown(true);
+      }
+      const requestId = searchRequestRef.current + 1;
+      searchRequestRef.current = requestId;
       debounceTimer.current = setTimeout(() => {
         fetchJsonWithRetry<any>(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, undefined, {
-          retries: 2,
-          retryDelayMs: 900,
+          retries: 0,
+          retryDelayMs: 150,
+          timeoutMs: 1800,
         })
           .then((data) => {
+            if (searchRequestRef.current !== requestId) return;
             if (data.Matches && data.Matches.length > 0) {
               setSuggestions({ Treffer: data.Matches });
-            } else {
+            } else if (localMatches.length === 0) {
               setSuggestions({});
             }
           })
-          .catch(() => setSuggestions({}));
-      }, 120); // faster than before (was 240ms)
+          .catch(() => {
+            if (searchRequestRef.current === requestId && localMatches.length === 0) setSuggestions({});
+          });
+      }, 90);
     } else if (trimmedQuery.length === 0) {
       fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
         retries: 2,
@@ -175,7 +228,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Tab or ArrowRight at end of input → accept ghost text
+    // Tab or ArrowRight at end of input accepts ghost text.
     if ((e.key === "Tab" || e.key === "ArrowRight") && ghostText) {
       const input = e.currentTarget;
       if (e.key === "Tab" || input.selectionStart === input.value.length) {
@@ -210,7 +263,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[1320px]">
-      <div className="surface-panel relative overflow-hidden rounded-[1.6rem] p-3 sm:rounded-[2rem]">
+      <div className="surface-panel relative overflow-visible rounded-[1.6rem] p-3 sm:rounded-[2rem]">
         <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-black/10 to-transparent" />
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -256,7 +309,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             {/* Ghost-text hint pill */}
             {ghostText && (
               <span className="hidden shrink-0 rounded-md border border-black/8 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:inline">
-                Tab →
+                Tab
               </span>
             )}
           </div>
@@ -302,7 +355,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             <span className="rounded-full border border-black/8 bg-white/65 px-3 py-1 font-bold uppercase tracking-[0.14em] text-slate-600">
               Fast lane
             </span>
-            <span>Tippe einen Namen oder Ticker — Tab vervollständigt automatisch.</span>
+            <span>Tippe einen Namen oder Ticker - Tab vervollstaendigt automatisch.</span>
           </div>
           <div className="font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
             {loading ? "Deep scan running" : "Ready"}
@@ -347,7 +400,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
               ))}
             </div>
             <div className="flex items-center justify-between border-t border-black/6 bg-black/[0.02] px-4 py-3 text-[11px] text-slate-500">
-              <span>↑↓ navigieren · Enter auswählen · Tab vervollständigen</span>
+              <span>Pfeile navigieren - Enter auswaehlen - Tab vervollstaendigen</span>
               <button
                 type="button"
                 onClick={() => setShowDropdown(false)}

@@ -435,6 +435,17 @@ class EmailAlertService:
                 if now < scheduled_at:
                     continue
             elif not self._time_window_matches(now, str(job["scheduled_time"])):
+                grace_minutes = self._brief_delivery_grace_minutes()
+                if now >= scheduled_at + timedelta(minutes=grace_minutes):
+                    missed = {
+                        "job": job["job_key"],
+                        "status": "missed",
+                        "event_key": event_key,
+                        "scheduled_at": scheduled_at.isoformat(),
+                        "minutes_late": int((now - scheduled_at).total_seconds() / 60),
+                        "message": "Brief missed its delivery grace window.",
+                    }
+                    self._set_brief_job_status(str(job["job_key"]), missed)
                 continue
             due_jobs.append(
                 {
@@ -623,6 +634,8 @@ class EmailAlertService:
             enriched["last_error"] = None
         elif status == "failed":
             enriched["last_error"] = payload.get("error") or payload.get("message") or "failed"
+        elif status == "missed":
+            enriched["last_error"] = payload.get("message") or "missed"
         self.portfolio_manager.set_app_setting(self._brief_status_key(job_key), json.dumps(enriched))
 
     def _record_brief_forecasts(

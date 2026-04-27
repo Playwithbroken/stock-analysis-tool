@@ -5,7 +5,14 @@ from src.forecast_learning_service import ForecastLearningService
 
 
 class _DummyPortfolioManager:
-    pass
+    def __init__(self) -> None:
+        self.settings: dict[str, str] = {}
+
+    def get_app_setting(self, key: str, default: str = "") -> str:
+        return self.settings.get(key, default)
+
+    def set_app_setting(self, key: str, value: str) -> None:
+        self.settings[key] = value
 
 
 class _DummyPublicSignalService:
@@ -14,7 +21,8 @@ class _DummyPublicSignalService:
 
 class _CapturingAlertService(EmailAlertService):
     def __init__(self) -> None:
-        super().__init__(_DummyPortfolioManager(), _DummyPublicSignalService())
+        self.dummy_portfolio_manager = _DummyPortfolioManager()
+        super().__init__(self.dummy_portfolio_manager, _DummyPublicSignalService())
         self.telegram_messages: list[str] = []
 
     def _tg_post(self, token: str, chat_id: str, text: str, disable_preview: bool = True) -> None:
@@ -112,6 +120,35 @@ class BriefLearningSmokeTest(unittest.TestCase):
         self.assertEqual(congress["direction"], "long")
         self.assertEqual(congress["setup_source"], "congress_watch")
         self.assertIn("congress_signal", congress)
+
+    def test_brief_status_tracks_missed_and_clears_after_sent(self) -> None:
+        service = _CapturingAlertService()
+        service._set_brief_job_status(
+            "morning-brief",
+            {
+                "status": "missed",
+                "message": "Brief missed its delivery grace window.",
+                "scheduled_at": "2026-04-27T08:30:00+02:00",
+            },
+        )
+
+        missed = service.get_brief_job_status("morning-brief")
+        self.assertEqual(missed["status"], "missed")
+        self.assertEqual(missed["last_error"], "Brief missed its delivery grace window.")
+
+        service._set_brief_job_status(
+            "morning-brief",
+            {
+                "status": "sent",
+                "sent_at": "2026-04-27T08:35:00+02:00",
+                "scheduled_at": "2026-04-27T08:30:00+02:00",
+            },
+        )
+
+        sent = service.get_brief_job_status("morning-brief")
+        self.assertEqual(sent["status"], "sent")
+        self.assertEqual(sent["last_success_at"], "2026-04-27T08:35:00+02:00")
+        self.assertIsNone(sent["last_error"])
 
 
 if __name__ == "__main__":

@@ -1313,8 +1313,11 @@ export default function MorningBriefPanel({
                   </div>
                   <div className="mt-2 text-xs text-slate-500">{item.company}</div>
                   <div className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {new Date(item.scheduled_for).toLocaleDateString()} · {item.region}
+                    {item.scheduled_for ? new Date(item.scheduled_for).toLocaleDateString() : "Datum offen"} · {item.region}
                   </div>
+                  {item.summary ? (
+                    <div className="mt-2 text-xs leading-5 text-slate-500">{item.summary}</div>
+                  ) : null}
                 </div>
               ))
             ) : (
@@ -1519,7 +1522,20 @@ export default function MorningBriefPanel({
           </div>
         ) : (
           <div className="mt-4 rounded-[1rem] border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700">
-            Polymarket-Daten aktuell verzoegert. Abschnitt bleibt sichtbar und wird automatisch wieder aktualisiert.
+            {brief.prediction_markets?.message ||
+              "Polymarket-Daten aktuell verzoegert. Abschnitt bleibt sichtbar und wird automatisch wieder aktualisiert."}
+            {(brief.prediction_markets?.watched_themes || []).length ? (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {(brief.prediction_markets?.watched_themes || []).slice(0, 4).map((theme: any, index: number) => (
+                  <div key={`${theme.theme}-${index}`} className="rounded-[0.9rem] border border-amber-500/20 bg-white/55 p-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-700">
+                      {theme.theme}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-amber-800">{theme.why}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </section>

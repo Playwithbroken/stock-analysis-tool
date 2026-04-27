@@ -378,6 +378,8 @@ class MorningBriefService:
         market_movers = self._collect_market_movers(watchlist_tickers)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
+        if not earnings_calendar:
+            earnings_calendar = self._build_earnings_watch_fallback(watchlist_snapshot)
         earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
@@ -444,6 +446,12 @@ class MorningBriefService:
             "prediction_markets": {
                 "kalshi_enabled": self._kalshi_enabled,
                 "status": "live" if prediction_signals else "data_delayed",
+                "watched_themes": self._build_prediction_market_watch_themes(event_layer, macro),
+                "message": (
+                    "Live Polymarket-Signale aktiv."
+                    if prediction_signals
+                    else "Polymarket-Feed aktuell ohne verwertbare Live-Treffer; Makro-Themen werden weiter beobachtet."
+                ),
             },
             "google_news_extra": google_news_extra[:8],
             "trading_edge": trading_edge,
@@ -1478,6 +1486,61 @@ class MorningBriefService:
         signals.sort(key=lambda row: row.get("relevance", 0), reverse=True)
         return signals[:8]
 
+    def _build_prediction_market_watch_themes(
+        self,
+        event_layer: List[Dict[str, Any]] | None,
+        macro: List[Dict[str, Any]] | None,
+    ) -> List[Dict[str, Any]]:
+        themes: List[Dict[str, Any]] = []
+        seen = set()
+
+        for event in (event_layer or [])[:5]:
+            event_type = str(event.get("event_type") or "macro").replace("_", " ").title()
+            title = str(event.get("title") or event_type)
+            key = event_type.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            themes.append(
+                {
+                    "theme": event_type,
+                    "why": title[:140],
+                    "status": "watching",
+                    "source": "event_layer",
+                }
+            )
+
+        macro_lookup = {str(item.get("symbol") or "").upper(): item for item in (macro or [])}
+        for symbol, label in [("CL=F", "Oil / inflation"), ("BTC-USD", "Crypto risk"), ("GC=F", "Gold hedge"), ("DX-Y.NYB", "Dollar pressure")]:
+            if label.lower() in seen:
+                continue
+            asset = macro_lookup.get(symbol)
+            move = asset.get("change_1d") if asset else None
+            if asset and isinstance(move, (int, float)) and abs(move) < 0.15:
+                continue
+            seen.add(label.lower())
+            themes.append(
+                {
+                    "theme": label,
+                    "why": f"{symbol} bewegt sich auffaellig und kann Prediction-Market-Relevanz bekommen." if asset else f"{label} bleibt im Makro-Watch.",
+                    "status": "watching",
+                    "source": "macro_assets",
+                }
+            )
+            if len(themes) >= 5:
+                break
+
+        if not themes:
+            themes.append(
+                {
+                    "theme": "Fed / rates / inflation",
+                    "why": "Standard-Makro-Set fuer Polymarket-Relevanz, bis der Live-Feed wieder belastbare Treffer liefert.",
+                    "status": "watching",
+                    "source": "fallback_watch",
+                }
+            )
+        return themes[:5]
+
     def _normalize_probability(self, value: Any) -> float | None:
         parsed = self._safe_float(value)
         if parsed is None:
@@ -1849,6 +1912,58 @@ class MorningBriefService:
 
         entries.sort(key=lambda item: item["scheduled_for"])
         return entries[:8]
+
+    def _build_earnings_watch_fallback(self, watchlist_snapshot: Dict[str, Any] | None) -> List[Dict[str, Any]]:
+        tickers: List[str] = []
+        watched_tickers = set()
+        if watchlist_snapshot:
+            for item in watchlist_snapshot.get("items", []):
+                if item.get("kind") != "ticker":
+                    continue
+                value = (item.get("value") or "").upper().strip()
+                if value:
+                    tickers.append(value)
+                    watched_tickers.add(value)
+        tickers.extend(["NVDA", "AAPL", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD"])
+
+        entries: List[Dict[str, Any]] = []
+        seen = set()
+        for ticker in tickers:
+            normalized = (ticker or "").upper().strip()
+            if (
+                not normalized
+                or normalized in seen
+                or normalized in self.FUNDAMENTAL_EXCLUDED_TICKERS
+                or normalized.startswith("^")
+                or normalized.endswith("=F")
+                or normalized.endswith("-USD")
+            ):
+                continue
+            seen.add(normalized)
+            company = normalized
+            region = "global"
+            try:
+                info = DataFetcher(normalized).info or {}
+                company = info.get("shortName") or info.get("longName") or normalized
+                region = self._region_from_country(info.get("country"))
+            except Exception:
+                pass
+            entries.append(
+                {
+                    "ticker": normalized,
+                    "company": company,
+                    "scheduled_for": None,
+                    "session": "monitoring",
+                    "days_until": None,
+                    "importance": "watchlist" if normalized in watched_tickers else "market",
+                    "region": region,
+                    "date_status": "provider_pending",
+                    "summary": "Noch kein belastbares Earnings-Datum vom Datenprovider. Wird weiter fuer Ueberraschung, Guidance und Umsatztrend beobachtet.",
+                }
+            )
+            if len(entries) >= 8:
+                break
+        return entries
 
     def _collect_earnings_results(
         self,
@@ -3158,6 +3273,32 @@ class MorningBriefService:
                         "summary": f"{news.get('title')} ({news.get('publisher')})",
                     }
                 )
+        if not impact and watched_tickers:
+            earnings_by_ticker = {
+                str(item.get("ticker") or "").upper(): item
+                for item in brief.get("earnings_calendar", [])
+                if item.get("ticker")
+            }
+            for ticker in list(watched_tickers)[:5]:
+                earnings = earnings_by_ticker.get(str(ticker).upper())
+                if earnings:
+                    status = earnings.get("date_status")
+                    summary = (
+                        f"{ticker}: Earnings-Datum noch nicht bestaetigt, aber Umsatz/EPS/Guidance bleiben im Briefing-Watch."
+                        if status == "provider_pending"
+                        else f"{ticker}: Earnings am {earnings.get('scheduled_for')} im Kalender. Reaktion auf EPS, Umsatz und Guidance beobachten."
+                    )
+                    impact.append({"ticker": ticker, "type": "earnings", "summary": summary})
+                else:
+                    impact.append(
+                        {
+                            "ticker": ticker,
+                            "type": "monitoring",
+                            "summary": f"{ticker}: Keine harte News im aktuellen Brief, aber Kurs, News und Earnings werden weiter ueberwacht.",
+                        }
+                    )
+                if len(impact) >= 5:
+                    break
         brief["watchlist_impact"] = impact[:8]
         return brief
 

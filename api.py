@@ -8,11 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+import copy
 import difflib
 import json
 import uvicorn
 import numpy as np
 import asyncio
+import time
 import hashlib
 import hmac
 import secrets
@@ -75,6 +77,17 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def add_api_timing_headers(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        response.headers["X-API-Duration-Ms"] = str(duration_ms)
+        response.headers["Server-Timing"] = f"app;dur={duration_ms}"
+    return response
+
+
 # Global services (Lazy initialized)
 _discovery_service = None
 _portfolio_manager = None
@@ -93,6 +106,36 @@ _forecast_learning_service = None
 _forecast_learning_task = None
 _push_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
+_RESPONSE_CACHE: Dict[str, tuple[datetime, Any]] = {}
+
+
+def _cache_get(key: str, ttl_seconds: int) -> Any | None:
+    entry = _RESPONSE_CACHE.get(key)
+    if not entry:
+        return None
+    created_at, payload = entry
+    age_seconds = (datetime.utcnow() - created_at).total_seconds()
+    if age_seconds > ttl_seconds:
+        _RESPONSE_CACHE.pop(key, None)
+        return None
+    cloned = copy.deepcopy(payload)
+    if isinstance(cloned, dict):
+        meta = cloned.setdefault("meta", {})
+        if isinstance(meta, dict):
+            meta["cached"] = True
+            meta["cache_age_seconds"] = int(age_seconds)
+    return cloned
+
+
+def _cache_set(key: str, payload: Any) -> Any:
+    _RESPONSE_CACHE[key] = (datetime.utcnow(), copy.deepcopy(payload))
+    return payload
+
+
+def _cache_forget(prefix: str) -> None:
+    for key in list(_RESPONSE_CACHE.keys()):
+        if key.startswith(prefix):
+            _RESPONSE_CACHE.pop(key, None)
 
 
 def _env_enabled(name: str, default: str = "false") -> bool:
@@ -1003,6 +1046,11 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
     so it never hangs the event loop indefinitely.
     """
     normalized_ticker = ticker.upper().strip()
+    cache_key = f"history:{normalized_ticker}:{period}:{interval}"
+    cached = _cache_get(cache_key, int(os.getenv("HISTORY_CACHE_TTL_SECONDS", "180")))
+    if cached is not None:
+        return convert_numpy_types(cached)
+
     attempts: List[tuple[str, str]] = [
         (period, interval),
         ("1mo", "1d"),
@@ -1026,7 +1074,9 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             if history:
                 mode = "live" if (try_period, try_interval) == (period, interval) else "fallback"
                 return convert_numpy_types(
-                    {
+                    _cache_set(
+                        cache_key,
+                        {
                         "items": history,
                         "meta": {
                             "symbol": normalized_ticker,
@@ -1039,7 +1089,8 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                             "requested_period": period,
                             "requested_interval": interval,
                         },
-                    }
+                        },
+                    )
                 )
         except asyncio.TimeoutError as e:
             last_error = e
@@ -1075,7 +1126,9 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                     }
                 )
             return convert_numpy_types(
-                {
+                _cache_set(
+                    cache_key,
+                    {
                     "items": fallback_history,
                     "meta": {
                         "symbol": normalized_ticker,
@@ -1088,7 +1141,8 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                         "requested_period": period,
                         "requested_interval": interval,
                     },
-                }
+                    },
+                )
             )
     except Exception:
         pass
@@ -2180,9 +2234,12 @@ async def get_public_signals():
 @app.get("/api/signals/watchlist")
 async def get_signal_watchlist():
     try:
+        cached = _cache_get("signals:watchlist", int(os.getenv("WATCHLIST_CACHE_TTL_SECONDS", "45")))
+        if cached is not None:
+            return convert_numpy_types(cached)
         items = get_portfolio_manager().get_signal_watch_items()
         summary = get_public_signal_service().build_watchlist_snapshot(items)
-        return convert_numpy_types(summary)
+        return convert_numpy_types(_cache_set("signals:watchlist", summary))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2190,6 +2247,9 @@ async def get_signal_watchlist():
 async def add_signal_watch_item(req: SignalWatchItemRequest):
     try:
         get_portfolio_manager().add_signal_watch_item(req.kind, req.value)
+        _cache_forget("signals:")
+        _cache_forget("radar_bootstrap:")
+        _cache_forget("morning_brief:")
         items = get_portfolio_manager().get_signal_watch_items()
         return convert_numpy_types(get_public_signal_service().build_watchlist_snapshot(items))
     except Exception as e:
@@ -2199,6 +2259,9 @@ async def add_signal_watch_item(req: SignalWatchItemRequest):
 async def delete_signal_watch_item(kind: str, value: str):
     try:
         get_portfolio_manager().remove_signal_watch_item(kind, value)
+        _cache_forget("signals:")
+        _cache_forget("radar_bootstrap:")
+        _cache_forget("morning_brief:")
         items = get_portfolio_manager().get_signal_watch_items()
         return convert_numpy_types(get_public_signal_service().build_watchlist_snapshot(items))
     except Exception as e:
@@ -2337,12 +2400,17 @@ async def get_signal_history(limit: int = 100):
 
 
 async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
+    cache_key = f"radar_bootstrap:{limit}"
+    cached = _cache_get(cache_key, int(os.getenv("RADAR_BOOTSTRAP_CACHE_TTL_SECONDS", "180")))
+    if cached is not None:
+        return cached
+
     items = get_portfolio_manager().get_signal_watch_items()
     snapshot = get_public_signal_service().build_watchlist_snapshot(items)
     settings = get_portfolio_manager().get_signal_score_settings()
     scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
 
-    return {
+    return _cache_set(cache_key, {
         "watchlist": convert_numpy_types(snapshot),
         "history": convert_numpy_types(get_portfolio_manager().get_sent_signal_events(limit=limit)),
         "brief": convert_numpy_types(get_morning_brief_service().get_brief_fast(snapshot)),
@@ -2351,7 +2419,7 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
         "paper_dashboard": convert_numpy_types(get_paper_trading_service().build_dashboard(scoreboard, settings)),
         "trading_intelligence": convert_numpy_types(get_trading_intelligence_service().build_snapshot(snapshot)),
         "learning": convert_numpy_types(get_forecast_learning_service().build_dashboard()),
-    }
+    })
 
 
 @app.get("/api/radar/bootstrap")
@@ -2394,6 +2462,10 @@ async def get_morning_brief(fast: bool = False):
             quality["cache_mode"] = "fast_cached"
             return convert_numpy_types(fallback)
 
+        cached = _cache_get("morning_brief:full", int(os.getenv("MORNING_BRIEF_HTTP_CACHE_TTL_SECONDS", "90")))
+        if cached is not None:
+            return convert_numpy_types(cached)
+
         items = get_portfolio_manager().get_signal_watch_items()
         try:
             snapshot = await asyncio.wait_for(
@@ -2426,7 +2498,7 @@ async def get_morning_brief(fast: bool = False):
             quality["fallback"] = "error"
             return convert_numpy_types(fallback)
 
-        return convert_numpy_types(brief)
+        return convert_numpy_types(_cache_set("morning_brief:full", brief))
     except Exception as e:
         fallback = service.get_cached_or_last_brief()
         if fallback is not None:
@@ -2443,10 +2515,13 @@ async def get_trading_edge():
     sectors, yield curve). Loaded by the frontend separately so the main
     brief stays fast. Cached internally per-component (10min – 6h)."""
     try:
+        cached = _cache_get("trading_edge:dashboard", int(os.getenv("TRADING_EDGE_HTTP_CACHE_TTL_SECONDS", "300")))
+        if cached is not None:
+            return convert_numpy_types(cached)
         items = get_portfolio_manager().get_signal_watch_items()
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         return convert_numpy_types(
-            get_morning_brief_service().get_trading_edge(snapshot)
+            _cache_set("trading_edge:dashboard", get_morning_brief_service().get_trading_edge(snapshot))
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2511,6 +2586,22 @@ async def run_scheduled_briefs_now(include_missed: bool = False):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/performance-cache")
+async def get_performance_cache_status():
+    now = datetime.utcnow()
+    entries = []
+    for key, (created_at, payload) in sorted(_RESPONSE_CACHE.items()):
+        entries.append(
+            {
+                "key": key,
+                "age_seconds": int((now - created_at).total_seconds()),
+                "shape": "dict" if isinstance(payload, dict) else "list" if isinstance(payload, list) else type(payload).__name__,
+                "items": len(payload) if isinstance(payload, list) else len(payload.keys()) if isinstance(payload, dict) else None,
+            }
+        )
+    return {"entries": entries, "count": len(entries)}
 
 
 @app.get("/api/admin/telegram-diagnostics")
@@ -2845,11 +2936,14 @@ async def admin_health_center():
 @app.get("/api/signals/scoreboard")
 async def get_signal_scoreboard():
     try:
+        cached = _cache_get("signals:scoreboard", int(os.getenv("SIGNAL_SCOREBOARD_CACHE_TTL_SECONDS", "90")))
+        if cached is not None:
+            return convert_numpy_types(cached)
         items = get_portfolio_manager().get_signal_watch_items()
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         settings = get_portfolio_manager().get_signal_score_settings()
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
-        return convert_numpy_types(scoreboard)
+        return convert_numpy_types(_cache_set("signals:scoreboard", scoreboard))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2962,7 +3056,15 @@ async def send_session_list_alert(region: str, phase: str):
 async def get_realtime_snapshot(symbols: str):
     try:
         requested = [item.strip() for item in symbols.split(",") if item.strip()]
-        return convert_numpy_types(get_realtime_market_service().build_snapshot(requested))
+        normalized = sorted({item.upper() for item in requested})
+        cache_key = f"realtime:snapshot:{','.join(normalized)}"
+        cached = _cache_get(cache_key, int(os.getenv("REALTIME_SNAPSHOT_CACHE_TTL_SECONDS", "5")))
+        if cached is not None:
+            return convert_numpy_types(cached)
+        payload = get_realtime_market_service().build_snapshot(normalized)
+        if isinstance(payload, dict):
+            payload.setdefault("connection_state", "snapshot")
+        return convert_numpy_types(_cache_set(cache_key, payload))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

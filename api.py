@@ -96,6 +96,7 @@ _email_alert_service = None
 _signal_alert_task = None
 _price_alert_task = None
 _brief_warmup_task = None
+_scheduler_startup_catchup_task = None
 _morning_brief_service = None
 _signal_score_service = None
 _session_list_service = None
@@ -393,13 +394,7 @@ async def _signal_alert_loop():
     await asyncio.sleep(5)
     while True:
         try:
-            get_portfolio_manager().set_app_setting(
-                "brief_scheduler_loop_seen_at",
-                datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
-            )
-            if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
-                await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
-            await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs)
+            await _run_scheduler_tick(include_missed=False)
         except Exception as e:
             print(f"Signal alert loop error: {e}")
             try:
@@ -408,6 +403,28 @@ async def _signal_alert_loop():
                 pass
         interval_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
         await asyncio.sleep(max(1, interval_minutes) * 60)
+
+
+async def _run_scheduler_tick(include_missed: bool = False) -> None:
+    get_portfolio_manager().set_app_setting(
+        "brief_scheduler_loop_seen_at",
+        datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+    )
+    if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
+        await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
+    await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs, include_missed)
+
+
+async def _scheduler_startup_catchup() -> None:
+    await asyncio.sleep(8)
+    try:
+        await _run_scheduler_tick(include_missed=True)
+    except Exception as e:
+        print(f"Scheduler startup catchup error: {e}")
+        try:
+            get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", str(e))
+        except Exception:
+            pass
 
 
 def _safe_int_env(name: str, default: int, minimum: int | None = None) -> int:
@@ -561,11 +578,13 @@ async def _price_alert_loop():
 
 @app.on_event("startup")
 async def startup_event():
-    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task
     alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
     scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
     if (alerts_enabled or scheduled_briefs_enabled) and _signal_alert_task is None:
         _signal_alert_task = asyncio.create_task(_signal_alert_loop())
+    if scheduled_briefs_enabled and _scheduler_startup_catchup_task is None:
+        _scheduler_startup_catchup_task = asyncio.create_task(_scheduler_startup_catchup())
     if scheduled_briefs_enabled and _brief_warmup_task is None:
         _brief_warmup_task = asyncio.create_task(_brief_warmup_loop())
     if _price_alert_task is None:

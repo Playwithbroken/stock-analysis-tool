@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from html import escape
 import json
 import os
@@ -67,6 +68,7 @@ class EmailAlertService:
         self.signal_score_service = signal_score_service or SignalScoreService()
         self.push_service = push_service
         self.forecast_learning_service = forecast_learning_service
+        self._brief_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brief-send")
 
     def get_config(self) -> EmailAlertConfig:
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -496,19 +498,64 @@ class EmailAlertService:
             # For scheduled briefs: send rich multi-part Telegram message + email
             if job.get("is_brief"):
                 items = self.portfolio_manager.get_signal_watch_items()
-                snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+                snapshot_timeout = self._safe_int_env("SCHEDULED_BRIEF_SNAPSHOT_TIMEOUT_SECONDS", 8, minimum=2)
+                brief_timeout = self._safe_int_env("SCHEDULED_BRIEF_BUILD_TIMEOUT_SECONDS", 35, minimum=5)
+                edge_timeout = self._safe_int_env("SCHEDULED_BRIEF_EDGE_TIMEOUT_SECONDS", 10, minimum=2)
                 try:
-                    self.morning_brief_service.get_brief_fast(snapshot, True)
+                    snapshot = self._run_with_timeout(
+                        f"{job['job_key']} snapshot",
+                        lambda: self.public_signal_service.build_watchlist_snapshot(items),
+                        snapshot_timeout,
+                    )
+                except Exception as exc:
+                    failure = {
+                        "job": job["job_key"],
+                        "status": "failed",
+                        "event_key": event_key,
+                        "scheduled_at": job["scheduled_at"].isoformat(),
+                        "minutes_late": job["minutes_late"],
+                        "error": f"snapshot_failed: {exc}",
+                    }
+                    self._set_brief_job_status(str(job["job_key"]), failure)
+                    results.append(failure)
+                    continue
+                try:
+                    self._run_with_timeout(
+                        f"{job['job_key']} warm brief",
+                        lambda: self.morning_brief_service.get_brief_fast(snapshot, True),
+                        brief_timeout,
+                    )
                 except Exception as exc:
                     print(f"Brief warm-cache failed before {job['job_key']}: {exc}")
-                brief = self.morning_brief_service.get_brief(snapshot)
+                try:
+                    brief = self._run_with_timeout(
+                        f"{job['job_key']} brief",
+                        lambda: self.morning_brief_service.get_brief_fast(snapshot, False),
+                        brief_timeout,
+                    )
+                except Exception as exc:
+                    failure = {
+                        "job": job["job_key"],
+                        "status": "failed",
+                        "event_key": event_key,
+                        "scheduled_at": job["scheduled_at"].isoformat(),
+                        "minutes_late": job["minutes_late"],
+                        "error": f"brief_failed: {exc}",
+                    }
+                    self._set_brief_job_status(str(job["job_key"]), failure)
+                    results.append(failure)
+                    continue
                 # Trading edge is decoupled from the cached brief — fetch
                 # fresh here so scheduled briefs always include MSG 5.
                 try:
                     brief = dict(brief)
-                    brief["trading_edge"] = self.morning_brief_service.get_trading_edge(snapshot)
-                except Exception:
-                    pass
+                    brief["trading_edge"] = self._run_with_timeout(
+                        f"{job['job_key']} trading edge",
+                        lambda: self.morning_brief_service.get_trading_edge(snapshot),
+                        edge_timeout,
+                    )
+                except Exception as exc:
+                    print(f"Brief trading-edge skipped for {job['job_key']}: {exc}")
                 telegram_required = bool(
                     config.telegram_enabled
                     and config.telegram_bot_token
@@ -707,6 +754,14 @@ class EmailAlertService:
         if minimum is not None:
             value = max(minimum, value)
         return value
+
+    def _run_with_timeout(self, label: str, fn: "Any", timeout_seconds: int) -> Any:
+        future = self._brief_executor.submit(fn)
+        try:
+            return future.result(timeout=max(1, int(timeout_seconds)))
+        except FutureTimeoutError as exc:
+            future.cancel()
+            raise TimeoutError(f"{label} timed out after {timeout_seconds}s") from exc
 
     def _scheduled_datetime(self, now: datetime, scheduled_hhmm: str) -> datetime | None:
         try:

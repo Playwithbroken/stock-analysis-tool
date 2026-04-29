@@ -86,6 +86,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const telegram = health?.telegram || {};
   const feeds = health?.data_feeds || {};
   const jobs = health?.schedule?.jobs || [];
+  const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
 
   return (
@@ -164,6 +165,50 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 : "No due brief inside the current grace window."}
             </div>
           ) : null}
+
+          <div className="mb-5 grid gap-3 lg:grid-cols-4">
+            <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Next Brief
+              </div>
+              <div className="mt-2 text-lg font-black text-slate-900">
+                {scheduleSummary.next_label || "n/a"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{fmtDate(scheduleSummary.next_due_at)}</div>
+            </div>
+            <div className="rounded-[1.4rem] border border-emerald-500/15 bg-emerald-500/6 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                Last Sent
+              </div>
+              <div className="mt-2 text-lg font-black text-slate-900">
+                {scheduleSummary.last_success_job || "none"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{fmtDate(scheduleSummary.last_success_at)}</div>
+            </div>
+            <div className="rounded-[1.4rem] border border-amber-500/15 bg-amber-500/6 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
+                Queue
+              </div>
+              <div className="mt-2 text-lg font-black text-slate-900">
+                {scheduleSummary.due_now_count ?? 0} due · {scheduleSummary.missed_count ?? 0} missed
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Loop {scheduleSummary.loop_state || "unknown"} · {fmtDate(health?.schedule?.loop_seen_at)}
+              </div>
+            </div>
+            <div className={`rounded-[1.4rem] border p-4 ${scheduleSummary.last_error ? "border-red-500/15 bg-red-500/6" : "border-black/8 bg-white/80"}`}>
+              <div className={`text-[10px] font-extrabold uppercase tracking-[0.18em] ${scheduleSummary.last_error ? "text-red-700" : "text-slate-500"}`}>
+                Last Error
+              </div>
+              <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">
+                {scheduleSummary.last_error || "No active delivery error"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} · ` : ""}
+                {fmtDate(scheduleSummary.last_error_at)}
+              </div>
+            </div>
+          </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">

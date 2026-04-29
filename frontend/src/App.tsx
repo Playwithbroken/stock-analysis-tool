@@ -457,6 +457,15 @@ function AppContent() {
             learning_adjustments: globalBrief.learning_adjustments || [],
             congress_watch: (globalBrief.congress_watch || []).slice(0, 5),
             event_pings: (globalBrief.event_pings || []).slice(0, 5),
+            earnings_calendar: (globalBrief.earnings_calendar || []).slice(0, 8),
+            earnings_results: (globalBrief.earnings_results || []).slice(0, 6),
+            market_movers: {
+              gainers: (globalBrief.market_movers?.gainers || []).slice(0, 6),
+              losers: (globalBrief.market_movers?.losers || []).slice(0, 6),
+            },
+            product_catalysts: (globalBrief.product_catalysts || []).slice(0, 6),
+            watchlist_impact: (globalBrief.watchlist_impact || []).slice(0, 8),
+            prediction_signals: (globalBrief.prediction_signals || []).slice(0, 6),
           }
         : null,
     [globalBrief],

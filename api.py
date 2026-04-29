@@ -1672,6 +1672,12 @@ async def oracle_chat(req: OracleRequest):
     current_setups = brief.get("trade_setups", []) if isinstance(brief, dict) else []
     current_learning_adjustments = brief.get("learning_adjustments", []) if isinstance(brief, dict) else []
     current_congress_watch = brief.get("congress_watch", []) if isinstance(brief, dict) else []
+    current_earnings_calendar = brief.get("earnings_calendar", []) if isinstance(brief, dict) else []
+    current_earnings_results = brief.get("earnings_results", []) if isinstance(brief, dict) else []
+    current_market_movers = brief.get("market_movers", {}) if isinstance(brief, dict) else {}
+    current_product_catalysts = brief.get("product_catalysts", []) if isinstance(brief, dict) else []
+    current_event_pings = brief.get("event_pings", []) if isinstance(brief, dict) else []
+    current_watchlist_impact = brief.get("watchlist_impact", []) if isinstance(brief, dict) else []
 
     explain_lines = []
     if primary:
@@ -1820,6 +1826,60 @@ async def oracle_chat(req: OracleRequest):
             ][:4]
             if symbols:
                 levels.append(f"Congress Watch aktiv fuer: {', '.join(symbols)}")
+
+    if any(token in msg for token in ["earning", "earnings", "zahlen", "quartal", "beat", "miss", "guidance"]):
+        for item in current_earnings_results[:3]:
+            if isinstance(item, dict):
+                ticker = str(item.get("symbol") or item.get("ticker") or "").upper()
+                tone = item.get("tone") or item.get("status") or "reported"
+                detail = item.get("summary") or item.get("headline") or item.get("reaction") or ""
+                levels.append(f"Earnings Result: {ticker} {tone} - {str(detail)[:110]}")
+        for item in current_earnings_calendar[:4]:
+            if isinstance(item, dict):
+                ticker = str(item.get("symbol") or item.get("ticker") or "").upper()
+                when = item.get("date") or item.get("report_date") or item.get("time") or "soon"
+                name = item.get("name") or item.get("company") or ticker
+                levels.append(f"Earnings Watch: {ticker} {name} - {when}")
+
+    if any(token in msg for token in ["mover", "winner", "loser", "gewinner", "verlierer", "market"]):
+        gainers = current_market_movers.get("gainers", []) if isinstance(current_market_movers, dict) else []
+        losers = current_market_movers.get("losers", []) if isinstance(current_market_movers, dict) else []
+        for item in (gainers or [])[:3]:
+            if isinstance(item, dict):
+                levels.append(
+                    f"Top Winner: {str(item.get('ticker') or item.get('symbol') or '').upper()} {item.get('change') or item.get('change_1w') or 'move'}"
+                )
+        for item in (losers or [])[:3]:
+            if isinstance(item, dict):
+                levels.append(
+                    f"Top Loser: {str(item.get('ticker') or item.get('symbol') or '').upper()} {item.get('change') or item.get('change_1w') or 'move'}"
+                )
+
+    if any(token in msg for token in ["produkt", "iphone", "nvidia", "gpu", "gta", "bmw", "news", "katalysator"]):
+        for item in current_product_catalysts[:5]:
+            if isinstance(item, dict):
+                ticker = str(item.get("symbol") or item.get("ticker") or "").upper()
+                title = item.get("title") or item.get("headline") or item.get("summary") or ""
+                source = item.get("source") or item.get("publisher") or ""
+                levels.append(f"Product Catalyst: {ticker} - {str(title)[:120]}" + (f" ({source})" if source else ""))
+
+    if any(token in msg for token in ["event", "ping", "krieg", "war", "policy", "map", "karte", "impact"]):
+        for ping in current_event_pings[:5]:
+            if isinstance(ping, dict):
+                ping_type = ping.get("type") or "event"
+                severity = ping.get("severity") or "normal"
+                region = ping.get("region") or ping.get("country") or "global"
+                symbols = ping.get("symbols") or []
+                levels.append(
+                    f"Event Ping: {ping_type}/{severity} in {region}"
+                    + (f" -> {', '.join(map(str, symbols[:4]))}" if isinstance(symbols, list) and symbols else "")
+                )
+        for impact in current_watchlist_impact[:4]:
+            if isinstance(impact, dict):
+                ticker = str(impact.get("symbol") or impact.get("ticker") or "").upper()
+                action = impact.get("action") or impact.get("impact") or "watch"
+                reason = impact.get("reason") or impact.get("summary") or ""
+                levels.append(f"Watchlist Impact: {ticker} {action} - {str(reason)[:110]}")
 
     wants_briefing = any(
         token in msg
@@ -2928,6 +2988,40 @@ async def admin_health_center():
     if any(job.get("missed_today") for job in schedule_jobs):
         problems.append("brief_missed_today")
     overall = "ok" if not problems else "degraded"
+    next_job = next(
+        (
+            job
+            for job in sorted(
+                [item for item in schedule_jobs if item.get("next_due_at")],
+                key=lambda item: str(item.get("next_due_at")),
+            )
+        ),
+        None,
+    )
+    last_success_job = next(
+        (
+            job
+            for job in sorted(
+                [item for item in schedule_jobs if item.get("last_success_at")],
+                key=lambda item: str(item.get("last_success_at")),
+                reverse=True,
+            )
+        ),
+        None,
+    )
+    last_error_job = next(
+        (
+            job
+            for job in sorted(
+                [item for item in schedule_jobs if item.get("last_error")],
+                key=lambda item: str(item.get("last_status_updated_at") or item.get("last_success_at") or ""),
+                reverse=True,
+            )
+        ),
+        None,
+    )
+    due_now_jobs = [job for job in schedule_jobs if job.get("due_now")]
+    missed_jobs = [job for job in schedule_jobs if job.get("missed_today")]
     return convert_numpy_types(
         {
             "status": overall,
@@ -2943,6 +3037,19 @@ async def admin_health_center():
                 "loop_error": scheduler_loop_error,
                 "last_result": scheduler_last_result,
                 "delivery_grace_minutes": grace_minutes,
+                "summary": {
+                    "next_job_key": next_job.get("job_key") if next_job else None,
+                    "next_label": next_job.get("label") if next_job else None,
+                    "next_due_at": next_job.get("next_due_at") if next_job else None,
+                    "last_success_job": last_success_job.get("label") if last_success_job else None,
+                    "last_success_at": last_success_job.get("last_success_at") if last_success_job else None,
+                    "last_error_job": last_error_job.get("label") if last_error_job else None,
+                    "last_error": last_error_job.get("last_error") if last_error_job else None,
+                    "last_error_at": last_error_job.get("last_status_updated_at") if last_error_job else None,
+                    "due_now_count": len(due_now_jobs),
+                    "missed_count": len(missed_jobs),
+                    "loop_state": "seen" if scheduler_loop_seen_at else "not_seen",
+                },
                 "jobs": schedule_jobs,
             },
             "learning": learning_dashboard,

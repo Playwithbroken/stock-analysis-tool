@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/prune-dist-assets.mjs",
     "preview": "vite preview",
     "qa:release": "node qa_smoke_playwright.mjs"
   },

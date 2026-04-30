@@ -131,6 +131,7 @@ class EmailAlertService:
                 "midday": os.getenv("MIDDAY_BRIEF_TIME", DEFAULT_MIDDAY_BRIEF_TIME),
                 "us_open": os.getenv("US_OPEN_BRIEF_TIME", DEFAULT_US_OPEN_BRIEF_TIME),
                 "close_recap": os.getenv("CLOSE_RECAP_TIME", DEFAULT_CLOSE_RECAP_TIME),
+                "on_time_window_minutes": self._brief_on_time_window_minutes(),
                 "delivery_grace_minutes": self._brief_delivery_grace_minutes(),
             },
         }
@@ -422,7 +423,9 @@ class EmailAlertService:
             },
         ]
         results: List[Dict[str, Any]] = []
-        max_jobs_per_run = self._safe_int_env("BRIEF_MAX_JOBS_PER_RUN", 3, minimum=1)
+        max_jobs_per_run = self._safe_int_env("BRIEF_MAX_JOBS_PER_RUN", 6, minimum=1)
+        on_time_window_minutes = self._brief_on_time_window_minutes()
+        catchup_window_minutes = self._brief_delivery_grace_minutes()
         sent_this_run = 0
         due_jobs: List[Dict[str, Any]] = []
 
@@ -433,18 +436,19 @@ class EmailAlertService:
             scheduled_at = self._scheduled_datetime(now, str(job["scheduled_time"]))
             if scheduled_at is None:
                 continue
-            if include_missed:
-                if now < scheduled_at:
-                    continue
-            elif not self._time_window_matches(now, str(job["scheduled_time"])):
-                grace_minutes = self._brief_delivery_grace_minutes()
-                if now >= scheduled_at + timedelta(minutes=grace_minutes):
+            delta_minutes = (now - scheduled_at).total_seconds() / 60
+            if delta_minutes < 0:
+                continue
+            on_time = delta_minutes < on_time_window_minutes
+            catchup = include_missed and delta_minutes < catchup_window_minutes
+            if not (on_time or catchup):
+                if delta_minutes >= catchup_window_minutes:
                     missed = {
                         "job": job["job_key"],
                         "status": "missed",
                         "event_key": event_key,
                         "scheduled_at": scheduled_at.isoformat(),
-                        "minutes_late": int((now - scheduled_at).total_seconds() / 60),
+                        "minutes_late": int(delta_minutes),
                         "message": "Brief missed its delivery grace window.",
                     }
                     self._set_brief_job_status(str(job["job_key"]), missed)
@@ -454,13 +458,15 @@ class EmailAlertService:
                     **job,
                     "event_key": event_key,
                     "scheduled_at": scheduled_at,
-                    "minutes_late": max(0, int((now - scheduled_at).total_seconds() // 60)),
+                    "minutes_late": max(0, int(delta_minutes // 60)),
+                    "on_time": on_time,
+                    "catchup": bool(catchup and not on_time),
                 }
             )
 
-        # Prioritize the current/recent slot first. This prevents an unsent
-        # morning brief from blocking the midday or US-open brief after a restart.
-        due_jobs.sort(key=lambda item: (item["minutes_late"], item["scheduled_at"]), reverse=False)
+        # Prioritize the current slot first. Catchup jobs remain available but
+        # cannot block the midday or US-open brief after a restart.
+        due_jobs.sort(key=lambda item: (0 if item.get("on_time") else 1, item["scheduled_at"]))
 
         for job in due_jobs:
             if sent_this_run >= max_jobs_per_run:
@@ -637,7 +643,7 @@ class EmailAlertService:
                 "scheduled_at": job["scheduled_at"].isoformat(),
                 "sent_at": datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
                 "minutes_late": job["minutes_late"],
-                "catchup": job["minutes_late"] > 5,
+                "catchup": bool(job.get("catchup")),
                 "forecasts_recorded": learning.get("recorded", 0),
             }
             self._set_brief_job_status(str(job["job_key"]), success)
@@ -648,7 +654,7 @@ class EmailAlertService:
             results.append(
                 {
                     "status": "idle",
-                    "message": "No scheduled brief is due inside the current grace window.",
+                    "message": "No scheduled brief is due inside the current on-time/catchup window.",
                     "checked_at": now.isoformat(),
                 }
             )
@@ -737,12 +743,18 @@ class EmailAlertService:
         scheduled = self._scheduled_datetime(now, scheduled_hhmm)
         if scheduled is None:
             return False
-        grace_minutes = self._brief_delivery_grace_minutes()
+        grace_minutes = self._brief_on_time_window_minutes()
         delta_minutes = (now - scheduled).total_seconds() / 60
         return 0 <= delta_minutes < grace_minutes
 
+    def _brief_on_time_window_minutes(self) -> int:
+        loop_minutes = self._safe_int_env("BRIEF_SCHEDULER_INTERVAL_MINUTES", 5, minimum=1)
+        signal_minutes = self._safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
+        minimum_window = max(loop_minutes, min(signal_minutes, 15))
+        return self._safe_int_env("BRIEF_ON_TIME_WINDOW_MINUTES", 30, minimum=minimum_window)
+
     def _brief_delivery_grace_minutes(self) -> int:
-        loop_minutes = self._safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=2)
+        loop_minutes = self._safe_int_env("BRIEF_SCHEDULER_INTERVAL_MINUTES", 5, minimum=1)
         return max(loop_minutes, self._safe_int_env("BRIEF_DELIVERY_GRACE_MINUTES", 720, minimum=loop_minutes))
 
     def _safe_int_env(self, name: str, default: int, minimum: int | None = None) -> int:

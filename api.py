@@ -390,18 +390,44 @@ async def require_single_user_auth(request: Request, call_next):
     return await call_next(request)
 
 async def _signal_alert_loop():
-    interval_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
+    interval_minutes = _scheduler_loop_interval_minutes()
     await asyncio.sleep(5)
     while True:
+        now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
         try:
-            await _run_scheduler_tick(include_missed=False)
+            get_portfolio_manager().set_app_setting("brief_scheduler_loop_tick_started_at", now.isoformat())
+            tick_timeout_seconds = _safe_int_env("BRIEF_SCHEDULER_TICK_TIMEOUT_SECONDS", 180, minimum=30)
+            include_missed = _env_enabled("SCHEDULED_BRIEF_INCLUDE_MISSED_ON_LOOP", "true")
+            await asyncio.wait_for(
+                _run_scheduler_tick(include_missed=include_missed),
+                timeout=tick_timeout_seconds,
+            )
+            get_portfolio_manager().set_app_setting(
+                "brief_scheduler_loop_completed_at",
+                datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+            )
+            get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", "")
+        except asyncio.TimeoutError:
+            message = f"Scheduler tick timed out after {tick_timeout_seconds}s"
+            print(f"Signal alert loop error: {message}")
+            try:
+                get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", message)
+            except Exception:
+                pass
         except Exception as e:
             print(f"Signal alert loop error: {e}")
             try:
                 get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", str(e))
             except Exception:
                 pass
-        interval_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
+        interval_minutes = _scheduler_loop_interval_minutes()
+        try:
+            next_tick = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))) + timedelta(
+                minutes=max(1, interval_minutes)
+            )
+            get_portfolio_manager().set_app_setting("brief_scheduler_loop_next_tick_at", next_tick.isoformat())
+        except Exception:
+            pass
         await asyncio.sleep(max(1, interval_minutes) * 60)
 
 
@@ -425,6 +451,12 @@ async def _scheduler_startup_catchup() -> None:
             get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", str(e))
         except Exception:
             pass
+
+
+def _scheduler_loop_interval_minutes() -> int:
+    signal_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
+    brief_minutes = _safe_int_env("BRIEF_SCHEDULER_INTERVAL_MINUTES", 5, minimum=1)
+    return min(signal_minutes, brief_minutes)
 
 
 def _safe_int_env(name: str, default: int, minimum: int | None = None) -> int:
@@ -2921,6 +2953,7 @@ async def admin_health_center():
     now_local = datetime.now(tz)
     notification_status = get_email_alert_service().get_notification_status()
     schedule_status = notification_status.get("schedule", {})
+    on_time_window_minutes = int(schedule_status.get("on_time_window_minutes") or 30)
     grace_minutes = int(schedule_status.get("delivery_grace_minutes") or 720)
     sent_events = get_portfolio_manager().get_sent_signal_events(limit=80)
     sent_keys = {event.get("event_key") for event in sent_events}
@@ -2943,9 +2976,18 @@ async def admin_health_center():
             if scheduled_today and now_local >= scheduled_today
             else None
         )
+        on_time_until = scheduled_today + timedelta(minutes=on_time_window_minutes) if scheduled_today else None
         grace_until = scheduled_today + timedelta(minutes=grace_minutes) if scheduled_today else None
         sent_today = event_key in sent_keys
         due_now = (
+            bool(scheduled_today)
+            and now_local.weekday() in weekdays
+            and not sent_today
+            and now_local >= scheduled_today
+            and bool(on_time_until)
+            and now_local < on_time_until
+        )
+        catchup_available = (
             bool(scheduled_today)
             and now_local.weekday() in weekdays
             and not sent_today
@@ -2975,7 +3017,9 @@ async def admin_health_center():
                 "last_status_updated_at": job_status.get("updated_at"),
                 "next_due_at": next_due.isoformat() if next_due else None,
                 "minutes_late": minutes_late,
+                "on_time_until": on_time_until.isoformat() if on_time_until else None,
                 "grace_until": grace_until.isoformat() if grace_until else None,
+                "catchup_available": catchup_available,
             }
         )
 
@@ -3092,8 +3136,11 @@ async def admin_health_center():
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
                 "last_checked_at": scheduler_last_checked_at,
                 "loop_seen_at": scheduler_loop_seen_at,
+                "loop_completed_at": get_portfolio_manager().get_app_setting("brief_scheduler_loop_completed_at"),
+                "loop_next_tick_at": get_portfolio_manager().get_app_setting("brief_scheduler_loop_next_tick_at"),
                 "loop_error": scheduler_loop_error,
                 "last_result": scheduler_last_result,
+                "on_time_window_minutes": on_time_window_minutes,
                 "delivery_grace_minutes": grace_minutes,
                 "summary": {
                     "next_job_key": next_job.get("job_key") if next_job else None,

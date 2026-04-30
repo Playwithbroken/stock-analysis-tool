@@ -917,6 +917,13 @@ function AppContent() {
   const shouldShowOnboardingNudge = ONBOARDING_NUDGE_ENABLED && showOnboardingNudge;
   const activeNavItem = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
   const headerStatusLabel = headerRealtimeConnected ? headerConnectionState : headerTransportMode;
+  const briefCommandStats = [
+    ["Setups", globalBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
+    ["Events", globalBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
+    ["Congress", globalBrief?.congress_watch?.length || 0, "border-sky-500/20 bg-sky-500/10 text-sky-700"],
+    ["Earnings", globalBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
+    ["Products", globalBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
+  ];
   const favoriteTape = (
     <div className="overflow-x-auto no-scrollbar">
       <div className="flex min-w-max items-center gap-2">
@@ -1251,19 +1258,33 @@ function AppContent() {
               </section>
             ) : null}
 
-            <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
+            <section className="surface-panel dashboard-command-panel rounded-[2rem] p-5 sm:p-7">
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)] xl:items-center">
+                <div className="min-w-0">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                     Dashboard
                   </div>
-                  <h2 className="mt-2 text-3xl text-slate-900">
+                  <h2 className="mt-2 max-w-4xl text-3xl text-slate-900 sm:text-4xl">
                     World watch, sectors and live trading edge
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                     Übersicht über globale Märkte, Wars / Wahlen / Energie / Policy events
                     sowie Squeeze-, Insider- und Options-Signale auf einen Blick.
                   </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <div className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                      headerRealtimeConnected
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                    }`}>
+                      feed {headerStatusLabel}
+                    </div>
+                    {globalBrief?.macro_regime ? (
+                      <div className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-700">
+                        regime {globalBrief.macro_regime}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 {globalBrief?.macro_regime ? (() => {
                   const r = (globalBrief.macro_regime || "").toLowerCase();
@@ -1276,11 +1297,40 @@ function AppContent() {
                       ? "border-red-500/20 bg-red-500/10 text-red-700"
                       : "border-amber-500/20 bg-amber-500/10 text-amber-700";
                   return (
-                    <div className={`rounded-full border ${cls} px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em]`}>
+                    <div className={`hidden rounded-full border ${cls} px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em]`}>
                       {icon} {globalBrief.macro_regime}
                     </div>
                   );
                 })() : null}
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/72 p-4 shadow-[0_16px_34px_rgba(17,24,39,0.06)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                        Command Board
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-slate-900">
+                        Live brief readiness
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsChatOpen(true)}
+                      className="rounded-full bg-[#101114] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                    >
+                      Ask Buddy
+                    </button>
+                  </div>
+                  <div className="mt-4 grid grid-cols-5 gap-2">
+                    {briefCommandStats.map(([label, value, tone]) => (
+                      <div key={String(label)} className={`rounded-[1rem] border p-2 text-center ${tone}`}>
+                        <div className="text-lg font-black leading-none">{value}</div>
+                        <div className="mt-1 truncate text-[8px] font-extrabold uppercase tracking-[0.12em]">
+                          {label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -36,6 +36,7 @@ interface HistoryPayload {
     period?: string;
     interval?: string;
     points?: number;
+    fallback_reason?: string;
   };
 }
 
@@ -68,11 +69,11 @@ const PERIODS = [
 ];
 
 const HISTORY_STATUS_LABELS: Record<"loading" | "ready" | "stale" | "snapshot" | "unavailable", string> = {
-  loading: "loading",
-  ready: "live history",
-  stale: "fallback history",
-  snapshot: "snapshot fallback",
-  unavailable: "unavailable",
+  loading: "laedt",
+  ready: "Live-Historie",
+  stale: "gespeicherte Historie",
+  snapshot: "Snapshot-Fallback",
+  unavailable: "nicht verfuegbar",
 };
 
 const friendlyRealtimeError = (error: string) => {
@@ -90,7 +91,7 @@ const dataStatusLabel = (
 ) => {
   if (historyState === "unavailable") return "Kursdaten aktuell nicht verfuegbar";
   if (historyState === "snapshot") return "Snapshot-Fallback aktiv";
-  if (historyState === "stale") return "Fallback-Historie aktiv";
+  if (historyState === "stale") return "Gespeicherte Historie aktiv, Provider wird erneut versucht";
   if (connectionState === "degraded") return "Live-Feed verzoegert, Chart bleibt nutzbar";
   if (connectionState === "snapshot" || transportMode === "snapshot") return "Snapshot-Feed aktiv";
   return "Live-Daten aktiv";
@@ -772,6 +773,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
           History: {historyMeta.source || "unknown"} - {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
           {typeof historyMeta.points === "number" ? ` - ${historyMeta.points} Punkte` : ""}
+          {historyMeta.fallback_reason ? ` - ${String(historyMeta.fallback_reason).replaceAll("_", " ")}` : ""}
         </div>
       ) : null}
     </div>

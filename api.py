@@ -128,6 +128,27 @@ def _cache_get(key: str, ttl_seconds: int) -> Any | None:
     return cloned
 
 
+def _cache_get_stale(key: str, max_age_seconds: int) -> Any | None:
+    entry = _RESPONSE_CACHE.get(key)
+    if not entry:
+        return None
+    created_at, payload = entry
+    age_seconds = (datetime.utcnow() - created_at).total_seconds()
+    if age_seconds > max_age_seconds:
+        return None
+    cloned = copy.deepcopy(payload)
+    if isinstance(cloned, dict):
+        meta = cloned.setdefault("meta", {})
+        if isinstance(meta, dict):
+            meta["cached"] = True
+            meta["cache_age_seconds"] = int(age_seconds)
+            meta["mode"] = "fallback"
+            meta["stale"] = True
+            meta["source"] = f"{meta.get('source') or 'history'}_stale_cache"
+            meta["fallback_reason"] = "provider_unavailable"
+    return cloned
+
+
 def _cache_set(key: str, payload: Any) -> Any:
     _RESPONSE_CACHE[key] = (datetime.utcnow(), copy.deepcopy(payload))
     return payload
@@ -1098,6 +1119,7 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
     """
     normalized_ticker = ticker.upper().strip()
     cache_key = f"history:{normalized_ticker}:{period}:{interval}"
+    last_good_key = f"history:lastgood:{normalized_ticker}:{period}:{interval}"
     cached = _cache_get(cache_key, int(os.getenv("HISTORY_CACHE_TTL_SECONDS", "180")))
     if cached is not None:
         return convert_numpy_types(cached)
@@ -1124,10 +1146,7 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             history = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=12.0)
             if history:
                 mode = "live" if (try_period, try_interval) == (period, interval) else "fallback"
-                return convert_numpy_types(
-                    _cache_set(
-                        cache_key,
-                        {
+                payload = {
                         "items": history,
                         "meta": {
                             "symbol": normalized_ticker,
@@ -1140,9 +1159,9 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                             "requested_period": period,
                             "requested_interval": interval,
                         },
-                        },
-                    )
-                )
+                    }
+                _cache_set(last_good_key, payload)
+                return convert_numpy_types(_cache_set(cache_key, payload))
         except asyncio.TimeoutError as e:
             last_error = e
             continue
@@ -1176,10 +1195,7 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                         "source": "snapshot_fallback",
                     }
                 )
-            return convert_numpy_types(
-                _cache_set(
-                    cache_key,
-                    {
+            payload = {
                     "items": fallback_history,
                     "meta": {
                         "symbol": normalized_ticker,
@@ -1192,11 +1208,18 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
                         "requested_period": period,
                         "requested_interval": interval,
                     },
-                    },
-                )
-            )
+                }
+            _cache_set(last_good_key, payload)
+            return convert_numpy_types(_cache_set(cache_key, payload))
     except Exception:
         pass
+
+    stale = _cache_get_stale(
+        last_good_key,
+        _safe_int_env("HISTORY_STALE_CACHE_TTL_SECONDS", 86400, minimum=300),
+    )
+    if stale is not None:
+        return convert_numpy_types(_cache_set(cache_key, stale))
 
     if isinstance(last_error, asyncio.TimeoutError):
         raise HTTPException(status_code=504, detail="History fetch timed out - data provider not responding")

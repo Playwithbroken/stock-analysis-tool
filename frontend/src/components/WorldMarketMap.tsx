@@ -1308,8 +1308,117 @@ export default function WorldMarketMap({
           </div>
         </div>
 
+        <div className="sm:hidden rounded-[1.45rem] border border-black/8 bg-white/78 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                World Map
+              </div>
+              <div className="mt-1 text-base font-black text-slate-900">
+                Event pings & trade impact
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setImpactDrawerOpen(true)}
+              className="shrink-0 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+            >
+              {mapSignalSummary.total} pings
+            </button>
+          </div>
+
+          <div className="relative mt-3 h-[188px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
+            <img
+              src={worldMapSvg}
+              alt="World map"
+              className="absolute inset-0 h-full w-full object-contain opacity-95 contrast-[1.04] saturate-[0.88]"
+              draggable={false}
+            />
+
+            {positionedGeoSignals.slice(0, 12).map((item, index) => (
+              <button
+                key={item.geoKey || `${item.title}-${index}`}
+                type="button"
+                onClick={() => {
+                  setPinnedEventIndex(index);
+                  setImpactDrawerOpen(true);
+                }}
+                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-1.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] shadow-[0_10px_24px_rgba(15,23,42,0.14)] ${markerClass(
+                  item.markerTone,
+                )} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
+                style={item.adjustedStyle}
+                aria-label={`Open ${item.title}`}
+              >
+                {item.pulse ? (
+                  <span
+                    className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(
+                      item.markerTone,
+                    )} animate-ping`}
+                  />
+                ) : null}
+                <span className="relative inline-flex items-center gap-1">
+                  <span className={`h-1.5 w-1.5 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                  {item.markerIcon}
+                </span>
+              </button>
+            ))}
+
+            {!positionedGeoSignals.length ? (
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-[1rem] border border-black/8 bg-white/88 p-3 text-center text-xs font-semibold text-slate-600">
+                Keine priorisierten Event-Pings im aktuellen Filter.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {regions.map((region) => (
+              <button
+                key={region.label}
+                type="button"
+                onClick={() => onSelectRegion(region.label)}
+                className={`shrink-0 rounded-full border px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all ${
+                  selectedRegion === region.label
+                    ? "border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-black/8 bg-white text-slate-600"
+                }`}
+              >
+                {regionFlag(region.label)} {region.label} {formatPct(region.avg_change_1d)}
+              </button>
+            ))}
+          </div>
+
+          {activeGeoEvent ? (
+            <button
+              type="button"
+              onClick={() => setImpactDrawerOpen(true)}
+              className="mt-3 block w-full rounded-[1.05rem] border border-black/8 bg-white/88 p-3 text-left"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(
+                    activeGeoEvent.markerTone,
+                  )}`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${markerAccentClass(activeGeoEvent.markerTone)}`} />
+                  {activeGeoEvent.markerIcon}
+                </span>
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                  Trade impact
+                </span>
+              </div>
+              <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900">
+                {activeGeoEvent.title}
+              </div>
+              <div className="mt-1 text-xs font-semibold text-slate-500">
+                {activeGeoEvent.region || "Global"} · {activeGeoEvent.event_intelligence?.action || "watch"}
+              </div>
+            </button>
+          ) : null}
+        </div>
+
         <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
-          <div className="relative h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:p-5">
+          <div className="relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
             <div className="relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />

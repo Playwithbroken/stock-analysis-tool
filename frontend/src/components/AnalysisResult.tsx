@@ -69,6 +69,29 @@ const metricTone = (value: number | null | undefined, positiveAbove = 0): string
   return value >= positiveAbove ? "text-emerald-700" : "text-red-700";
 };
 
+const METRIC_HELP: Record<string, string> = {
+  "Market Cap": "Boersenwert des Unternehmens. Hilft einzuordnen, ob es Large Cap, Mid Cap oder Small Cap ist.",
+  "P/E Ratio": "Kurs-Gewinn-Verhaeltnis. Niedriger kann guenstiger wirken, hoher braucht meist starkes Wachstum.",
+  "Rev Growth": "Umsatzwachstum. Zeigt, ob das Geschaeft groesser wird, nicht ob es schon profitabler wird.",
+  Margin: "Profitabilitaet nach Kosten. Hoehere Margen geben oft mehr Preissetzungsmacht und Krisenpuffer.",
+  "Revenue Growth": "Wachstum der Erloese. Wichtig, um zu sehen, ob die Story fundamental getragen wird.",
+  "FCF Yield": "Free-Cashflow im Verhaeltnis zum Boersenwert. Hoeher bedeutet mehr Cash-Qualitaet pro investiertem Euro.",
+  "Analyst Upside": "Abstand zum durchschnittlichen Analystenziel. Nur als Stimmungsindikator nutzen, nicht blind folgen.",
+  "Net Debt": "Nettoschulden nach Cash. Hohe Werte koennen bei steigenden Zinsen oder schwachen Margen belasten.",
+  "Reported EPS": "Tatsaechlich gemeldeter Gewinn je Aktie im letzten Quartal.",
+  "EPS Estimate": "Konsensschaetzung vor den Zahlen. Relevant fuer Beat oder Miss.",
+  "EPS Surprise": "Abweichung zwischen gemeldetem EPS und Erwartung. Positive Surprise kann Momentum ausloesen.",
+  "4Q Pattern": "Trefferbild der letzten Quartale. Viele Beats zeigen bessere Planbarkeit, viele Misses erhoehen Risiko.",
+  "Revenue YoY": "Umsatzveraenderung gegenueber Vorjahr. Wichtig, weil EPS auch durch Kostenkuerzungen steigen kann.",
+  "Forward EPS": "Erwarteter Gewinn je Aktie fuer die Zukunft. Zeigt, was der Markt bereits einpreist.",
+  Umsatz: "Gesamterloese der letzten Berichtsperiode. Basis fuer Wachstum, Margen und Bewertung.",
+  "Umsatz YoY": "Umsatzwachstum gegenueber Vorjahr. Negativ kann auf Nachfrage- oder Preisprobleme hindeuten.",
+  "Umsatz CAGR": "Durchschnittliches Umsatzwachstum ueber mehrere Jahre. Glaettet Ausreisser.",
+  "Quartal YoY": "Umsatzwachstum im letzten Quartal gegenueber Vorjahresquartal. Gut fuer aktuelle Dynamik.",
+  "FCF-Marge": "Free-Cashflow nach Investitionen im Verhaeltnis zum Umsatz. Misst Cash-Qualitaet.",
+  "Op. Marge": "Operative Marge vor Zinsen und Steuern. Zeigt operative Effizienz.",
+};
+
 export default function AnalysisResult({
   data,
   portfolios,
@@ -1173,15 +1196,33 @@ function MetricCard({
   trend?: "up" | "down";
   info?: string;
 }) {
+  const help = METRIC_HELP[label] || info || "";
+  const meta = info && info !== help ? info : "";
+
   return (
     <div className="surface-panel relative group rounded-xl p-5 transition-all hover:border-black/12">
       <div className="mb-2 flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-        {label}
-        {info && (
-          <span className="opacity-0 transition-opacity group-hover:opacity-100">
-            i
+        <span>{label}</span>
+        {help ? (
+          <span
+            className="relative inline-flex h-5 w-5 items-center justify-center rounded-full border border-black/8 bg-white/70 text-[10px] text-slate-500 opacity-70 transition-opacity group-hover:opacity-100"
+            title={help}
+            aria-label={`${label}: ${help}`}
+          >
+            ?
+            <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 hidden w-64 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-within:block group-focus-within:opacity-100">
+              <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
+                {label}
+              </span>
+              {help}
+              {meta ? (
+                <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                  {meta}
+                </span>
+              ) : null}
+            </span>
           </span>
-        )}
+        ) : null}
       </div>
       <div className="text-xl font-mono font-bold text-slate-900">
         {value ?? "N/A"}

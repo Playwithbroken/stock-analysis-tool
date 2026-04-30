@@ -374,7 +374,11 @@ class MorningBriefService:
 
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
+        if not event_pings:
+            event_pings = self._build_macro_event_ping_fallback(macro)
         product_catalysts = self._build_product_catalysts(top_news)
+        if not product_catalysts:
+            product_catalysts = self._build_product_watch_fallback(watchlist_tickers)
         market_movers = self._collect_market_movers(watchlist_tickers)
         contrarian_signals = self._build_contrarian_signals(top_news, watchlist_snapshot)
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
@@ -492,6 +496,11 @@ class MorningBriefService:
         top_news = self._collect_news(extra_tickers=watchlist_tickers, fast=True)
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
+        if not event_pings:
+            event_pings = self._build_macro_event_ping_fallback(macro)
+        product_catalysts = self._build_product_catalysts(top_news)
+        if not product_catalysts:
+            product_catalysts = self._build_product_watch_fallback(watchlist_tickers)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
             [asia, europe, usa],
@@ -532,7 +541,7 @@ class MorningBriefService:
             },
             "event_layer": event_layer,
             "event_pings": event_pings,
-            "product_catalysts": self._build_product_catalysts(top_news),
+            "product_catalysts": product_catalysts,
             "market_movers": {"gainers": [], "losers": []},
             "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
             "economic_calendar": economic_calendar,
@@ -555,6 +564,8 @@ class MorningBriefService:
             "prediction_markets": {
                 "kalshi_enabled": self._kalshi_enabled,
                 "status": "data_delayed",
+                "watched_themes": self._build_prediction_market_watch_themes(event_layer, macro),
+                "message": "Fast mode: Polymarket-Livefeed wird nachgeladen; relevante Makro-Themen bleiben auf Watch.",
             },
             "google_news_extra": [],
             "trading_edge": {},
@@ -999,6 +1010,49 @@ class MorningBriefService:
             )
         return pings[:8]
 
+    def _build_macro_event_ping_fallback(self, macro: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
+        """Create transparent watch pings when no hard geo/event headline is active."""
+        now = datetime.now(timezone.utc)
+        rows: List[Dict[str, Any]] = []
+        macro = macro or []
+        candidates = [
+            ("CL=F", "energy", "Oil impulse watch", "Oil and energy equities confirm together.", "Oil fades or XLE fails to confirm.", ["XLE", "CVX", "OXY"]),
+            ("GC=F", "conflict", "Gold hedge watch", "Gold holds bid while indexes/rates show stress.", "Gold reverses and VIX remains contained.", ["GLD", "NEM"]),
+            ("^TNX", "central_bank", "Rates watch", "Yields, dollar and Nasdaq futures align.", "Rates move without equity confirmation.", ["TLT", "QQQ"]),
+            ("DX-Y.NYB", "policy", "Dollar pressure watch", "Dollar strength pressures risk assets and multinationals.", "Dollar move fades before US open.", ["UUP", "SPY"]),
+        ]
+        lookup = {str(item.get("symbol") or "").upper(): item for item in macro}
+        for symbol, event_type, title, trigger, invalidation, symbols in candidates:
+            asset = lookup.get(symbol.upper())
+            change = asset.get("change_1d") if isinstance(asset, dict) else None
+            if isinstance(change, (int, float)) and abs(change) < 0.12:
+                continue
+            rows.append(
+                {
+                    "id": f"watch:{event_type}:{int(now.timestamp())}",
+                    "type": event_type,
+                    "severity": "normal",
+                    "region": "global",
+                    "symbols": symbols,
+                    "started_at": now.isoformat(),
+                    "confidence": 45,
+                    "title": title,
+                    "source_status": "watch_fallback",
+                    "trade_impact": {
+                        "action": "watch",
+                        "baseline_scenario": "No high-confidence headline ping is active, but this macro proxy is worth monitoring.",
+                        "symbols": symbols,
+                        "trigger": trigger,
+                        "invalidation": invalidation,
+                        "window": "today",
+                        "hedge_idea": "Keep gross exposure smaller until confirmation.",
+                    },
+                }
+            )
+            if len(rows) >= 3:
+                break
+        return rows
+
     def _build_product_catalysts(self, news: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         catalysts: List[Dict[str, Any]] = []
         seen: set[str] = set()
@@ -1029,6 +1083,47 @@ class MorningBriefService:
                 }
             )
         return catalysts[:6]
+
+    def _build_product_watch_fallback(self, watchlist_tickers: List[str] | None = None) -> List[Dict[str, Any]]:
+        """Keep product radar visible without pretending a fresh headline exists."""
+        priority = list(dict.fromkeys([*(watchlist_tickers or []), "NVDA", "AAPL", "TTWO", "BMW.DE", "TSLA"]))
+        themes = {
+            "NVDA": "GPU / AI chip cycle",
+            "AAPL": "iPhone / device cycle",
+            "TTWO": "GTA 6 / release timing",
+            "BMW.DE": "Neue Klasse / EV launch",
+            "TSLA": "Robotaxi / vehicle refresh",
+            "MSFT": "Copilot / Azure AI",
+            "AMZN": "AWS / Anthropic",
+            "META": "AI devices / ads",
+            "GOOGL": "Gemini / Search / Waymo",
+        }
+        rows: List[Dict[str, Any]] = []
+        seen = set()
+        for raw in priority:
+            ticker = (raw or "").upper().strip()
+            if not ticker or ticker in seen or ticker not in themes:
+                continue
+            seen.add(ticker)
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "title": f"{themes[ticker]} watch",
+                    "theme": themes[ticker],
+                    "catalyst_type": "watch_fallback",
+                    "direction_hint": "watch",
+                    "publisher": "Internal radar",
+                    "link": "",
+                    "impact": "watch",
+                    "confidence": 42,
+                    "source_status": "no_fresh_headline",
+                    "trigger": "Only promote to setup after a trusted headline, official confirmation, volume and price follow-through.",
+                    "invalidation": "Ignore if the story remains rumour-only or price does not react.",
+                }
+            )
+            if len(rows) >= 4:
+                break
+        return rows
 
     def _collect_market_movers(self, extra_tickers: List[str] | None = None) -> Dict[str, List[Dict[str, Any]]]:
         now = datetime.now(timezone.utc)

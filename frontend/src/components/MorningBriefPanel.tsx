@@ -226,6 +226,20 @@ export default function MorningBriefPanel({
   const topLosers = Array.isArray(marketMovers.losers) ? marketMovers.losers.slice(0, 4) : [];
   const productCatalysts = Array.isArray(brief.product_catalysts) ? brief.product_catalysts.slice(0, 4) : [];
   const setupBoard = brief.setup_board || { now: [], next: [], avoid: [] };
+  const earningsRows = (
+    Array.isArray(brief.earnings_calendar) && brief.earnings_calendar.length
+      ? brief.earnings_calendar
+      : Array.isArray(brief.broad_earnings)
+        ? brief.broad_earnings
+        : []
+  ).slice(0, 6);
+  const watchedPredictionThemes = Array.isArray(brief.prediction_markets?.watched_themes)
+    ? brief.prediction_markets.watched_themes.slice(0, 4)
+    : [];
+  const watchlistImpactFallback = watchedPredictionThemes.map((theme: any) => ({
+    type: "macro watch",
+    summary: `${theme.theme}: ${theme.why}`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -1342,8 +1356,8 @@ export default function MorningBriefPanel({
             </div>
           </div>
           <div className="mt-4 space-y-3">
-            {(brief.earnings_calendar || []).length ? (
-              (brief.earnings_calendar || []).slice(0, 6).map((item: any, index: number) => (
+            {earningsRows.length ? (
+              earningsRows.map((item: any, index: number) => (
                 <div
                   key={`${item.ticker}-${index}`}
                   className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
@@ -1356,12 +1370,12 @@ export default function MorningBriefPanel({
                       {item.ticker}
                     </button>
                     <div className="text-[11px] font-bold uppercase text-slate-500">
-                      {item.session}
+                      {item.session || item.time || "watch"}
                     </div>
                   </div>
-                  <div className="mt-2 text-xs text-slate-500">{item.company}</div>
+                  <div className="mt-2 text-xs text-slate-500">{item.company || item.name || item.ticker}</div>
                   <div className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {item.scheduled_for ? new Date(item.scheduled_for).toLocaleDateString() : "Datum offen"} · {item.region}
+                    {(item.scheduled_for || item.date) ? new Date(item.scheduled_for || item.date).toLocaleDateString() : "Datum offen"} · {item.region || item.importance || "market"}
                   </div>
                   {item.summary ? (
                     <div className="mt-2 text-xs leading-5 text-slate-500">{item.summary}</div>
@@ -1382,10 +1396,10 @@ export default function MorningBriefPanel({
           Watchlist Impact
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {brief.watchlist_impact?.length ? (
-            brief.watchlist_impact.map((item: any, index: number) => (
+          {(brief.watchlist_impact?.length ? brief.watchlist_impact : watchlistImpactFallback).length ? (
+            (brief.watchlist_impact?.length ? brief.watchlist_impact : watchlistImpactFallback).map((item: any, index: number) => (
               <div
-                key={`${item.ticker}-${index}`}
+                key={`${item.ticker || item.type}-${index}`}
                 className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
               >
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
@@ -1570,11 +1584,18 @@ export default function MorningBriefPanel({
           </div>
         ) : (
           <div className="mt-4 rounded-[1rem] border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700">
-            {brief.prediction_markets?.message ||
-              "Polymarket-Daten aktuell verzoegert. Abschnitt bleibt sichtbar und wird automatisch wieder aktualisiert."}
-            {(brief.prediction_markets?.watched_themes || []).length ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {brief.prediction_markets?.message ||
+                  "Polymarket-Daten aktuell verzoegert. Abschnitt bleibt sichtbar und wird automatisch wieder aktualisiert."}
+              </span>
+              <span className="rounded-full border border-amber-500/20 bg-white/65 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-700">
+                {brief.prediction_markets?.status || "watch"}
+              </span>
+            </div>
+            {watchedPredictionThemes.length ? (
               <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {(brief.prediction_markets?.watched_themes || []).slice(0, 4).map((theme: any, index: number) => (
+                {watchedPredictionThemes.map((theme: any, index: number) => (
                   <div key={`${theme.theme}-${index}`} className="rounded-[0.9rem] border border-amber-500/20 bg-white/55 p-3">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-700">
                       {theme.theme}
@@ -1588,7 +1609,7 @@ export default function MorningBriefPanel({
         )}
       </section>
 
-      {(brief.polymarket || []).length > 0 && (
+      {(brief.polymarket || []).length > 0 && !(brief.prediction_signals || []).length && (
         <section className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">

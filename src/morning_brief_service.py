@@ -501,6 +501,36 @@ class MorningBriefService:
         product_catalysts = self._build_product_catalysts(top_news)
         if not product_catalysts:
             product_catalysts = self._build_product_watch_fallback(watchlist_tickers)
+        try:
+            broad_earnings = self._social_service.get_broad_earnings_calendar(
+                extra_tickers=watchlist_tickers,
+                days_ahead=21,
+            )
+        except Exception:
+            broad_earnings = []
+        earnings_calendar = [
+            {
+                "ticker": item.get("ticker"),
+                "company": item.get("company"),
+                "scheduled_for": item.get("date"),
+                "session": item.get("session") or "watch",
+                "region": "USA",
+                "date_status": "confirmed",
+                "summary": (
+                    f"{item.get('ticker')}: Earnings in {item.get('days_until')}d. "
+                    "EPS, revenue and guidance reaction stay on watch."
+                ),
+            }
+            for item in (broad_earnings or [])[:8]
+            if item.get("ticker")
+        ]
+        if not earnings_calendar:
+            earnings_calendar = self._build_earnings_watch_fallback(watchlist_snapshot)
+        try:
+            polymarket_events = self._social_service.get_polymarket_events()
+        except Exception:
+            polymarket_events = []
+        prediction_signals = self._build_prediction_signals(polymarket_events)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
             [asia, europe, usa],
@@ -545,8 +575,8 @@ class MorningBriefService:
             "market_movers": {"gainers": [], "losers": []},
             "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
             "economic_calendar": economic_calendar,
-            "earnings_calendar": [],
-            "broad_earnings": [],
+            "earnings_calendar": earnings_calendar,
+            "broad_earnings": broad_earnings[:12],
             "earnings_results": [],
             "opening_timeline": opening_timeline,
             "action_board": action_board,
@@ -559,13 +589,17 @@ class MorningBriefService:
             "watchlist_impact": [],
             "reddit_posts": [],
             "stocktwits": [],
-            "polymarket": [],
-            "prediction_signals": [],
+            "polymarket": polymarket_events[:8],
+            "prediction_signals": prediction_signals,
             "prediction_markets": {
                 "kalshi_enabled": self._kalshi_enabled,
-                "status": "data_delayed",
+                "status": "live" if prediction_signals else "watch_only",
                 "watched_themes": self._build_prediction_market_watch_themes(event_layer, macro),
-                "message": "Fast mode: Polymarket-Livefeed wird nachgeladen; relevante Makro-Themen bleiben auf Watch.",
+                "message": (
+                    "Polymarket-Livefeed aktiv: relevante Maerkte werden als Wahrscheinlichkeiten gezeigt."
+                    if prediction_signals
+                    else "Polymarket-Livefeed liefert gerade keine belastbaren Finance-Maerkte; Makro-Themen bleiben auf Watch."
+                ),
             },
             "google_news_extra": [],
             "trading_edge": {},

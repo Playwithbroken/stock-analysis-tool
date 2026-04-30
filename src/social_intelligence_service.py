@@ -410,10 +410,11 @@ class SocialIntelligenceService:
                     item["importance"] = "watchlist"
                 results = results + fresh
 
-        horizon_date = datetime.now(timezone.utc).date() + timedelta(days=days_ahead)
+        today = datetime.now(timezone.utc).date()
+        horizon_date = today + timedelta(days=days_ahead)
         filtered = [
             r for r in results
-            if r.get("date") and r["date"][:10] <= horizon_date.isoformat()
+            if r.get("date") and today.isoformat() <= r["date"][:10] <= horizon_date.isoformat()
         ]
         filtered.sort(key=lambda x: x.get("date", ""))
         return filtered[:20]
@@ -449,7 +450,8 @@ class SocialIntelligenceService:
                 if not earnings_ts:
                     continue
                 dt = datetime.fromtimestamp(int(earnings_ts), tz=timezone.utc)
-                if dt > horizon:
+                today = datetime.now(timezone.utc).date()
+                if dt.date() < today or dt > horizon:
                     continue
                 hour = dt.hour
                 session = "pre-market" if hour < 12 else "after-hours" if hour >= 16 else "intraday"

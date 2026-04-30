@@ -1683,6 +1683,8 @@ async def oracle_chat(req: OracleRequest):
     current_product_catalysts = brief.get("product_catalysts", []) if isinstance(brief, dict) else []
     current_event_pings = brief.get("event_pings", []) if isinstance(brief, dict) else []
     current_watchlist_impact = brief.get("watchlist_impact", []) if isinstance(brief, dict) else []
+    current_prediction_signals = brief.get("prediction_signals", []) if isinstance(brief, dict) else []
+    prediction_status = brief.get("prediction_markets", {}) if isinstance(brief, dict) else {}
 
     explain_lines = []
     if primary:
@@ -1718,6 +1720,13 @@ async def oracle_chat(req: OracleRequest):
         )
     if top_signal:
         explain_lines.append("Das Signalboard fliesst als Priorisierung ein, nicht als blinder Kaufbefehl.")
+    if isinstance(brief, dict):
+        explain_lines.append(
+            "Aktive Daten im Briefing: "
+            f"{len(current_setups)} Setups, {len(current_congress_watch)} Congress-Signale, "
+            f"{len(current_event_pings)} Event-Pings, {len(current_earnings_calendar)} Earnings, "
+            f"{len(current_product_catalysts)} Produkt-Katalysatoren."
+        )
     if learning_summary.get("forecasts"):
         explain_lines.append(
             f"Learning Loop aktiv: {learning_summary.get('forecasts')} gespeicherte Setups, "
@@ -1833,6 +1842,8 @@ async def oracle_chat(req: OracleRequest):
                 levels.append(f"Learning Lesson: {lesson.get('message')}")
 
     if any(token in msg for token in ["warum", "setup", "ranking", "oben", "priorisiert", "briefing"]):
+        if not current_setups:
+            levels.append("Briefing-Luecke: keine belastbaren Trade Setups; Ursache ist meist fehlender Trigger, schwache Datenlage oder Upstream-Timeout.")
         for setup in current_setups[:3]:
             if not isinstance(setup, dict):
                 continue
@@ -1850,8 +1861,12 @@ async def oracle_chat(req: OracleRequest):
             ][:4]
             if symbols:
                 levels.append(f"Congress Watch aktiv fuer: {', '.join(symbols)}")
+        elif any(token in msg for token in ["congress", "politiker", "senat", "house"]):
+            levels.append("Congress Watch: aktuell keine hoch priorisierte PTR-Cluster-Lage im Briefing.")
 
     if any(token in msg for token in ["earning", "earnings", "zahlen", "quartal", "beat", "miss", "guidance"]):
+        if not current_earnings_results and not current_earnings_calendar:
+            levels.append("Earnings: keine nahen oder ausgewerteten Zahlen im aktuellen Briefing-Kontext.")
         for item in current_earnings_results[:3]:
             if isinstance(item, dict):
                 ticker = str(item.get("symbol") or item.get("ticker") or "").upper()
@@ -1868,6 +1883,8 @@ async def oracle_chat(req: OracleRequest):
     if any(token in msg for token in ["mover", "winner", "loser", "gewinner", "verlierer", "market"]):
         gainers = current_market_movers.get("gainers", []) if isinstance(current_market_movers, dict) else []
         losers = current_market_movers.get("losers", []) if isinstance(current_market_movers, dict) else []
+        if not gainers and not losers:
+            levels.append("Market Movers: Feed aktuell leer oder verzoegert; zuerst Markets-Tab neu laden und dann Gewinner/Verlierer bestaetigen.")
         for item in (gainers or [])[:3]:
             if isinstance(item, dict):
                 levels.append(
@@ -1880,6 +1897,8 @@ async def oracle_chat(req: OracleRequest):
                 )
 
     if any(token in msg for token in ["produkt", "iphone", "nvidia", "gpu", "gta", "bmw", "news", "katalysator"]):
+        if not current_product_catalysts:
+            levels.append("Produkt-News: kein belastbarer Produkt-Katalysator im aktuellen Briefing. Nicht jede Headline reicht als Setup.")
         for item in current_product_catalysts[:5]:
             if isinstance(item, dict):
                 ticker = str(item.get("symbol") or item.get("ticker") or "").upper()
@@ -1888,6 +1907,8 @@ async def oracle_chat(req: OracleRequest):
                 levels.append(f"Product Catalyst: {ticker} - {str(title)[:120]}" + (f" ({source})" if source else ""))
 
     if any(token in msg for token in ["event", "ping", "krieg", "war", "policy", "map", "karte", "impact"]):
+        if not current_event_pings:
+            levels.append("Event Map: keine priorisierten Pings im Filter. Das bedeutet nicht 'kein Risiko', sondern keinen starken App-Trigger.")
         for ping in current_event_pings[:5]:
             if isinstance(ping, dict):
                 ping_type = ping.get("type") or "event"
@@ -1904,6 +1925,19 @@ async def oracle_chat(req: OracleRequest):
                 action = impact.get("action") or impact.get("impact") or "watch"
                 reason = impact.get("reason") or impact.get("summary") or ""
                 levels.append(f"Watchlist Impact: {ticker} {action} - {str(reason)[:110]}")
+
+    if any(token in msg for token in ["polymarket", "prediction", "wetten", "wahrscheinlichkeit"]):
+        if current_prediction_signals:
+            for item in current_prediction_signals[:4]:
+                market = str(item.get("market") or "")[:120]
+                probability = item.get("probability")
+                relevance = item.get("relevance")
+                prob_text = f"{float(probability) * 100:.0f}%" if isinstance(probability, (int, float)) else "n/a"
+                levels.append(f"Polymarket: {prob_text} | relevance {relevance} - {market}")
+        else:
+            status_text = prediction_status.get("status") if isinstance(prediction_status, dict) else "data_delayed"
+            reason = prediction_status.get("message") if isinstance(prediction_status, dict) else ""
+            levels.append(f"Polymarket: {status_text}. {reason or 'Feed leer oder verzoegert; Abschnitt bleibt sichtbar.'}")
 
     wants_briefing = any(
         token in msg

@@ -145,6 +145,36 @@ export default function BrokerChat({
     contextSymbols?.[0] ||
     (liveQuotes ? Object.keys(liveQuotes)[0] : "");
   const primaryTicker = Array.isArray(currentTicker) ? currentTicker[0] : currentTicker || topSignalTicker;
+  const setupCount = Array.isArray(morningBriefSummary?.trade_setups)
+    ? morningBriefSummary.trade_setups.length
+    : 0;
+  const congressCount = Array.isArray(morningBriefSummary?.congress_watch)
+    ? morningBriefSummary.congress_watch.length
+    : 0;
+  const eventPingCount = Array.isArray(morningBriefSummary?.event_pings)
+    ? morningBriefSummary.event_pings.length
+    : 0;
+  const earningsCount = Array.isArray(morningBriefSummary?.earnings_calendar)
+    ? morningBriefSummary.earnings_calendar.length
+    : 0;
+  const productCatalystCount = Array.isArray(morningBriefSummary?.product_catalysts)
+    ? morningBriefSummary.product_catalysts.length
+    : 0;
+  const moverCount =
+    (morningBriefSummary?.market_movers?.gainers?.length || 0) +
+    (morningBriefSummary?.market_movers?.losers?.length || 0);
+  const forecastCount = learningSummary?.summary?.forecasts || learningSummary?.summary?.total || 0;
+  const evaluatedCount = learningSummary?.summary?.evaluated || 0;
+
+  const contextStats = [
+    { label: "Setups", value: setupCount, active: setupCount > 0 },
+    { label: "Congress", value: congressCount, active: congressCount > 0 },
+    { label: "Events", value: eventPingCount, active: eventPingCount > 0 },
+    { label: "Earnings", value: earningsCount, active: earningsCount > 0 },
+    { label: "Products", value: productCatalystCount, active: productCatalystCount > 0 },
+    { label: "Movers", value: moverCount, active: moverCount > 0 },
+    { label: "Learning", value: evaluatedCount || forecastCount, active: Boolean(evaluatedCount || forecastCount) },
+  ];
 
   const quickActions = [
     activeTab === "discovery"
@@ -164,12 +194,17 @@ export default function BrokerChat({
     currentTicker
       ? `Erklaere das Dossier fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}: Umsatz, Margen, Bewertung und Risiken.`
       : "Welche Quelle oder Prognose lag zuletzt daneben?",
+    activeTab === "discovery"
+      ? "Zeige mir die besten Gewinner/Verlierer und welchen ich analysieren soll."
+      : activeTab === "portfolio"
+        ? "Welche Holding hat die hoechste Gefahr und welche profitiert heute?"
+        : "Welche News, Earnings oder Produkt-Katalysatoren sind heute wirklich wichtig?",
     "Warum wurde das aktuelle Briefing so gerankt?",
     "Welche Learnings verbessern heute die Signale?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];
-  const visibleQuickActions = quickActions.slice(0, 5);
+  const visibleQuickActions = quickActions.slice(0, 6);
 
   const deskActions = [
     primaryTicker && onAnalyzeTicker
@@ -302,6 +337,23 @@ export default function BrokerChat({
               <div className="mt-3 text-sm leading-6 text-slate-700">
                 {latestOracleMessage}
               </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {contextStats.slice(0, 6).map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-[1rem] border px-3 py-2 ${
+                    item.active
+                      ? "border-[var(--accent)]/20 bg-[var(--accent-soft)] text-[var(--accent)]"
+                      : "border-black/8 bg-white/72 text-slate-400"
+                  }`}
+                >
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em]">
+                    {item.label}
+                  </div>
+                  <div className="mt-1 text-sm font-black">{item.value || 0}</div>
+                </div>
+              ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
@@ -483,6 +535,14 @@ export default function BrokerChat({
                   {morningBriefSummary.macro_regime}
                 </span>
               ) : null}
+              {contextStats.filter((item) => item.active).slice(0, 5).map((item) => (
+                <span
+                  key={item.label}
+                  className="rounded-full border border-[var(--accent)]/18 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+                >
+                  {item.label} {item.value}
+                </span>
+              ))}
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
               {visibleQuickActions.map((action) => (

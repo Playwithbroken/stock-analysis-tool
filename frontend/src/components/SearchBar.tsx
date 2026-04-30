@@ -59,9 +59,17 @@ function buildLocalMatches(query: string): string[] {
     .slice(0, 6);
 }
 
+function buildDefaultSuggestions(): Record<string, string[]> {
+  return {
+    "Aktien": LOCAL_SEARCH_ASSETS.slice(0, 12),
+    "ETFs & Makro": LOCAL_SEARCH_ASSETS.slice(20, 27),
+    "Crypto": LOCAL_SEARCH_ASSETS.slice(27),
+  };
+}
+
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>(() => buildDefaultSuggestions());
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   /** Inline ghost-text completion (Google-style) */
@@ -69,6 +77,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestRef = useRef(0);
+  const suggestionAbortRef = useRef<AbortController | null>(null);
 
   const flatSuggestions = useMemo(
     () =>
@@ -98,12 +107,19 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
   // Load default suggestions on mount
   useEffect(() => {
-    fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
+    const controller = new AbortController();
+    fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", { signal: controller.signal }, {
       retries: 2,
       retryDelayMs: 900,
+      timeoutMs: 2500,
     })
-      .then((data) => setSuggestions(data))
-      .catch(() => setSuggestions({}));
+      .then((data) => {
+        if (!controller.signal.aborted && data && Object.keys(data).length > 0) {
+          setSuggestions(data);
+        }
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
   }, []);
 
   // Debounced live search
@@ -119,14 +135,17 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       }
       const requestId = searchRequestRef.current + 1;
       searchRequestRef.current = requestId;
+      suggestionAbortRef.current?.abort();
+      const controller = new AbortController();
+      suggestionAbortRef.current = controller;
       debounceTimer.current = setTimeout(() => {
-        fetchJsonWithRetry<any>(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, undefined, {
+        fetchJsonWithRetry<any>(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, { signal: controller.signal }, {
           retries: 0,
           retryDelayMs: 150,
-          timeoutMs: 1800,
+          timeoutMs: 1200,
         })
           .then((data) => {
-            if (searchRequestRef.current !== requestId) return;
+            if (controller.signal.aborted || searchRequestRef.current !== requestId) return;
             if (data.Matches && data.Matches.length > 0) {
               setSuggestions({ Treffer: data.Matches });
             } else if (localMatches.length === 0) {
@@ -134,17 +153,20 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             }
           })
           .catch(() => {
-            if (searchRequestRef.current === requestId && localMatches.length === 0) setSuggestions({});
+            if (!controller.signal.aborted && searchRequestRef.current === requestId && localMatches.length === 0) {
+              setSuggestions({});
+            }
           });
       }, 90);
     } else if (trimmedQuery.length === 0) {
-      fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", undefined, {
-        retries: 2,
-        retryDelayMs: 900,
-      })
-        .then((data) => setSuggestions(data))
-        .catch(() => setSuggestions({}));
+      suggestionAbortRef.current?.abort();
+      setSuggestions(buildDefaultSuggestions());
+      setGhostText("");
     }
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
   }, [query]);
 
   // Close dropdown on outside click
@@ -294,7 +316,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                     setQuery(e.target.value);
                     setShowDropdown(true);
                   }}
-                  onFocus={() => setShowDropdown(true)}
+                  onFocus={() => {
+                    if (!query.trim() && Object.keys(suggestions).length === 0) {
+                      setSuggestions(buildDefaultSuggestions());
+                    }
+                    setShowDropdown(true);
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder={ghostText ? "" : "AAPL, NVDA, ASML, BTC-USD"}
                   aria-label="Search for a stock, ETF, or crypto ticker"

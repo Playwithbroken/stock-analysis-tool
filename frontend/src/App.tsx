@@ -422,6 +422,7 @@ function AppContent() {
   ).slice(0, 10);
   const headerFallbackSymbols = ["SPY", "QQQ", "AAPL", "NVDA", "BTC-USD", "GLD"];
   const favoriteSymbols = headerSymbols.length ? headerSymbols : headerFallbackSymbols;
+  const favoriteTapeLabel = headerSymbols.length ? "Watchlist / Portfolio" : "Market Snapshot";
   const {
     quotes: headerQuotes,
     connected: headerRealtimeConnected,
@@ -920,7 +921,9 @@ function AppContent() {
     <div className="overflow-x-auto no-scrollbar">
       <div className="flex min-w-max items-center gap-2">
         <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
-          {headerRealtimeConnected ? `Favorites ${headerConnectionState}` : `Favorites ${headerTransportMode}`}
+          {headerRealtimeConnected
+            ? `${favoriteTapeLabel} ${headerConnectionState}`
+            : `${favoriteTapeLabel} ${headerTransportMode}`}
         </div>
         {favoriteSymbols.map((symbol) => (
           <HeaderTickerChip key={symbol} symbol={symbol} quote={headerQuotes[symbol]} />

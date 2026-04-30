@@ -9,7 +9,7 @@ import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
-import { ArrowDownRight, ArrowUpRight, Bell, BellOff, BellRing, Moon, Sun } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowUpRight, Bell, BellOff, BellRing, LockKeyhole, Moon, Sun } from "lucide-react";
 import usePushNotifications from "./hooks/usePushNotifications";
 
 const CHUNK_RELOAD_GUARD_KEY = "brokerfreund:chunk-reload-once";
@@ -1025,9 +1025,9 @@ function AppContent() {
     <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
         <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] md:hidden">
-          <div className="mobile-topbar flex h-[58px] items-center justify-between gap-2 rounded-[1.25rem] border border-white/70 bg-white/86 px-3 shadow-[0_14px_34px_rgba(17,24,39,0.09)] backdrop-blur-xl">
+          <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] border border-white/70 bg-white/88 px-2.5 shadow-[0_12px_28px_rgba(17,24,39,0.08)] backdrop-blur-xl">
             <div className="flex min-w-0 items-center gap-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] bg-[#101114] text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#101114] text-white">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l5-5 4 4 7-8" />
                 </svg>
@@ -1036,13 +1036,13 @@ function AppContent() {
                 <div className="truncate text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
                   Broker Freund
                 </div>
-                <div className="truncate text-[15px] font-black leading-tight text-slate-950">
+                <div className="truncate text-[14px] font-black leading-tight text-slate-950">
                   {activeNavItem.label}
                 </div>
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1">
               <span
                 className={`flex h-2.5 w-2.5 rounded-full ${
                   headerRealtimeConnected ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" : "bg-amber-500"
@@ -1052,7 +1052,7 @@ function AppContent() {
               <button
                 onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
                 aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
-                className="rounded-full border border-black/8 bg-white/76 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-800"
+                className="rounded-full border border-black/8 bg-white/76 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-800"
               >
                 {currency}
               </button>
@@ -1066,16 +1066,18 @@ function AppContent() {
               <button
                 onClick={() => setIsHealthOpen(true)}
                 aria-label="Open health center"
-                className="flex h-8 items-center justify-center rounded-full border border-black/8 bg-white/76 px-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 text-slate-700"
+                title="Health center"
               >
-                Health
+                <Activity size={14} />
               </button>
               <button
                 onClick={handleLogout}
                 aria-label="Lock workspace"
-                className="flex h-8 items-center justify-center rounded-full bg-[#101114] px-2.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#101114] text-white"
+                title="Lock workspace"
               >
-                Lock
+                <LockKeyhole size={14} />
               </button>
             </div>
           </div>

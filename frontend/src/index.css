@@ -190,7 +190,7 @@ h3,
 }
 
 .mobile-topbar {
-  min-height: 58px;
+  min-height: 54px;
 }
 
 .mobile-market-tape {
@@ -532,6 +532,24 @@ h3,
   .header-gradient {
     background:
       linear-gradient(180deg, rgba(250, 248, 243, 0.96), rgba(250, 248, 243, 0.78) 72%, rgba(250, 248, 243, 0));
+  }
+
+  .mobile-topbar-shell {
+    padding-inline: 0.55rem;
+    padding-bottom: 0.45rem;
+  }
+
+  .mobile-market-tape {
+    margin-bottom: 0.75rem;
+  }
+
+  .mobile-market-tape > div {
+    border-radius: 1.05rem;
+    padding: 0.5rem;
+  }
+
+  .mobile-market-tape .ticker-chip {
+    padding-block: 0.35rem;
   }
 
   .mobile-market-tape .ticker-marquee-wrap {

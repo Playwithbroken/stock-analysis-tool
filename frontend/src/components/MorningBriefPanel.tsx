@@ -106,6 +106,27 @@ function pingTypeLabel(type?: string) {
   return labels[t] || t.replace("_", " ");
 }
 
+function catalystTypeLabel(type?: string) {
+  const t = String(type || "product_news").toLowerCase();
+  if (t === "watch_fallback") return "Watch Radar";
+  if (t === "launch") return "Launch Watch";
+  if (t === "delay") return "Delay Risk";
+  return t.replace("_", " ");
+}
+
+function catalystStatusCopy(status?: string) {
+  const s = String(status || "").toLowerCase();
+  if (s === "no_fresh_headline") return "Kein frischer Headline-Trigger. Nur beobachten.";
+  if (s === "watch_fallback") return "Makro-/Produkt-Watch, noch kein Trade-Signal.";
+  return "";
+}
+
+function pingStatusCopy(status?: string) {
+  const s = String(status || "").toLowerCase();
+  if (s === "watch_fallback") return "Watch-Fallback: kein harter Event-Ping, aber relevanter Markt-Proxy.";
+  return "";
+}
+
 function extractTickerCandidates(text?: string) {
   if (!text) return [];
   const matches = text.match(/\b[A-Z]{1,5}(?:-[A-Z]{1,5})?\b/g) || [];
@@ -391,7 +412,9 @@ export default function MorningBriefPanel({
               Launches, delays, GPUs, iPhone, autos, games.
             </div>
             <div className="mt-4 space-y-3">
-              {productCatalysts.length ? productCatalysts.map((item: any) => (
+              {productCatalysts.length ? productCatalysts.map((item: any) => {
+                const statusCopy = catalystStatusCopy(item.source_status);
+                return (
                 <div key={`${item.ticker}-${item.title}`} className="rounded-[1.1rem] border border-black/8 bg-white/70 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <button
@@ -408,13 +431,33 @@ export default function MorningBriefPanel({
                           ? "bg-emerald-500/10 text-emerald-700"
                           : "bg-amber-500/10 text-amber-700"
                     }`}>
-                      {item.catalyst_type || "product"}
+                      {catalystTypeLabel(item.catalyst_type)}
                     </span>
                   </div>
                   <div className="mt-2 text-sm font-bold text-slate-900">{item.theme}</div>
                   <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.title}</div>
+                  {statusCopy ? (
+                    <div className="mt-2 rounded-[0.8rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                      {statusCopy}
+                    </div>
+                  ) : null}
+                  {item.trigger || item.invalidation ? (
+                    <div className="mt-2 grid gap-2 text-[11px] leading-5 text-slate-500">
+                      {item.trigger ? (
+                        <div className="rounded-[0.8rem] border border-black/8 bg-white px-3 py-2">
+                          Trigger: {item.trigger}
+                        </div>
+                      ) : null}
+                      {item.invalidation ? (
+                        <div className="rounded-[0.8rem] border border-black/8 bg-white px-3 py-2">
+                          Invalidierung: {item.invalidation}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-              )) : (
+                );
+              }) : (
                 <div className="rounded-[1.1rem] border border-black/8 bg-white/70 p-3 text-sm text-slate-500">
                   No strong product catalyst in the current trusted feed.
                 </div>
@@ -1059,6 +1102,11 @@ export default function MorningBriefPanel({
                 <div className="mt-2 text-sm font-bold text-slate-900">
                   {ping.title || "Event signal"}
                 </div>
+                {pingStatusCopy(ping.source_status) ? (
+                  <div className="mt-2 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-semibold text-amber-800">
+                    {pingStatusCopy(ping.source_status)}
+                  </div>
+                ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>Region: {ping.region || "global"}</div>
                   <div>Confidence: {ping.confidence}</div>

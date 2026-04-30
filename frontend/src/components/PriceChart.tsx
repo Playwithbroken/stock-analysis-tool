@@ -97,6 +97,15 @@ const dataStatusLabel = (
   return "Live-Daten aktiv";
 };
 
+const INDICATOR_HELP: Record<string, string> = {
+  RSI: "RSI misst Momentum: ueber 70 oft ueberkauft, unter 30 oft ueberverkauft. Kein Kaufsignal allein.",
+  MACD: "MACD zeigt Trend-Momentum: steigendes Histogramm spricht fuer zunehmenden Aufwaertsdruck, fallend fuer nachlassenden Druck.",
+  SMA: "SMA ist der gleitende Durchschnitt. 20/50/200 Tage zeigen kurz-, mittel- und langfristigen Trend.",
+  Bollinger: "Bollinger-Baender zeigen normale Schwankungsbreite. Ausbrueche koennen Momentum oder Uebertreibung markieren.",
+  Volume: "Volume zeigt Handelsaktivitaet. Bewegungen mit hohem Volumen sind belastbarer als duenne Moves.",
+  VWAP: "VWAP ist der volumengewichtete Durchschnittspreis. Intraday oft Referenz, ob Kaeufer oder Verkaeufer Kontrolle haben.",
+};
+
 const emptyIndicators = (): IndicatorSeries => ({
   rsi: [],
   macd: [],
@@ -483,13 +492,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     active: boolean;
     setActive: React.Dispatch<React.SetStateAction<boolean>>;
     activeTone: string;
+    help: string;
   }> = [
-    { label: "RSI", active: showRSI, setActive: setShowRSI, activeTone: "border-amber-500/30 bg-amber-500/10 text-amber-700" },
-    { label: "MACD", active: showMACD, setActive: setShowMACD, activeTone: "border-sky-500/30 bg-sky-500/10 text-sky-700" },
-    { label: "SMA", active: showSMA, setActive: setShowSMA, activeTone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" },
-    { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700" },
-    { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700" },
-    { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700" },
+    { label: "RSI", active: showRSI, setActive: setShowRSI, activeTone: "border-amber-500/30 bg-amber-500/10 text-amber-700", help: INDICATOR_HELP.RSI },
+    { label: "MACD", active: showMACD, setActive: setShowMACD, activeTone: "border-sky-500/30 bg-sky-500/10 text-sky-700", help: INDICATOR_HELP.MACD },
+    { label: "SMA", active: showSMA, setActive: setShowSMA, activeTone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700", help: INDICATOR_HELP.SMA },
+    { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700", help: INDICATOR_HELP.Bollinger },
+    { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700", help: INDICATOR_HELP.Volume },
+    { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700", help: INDICATOR_HELP.VWAP },
   ];
 
   const CustomTooltip = useCallback(
@@ -589,11 +599,24 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           <button
             key={toggle.label}
             onClick={() => toggle.setActive((prev) => !prev)}
-            className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
+            title={toggle.help}
+            aria-label={`${toggle.label}: ${toggle.help}`}
+            className={`group relative rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
               toggle.active ? toggle.activeTone : "border-black/8 bg-white/80 text-slate-500"
             }`}
           >
-            {toggle.label}
+            <span className="inline-flex items-center gap-1.5">
+              {toggle.label}
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-current/20 bg-white/55 text-[9px] normal-case tracking-normal opacity-70">
+                ?
+              </span>
+            </span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-64 -translate-x-1/2 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-visible:block group-focus-visible:opacity-100">
+              <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
+                {toggle.label}
+              </span>
+              {toggle.help}
+            </span>
           </button>
         ))}
       </div>

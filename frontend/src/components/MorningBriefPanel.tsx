@@ -19,7 +19,7 @@ function regimeStyle(regime?: string) {
   if (r.includes("risk-on") || r.includes("on"))
     return { icon: "↗", bg: "bg-emerald-500/10", text: "text-emerald-700", border: "border-emerald-500/20" };
   if (r.includes("risk-off") || r.includes("off"))
-    return { icon: "↘", bg: "bg-red-500/10", text: "text-red-700", border: "border-red-500/20" };
+    return { icon: "↘", bg: "bg-red-500/[0.065]", text: "text-red-700", border: "border-red-500/16" };
   return { icon: "⚖", bg: "bg-amber-500/10", text: "text-amber-700", border: "border-amber-500/20" };
 }
 
@@ -58,7 +58,7 @@ function decisionTone(value?: string) {
 
 function setupBucketTone(bucket: "now" | "next" | "avoid") {
   if (bucket === "now") return "border-emerald-500/16 bg-emerald-500/5 text-emerald-700";
-  if (bucket === "avoid") return "border-red-500/16 bg-red-500/5 text-red-700";
+  if (bucket === "avoid") return "brief-avoid-soft border-red-500/14 text-red-700";
   return "border-amber-500/16 bg-amber-500/5 text-amber-700";
 }
 

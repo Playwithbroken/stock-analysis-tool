@@ -802,6 +802,7 @@ export default function WorldMarketMap({
   const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
   const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
   const [impactDrawerOpen, setImpactDrawerOpen] = useState(false);
+  const [mapZoom, setMapZoom] = useState(1);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
   const displayRegion = activeRegion;
@@ -1332,9 +1333,27 @@ export default function WorldMarketMap({
             <img
               src={worldMapSvg}
               alt="World map"
-              className="absolute inset-0 h-full w-full object-contain opacity-95 contrast-[1.04] saturate-[0.88]"
+              className="absolute inset-0 h-full w-full object-contain opacity-95 contrast-[1.04] saturate-[0.88] transition-transform duration-200"
+              style={{ transform: `scale(${mapZoom})` }}
               draggable={false}
             />
+            <div className="absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 bg-white/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
+              {[
+                { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },
+                { label: "1x", action: () => setMapZoom(1) },
+                { label: "+", action: () => setMapZoom((value) => Math.min(1.42, Number((value + 0.12).toFixed(2)))) },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.action}
+                  className="h-7 min-w-7 rounded-full px-2 text-[10px] font-black text-slate-600 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  aria-label={`Map zoom ${item.label}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
 
             {positionedGeoSignals.slice(0, 12).map((item, index) => (
               <button
@@ -1433,6 +1452,8 @@ export default function WorldMarketMap({
                   maxHeight: "100%",
                   objectFit: "contain",
                   objectPosition: "50% 50%",
+                  transform: `scale(${mapZoom})`,
+                  transition: "transform 200ms ease",
                 }}
                 draggable={false}
               />
@@ -1451,13 +1472,19 @@ export default function WorldMarketMap({
             </div>
 
             <div className="absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
-              {["+", "-", "1x"].map((item) => (
+              {[
+                { label: "+", action: () => setMapZoom((value) => Math.min(1.42, Number((value + 0.12).toFixed(2)))) },
+                { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },
+                { label: "1x", action: () => setMapZoom(1) },
+              ].map((item) => (
                 <button
-                  key={item}
+                  key={item.label}
                   type="button"
+                  onClick={item.action}
                   className="h-8 w-8 rounded-[0.7rem] border border-black/8 bg-white text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  aria-label={`Map zoom ${item.label}`}
                 >
-                  {item}
+                  {item.label}
                 </button>
               ))}
             </div>

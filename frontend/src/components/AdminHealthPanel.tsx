@@ -7,8 +7,8 @@ interface AdminHealthPanelProps {
 
 function statusTone(status?: string) {
   const value = String(status || "").toLowerCase();
-  if (["ok", "live", "ready"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
-  if (["degraded", "partial", "snapshot"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+  if (["ok", "live", "ready", "sent", "sendable"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
+  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
   return "bg-red-500/10 text-red-700 border-red-500/20";
 }
 

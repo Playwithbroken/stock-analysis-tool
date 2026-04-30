@@ -63,6 +63,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const [transportMode, setTransportMode] = useState<"ws" | "snapshot">("snapshot");
   const [lastError, setLastError] = useState<string | null>(null);
   const lastFrameRef = useRef<number>(0);
+  const snapshotSucceededRef = useRef<boolean>(false);
   const reconnectAttemptRef = useRef<number>(0);
   const wsDisabledRef = useRef<boolean>(false);
 
@@ -112,6 +113,7 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     setTransportMode("snapshot");
     setLastError(null);
     lastFrameRef.current = 0;
+    snapshotSucceededRef.current = false;
     reconnectAttemptRef.current = 0;
     wsDisabledRef.current = globalWsUnavailable || isWsUnavailable() || shouldPreferSnapshotOnly();
 
@@ -159,11 +161,13 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         setStaleSeconds(payload.stale_seconds || {});
         setTransportMode("snapshot");
         setLastError(null);
+        snapshotSucceededRef.current = true;
         if ((payload.quotes || []).length > 0) {
           setConnected(true);
         }
       } catch {
-        setLastError("snapshot_fetch_failed");
+        setConnectionState(snapshotSucceededRef.current ? "degraded" : "snapshot");
+        setLastError(snapshotSucceededRef.current ? null : "snapshot_fetch_failed");
       }
     };
 

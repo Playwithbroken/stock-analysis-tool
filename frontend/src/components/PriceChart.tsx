@@ -76,9 +76,24 @@ const HISTORY_STATUS_LABELS: Record<"loading" | "ready" | "stale" | "snapshot" |
 };
 
 const friendlyRealtimeError = (error: string) => {
-  if (error === "snapshot_fetch_failed") return "Realtime snapshot kurz nicht verfuegbar";
-  if (error === "ws_unavailable" || error === "websocket_unavailable") return "Realtime-Verbindung nicht verfuegbar";
+  if (error === "snapshot_fetch_failed") return "Snapshot wird automatisch erneut geladen";
+  if (error.startsWith("snapshot_http_401") || error.startsWith("snapshot_http_403")) return "Session pruefen, Snapshot nicht freigegeben";
+  if (error === "ws_unavailable" || error === "websocket_unavailable") return "Realtime laeuft im Snapshot-Modus";
+  if (error.startsWith("ws_closed_") || error === "ws_error") return "WebSocket deaktiviert, Snapshot-Fallback aktiv";
   return error.replaceAll("_", " ");
+};
+
+const dataStatusLabel = (
+  historyState: "loading" | "ready" | "stale" | "snapshot" | "unavailable",
+  connectionState: "live" | "degraded" | "snapshot",
+  transportMode: "ws" | "snapshot",
+) => {
+  if (historyState === "unavailable") return "Kursdaten aktuell nicht verfuegbar";
+  if (historyState === "snapshot") return "Snapshot-Fallback aktiv";
+  if (historyState === "stale") return "Fallback-Historie aktiv";
+  if (connectionState === "degraded") return "Live-Feed verzoegert, Chart bleibt nutzbar";
+  if (connectionState === "snapshot" || transportMode === "snapshot") return "Snapshot-Feed aktiv";
+  return "Live-Daten aktiv";
 };
 
 const emptyIndicators = (): IndicatorSeries => ({
@@ -747,7 +762,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               : "border-amber-500/20 bg-amber-500/10 text-amber-700"
           }`}
         >
-          Kursverlauf: {HISTORY_STATUS_LABELS[historyState]} - Realtime: {connectionState} - Feed: {transportMode}
+          Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
+          {" "}Kursverlauf: {HISTORY_STATUS_LABELS[historyState]} - Feed: {transportMode}
           {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
           {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>

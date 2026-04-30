@@ -705,7 +705,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               </div>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {highRiskOpps.map((opp: any) => (
+                {highRiskOpps.length ? highRiskOpps.map((opp: any) => (
                   <div
                     key={opp.ticker}
                     onClick={() =>
@@ -733,7 +733,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         </div>
                       </div>
                       <div className="rounded-full border border-red-500/15 bg-red-500/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-700">
-                        Opportunity
+                        {opp.data_mode === "fallback" ? "Watchlist" : "Opportunity"}
                       </div>
                     </div>
 
@@ -788,7 +788,11 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
+                    High-Risk Radar laedt gerade Live-Daten. Wenn der Feed zu langsam ist, zeigt der Server automatisch eine kuratierte Watchlist.
+                  </div>
+                )}
               </div>
             </section>
 
@@ -808,7 +812,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               </div>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {(moonshots.length > 0 ? moonshots : []).map((stock) => (
+                {moonshots.length > 0 ? moonshots.map((stock) => (
                   <div
                     key={stock.ticker}
                     onClick={() => openMarketDetails(stock, "ai")}
@@ -843,7 +847,11 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       </p>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
+                    Moonshot Scanner laedt gerade Growth-Kandidaten. Falls Live-Fundamentals fehlen, wird eine kuratierte AI-/Growth-Watchlist angezeigt.
+                  </div>
+                )}
               </div>
             </section>
           </div>

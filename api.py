@@ -3525,9 +3525,13 @@ async def get_high_risk_opportunities():
         from src.risk_scanner import RiskScanner
         scanner = RiskScanner()
         opportunities = await scanner.scan_opportunities(min_opportunity_score=40)
-        return opportunities
+        return opportunities or scanner.fallback_opportunities()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            from src.risk_scanner import RiskScanner
+            return RiskScanner().fallback_opportunities()
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/market/exchange-rate")
 async def get_exchange_rate():

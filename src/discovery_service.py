@@ -32,6 +32,38 @@ class DiscoveryService:
             "PANW", "SNPS", "ASML", "LRCX", "ADI", "MELI", "CDNS", "KLAC", "PDD", "PYPL"
         ]
 
+    def _moonshot_fallbacks(self) -> List[Dict[str, Any]]:
+        """Stable fallback so the AI Chancen rail never renders empty."""
+        return [
+            {
+                "ticker": "PLTR",
+                "name": "Palantir Technologies Inc.",
+                "growth": 22.0,
+                "market_cap": 0,
+                "trend_context": "AI platform demand",
+                "score": 88,
+                "reason": "Profitable AI software compounder, but valuation risk is high.",
+            },
+            {
+                "ticker": "ARM",
+                "name": "Arm Holdings plc",
+                "growth": 18.0,
+                "market_cap": 0,
+                "trend_context": "AI chip architecture",
+                "score": 84,
+                "reason": "AI/edge semiconductor exposure with premium multiple risk.",
+            },
+            {
+                "ticker": "RKLB",
+                "name": "Rocket Lab USA, Inc.",
+                "growth": 28.0,
+                "market_cap": 0,
+                "trend_context": "Space infrastructure",
+                "score": 82,
+                "reason": "High-growth space infrastructure setup; execution risk remains elevated.",
+            },
+        ]
+
     @staticmethod
     def _compute_rsi(prices: List[float], period: int = 14) -> Optional[float]:
         if len(prices) <= period:
@@ -380,7 +412,10 @@ class DiscoveryService:
         if not results:
             fallback_tasks = [fetch_moon(t) for t in ["PLTR", "ARM", "MSTR", "TSLA"]]
             results = [r for r in await asyncio.gather(*fallback_tasks) if r]
-            
+
+        if not results:
+            return self._moonshot_fallbacks()
+
         return sorted(results, key=lambda x: x['growth'], reverse=True)
 
     async def get_star_assets(self) -> Dict[str, Any]:

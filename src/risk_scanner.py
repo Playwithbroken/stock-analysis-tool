@@ -25,6 +25,59 @@ class RiskScanner:
             # Emerging tech
             "U", "SNOW", "DDOG", "NET", "CRWD"
         ]
+
+    def fallback_opportunities(self) -> List[Dict[str, Any]]:
+        """Return stable high-risk ideas when live scoring is slow or sparse."""
+        return [
+            {
+                "ticker": "IONQ",
+                "name": "IonQ, Inc.",
+                "risk_score": 82.0,
+                "reward_score": 74.0,
+                "opportunity_score": 76.4,
+                "recommendation": "WATCH - Quantum moonshot, only on confirmed momentum",
+                "confidence": "Low",
+                "price": None,
+                "market_cap": None,
+                "reasons": ["Very high volatility", "Quantum narrative", "Execution risk"],
+                "volatility": None,
+                "growth": None,
+                "upside_potential": None,
+                "data_mode": "fallback",
+            },
+            {
+                "ticker": "RKLB",
+                "name": "Rocket Lab USA, Inc.",
+                "risk_score": 76.0,
+                "reward_score": 70.0,
+                "opportunity_score": 71.8,
+                "recommendation": "WATCH - Space infrastructure growth setup",
+                "confidence": "Low",
+                "price": None,
+                "market_cap": None,
+                "reasons": ["Space infrastructure", "Contract-driven upside", "Execution risk"],
+                "volatility": None,
+                "growth": None,
+                "upside_potential": None,
+                "data_mode": "fallback",
+            },
+            {
+                "ticker": "SOFI",
+                "name": "SoFi Technologies, Inc.",
+                "risk_score": 68.0,
+                "reward_score": 66.0,
+                "opportunity_score": 66.6,
+                "recommendation": "WATCH - Fintech growth with rate sensitivity",
+                "confidence": "Low",
+                "price": None,
+                "market_cap": None,
+                "reasons": ["Fintech growth", "Rate sensitivity", "Profitability watch"],
+                "volatility": None,
+                "growth": None,
+                "upside_potential": None,
+                "data_mode": "fallback",
+            },
+        ]
     
     def calculate_risk_reward_score(self, ticker: str) -> Dict[str, Any]:
         """
@@ -148,17 +201,17 @@ class RiskScanner:
             return {
                 "ticker": ticker,
                 "name": data.get("company_name", ticker),
-                "risk_score": round(risk_score, 1),
-                "reward_score": round(reward_score, 1),
-                "opportunity_score": round(opportunity_score, 1),
+                "risk_score": float(round(risk_score, 1)),
+                "reward_score": float(round(reward_score, 1)),
+                "opportunity_score": float(round(opportunity_score, 1)),
                 "recommendation": recommendation,
                 "confidence": confidence,
-                "price": current_price,
-                "market_cap": market_cap,
+                "price": float(current_price) if current_price else None,
+                "market_cap": int(market_cap) if market_cap else None,
                 "reasons": reasons[:5],  # Top 5 reasons
-                "volatility": vol_annual,
-                "growth": rev_growth * 100 if rev_growth else 0,
-                "upside_potential": upside if current_price and target_mean else None
+                "volatility": float(vol_annual) if vol_annual else None,
+                "growth": float(rev_growth * 100) if rev_growth else 0.0,
+                "upside_potential": float(upside) if current_price and target_mean else None
             }
             
         except Exception as e:
@@ -183,11 +236,18 @@ class RiskScanner:
         Scan universe in parallel and return top high-risk opportunities.
         """
         import asyncio
-        tasks = [self.calculate_risk_reward_score_async(ticker) for ticker in self.scan_universe]
-        results = [r for r in await asyncio.gather(*tasks) if r]
+        tasks = [self.calculate_risk_reward_score_async(ticker) for ticker in self.scan_universe[:18]]
+        try:
+            raw_results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=10)
+        except asyncio.TimeoutError:
+            raw_results = []
+        results = [r for r in raw_results if r]
         
         # Filter and sort
         opportunities = [r for r in results if r["opportunity_score"] >= min_opportunity_score]
         opportunities.sort(key=lambda x: x["opportunity_score"], reverse=True)
         
+        if not opportunities:
+            return self.fallback_opportunities()
+
         return opportunities[:10]  # Top 10

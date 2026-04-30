@@ -1587,6 +1587,11 @@ async def oracle_chat(req: OracleRequest):
     elif "long" in msg or "buy" in msg or "kauf" in msg:
         thesis = f"{thesis} Long nur mit Folgekäufen und sauberem Volumen."
 
+    wants_app_guide = any(
+        token in msg
+        for token in ["fuehre", "fuehr", "durch", "anklicken", "klicken", "bedienen", "seite", "app", "wo soll"]
+    )
+
     risk_line_parts: List[str] = []
     if macro_regime:
         risk_line_parts.append(f"Regime: {macro_regime}")
@@ -1733,6 +1738,25 @@ async def oracle_chat(req: OracleRequest):
                 + ", ".join(f"{item.get('label')} ({item.get('score_delta'):+})" for item in downgraded[:3])
                 + "."
             )
+
+    if wants_app_guide:
+        area = (req.active_tab or "dashboard").lower()
+        if area == "discovery":
+            levels.append("Markets Guide: erst Top Movers fuer echte Staerke/Schwaeche pruefen, dann Market Explorer fuer Sektor/ETF-Kontext nutzen.")
+            levels.append("Markets Guide: Karten nur ueber explizite Analyse-Buttons oeffnen; nicht jeder Klick ist ein Trade-Signal.")
+            levels.append("Markets Guide: Winner/Loser mit Briefing, News und Volumen bestaetigen, bevor ein Ticker in Analyze geht.")
+        elif area == "portfolio":
+            levels.append("Portfolio Guide: zuerst Rendite seit Kauf, Positionsgroesse und Klumpenrisiko ansehen.")
+            levels.append("Portfolio Guide: rote Positionen nicht automatisch verkaufen; Trigger, Earnings und Marktregime gegenpruefen.")
+            levels.append("Portfolio Guide: bei hoher Konzentration Hedge- oder Reduce-Idee im Briefing suchen.")
+        elif area == "analyze":
+            levels.append("Analyze Guide: zuerst Kurslauf/History, dann Dossier-Finanzen, dann Trigger/Invalidierung lesen.")
+            levels.append("Analyze Guide: wenn Price History nur Snapshot zeigt, Entscheidung vertagen oder Tageschart spaeter neu laden.")
+            levels.append("Analyze Guide: Analystenziele und News sind Kontext, entscheidend ist die bestaetigte Kursreaktion.")
+        else:
+            levels.append("Dashboard Guide: Morning Brief zeigt Regime und Top Setups, Map zeigt Event-Pings, Trading Edge zeigt taktische Ideen.")
+            levels.append("Dashboard Guide: zuerst Regime/Risk-off vs Mixed lesen, danach nur die Setups mit Trigger und Invalidierung verfolgen.")
+            levels.append("Dashboard Guide: Health pruefen, wenn Briefings oder Telegram nicht rechtzeitig kamen.")
 
     wants_dossier = any(
         token in msg

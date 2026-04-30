@@ -147,6 +147,13 @@ export default function BrokerChat({
   const primaryTicker = Array.isArray(currentTicker) ? currentTicker[0] : currentTicker || topSignalTicker;
 
   const quickActions = [
+    activeTab === "discovery"
+      ? "Fuehre mich durch Markets: welche Karte ist wichtig und was soll ich anklicken?"
+      : activeTab === "portfolio"
+        ? "Erklaere mein Portfolio: Rendite seit Kauf, Risiko und naechste Pruefung."
+        : activeTab === "analyze"
+          ? "Wie lese ich diese Analyse und welche Daten sind entscheidend?"
+          : "Erklaere mir das Dashboard und was heute wichtig ist.",
     currentTicker
       ? `Was ist heute der wichtigste Trigger fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}?`
       : activeTab === "discovery"
@@ -162,6 +169,7 @@ export default function BrokerChat({
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",
   ];
+  const visibleQuickActions = quickActions.slice(0, 5);
 
   const deskActions = [
     primaryTicker && onAnalyzeTicker
@@ -454,6 +462,43 @@ export default function BrokerChat({
             ))}
           </div>
         ) : null}
+        {(isInline || mobileSheetMode === "full") && (
+          <div className="mb-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-black/8 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                {activeTab ? `${activeTab} desk` : "desk"}
+              </span>
+              {primaryTicker ? (
+                <span className="rounded-full border border-[var(--accent)]/18 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                  Fokus {String(primaryTicker).toUpperCase()}
+                </span>
+              ) : null}
+              {portfolioSnapshot?.summary?.num_holdings ? (
+                <span className="rounded-full border border-black/8 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  {portfolioSnapshot.summary.num_holdings} Holdings
+                </span>
+              ) : null}
+              {morningBriefSummary?.macro_regime ? (
+                <span className="rounded-full border border-black/8 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  {morningBriefSummary.macro_regime}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {visibleQuickActions.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => void submitMessage(action)}
+                  disabled={loading}
+                  className="shrink-0 rounded-xl border border-black/8 bg-white/82 px-3 py-2 text-left text-[11px] font-bold text-slate-700 transition-colors hover:border-[var(--accent)]/25 hover:bg-[var(--accent-soft)] disabled:opacity-50"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {!isInline && mobileSheetMode === "peek" ? (
           <div className="grid gap-2 md:hidden">
             <button

@@ -1644,7 +1644,23 @@ async def oracle_chat(req: OracleRequest):
 
     wants_app_guide = any(
         token in msg
-        for token in ["fuehre", "fuehr", "durch", "anklicken", "klicken", "bedienen", "seite", "app", "wo soll"]
+        for token in [
+            "fuehre",
+            "fuehr",
+            "durch",
+            "anklicken",
+            "klicken",
+            "bedienen",
+            "seite",
+            "app",
+            "wo soll",
+            "was jetzt",
+            "naechst",
+            "weiter",
+            "machen",
+            "hilfe",
+            "help",
+        ]
     )
 
     risk_line_parts: List[str] = []
@@ -1741,6 +1757,30 @@ async def oracle_chat(req: OracleRequest):
     current_prediction_signals = brief.get("prediction_signals", []) if isinstance(brief, dict) else []
     prediction_status = brief.get("prediction_markets", {}) if isinstance(brief, dict) else {}
 
+    def _item_symbol(item: Dict[str, Any]) -> str:
+        return str(item.get("symbol") or item.get("ticker") or item.get("value") or "").upper().strip()
+
+    def _item_change(item: Dict[str, Any]) -> str:
+        raw = item.get("change") if item.get("change") is not None else item.get("change_1w")
+        value = _safe_float(raw)
+        if value is None:
+            return "move n/a"
+        return f"{value:+.2f}%"
+
+    gainers = current_market_movers.get("gainers", []) if isinstance(current_market_movers, dict) else []
+    losers = current_market_movers.get("losers", []) if isinstance(current_market_movers, dict) else []
+    worst_holding = None
+    best_holding = None
+    if isinstance(portfolio_holdings, list) and portfolio_holdings:
+        sortable_holdings = [
+            item
+            for item in portfolio_holdings
+            if isinstance(item, dict) and _safe_float(item.get("return_since_buy_pct")) is not None
+        ]
+        if sortable_holdings:
+            worst_holding = min(sortable_holdings, key=lambda item: float(item.get("return_since_buy_pct") or 0))
+            best_holding = max(sortable_holdings, key=lambda item: float(item.get("return_since_buy_pct") or 0))
+
     explain_lines = []
     if primary:
         explain_lines.append(
@@ -1821,6 +1861,59 @@ async def oracle_chat(req: OracleRequest):
             levels.append("Dashboard Guide: Morning Brief zeigt Regime und Top Setups, Map zeigt Event-Pings, Trading Edge zeigt taktische Ideen.")
             levels.append("Dashboard Guide: zuerst Regime/Risk-off vs Mixed lesen, danach nur die Setups mit Trigger und Invalidierung verfolgen.")
             levels.append("Dashboard Guide: Health pruefen, wenn Briefings oder Telegram nicht rechtzeitig kamen.")
+
+    active_area = (req.active_tab or "dashboard").lower()
+    if active_area == "discovery":
+        explain_lines.append(
+            "Markets-Modus aktiv: ich priorisiere Gewinner/Verlierer, Sektorstaerke, Event-Pings und den expliziten Analyze-Klick."
+        )
+        if gainers:
+            winner = gainers[0]
+            if isinstance(winner, dict):
+                levels.append(f"Markets Next Click: Top Winner {_item_symbol(winner)} ({_item_change(winner)}) zuerst nur analysieren, nicht blind kaufen.")
+        if losers:
+            loser = losers[0]
+            if isinstance(loser, dict):
+                levels.append(f"Markets Risk Check: Top Loser {_item_symbol(loser)} ({_item_change(loser)}) nur handeln, wenn News und Volumen passen.")
+        if current_event_pings:
+            levels.append("Markets Filter: Event-Pings vor Einzelaktie lesen, weil Makro/Policy die Moves uebersteuern kann.")
+        else:
+            levels.append("Markets Filter: keine starken Event-Pings; dann haben relative Staerke und Volumen mehr Gewicht.")
+    elif active_area == "portfolio":
+        explain_lines.append(
+            "Portfolio-Modus aktiv: ich bewerte zuerst Rendite seit Kauf, Positionsgroesse, Klumpenrisiko und Briefing-Auswirkung."
+        )
+        if isinstance(worst_holding, dict):
+            levels.append(
+                f"Portfolio Risk: {_item_symbol(worst_holding)} ist der schwaechste Kauf-Return "
+                f"({_format_pct(_safe_float(worst_holding.get('return_since_buy_pct')))})."
+            )
+        if isinstance(best_holding, dict):
+            levels.append(
+                f"Portfolio Strength: {_item_symbol(best_holding)} traegt am staerksten "
+                f"({_format_pct(_safe_float(best_holding.get('return_since_buy_pct')))} seit Kauf)."
+            )
+        if current_watchlist_impact:
+            levels.append("Portfolio Briefing: Watchlist Impact ist aktiv; betroffene Holdings zuerst pruefen.")
+    elif active_area == "analyze":
+        explain_lines.append(
+            "Analyze-Modus aktiv: ich lese erst Kursverlauf/History-Status, dann Dossier, dann Trigger und Invalidierung."
+        )
+        if primary:
+            levels.append(f"Analyze Reihenfolge: {symbol} Chart -> Finanzprofil -> News/Earnings -> Trigger -> Positionsgroesse.")
+        if primary and latest_surprise is None and not guidance_label:
+            levels.append("Analyze Datenluecke: keine belastbare Earnings/Guidance-Zusammenfassung im aktuellen Snapshot.")
+    else:
+        explain_lines.append(
+            "Dashboard-Modus aktiv: ich verbinde Morning Brief, Map-Pings, Trading Edge, Portfolio und Learning zu einer Prioritaet."
+        )
+        if current_setups:
+            setup = current_setups[0]
+            if isinstance(setup, dict):
+                levels.append(
+                    f"Dashboard Top Setup: {str(setup.get('symbol') or setup.get('ticker') or '').upper()} - "
+                    f"{str(setup.get('trigger') or setup.get('thesis') or '')[:110]}"
+                )
 
     wants_dossier = any(
         token in msg
@@ -1936,19 +2029,17 @@ async def oracle_chat(req: OracleRequest):
                 levels.append(f"Earnings Watch: {ticker} {name} - {when}")
 
     if any(token in msg for token in ["mover", "winner", "loser", "gewinner", "verlierer", "market"]):
-        gainers = current_market_movers.get("gainers", []) if isinstance(current_market_movers, dict) else []
-        losers = current_market_movers.get("losers", []) if isinstance(current_market_movers, dict) else []
         if not gainers and not losers:
             levels.append("Market Movers: Feed aktuell leer oder verzoegert; zuerst Markets-Tab neu laden und dann Gewinner/Verlierer bestaetigen.")
         for item in (gainers or [])[:3]:
             if isinstance(item, dict):
                 levels.append(
-                    f"Top Winner: {str(item.get('ticker') or item.get('symbol') or '').upper()} {item.get('change') or item.get('change_1w') or 'move'}"
+                    f"Top Winner: {_item_symbol(item)} {_item_change(item)}"
                 )
         for item in (losers or [])[:3]:
             if isinstance(item, dict):
                 levels.append(
-                    f"Top Loser: {str(item.get('ticker') or item.get('symbol') or '').upper()} {item.get('change') or item.get('change_1w') or 'move'}"
+                    f"Top Loser: {_item_symbol(item)} {_item_change(item)}"
                 )
 
     if any(token in msg for token in ["produkt", "iphone", "nvidia", "gpu", "gta", "bmw", "news", "katalysator"]):
@@ -2053,10 +2144,19 @@ async def oracle_chat(req: OracleRequest):
         app_actions.append(f"Analyze: {symbol} Kursverlauf, Dossier und Trigger pruefen.")
     elif tickers:
         app_actions.append(f"Analyze: {tickers[0]} als Fokus-Ticker oeffnen.")
-    if active_tab != "discovery":
+    if active_tab == "discovery":
+        app_actions.append("Markets: Gewinner/Verlierer erst filtern, dann nur per Analyze-Button in die Detailanalyse.")
+        app_actions.append("Markets: Bei Event-Ping zuerst betroffene Ticker und Hedge-Idee lesen.")
+    else:
         app_actions.append("Markets: Top Movers, Market Explorer und Event-Pings gegenchecken.")
-    if active_tab != "portfolio":
+    if active_tab == "portfolio":
+        app_actions.append("Portfolio: Schwaechste Rendite seit Kauf, groesste Position und Briefing-Auswirkung vergleichen.")
+    else:
         app_actions.append("Portfolio: Exposure, Rendite seit Kauf und Hedge-Bedarf pruefen.")
+    if active_tab == "analyze":
+        app_actions.append("Analyze: Wenn History nur Snapshot/Stale ist, Setup erst nach aktualisiertem Chart bestaetigen.")
+    else:
+        app_actions.append("Analyze: Fokus-Ticker oeffnen und Dossier/Chart gegen das Briefing pruefen.")
     if wants_briefing:
         app_actions.append("Health: Scheduler/Telegram im Health Center pruefen, falls ein Brief fehlt.")
     if learning_summary.get("forecasts"):

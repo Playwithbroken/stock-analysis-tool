@@ -178,7 +178,7 @@ export default function BrokerChat({
 
   const quickActions = [
     activeTab === "discovery"
-      ? "Fuehre mich durch Markets: welche Karte ist wichtig und was soll ich anklicken?"
+      ? "Fuehre mich durch Markets: welche Gewinner/Verlierer sind relevant und was soll ich anklicken?"
       : activeTab === "portfolio"
         ? "Erklaere mein Portfolio: Rendite seit Kauf, Risiko und naechste Pruefung."
         : activeTab === "analyze"
@@ -195,7 +195,7 @@ export default function BrokerChat({
       ? `Erklaere das Dossier fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}: Umsatz, Margen, Bewertung und Risiken.`
       : "Welche Quelle oder Prognose lag zuletzt daneben?",
     activeTab === "discovery"
-      ? "Zeige mir die besten Gewinner/Verlierer und welchen ich analysieren soll."
+      ? "Zeige mir die besten Gewinner/Verlierer, Event-Pings und welchen Ticker ich nur analysieren soll."
       : activeTab === "portfolio"
         ? "Welche Holding hat die hoechste Gefahr und welche profitiert heute?"
         : "Welche News, Earnings oder Produkt-Katalysatoren sind heute wirklich wichtig?",
@@ -203,6 +203,8 @@ export default function BrokerChat({
     "Welche Learnings verbessern heute die Signale?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",
+    activeTab === "discovery" ? "Erklaere mir Market Explorer vs Top Movers." : "Welche App-Aktion soll ich als naechstes machen?",
+    activeTab === "portfolio" ? "Welche Position sollte ich wegen Rendite seit Kauf pruefen?" : "Welche Daten fehlen fuer eine saubere Entscheidung?",
   ];
   const visibleQuickActions = quickActions.slice(0, 6);
 
@@ -217,21 +219,30 @@ export default function BrokerChat({
     onOpenTab && activeTab !== "discovery"
       ? {
           label: "Markets oeffnen",
-          action: () => onOpenTab("discovery"),
+          action: () => {
+            onOpenTab("discovery");
+            if (!isInline) setMobileSheetMode("peek");
+          },
           tone: "bg-white text-slate-700 border-black/8",
         }
       : null,
     onOpenTab && activeTab !== "portfolio"
       ? {
           label: "Portfolio pruefen",
-          action: () => onOpenTab("portfolio"),
+          action: () => {
+            onOpenTab("portfolio");
+            if (!isInline) setMobileSheetMode("peek");
+          },
           tone: "bg-white text-slate-700 border-black/8",
         }
       : null,
     onOpenTab && activeTab !== "analyze"
       ? {
           label: "Analyze Desk",
-          action: () => onOpenTab("analyze"),
+          action: () => {
+            onOpenTab("analyze");
+            if (!isInline) setMobileSheetMode("peek");
+          },
           tone: "bg-white text-slate-700 border-black/8",
         }
       : null,
@@ -419,6 +430,7 @@ export default function BrokerChat({
                     onClick={() => {
                       setMobileSheetMode("full");
                       onOpenTab(activeTab === "discovery" ? "analyze" : "discovery");
+                      if (activeTab !== "discovery") setMobileSheetMode("peek");
                     }}
                     className="rounded-[1.1rem] border border-black/8 bg-white/78 px-4 py-3 text-left text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
                   >

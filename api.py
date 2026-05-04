@@ -1339,11 +1339,39 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
         _safe_int_env("HISTORY_STALE_CACHE_TTL_SECONDS", 86400, minimum=300),
     )
     if stale is not None:
+        try:
+            stale = copy.deepcopy(stale)
+            meta = stale.setdefault("meta", {})
+            meta["mode"] = "stale"
+            meta["stale"] = True
+            meta.setdefault("source", "cached_history")
+            meta["fallback_reason"] = "provider_unavailable_using_last_good_history"
+        except Exception:
+            pass
         return convert_numpy_types(_cache_set(cache_key, stale))
 
-    if isinstance(last_error, asyncio.TimeoutError):
-        raise HTTPException(status_code=504, detail="History fetch timed out - data provider not responding")
-    raise HTTPException(status_code=404, detail="No history data available for this symbol right now")
+    unavailable_reason = (
+        "provider_timeout"
+        if isinstance(last_error, asyncio.TimeoutError)
+        else "no_history_or_snapshot_available"
+    )
+    payload = {
+        "items": [],
+        "meta": {
+            "symbol": normalized_ticker,
+            "mode": "unavailable",
+            "stale": True,
+            "source": "history_service",
+            "period": period,
+            "interval": interval,
+            "points": 0,
+            "requested_period": period,
+            "requested_interval": interval,
+            "fallback_reason": unavailable_reason,
+            "error": "Kursverlauf aktuell nicht verfuegbar. Retry oder anderen Zeitraum nutzen.",
+        },
+    }
+    return convert_numpy_types(_cache_set(cache_key, payload, ttl=30))
 
 
 @app.get("/api/quick/{ticker}")

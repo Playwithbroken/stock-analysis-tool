@@ -37,6 +37,7 @@ interface HistoryPayload {
     interval?: string;
     points?: number;
     fallback_reason?: string;
+    error?: string;
   };
 }
 
@@ -68,7 +69,9 @@ const PERIODS = [
   { id: "max", label: "MAX", interval: "1mo" },
 ];
 
-const HISTORY_STATUS_LABELS: Record<"loading" | "ready" | "stale" | "snapshot" | "unavailable", string> = {
+type HistoryState = "loading" | "ready" | "stale" | "snapshot" | "unavailable";
+
+const HISTORY_STATUS_LABELS: Record<HistoryState, string> = {
   loading: "laedt",
   ready: "Live-Historie",
   stale: "gespeicherte Historie",
@@ -77,7 +80,7 @@ const HISTORY_STATUS_LABELS: Record<"loading" | "ready" | "stale" | "snapshot" |
 };
 
 const friendlyRealtimeError = (error: string) => {
-  if (error === "snapshot_fetch_failed") return "Snapshot wird automatisch erneut geladen";
+  if (error === "snapshot_fetch_failed") return "Snapshot-Retry aktiv";
   if (error.startsWith("snapshot_http_401") || error.startsWith("snapshot_http_403")) return "Session pruefen, Snapshot nicht freigegeben";
   if (error === "ws_unavailable" || error === "websocket_unavailable") return "Realtime laeuft im Snapshot-Modus";
   if (error.startsWith("ws_closed_") || error === "ws_error") return "WebSocket deaktiviert, Snapshot-Fallback aktiv";
@@ -85,7 +88,7 @@ const friendlyRealtimeError = (error: string) => {
 };
 
 const dataStatusLabel = (
-  historyState: "loading" | "ready" | "stale" | "snapshot" | "unavailable",
+  historyState: HistoryState,
   connectionState: "live" | "degraded" | "snapshot",
   transportMode: "ws" | "snapshot",
 ) => {
@@ -95,6 +98,14 @@ const dataStatusLabel = (
   if (connectionState === "degraded") return "Live-Feed verzoegert, Chart bleibt nutzbar";
   if (connectionState === "snapshot" || transportMode === "snapshot") return "Snapshot-Feed aktiv";
   return "Live-Daten aktiv";
+};
+
+const friendlyHistoryReason = (reason?: string) => {
+  if (!reason) return "";
+  if (reason === "provider_unavailable_using_last_good_history") return "Provider langsam, letzter guter Kursverlauf aktiv";
+  if (reason === "provider_timeout") return "Datenprovider antwortet zu langsam";
+  if (reason === "no_history_or_snapshot_available") return "Weder Historie noch Snapshot liefern gerade Daten";
+  return reason.replaceAll("_", " ");
 };
 
 const INDICATOR_HELP: Record<string, string> = {
@@ -204,7 +215,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const [showVWAP, setShowVWAP] = useState(false);
   const [retryCounter, setRetryCounter] = useState(0);
   const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
-  const [historyState, setHistoryState] = useState<"loading" | "ready" | "stale" | "snapshot" | "unavailable">("loading");
+  const [historyState, setHistoryState] = useState<HistoryState>("loading");
   const [historyMeta, setHistoryMeta] = useState<HistoryPayload["meta"] | null>(null);
   const tickerSymbol = ticker.toUpperCase();
   const { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError } = useRealtimeFeed([ticker], true);
@@ -355,8 +366,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
 
         if (!normalized.length) {
           setData([]);
+          setHistoryMeta(responseMeta);
           setFetchError(true);
-          setFetchErrorMessage("Keine Kursdaten erhalten. Bitte erneut versuchen.");
+          setFetchErrorMessage(
+            responseMeta?.error ||
+              friendlyHistoryReason(responseMeta?.fallback_reason) ||
+              "Keine Kursdaten erhalten. Bitte erneut versuchen.",
+          );
           setHistoryState("unavailable");
           return;
         }
@@ -479,7 +495,9 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const subPanelHeightPercent = subPanels > 0 ? Math.max(18, Math.floor((100 - mainHeightPercent) / subPanels)) : 0;
   const hasUsableHistory = data.length > 0 && historyState !== "unavailable";
   const benignRealtimeError = lastError === "snapshot_fetch_failed" && hasUsableHistory;
-  const displayedRealtimeError = benignRealtimeError ? "" : lastError;
+  const displayedRealtimeError = benignRealtimeError || (lastError === "snapshot_fetch_failed" && historyState === "unavailable")
+    ? ""
+    : lastError;
   const staleForTicker = staleSeconds?.[tickerSymbol];
   const shouldShowDataStatus =
     historyState === "stale" ||
@@ -787,7 +805,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           }`}
         >
           Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
-          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} - Feed: {transportMode}
+          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} · Feed: {transportMode === "ws" ? "live" : "snapshot"}
           {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
           {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>
@@ -796,7 +814,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
           History: {historyMeta.source || "unknown"} - {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
           {typeof historyMeta.points === "number" ? ` - ${historyMeta.points} Punkte` : ""}
-          {historyMeta.fallback_reason ? ` - ${String(historyMeta.fallback_reason).replaceAll("_", " ")}` : ""}
+          {historyMeta.fallback_reason ? ` - ${friendlyHistoryReason(historyMeta.fallback_reason)}` : ""}
         </div>
       ) : null}
     </div>

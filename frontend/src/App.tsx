@@ -431,21 +431,46 @@ function AppContent() {
   } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
   const portfolioSnapshotForChat = useMemo(() => {
     const holdings = portfolios.flatMap((portfolio) =>
-      (portfolio.holdings || []).map((holding) => ({
-        ticker: holding.ticker,
-        shares: holding.shares,
-        buy_price: holding.buyPrice ?? null,
-        portfolio: portfolio.name,
-      })),
+      (portfolio.holdings || []).map((holding) => {
+        const ticker = String(holding.ticker || "").toUpperCase();
+        const shares = Number(holding.shares || 0);
+        const buyPrice = holding.buyPrice != null ? Number(holding.buyPrice) : null;
+        const quotePrice = headerQuotes?.[ticker]?.price != null ? Number(headerQuotes[ticker].price) : null;
+        const currentValue = quotePrice != null ? quotePrice * shares : null;
+        const costBasis = buyPrice != null ? buyPrice * shares : null;
+        const returnSinceBuy = currentValue != null && costBasis != null ? currentValue - costBasis : null;
+        const returnSinceBuyPct =
+          quotePrice != null && buyPrice != null && buyPrice > 0 ? ((quotePrice / buyPrice) - 1) * 100 : null;
+        return {
+          ticker,
+          shares,
+          buy_price: buyPrice,
+          purchase_date: holding.purchaseDate ?? null,
+          current_price: quotePrice,
+          current_value: currentValue,
+          return_since_buy: returnSinceBuy,
+          return_since_buy_pct: returnSinceBuyPct,
+          portfolio: portfolio.name,
+        };
+      }),
     );
+    const totalValue = holdings.reduce((sum, holding) => sum + Number(holding.current_value || 0), 0);
+    const totalCost = holdings.reduce((sum, holding) => {
+      const buyPrice = holding.buy_price;
+      return sum + (buyPrice != null ? buyPrice * Number(holding.shares || 0) : 0);
+    }, 0);
+    const totalReturn = holdings.reduce((sum, holding) => sum + Number(holding.return_since_buy || 0), 0);
     return {
       summary: {
         num_holdings: holdings.length,
         portfolios: portfolios.length,
+        total_value: totalValue || null,
+        return_since_buy: totalReturn || null,
+        return_since_buy_pct: totalCost > 0 ? (totalReturn / totalCost) * 100 : null,
       },
       holdings: holdings.slice(0, 50),
     };
-  }, [portfolios]);
+  }, [headerQuotes, portfolios]);
   const briefSummaryForChat = useMemo(
     () =>
       globalBrief

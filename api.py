@@ -1403,7 +1403,7 @@ async def get_sentiment_heatmap():
 
 @app.get("/api/search/suggestions")
 async def get_search_suggestions(q: str = None):
-    """Aggregate trending, moonshot, and commodity suggestions for search."""
+    """Fast search suggestions. Query mode may use live lookup; default mode must not block UI."""
     if q and len(q) > 1:
         catalog_results = _fuzzy_catalog_search(q, limit=6)
         results: List[Dict[str, Any]] = []
@@ -1424,18 +1424,12 @@ async def get_search_suggestions(q: str = None):
             "Ticker": [r['ticker'] for r in results[:5]]
         }
 
-    trending = await get_discovery_service().get_trending()
-    moonshots = await get_discovery_service().get_moonshots()
-    
-    suggestions = {
-        "Trending": [t['ticker'] for t in trending[:3]],
-        "Moonshots": [m['ticker'] for m in moonshots[:3]],
-        "Sektoren": ["Artificial Intelligence", "Semiconductors", "Technology"],
-        "Regionen": ["USA", "Europe", "Asia", "Germany"],
-        "Rohstoffe": ["GC=F", "CL=F", "SI=F"],
-        "Crypto": ["BTC-USD", "ETH-USD", "SOL-USD"]
+    return {
+        "Aktien": ["Apple Inc. (AAPL)", "Microsoft Corporation (MSFT)", "NVIDIA Corporation (NVDA)", "Amazon.com Inc. (AMZN)", "Advanced Micro Devices Inc. (AMD)"],
+        "AI & Growth": ["Palantir Technologies Inc. (PLTR)", "Arm Holdings plc (ARM)", "Broadcom Inc. (AVGO)", "Super Micro Computer Inc. (SMCI)", "SoFi Technologies Inc. (SOFI)"],
+        "ETFs & Makro": ["SPDR S&P 500 ETF Trust (SPY)", "Invesco QQQ Trust (QQQ)", "SPDR Gold Shares (GLD)", "iShares 20+ Year Treasury Bond ETF (TLT)", "Energy Select Sector SPDR Fund (XLE)"],
+        "Crypto": ["Bitcoin USD (BTC-USD)", "Ethereum USD (ETH-USD)", "Solana USD (SOL-USD)"],
     }
-    return suggestions
 
 
 @app.post("/api/oracle/chat")

@@ -97,6 +97,7 @@ _signal_alert_task = None
 _price_alert_task = None
 _brief_warmup_task = None
 _scheduler_startup_catchup_task = None
+_background_task_watchdog_task = None
 _morning_brief_service = None
 _signal_score_service = None
 _session_list_service = None
@@ -525,6 +526,79 @@ async def _forecast_learning_loop():
         await asyncio.sleep(interval_minutes * 60)
 
 
+def _task_state(task: Any) -> str:
+    if task is None:
+        return "missing"
+    try:
+        if task.cancelled():
+            return "cancelled"
+        if task.done():
+            return "done"
+        return "running"
+    except Exception:
+        return "unknown"
+
+
+def _remember_finished_task_error(setting_key: str, task: Any) -> None:
+    if task is None or not getattr(task, "done", lambda: False)():
+        return
+    try:
+        exc = task.exception()
+    except Exception as error:
+        exc = error
+    if exc:
+        try:
+            get_portfolio_manager().set_app_setting(setting_key, str(exc))
+        except Exception:
+            pass
+
+
+def _ensure_background_tasks() -> None:
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task
+
+    alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
+    scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
+
+    if alerts_enabled or scheduled_briefs_enabled:
+        if _signal_alert_task is None or _signal_alert_task.done():
+            _remember_finished_task_error("brief_scheduler_loop_error", _signal_alert_task)
+            _signal_alert_task = asyncio.create_task(_signal_alert_loop())
+
+    if scheduled_briefs_enabled and _scheduler_startup_catchup_task is None:
+        _scheduler_startup_catchup_task = asyncio.create_task(_scheduler_startup_catchup())
+
+    if scheduled_briefs_enabled:
+        if _brief_warmup_task is None or _brief_warmup_task.done():
+            _remember_finished_task_error("brief_warmup_loop_error", _brief_warmup_task)
+            _brief_warmup_task = asyncio.create_task(_brief_warmup_loop())
+
+    if _price_alert_task is None or _price_alert_task.done():
+        _price_alert_task = asyncio.create_task(_price_alert_loop())
+
+    if _forecast_learning_task is None or _forecast_learning_task.done():
+        _remember_finished_task_error("forecast_learning_loop_error", _forecast_learning_task)
+        _forecast_learning_task = asyncio.create_task(_forecast_learning_loop())
+
+
+async def _background_task_watchdog_loop():
+    await asyncio.sleep(30)
+    while True:
+        try:
+            _ensure_background_tasks()
+            get_portfolio_manager().set_app_setting(
+                "background_task_watchdog_seen_at",
+                datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
+            )
+            get_portfolio_manager().set_app_setting("background_task_watchdog_error", "")
+        except Exception as e:
+            print(f"Background task watchdog error: {e}")
+            try:
+                get_portfolio_manager().set_app_setting("background_task_watchdog_error", str(e))
+            except Exception:
+                pass
+        await asyncio.sleep(_safe_int_env("BACKGROUND_TASK_WATCHDOG_INTERVAL_SECONDS", 60, minimum=15))
+
+
 async def _warm_brief_once() -> Dict[str, Any]:
     started = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
     items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
@@ -631,19 +705,10 @@ async def _price_alert_loop():
 
 @app.on_event("startup")
 async def startup_event():
-    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task
-    alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
-    scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
-    if (alerts_enabled or scheduled_briefs_enabled) and _signal_alert_task is None:
-        _signal_alert_task = asyncio.create_task(_signal_alert_loop())
-    if scheduled_briefs_enabled and _scheduler_startup_catchup_task is None:
-        _scheduler_startup_catchup_task = asyncio.create_task(_scheduler_startup_catchup())
-    if scheduled_briefs_enabled and _brief_warmup_task is None:
-        _brief_warmup_task = asyncio.create_task(_brief_warmup_loop())
-    if _price_alert_task is None:
-        _price_alert_task = asyncio.create_task(_price_alert_loop())
-    if _forecast_learning_task is None:
-        _forecast_learning_task = asyncio.create_task(_forecast_learning_loop())
+    global _background_task_watchdog_task
+    _ensure_background_tasks()
+    if _background_task_watchdog_task is None or _background_task_watchdog_task.done():
+        _background_task_watchdog_task = asyncio.create_task(_background_task_watchdog_loop())
 
 # Response Models
 class AnalysisResponse(BaseModel):
@@ -3697,7 +3762,43 @@ async def healthz():
         listing = os.listdir("frontend/dist") if dist_exists else os.listdir("frontend") if os.path.exists("frontend") else os.listdir(".")
     except Exception as e:
         listing = [f"err:{e}"]
-    return {"ok": True, "dist": dist_exists, "index": index_exists, "cwd": os.getcwd(), "listing": listing[:30]}
+    scheduler_seen_at = None
+    scheduler_next_tick_at = None
+    scheduler_error = None
+    watchdog_seen_at = None
+    watchdog_error = None
+    try:
+        manager = get_portfolio_manager()
+        scheduler_seen_at = manager.get_app_setting("brief_scheduler_loop_seen_at")
+        scheduler_next_tick_at = manager.get_app_setting("brief_scheduler_loop_next_tick_at")
+        scheduler_error = manager.get_app_setting("brief_scheduler_loop_error")
+        watchdog_seen_at = manager.get_app_setting("background_task_watchdog_seen_at")
+        watchdog_error = manager.get_app_setting("background_task_watchdog_error")
+    except Exception as e:
+        watchdog_error = f"settings_unavailable:{e}"
+    return {
+        "ok": True,
+        "dist": dist_exists,
+        "index": index_exists,
+        "cwd": os.getcwd(),
+        "listing": listing[:30],
+        "scheduler": {
+            "enabled": _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true"),
+            "loop_seen_at": scheduler_seen_at,
+            "next_tick_at": scheduler_next_tick_at,
+            "loop_error": scheduler_error,
+            "watchdog_seen_at": watchdog_seen_at,
+            "watchdog_error": watchdog_error,
+            "tasks": {
+                "scheduler": _task_state(_signal_alert_task),
+                "warmup": _task_state(_brief_warmup_task),
+                "startup_catchup": _task_state(_scheduler_startup_catchup_task),
+                "price_alerts": _task_state(_price_alert_task),
+                "forecast_learning": _task_state(_forecast_learning_task),
+                "watchdog": _task_state(_background_task_watchdog_task),
+            },
+        },
+    }
 
 # Check if dist folder exists
 if os.path.exists("frontend/dist"):

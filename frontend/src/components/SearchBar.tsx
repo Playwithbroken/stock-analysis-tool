@@ -12,8 +12,15 @@ const LOCAL_SEARCH_ASSETS = [
   "Tesla Inc. (TSLA)",
   "Advanced Micro Devices Inc. (AMD)",
   "Broadcom Inc. (AVGO)",
-  "Berkshire Hathaway Inc. (BRK-B)",
+  "Pfizer Inc. (PFE)",
+  "UnitedHealth Group Incorporated (UNH)",
+  "Eli Lilly and Company (LLY)",
+  "Novo Nordisk A/S (NVO)",
+  "Johnson & Johnson (JNJ)",
   "JPMorgan Chase & Co. (JPM)",
+  "Bank of America Corporation (BAC)",
+  "Goldman Sachs Group Inc. (GS)",
+  "Berkshire Hathaway Inc. (BRK-B)",
   "Visa Inc. (V)",
   "Mastercard Incorporated (MA)",
   "SAP SE (SAP)",
@@ -22,6 +29,26 @@ const LOCAL_SEARCH_ASSETS = [
   "Netflix Inc. (NFLX)",
   "Salesforce Inc. (CRM)",
   "Oracle Corporation (ORCL)",
+  "ServiceNow Inc. (NOW)",
+  "Adobe Inc. (ADBE)",
+  "Palo Alto Networks Inc. (PANW)",
+  "CrowdStrike Holdings Inc. (CRWD)",
+  "Take-Two Interactive Software Inc. (TTWO)",
+  "BMW AG (BMW.DE)",
+  "Mercedes-Benz Group AG (MBG.DE)",
+  "Volkswagen AG (VOW3.DE)",
+  "Siemens AG (SIE.DE)",
+  "Rheinmetall AG (RHM.DE)",
+  "Coinbase Global Inc. (COIN)",
+  "MicroStrategy Incorporated (MSTR)",
+  "Spirit Airlines Inc. (FLYYQ)",
+  "Danaher Corporation (DHR)",
+  "GE Aerospace (GE)",
+  "RTX Corporation (RTX)",
+  "Intuitive Surgical Inc. (ISRG)",
+  "Philip Morris International Inc. (PM)",
+  "PepsiCo Inc. (PEP)",
+  "Abbott Laboratories (ABT)",
   "Palantir Technologies Inc. (PLTR)",
   "SPDR S&P 500 ETF Trust (SPY)",
   "Invesco QQQ Trust (QQQ)",
@@ -34,6 +61,34 @@ const LOCAL_SEARCH_ASSETS = [
   "Ethereum USD (ETH-USD)",
   "Solana USD (SOL-USD)",
 ];
+
+const LOCAL_SEARCH_ALIASES: Record<string, string> = {
+  ai: "NVIDIA Corporation (NVDA)",
+  nvdia: "NVIDIA Corporation (NVDA)",
+  nvidia: "NVIDIA Corporation (NVDA)",
+  gpu: "NVIDIA Corporation (NVDA)",
+  geforce: "NVIDIA Corporation (NVDA)",
+  iphone: "Apple Inc. (AAPL)",
+  apple: "Apple Inc. (AAPL)",
+  ios: "Apple Inc. (AAPL)",
+  ipad: "Apple Inc. (AAPL)",
+  gta: "Take-Two Interactive Software Inc. (TTWO)",
+  gta6: "Take-Two Interactive Software Inc. (TTWO)",
+  rockstar: "Take-Two Interactive Software Inc. (TTWO)",
+  bmw: "BMW AG (BMW.DE)",
+  auto: "BMW AG (BMW.DE)",
+  pfizer: "Pfizer Inc. (PFE)",
+  pfi: "Pfizer Inc. (PFE)",
+  novo: "Novo Nordisk A/S (NVO)",
+  obesity: "Eli Lilly and Company (LLY)",
+  bitcoin: "Bitcoin USD (BTC-USD)",
+  btc: "Bitcoin USD (BTC-USD)",
+  crypto: "Bitcoin USD (BTC-USD)",
+  ethereum: "Ethereum USD (ETH-USD)",
+  eth: "Ethereum USD (ETH-USD)",
+  spirit: "Spirit Airlines Inc. (FLYYQ)",
+  airline: "Spirit Airlines Inc. (FLYYQ)",
+};
 
 interface SearchBarProps {
   onSearch: (ticker: string) => void;
@@ -51,19 +106,49 @@ function extractTicker(value: string): string {
   return value;
 }
 
+function normalizeSearchValue(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function uniqueValues(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
 function buildLocalMatches(query: string): string[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return LOCAL_SEARCH_ASSETS
-    .filter((value) => value.toLowerCase().includes(needle) || extractTicker(value).toLowerCase().startsWith(needle))
-    .slice(0, 6);
+  const normalizedNeedle = normalizeSearchValue(needle);
+  const alias = LOCAL_SEARCH_ALIASES[normalizedNeedle] || LOCAL_SEARCH_ALIASES[needle];
+  const scored = LOCAL_SEARCH_ASSETS.map((value) => {
+    const ticker = extractTicker(value).toLowerCase();
+    const lowerValue = value.toLowerCase();
+    const normalizedValue = normalizeSearchValue(value);
+    let score = 0;
+    if (alias === value) score = 120;
+    else if (ticker === needle) score = 110;
+    else if (ticker.startsWith(needle)) score = 100;
+    else if (lowerValue.startsWith(needle)) score = 92;
+    else if (lowerValue.includes(` ${needle}`)) score = 86;
+    else if (lowerValue.includes(needle) || normalizedValue.includes(normalizedNeedle)) score = 74;
+    else {
+      const compactTicker = normalizeSearchValue(ticker);
+      const overlap = [...normalizedNeedle].filter((char, index) => compactTicker[index] === char).length;
+      score = normalizedNeedle.length >= 3 && overlap >= Math.min(3, normalizedNeedle.length) ? 52 : 0;
+    }
+    return { value, score };
+  })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.value);
+  return uniqueValues(alias ? [alias, ...scored] : scored).slice(0, 8);
 }
 
 function buildDefaultSuggestions(): Record<string, string[]> {
   return {
-    "Aktien": LOCAL_SEARCH_ASSETS.slice(0, 12),
-    "ETFs & Makro": LOCAL_SEARCH_ASSETS.slice(20, 27),
-    "Crypto": LOCAL_SEARCH_ASSETS.slice(27),
+    "Aktien": LOCAL_SEARCH_ASSETS.slice(0, 14),
+    "Themen": ["NVIDIA Corporation (NVDA)", "Apple Inc. (AAPL)", "Take-Two Interactive Software Inc. (TTWO)", "BMW AG (BMW.DE)", "Pfizer Inc. (PFE)", "Palo Alto Networks Inc. (PANW)"],
+    "ETFs & Makro": ["SPDR S&P 500 ETF Trust (SPY)", "Invesco QQQ Trust (QQQ)", "iShares Russell 2000 ETF (IWM)", "SPDR Gold Shares (GLD)", "iShares 20+ Year Treasury Bond ETF (TLT)", "Energy Select Sector SPDR Fund (XLE)"],
+    "Crypto": ["Bitcoin USD (BTC-USD)", "Ethereum USD (ETH-USD)", "Solana USD (SOL-USD)"],
   };
 }
 
@@ -82,7 +167,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const flatSuggestions = useMemo(
     () =>
       Object.entries(suggestions).flatMap(([category, values]) =>
-        (values || []).map((value) => ({ category, value })),
+        (values || []).filter(Boolean).map((value) => ({ category, value })),
       ),
     [suggestions],
   );
@@ -127,11 +212,16 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     const trimmedQuery = query.trim();
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    if (trimmedQuery.length > 1) {
+    if (trimmedQuery.length > 0) {
       const localMatches = buildLocalMatches(trimmedQuery);
       if (localMatches.length > 0) {
         setSuggestions({ Treffer: localMatches });
         setShowDropdown(true);
+      }
+      if (trimmedQuery.length === 1) {
+        suggestionAbortRef.current?.abort();
+        if (localMatches.length === 0) setSuggestions(buildDefaultSuggestions());
+        return;
       }
       const requestId = searchRequestRef.current + 1;
       searchRequestRef.current = requestId;
@@ -147,7 +237,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           .then((data) => {
             if (controller.signal.aborted || searchRequestRef.current !== requestId) return;
             if (data.Matches && data.Matches.length > 0) {
-              setSuggestions({ Treffer: data.Matches });
+              setSuggestions({ Treffer: uniqueValues([...localMatches, ...data.Matches]).slice(0, 8) });
             } else if (localMatches.length === 0) {
               setSuggestions({});
             }
@@ -203,9 +293,13 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     setShowDropdown(false);
     setGhostText("");
 
-    // Accept ghost text auto-complete if there is exactly one match
-    if (flatSuggestions.length === 1) {
-      handleQuickSelect(flatSuggestions[0].value);
+    const localMatches = buildLocalMatches(raw);
+    const exactLocal = localMatches.find((value) => {
+      const ticker = extractTicker(value);
+      return ticker.toLowerCase() === raw.toLowerCase() || value.toLowerCase() === raw.toLowerCase();
+    });
+    if (exactLocal) {
+      handleQuickSelect(exactLocal);
       return;
     }
 
@@ -213,6 +307,10 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     const looksLikeName =
       raw.includes(" ") || raw !== raw.toUpperCase() || raw.length > 5;
     if (looksLikeName) {
+      if (localMatches.length > 0) {
+        handleQuickSelect(localMatches[0]);
+        return;
+      }
       try {
         const data = await fetchJsonWithRetry<any>(
           `/api/search/suggestions?q=${encodeURIComponent(raw)}`,
@@ -245,6 +343,11 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       } catch {
         // fallthrough
       }
+    }
+    const fallbackLocal = localMatches[0];
+    if (fallbackLocal && raw.length >= 3) {
+      handleQuickSelect(fallbackLocal);
+      return;
     }
     onSearch(raw.toUpperCase());
   };
@@ -317,7 +420,10 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                     setShowDropdown(true);
                   }}
                   onFocus={() => {
-                    if (!query.trim() && Object.keys(suggestions).length === 0) {
+                    const localMatches = buildLocalMatches(query);
+                    if (query.trim() && localMatches.length > 0) {
+                      setSuggestions({ Treffer: localMatches });
+                    } else if (!query.trim() && Object.keys(suggestions).length === 0) {
                       setSuggestions(buildDefaultSuggestions());
                     }
                     setShowDropdown(true);
@@ -325,6 +431,9 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   onKeyDown={handleKeyDown}
                   placeholder={ghostText ? "" : "AAPL, NVDA, ASML, BTC-USD"}
                   aria-label="Search for a stock, ETF, or crypto ticker"
+                  aria-expanded={showDropdown}
+                  aria-controls="search-suggestion-list"
+                  aria-autocomplete="list"
                   className="relative w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0 sm:text-lg"
                   style={{ caretColor: "currentColor" }}
                   disabled={loading}
@@ -392,10 +501,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         {showDropdown && Object.keys(suggestions).length > 0 && (
           <div
             ref={dropdownRef}
+            id="search-suggestion-list"
+            role="listbox"
             className="absolute left-3 right-3 top-full z-50 mt-3 overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(255,255,255,0.94)] shadow-[0_24px_80px_rgba(17,24,39,0.12)] backdrop-blur-xl"
           >
             <div className="grid gap-1 p-3 md:grid-cols-2">
-              {Object.entries(suggestions).map(([category, tickers]) => (
+              {Object.entries(suggestions).filter(([, tickers]) => Array.isArray(tickers) && tickers.length > 0).map(([category, tickers]) => (
                 <div key={category} className="rounded-2xl bg-black/[0.02] p-3">
                   <h4 className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                     {category}
@@ -411,6 +522,9 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                           <button
                             key={ticker}
                             type="button"
+                            role="option"
+                            aria-selected={active}
+                            onMouseDown={(event) => event.preventDefault()}
                             onClick={() => handleQuickSelect(ticker)}
                             className={`rounded-2xl border px-3 py-2 text-left text-xs font-bold transition-colors ${
                               active

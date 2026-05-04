@@ -3206,6 +3206,8 @@ async def admin_health_center():
         problems.append("scheduler_not_seen")
     if any(job.get("missed_today") for job in schedule_jobs):
         problems.append("brief_missed_today")
+    if any(job.get("catchup_available") for job in schedule_jobs):
+        problems.append("brief_catchup_available")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (
@@ -3240,6 +3242,7 @@ async def admin_health_center():
         None,
     )
     due_now_jobs = [job for job in schedule_jobs if job.get("due_now")]
+    catchup_jobs = [job for job in schedule_jobs if job.get("catchup_available")]
     missed_jobs = [job for job in schedule_jobs if job.get("missed_today")]
     return convert_numpy_types(
         {
@@ -3269,8 +3272,11 @@ async def admin_health_center():
                     "last_error": last_error_job.get("last_error") if last_error_job else None,
                     "last_error_at": last_error_job.get("last_status_updated_at") if last_error_job else None,
                     "due_now_count": len(due_now_jobs),
+                    "catchup_count": len(catchup_jobs),
+                    "catchup_jobs": [job.get("label") for job in catchup_jobs],
                     "missed_count": len(missed_jobs),
                     "loop_state": "seen" if scheduler_loop_seen_at else "not_seen",
+                    "needs_manual_run": bool(catchup_jobs) or bool(due_now_jobs),
                 },
                 "jobs": schedule_jobs,
             },

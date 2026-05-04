@@ -190,11 +190,16 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Queue
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
-                {scheduleSummary.due_now_count ?? 0} due · {scheduleSummary.missed_count ?? 0} missed
+                {scheduleSummary.due_now_count ?? 0} due - {scheduleSummary.catchup_count ?? 0} catch-up - {scheduleSummary.missed_count ?? 0} missed
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Loop {scheduleSummary.loop_state || "unknown"} · {fmtDate(health?.schedule?.loop_seen_at)}
+                Loop {scheduleSummary.loop_state || "unknown"} - {fmtDate(health?.schedule?.loop_seen_at)}
               </div>
+              {scheduleSummary.needs_manual_run ? (
+                <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-800">
+                  Run Due/Missed kann jetzt {scheduleSummary.catchup_count || scheduleSummary.due_now_count} Brief(s) nachholen.
+                </div>
+              ) : null}
             </div>
             <div className={`rounded-[1.4rem] border p-4 ${scheduleSummary.last_error ? "border-red-500/15 bg-red-500/6" : "border-black/8 bg-white/80"}`}>
               <div className={`text-[10px] font-extrabold uppercase tracking-[0.18em] ${scheduleSummary.last_error ? "text-red-700" : "text-slate-500"}`}>
@@ -204,7 +209,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 {scheduleSummary.last_error || "No active delivery error"}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} · ` : ""}
+                {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} - ` : ""}
                 {fmtDate(scheduleSummary.last_error_at)}
               </div>
             </div>
@@ -277,11 +282,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                           ? "bg-emerald-500/10 text-emerald-700"
                           : job.due_now
                             ? "bg-amber-500/10 text-amber-700"
+                            : job.catchup_available
+                              ? "bg-sky-500/10 text-sky-700"
                             : job.missed_today
                               ? "bg-red-500/10 text-red-700"
                               : "bg-slate-500/10 text-slate-500"
                       }`}>
-                        {job.sent_today ? "sent today" : job.due_now ? "due now" : job.missed_today ? "missed" : "pending"}
+                        {job.sent_today ? "sent today" : job.due_now ? "due now" : job.catchup_available ? "catch-up" : job.missed_today ? "missed" : "pending"}
                       </span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">Plan {job.time} - next {fmtDate(job.next_due_at)}</div>
@@ -289,12 +296,17 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     {job.minutes_late != null ? (
                       <div className="mt-1 text-xs text-slate-500">{job.minutes_late} minutes late</div>
                     ) : null}
+                    {job.catchup_available ? (
+                      <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-700">
+                        Noch in Grace-Zeit: automatisch oder per Run Due/Missed nachsendbar.
+                      </div>
+                    ) : null}
                     <div className="mt-1 text-xs text-slate-500">
                       Last success {fmtDate(job.last_success_at || job.last_sent_at)}
                     </div>
                     {job.last_status ? (
                       <div className="mt-1 text-xs text-slate-500">
-                        Last status {job.last_status} · {fmtDate(job.last_status_updated_at)}
+                        Last status {job.last_status} - {fmtDate(job.last_status_updated_at)}
                       </div>
                     ) : null}
                     {job.last_error ? (

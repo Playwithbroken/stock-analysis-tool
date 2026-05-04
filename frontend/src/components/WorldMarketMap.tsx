@@ -1309,7 +1309,7 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="sm:hidden rounded-[1.45rem] border border-black/8 bg-white/78 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+        <div className="world-map-mobile-card sm:hidden rounded-[1.45rem] border border-black/8 bg-white/78 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
@@ -1328,12 +1328,12 @@ export default function WorldMarketMap({
             </button>
           </div>
 
-          <div className="relative mt-3 h-[188px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
+          <div className="world-map-canvas relative mt-3 h-[188px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
+            <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
             <img
               src={worldMapSvg}
               alt="World map"
-              className="absolute inset-0 h-full w-full object-contain opacity-95 contrast-[1.04] saturate-[0.88] transition-transform duration-200"
+              className="world-map-image absolute inset-0 h-full w-full object-contain opacity-95 contrast-[1.04] saturate-[0.88] transition-transform duration-200"
               style={{ transform: `scale(${mapZoom})` }}
               draggable={false}
             />
@@ -1437,14 +1437,14 @@ export default function WorldMarketMap({
         </div>
 
         <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
-          <div className="relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
-            <div className="relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]">
+          <div className="world-map-shell relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
+            <div className="world-map-canvas relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
+              <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
               <img
                 src={worldMapSvg}
                 alt="World map"
-                className="absolute inset-0 block opacity-95 contrast-[1.05] saturate-[0.88]"
+                className="world-map-image absolute inset-0 block opacity-95 contrast-[1.05] saturate-[0.88]"
                 style={{
                   width: "100%",
                   height: "100%",

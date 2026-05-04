@@ -530,8 +530,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   );
 
   return (
-    <div className="surface-panel rounded-[2rem] p-6">
-      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+    <div className="surface-panel rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6">
+      <div className="mb-5 flex flex-col justify-between gap-4 md:mb-8 md:flex-row md:items-center">
         <div>
           <div className="mb-1 flex items-center gap-2 text-slate-500">
             <TrendingUp size={16} className={isPositive ? "text-emerald-600" : "text-red-600"} />
@@ -577,12 +577,12 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-black/8 bg-white/80 p-1">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-black/8 bg-white/80 p-1 no-scrollbar">
           {PERIODS.map((p) => (
             <button
               key={p.id}
               onClick={() => setPeriod(p)}
-              className={`rounded-lg px-4 py-1.5 text-xs font-bold transition-all ${
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition-all sm:px-4 ${
                 period.id === p.id
                   ? "bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(15,118,110,0.18)]"
                   : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900"
@@ -594,14 +594,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap">
         {indicatorToggles.map((toggle) => (
           <button
             key={toggle.label}
             onClick={() => toggle.setActive((prev) => !prev)}
             title={toggle.help}
             aria-label={`${toggle.label}: ${toggle.help}`}
-            className={`group relative rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
+            className={`group relative shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
               toggle.active ? toggle.activeTone : "border-black/8 bg-white/80 text-slate-500"
             }`}
           >
@@ -611,7 +611,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 ?
               </span>
             </span>
-            <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-64 -translate-x-1/2 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-visible:block group-focus-visible:opacity-100">
+            <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-64 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-visible:block group-focus-visible:opacity-100 sm:left-1/2 sm:-translate-x-1/2">
               <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
                 {toggle.label}
               </span>
@@ -622,8 +622,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       </div>
 
       <MeasuredChartFrame
-        className={`w-full ${subPanels > 0 ? "h-[520px]" : "h-[320px]"}`}
-        minHeight={subPanels > 0 ? 520 : 320}
+        className={`w-full ${subPanels > 0 ? "h-[430px] sm:h-[520px]" : "h-[280px] sm:h-[320px]"}`}
+        minHeight={subPanels > 0 ? 430 : 280}
         fallback={
           <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
             <span className="text-sm text-slate-500">Chart-Layout wird vorbereitet...</span>
@@ -631,7 +631,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }
       >
         {(size) => {
-          const totalHeight = Math.max(size.h, subPanels > 0 ? 520 : 320);
+          const totalHeight = Math.max(size.h, subPanels > 0 ? 430 : 280);
           const gapPx = subPanels > 0 ? 8 * (subPanels + 1) : 0;
           const availableHeight = Math.max(220, totalHeight - gapPx);
           const mainHeightPx = subPanels > 0
@@ -767,7 +767,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }}
       </MeasuredChartFrame>
 
-      <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <div className="flex items-center gap-1">
           <Clock size={10} />
           {period.id === "1d" ? "Intraday Minute Data" : "Historical Market Data"}
@@ -787,7 +787,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           }`}
         >
           Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
-          {" "}Kursverlauf: {HISTORY_STATUS_LABELS[historyState]} - Feed: {transportMode}
+          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} - Feed: {transportMode}
           {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
           {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>

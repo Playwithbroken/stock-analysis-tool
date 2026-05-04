@@ -1384,7 +1384,11 @@ export default function MorningBriefPanel({
               ))
             ) : (
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-                Keine nahen Earnings aus Watchlist und Leitwerten gefunden.
+                <div className="font-bold text-slate-700">Keine priorisierten Earnings im 21-Tage-Filter.</div>
+                <div className="mt-1 text-xs leading-5">
+                  Ursache: Watchlist/Leitwerte haben aktuell keinen belastbaren Termin oder der Feed liefert nur
+                  breite Kalenderdaten. Broad Earnings erscheinen weiter unten, sobald sie verfuegbar sind.
+                </div>
               </div>
             )}
           </div>
@@ -1409,8 +1413,12 @@ export default function MorningBriefPanel({
               </div>
             ))
           ) : (
-            <div className="text-sm text-slate-500">
-              Keine direkten Watchlist-Auswirkungen im aktuellen Brief.
+            <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
+              <div className="font-bold text-slate-700">Kein direkter Watchlist-Treffer.</div>
+              <div className="mt-1 text-xs leading-5">
+                Das bedeutet nicht “keine Risiken”: Makro, Event-Pings und Top-Mover werden weiter beobachtet.
+                Sobald ein Event deine Holdings, Watchlist oder Sektoren trifft, erscheint hier ein konkreter Impact.
+              </div>
             </div>
           )}
         </div>
@@ -1604,7 +1612,12 @@ export default function MorningBriefPanel({
                   </div>
                 ))}
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-white/55 p-3 text-xs leading-5 text-amber-800">
+                Fast Mode: Live-Maerkte werden nachgeladen. Bis dahin bewertet das Briefing Makro-Themen,
+                News-Cluster und Event-Pings ohne Polymarket-Gewichtung.
+              </div>
+            )}
           </div>
         )}
       </section>

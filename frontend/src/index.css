@@ -335,7 +335,7 @@ h3,
 }
 
 [data-theme="dark"] .brief-avoid-soft {
-  background: linear-gradient(135deg, rgba(248, 113, 113, 0.13), rgba(255, 255, 255, 0.045) 74%) !important;
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.10), rgba(255, 255, 255, 0.045) 58%, rgba(255, 255, 255, 0.025) 100%) !important;
 }
 
 [data-theme="dark"] .glass-card {
@@ -475,6 +475,40 @@ h3,
 }
 [data-theme="dark"] .surface-panel .text-emerald-700 {
   color: #34d399 !important;
+}
+
+/* Dark mode: world map readability */
+[data-theme="dark"] .world-map-shell,
+[data-theme="dark"] .world-map-mobile-card {
+  background: rgba(255, 255, 255, 0.045) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .world-map-canvas {
+  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+[data-theme="dark"] .world-map-glow {
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.14), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.2), rgba(15, 23, 42, 0.72)) !important;
+}
+
+[data-theme="dark"] .world-map-image {
+  opacity: 0.72 !important;
+  filter: invert(0.86) hue-rotate(174deg) saturate(0.72) brightness(0.78) contrast(1.18);
+}
+
+@media (max-width: 640px) {
+  .surface-panel .recharts-wrapper {
+    font-size: 10px;
+  }
+
+  .surface-panel .recharts-tooltip-wrapper {
+    max-width: 82vw;
+  }
 }
 
 .ticker-chip-flash-up {

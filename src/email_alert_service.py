@@ -458,7 +458,7 @@ class EmailAlertService:
                     **job,
                     "event_key": event_key,
                     "scheduled_at": scheduled_at,
-                    "minutes_late": max(0, int(delta_minutes // 60)),
+                    "minutes_late": max(0, int(delta_minutes)),
                     "on_time": on_time,
                     "catchup": bool(catchup and not on_time),
                 }

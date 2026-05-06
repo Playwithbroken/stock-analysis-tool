@@ -684,7 +684,7 @@ function AppContent() {
         if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBriefStatus("error");
         }
-      }, 6500);
+      }, 10000);
       try {
         const fastPayload = await fetchJsonWithRetry<any>("/api/market/morning-brief?fast=true", undefined, {
           retries: 0,
@@ -697,6 +697,7 @@ function AppContent() {
           setGlobalBriefStatus(fastPayload?.quality?.fallback ? "error" : "ready");
         }
 
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
           retries: 0,
           retryDelayMs: 250,
@@ -717,7 +718,7 @@ function AppContent() {
     };
 
     loadGlobalBrief();
-    const interval = window.setInterval(loadGlobalBrief, 120000);
+    const interval = window.setInterval(loadGlobalBrief, 300000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

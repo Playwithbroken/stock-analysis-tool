@@ -2169,6 +2169,9 @@ class MorningBriefService:
             unique_tickers.append(normalized)
 
         results: List[Dict[str, Any]] = []
+        stale_references: List[Dict[str, Any]] = []
+        max_age_days = int(os.getenv("BRIEF_EARNINGS_RESULT_MAX_AGE_DAYS", "10"))
+        stale_max_age_days = int(os.getenv("BRIEF_EARNINGS_RESULT_STALE_MAX_AGE_DAYS", "420"))
         for ticker in unique_tickers[:10]:
             try:
                 fetcher = DataFetcher(ticker)
@@ -2185,7 +2188,7 @@ class MorningBriefService:
                     continue
                 now_utc = datetime.now(timezone.utc)
                 days_since = (now_utc.date() - period_dt.date()).days
-                if days_since < 0 or days_since > int(os.getenv("BRIEF_EARNINGS_RESULT_MAX_AGE_DAYS", "10")):
+                if days_since < 0:
                     continue
 
                 surprise = latest.get("eps_surprise_pct")
@@ -2206,26 +2209,39 @@ class MorningBriefService:
                     revenue_yoy,
                     guidance_sentiment,
                 )
+                freshness = "fresh" if days_since <= max_age_days else "stale_reference"
+                if freshness == "stale_reference":
+                    if days_since > stale_max_age_days:
+                        continue
+                    action_hint = "stale_reference_only"
+                    summary = (
+                        f"Letzte bekannte Zahlen sind {days_since} Tage alt. "
+                        f"Nicht als frisches Setup nutzen; nur Kontext fuer Qualitaet, Bewertung und naechste Earnings-Erwartung. "
+                        f"{summary}"
+                    )
                 info = fetcher.info or {}
-                results.append(
-                    {
-                        "ticker": ticker,
-                        "company": info.get("shortName") or info.get("longName") or ticker,
-                        "period": latest.get("period"),
-                        "reported_at": period_dt.isoformat(),
-                        "days_since": days_since,
-                        "reported_eps": reported,
-                        "eps_estimate": estimate,
-                        "eps_surprise_pct": surprise,
-                        "revenue_yoy": revenue_yoy,
-                        "guidance_label": guidance_signal.get("label"),
-                        "guidance_sentiment": guidance_sentiment,
-                        "status": status,
-                        "action_hint": action_hint,
-                        "summary": summary,
-                        "source": "yfinance_earnings_dates",
-                    }
-                )
+                row = {
+                    "ticker": ticker,
+                    "company": info.get("shortName") or info.get("longName") or ticker,
+                    "period": latest.get("period"),
+                    "reported_at": period_dt.isoformat(),
+                    "days_since": days_since,
+                    "reported_eps": reported,
+                    "eps_estimate": estimate,
+                    "eps_surprise_pct": surprise,
+                    "revenue_yoy": revenue_yoy,
+                    "guidance_label": guidance_signal.get("label"),
+                    "guidance_sentiment": guidance_sentiment,
+                    "status": status,
+                    "freshness": freshness,
+                    "action_hint": action_hint,
+                    "summary": summary,
+                    "source": "yfinance_earnings_dates",
+                }
+                if freshness == "fresh":
+                    results.append(row)
+                else:
+                    stale_references.append(row)
             except Exception:
                 continue
 
@@ -2236,7 +2252,10 @@ class MorningBriefService:
             return (status_rank, surprise_abs)
 
         results.sort(key=sort_key, reverse=True)
-        return results[:6]
+        if results:
+            return results[:6]
+        stale_references.sort(key=sort_key, reverse=True)
+        return stale_references[:4]
 
     def _parse_earnings_period(self, value: Any) -> datetime | None:
         if not value:

@@ -1871,7 +1871,11 @@ export default function MorningBriefPanel({
               {(brief.earnings_results || []).slice(0, 6).map((item: any, i: number) => (
                 <div
                   key={`er-${item.ticker}-${i}`}
-                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                  className={`rounded-[1.2rem] border p-4 ${
+                    item.freshness === "stale_reference"
+                      ? "border-slate-300 bg-white/55"
+                      : "border-black/8 bg-white/70"
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <button
@@ -1890,6 +1894,15 @@ export default function MorningBriefPanel({
                       {item.status}
                     </span>
                   </div>
+                  {item.freshness === "stale_reference" ? (
+                    <div className="mt-2 inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      reference only · {item.days_since}d old
+                    </div>
+                  ) : item.days_since != null ? (
+                    <div className="mt-2 inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-emerald-700">
+                      fresh · {item.days_since}d old
+                    </div>
+                  ) : null}
                   <div className="mt-1 line-clamp-1 text-xs text-slate-500">{item.company}</div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">

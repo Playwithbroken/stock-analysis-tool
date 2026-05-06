@@ -176,6 +176,39 @@ export default function BrokerChat({
     { label: "Learning", value: evaluatedCount || forecastCount, active: Boolean(evaluatedCount || forecastCount) },
   ];
 
+  const deskCommands = [
+    {
+      label: "Markets oeffnen",
+      detail: "Mover + Explorer",
+      disabled: !onOpenTab || activeTab === "discovery",
+      run: () => onOpenTab?.("discovery"),
+    },
+    {
+      label: primaryTicker ? `${String(primaryTicker).toUpperCase()} analysieren` : "Analyze oeffnen",
+      detail: primaryTicker ? "Dossier + Chart" : "Suche starten",
+      disabled: primaryTicker ? !onAnalyzeTicker : !onOpenTab,
+      run: () => {
+        if (primaryTicker && onAnalyzeTicker) {
+          onAnalyzeTicker(String(primaryTicker).toUpperCase());
+          return;
+        }
+        onOpenTab?.("analyze");
+      },
+    },
+    {
+      label: "Portfolio pruefen",
+      detail: "Rendite + Risiko",
+      disabled: !onOpenTab || activeTab === "portfolio",
+      run: () => onOpenTab?.("portfolio"),
+    },
+    {
+      label: "Briefing erklaeren",
+      detail: `${setupCount} Setups · ${eventPingCount} Events`,
+      disabled: loading,
+      run: () => void submitMessage("Erklaere mir das aktuelle Briefing: wichtigste Setups, Risiken, Datenluecken und was ich anklicken soll."),
+    },
+  ];
+
   const quickActions = [
     activeTab === "discovery"
       ? "Fuehre mich durch Markets: welche Gewinner/Verlierer sind relevant und was soll ich anklicken?"
@@ -675,6 +708,20 @@ export default function BrokerChat({
               ))}
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {deskCommands.map((command) => (
+                <button
+                  key={command.label}
+                  type="button"
+                  onClick={command.run}
+                  disabled={command.disabled}
+                  className="shrink-0 rounded-xl border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-3 py-2 text-left text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--accent)] transition-colors hover:bg-white disabled:border-black/8 disabled:bg-white/60 disabled:text-slate-400"
+                >
+                  <span className="block">{command.label}</span>
+                  <span className="mt-0.5 block text-[9px] font-bold tracking-[0.1em] text-slate-500">
+                    {command.detail}
+                  </span>
+                </button>
+              ))}
               {visibleQuickActions.map((action) => (
                 <button
                   key={action}

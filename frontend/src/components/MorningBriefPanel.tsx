@@ -236,6 +236,14 @@ export default function MorningBriefPanel({
   const watchedPredictionThemes = Array.isArray(brief.prediction_markets?.watched_themes)
     ? brief.prediction_markets.watched_themes.slice(0, 4)
     : [];
+  const hasPredictionSignals = Array.isArray(brief.prediction_signals) && brief.prediction_signals.length > 0;
+  const hasPolymarketMarkets = Array.isArray(brief.polymarket) && brief.polymarket.length > 0;
+  const predictionStatus = brief.prediction_markets?.status || (hasPolymarketMarkets ? "market-feed" : "fast-mode");
+  const predictionMessage =
+    brief.prediction_markets?.message ||
+    (hasPolymarketMarkets
+      ? "Polymarket-Maerkte sind geladen; noch kein Signal hat die Relevanz- und Confidence-Schwelle fuer das Briefing erreicht."
+      : "Polymarket-Livefeed wird nachgeladen; relevante Makro-Themen bleiben im Watch-Modus.");
   const watchlistImpactFallback = watchedPredictionThemes.map((theme: any) => ({
     type: "macro watch",
     summary: `${theme.theme}: ${theme.why}`,
@@ -1384,10 +1392,22 @@ export default function MorningBriefPanel({
               ))
             ) : (
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-                <div className="font-bold text-slate-700">Keine priorisierten Earnings im 21-Tage-Filter.</div>
-                <div className="mt-1 text-xs leading-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-bold text-slate-700">Keine priorisierten Earnings im 21-Tage-Filter.</div>
+                  <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-700">
+                    no direct watch hit
+                  </span>
+                </div>
+                <div className="mt-2 text-xs leading-5">
                   Ursache: Watchlist/Leitwerte haben aktuell keinen belastbaren Termin oder der Feed liefert nur
                   breite Kalenderdaten. Broad Earnings erscheinen weiter unten, sobald sie verfuegbar sind.
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {["Watchlist wird weiter gescannt", "Heute gemeldete Beats/Misses erscheinen separat", "Buddy kann Earnings-Luecken erklaeren"].map((copy) => (
+                    <div key={copy} className="rounded-[0.8rem] border border-black/8 bg-white/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                      {copy}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -1414,10 +1434,26 @@ export default function MorningBriefPanel({
             ))
           ) : (
             <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
-              <div className="font-bold text-slate-700">Kein direkter Watchlist-Treffer.</div>
-              <div className="mt-1 text-xs leading-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-bold text-slate-700">Kein direkter Watchlist-Treffer.</div>
+                <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  monitoring
+                </span>
+              </div>
+              <div className="mt-2 text-xs leading-5">
                 Das bedeutet nicht “keine Risiken”: Makro, Event-Pings und Top-Mover werden weiter beobachtet.
                 Sobald ein Event deine Holdings, Watchlist oder Sektoren trifft, erscheint hier ein konkreter Impact.
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {[
+                  "Portfolio-Bezug wird gegen Holdings gematcht",
+                  "Event-Pings bleiben priorisiert",
+                  "Top-Mover koennen trotzdem Analyse-Trigger liefern",
+                ].map((copy) => (
+                  <div key={copy} className="rounded-[0.8rem] border border-black/8 bg-white/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    {copy}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1554,7 +1590,7 @@ export default function MorningBriefPanel({
             Polymarket
           </div>
         </div>
-        {(brief.prediction_signals || []).length > 0 ? (
+        {hasPredictionSignals ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {(brief.prediction_signals || []).slice(0, 8).map((pm: any, i: number) => {
               const probabilityRaw = Number(pm.probability);
@@ -1590,15 +1626,12 @@ export default function MorningBriefPanel({
               );
             })}
           </div>
-        ) : (
+        ) : !hasPolymarketMarkets ? (
           <div className="mt-4 rounded-[1rem] border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>
-                {brief.prediction_markets?.message ||
-                  "Polymarket-Daten aktuell verzoegert. Abschnitt bleibt sichtbar und wird automatisch wieder aktualisiert."}
-              </span>
+              <span>{predictionMessage}</span>
               <span className="rounded-full border border-amber-500/20 bg-white/65 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-700">
-                {brief.prediction_markets?.status || "watch"}
+                {predictionStatus}
               </span>
             </div>
             {watchedPredictionThemes.length ? (
@@ -1619,10 +1652,23 @@ export default function MorningBriefPanel({
               </div>
             )}
           </div>
+        ) : (
+          <div className="mt-4 rounded-[1rem] border border-sky-500/20 bg-sky-500/10 p-3 text-sm text-sky-700">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>{predictionMessage}</span>
+              <span className="rounded-full border border-sky-500/20 bg-white/65 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-700">
+                confidence gate
+              </span>
+            </div>
+            <div className="mt-2 text-xs leading-5 text-sky-800">
+              Die Live-Maerkte werden unten angezeigt. Ins Briefing wandern sie erst, wenn Wahrscheinlichkeit,
+              Volumen, Themen-Relevanz und Marktbezug zusammen stark genug sind.
+            </div>
+          </div>
         )}
       </section>
 
-      {(brief.polymarket || []).length > 0 && !(brief.prediction_signals || []).length && (
+      {hasPolymarketMarkets && !hasPredictionSignals && (
         <section className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">

@@ -256,6 +256,24 @@ export default function BrokerChat({
       ? `${activeTab} context`
       : "Market overview";
 
+  const activeContextStats = contextStats.filter((item) => item.active);
+  const portfolioReturnPct = portfolioSnapshot?.summary?.return_since_buy_pct;
+  const contextReadout = [
+    activeTab ? `Tab: ${activeTab}` : "Tab: dashboard",
+    primaryTicker ? `Fokus: ${String(primaryTicker).toUpperCase()}` : null,
+    portfolioSnapshot?.summary?.num_holdings
+      ? `Portfolio: ${portfolioSnapshot.summary.num_holdings} Holdings${
+          Number.isFinite(Number(portfolioReturnPct))
+            ? ` / ${Number(portfolioReturnPct).toFixed(2)}% seit Kauf`
+            : ""
+        }`
+      : null,
+    morningBriefSummary?.macro_regime ? `Regime: ${morningBriefSummary.macro_regime}` : null,
+    activeContextStats.length
+      ? `Daten: ${activeContextStats.slice(0, 4).map((item) => `${item.label} ${item.value}`).join(" · ")}`
+      : "Daten: Live-Kontext aktiv",
+  ].filter(Boolean);
+
   const peekCards = [
     {
       label: "Setup",
@@ -455,6 +473,31 @@ export default function BrokerChat({
           </div>
         ) : (
           <>
+            <div className="rounded-[1.2rem] border border-black/8 bg-white/76 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    Kontextspeicher
+                  </div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {contextLabel}
+                  </div>
+                </div>
+                <span className="rounded-full border border-emerald-500/18 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-700">
+                  aktiv
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {contextReadout.map((item) => (
+                  <span
+                    key={String(item)}
+                    className="rounded-full border border-black/8 bg-white/82 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -477,7 +520,7 @@ export default function BrokerChat({
                     )}
                   </div>
                   <div
-                    className={`rounded-2xl border p-4 text-sm leading-relaxed ${
+                    className={`whitespace-pre-line rounded-2xl border p-4 text-sm leading-relaxed ${
                       msg.role === "user"
                         ? "border-slate-300 bg-slate-100 text-slate-800"
                         : "border-black/8 bg-white/80 text-slate-700"

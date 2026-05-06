@@ -283,6 +283,11 @@ class MorningBriefService:
                 "kalshi_enabled": self._kalshi_enabled,
                 "status": "data_delayed",
             },
+            "data_status": {
+                "mode": "fallback",
+                "deferred": [],
+                "sources": {},
+            },
             "google_news_extra": [],
             "trading_edge": {},
             "quality": {
@@ -459,6 +464,18 @@ class MorningBriefService:
             },
             "google_news_extra": google_news_extra[:8],
             "trading_edge": trading_edge,
+            "data_status": {
+                "mode": "full",
+                "deferred": [],
+                "sources": {
+                    "reddit": "loaded" if reddit_posts else "empty_or_unavailable",
+                    "stocktwits": "loaded" if stocktwits_data else "empty_or_unavailable",
+                    "polymarket": "loaded" if polymarket_events else "empty_or_unavailable",
+                    "google_news": "loaded" if google_news_extra else "empty_or_unavailable",
+                    "earnings_calendar": "loaded" if broad_earnings else "empty_or_unavailable",
+                    "earnings_results": "loaded" if earnings_results else "no_recent_results",
+                },
+            },
         }
         brief["quality"] = self._build_quality_report(brief)
         self._cache = brief
@@ -603,6 +620,23 @@ class MorningBriefService:
             },
             "google_news_extra": [],
             "trading_edge": {},
+            "data_status": {
+                "mode": "fast",
+                "deferred": [
+                    "reddit_posts",
+                    "stocktwits",
+                    "google_news_extra",
+                    "earnings_results",
+                    "market_movers",
+                ],
+                "sources": {
+                    "polymarket": "loaded" if polymarket_events else "empty_or_unavailable",
+                    "broad_earnings": "loaded" if broad_earnings else "empty_or_unavailable",
+                    "deep_social": "deferred_fast_mode",
+                    "earnings_results": "deferred_fast_mode",
+                    "market_movers": "deferred_fast_mode",
+                },
+            },
         }
         brief["quality"] = self._build_quality_report(brief)
         brief["quality"]["mode"] = "fast"
@@ -663,6 +697,9 @@ class MorningBriefService:
                 "ok": age_minutes is not None and age_minutes <= 20,
             },
         ]
+        data_status = brief.get("data_status") if isinstance(brief.get("data_status"), dict) else {}
+        deferred = data_status.get("deferred") if isinstance(data_status.get("deferred"), list) else []
+        sources = data_status.get("sources") if isinstance(data_status.get("sources"), dict) else {}
 
         passed = sum(1 for check in checks if check["ok"])
         total = len(checks)
@@ -677,6 +714,9 @@ class MorningBriefService:
             "age_minutes": age_minutes,
             "missing": missing,
             "checks": checks,
+            "mode": data_status.get("mode") or "full",
+            "deferred": deferred,
+            "sources": sources,
         }
 
     def _collect_region(self, tickers: Sequence[tuple[str, str]], label: str, fast: bool = False) -> Dict[str, Any]:

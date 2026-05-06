@@ -148,6 +148,8 @@ export default function MorningBriefPanel({
   if (!brief) return null;
   const quality = brief.quality || null;
   const qualityReady = quality?.status === "ready";
+  const deferredLayers = Array.isArray(quality?.deferred) ? quality.deferred : [];
+  const sourceStates = quality?.sources && typeof quality.sources === "object" ? quality.sources : {};
 
   const regions = [
     brief.regions?.asia,
@@ -303,6 +305,11 @@ export default function MorningBriefPanel({
                 Missing: {quality.missing.slice(0, 3).join(" · ")}
               </div>
             ) : null}
+            {deferredLayers.length ? (
+              <div className="mt-2 rounded-[0.9rem] border border-sky-500/20 bg-sky-500/8 px-3 py-2 text-[11px] text-sky-800">
+                Fast Mode: {deferredLayers.slice(0, 4).join(" · ")} werden nachgeladen.
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -393,6 +400,30 @@ export default function MorningBriefPanel({
             </div>
           ))}
         </div>
+        {Object.keys(sourceStates).length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(sourceStates).slice(0, 8).map(([source, state]) => {
+              const stateText = String(state);
+              const active = stateText === "loaded";
+              const deferred = stateText.includes("deferred");
+              return (
+                <span
+                  key={source}
+                  className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${
+                    active
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                      : deferred
+                        ? "border-sky-500/20 bg-sky-500/10 text-sky-700"
+                        : "border-slate-300 bg-white/65 text-slate-500"
+                  }`}
+                  title={`${source}: ${stateText}`}
+                >
+                  {source.replace(/_/g, " ")} · {stateText.replace(/_/g, " ")}
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
 
       {!hideMap && (

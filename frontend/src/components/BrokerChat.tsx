@@ -207,6 +207,48 @@ export default function BrokerChat({
     activeTab === "portfolio" ? "Welche Position sollte ich wegen Rendite seit Kauf pruefen?" : "Welche Daten fehlen fuer eine saubere Entscheidung?",
   ];
   const visibleQuickActions = quickActions.slice(0, 6);
+  const tabGuide =
+    activeTab === "discovery"
+      ? {
+          title: "Markets Desk",
+          steps: [
+            "Erst Top Movers lesen: Gewinner/Verlierer nur mit Volumen, News oder Event bestaetigen.",
+            "Dann Market Explorer nutzen: Signals, Screener, ETFs und Internals getrennt pruefen.",
+            "Analyse erst starten, wenn Trigger, Risiko und Datenquelle klar sind.",
+          ],
+          prompt: "Fuehre mich durch Markets und sag mir, welche Karte ich jetzt als erstes pruefen soll.",
+        }
+      : activeTab === "analyze"
+        ? {
+            title: "Analyze Desk",
+            steps: [
+              "Dossier zuerst: Umsatz, Margen, Bewertung, Guidance und Risiken einordnen.",
+              "Dann Chart: Trend, SMA, RSI, Volume und Kursverlauf gegen die These pruefen.",
+              "Zum Schluss Trigger/Invalidierung definieren, nicht nur Score lesen.",
+            ],
+            prompt: currentTicker
+              ? `Erklaere mir ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker} Schritt fuer Schritt: Dossier, Chart, Risiko, Trigger.`
+              : "Erklaere mir, wie ich eine Analyse sauber lese.",
+          }
+        : activeTab === "portfolio"
+          ? {
+              title: "Portfolio Desk",
+              steps: [
+                "Rendite seit Kauf und Positionsgroesse zuerst pruefen.",
+                "Dann Risiko-Cluster: gleiche Sektoren, gleiche Makro-Abhaengigkeit, gleiche Event-Gefahr.",
+                "Am Ende konkrete Watchlist: halten, reduzieren, beobachten, nachkaufen nur mit Trigger.",
+              ],
+              prompt: "Pruefe mein Portfolio: Rendite seit Kauf, groesste Risiken und naechste sinnvolle Aktion.",
+            }
+          : {
+              title: "Dashboard Desk",
+              steps: [
+                "Regime und World Map zuerst lesen: Risk-on/off/mixed bestimmt Positionsgroesse.",
+                "Morning Brief nach Now/Next/Avoid und Event-Pings sortieren.",
+                "Nur Setups weiterverfolgen, die News, Chart und Datenvertrauen gemeinsam bestaetigen.",
+              ],
+              prompt: "Erklaere mir das Dashboard und was ich heute wirklich beachten soll.",
+            };
 
   const deskActions = [
     primaryTicker && onAnalyzeTicker
@@ -495,6 +537,39 @@ export default function BrokerChat({
                   >
                     {item}
                   </span>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-[1.2rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.86))] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                    Aktueller Plan
+                  </div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {tabGuide.title}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void submitMessage(tabGuide.prompt)}
+                  disabled={loading}
+                  className="rounded-full border border-[var(--accent)]/20 bg-white/80 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)] disabled:opacity-50"
+                >
+                  Seite erklaeren
+                </button>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {tabGuide.steps.map((step, index) => (
+                  <div
+                    key={step}
+                    className="flex gap-2 rounded-[0.9rem] border border-black/6 bg-white/62 px-3 py-2 text-xs leading-5 text-slate-600"
+                  >
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-black text-white">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </div>
                 ))}
               </div>
             </div>

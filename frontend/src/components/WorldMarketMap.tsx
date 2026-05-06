@@ -1328,7 +1328,7 @@ export default function WorldMarketMap({
             </button>
           </div>
 
-          <div className="world-map-canvas relative mt-3 h-[188px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
+          <div className="world-map-canvas relative mt-3 h-[212px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
             <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
             <img
               src={worldMapSvg}
@@ -1337,7 +1337,7 @@ export default function WorldMarketMap({
               style={{ transform: `scale(${mapZoom})` }}
               draggable={false}
             />
-            <div className="absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 bg-white/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
+            <div className="world-map-zoom-controls absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 bg-white/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
               {[
                 { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },
                 { label: "1x", action: () => setMapZoom(1) },
@@ -1347,7 +1347,7 @@ export default function WorldMarketMap({
                   key={item.label}
                   type="button"
                   onClick={item.action}
-                  className="h-7 min-w-7 rounded-full px-2 text-[10px] font-black text-slate-600 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  className="h-8 min-w-8 rounded-full px-2 text-[10px] font-black text-slate-600 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
                   aria-label={`Map zoom ${item.label}`}
                 >
                   {item.label}
@@ -1471,7 +1471,7 @@ export default function WorldMarketMap({
               ))}
             </div>
 
-            <div className="absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
+            <div className="world-map-zoom-controls absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
               {[
                 { label: "+", action: () => setMapZoom((value) => Math.min(1.42, Number((value + 0.12).toFixed(2)))) },
                 { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },

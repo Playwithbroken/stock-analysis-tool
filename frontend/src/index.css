@@ -485,7 +485,7 @@ h3,
 }
 
 [data-theme="dark"] .world-map-canvas {
-  background: #0f172a !important;
+  background: #08111f !important;
   border-color: rgba(255, 255, 255, 0.10) !important;
 }
 
@@ -497,8 +497,14 @@ h3,
 }
 
 [data-theme="dark"] .world-map-image {
-  opacity: 0.72 !important;
-  filter: invert(0.86) hue-rotate(174deg) saturate(0.72) brightness(0.78) contrast(1.18);
+  opacity: 0.58 !important;
+  filter: invert(0.88) hue-rotate(174deg) saturate(0.55) brightness(0.62) contrast(1.28);
+}
+
+[data-theme="dark"] .world-map-zoom-controls {
+  background: rgba(15, 23, 42, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34) !important;
 }
 
 @media (max-width: 640px) {
@@ -610,6 +616,25 @@ h3,
 
   .mobile-market-tape .ticker-marquee-wrap > div:first-child {
     margin-bottom: 0.45rem;
+  }
+
+  .world-map-mobile-card {
+    border-radius: 1.15rem !important;
+    padding: 0.75rem !important;
+  }
+
+  .world-map-mobile-card .world-map-canvas {
+    min-height: 212px;
+  }
+
+  .world-map-mobile-card .world-map-zoom-controls {
+    right: 0.5rem;
+    top: 0.5rem;
+  }
+
+  .world-map-mobile-card .world-map-zoom-controls button {
+    min-width: 2rem;
+    min-height: 2rem;
   }
 
   .ticker-marquee-wrap {

@@ -1721,11 +1721,15 @@ export default function MorningBriefPanel({
         <section className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Prediction Markets
+              Polymarket Live Watchlist
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              Polymarket
+              below signal gate
             </div>
+          </div>
+          <div className="mt-3 rounded-[1rem] border border-sky-500/20 bg-sky-500/10 p-3 text-xs leading-5 text-sky-800">
+            Diese Maerkte sind live geladen, aber noch nicht stark genug fuer ein Trade-Signal. Sie bleiben sichtbar,
+            damit du erkennst, was beobachtet wird und warum im Briefing noch kein Polymarket-Setup daraus entsteht.
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {(brief.polymarket || []).slice(0, 8).map((pm: any, i: number) => {
@@ -1893,16 +1897,16 @@ export default function MorningBriefPanel({
         )}
       </section>
 
-      {(brief.broad_earnings || []).length > 0 && (
-        <section className="surface-panel rounded-[2rem] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Upcoming Earnings
-            </div>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              S&P 500 + Watchlist
-            </div>
+      <section className="surface-panel rounded-[2rem] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Upcoming Earnings
           </div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+            S&P 500 + Watchlist
+          </div>
+        </div>
+        {(brief.broad_earnings || []).length > 0 ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(brief.broad_earnings || []).slice(0, 12).map((item: any, i: number) => (
               <div
@@ -1946,8 +1950,32 @@ export default function MorningBriefPanel({
               </div>
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="mt-4 rounded-[1.1rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-bold text-slate-700">Keine nahen Earnings mit hoher Relevanz gefunden.</div>
+              <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                no calendar hit
+              </span>
+            </div>
+            <div className="mt-2 text-xs leading-5">
+              Ursache: Im aktuellen 21-Tage-Fenster gibt es keinen priorisierten Termin aus Watchlist, Portfolio
+              oder Leitwerten. Wenn ein relevanter Termin auftaucht, wird er hier mit Erwartung, Session und
+              Analyse-Button angezeigt.
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {["Watchlist + Portfolio werden weiter gescannt", "Beat/Miss-Daten laufen separat ein", "Termine werden im Briefing gewichtet"].map((copy) => (
+                <div
+                  key={copy}
+                  className="rounded-[0.8rem] border border-black/8 bg-white/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500"
+                >
+                  {copy}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

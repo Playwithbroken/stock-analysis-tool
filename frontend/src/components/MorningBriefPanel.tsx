@@ -233,6 +233,9 @@ export default function MorningBriefPanel({
         ? brief.broad_earnings
         : []
   ).slice(0, 6);
+  const earningsResultCount = Array.isArray(brief.earnings_results) ? brief.earnings_results.length : 0;
+  const upcomingEarningsCount = Array.isArray(brief.broad_earnings) ? brief.broad_earnings.length : 0;
+  const watchlistImpactCount = Array.isArray(brief.watchlist_impact) ? brief.watchlist_impact.length : 0;
   const watchedPredictionThemes = Array.isArray(brief.prediction_markets?.watched_themes)
     ? brief.prediction_markets.watched_themes.slice(0, 4)
     : [];
@@ -343,6 +346,52 @@ export default function MorningBriefPanel({
               {realtimeConnected ? "Live stream on" : "Snapshot mode"}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="surface-panel rounded-[1.6rem] p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            {
+              label: "Earnings Results",
+              value: earningsResultCount,
+              status: earningsResultCount ? "loaded" : "no fresh results",
+              tone: earningsResultCount ? "text-emerald-700 bg-emerald-500/10" : "text-slate-500 bg-slate-500/10",
+            },
+            {
+              label: "Upcoming Earnings",
+              value: upcomingEarningsCount,
+              status: upcomingEarningsCount ? "loaded" : "none in focus window",
+              tone: upcomingEarningsCount ? "text-emerald-700 bg-emerald-500/10" : "text-slate-500 bg-slate-500/10",
+            },
+            {
+              label: "Watchlist Impact",
+              value: watchlistImpactCount,
+              status: watchlistImpactCount ? "direct hits" : "no direct hits",
+              tone: watchlistImpactCount ? "text-sky-700 bg-sky-500/10" : "text-slate-500 bg-slate-500/10",
+            },
+            {
+              label: "Polymarket",
+              value: hasPredictionSignals ? brief.prediction_signals.length : hasPolymarketMarkets ? brief.polymarket.length : 0,
+              status: hasPredictionSignals ? "signals passed" : hasPolymarketMarkets ? "confidence gate" : predictionStatus,
+              tone: hasPredictionSignals ? "text-emerald-700 bg-emerald-500/10" : hasPolymarketMarkets ? "text-sky-700 bg-sky-500/10" : "text-amber-700 bg-amber-500/10",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-[1rem] border border-black/8 bg-white/72 px-3 py-2"
+            >
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                {item.label}
+              </div>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-sm font-black text-slate-900">{item.value}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] ${item.tone}`}>
+                  {item.status}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -1772,71 +1821,77 @@ export default function MorningBriefPanel({
       )}
 
       {/* ── Broad Earnings Calendar ───────────────────────────────────── */}
-      {(brief.earnings_results || []).length > 0 && (
-        <section className="surface-panel rounded-[2rem] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Earnings Results
-            </div>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              beat / miss / guidance
-            </div>
+      <section className="surface-panel rounded-[2rem] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Earnings Results
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {(brief.earnings_results || []).slice(0, 6).map((item: any, i: number) => (
-              <div
-                key={`er-${item.ticker}-${i}`}
-                className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => onAnalyze(item.ticker)}
-                    className="text-sm font-black text-slate-900"
-                  >
-                    {item.ticker}
-                  </button>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                    item.status === "beat"
-                      ? "bg-emerald-500/10 text-emerald-700"
-                      : item.status === "miss"
-                        ? "bg-red-500/10 text-red-700"
-                        : "bg-amber-500/10 text-amber-700"
-                  }`}>
-                    {item.status}
-                  </span>
-                </div>
-                <div className="mt-1 line-clamp-1 text-xs text-slate-500">{item.company}</div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                    EPS {item.reported_eps != null ? item.reported_eps.toFixed(2) : "n/a"}
-                  </div>
-                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                    Est {item.eps_estimate != null ? item.eps_estimate.toFixed(2) : "n/a"}
-                  </div>
-                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                    Surprise {item.eps_surprise_pct != null ? `${item.eps_surprise_pct >= 0 ? "+" : ""}${item.eps_surprise_pct.toFixed(1)}%` : "n/a"}
-                  </div>
-                  <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                    Revenue {item.revenue_yoy != null ? `${item.revenue_yoy >= 0 ? "+" : ""}${(item.revenue_yoy * 100).toFixed(1)}%` : "n/a"}
-                  </div>
-                </div>
-                {item.guidance_label && (
-                  <div className={`mt-3 rounded-[0.95rem] border px-3 py-2 text-[11px] font-bold ${
-                    item.guidance_sentiment === "positive"
-                      ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-700"
-                      : item.guidance_sentiment === "negative"
-                        ? "border-red-500/20 bg-red-500/8 text-red-700"
-                        : "border-black/8 bg-white text-slate-600"
-                  }`}>
-                    {item.guidance_label}
-                  </div>
-                )}
-                <div className="mt-3 text-xs leading-6 text-slate-600">{item.summary}</div>
-              </div>
-            ))}
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+            beat / miss / guidance
           </div>
-        </section>
-      )}
+        </div>
+        {(brief.earnings_results || []).length > 0 ? (
+          <>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {(brief.earnings_results || []).slice(0, 6).map((item: any, i: number) => (
+                <div
+                  key={`er-${item.ticker}-${i}`}
+                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => onAnalyze(item.ticker)}
+                      className="text-sm font-black text-slate-900"
+                    >
+                      {item.ticker}
+                    </button>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                      item.status === "beat"
+                        ? "bg-emerald-500/10 text-emerald-700"
+                        : item.status === "miss"
+                          ? "bg-red-500/10 text-red-700"
+                          : "bg-amber-500/10 text-amber-700"
+                    }`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-1 line-clamp-1 text-xs text-slate-500">{item.company}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                      EPS {item.reported_eps != null ? item.reported_eps.toFixed(2) : "n/a"}
+                    </div>
+                    <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                      Est {item.eps_estimate != null ? item.eps_estimate.toFixed(2) : "n/a"}
+                    </div>
+                    <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                      Surprise {item.eps_surprise_pct != null ? `${item.eps_surprise_pct >= 0 ? "+" : ""}${item.eps_surprise_pct.toFixed(1)}%` : "n/a"}
+                    </div>
+                    <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
+                      Revenue {item.revenue_yoy != null ? `${item.revenue_yoy >= 0 ? "+" : ""}${(item.revenue_yoy * 100).toFixed(1)}%` : "n/a"}
+                    </div>
+                  </div>
+                  {item.guidance_label && (
+                    <div className={`mt-3 rounded-[0.95rem] border px-3 py-2 text-[11px] font-bold ${
+                      item.guidance_sentiment === "positive"
+                        ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-700"
+                        : item.guidance_sentiment === "negative"
+                          ? "border-red-500/20 bg-red-500/8 text-red-700"
+                          : "border-black/8 bg-white text-slate-600"
+                    }`}>
+                      {item.guidance_label}
+                    </div>
+                  )}
+                  <div className="mt-3 text-xs leading-6 text-slate-600">{item.summary}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="mt-4 rounded-[1.1rem] border border-black/8 bg-white/70 p-4 text-sm leading-6 text-slate-500">
+            Keine frischen Beat-/Miss-Daten im aktuellen Briefing-Fenster. Das bedeutet nicht, dass Earnings ignoriert werden: bevorstehende Termine erscheinen unten, sobald Watchlist oder Leitwerte betroffen sind.
+          </div>
+        )}
+      </section>
 
       {(brief.broad_earnings || []).length > 0 && (
         <section className="surface-panel rounded-[2rem] p-5">

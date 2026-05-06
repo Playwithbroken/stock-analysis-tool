@@ -519,6 +519,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700", help: INDICATOR_HELP.Volume },
     { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700", help: INDICATOR_HELP.VWAP },
   ];
+  const activeIndicatorHelp = indicatorToggles.filter((toggle) => toggle.active).slice(0, 3);
 
   const CustomTooltip = useCallback(
     ({ active, payload }: any) => {
@@ -638,6 +639,21 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           </button>
         ))}
       </div>
+      {activeIndicatorHelp.length ? (
+        <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {activeIndicatorHelp.map((toggle) => (
+            <div
+              key={toggle.label}
+              className="rounded-[0.9rem] border border-black/8 bg-white/68 px-3 py-2 text-[11px] leading-5 text-slate-600"
+            >
+              <span className="mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">
+                {toggle.label}
+              </span>
+              {toggle.help}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <MeasuredChartFrame
         className={`w-full ${subPanels > 0 ? "h-[430px] sm:h-[520px]" : "h-[280px] sm:h-[320px]"}`}
@@ -731,7 +747,12 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">Volume</div>
+                <div
+                  className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400"
+                  title={INDICATOR_HELP.Volume}
+                >
+                  Volume · Hover: Aktivitaet / Bestaetigung
+                </div>
               </div>
             ) : null}
 
@@ -747,7 +768,10 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                     <Line type="monotone" dataKey="_rsi" stroke="#d97706" strokeWidth={1.5} dot={false} animationDuration={600} />
                   </LineChart>
                 </ResponsiveContainer>
-                <div className="flex justify-between px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                <div
+                  className="flex justify-between px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400"
+                  title={INDICATOR_HELP.RSI}
+                >
                   <span>RSI 14</span>
                   <span className="text-red-400">70</span>
                   <span className="text-emerald-500">30</span>
@@ -770,8 +794,11 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                  MACD Histogram (12/26/9)
+                <div
+                  className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400"
+                  title={INDICATOR_HELP.MACD}
+                >
+                  MACD Histogram (12/26/9) · Momentum
                 </div>
               </div>
             ) : null}

@@ -436,20 +436,13 @@ class SocialIntelligenceService:
                     info.get("earningsTimestamp")
                     or info.get("earningsTimestampStart")
                 )
-                if not earnings_ts:
+                earnings_dt = self._coerce_earnings_datetime(earnings_ts)
+                if earnings_dt is None:
                     cal = stock.calendar
-                    if cal is not None and not (hasattr(cal, "empty") and cal.empty):
-                        if hasattr(cal, "get"):
-                            earnings_ts = cal.get("Earnings Date")
-                            if hasattr(earnings_ts, "__iter__"):
-                                try:
-                                    earnings_ts = list(earnings_ts)[0]
-                                    earnings_ts = int(earnings_ts.timestamp()) if hasattr(earnings_ts, "timestamp") else None
-                                except Exception:
-                                    earnings_ts = None
-                if not earnings_ts:
+                    earnings_dt = self._extract_calendar_earnings_datetime(cal)
+                if earnings_dt is None:
                     continue
-                dt = datetime.fromtimestamp(int(earnings_ts), tz=timezone.utc)
+                dt = earnings_dt.astimezone(timezone.utc)
                 today = datetime.now(timezone.utc).date()
                 if dt.date() < today or dt > horizon:
                     continue
@@ -469,6 +462,87 @@ class SocialIntelligenceService:
             except Exception:
                 continue
         return results
+
+    def _coerce_earnings_datetime(self, value: Any) -> Optional[datetime]:
+        if value in (None, "", []):
+            return None
+        if isinstance(value, datetime):
+            dt = value
+        elif hasattr(value, "to_pydatetime"):
+            dt = value.to_pydatetime()
+        elif isinstance(value, (int, float)):
+            # yfinance timestamps are seconds; tolerate accidental ms values.
+            raw = float(value)
+            if raw > 10_000_000_000:
+                raw = raw / 1000
+            dt = datetime.fromtimestamp(raw, tz=timezone.utc)
+        elif isinstance(value, (list, tuple, set)):
+            for item in value:
+                parsed = self._coerce_earnings_datetime(item)
+                if parsed is not None:
+                    return parsed
+            return None
+        else:
+            text = str(value).strip()
+            if not text or text.lower() in {"nan", "nat", "none"}:
+                return None
+            try:
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except Exception:
+                return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
+    def _extract_calendar_earnings_datetime(self, calendar: Any) -> Optional[datetime]:
+        if calendar is None:
+            return None
+        try:
+            if hasattr(calendar, "empty") and calendar.empty:
+                return None
+        except Exception:
+            pass
+
+        candidates: List[Any] = []
+        keys = [
+            "Earnings Date",
+            "Earnings Timestamp",
+            "Earnings Timestamp Start",
+            "Earnings Timestamp End",
+        ]
+        try:
+            if isinstance(calendar, dict):
+                for key in keys:
+                    if key in calendar:
+                        candidates.append(calendar.get(key))
+            elif hasattr(calendar, "get"):
+                for key in keys:
+                    try:
+                        candidates.append(calendar.get(key))
+                    except Exception:
+                        continue
+            if hasattr(calendar, "to_dict"):
+                raw = calendar.to_dict()
+                if isinstance(raw, dict):
+                    for key in keys:
+                        if key in raw:
+                            candidates.append(raw.get(key))
+                    for value in raw.values():
+                        if isinstance(value, dict):
+                            for key in keys:
+                                if key in value:
+                                    candidates.append(value.get(key))
+        except Exception:
+            pass
+
+        now = datetime.now(timezone.utc)
+        parsed = [
+            dt for dt in (self._coerce_earnings_datetime(value) for value in candidates)
+            if dt is not None and dt >= now - timedelta(days=1)
+        ]
+        if not parsed:
+            return None
+        return min(parsed)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -3186,6 +3186,8 @@ def _telegram_health_check() -> Dict[str, Any]:
         "sendable": False,
         "status": "disabled" if not config.telegram_enabled else "missing_config",
         "error": None,
+        "diagnosis": None,
+        "next_step": None,
     }
     if not (config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id):
         return payload
@@ -3196,12 +3198,30 @@ def _telegram_health_check() -> Dict[str, Any]:
             timeout=8,
         )
         if response.ok:
-            payload.update({"sendable": True, "status": "ok"})
+            payload.update({"sendable": True, "status": "ok", "diagnosis": "sendable", "next_step": None})
         else:
-            detail = response.json().get("description") if response.headers.get("content-type", "").startswith("application/json") else response.text
-            payload.update({"status": "error", "error": detail or response.reason})
+            body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+            detail = body.get("description") if isinstance(body, dict) else response.text
+            error_code = body.get("error_code") if isinstance(body, dict) else response.status_code
+            diagnosis = "telegram_error"
+            next_step = "Telegram bot settings in Railway pruefen."
+            if response.status_code == 401 or error_code == 401:
+                diagnosis = "invalid_bot_token"
+                next_step = "TELEGRAM_BOT_TOKEN ist falsch oder enthaelt Prefix/Anfuehrungszeichen. Raw BotFather Token setzen."
+            elif response.status_code == 403 or error_code == 403:
+                diagnosis = "bot_not_allowed_for_chat"
+                next_step = "Bot in Telegram mit /start aktivieren oder als Admin/Mitglied in Gruppe/Kanal hinzufuegen."
+            elif response.status_code == 400 or error_code == 400:
+                diagnosis = "invalid_chat_id"
+                next_step = "TELEGRAM_CHAT_ID gegen /api/admin/telegram-diagnostics recent_chats abgleichen."
+            payload.update({"status": "error", "error": detail or response.reason, "diagnosis": diagnosis, "next_step": next_step})
     except Exception as exc:
-        payload.update({"status": "error", "error": exc.__class__.__name__})
+        payload.update({
+            "status": "error",
+            "error": exc.__class__.__name__,
+            "diagnosis": "telegram_network_error",
+            "next_step": "Railway outbound network / Telegram API Erreichbarkeit pruefen.",
+        })
     return payload
 
 

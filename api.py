@@ -1371,7 +1371,7 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             "error": "Kursverlauf aktuell nicht verfuegbar. Retry oder anderen Zeitraum nutzen.",
         },
     }
-    return convert_numpy_types(_cache_set(cache_key, payload, ttl=30))
+    return convert_numpy_types(_cache_set(cache_key, payload))
 
 
 @app.get("/api/quick/{ticker}")

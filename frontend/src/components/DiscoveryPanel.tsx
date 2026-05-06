@@ -62,10 +62,10 @@ interface ScreenerRow {
 
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw }) => {
   const { formatPrice } = useCurrency();
-  const [marketView, setMarketView] = useState<"movers" | "explorer">("explorer");
+  const [marketView, setMarketView] = useState<"movers" | "explorer">("movers");
   const [activeTab, setActiveTab] = useState<
     "overview" | "signals" | "ai" | "movers" | "screener" | "alternative" | "etf" | "internals"
-  >("signals");
+  >("overview");
   const [stars, setStars] = useState<StarAssets | null>(null);
   const [publicSignals, setPublicSignals] = useState<PublicSignalsData | null>(
     null,
@@ -87,6 +87,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   const [highRiskOpps, setHighRiskOpps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -175,31 +176,33 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     fetchAll();
   }, []);
 
+  const refreshAiScanners = async (force = false) => {
+    if (!force && (aiLoadedRef.current || aiLoading)) return;
+    setAiLoading(true);
+    setAiError(null);
+    const safeFetch = <T,>(url: string) =>
+      withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 700 }), 11000);
+    const [moon, highRisk] = await Promise.allSettled([
+      safeFetch<DiscoveryStock[]>("/api/discovery/moonshots"),
+      safeFetch<any[]>("/api/discovery/high-risk-opportunities"),
+    ]);
+    const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>
+      r.status === "fulfilled" && r.value != null ? r.value : fallback;
+    const nextMoonshots = val(moon, []);
+    const nextHighRisk = val(highRisk, []);
+    setMoonshots(nextMoonshots);
+    setHighRiskOpps(nextHighRisk);
+    aiLoadedRef.current = true;
+    if (!nextMoonshots.length && !nextHighRisk.length) {
+      setAiError("scanner_empty_or_delayed");
+    }
+    setAiLoading(false);
+  };
+
   useEffect(() => {
-    if (activeTab !== "ai" || aiLoadedRef.current || aiLoading) return;
-    let cancelled = false;
-    const loadAiScanners = async () => {
-      setAiLoading(true);
-      const safeFetch = <T,>(url: string) =>
-        withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 700 }), 11000);
-      const [moon, highRisk] = await Promise.allSettled([
-        safeFetch<DiscoveryStock[]>("/api/discovery/moonshots"),
-        safeFetch<any[]>("/api/discovery/high-risk-opportunities"),
-      ]);
-      const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>
-        r.status === "fulfilled" && r.value != null ? r.value : fallback;
-      if (!cancelled) {
-        setMoonshots(val(moon, []));
-        setHighRiskOpps(val(highRisk, []));
-        aiLoadedRef.current = true;
-        setAiLoading(false);
-      }
-    };
-    loadAiScanners();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, aiLoading]);
+    if (activeTab !== "ai") return;
+    refreshAiScanners();
+  }, [activeTab]);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -343,6 +346,18 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     }
     return bValue - aValue;
   });
+  const modeCopy =
+    marketView === "movers"
+      ? {
+          title: "Top Movers",
+          body: "Schneller Markt-Puls: Gewinner, Verlierer, AI-Chancen und alternative Assets. Klick auf eine Karte zeigt erst Details; Analyse startet nur ueber den Analyze-Button.",
+          stat: `${gainers.length + losers.length + trending.length} Live-Kandidaten`,
+        }
+      : {
+          title: "Market Explorer",
+          body: "Strukturierter Deep-Dive fuer Signals, Screener, ETF-Vergleich und Markt-Internals. Nutze diesen Modus, wenn du gezielt filtern statt nur Momentum scannen willst.",
+          stat: `${(publicSignals?.trackers?.length || 0) + screenerRows.length + etfs.length} Explorer-Datenpunkte`,
+        };
 
   if (loading && !stars) {
     return (
@@ -383,13 +398,27 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   return (
     <div className="space-y-8 pb-20">
       <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-3">
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-          Discovery Mode
+        <div>
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+            Discovery Mode
+          </div>
+          <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            <span className="font-extrabold text-slate-900">{modeCopy.title}</span>
+            {" · "}
+            {modeCopy.body}
+          </div>
         </div>
-        <div className="rounded-full border border-black/8 bg-white/75 p-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+            {modeCopy.stat}
+          </div>
+          <div className="rounded-full border border-black/8 bg-white/75 p-1">
           <button
             type="button"
-            onClick={() => setMarketView("movers")}
+            onClick={() => {
+              setMarketView("movers");
+              setActiveTab("overview");
+            }}
             className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
               marketView === "movers" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
             }`}
@@ -398,13 +427,17 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
           </button>
           <button
             type="button"
-            onClick={() => setMarketView("explorer")}
+            onClick={() => {
+              setMarketView("explorer");
+              setActiveTab("signals");
+            }}
             className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
               marketView === "explorer" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
             }`}
           >
             Market Explorer
           </button>
+          </div>
         </div>
       </div>
 
@@ -722,9 +755,22 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   <h2 className="mt-2 text-3xl font-black text-slate-900">
                     High-Risk Radar
                   </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    Opportunistische Kandidaten mit hohem Bewegungsrisiko. Erst Details lesen, dann bewusst analysieren.
+                  </p>
                 </div>
-                <div className="rounded-full border border-red-500/15 bg-red-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700">
-                  {aiLoading ? "Live-Scan" : "Opportunistisch"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => refreshAiScanners(true)}
+                    disabled={aiLoading}
+                    className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60"
+                  >
+                    {aiLoading ? "Scan..." : "Neu scannen"}
+                  </button>
+                  <div className="rounded-full border border-red-500/15 bg-red-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700">
+                    {aiLoading ? "Live-Scan" : highRiskOpps.length ? `${highRiskOpps.length} Treffer` : "Opportunistisch"}
+                  </div>
                 </div>
               </div>
 
@@ -814,9 +860,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   </div>
                 )) : (
                   <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
-                    {aiLoading
-                      ? "High-Risk Radar laedt Live-Daten erst jetzt, damit Markets schneller startet."
-                      : "High-Risk Radar konnte gerade keine Live-Treffer laden. Der Server zeigt bei erneutem Versuch automatisch eine kuratierte Watchlist."}
+                    <div className="font-bold text-slate-800">
+                      {aiLoading ? "High-Risk Radar laedt..." : "Keine belastbaren High-Risk-Kandidaten im aktuellen Scan."}
+                    </div>
+                    <div className="mt-2 leading-6">
+                      {aiLoading
+                        ? "Die Live-Daten werden erst beim Oeffnen dieses Tabs geladen, damit Markets schneller startet."
+                        : aiError
+                          ? "Der Scanner ist leer oder der Feed ist verzoegert. Das ist besser als schwache Treffer kuenstlich zu pushen; du kannst den Scan direkt neu starten."
+                          : "Aktuell gibt es kein Setup, das Risiko, Reward und Datenqualitaet sauber genug kombiniert."}
+                    </div>
                   </div>
                 )}
               </div>
@@ -831,9 +884,12 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   <h2 className="mt-2 text-3xl font-black text-slate-900">
                     Moonshot Scanner
                   </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    Growth- und Narrative-Kandidaten mit klarer Kennzeichnung, ob echte Live-Daten oder Watchlist-Fallback genutzt werden.
+                  </p>
                 </div>
                 <div className="rounded-full border border-indigo-500/15 bg-indigo-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-indigo-700">
-                  {aiLoading ? "Live-Scan" : "Growth Bias"}
+                  {aiLoading ? "Live-Scan" : moonshots.length ? `${moonshots.length} Treffer` : "Growth Bias"}
                 </div>
               </div>
 
@@ -875,9 +931,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   </div>
                 )) : (
                   <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
-                    {aiLoading
-                      ? "Moonshot Scanner laedt Growth-Kandidaten erst beim Oeffnen dieses Tabs."
-                      : "Moonshot Scanner konnte gerade keine Live-Treffer laden. Bei erneutem Versuch greift die kuratierte AI-/Growth-Watchlist."}
+                    <div className="font-bold text-slate-800">
+                      {aiLoading ? "Moonshot Scanner laedt..." : "Keine sauberen Moonshot-Kandidaten im aktuellen Scan."}
+                    </div>
+                    <div className="mt-2 leading-6">
+                      {aiLoading
+                        ? "Growth-Kandidaten werden lazy geladen, damit der Markets-Tab nicht den App-Start blockiert."
+                        : aiError
+                          ? "Der Feed ist gerade leer oder verzoegert. Nutze Neu scannen oben, statt mit alten Kandidaten weiterzuarbeiten."
+                          : "Im aktuellen Datenfenster fehlt die Kombination aus Momentum, News-Impuls und Datenvertrauen."}
+                    </div>
                   </div>
                 )}
               </div>

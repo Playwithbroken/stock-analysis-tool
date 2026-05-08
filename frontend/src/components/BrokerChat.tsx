@@ -205,7 +205,7 @@ export default function BrokerChat({
     },
     {
       label: "Briefing erklaeren",
-      detail: `${setupCount} Setups · ${eventPingCount} Events`,
+      detail: `${setupCount} Setups / ${eventPingCount} Events`,
       disabled: loading,
       run: () => void submitMessage("Erklaere mir das aktuelle Briefing: wichtigste Setups, Risiken, Datenluecken und was ich anklicken soll."),
     },
@@ -354,7 +354,7 @@ export default function BrokerChat({
       : null,
     morningBriefSummary?.macro_regime ? `Regime: ${morningBriefSummary.macro_regime}` : null,
     activeContextStats.length
-      ? `Daten: ${activeContextStats.slice(0, 4).map((item) => `${item.label} ${item.value}`).join(" · ")}`
+      ? `Daten: ${activeContextStats.slice(0, 4).map((item) => `${item.label} ${item.value}`).join(" / ")}`
       : "Daten: Live-Kontext aktiv",
   ].filter(Boolean);
 

@@ -134,30 +134,29 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let deferredTimer: number | null = null;
     const fetchAll = async () => {
       setLoading(true);
 
       const safeFetch = <T,>(url: string) =>
-        withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }));
+        withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }), 6500);
 
-      const results = await Promise.allSettled([
+      const primaryResults = await Promise.allSettled([
         safeFetch<StarAssets>("/api/discovery/stars"),
         safeFetch<PublicSignalsData>("/api/discovery/public-signals"),
         safeFetch<SignalWatchlistData>("/api/signals/watchlist"),
         safeFetch<DiscoveryStock[]>("/api/discovery/trending"),
         safeFetch<DiscoveryStock[]>("/api/discovery/gainers"),
         safeFetch<DiscoveryStock[]>("/api/discovery/losers"),
-        safeFetch<DiscoveryStock[]>("/api/discovery/rebounds"),
-        safeFetch<DiscoveryStock[]>("/api/discovery/small-caps"),
-        safeFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
-        safeFetch<DiscoveryStock[]>("/api/discovery/commodities"),
-        safeFetch<any[]>("/api/discovery/etfs"),
       ]);
+
+      if (cancelled) return;
 
       const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>
         r.status === "fulfilled" && r.value != null ? r.value : fallback;
 
-      const [s, ps, sw, t, g, l, r, sc, cur, com, e] = results;
+      const [s, ps, sw, t, g, l] = primaryResults;
 
       setStars(val(s, null));
       setPublicSignals(val(ps, null));
@@ -165,15 +164,32 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
       setTrending(val(t, []));
       setGainers(val(g, []));
       setLosers(val(l, []));
-      setRebounds(val(r, []));
-      setSmallCaps(val(sc, []));
-      setCryptos(val(cur, []));
-      setCommodities(val(com, []));
-      setEtfs(val(e, []));
-
       setLoading(false);
+
+      deferredTimer = window.setTimeout(async () => {
+        const deferredFetch = <T,>(url: string) =>
+          withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }), 9000);
+        const deferredResults = await Promise.allSettled([
+          deferredFetch<DiscoveryStock[]>("/api/discovery/rebounds"),
+          deferredFetch<DiscoveryStock[]>("/api/discovery/small-caps"),
+          deferredFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
+          deferredFetch<DiscoveryStock[]>("/api/discovery/commodities"),
+          deferredFetch<any[]>("/api/discovery/etfs"),
+        ]);
+        if (cancelled) return;
+        const [r, sc, cur, com, e] = deferredResults;
+        setRebounds(val(r, []));
+        setSmallCaps(val(sc, []));
+        setCryptos(val(cur, []));
+        setCommodities(val(com, []));
+        setEtfs(val(e, []));
+      }, 900);
     };
     fetchAll();
+    return () => {
+      cancelled = true;
+      if (deferredTimer !== null) window.clearTimeout(deferredTimer);
+    };
   }, []);
 
   const refreshAiScanners = async (force = false) => {

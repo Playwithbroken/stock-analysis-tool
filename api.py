@@ -20,7 +20,7 @@ import hmac
 import secrets
 import math
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from src.data_fetcher import DataFetcher
@@ -3410,6 +3410,20 @@ async def admin_health_center():
     scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
     scheduler_loop_seen_at = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
     scheduler_loop_error = get_portfolio_manager().get_app_setting("brief_scheduler_loop_error")
+    loop_age_minutes = None
+    if scheduler_loop_seen_at:
+        try:
+            loop_seen_dt = datetime.fromisoformat(str(scheduler_loop_seen_at).replace("Z", "+00:00"))
+            if loop_seen_dt.tzinfo is not None:
+                loop_seen_dt = loop_seen_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            loop_age_minutes = max(0, int((now_utc - loop_seen_dt).total_seconds() // 60))
+        except Exception:
+            loop_age_minutes = None
+    loop_stale_after_minutes = _safe_int_env("BRIEF_SCHEDULER_STALE_AFTER_MINUTES", 20, minimum=5)
+    scheduler_loop_stale = (
+        bool(notification_status.get("schedule", {}).get("enabled"))
+        and (loop_age_minutes is None or loop_age_minutes > loop_stale_after_minutes)
+    )
     raw_scheduler_result = get_portfolio_manager().get_app_setting("brief_scheduler_last_result", "[]")
     try:
         scheduler_last_result = json.loads(raw_scheduler_result or "[]")
@@ -3424,6 +3438,8 @@ async def admin_health_center():
         problems.append("schedule_disabled")
     if notification_status.get("schedule", {}).get("enabled") and not scheduler_loop_seen_at:
         problems.append("scheduler_not_seen")
+    if scheduler_loop_stale:
+        problems.append("scheduler_loop_stale")
     if any(job.get("missed_today") for job in schedule_jobs):
         problems.append("brief_missed_today")
     if any(job.get("catchup_available") for job in schedule_jobs):
@@ -3478,6 +3494,9 @@ async def admin_health_center():
                 "loop_seen_at": scheduler_loop_seen_at,
                 "loop_completed_at": get_portfolio_manager().get_app_setting("brief_scheduler_loop_completed_at"),
                 "loop_next_tick_at": get_portfolio_manager().get_app_setting("brief_scheduler_loop_next_tick_at"),
+                "loop_age_minutes": loop_age_minutes,
+                "loop_stale_after_minutes": loop_stale_after_minutes,
+                "loop_stale": scheduler_loop_stale,
                 "loop_error": scheduler_loop_error,
                 "last_result": scheduler_last_result,
                 "on_time_window_minutes": on_time_window_minutes,
@@ -3495,7 +3514,7 @@ async def admin_health_center():
                     "catchup_count": len(catchup_jobs),
                     "catchup_jobs": [job.get("label") for job in catchup_jobs],
                     "missed_count": len(missed_jobs),
-                    "loop_state": "seen" if scheduler_loop_seen_at else "not_seen",
+                    "loop_state": "stale" if scheduler_loop_stale else "seen" if scheduler_loop_seen_at else "not_seen",
                     "needs_manual_run": bool(catchup_jobs) or bool(due_now_jobs),
                 },
                 "jobs": schedule_jobs,

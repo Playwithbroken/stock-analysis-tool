@@ -86,10 +86,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const telegram = health?.telegram || {};
   const feeds = health?.data_feeds || {};
   const jobs = health?.schedule?.jobs || [];
+  const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
   const schedulerVerdict = scheduleSummary.last_error
     ? "error"
+    : scheduleSummary.loop_state === "stale"
+      ? "error"
     : scheduleSummary.missed_count
       ? "missed"
       : scheduleSummary.catchup_count || scheduleSummary.due_now_count
@@ -99,7 +102,9 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           : "unknown";
   const schedulerCopy =
     schedulerVerdict === "error"
-      ? `Letzter Fehler bei ${scheduleSummary.last_error_job || "Scheduler"}: ${scheduleSummary.last_error}`
+      ? scheduleSummary.loop_state === "stale"
+        ? `Scheduler-Loop ist stale: letzter Tick vor ${schedule.loop_age_minutes ?? "?"}m. Railway Prozess/Logs pruefen.`
+        : `Letzter Fehler bei ${scheduleSummary.last_error_job || "Scheduler"}: ${scheduleSummary.last_error}`
       : schedulerVerdict === "missed"
         ? `${scheduleSummary.missed_count} Brief(s) heute verpasst. Pruefe Telegram, Scheduler-Loop und Railway Logs.`
         : schedulerVerdict === "action"
@@ -221,6 +226,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
               <div>Next due: {scheduleSummary.next_label || "n/a"} · {fmtDate(scheduleSummary.next_due_at)}</div>
               <div>Loop: {scheduleSummary.loop_state || "unknown"} · {fmtDate(health?.schedule?.loop_seen_at)}</div>
+              <div>
+                Loop age: {typeof schedule.loop_age_minutes === "number" ? `${schedule.loop_age_minutes}m` : "n/a"}
+                {schedule.loop_stale ? ` stale after ${schedule.loop_stale_after_minutes ?? "?"}m` : ""}
+              </div>
               <div>Telegram: {telegram.sendable ? "sendable" : "blocked/missing"}</div>
             </div>
           </div>
@@ -254,6 +263,12 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-1 text-xs text-slate-500">
                 Loop {scheduleSummary.loop_state || "unknown"} - {fmtDate(health?.schedule?.loop_seen_at)}
               </div>
+              {schedule.loop_stale ? (
+                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-800">
+                  Scheduler-Loop ist stale: letzter Tick vor {schedule.loop_age_minutes ?? "?"}m,
+                  Schwelle {schedule.loop_stale_after_minutes ?? "?"}m. Railway Worker/Logs pruefen.
+                </div>
+              ) : null}
               {scheduleSummary.needs_manual_run ? (
                 <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-800">
                   Run Due/Missed kann jetzt {scheduleSummary.catchup_count || scheduleSummary.due_now_count} Brief(s) nachholen.

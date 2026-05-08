@@ -72,6 +72,34 @@ interface TapeMover {
   side: "winner" | "loser";
 }
 
+const normalizeTapeMover = (item: any, side: TapeMover["side"]): TapeMover | null => {
+  const symbol = String(item?.ticker || item?.symbol || "").trim().toUpperCase();
+  if (!symbol) return null;
+  return {
+    symbol,
+    price: item?.price ?? item?.current_price ?? null,
+    change: item?.change ?? item?.change_percent ?? item?.change_1d ?? null,
+    label: item?.name || item?.label,
+    side,
+  };
+};
+
+const marketMoversToTape = (marketMovers: any, limit = 6): TapeMover[] => {
+  const winners = Array.isArray(marketMovers?.gainers)
+    ? marketMovers.gainers
+        .slice(0, limit)
+        .map((item: any) => normalizeTapeMover(item, "winner"))
+        .filter(Boolean)
+    : [];
+  const losers = Array.isArray(marketMovers?.losers)
+    ? marketMovers.losers
+        .slice(0, limit)
+        .map((item: any) => normalizeTapeMover(item, "loser"))
+        .filter(Boolean)
+    : [];
+  return [...winners, ...losers] as TapeMover[];
+};
+
 interface AuthState {
   loading: boolean;
   authenticated: boolean;
@@ -498,6 +526,13 @@ function AppContent() {
   );
 
   useEffect(() => {
+    if (!auth.authenticated || marketMoversWindow !== "1w") return;
+    const seededMovers = marketMoversToTape(globalBrief?.market_movers, 6);
+    if (!seededMovers.length) return;
+    setTapeMovers((current) => (current.length ? current : seededMovers));
+  }, [auth.authenticated, globalBrief, marketMoversWindow]);
+
+  useEffect(() => {
     if (!auth.authenticated) return;
 
     let cancelled = false;
@@ -536,36 +571,21 @@ function AppContent() {
 
         if (cancelled) return;
 
-        const winners = (gainers || []).slice(0, 6).map((item) => ({
-          symbol: item.ticker || item.symbol,
-          price: item.price ?? item.current_price ?? null,
-          change: item.change ?? item.change_percent ?? item.change_1d ?? null,
-          label: item.name || item.label,
-          side: "winner" as const,
-        }));
-
-        const losersTape = (losers || []).slice(0, 6).map((item) => ({
-          symbol: item.ticker || item.symbol,
-          price: item.price ?? item.current_price ?? null,
-          change: item.change ?? item.change_percent ?? item.change_1d ?? null,
-          label: item.name || item.label,
-          side: "loser" as const,
-        }));
-
-        setTapeMovers([...winners, ...losersTape].filter((item) => item.symbol));
+        setTapeMovers(marketMoversToTape({ gainers, losers }, 6));
       } catch {
         if (!cancelled) {
-          setTapeMovers([]);
+          setTapeMovers((current) => current);
         }
       }
     };
 
-    loadMovers();
+    const initialMoversTimer = window.setTimeout(loadMovers, marketMoversWindow === "1w" ? 1800 : 0);
     loadWatchlist();
     const interval = window.setInterval(loadMovers, 60000);
     const watchlistInterval = window.setInterval(loadWatchlist, 90000);
     return () => {
       cancelled = true;
+      window.clearTimeout(initialMoversTimer);
       window.clearInterval(interval);
       window.clearInterval(watchlistInterval);
     };

@@ -304,6 +304,33 @@ def _fuzzy_catalog_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     return [row[1] for row in scored[:limit]]
 
 
+async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]]:
+    normalized_query = _normalize_search_query(q)
+    if not normalized_query:
+        return []
+
+    cache_key = f"search:query:{normalized_query}:{limit}"
+    cached = _cache_get(cache_key, _safe_int_env("SEARCH_QUERY_CACHE_TTL_SECONDS", 300, minimum=30))
+    if cached is not None:
+        return cached
+
+    catalog_results = _fuzzy_catalog_search(q, limit=limit)
+    live_results: List[Dict[str, Any]] = []
+    try:
+        live_results = await asyncio.wait_for(get_discovery_service().search_ticker(q), timeout=1.0)
+    except Exception:
+        live_results = []
+
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for item in [*catalog_results, *live_results]:
+        ticker = str(item.get("ticker", "")).upper()
+        if ticker and ticker not in seen:
+            seen.add(ticker)
+            merged.append(item)
+    return _cache_set(cache_key, merged[:limit])
+
+
 def get_app_password() -> str:
     return os.getenv("APP_ACCESS_PASSWORD", "").strip()
 
@@ -1522,20 +1549,7 @@ async def get_dividend_stocks():
 async def search_ticker(q: str):
     """Search for tickers."""
     try:
-        catalog_results = _fuzzy_catalog_search(q, limit=6)
-        results: List[Dict[str, Any]] = []
-        try:
-            results = await asyncio.wait_for(get_discovery_service().search_ticker(q), timeout=1.2)
-        except Exception:
-            results = []
-        merged: List[Dict[str, Any]] = []
-        seen = set()
-        for item in [*catalog_results, *results]:
-            ticker = str(item.get("ticker", "")).upper()
-            if ticker and ticker not in seen:
-                seen.add(ticker)
-                merged.append(item)
-        return merged[:6]
+        return await _resolve_search_results(q, limit=6)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1553,20 +1567,7 @@ async def get_sentiment_heatmap():
 async def get_search_suggestions(q: str = None):
     """Fast search suggestions. Query mode may use live lookup; default mode must not block UI."""
     if q and len(q) > 1:
-        catalog_results = _fuzzy_catalog_search(q, limit=6)
-        results: List[Dict[str, Any]] = []
-        try:
-            results = await asyncio.wait_for(get_discovery_service().search_ticker(q), timeout=1.2)
-        except Exception:
-            results = []
-        merged: List[Dict[str, Any]] = []
-        seen = set()
-        for item in [*catalog_results, *results]:
-            ticker = str(item.get("ticker", "")).upper()
-            if ticker and ticker not in seen:
-                seen.add(ticker)
-                merged.append(item)
-        results = merged[:6]
+        results = await _resolve_search_results(q, limit=6)
         return {
             "Matches": [f"{r['name']} ({r['ticker']})" for r in results[:5]],
             "Ticker": [r['ticker'] for r in results[:5]]

@@ -1898,6 +1898,10 @@ async def oracle_chat(req: OracleRequest):
     current_watchlist_impact = brief.get("watchlist_impact", []) if isinstance(brief, dict) else []
     current_prediction_signals = brief.get("prediction_signals", []) if isinstance(brief, dict) else []
     prediction_status = brief.get("prediction_markets", {}) if isinstance(brief, dict) else {}
+    current_quality = brief.get("quality", {}) if isinstance(brief, dict) and isinstance(brief.get("quality"), dict) else {}
+    current_source_states = current_quality.get("sources", {}) if isinstance(current_quality.get("sources"), dict) else {}
+    current_deferred_layers = current_quality.get("deferred", []) if isinstance(current_quality.get("deferred"), list) else []
+    current_missing_checks = current_quality.get("missing", []) if isinstance(current_quality.get("missing"), list) else []
 
     def _item_symbol(item: Dict[str, Any]) -> str:
         return str(item.get("symbol") or item.get("ticker") or item.get("value") or "").upper().strip()
@@ -2226,6 +2230,53 @@ async def oracle_chat(req: OracleRequest):
             status_text = prediction_status.get("status") if isinstance(prediction_status, dict) else "data_delayed"
             reason = prediction_status.get("message") if isinstance(prediction_status, dict) else ""
             levels.append(f"Polymarket: {status_text}. {reason or 'Feed leer oder verzoegert; Abschnitt bleibt sichtbar.'}")
+
+    wants_data_diagnostics = any(
+        token in msg
+        for token in [
+            "daten",
+            "quelle",
+            "quellen",
+            "fehlt",
+            "fehlen",
+            "leer",
+            "zeigt nichts",
+            "warum nichts",
+            "status",
+            "diagnose",
+            "diagnostics",
+            "unavailable",
+            "deferred",
+            "fast mode",
+        ]
+    )
+    if wants_data_diagnostics:
+        quality_score = current_quality.get("score")
+        quality_status = current_quality.get("status")
+        quality_mode = current_quality.get("mode")
+        if quality_score is not None or quality_status or quality_mode:
+            levels.append(
+                f"Briefing Data Quality: {quality_status or 'unknown'} / {quality_score if quality_score is not None else 'n/a'} "
+                f"im Modus {quality_mode or 'full'}."
+            )
+        for source, state in list(current_source_states.items())[:8]:
+            state_text = str(state).replace("_", " ")
+            source_label = str(source).replace("_", " ")
+            if str(state).lower() == "loaded":
+                meaning = "aktiv im Brief"
+            elif "deferred" in str(state).lower():
+                meaning = "wird nachgeladen, deshalb im ersten Blick eventuell leer"
+            elif "no_recent" in str(state).lower():
+                meaning = "Quelle funktioniert, aber keine frischen Treffer"
+            elif "empty" in str(state).lower() or "unavailable" in str(state).lower():
+                meaning = "gerade leer oder temporaer nicht erreichbar"
+            else:
+                meaning = "Status pruefen"
+            levels.append(f"Datenquelle {source_label}: {state_text} - {meaning}.")
+        if current_deferred_layers:
+            levels.append("Nachlade-Layer: " + ", ".join(map(str, current_deferred_layers[:6])) + ".")
+        if current_missing_checks:
+            levels.append("Fehlende Checks: " + ", ".join(map(str, current_missing_checks[:6])) + ".")
 
     wants_briefing = any(
         token in msg

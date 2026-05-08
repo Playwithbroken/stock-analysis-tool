@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { fetchJsonWithRetry } from "../lib/api";
 
 type Currency = "USD" | "EUR";
@@ -15,7 +15,8 @@ const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined
 
 export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currency, setCurrency] = useState<Currency>(() => {
-    return (localStorage.getItem("preferred_currency") as Currency) || "USD";
+    const saved = localStorage.getItem("preferred_currency");
+    return saved === "EUR" || saved === "USD" ? saved : "USD";
   });
   const [exchangeRate, setExchangeRate] = useState<number>(0.92);
 
@@ -24,6 +25,7 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [currency]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchRate = async () => {
       try {
         const data = await fetchJsonWithRetry<{ rate?: number }>(
@@ -31,7 +33,7 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
           undefined,
           { retries: 1, retryDelayMs: 1000 },
         );
-        if (data.rate) {
+        if (!cancelled && data.rate && Number.isFinite(Number(data.rate)) && Number(data.rate) > 0) {
           setExchangeRate(data.rate);
         }
       } catch {
@@ -49,39 +51,45 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
     };
 
+    void fetchRate();
     window.addEventListener("app:auth-state", onAuthState);
     return () => {
+      cancelled = true;
       window.removeEventListener("app:auth-state", onAuthState);
       if (interval != null) window.clearInterval(interval);
     };
   }, []);
 
-  const convert = (amount: number, from: "USD" | "EUR" = "USD"): number => {
-    if (!amount) return 0;
-    if (currency === from) return amount;
+  const value = useMemo(() => {
+    const convert = (amount: number, from: "USD" | "EUR" = "USD"): number => {
+      if (!amount) return 0;
+      if (currency === from) return amount;
 
-    if (from === "USD" && currency === "EUR") {
-      return amount * exchangeRate;
-    } else if (from === "EUR" && currency === "USD") {
-      return amount / exchangeRate;
-    }
-    return amount;
-  };
+      if (from === "USD" && currency === "EUR") {
+        return amount * exchangeRate;
+      } else if (from === "EUR" && currency === "USD") {
+        return amount / exchangeRate;
+      }
+      return amount;
+    };
 
-  const formatPrice = (amount: number, forceCurrency?: Currency): string => {
-    const activeCurrency = forceCurrency || currency;
-    const value = activeCurrency === "EUR" ? amount * exchangeRate : amount;
+    const formatPrice = (amount: number, forceCurrency?: Currency): string => {
+      const activeCurrency = forceCurrency || currency;
+      const value = activeCurrency === "EUR" ? amount * exchangeRate : amount;
 
-    return new Intl.NumberFormat("de-DE", {
-      style: "currency",
-      currency: activeCurrency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  };
+      return new Intl.NumberFormat("de-DE", {
+        style: "currency",
+        currency: activeCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    };
+
+    return { currency, setCurrency, exchangeRate, convert, formatPrice };
+  }, [currency, exchangeRate]);
 
   return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, exchangeRate, convert, formatPrice }}>
+    <CurrencyContext.Provider value={value}>
       {children}
     </CurrencyContext.Provider>
   );

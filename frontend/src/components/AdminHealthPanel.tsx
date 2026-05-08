@@ -88,6 +88,33 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const jobs = health?.schedule?.jobs || [];
   const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
+  const schedulerVerdict = scheduleSummary.last_error
+    ? "error"
+    : scheduleSummary.missed_count
+      ? "missed"
+      : scheduleSummary.catchup_count || scheduleSummary.due_now_count
+        ? "action"
+        : scheduleSummary.last_success_at
+          ? "healthy"
+          : "unknown";
+  const schedulerCopy =
+    schedulerVerdict === "error"
+      ? `Letzter Fehler bei ${scheduleSummary.last_error_job || "Scheduler"}: ${scheduleSummary.last_error}`
+      : schedulerVerdict === "missed"
+        ? `${scheduleSummary.missed_count} Brief(s) heute verpasst. Pruefe Telegram, Scheduler-Loop und Railway Logs.`
+        : schedulerVerdict === "action"
+          ? `${scheduleSummary.catchup_count || scheduleSummary.due_now_count} Brief(s) koennen jetzt per Run Due/Missed gesendet werden.`
+          : schedulerVerdict === "healthy"
+            ? `Letzter Versand erfolgreich: ${scheduleSummary.last_success_job || "Brief"} um ${fmtDate(scheduleSummary.last_success_at)}.`
+            : "Noch kein erfolgreicher Versand gespeichert. Scheduler und Telegram pruefen.";
+  const nextAction =
+    schedulerVerdict === "action"
+      ? "Run Due/Missed klicken"
+      : schedulerVerdict === "missed"
+        ? "Warm Brief Now, danach manuell senden"
+        : schedulerVerdict === "error"
+          ? "Fehlertext beheben und Health neu laden"
+          : "Naechsten Termin abwarten";
 
   return (
     <div className="fixed inset-0 z-[210] bg-black/45 p-3 backdrop-blur-sm sm:p-6" onClick={onClose}>
@@ -165,6 +192,38 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 : "No due brief inside the current grace window."}
             </div>
           ) : null}
+
+          <div className={`mb-5 rounded-[1.5rem] border p-4 ${
+            schedulerVerdict === "healthy"
+              ? "border-emerald-500/20 bg-emerald-500/10"
+              : schedulerVerdict === "action"
+                ? "border-sky-500/20 bg-sky-500/10"
+                : schedulerVerdict === "missed"
+                  ? "border-amber-500/20 bg-amber-500/10"
+                  : "border-red-500/20 bg-red-500/10"
+          }`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-600">
+                  Scheduler Verdict
+                </div>
+                <div className="mt-1 text-lg font-black text-slate-900">
+                  {schedulerVerdict}
+                </div>
+                <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
+                  {schedulerCopy}
+                </div>
+              </div>
+              <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                Next: {nextAction}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+              <div>Next due: {scheduleSummary.next_label || "n/a"} · {fmtDate(scheduleSummary.next_due_at)}</div>
+              <div>Loop: {scheduleSummary.loop_state || "unknown"} · {fmtDate(health?.schedule?.loop_seen_at)}</div>
+              <div>Telegram: {telegram.sendable ? "sendable" : "blocked/missing"}</div>
+            </div>
+          </div>
 
           <div className="mb-5 grid gap-3 lg:grid-cols-4">
             <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4">

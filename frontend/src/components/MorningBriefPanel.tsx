@@ -127,6 +127,59 @@ function pingStatusCopy(status?: string) {
   return "";
 }
 
+function sourceLabel(source: string) {
+  const labels: Record<string, string> = {
+    reddit: "Reddit",
+    stocktwits: "Stocktwits",
+    polymarket: "Polymarket",
+    google_news: "Google News",
+    google_news_extra: "Google News",
+    earnings_calendar: "Earnings Kalender",
+    broad_earnings: "Earnings Kalender",
+    earnings_results: "Earnings Results",
+    market_movers: "Market Movers",
+    deep_social: "Social Deep Scan",
+  };
+  return labels[source] || source.replace(/_/g, " ");
+}
+
+function sourceStateMeta(state: unknown) {
+  const text = String(state || "unknown").toLowerCase();
+  if (text === "loaded") {
+    return {
+      label: "geladen",
+      detail: "Datenquelle ist aktiv im aktuellen Briefing.",
+      className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700",
+    };
+  }
+  if (text.includes("deferred")) {
+    return {
+      label: "laedt nach",
+      detail: "Fast Mode: Quelle wird nach dem ersten Briefing nachgeladen.",
+      className: "border-sky-500/20 bg-sky-500/10 text-sky-700",
+    };
+  }
+  if (text.includes("no_recent")) {
+    return {
+      label: "keine frischen Treffer",
+      detail: "Quelle funktioniert, aber im aktuellen Fenster gab es keinen relevanten Treffer.",
+      className: "border-slate-300 bg-white/65 text-slate-500",
+    };
+  }
+  if (text.includes("empty") || text.includes("unavailable")) {
+    return {
+      label: "leer / nicht verfuegbar",
+      detail: "Quelle lieferte gerade keine verwertbaren Daten oder ist temporaer nicht erreichbar.",
+      className: "border-amber-500/20 bg-amber-500/10 text-amber-700",
+    };
+  }
+  return {
+    label: text.replace(/_/g, " "),
+    detail: `Status: ${text.replace(/_/g, " ")}`,
+    className: "border-slate-300 bg-white/65 text-slate-500",
+  };
+}
+
 function extractTickerCandidates(text?: string) {
   if (!text) return [];
   const matches = text.match(/\b[A-Z]{1,5}(?:-[A-Z]{1,5})?\b/g) || [];
@@ -401,27 +454,33 @@ export default function MorningBriefPanel({
           ))}
         </div>
         {Object.keys(sourceStates).length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 rounded-[1.2rem] border border-black/6 bg-white/55 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Datenquellen Status
+              </div>
+              <div className="text-[10px] font-semibold text-slate-400">
+                zeigt, warum einzelne Sektionen leer oder verzögert sind
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
             {Object.entries(sourceStates).slice(0, 8).map(([source, state]) => {
-              const stateText = String(state);
-              const active = stateText === "loaded";
-              const deferred = stateText.includes("deferred");
+              const meta = sourceStateMeta(state);
               return (
                 <span
                   key={source}
-                  className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${
-                    active
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
-                      : deferred
-                        ? "border-sky-500/20 bg-sky-500/10 text-sky-700"
-                        : "border-slate-300 bg-white/65 text-slate-500"
-                  }`}
-                  title={`${source}: ${stateText}`}
+                  className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${meta.className}`}
+                  title={`${sourceLabel(source)}: ${meta.detail}`}
                 >
-                  {source.replace(/_/g, " ")} · {stateText.replace(/_/g, " ")}
+                  {sourceLabel(source)} · {meta.label}
                 </span>
               );
             })}
+            </div>
+            <div className="mt-2 text-[11px] leading-5 text-slate-500">
+              Grün bedeutet: im Brief aktiv. Blau bedeutet: Fast-Mode lädt nach. Gelb/Grau bedeutet: Quelle war erreichbar,
+              aber ohne verwertbaren Treffer oder temporär leer.
+            </div>
           </div>
         ) : null}
       </section>

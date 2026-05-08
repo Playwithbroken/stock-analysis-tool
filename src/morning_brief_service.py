@@ -1630,18 +1630,29 @@ class MorningBriefService:
         return f"{symbol} is the broad-market proxy for this event. Wait for confirmation."
 
     def _build_prediction_signals(self, polymarket_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        finance_terms = (
+            "fed", "rate", "rates", "inflation", "cpi", "ppi", "gdp", "recession",
+            "stock", "stocks", "market", "nasdaq", "s&p", "spx", "dow", "earnings",
+            "bitcoin", "crypto", "ethereum", "oil", "opec", "gold", "dollar",
+            "tariff", "trade", "election", "powell", "treasury", "bond", "yield",
+            "unemployment", "jobs", "fomc", "ecb", "china", "war", "conflict",
+        )
         signals: List[Dict[str, Any]] = []
         for event in polymarket_events or []:
             question = str(event.get("question") or "").strip()
             if not question:
+                continue
+            question_lc = question.lower()
+            if not any(term in question_lc for term in finance_terms):
                 continue
             probability = self._normalize_probability(event.get("probability_yes"))
             if probability is None:
                 continue
             volume_usd = self._safe_float(event.get("volume_usd")) or 0.0
             relevance = max(10, min(100, int(self._event_relevance_score({"title": question}) * 60 + (volume_usd / 2_000_000))))
-            if relevance < 28:
+            if relevance < 18 and volume_usd < 250_000:
                 continue
+            signal_status = "active" if relevance >= 28 else "watch"
             signals.append(
                 {
                     "source": "polymarket",
@@ -1649,10 +1660,19 @@ class MorningBriefService:
                     "probability": probability,
                     "delta_24h": None,
                     "relevance": relevance,
+                    "signal_status": signal_status,
+                    "volume_usd": volume_usd,
+                    "end_date": event.get("end_date"),
+                    "url": event.get("url"),
+                    "why": (
+                        "Relevance, volume and macro/market keywords are strong enough for the briefing signal rail."
+                        if signal_status == "active"
+                        else "Visible watch item: market is relevant enough to monitor, but not strong enough for a trade setup."
+                    ),
                 }
             )
 
-        signals.sort(key=lambda row: row.get("relevance", 0), reverse=True)
+        signals.sort(key=lambda row: (row.get("signal_status") == "active", row.get("relevance", 0)), reverse=True)
         return signals[:8]
 
     def _build_prediction_market_watch_themes(

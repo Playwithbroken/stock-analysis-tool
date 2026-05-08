@@ -1678,11 +1678,31 @@ export default function MorningBriefPanel({
                 ? (probabilityRaw > 1 ? probabilityRaw / 100 : probabilityRaw)
                 : null;
               const prob = probability != null ? Math.round(probability * 100) : null;
+              const signalStatus = String(pm.signal_status || "active").toLowerCase();
+              const isWatchOnly = signalStatus === "watch";
+              const volume = Number(pm.volume_usd);
+              const volumeLabel = Number.isFinite(volume) && volume > 0 ? `$${(volume / 1e6).toFixed(1)}M vol` : null;
               return (
                 <div
                   key={`pm-signal-${i}`}
                   className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
                 >
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                        isWatchOnly
+                          ? "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                          : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                      }`}
+                    >
+                      {isWatchOnly ? "Watch" : "Signal"}
+                    </span>
+                    {volumeLabel && (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                        {volumeLabel}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-sm font-bold text-slate-900 line-clamp-2">
                     {pm.market}
                   </div>
@@ -1702,6 +1722,11 @@ export default function MorningBriefPanel({
                       relevance {pm.relevance ?? "n/a"}
                     </span>
                   </div>
+                  {pm.why && (
+                    <div className="mt-3 rounded-[0.9rem] border border-black/6 bg-white/55 p-2 text-xs leading-5 text-slate-600">
+                      {pm.why}
+                    </div>
+                  )}
                 </div>
               );
             })}

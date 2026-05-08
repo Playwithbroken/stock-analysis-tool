@@ -35,6 +35,8 @@ interface HistoryPayload {
     source?: string;
     period?: string;
     interval?: string;
+    requested_period?: string;
+    requested_interval?: string;
     points?: number;
     fallback_reason?: string;
     error?: string;
@@ -498,12 +500,16 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const displayedRealtimeError = benignRealtimeError || (lastError === "snapshot_fetch_failed" && historyState === "unavailable")
     ? ""
     : lastError;
+  const realtimeFallbackNote = benignRealtimeError
+    ? "Realtime-Snapshot wird erneut versucht, Historie bleibt nutzbar"
+    : "";
   const staleForTicker = staleSeconds?.[tickerSymbol];
   const shouldShowDataStatus =
     historyState === "stale" ||
     historyState === "snapshot" ||
     historyState === "unavailable" ||
     connectionState !== "live" ||
+    Boolean(realtimeFallbackNote) ||
     Boolean(displayedRealtimeError);
   const indicatorToggles: Array<{
     label: string;
@@ -834,12 +840,16 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
           {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} · Feed: {transportMode === "ws" ? "live" : "snapshot"}
           {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
+          {realtimeFallbackNote ? ` - ${realtimeFallbackNote}` : ""}
           {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>
       ) : null}
       {historyMeta ? (
         <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
           History: {historyMeta.source || "unknown"} - {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
+          {historyMeta.requested_period && historyMeta.requested_period !== historyMeta.period
+            ? ` - angefragt ${historyMeta.requested_period}/${historyMeta.requested_interval || "n/a"}`
+            : ""}
           {typeof historyMeta.points === "number" ? ` - ${historyMeta.points} Punkte` : ""}
           {historyMeta.fallback_reason ? ` - ${friendlyHistoryReason(historyMeta.fallback_reason)}` : ""}
         </div>

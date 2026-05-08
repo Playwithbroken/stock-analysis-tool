@@ -163,6 +163,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestRef = useRef(0);
   const suggestionAbortRef = useRef<AbortController | null>(null);
+  const latestQueryRef = useRef("");
 
   const flatSuggestions = useMemo(
     () =>
@@ -199,7 +200,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       timeoutMs: 2500,
     })
       .then((data) => {
-        if (!controller.signal.aborted && data && Object.keys(data).length > 0) {
+        if (!controller.signal.aborted && !latestQueryRef.current.trim() && data && Object.keys(data).length > 0) {
           setSuggestions(data);
         }
       })
@@ -210,6 +211,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   // Debounced live search
   useEffect(() => {
     const trimmedQuery = query.trim();
+    latestQueryRef.current = trimmedQuery;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
     if (trimmedQuery.length > 0) {
@@ -256,6 +258,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      suggestionAbortRef.current?.abort();
     };
   }, [query]);
 

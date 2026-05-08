@@ -1696,6 +1696,7 @@ function AppContent() {
               handleSearch(ticker);
             }}
             onOpenTab={(tab) => selectTab(tab as Tab)}
+            onOpenHealth={() => setIsHealthOpen(true)}
             isOpen={isChatOpen}
             setIsOpen={setIsChatOpen}
           />

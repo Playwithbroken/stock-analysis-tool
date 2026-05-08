@@ -2285,6 +2285,22 @@ async def oracle_chat(req: OracleRequest):
     )
     if wants_briefing:
         try:
+            scheduler_seen = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
+            scheduler_error = get_portfolio_manager().get_app_setting("brief_scheduler_loop_error")
+            scheduler_next = get_portfolio_manager().get_app_setting("brief_scheduler_loop_next_tick_at")
+            if scheduler_seen:
+                try:
+                    seen_dt = datetime.fromisoformat(str(scheduler_seen).replace("Z", "+00:00"))
+                    if seen_dt.tzinfo is not None:
+                        seen_dt = seen_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                    age_minutes = max(0, int((datetime.utcnow() - seen_dt).total_seconds() // 60))
+                    levels.append(f"Scheduler Loop: letzter Tick vor {age_minutes}m, naechster Tick {scheduler_next or 'n/a'}.")
+                except Exception:
+                    levels.append(f"Scheduler Loop: letzter Tick {scheduler_seen}, naechster Tick {scheduler_next or 'n/a'}.")
+            else:
+                levels.append("Scheduler Loop: noch kein Tick gespeichert. Health Center/Railway Worker pruefen.")
+            if scheduler_error:
+                levels.append(f"Scheduler Fehler: {scheduler_error}")
             alert_service = get_email_alert_service()
             brief_statuses = [
                 alert_service.get_brief_job_status(job["job_key"])

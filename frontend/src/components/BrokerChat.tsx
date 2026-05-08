@@ -17,6 +17,7 @@ interface BrokerChatProps {
   learningSummary?: any;
   onAnalyzeTicker?: (ticker: string) => void;
   onOpenTab?: (tab: string) => void;
+  onOpenHealth?: () => void;
   isInline?: boolean;
   initialMessage?: string;
   onClose?: () => void;
@@ -35,6 +36,7 @@ export default function BrokerChat({
   learningSummary,
   onAnalyzeTicker,
   onOpenTab,
+  onOpenHealth,
   isInline = false,
   initialMessage,
   onClose,
@@ -207,6 +209,12 @@ export default function BrokerChat({
       disabled: loading,
       run: () => void submitMessage("Erklaere mir das aktuelle Briefing: wichtigste Setups, Risiken, Datenluecken und was ich anklicken soll."),
     },
+    {
+      label: "Health pruefen",
+      detail: "Scheduler + Daten",
+      disabled: !onOpenHealth,
+      run: () => onOpenHealth?.(),
+    },
   ];
 
   const quickActions = [
@@ -233,6 +241,7 @@ export default function BrokerChat({
         ? "Welche Holding hat die hoechste Gefahr und welche profitiert heute?"
         : "Welche News, Earnings oder Produkt-Katalysatoren sind heute wirklich wichtig?",
     "Warum wurde das aktuelle Briefing so gerankt?",
+    "Welche Daten oder Scheduler-Probleme gibt es gerade?",
     "Welche Learnings verbessern heute die Signale?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",

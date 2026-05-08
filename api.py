@@ -3690,17 +3690,51 @@ async def websocket_realtime_feed(websocket: WebSocket):
 @app.get("/api/discovery/gainers")
 async def get_top_gainers(window: str = "1w"):
     """Get market-wide top performers."""
+    cache_key = None
     try:
-        return await get_discovery_service().get_market_movers(type='gainers', window=window)
+        normalized_window = (window or "1w").strip().lower()
+        cache_key = f"discovery:gainers:{normalized_window}"
+        cached = _cache_get(
+            cache_key,
+            _safe_int_env("DISCOVERY_MOVERS_CACHE_TTL_SECONDS", 75, minimum=15),
+        )
+        if cached is not None:
+            return convert_numpy_types(cached)
+        payload = await get_discovery_service().get_market_movers(type="gainers", window=normalized_window)
+        return convert_numpy_types(_cache_set(cache_key, payload))
     except Exception as e:
+        if cache_key:
+            stale = _cache_get_stale(
+                cache_key,
+                _safe_int_env("DISCOVERY_MOVERS_STALE_CACHE_TTL_SECONDS", 900, minimum=60),
+            )
+            if stale is not None:
+                return convert_numpy_types(stale)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/discovery/losers")
 async def get_top_losers(window: str = "1w"):
     """Get market-wide top laggards."""
+    cache_key = None
     try:
-        return await get_discovery_service().get_market_movers(type='losers', window=window)
+        normalized_window = (window or "1w").strip().lower()
+        cache_key = f"discovery:losers:{normalized_window}"
+        cached = _cache_get(
+            cache_key,
+            _safe_int_env("DISCOVERY_MOVERS_CACHE_TTL_SECONDS", 75, minimum=15),
+        )
+        if cached is not None:
+            return convert_numpy_types(cached)
+        payload = await get_discovery_service().get_market_movers(type="losers", window=normalized_window)
+        return convert_numpy_types(_cache_set(cache_key, payload))
     except Exception as e:
+        if cache_key:
+            stale = _cache_get_stale(
+                cache_key,
+                _safe_int_env("DISCOVERY_MOVERS_STALE_CACHE_TTL_SECONDS", 900, minimum=60),
+            )
+            if stale is not None:
+                return convert_numpy_types(stale)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/discovery/small-caps")

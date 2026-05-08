@@ -3431,60 +3431,130 @@ class MorningBriefService:
             return brief
 
         watched_tickers = {
-            item["value"]
+            str(item["value"]).upper().strip()
             for item in watchlist_snapshot.get("items", [])
-            if item.get("kind") == "ticker"
+            if item.get("kind") == "ticker" and item.get("value")
         }
-        impact = []
+        impact: List[Dict[str, Any]] = []
+        seen_keys: set[tuple[str, str]] = set()
+        impacted_tickers: set[str] = set()
+
+        def add_impact(ticker: Any, impact_type: str, summary: str, **extra: Any) -> None:
+            normalized = str(ticker or "").upper().strip()
+            if not normalized or normalized not in watched_tickers or not summary:
+                return
+            key = (normalized, impact_type)
+            if key in seen_keys:
+                return
+            seen_keys.add(key)
+            if impact_type != "monitoring":
+                impacted_tickers.add(normalized)
+            impact.append(
+                {
+                    "ticker": normalized,
+                    "type": impact_type,
+                    "summary": summary,
+                    **extra,
+                }
+            )
 
         for signal in watchlist_snapshot.get("ticker_signals", []):
-            if signal.get("ticker") not in watched_tickers:
-                continue
+            ticker = str(signal.get("ticker") or "").upper().strip()
             event = (signal.get("events") or [None])[0]
             if event:
-                impact.append(
-                    {
-                        "ticker": signal.get("ticker"),
-                        "type": "insider",
-                        "summary": (
-                            f"{signal.get('ticker')}: {event.get('action')} by {event.get('owner_name')} "
-                            f"on {event.get('trade_date')}"
-                        ),
-                    }
+                add_impact(
+                    ticker,
+                    "insider",
+                    f"{ticker}: {event.get('action')} by {event.get('owner_name')} on {event.get('trade_date')}",
+                    source="public_signal",
                 )
+
         for news in brief.get("top_news", []):
-            if news.get("ticker") in watched_tickers:
-                impact.append(
-                    {
-                        "ticker": news.get("ticker"),
-                        "type": "news",
-                        "summary": f"{news.get('title')} ({news.get('publisher')})",
-                    }
+            add_impact(
+                news.get("ticker"),
+                "news",
+                f"{news.get('title')} ({news.get('publisher')})",
+                source="trusted_news",
+            )
+
+        for catalyst in brief.get("product_catalysts", []):
+            ticker = catalyst.get("ticker") or catalyst.get("symbol")
+            label = catalyst.get("label") or catalyst.get("type") or "product catalyst"
+            title = catalyst.get("title") or catalyst.get("summary") or ""
+            add_impact(
+                ticker,
+                "product_catalyst",
+                f"{str(ticker).upper()}: {label} - {title}".strip(),
+                source="product_news",
+            )
+
+        for result in brief.get("earnings_results", []):
+            ticker = result.get("ticker")
+            status = str(result.get("status") or "reported").upper()
+            freshness = result.get("freshness") or "fresh"
+            age = result.get("days_since")
+            summary = result.get("summary") or "Earnings result in watch context."
+            age_text = f" ({age}d old, reference only)" if freshness == "stale_reference" and age is not None else ""
+            add_impact(
+                ticker,
+                "earnings_result",
+                f"{str(ticker).upper()}: {status} earnings{age_text}. {summary}",
+                source="earnings_results",
+                freshness=freshness,
+            )
+
+        earnings_sources = [*(brief.get("earnings_calendar", []) or []), *(brief.get("broad_earnings", []) or [])]
+        for earnings in earnings_sources:
+            ticker = earnings.get("ticker")
+            status = earnings.get("date_status")
+            date = earnings.get("scheduled_for") or earnings.get("date") or "pending"
+            summary = (
+                f"{str(ticker).upper()}: Earnings-Datum noch nicht bestaetigt, aber Umsatz/EPS/Guidance bleiben im Briefing-Watch."
+                if status == "provider_pending"
+                else f"{str(ticker).upper()}: Earnings am {date}. Reaktion auf EPS, Umsatz und Guidance beobachten."
+            )
+            add_impact(ticker, "earnings", summary, source="earnings_calendar")
+
+        movers = brief.get("market_movers", {}) if isinstance(brief.get("market_movers"), dict) else {}
+        for bucket, label in (("gainers", "Top Winner"), ("losers", "Top Loser")):
+            for mover in (movers.get(bucket) or [])[:8]:
+                ticker = mover.get("ticker") or mover.get("symbol")
+                change = mover.get("change")
+                if change is None:
+                    change = mover.get("change_1w")
+                change_text = f"{float(change):+.2f}%" if isinstance(change, (int, float)) else "move n/a"
+                add_impact(
+                    ticker,
+                    "market_mover",
+                    f"{str(ticker).upper()}: {label} {change_text}. Nur analysieren, wenn News/Volumen und Briefing-Kontext bestaetigen.",
+                    source="market_movers",
                 )
-        if not impact and watched_tickers:
-            earnings_by_ticker = {
-                str(item.get("ticker") or "").upper(): item
-                for item in brief.get("earnings_calendar", [])
-                if item.get("ticker")
-            }
+
+        for ping in brief.get("event_pings", []):
+            symbols = ping.get("symbols") or []
+            if not isinstance(symbols, list):
+                continue
+            for ticker in symbols:
+                severity = ping.get("severity") or "normal"
+                ping_type = ping.get("type") or "event"
+                region = ping.get("region") or ping.get("country") or "global"
+                add_impact(
+                    ticker,
+                    "event_ping",
+                    f"{str(ticker).upper()}: {ping_type}/{severity} Event in {region}. Trade Impact und Hedge-Idee vor Analyse pruefen.",
+                    source="event_pings",
+                )
+
+        if watched_tickers:
             for ticker in list(watched_tickers)[:5]:
-                earnings = earnings_by_ticker.get(str(ticker).upper())
-                if earnings:
-                    status = earnings.get("date_status")
-                    summary = (
-                        f"{ticker}: Earnings-Datum noch nicht bestaetigt, aber Umsatz/EPS/Guidance bleiben im Briefing-Watch."
-                        if status == "provider_pending"
-                        else f"{ticker}: Earnings am {earnings.get('scheduled_for')} im Kalender. Reaktion auf EPS, Umsatz und Guidance beobachten."
-                    )
-                    impact.append({"ticker": ticker, "type": "earnings", "summary": summary})
-                else:
-                    impact.append(
-                        {
-                            "ticker": ticker,
-                            "type": "monitoring",
-                            "summary": f"{ticker}: Keine harte News im aktuellen Brief, aber Kurs, News und Earnings werden weiter ueberwacht.",
-                        }
-                    )
+                if ticker in impacted_tickers:
+                    continue
+                add_impact(
+                    ticker,
+                    "monitoring",
+                    f"{ticker}: Keine harte direkte News im aktuellen Brief, aber Kurs, News, Earnings und Event-Pings werden weiter ueberwacht.",
+                    source="fallback_monitoring",
+                )
                 if len(impact) >= 5:
                     break
         brief["watchlist_impact"] = impact[:8]

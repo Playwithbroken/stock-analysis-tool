@@ -442,15 +442,15 @@ function AppContent() {
     .flatMap((portfolio) => portfolio.holdings || [])
     .map((holding) => (holding.ticker || "").toUpperCase())
     .filter(Boolean);
-  const headerSymbols = Array.from(
+  const userTrackedSymbols = Array.from(
     new Set([
       ...watchlistTickerSymbols,
       ...portfolioTickerSymbols,
     ].filter(Boolean) as string[]),
   ).slice(0, 10);
   const headerFallbackSymbols = ["SPY", "QQQ", "AAPL", "NVDA", "BTC-USD", "GLD"];
-  const favoriteSymbols = headerSymbols.length ? headerSymbols : headerFallbackSymbols;
-  const favoriteTapeLabel = headerSymbols.length ? "Watchlist / Portfolio" : "Market Snapshot";
+  const favoriteSymbols = userTrackedSymbols.length ? userTrackedSymbols : headerFallbackSymbols;
+  const favoriteTapeLabel = userTrackedSymbols.length ? "Watchlist / Portfolio" : "Market Snapshot";
   const {
     quotes: headerQuotes,
     connected: headerRealtimeConnected,

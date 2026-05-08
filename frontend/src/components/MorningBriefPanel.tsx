@@ -922,7 +922,15 @@ export default function MorningBriefPanel({
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {(brief.congress_watch || []).length ? (
-              (brief.congress_watch || []).slice(0, 5).map((item: any, index: number) => (
+              (brief.congress_watch || []).slice(0, 5).map((item: any, index: number) => {
+                const quality = String(item.setup_quality || "watch_only").toLowerCase();
+                const qualityClass =
+                  quality === "strong"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                    : quality === "selective"
+                      ? "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                      : "border-slate-500/15 bg-slate-500/10 text-slate-600";
+                return (
                 <div
                   key={`${item.name}-${item.ticker}-${index}`}
                   className="rounded-[1.25rem] border border-[var(--accent)]/16 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.82))] p-4"
@@ -946,14 +954,22 @@ export default function MorningBriefPanel({
                       <span className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
                         {item.confidence || "n/a"} conf
                       </span>
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${qualityClass}`}>
+                        {quality.replace("_", " ")}
+                      </span>
                     </div>
                   </div>
                   <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
                     <div>Action: {item.action || item.setup}</div>
                     <div>Amount: {item.amount_range || "n/a"}</div>
                     <div>Trade date: {item.trade_date || "n/a"}</div>
-                    <div>Delay: {item.delay_days != null ? `${item.delay_days}d` : "n/a"}</div>
+                    <div>Delay: {item.delay_days != null ? `${item.delay_days}d` : "n/a"} · {item.delay_bucket || "unknown"}</div>
                   </div>
+                  {item.score_explainer && (
+                    <div className="mt-3 rounded-[0.9rem] border border-black/6 bg-white/65 p-2 text-xs leading-5 text-slate-600">
+                      {item.score_explainer} {item.amount_note ? `Betrag: ${item.amount_note}.` : ""}
+                    </div>
+                  )}
                   <div className="mt-3 text-sm font-semibold text-slate-800">{item.thesis}</div>
                   <div className="mt-3 grid gap-2 text-xs text-slate-500">
                     <div>Trigger: {item.trigger}</div>
@@ -975,7 +991,8 @@ export default function MorningBriefPanel({
                     {item.compliance_note}
                   </div>
                 </div>
-              ))
+                );
+              })
             ) : (
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-500">
                 Keine priorisierten Congress-PTR-Signale im aktuellen Brief.

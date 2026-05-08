@@ -2805,6 +2805,18 @@ class MorningBriefService:
             action = signal.get("action") or setup
             amount = signal.get("amount_range") or "amount n/a"
             freshness = signal.get("freshness") or ("fresh" if isinstance(delay, int) and delay <= 20 else "delayed")
+            delay_bucket = (
+                "fresh" if isinstance(delay, int) and delay <= 10
+                else "usable" if isinstance(delay, int) and delay <= 30
+                else "stale" if isinstance(delay, int)
+                else "unknown"
+            )
+            setup_quality = (
+                "strong" if item.get("impact") == "high" and confidence >= 72
+                else "selective" if item.get("impact") in {"high", "medium"} and confidence >= 60
+                else "watch_only"
+            )
+            amount_note = "large disclosure" if amount != "amount n/a" and any(token in str(amount).lower() for token in ["50,000", "100,000", "250,000", "500,000", "1,000,000", "million"]) else "size not decisive"
             watch.append(
                 {
                     "ticker": ticker,
@@ -2818,6 +2830,13 @@ class MorningBriefService:
                     "delay_days": delay,
                     "amount_range": amount,
                     "freshness": freshness,
+                    "delay_bucket": delay_bucket,
+                    "setup_quality": setup_quality,
+                    "amount_note": amount_note,
+                    "score_explainer": (
+                        f"{setup_quality.replace('_', ' ')}: PTR delay {delay if delay is not None else 'n/a'}d, "
+                        f"impact {item.get('impact') or 'medium'}, confidence {confidence}."
+                    ),
                     "cluster": signal.get("top_tickers") or ([ticker] if ticker else []),
                     "trigger": item.get("trigger") or intelligence.get("trigger"),
                     "invalidation": item.get("risk") or intelligence.get("invalidation"),

@@ -251,7 +251,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
               </div>
               <div className="rounded-[1.4rem] border border-black/8 bg-white/78 p-4 text-sm text-slate-700">
                 {topPoliticalTrade
-                  ? `${topPolitical.name}: ${topPoliticalPlaybook?.setup || topPoliticalTrade.action} ${topPoliticalTrade.ticker || topPoliticalTrade.asset} · ${topPoliticalTrade.amount_range || "amount n/a"} · delay ${topPoliticalTrade.delay_days ?? "n/a"}d`
+                  ? `${topPolitical.name}: ${topPoliticalPlaybook?.setup || topPoliticalTrade.action} ${topPoliticalTrade.ticker || topPoliticalTrade.asset} / ${topPoliticalTrade.amount_range || "amount offen"} / delay ${topPoliticalTrade.delay_days ?? "offen"}d`
                   : "Noch keine Congress-Signale in deiner Watchlist."}
                 {topPoliticalTrade && topPoliticalPlaybook?.next_action ? (
                   <div className="mt-2 rounded-xl border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
@@ -275,7 +275,7 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
                   <div key={item.event_key} className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4">
                     <div className="text-sm font-bold text-slate-900">{item.title}</div>
                     <div className="mt-1 text-xs text-slate-500">
-                      {item.category} · {new Date(item.sent_at).toLocaleString()}
+                      {item.category} / {new Date(item.sent_at).toLocaleString()}
                     </div>
                   </div>
                 ))

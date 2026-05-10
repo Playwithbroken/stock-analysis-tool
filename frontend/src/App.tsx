@@ -1619,7 +1619,7 @@ function AppContent() {
                       sollen sie wiederhergestellt werden?
                     </p>
                     <div className="mt-1 text-xs text-amber-600">
-                      {cachedPortfolios.map(p => `${p.name} (${p.holdings.length} Positionen)`).join(" · ")}
+                      {cachedPortfolios.map(p => `${p.name} (${p.holdings.length} Positionen)`).join(" / ")}
                     </div>
                   </div>
                   <div className="flex gap-2">

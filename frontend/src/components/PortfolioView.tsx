@@ -58,7 +58,7 @@ const formatPurchaseDate = (value?: string | null): string => {
 };
 
 const formatHoldingPeriod = (days?: number | null): string => {
-  if (days == null || !Number.isFinite(days)) return "n/a";
+  if (days == null || !Number.isFinite(days)) return "Kaufdatum fehlt";
   if (days <= 0) return "Heute";
   if (days < 30) return `${Math.round(days)}d`;
   const months = Math.floor(days / 30);

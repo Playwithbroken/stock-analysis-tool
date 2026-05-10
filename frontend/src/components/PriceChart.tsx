@@ -110,6 +110,13 @@ const friendlyHistoryReason = (reason?: string) => {
   return reason.replaceAll("_", " ");
 };
 
+const displayMetaValue = (value?: string | number | null, fallback = "offen") => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const text = String(value);
+  if (text.toLowerCase() === "unknown" || text.toLowerCase() === "n/a") return fallback;
+  return text;
+};
+
 const INDICATOR_HELP: Record<string, string> = {
   RSI: "RSI misst Momentum: ueber 70 oft ueberkauft, unter 30 oft ueberverkauft. Kein Kaufsignal allein.",
   MACD: "MACD zeigt Trend-Momentum: steigendes Histogramm spricht fuer zunehmenden Aufwaertsdruck, fallend fuer nachlassenden Druck.",
@@ -842,19 +849,19 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         >
           Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
           {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} / Feed: {transportMode === "ws" ? "live" : "snapshot"}
-          {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
-          {realtimeFallbackNote ? ` - ${realtimeFallbackNote}` : ""}
-          {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
+          {typeof staleForTicker === "number" && staleForTicker > 5 ? ` / verzoegert ${staleForTicker}s` : ""}
+          {realtimeFallbackNote ? ` / ${realtimeFallbackNote}` : ""}
+          {displayedRealtimeError ? ` / ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>
       ) : null}
       {historyMeta ? (
         <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
-          History: {historyMeta.source || "unknown"} - {historyMeta.period || "n/a"}/{historyMeta.interval || "n/a"}
+          Historie: {displayMetaValue(historyMeta.source)} / {displayMetaValue(historyMeta.period)}/{displayMetaValue(historyMeta.interval)}
           {historyMeta.requested_period && historyMeta.requested_period !== historyMeta.period
-            ? ` - angefragt ${historyMeta.requested_period}/${historyMeta.requested_interval || "n/a"}`
+            ? ` / angefragt ${historyMeta.requested_period}/${displayMetaValue(historyMeta.requested_interval)}`
             : ""}
-          {typeof historyMeta.points === "number" ? ` - ${historyMeta.points} Punkte` : ""}
-          {historyMeta.fallback_reason ? ` - ${friendlyHistoryReason(historyMeta.fallback_reason)}` : ""}
+          {typeof historyMeta.points === "number" ? ` / ${historyMeta.points} Punkte` : ""}
+          {historyMeta.fallback_reason ? ` / ${friendlyHistoryReason(historyMeta.fallback_reason)}` : ""}
         </div>
       ) : null}
     </div>

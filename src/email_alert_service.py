@@ -449,7 +449,7 @@ class EmailAlertService:
                         "event_key": event_key,
                         "scheduled_at": scheduled_at.isoformat(),
                         "minutes_late": int(delta_minutes),
-                        "message": "Brief missed its delivery grace window.",
+                        "message": "Brief verpasst: Grace-Zeit abgelaufen. Pruefe Scheduler/Telegram und sende bei Bedarf manuell.",
                     }
                     self._set_brief_job_status(str(job["job_key"]), missed)
                 continue
@@ -481,7 +481,7 @@ class EmailAlertService:
                     "event_key": event_key,
                     "scheduled_at": job["scheduled_at"].isoformat(),
                     "started_at": datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
-                    "message": "Building and warming scheduled brief.",
+                    "message": "Brief wird gebaut: Cache wird vorbereitet, Daten werden geladen, Versand wird vorbereitet.",
                 },
             )
             try:
@@ -494,6 +494,7 @@ class EmailAlertService:
                     "scheduled_at": job["scheduled_at"].isoformat(),
                     "minutes_late": job["minutes_late"],
                     "error": f"build_failed: {exc}",
+                    "message": "Brief konnte nicht gebaut werden. Logs und Datenquellen pruefen; der Job kann innerhalb der Grace-Zeit erneut laufen.",
                 }
                 self._set_brief_job_status(str(job["job_key"]), failure)
                 results.append(failure)
@@ -521,6 +522,7 @@ class EmailAlertService:
                         "scheduled_at": job["scheduled_at"].isoformat(),
                         "minutes_late": job["minutes_late"],
                         "error": f"snapshot_failed: {exc}",
+                        "message": "Watchlist-Snapshot fehlgeschlagen. Der Brief wurde nicht ohne Basisdaten gesendet.",
                     }
                     self._set_brief_job_status(str(job["job_key"]), failure)
                     results.append(failure)
@@ -547,6 +549,7 @@ class EmailAlertService:
                         "scheduled_at": job["scheduled_at"].isoformat(),
                         "minutes_late": job["minutes_late"],
                         "error": f"brief_failed: {exc}",
+                        "message": "Morning Brief konnte nicht geladen werden. Warm-Cache und Provider pruefen.",
                     }
                     self._set_brief_job_status(str(job["job_key"]), failure)
                     results.append(failure)
@@ -599,7 +602,7 @@ class EmailAlertService:
                         "minutes_late": job["minutes_late"],
                         "error": telegram_error or "telegram_not_delivered",
                         "email_delivered": delivered,
-                        "message": "Telegram delivery failed; job will retry within the grace window.",
+                        "message": "Telegram-Versand fehlgeschlagen; der Job wird innerhalb der Grace-Zeit erneut versucht.",
                     }
                     self._set_brief_job_status(str(job["job_key"]), failure)
                     results.append(failure)
@@ -613,7 +616,7 @@ class EmailAlertService:
                     "event_key": event_key,
                     "scheduled_at": job["scheduled_at"].isoformat(),
                     "minutes_late": job["minutes_late"],
-                    "message": "No notification channel delivered; will retry within the grace window.",
+                    "message": "Kein Versandkanal hat erfolgreich geliefert; der Job wird innerhalb der Grace-Zeit erneut versucht.",
                 }
                 self._set_brief_job_status(str(job["job_key"]), failure)
                 results.append(failure)
@@ -645,6 +648,7 @@ class EmailAlertService:
                 "minutes_late": job["minutes_late"],
                 "catchup": bool(job.get("catchup")),
                 "forecasts_recorded": learning.get("recorded", 0),
+                "message": "Brief erfolgreich gesendet.",
             }
             self._set_brief_job_status(str(job["job_key"]), success)
             results.append(success)
@@ -654,7 +658,7 @@ class EmailAlertService:
             results.append(
                 {
                     "status": "idle",
-                    "message": "No scheduled brief is due inside the current on-time/catchup window.",
+                    "message": "Kein geplanter Brief ist im aktuellen Zeitfenster faellig.",
                     "checked_at": now.isoformat(),
                 }
             )

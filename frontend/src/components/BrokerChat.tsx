@@ -180,13 +180,13 @@ export default function BrokerChat({
 
   const deskCommands = [
     {
-      label: "Markets oeffnen",
-      detail: "Mover + Explorer",
+      label: "Markets",
+      detail: "Mover / Explorer",
       disabled: !onOpenTab || activeTab === "discovery",
       run: () => onOpenTab?.("discovery"),
     },
     {
-      label: primaryTicker ? `${String(primaryTicker).toUpperCase()} analysieren` : "Analyze oeffnen",
+      label: primaryTicker ? `${String(primaryTicker).toUpperCase()} Check` : "Analyze",
       detail: primaryTicker ? "Dossier + Chart" : "Suche starten",
       disabled: primaryTicker ? !onAnalyzeTicker : !onOpenTab,
       run: () => {
@@ -198,20 +198,20 @@ export default function BrokerChat({
       },
     },
     {
-      label: "Portfolio pruefen",
-      detail: "Rendite + Risiko",
+      label: "Portfolio",
+      detail: "Rendite / Risiko",
       disabled: !onOpenTab || activeTab === "portfolio",
       run: () => onOpenTab?.("portfolio"),
     },
     {
-      label: "Briefing erklaeren",
+      label: "Briefing",
       detail: `${setupCount} Setups / ${eventPingCount} Events`,
       disabled: loading,
       run: () => void submitMessage("Erklaere mir das aktuelle Briefing: wichtigste Setups, Risiken, Datenluecken und was ich anklicken soll."),
     },
     {
-      label: "Health pruefen",
-      detail: "Scheduler + Daten",
+      label: "Health",
+      detail: "Scheduler / Daten",
       disabled: !onOpenHealth,
       run: () => onOpenHealth?.(),
     },
@@ -219,29 +219,29 @@ export default function BrokerChat({
 
   const quickActions = [
     activeTab === "discovery"
-      ? "Fuehre mich durch Markets: welche Gewinner/Verlierer sind relevant und was soll ich anklicken?"
+      ? "Markets: Welche Karte soll ich zuerst pruefen?"
       : activeTab === "portfolio"
-        ? "Erklaere mein Portfolio: Rendite seit Kauf, Risiko und naechste Pruefung."
+        ? "Portfolio: groesstes Risiko und naechste Aktion?"
         : activeTab === "analyze"
-          ? "Wie lese ich diese Analyse und welche Daten sind entscheidend?"
-          : "Erklaere mir das Dashboard und was heute wichtig ist.",
+          ? "Analyse: Was ist der wichtigste Punkt?"
+          : "Dashboard: Was ist heute wichtig?",
     currentTicker
-      ? `Was ist heute der wichtigste Trigger fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}?`
+      ? `Trigger fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}?`
       : activeTab === "discovery"
-        ? "Welche Market-Idee ist jetzt am besten und warum?"
+        ? "Beste Market-Idee und warum?"
         : activeTab === "portfolio"
-          ? "Pruefe mein Portfolio: groesstes Risiko und beste naechste Aktion?"
-          : "Was ist heute das wichtigste Setup?",
+          ? "Rendite seit Kauf pruefen?"
+          : "Wichtigstes Setup heute?",
     currentTicker
-      ? `Erklaere das Dossier fuer ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}: Umsatz, Margen, Bewertung und Risiken.`
-      : "Welche Quelle oder Prognose lag zuletzt daneben?",
+      ? `Dossier ${Array.isArray(currentTicker) ? currentTicker[0] : currentTicker}: Umsatz, Margen, Bewertung?`
+      : "Welche Prognose lag zuletzt daneben?",
     activeTab === "discovery"
-      ? "Zeige mir die besten Gewinner/Verlierer, Event-Pings und welchen Ticker ich nur analysieren soll."
+      ? "Top Gewinner/Verlierer mit echtem Grund?"
       : activeTab === "portfolio"
-        ? "Welche Holding hat die hoechste Gefahr und welche profitiert heute?"
-        : "Welche News, Earnings oder Produkt-Katalysatoren sind heute wirklich wichtig?",
-    "Warum wurde das aktuelle Briefing so gerankt?",
-    "Welche Daten oder Scheduler-Probleme gibt es gerade?",
+        ? "Welche Holding ist heute gefaehrdet?"
+        : "Welche News/Earnings sind wirklich wichtig?",
+    "Warum ist das Briefing so gerankt?",
+    "Welche Daten fehlen gerade?",
     "Welche Learnings verbessern heute die Signale?",
     "Wo ist heute das groesste Risiko?",
     "Welche Hedge-Idee ist heute am sinnvollsten?",

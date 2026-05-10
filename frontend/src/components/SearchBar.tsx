@@ -177,6 +177,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       ),
     [suggestions],
   );
+  const directSearchActive = Boolean(query.trim()) && flatSuggestions.some((item) => item.category === "Direkt suchen");
 
   // Compute ghost-text: first flat suggestion that starts with query (case-insensitive)
   useEffect(() => {
@@ -504,7 +505,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             <span>Tippe einen Namen oder Ticker - Tab vervollstaendigt automatisch.</span>
           </div>
           <div className="font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
-            {loading ? "Deep scan running" : "Ready"}
+            {loading ? "Deep scan running" : directSearchActive ? "Direct lookup ready" : "Ready"}
           </div>
         </div>
 

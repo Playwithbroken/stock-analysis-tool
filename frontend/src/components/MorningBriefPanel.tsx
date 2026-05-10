@@ -187,8 +187,16 @@ function extractTickerCandidates(text?: string) {
 }
 
 function moveLabel(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return "n/a";
+  if (value == null || !Number.isFinite(value)) return "offen";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function openValue(value: unknown, fallback = "offen"): string | number {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value !== "string" && typeof value !== "number") return fallback;
+  const text = String(value);
+  if (text.toLowerCase() === "n/a" || text.toLowerCase() === "unknown") return fallback;
+  return value;
 }
 
 export default function MorningBriefPanel({
@@ -782,7 +790,7 @@ export default function MorningBriefPanel({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      score {setup.rank_score ?? "n/a"}
+                      score {openValue(setup.rank_score)}
                     </span>
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       confidence {setup.confidence}
@@ -837,7 +845,7 @@ export default function MorningBriefPanel({
                       {item.axis}: {item.label}
                     </div>
                     <div className="mt-1">
-                      hit {item.hit_rate}% - ranking {Number(item.score_delta) > 0 ? "+" : ""}
+                      hit {item.hit_rate}% / ranking {Number(item.score_delta) > 0 ? "+" : ""}
                       {item.score_delta}
                     </div>
                   </div>
@@ -1011,7 +1019,7 @@ export default function MorningBriefPanel({
                         </button>
                       ) : null}
                       <span className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
-                        {item.confidence || "n/a"} conf
+                        {openValue(item.confidence)} conf
                       </span>
                       <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${qualityClass}`}>
                         {quality.replace("_", " ")}
@@ -1020,9 +1028,9 @@ export default function MorningBriefPanel({
                   </div>
                   <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
                     <div>Action: {item.action || item.setup}</div>
-                    <div>Amount: {item.amount_range || "n/a"}</div>
-                    <div>Trade date: {item.trade_date || "n/a"}</div>
-                    <div>Delay: {item.delay_days != null ? `${item.delay_days}d` : "offen"} / {item.delay_bucket || "unknown"}</div>
+                    <div>Amount: {openValue(item.amount_range)}</div>
+                    <div>Trade date: {openValue(item.trade_date)}</div>
+                    <div>Delay: {item.delay_days != null ? `${item.delay_days}d` : "offen"} / {openValue(item.delay_bucket)}</div>
                   </div>
                   {item.score_explainer && (
                     <div className="mt-3 rounded-[0.9rem] border border-black/6 bg-white/65 p-2 text-xs leading-5 text-slate-600">
@@ -1146,7 +1154,7 @@ export default function MorningBriefPanel({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       <span className="rounded-full border border-black/8 bg-white px-2 py-1">
-                        score {item.social_score ?? "n/a"}
+                        score {openValue(item.social_score)}
                       </span>
                       <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                         {item.social_style || "social pulse"}
@@ -1190,7 +1198,7 @@ export default function MorningBriefPanel({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       <span className="rounded-full border border-black/8 bg-white px-2 py-1">
-                        score {item.crowd_score ?? "n/a"}
+                        score {openValue(item.crowd_score)}
                       </span>
                       <span className="rounded-full border border-black/8 bg-white px-2 py-1">
                         {item.crowd_style || "crowd pressure"}
@@ -1795,7 +1803,7 @@ export default function MorningBriefPanel({
                       </div>
                     )}
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      relevance {pm.relevance ?? "n/a"}
+                      relevance {openValue(pm.relevance)}
                     </span>
                   </div>
                   {pm.why && (
@@ -2007,16 +2015,16 @@ export default function MorningBriefPanel({
                   <div className="mt-1 line-clamp-1 text-xs text-slate-500">{item.company}</div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      EPS {item.reported_eps != null ? item.reported_eps.toFixed(2) : "n/a"}
+                      EPS {item.reported_eps != null ? item.reported_eps.toFixed(2) : "offen"}
                     </div>
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      Est {item.eps_estimate != null ? item.eps_estimate.toFixed(2) : "n/a"}
+                      Est {item.eps_estimate != null ? item.eps_estimate.toFixed(2) : "offen"}
                     </div>
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      Surprise {item.eps_surprise_pct != null ? `${item.eps_surprise_pct >= 0 ? "+" : ""}${item.eps_surprise_pct.toFixed(1)}%` : "n/a"}
+                      Surprise {item.eps_surprise_pct != null ? `${item.eps_surprise_pct >= 0 ? "+" : ""}${item.eps_surprise_pct.toFixed(1)}%` : "offen"}
                     </div>
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      Revenue {item.revenue_yoy != null ? `${item.revenue_yoy >= 0 ? "+" : ""}${(item.revenue_yoy * 100).toFixed(1)}%` : "n/a"}
+                      Revenue {item.revenue_yoy != null ? `${item.revenue_yoy >= 0 ? "+" : ""}${(item.revenue_yoy * 100).toFixed(1)}%` : "offen"}
                     </div>
                   </div>
                   {item.guidance_label && (

@@ -33,8 +33,14 @@ const LOCAL_SEARCH_ASSETS = [
   "Adobe Inc. (ADBE)",
   "Palo Alto Networks Inc. (PANW)",
   "CrowdStrike Holdings Inc. (CRWD)",
+  "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+  "Arm Holdings plc (ARM)",
+  "Super Micro Computer Inc. (SMCI)",
+  "Dell Technologies Inc. (DELL)",
   "Take-Two Interactive Software Inc. (TTWO)",
   "BMW AG (BMW.DE)",
+  "BYD Company Limited (BYDDY)",
+  "Airbus SE (AIR.PA)",
   "Mercedes-Benz Group AG (MBG.DE)",
   "Volkswagen AG (VOW3.DE)",
   "Siemens AG (SIE.DE)",
@@ -67,16 +73,30 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   nvdia: "NVIDIA Corporation (NVDA)",
   nvidia: "NVIDIA Corporation (NVDA)",
   gpu: "NVIDIA Corporation (NVDA)",
+  grafikarte: "NVIDIA Corporation (NVDA)",
+  grafikkarte: "NVIDIA Corporation (NVDA)",
+  cuda: "NVIDIA Corporation (NVDA)",
   geforce: "NVIDIA Corporation (NVDA)",
+  blackwell: "NVIDIA Corporation (NVDA)",
+  quartalszahlennvidia: "NVIDIA Corporation (NVDA)",
   iphone: "Apple Inc. (AAPL)",
   apple: "Apple Inc. (AAPL)",
   ios: "Apple Inc. (AAPL)",
   ipad: "Apple Inc. (AAPL)",
+  quartalszahlenapple: "Apple Inc. (AAPL)",
   gta: "Take-Two Interactive Software Inc. (TTWO)",
   gta6: "Take-Two Interactive Software Inc. (TTWO)",
   rockstar: "Take-Two Interactive Software Inc. (TTWO)",
+  gta6verschiebung: "Take-Two Interactive Software Inc. (TTWO)",
   bmw: "BMW AG (BMW.DE)",
   auto: "BMW AG (BMW.DE)",
+  byd: "BYD Company Limited (BYDDY)",
+  ev: "Tesla Inc. (TSLA)",
+  elektroauto: "Tesla Inc. (TSLA)",
+  airbus: "Airbus SE (AIR.PA)",
+  rheinmetall: "Rheinmetall AG (RHM.DE)",
+  defense: "Rheinmetall AG (RHM.DE)",
+  ruestung: "Rheinmetall AG (RHM.DE)",
   pfizer: "Pfizer Inc. (PFE)",
   pfi: "Pfizer Inc. (PFE)",
   novo: "Novo Nordisk A/S (NVO)",
@@ -88,6 +108,13 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   eth: "Ethereum USD (ETH-USD)",
   spirit: "Spirit Airlines Inc. (FLYYQ)",
   airline: "Spirit Airlines Inc. (FLYYQ)",
+  tsmc: "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+  chips: "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+  semiconductor: "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+  smci: "Super Micro Computer Inc. (SMCI)",
+  supermicro: "Super Micro Computer Inc. (SMCI)",
+  arm: "Arm Holdings plc (ARM)",
+  dell: "Dell Technologies Inc. (DELL)",
 };
 
 interface SearchBarProps {
@@ -118,7 +145,10 @@ function buildLocalMatches(query: string): string[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
   const normalizedNeedle = normalizeSearchValue(needle);
-  const alias = LOCAL_SEARCH_ALIASES[normalizedNeedle] || LOCAL_SEARCH_ALIASES[needle];
+  const alias =
+    LOCAL_SEARCH_ALIASES[normalizedNeedle] ||
+    LOCAL_SEARCH_ALIASES[needle] ||
+    Object.entries(LOCAL_SEARCH_ALIASES).find(([key]) => key.length >= 3 && normalizedNeedle.includes(key))?.[1];
   const scored = LOCAL_SEARCH_ASSETS.map((value) => {
     const ticker = extractTicker(value).toLowerCase();
     const lowerValue = value.toLowerCase();

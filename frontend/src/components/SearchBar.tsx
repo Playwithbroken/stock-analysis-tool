@@ -152,6 +152,11 @@ function buildDefaultSuggestions(): Record<string, string[]> {
   };
 }
 
+function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
+  const value = query.trim().toUpperCase();
+  return value.length >= 2 ? { "Direkt suchen": [value] } : {};
+}
+
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>(() => buildDefaultSuggestions());
@@ -241,12 +246,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             if (data.Matches && data.Matches.length > 0) {
               setSuggestions({ Treffer: uniqueValues([...localMatches, ...data.Matches]).slice(0, 8) });
             } else if (localMatches.length === 0) {
-              setSuggestions({});
+              setSuggestions(buildDirectSearchSuggestion(trimmedQuery));
             }
           })
           .catch(() => {
             if (!controller.signal.aborted && searchRequestRef.current === requestId && localMatches.length === 0) {
-              setSuggestions({});
+              setSuggestions(buildDirectSearchSuggestion(trimmedQuery));
             }
           });
       }, 90);
@@ -426,6 +431,8 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                     const localMatches = buildLocalMatches(query);
                     if (query.trim() && localMatches.length > 0) {
                       setSuggestions({ Treffer: localMatches });
+                    } else if (query.trim() && Object.keys(suggestions).length === 0) {
+                      setSuggestions(buildDirectSearchSuggestion(query));
                     } else if (!query.trim() && Object.keys(suggestions).length === 0) {
                       setSuggestions(buildDefaultSuggestions());
                     }

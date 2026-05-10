@@ -2743,7 +2743,7 @@ class MorningBriefService:
             intelligence["execution_window"] = "today / next 3 sessions"
             name = signal.get("name") or "Congress member"
             action = str(latest.get("action") or "trade").upper()
-            amount = latest.get("amount_range") or playbook.get("estimated_exposure_label") or "amount n/a"
+            amount = latest.get("amount_range") or playbook.get("estimated_exposure_label") or "amount offen"
             items.append(
                 {
                     "title": f"Congress Watch: {name} {action} {ticker} ({amount})",
@@ -2803,20 +2803,20 @@ class MorningBriefService:
             ticker = item.get("ticker")
             setup = item.get("setup") or "watch"
             action = signal.get("action") or setup
-            amount = signal.get("amount_range") or "amount n/a"
+            amount = signal.get("amount_range") or "amount offen"
             freshness = signal.get("freshness") or ("fresh" if isinstance(delay, int) and delay <= 20 else "delayed")
             delay_bucket = (
                 "fresh" if isinstance(delay, int) and delay <= 10
                 else "usable" if isinstance(delay, int) and delay <= 30
                 else "stale" if isinstance(delay, int)
-                else "unknown"
+                else "offen"
             )
             setup_quality = (
                 "strong" if item.get("impact") == "high" and confidence >= 72
                 else "selective" if item.get("impact") in {"high", "medium"} and confidence >= 60
                 else "watch_only"
             )
-            amount_note = "large disclosure" if amount != "amount n/a" and any(token in str(amount).lower() for token in ["50,000", "100,000", "250,000", "500,000", "1,000,000", "million"]) else "size not decisive"
+            amount_note = "large disclosure" if amount != "amount offen" and any(token in str(amount).lower() for token in ["50,000", "100,000", "250,000", "500,000", "1,000,000", "million"]) else "size not decisive"
             watch.append(
                 {
                     "ticker": ticker,
@@ -2834,7 +2834,7 @@ class MorningBriefService:
                     "setup_quality": setup_quality,
                     "amount_note": amount_note,
                     "score_explainer": (
-                        f"{setup_quality.replace('_', ' ')}: PTR delay {delay if delay is not None else 'n/a'}d, "
+                        f"{setup_quality.replace('_', ' ')}: PTR delay {delay if delay is not None else 'offen'}d, "
                         f"impact {item.get('impact') or 'medium'}, confidence {confidence}."
                     ),
                     "cluster": signal.get("top_tickers") or ([ticker] if ticker else []),
@@ -3561,7 +3561,7 @@ class MorningBriefService:
                 change = mover.get("change")
                 if change is None:
                     change = mover.get("change_1w")
-                change_text = f"{float(change):+.2f}%" if isinstance(change, (int, float)) else "move n/a"
+                change_text = f"{float(change):+.2f}%" if isinstance(change, (int, float)) else "move offen"
                 add_impact(
                     ticker,
                     "market_mover",

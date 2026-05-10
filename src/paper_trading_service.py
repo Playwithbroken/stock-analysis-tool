@@ -136,7 +136,7 @@ class PaperTradingService:
                     "reward_buffer_pct": 7.5,
                     "thesis": (
                         f"{item.get('source_label')} with strong {direction} bias. "
-                        f"Use only if price holds after filing delay of {item.get('delay_days') or 'n/a'} days."
+                        f"Use only if price holds after filing delay of {item.get('delay_days') if item.get('delay_days') is not None else 'offen'} days."
                     ),
                     "tags": ["long" if direction == "long" else "short", "official filing", "equity"],
                     "reference_price": self._get_last_price(item.get("ticker")),

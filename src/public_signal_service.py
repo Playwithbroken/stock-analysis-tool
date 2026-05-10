@@ -455,7 +455,7 @@ class PublicSignalService:
             "next_action": next_action,
             "invalidation": "Invalid if the stock no longer respects the post-filing trend or the move already fully played out.",
             "compliance_note": "Official PTR data is delayed. Treat it as a research signal, not a blind copy trade.",
-            "copy_text": f"{name}: {latest.get('action')} {ticker or latest.get('asset')} on {latest.get('trade_date')} with {delay or 'n/a'}d delay.",
+            "copy_text": f"{name}: {latest.get('action')} {ticker or latest.get('asset')} on {latest.get('trade_date')} with {delay if delay is not None else 'offen'}d delay.",
         }
 
     def _search_house_ptr_reports(self, name: str) -> List[Dict[str, Any]]:

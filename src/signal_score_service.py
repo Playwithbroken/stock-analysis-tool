@@ -186,7 +186,7 @@ class SignalScoreService:
                     "next_action": next_action,
                     "playbook": playbook,
                     "compliance_note": playbook.get("compliance_note") or "Official PTR data is delayed.",
-                    "detail": f"{summary.get('buy_count', 0)} buys / {summary.get('sell_count', 0)} sells · {latest.get('amount_range') or 'amount n/a'}",
+                    "detail": f"{summary.get('buy_count', 0)} buys / {summary.get('sell_count', 0)} sells / {latest.get('amount_range') or 'amount offen'}",
                 }
             )
         return sorted(scored, key=lambda item: item["total_score"], reverse=True)
@@ -216,7 +216,7 @@ class SignalScoreService:
                     "timing_quality": flow,
                     "conviction_score": liquidity,
                     "total_score": total,
-                    "detail": f"TER {ter:.2f}% · {item.get('category') or 'ETF'}",
+                    "detail": f"TER {ter:.2f}% / {item.get('category') or 'ETF'}",
                     "change": change,
                 }
             )

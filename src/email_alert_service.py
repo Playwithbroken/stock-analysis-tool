@@ -911,7 +911,7 @@ class EmailAlertService:
                 ticker = self._tg_esc(item.get("ticker") or "")
                 name = self._tg_esc(str(item.get("name") or "PTR")[:36])
                 action = self._tg_esc(str(item.get("action") or item.get("setup") or "watch"))
-                amount = self._tg_esc(str(item.get("amount_range") or "amount n/a"))
+                amount = self._tg_esc(str(item.get("amount_range") or "amount offen"))
                 delay = item.get("delay_days")
                 conf = item.get("confidence")
                 delay_text = f" | delay {delay}d" if delay is not None else ""
@@ -1507,7 +1507,7 @@ class EmailAlertService:
                     chg = item.get("change_1d")
                     if not isinstance(chg, (int, float)):
                         chg = item.get("change_1w")
-                    chg_str = f"{chg:+.2f}%" if isinstance(chg, (int, float)) else "n/a"
+                    chg_str = f"{chg:+.2f}%" if isinstance(chg, (int, float)) else "offen"
                     price = item.get("price")
                     price_str = f" ${price:,.2f}" if isinstance(price, (int, float)) else ""
                     lines2.append(f"{label} <code>{ticker}</code> {name} {chg_str}{price_str}")
@@ -1559,11 +1559,11 @@ class EmailAlertService:
                     "needs_guidance_confirmation": "Trade: erst Guidance/Preis bestaetigen",
                 }.get(action_hint, "")
                 surprise = item.get("eps_surprise_pct")
-                surprise_str = f"{surprise:+.1f}%" if isinstance(surprise, (int, float)) else "n/a"
+                surprise_str = f"{surprise:+.1f}%" if isinstance(surprise, (int, float)) else "offen"
                 reported = item.get("reported_eps")
                 estimate = item.get("eps_estimate")
-                reported_str = f"{reported:.2f}" if isinstance(reported, (int, float)) else "n/a"
-                estimate_str = f"{estimate:.2f}" if isinstance(estimate, (int, float)) else "n/a"
+                reported_str = f"{reported:.2f}" if isinstance(reported, (int, float)) else "offen"
+                estimate_str = f"{estimate:.2f}" if isinstance(estimate, (int, float)) else "offen"
                 period = self._tg_esc(str(item.get("period") or "")[:10])
                 days_since = item.get("days_since")
                 freshness = f" · vor {days_since}d" if isinstance(days_since, int) else ""
@@ -1933,7 +1933,7 @@ class EmailAlertService:
                         continue
                     if not (to or action):
                         continue
-                    transition = f"{frm or 'n/a'} → <b>{to}</b>" if to else action
+                    transition = f"{frm or 'offen'} → <b>{to}</b>" if to else action
                     suffix = f" ({action})" if action and action not in transition else ""
                     analyst_lines.append(f"• <code>{tk}</code> {firm or 'Analyst'}: {transition}{suffix}")
             if analyst_lines:

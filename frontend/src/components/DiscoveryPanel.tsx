@@ -876,15 +876,27 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   </div>
                 )) : (
                   <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
-                    <div className="font-bold text-slate-800">
-                      {aiLoading ? "High-Risk Radar laedt..." : "Keine belastbaren High-Risk-Kandidaten im aktuellen Scan."}
-                    </div>
-                    <div className="mt-2 leading-6">
-                      {aiLoading
-                        ? "Die Live-Daten werden erst beim Oeffnen dieses Tabs geladen, damit Markets schneller startet."
-                        : aiError
-                          ? "Der Scanner ist leer oder der Feed ist verzoegert. Das ist besser als schwache Treffer kuenstlich zu pushen; du kannst den Scan direkt neu starten."
-                          : "Aktuell gibt es kein Setup, das Risiko, Reward und Datenqualitaet sauber genug kombiniert."}
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="font-bold text-slate-800">
+                          {aiLoading ? "High-Risk Radar laedt..." : "Keine belastbaren High-Risk-Kandidaten im aktuellen Scan."}
+                        </div>
+                        <div className="mt-2 max-w-2xl leading-6">
+                          {aiLoading
+                            ? "Die Live-Daten werden erst beim Oeffnen dieses Tabs geladen, damit Markets schneller startet."
+                            : aiError
+                              ? "Der Scanner ist leer oder der Feed ist verzoegert. Das ist besser als schwache Treffer kuenstlich zu pushen."
+                              : "Aktuell gibt es kein Setup, das Risiko, Reward und Datenqualitaet sauber genug kombiniert."}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshAiScanners(true)}
+                        disabled={aiLoading}
+                        className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60"
+                      >
+                        {aiLoading ? "Scan laeuft" : "Neu scannen"}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -947,15 +959,27 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   </div>
                 )) : (
                   <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
-                    <div className="font-bold text-slate-800">
-                      {aiLoading ? "Moonshot Scanner laedt..." : "Keine sauberen Moonshot-Kandidaten im aktuellen Scan."}
-                    </div>
-                    <div className="mt-2 leading-6">
-                      {aiLoading
-                        ? "Growth-Kandidaten werden lazy geladen, damit der Markets-Tab nicht den App-Start blockiert."
-                        : aiError
-                          ? "Der Feed ist gerade leer oder verzoegert. Nutze Neu scannen oben, statt mit alten Kandidaten weiterzuarbeiten."
-                          : "Im aktuellen Datenfenster fehlt die Kombination aus Momentum, News-Impuls und Datenvertrauen."}
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="font-bold text-slate-800">
+                          {aiLoading ? "Moonshot Scanner laedt..." : "Keine sauberen Moonshot-Kandidaten im aktuellen Scan."}
+                        </div>
+                        <div className="mt-2 max-w-2xl leading-6">
+                          {aiLoading
+                            ? "Growth-Kandidaten werden lazy geladen, damit der Markets-Tab nicht den App-Start blockiert."
+                            : aiError
+                              ? "Der Feed ist gerade leer oder verzoegert. Starte den Scan neu, statt mit alten Kandidaten weiterzuarbeiten."
+                              : "Im aktuellen Datenfenster fehlt die Kombination aus Momentum, News-Impuls und Datenvertrauen."}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshAiScanners(true)}
+                        disabled={aiLoading}
+                        className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60"
+                      >
+                        {aiLoading ? "Scan laeuft" : "Neu scannen"}
+                      </button>
                     </div>
                   </div>
                 )}

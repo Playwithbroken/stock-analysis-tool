@@ -504,11 +504,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     ? "Realtime-Snapshot wird erneut versucht, Historie bleibt nutzbar"
     : "";
   const staleForTicker = staleSeconds?.[tickerSymbol];
+  const feedNeedsAttention =
+    connectionState === "degraded" ||
+    ((connectionState === "snapshot" || transportMode === "snapshot") && !hasUsableHistory);
   const shouldShowDataStatus =
     historyState === "stale" ||
     historyState === "snapshot" ||
     historyState === "unavailable" ||
-    connectionState !== "live" ||
+    feedNeedsAttention ||
     Boolean(realtimeFallbackNote) ||
     Boolean(displayedRealtimeError);
   const indicatorToggles: Array<{

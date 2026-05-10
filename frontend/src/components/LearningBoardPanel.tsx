@@ -6,7 +6,7 @@ interface LearningBoardPanelProps {
 
 function formatPct(value: any, digits = 1) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return "n/a";
+  if (!Number.isFinite(number)) return "offen";
   return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
 }
 
@@ -74,16 +74,16 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
           </p>
         </div>
         <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-          {summary.pending || 0} pending checks
+          {summary.pending || 0} offene Pruefungen
         </div>
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-4">
         {[
-          ["Forecasts", summary.forecasts || 0],
-          ["Evaluated", summary.evaluated || 0],
-          ["Hit rate", `${Number(summary.hit_rate || 0).toFixed(1)}%`],
-          ["Avg move", formatPct(summary.avg_performance_pct)],
+          ["Prognosen", summary.forecasts || 0],
+          ["Ausgewertet", summary.evaluated || 0],
+          ["Trefferquote", `${Number(summary.hit_rate || 0).toFixed(1)}%`],
+          ["Durchschn. Move", formatPct(summary.avg_performance_pct)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">{label}</div>
@@ -96,10 +96,10 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
         <div className="rounded-[1.8rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.82))] p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[var(--accent)]">
-              Ranking lessons
+              Ranking-Lessons
             </div>
             <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-              auto feedback
+              Auto-Feedback
             </div>
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -110,7 +110,7 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
                   className="rounded-[1.2rem] border border-black/8 bg-white/75 p-3 text-sm leading-6 text-slate-700"
                 >
                   <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                    {lesson.type?.replaceAll("_", " ") || "lesson"}
+                    {lesson.type?.replaceAll("_", " ") || "Lesson"}
                   </div>
                   {lesson.message}
                 </div>
@@ -126,7 +126,7 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
 
         <div className="rounded-[1.8rem] border border-black/8 bg-white/72 p-5">
           <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-            Open checks
+            Offene Pruefungen
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {pendingByHorizon.length ? (
@@ -168,23 +168,23 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
       <div className="mt-6 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-4">
           <QualityList
-            title="Best setup types"
+            title="Beste Setup-Arten"
             rows={setupTypes}
             empty="Noch keine ausgewerteten Setup-Typen."
           />
           <QualityList
-            title="Needs stricter triggers"
+            title="Strengere Trigger noetig"
             rows={weakSetupTypes}
             empty="Noch keine schwachen Setup-Typen erkannt."
           />
           <QualityList
-            title="Source quality"
+            title="Quellenqualitaet"
             rows={sources}
             empty="Quellen werden bewertet, sobald Outcomes faellig sind."
             showMove
           />
           <QualityList
-            title="Sources to downgrade"
+            title="Quellen runtergewichten"
             rows={weakSources}
             empty="Noch keine schwachen Quellen erkannt."
             showMove
@@ -193,7 +193,7 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
 
         <div className="rounded-[1.8rem] border border-black/8 bg-white/72 p-5">
           <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-            Recent briefing forecasts
+            Letzte Briefing-Prognosen
           </div>
           <div className="mt-4 space-y-3">
             {recent.length ? (
@@ -212,7 +212,7 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
                       </span>
                     </div>
                     <div className="text-[11px] font-bold text-slate-500">
-                      {item.confidence ? `${Math.round(Number(item.confidence))}% conf` : "confidence n/a"}
+                      {item.confidence ? `${Math.round(Number(item.confidence))}% Konfidenz` : "Konfidenz offen"}
                     </div>
                   </div>
                   <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{item.thesis}</div>

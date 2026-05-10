@@ -89,6 +89,16 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
+  const nextBriefJob = [...jobs]
+    .filter((job: any) => job?.next_due_at)
+    .sort((a: any, b: any) => new Date(a.next_due_at).getTime() - new Date(b.next_due_at).getTime())[0];
+  const lastSuccessJob = [...jobs]
+    .filter((job: any) => job?.last_success_at || job?.last_sent_at)
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.last_success_at || b.last_sent_at).getTime() -
+        new Date(a.last_success_at || a.last_sent_at).getTime(),
+    )[0];
   const schedulerVerdict = scheduleSummary.last_error
     ? "error"
     : scheduleSummary.loop_state === "stale"
@@ -345,6 +355,30 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${health?.schedule?.enabled ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
                   {health?.schedule?.enabled ? "enabled" : "disabled"}
                 </span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-[1.1rem] border border-emerald-500/15 bg-emerald-500/10 p-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">
+                    Letzter erfolgreicher Brief
+                  </div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {lastSuccessJob?.label || scheduleSummary.last_success_job || "Noch keiner"}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {fmtDate(lastSuccessJob?.last_success_at || lastSuccessJob?.last_sent_at || scheduleSummary.last_success_at)}
+                  </div>
+                </div>
+                <div className="rounded-[1.1rem] border border-sky-500/15 bg-sky-500/10 p-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
+                    Naechster geplanter Brief
+                  </div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {nextBriefJob?.label || "n/a"}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {nextBriefJob ? `${fmtDate(nextBriefJob.next_due_at)} / Plan ${nextBriefJob.time}` : "Keine naechste Ausfuehrung berechnet"}
+                  </div>
+                </div>
               </div>
               <div className="mt-4 grid gap-2 md:grid-cols-2">
                 {jobs.map((job: any) => (

@@ -757,7 +757,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400"
                   title={INDICATOR_HELP.Volume}
                 >
-                  Volume · Hover: Aktivitaet / Bestaetigung
+                  Volume / Hover: Aktivitaet / Bestaetigung
                 </div>
               </div>
             ) : null}
@@ -804,7 +804,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400"
                   title={INDICATOR_HELP.MACD}
                 >
-                  MACD Histogram (12/26/9) · Momentum
+                  MACD Histogram (12/26/9) / Momentum
                 </div>
               </div>
             ) : null}
@@ -838,7 +838,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           }`}
         >
           Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
-          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} · Feed: {transportMode === "ws" ? "live" : "snapshot"}
+          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} / Feed: {transportMode === "ws" ? "live" : "snapshot"}
           {typeof staleForTicker === "number" && staleForTicker > 5 ? ` - stale ${staleForTicker}s` : ""}
           {realtimeFallbackNote ? ` - ${realtimeFallbackNote}` : ""}
           {displayedRealtimeError ? ` - ${friendlyRealtimeError(displayedRealtimeError)}` : ""}

@@ -754,6 +754,20 @@ export default function PortfolioView({
                             Score {(holding.score || 0).toFixed(0)}
                           </span>
                         </div>
+                        {!hasEntry && (
+                          <button
+                            type="button"
+                            onClick={() => openEditHolding({
+                              ticker: holding.ticker,
+                              shares: holding.shares,
+                              buyPrice: holding.buy_price,
+                              purchaseDate: holding.purchase_date,
+                            })}
+                            className="mt-3 w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left text-xs font-semibold text-amber-800"
+                          >
+                            Kaufkurs fehlt: Einstand eintragen, damit Rendite seit Kauf korrekt berechnet wird.
+                          </button>
+                        )}
 
                         <div className="mt-4 flex items-end justify-between gap-3">
                           <div>
@@ -904,7 +918,7 @@ export default function PortfolioView({
                               {formatHoldingPeriod(holding.holding_days)}
                             </td>
                             <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                              {hasEntry ? formatPrice(holding.buy_price) : "Aktueller Kurs"}
+                              {hasEntry ? formatPrice(holding.buy_price) : "Kaufkurs fehlt"}
                             </td>
                             <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                               {formatPrice(holding.current_price || 0)}
@@ -921,7 +935,7 @@ export default function PortfolioView({
                               </div>
                               {!hasEntry && (
                                 <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
-                                  Kaufkurs fehlt
+                                  Editieren fuer echte Rendite
                                 </div>
                               )}
                             </td>

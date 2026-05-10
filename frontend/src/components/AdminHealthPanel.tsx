@@ -13,10 +13,17 @@ function statusTone(status?: string) {
 }
 
 function fmtDate(value?: string | null) {
-  if (!value) return "n/a";
+  if (!value) return "offen";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+}
+
+function displayValue(value?: string | number | null, fallback = "offen") {
+  if (value === null || value === undefined || value === "") return fallback;
+  const text = String(value);
+  if (text.toLowerCase() === "unknown" || text.toLowerCase() === "n/a") return fallback;
+  return value;
 }
 
 export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelProps) {
@@ -194,7 +201,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           {warmupResult ? (
             <div className="mb-4 rounded-[1.2rem] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800">
               <span className="font-extrabold">Brief cache warmed.</span>{" "}
-              {warmupResult.headline || "Snapshot ready"} - {warmupResult.elapsed_ms ?? "n/a"}ms,
+              {warmupResult.headline || "Snapshot ready"} / {warmupResult.elapsed_ms ?? "offen"}ms,
               {warmupResult.snapshot_items ?? 0} signal items, generated {fmtDate(warmupResult.generated_at)}.
             </div>
           ) : null}
@@ -234,13 +241,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
             </div>
             <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
-              <div>Next due: {scheduleSummary.next_label || "n/a"} · {fmtDate(scheduleSummary.next_due_at)}</div>
-              <div>Loop: {scheduleSummary.loop_state || "unknown"} · {fmtDate(health?.schedule?.loop_seen_at)}</div>
+              <div>Next due: {displayValue(scheduleSummary.next_label)} / {fmtDate(scheduleSummary.next_due_at)}</div>
+              <div>Loop: {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}</div>
               <div>
-                Loop age: {typeof schedule.loop_age_minutes === "number" ? `${schedule.loop_age_minutes}m` : "n/a"}
+                Loop age: {typeof schedule.loop_age_minutes === "number" ? `${schedule.loop_age_minutes}m` : "offen"}
                 {schedule.loop_stale ? ` stale after ${schedule.loop_stale_after_minutes ?? "?"}m` : ""}
               </div>
-              <div>Telegram: {telegram.sendable ? "sendable" : "blocked/missing"}</div>
+              <div>Telegram: {telegram.sendable ? "sendable" : "blocked / fehlt"}</div>
             </div>
           </div>
 
@@ -250,7 +257,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Next Brief
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
-                {scheduleSummary.next_label || "n/a"}
+                {displayValue(scheduleSummary.next_label)}
               </div>
               <div className="mt-1 text-xs text-slate-500">{fmtDate(scheduleSummary.next_due_at)}</div>
             </div>
@@ -268,10 +275,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Queue
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
-                {scheduleSummary.due_now_count ?? 0} due - {scheduleSummary.catchup_count ?? 0} catch-up - {scheduleSummary.missed_count ?? 0} missed
+                {scheduleSummary.due_now_count ?? 0} due / {scheduleSummary.catchup_count ?? 0} catch-up / {scheduleSummary.missed_count ?? 0} missed
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Loop {scheduleSummary.loop_state || "unknown"} - {fmtDate(health?.schedule?.loop_seen_at)}
+                Loop {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}
               </div>
               {schedule.loop_stale ? (
                 <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-800">
@@ -293,7 +300,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 {scheduleSummary.last_error || "No active delivery error"}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} - ` : ""}
+                {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} / ` : ""}
                 {fmtDate(scheduleSummary.last_error_at)}
               </div>
             </div>
@@ -303,13 +310,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Telegram</div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">{telegram.status || "unknown"}</div>
+                <div className="text-lg font-black text-slate-900">{displayValue(telegram.status)}</div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(telegram.status)}`}>
                   {telegram.sendable ? "sendable" : "blocked"}
                 </span>
               </div>
               <div className="mt-2 text-xs leading-5 text-slate-500">
-                Chat: {telegram.chat_id || "missing"}
+                Chat: {displayValue(telegram.chat_id, "fehlt")}
               </div>
               {telegram.error ? <div className="mt-2 text-xs text-red-700">{telegram.error}</div> : null}
             </div>
@@ -320,9 +327,9 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   {key.replace("_", " ")}
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="text-lg font-black text-slate-900">{feed.status || "unknown"}</div>
+                  <div className="text-lg font-black text-slate-900">{displayValue(feed.status)}</div>
                   <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(feed.status)}`}>
-                    {feed.status || "n/a"}
+                    {displayValue(feed.status)}
                   </span>
                 </div>
                 <div className="mt-2 text-xs leading-5 text-slate-500">
@@ -341,10 +348,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <div>
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Scheduled Briefs</div>
                   <div className="mt-1 text-sm text-slate-500">
-                    Timezone {health?.timezone || "Europe/Berlin"} - {health?.schedule?.weekdays}
+                    Timezone {health?.timezone || "Europe/Berlin"} / {health?.schedule?.weekdays}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    Last check {fmtDate(health?.schedule?.last_checked_at)} - loop {fmtDate(health?.schedule?.loop_seen_at)} - grace {health?.schedule?.delivery_grace_minutes ?? "n/a"}m
+                    Last check {fmtDate(health?.schedule?.last_checked_at)} / loop {fmtDate(health?.schedule?.loop_seen_at)} / grace {health?.schedule?.delivery_grace_minutes ?? "offen"}m
                   </div>
                   {health?.schedule?.loop_error ? (
                     <div className="mt-1 text-xs font-semibold text-red-700">
@@ -373,7 +380,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     Naechster geplanter Brief
                   </div>
                   <div className="mt-1 text-sm font-black text-slate-900">
-                    {nextBriefJob?.label || "n/a"}
+                    {nextBriefJob?.label || "offen"}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
                     {nextBriefJob ? `${fmtDate(nextBriefJob.next_due_at)} / Plan ${nextBriefJob.time}` : "Keine naechste Ausfuehrung berechnet"}
@@ -399,8 +406,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                         {job.sent_today ? "sent today" : job.due_now ? "due now" : job.catchup_available ? "catch-up" : job.missed_today ? "missed" : "pending"}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} - next {fmtDate(job.next_due_at)}</div>
-                    <div className="mt-1 text-xs text-slate-500">Due today {fmtDate(job.scheduled_at_today)} - grace until {fmtDate(job.grace_until)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} / next {fmtDate(job.next_due_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Due today {fmtDate(job.scheduled_at_today)} / grace until {fmtDate(job.grace_until)}</div>
                     {job.minutes_late != null ? (
                       <div className="mt-1 text-xs text-slate-500">{job.minutes_late} minutes late</div>
                     ) : null}
@@ -414,7 +421,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     </div>
                     {job.last_status ? (
                       <div className="mt-1 text-xs text-slate-500">
-                        Last status {job.last_status} - {fmtDate(job.last_status_updated_at)}
+                        Last status {job.last_status} / {fmtDate(job.last_status_updated_at)}
                       </div>
                     ) : null}
                     {job.last_error ? (
@@ -435,7 +442,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 {deliveries.length ? deliveries.map((item: any) => (
                   <div key={item.event_key} className="rounded-[1rem] border border-black/8 bg-white p-3">
                     <div className="text-sm font-bold text-slate-900">{item.title}</div>
-                    <div className="mt-1 text-xs text-slate-500">{item.category} - {fmtDate(item.sent_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">{item.category} / {fmtDate(item.sent_at)}</div>
                   </div>
                 )) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white p-3 text-sm text-slate-500">

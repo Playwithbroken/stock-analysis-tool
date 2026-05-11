@@ -60,6 +60,14 @@ interface ScreenerRow {
   low52_proximity?: number;
 }
 
+const formatMove = (value?: number) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "offen";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+};
+
+const emptyTicker = "Offen";
+const emptyName = "Daten werden geladen oder aktuell nicht belastbar.";
+
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw }) => {
   const { formatPrice } = useCurrency();
   const [marketView, setMarketView] = useState<"movers" | "explorer">("movers");
@@ -366,7 +374,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     marketView === "movers"
       ? {
           title: "Top Movers",
-          body: "Schneller Markt-Puls: Gewinner, Verlierer, AI-Chancen und alternative Assets. Klick auf eine Karte zeigt erst Details; Analyse startet nur ueber den Analyze-Button.",
+          body: "Schneller Markt-Puls: Gewinner, Verlierer, AI-Chancen und alternative Assets. Klick auf eine Karte zeigt erst Details; Analyse startet nur ueber den Analysieren-Button.",
           stat: `${gainers.length + losers.length + trending.length} Live-Kandidaten`,
         }
       : {
@@ -608,16 +616,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   <div className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-green-500/20">
                     <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                      Day Winner
+                      Tagesgewinner
                     </div>
                     <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-green-700">
-                      {stars.day_winner?.ticker || "N/A"}
+                      {stars.day_winner?.ticker || emptyTicker}
                     </div>
                     <div className="mb-4 truncate text-sm text-slate-500">
-                      {stars.day_winner?.name || "No data"}
+                      {stars.day_winner?.name || emptyName}
                     </div>
                     <div className="text-2xl font-mono font-bold text-emerald-700">
-                      +{stars.day_winner?.change?.toFixed(2) || "0.00"}%
+                      {formatMove(stars.day_winner?.change)}
                     </div>
                     {stars.day_winner?.ticker ? (
                       <button
@@ -625,7 +633,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         onClick={() => onAnalyze(stars.day_winner!.ticker)}
                         className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
                       >
-                        Analyze
+                        Analysieren
                       </button>
                     ) : null}
                   </div>
@@ -634,16 +642,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   <div className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-[var(--accent)]/20">
                     <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">
                       <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
-                      Week Winner
+                      Wochentrend
                     </div>
                     <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-[var(--accent)]">
-                      {stars.week_winner?.ticker || "N/A"}
+                      {stars.week_winner?.ticker || emptyTicker}
                     </div>
                     <div className="mb-4 truncate text-sm text-slate-500">
-                      {stars.week_winner?.name || "No data"}
+                      {stars.week_winner?.name || emptyName}
                     </div>
                     <div className="text-2xl font-mono font-bold text-[var(--accent)]">
-                      +{stars.week_winner?.change?.toFixed(2) || "0.00"}%
+                      {formatMove(stars.week_winner?.change)}
                     </div>
                     {stars.week_winner?.ticker ? (
                       <button
@@ -651,7 +659,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         onClick={() => onAnalyze(stars.week_winner!.ticker)}
                         className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
                       >
-                        Analyze
+                        Analysieren
                       </button>
                     ) : null}
                   </div>
@@ -664,7 +672,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-sky-500/20"
                       >
                         <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-sky-700">
-                          Picked for you
+                          Fuer dich relevant
                         </div>
                         <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-sky-700">
                           {stock.ticker}
@@ -675,8 +683,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         <div
                           className={`text-2xl font-mono font-bold ${stock.change && stock.change > 0 ? "text-emerald-700" : "text-red-700"}`}
                         >
-                          {stock.change && stock.change > 0 ? "+" : ""}
-                          {stock.change?.toFixed(2)}%
+                          {formatMove(stock.change)}
                         </div>
                         {stock.ticker ? (
                           <button
@@ -684,21 +691,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             onClick={() => onAnalyze(stock.ticker)}
                             className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
                           >
-                            Analyze
+                            Analysieren
                           </button>
                         ) : null}
                       </div>
                     ))
                   ) : (
                     <div className="col-span-2 flex items-center justify-center rounded-3xl border border-dashed border-black/8 bg-white/72 p-6 text-sm text-slate-500">
-                      No personalized picks available yet.
+                      Noch keine personalisierten Picks mit belastbarer Datenlage.
                     </div>
                   )}
                 </div>
               </section>
             ) : (
               <div className="rounded-3xl border border-dashed border-black/8 bg-white/72 py-10 text-center text-slate-500">
-                Failed to load market stars.
+                Market Stars aktuell nicht verfuegbar. Bitte spaeter erneut laden.
               </div>
             )}
           </div>
@@ -736,7 +743,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       {(selectedMarketDetail.change || 0).toFixed(2)}%
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
-                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "No additional context"}
+                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -748,14 +755,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       }}
                       className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
                     >
-                      Close
+                      Schliessen
                     </button>
                     <button
                       type="button"
                       onClick={() => onAnalyze(selectedMarketDetail.ticker)}
                       className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                     >
-                      Analyze
+                      Analysieren
                     </button>
                   </div>
                 </div>
@@ -1008,7 +1015,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       {(selectedMarketDetail.change || 0).toFixed(2)}%
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
-                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "No additional context"}
+                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1020,14 +1027,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       }}
                       className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
                     >
-                      Close
+                      Schliessen
                     </button>
                     <button
                       type="button"
                       onClick={() => onAnalyze(selectedMarketDetail.ticker)}
                       className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                     >
-                      Analyze
+                      Analysieren
                     </button>
                   </div>
                 </div>
@@ -1192,7 +1199,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           {(selectedEtfDetail.change || 0).toFixed(2)}%
                         </div>
                         <div className="mt-2 text-xs text-slate-500">
-                          Category: {selectedEtfDetail.category || "Diverse"} · TER: {selectedEtfDetail.ter ? `${selectedEtfDetail.ter.toFixed(2)}%` : "N/A"}
+                          Kategorie: {selectedEtfDetail.category || "Diverse"} / TER: {selectedEtfDetail.ter ? `${selectedEtfDetail.ter.toFixed(2)}%` : "offen"}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1201,21 +1208,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           onClick={() => setSelectedEtfDetail(null)}
                           className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
                         >
-                          Close
+                          Schliessen
                         </button>
                         <button
                           type="button"
                           onClick={() => toggleEtfCompare(selectedEtfDetail)}
                           className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                         >
-                          {selectedEtfs.some((s) => s.ticker === selectedEtfDetail.ticker) ? "Remove Compare" : "Add Compare"}
+                          {selectedEtfs.some((s) => s.ticker === selectedEtfDetail.ticker) ? "Vergleich entfernen" : "Vergleich aufnehmen"}
                         </button>
                         <button
                           type="button"
                           onClick={() => onAnalyze(selectedEtfDetail.ticker)}
                           className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                         >
-                          Analyze
+                          Analysieren
                         </button>
                       </div>
                     </div>
@@ -1265,7 +1272,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                               Kosten (TER)
                             </div>
                             <div className="text-lg font-black text-emerald-700">
-                              {etf.ter ? `${etf.ter.toFixed(2)}%` : "N/A"}
+                              {etf.ter ? `${etf.ter.toFixed(2)}%` : "offen"}
                             </div>
                           </div>
                           <div className="rounded-2xl border border-black/8 bg-white/75 p-3">
@@ -1298,7 +1305,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             }}
                             className="rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                           >
-                            {isSelected ? "Remove Compare" : "Add Compare"}
+                            {isSelected ? "Vergleich entfernen" : "Vergleich aufnehmen"}
                           </button>
                           <button
                             type="button"
@@ -1308,7 +1315,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             }}
                             className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                           >
-                            Analyze
+                            Analysieren
                           </button>
                         </div>
                       </div>
@@ -1458,7 +1465,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                               onClick={() => onAnalyze(row.ticker)}
                               className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                             >
-                              Analyze
+                              Analysieren
                             </button>
                           </td>
                         </tr>
@@ -1491,7 +1498,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       {(selectedMarketDetail.change || 0).toFixed(2)}%
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
-                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "No additional context"}
+                      {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1503,14 +1510,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       }}
                       className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
                     >
-                      Close
+                      Schliessen
                     </button>
                     <button
                       type="button"
                       onClick={() => onAnalyze(selectedMarketDetail.ticker)}
                       className="rounded-full bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                     >
-                      Analyze
+                      Analysieren
                     </button>
                   </div>
                 </div>
@@ -1606,7 +1613,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     <div className="surface-panel rounded-[1.6rem] p-5">
                       <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">VIX</div>
                       <div className={`mt-2 text-3xl font-black ${(internals.vix.current || 0) > 25 ? "text-red-700" : (internals.vix.current || 0) > 18 ? "text-amber-700" : "text-emerald-700"}`}>
-                        {internals.vix.current ?? "N/A"}
+                        {internals.vix.current ?? "offen"}
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
@@ -1679,7 +1686,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       <div className={`mt-2 text-3xl font-black ${
                         internals.yield_spread.inverted ? "text-red-700" : "text-emerald-700"
                       }`}>
-                        {internals.yield_spread.spread != null ? `${internals.yield_spread.spread > 0 ? "+" : ""}${internals.yield_spread.spread}%` : "N/A"}
+                        {internals.yield_spread.spread != null ? `${internals.yield_spread.spread > 0 ? "+" : ""}${internals.yield_spread.spread}%` : "offen"}
                       </div>
                       <div className={`mt-1 rounded-full inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
                         internals.yield_spread.inverted ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"
@@ -1687,8 +1694,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         {internals.yield_spread.inverted ? "⚠ Inverted" : "Normal"}
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                        <div>13W: {internals.yield_spread.t13w ?? "N/A"}%</div>
-                        <div>10Y: {internals.yield_spread.t10y ?? "N/A"}%</div>
+                        <div>13W: {internals.yield_spread.t13w ?? "offen"}%</div>
+                        <div>10Y: {internals.yield_spread.t10y ?? "offen"}%</div>
                       </div>
                     </div>
                   )}

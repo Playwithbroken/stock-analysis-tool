@@ -764,11 +764,14 @@ export default function MorningBriefPanel({
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Top 5 Trade Setups
+              Top Setups
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              trader-first
+              Trigger zuerst
             </div>
+          </div>
+          <div className="mt-2 text-xs leading-5 text-slate-500">
+            Erst Einstieg, Ungueltig-wenn und Zeitfenster pruefen. Analyse nur starten, wenn die Kursreaktion dazu passt.
           </div>
           <div className="mt-4 space-y-3">
             {(brief.trade_setups || []).slice(0, 5).map((setup: any, idx: number) => (
@@ -790,10 +793,10 @@ export default function MorningBriefPanel({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      score {openValue(setup.rank_score)}
+                      Score {openValue(setup.rank_score)}
                     </span>
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      confidence {setup.confidence}
+                      Konfidenz {setup.confidence}
                     </span>
                   </div>
                 </div>
@@ -804,15 +807,15 @@ export default function MorningBriefPanel({
                       ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-800"
                       : "border-red-500/20 bg-red-500/8 text-red-800"
                   }`}>
-                    Learning bias {Number(setup.learning_adjustment.score_delta) > 0 ? "+" : ""}
+                    Learning-Bias {Number(setup.learning_adjustment.score_delta) > 0 ? "+" : ""}
                     {setup.learning_adjustment.score_delta}: {setup.learning_adjustment.reason}
                   </div>
                 ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                  <div>Trigger: {setup.trigger}</div>
-                  <div>Window: {setup.window}</div>
-                  <div>Invalidation: {setup.invalidation}</div>
-                  <div>Expected move: {setup.expected_move}</div>
+                  <div>Einstieg: {setup.trigger}</div>
+                  <div>Zeitfenster: {setup.window}</div>
+                  <div>Ungueltig wenn: {setup.invalidation}</div>
+                  <div>Erwartete Bewegung: {setup.expected_move}</div>
                 </div>
                 {setup.catalysts?.length ? (
                   <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
@@ -828,7 +831,7 @@ export default function MorningBriefPanel({
             {!(brief.trade_setups || []).length ? (
               <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
                 {brief.trade_setups_status === "insufficient_signal"
-                  ? "Insufficient signal: aktuell keine belastbaren Setups."
+                  ? "Keine belastbaren Setups: aktuell fehlt ein klarer Trigger mit genuegend Datenvertrauen."
                   : "Keine belastbaren Setups im aktuellen Feed."}
               </div>
             ) : null}
@@ -836,7 +839,7 @@ export default function MorningBriefPanel({
           {(brief.learning_adjustments || []).length ? (
             <div className="mt-4 rounded-[1.2rem] border border-[var(--accent)]/14 bg-[var(--accent-soft)]/60 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
-                Learning applied to ranking
+                Learning im Ranking
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {(brief.learning_adjustments || []).slice(0, 4).map((item: any, index: number) => (
@@ -845,7 +848,7 @@ export default function MorningBriefPanel({
                       {item.axis}: {item.label}
                     </div>
                     <div className="mt-1">
-                      hit {item.hit_rate}% / ranking {Number(item.score_delta) > 0 ? "+" : ""}
+                      Trefferquote {item.hit_rate}% / Ranking {Number(item.score_delta) > 0 ? "+" : ""}
                       {item.score_delta}
                     </div>
                   </div>
@@ -858,11 +861,14 @@ export default function MorningBriefPanel({
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Action Board
+              Aktionsboard
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              world watch
+              Weltlage
             </div>
+          </div>
+          <div className="mt-2 text-xs leading-5 text-slate-500">
+            Makro- und Event-Ideen bleiben Watchlist-Material, bis Preis, Volumen und Datenquelle bestaetigen.
           </div>
           <div className="mt-4 space-y-3">
             {(brief.action_board || []).slice(0, 6).map((item: any, index: number) => (
@@ -887,7 +893,7 @@ export default function MorningBriefPanel({
                       {item.setup}
                     </span>
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      leverage {item.leverage}
+                      Hebel {item.leverage}
                     </span>
                     {item.ticker && (
                       <button
@@ -904,9 +910,9 @@ export default function MorningBriefPanel({
                 {item.event_intelligence ? (
                   <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                     <div>Impact {item.event_intelligence.impact_score}</div>
-                    <div>Confidence {item.event_intelligence.confidence_score}</div>
-                    <div>Decay {item.event_intelligence.decay}</div>
-                    <div>Action {item.event_intelligence.action}</div>
+                    <div>Konfidenz {item.event_intelligence.confidence_score}</div>
+                    <div>Verfall {item.event_intelligence.decay}</div>
+                    <div>Aktion {item.event_intelligence.action}</div>
                   </div>
                 ) : null}
                 {item.event_intelligence?.decision_quality ? (
@@ -961,16 +967,16 @@ export default function MorningBriefPanel({
                 ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>Trigger: {item.trigger}</div>
-                  <div>Risk: {item.risk}</div>
+                  <div>Risiko: {item.risk}</div>
                 </div>
                 {item.event_intelligence?.invalidation ? (
                   <div className="mt-2 text-xs text-slate-500">
-                    Invalidation: {item.event_intelligence.invalidation}
+                    Ungueltig wenn: {item.event_intelligence.invalidation}
                   </div>
                 ) : null}
                 {item.event_intelligence?.execution_window ? (
                   <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-                    Window: {item.event_intelligence.execution_window}
+                    Zeitfenster: {item.event_intelligence.execution_window}
                   </div>
                 ) : null}
               </div>
@@ -984,7 +990,7 @@ export default function MorningBriefPanel({
               Congress Watch
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              PTR / delayed official filings
+              PTR / verzoegerte offizielle Meldungen
             </div>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">

@@ -249,6 +249,29 @@ export default function BrokerChat({
     activeTab === "portfolio" ? "Welche Position sollte ich wegen Rendite seit Kauf pruefen?" : "Welche Daten fehlen fuer eine saubere Entscheidung?",
   ];
   const visibleQuickActions = quickActions.slice(0, 6);
+  const tabName =
+    activeTab === "discovery"
+      ? "Markets"
+      : activeTab === "analyze"
+        ? "Analyze"
+        : activeTab === "portfolio"
+          ? "Portfolio"
+          : "Dashboard";
+  const activeDataCount = contextStats.filter((item) => item.active).length;
+  const dataReadiness =
+    activeDataCount >= 4
+      ? "Datenlage stark"
+      : activeDataCount >= 2
+        ? "Datenlage brauchbar"
+        : "Datenlage duenn";
+  const assistantFocus =
+    activeTab === "discovery"
+      ? "Ich kann Scanner-Karten priorisieren, Gewinner/Verlierer einordnen und sagen, welche Analyse sich lohnt."
+      : activeTab === "analyze"
+        ? "Ich kann Dossier, Chart, Umsatz, Bewertung, Trigger und Invalidierung Schritt fuer Schritt einordnen."
+        : activeTab === "portfolio"
+          ? "Ich kann Rendite seit Kauf, Positionsrisiko, Klumpenrisiken und naechste Watch-Aktionen erklaeren."
+          : "Ich kann Morning Brief, Weltkarte, Setups, Events und Datenluecken zu einem Tagesplan verdichten.";
   const tabGuide =
     activeTab === "discovery"
       ? {
@@ -338,12 +361,12 @@ export default function BrokerChat({
       : currentTicker
     : activeTab
       ? `${activeTab} context`
-      : "Market overview";
+    : "Marktueberblick";
 
   const activeContextStats = contextStats.filter((item) => item.active);
   const portfolioReturnPct = portfolioSnapshot?.summary?.return_since_buy_pct;
   const contextReadout = [
-    activeTab ? `Tab: ${activeTab}` : "Tab: dashboard",
+    `Tab: ${tabName}`,
     primaryTicker ? `Fokus: ${String(primaryTicker).toUpperCase()}` : null,
     portfolioSnapshot?.summary?.num_holdings
       ? `Portfolio: ${portfolioSnapshot.summary.num_holdings} Holdings${
@@ -361,7 +384,7 @@ export default function BrokerChat({
   const peekCards = [
     {
       label: "Setup",
-      value: currentTicker ? "Focused setup" : "Market scan",
+      value: currentTicker ? "Fokus-Setup" : "Markt-Scan",
       detail: currentTicker
         ? `Priorisiere ${contextLabel} nur bei bestaetigtem Trigger.`
         : "Suche nach frischem Trigger, bevor du Momentum jagst.",
@@ -370,7 +393,7 @@ export default function BrokerChat({
     },
     {
       label: "Risk",
-      value: "Tactical only",
+      value: "Taktisch bleiben",
       detail:
         "Groesse klein halten, solange Newsflow oder Open-Richtung nicht sauber bestaetigt sind.",
       tone:
@@ -378,7 +401,7 @@ export default function BrokerChat({
     },
     {
       label: "Hedge",
-      value: "Keep ready",
+      value: "Bereithalten",
       detail: currentTicker
         ? `Pruefe Hedge-Ideen gegen ${contextLabel}, falls das Setup kippt.`
         : "GLD, UUP oder TLT nur dann aktivieren, wenn Risiko wirklich hochzieht.",
@@ -401,7 +424,7 @@ export default function BrokerChat({
             type="button"
             onClick={() => setMobileSheetMode((prev) => (prev === "peek" ? "full" : "peek"))}
             className="flex items-center gap-2 rounded-full border border-black/8 bg-white/80 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
-            aria-label={mobileSheetMode === "peek" ? "Expand broker desk" : "Collapse broker desk"}
+            aria-label={mobileSheetMode === "peek" ? "Broker Desk erweitern" : "Broker Desk einklappen"}
           >
             <span className="h-1.5 w-10 rounded-full bg-slate-300" />
             {mobileSheetMode === "peek" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -420,7 +443,7 @@ export default function BrokerChat({
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Live market context
+                Live-Kontext
               </span>
             </div>
           </div>
@@ -445,10 +468,13 @@ export default function BrokerChat({
           <div className="space-y-4 md:hidden">
             <div className="rounded-[1.3rem] border border-black/8 bg-white/82 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Desk Snapshot
+                Desk-Snapshot
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-700">
                 {latestOracleMessage}
+              </div>
+              <div className="mt-3 rounded-[1rem] border border-[var(--accent)]/14 bg-[var(--accent-soft)] px-3 py-2 text-xs font-semibold leading-5 text-[var(--accent)]">
+                {assistantFocus}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -471,26 +497,26 @@ export default function BrokerChat({
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                  Context
+                  Kontext
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">
-                  {contextLabel}
+                  {tabName}
                 </div>
               </div>
               <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                  Mode
+                  Daten
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">
-                  Live desk
+                  {dataReadiness}
                 </div>
               </div>
               <div className="rounded-[1.15rem] border border-black/8 bg-white/76 p-3">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                  Next step
+                  Naechster Schritt
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">
-                  Slide up or tap a prompt
+                  Hochziehen oder Prompt waehlen
                 </div>
               </div>
             </div>
@@ -568,8 +594,11 @@ export default function BrokerChat({
                   </div>
                 </div>
                 <span className="rounded-full border border-emerald-500/18 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-700">
-                  aktiv
+                  {dataReadiness}
                 </span>
+              </div>
+              <div className="mt-3 rounded-[1rem] border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-3 py-2 text-xs font-semibold leading-5 text-[var(--accent)]">
+                {assistantFocus}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {contextReadout.map((item) => (
@@ -690,7 +719,7 @@ export default function BrokerChat({
           <div className="mb-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-black/8 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                {activeTab ? `${activeTab} desk` : "desk"}
+                {tabName} Desk
               </span>
               {primaryTicker ? (
                 <span className="rounded-full border border-[var(--accent)]/18 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">

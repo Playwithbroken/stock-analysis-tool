@@ -188,6 +188,14 @@ class ForecastLearningService:
                 "neutral": len(neutrals),
                 "hit_rate": round((len(hits) / max(1, len(hits) + len(misses))) * 100, 1),
                 "avg_performance_pct": self._avg([item.get("performance_pct") for item in evaluated]),
+                "avg_favorable_pct": self._avg([self._directional_performance(item) for item in evaluated]),
+                "avg_adverse_pct": self._avg(
+                    [
+                        self._directional_performance(item)
+                        for item in evaluated
+                        if self._directional_performance(item) is not None and self._directional_performance(item) < 0
+                    ]
+                ),
             },
             "by_setup_type": by_setup_type,
             "by_source": by_source,
@@ -268,6 +276,23 @@ class ForecastLearningService:
                 outcome_map.get(str(forecast.get("id")), []),
                 key=lambda item: int(item.get("horizon_hours") or 0),
             )
+            directional_outcomes = [
+                {
+                    **item,
+                    "_directional_performance": self._directional_performance(
+                        {
+                            **item,
+                            "direction": forecast.get("direction"),
+                        }
+                    ),
+                }
+                for item in forecast_outcomes
+                if item.get("status") == "evaluated"
+            ]
+            best_outcome = self._best_directional_outcome(directional_outcomes, strongest=True)
+            worst_outcome = self._best_directional_outcome(directional_outcomes, strongest=False)
+            max_favorable = best_outcome.get("_directional_performance") if best_outcome else None
+            max_adverse = worst_outcome.get("_directional_performance") if worst_outcome else None
             recent.append(
                 {
                     "id": forecast.get("id"),
@@ -279,18 +304,62 @@ class ForecastLearningService:
                     "entry_price": forecast.get("entry_price"),
                     "forecast_time": forecast.get("forecast_time"),
                     "thesis": forecast.get("thesis"),
+                    "max_favorable_pct": round(max_favorable, 2) if max_favorable is not None and max_favorable > 0 else None,
+                    "max_adverse_pct": round(max_adverse, 2) if max_adverse is not None and max_adverse < 0 else None,
+                    "best_horizon_hours": best_outcome.get("horizon_hours") if best_outcome else None,
+                    "worst_horizon_hours": worst_outcome.get("horizon_hours") if worst_outcome else None,
+                    "data_status": self._forecast_data_status(forecast_outcomes),
                     "outcomes": [
                         {
                             "horizon_hours": item.get("horizon_hours"),
                             "status": item.get("status"),
                             "result": item.get("result"),
                             "performance_pct": item.get("performance_pct"),
+                            "directional_performance_pct": self._directional_performance(
+                                {
+                                    **item,
+                                    "direction": forecast.get("direction"),
+                                }
+                            ),
+                            "data_status": item.get("status") or "pending",
                         }
                         for item in forecast_outcomes
                     ],
                 }
             )
         return recent
+
+    def _directional_performance(self, item: Dict[str, Any]) -> Optional[float]:
+        performance = self._safe_float(item.get("performance_pct"))
+        if performance is None:
+            return None
+        direction = str(item.get("direction") or "").lower()
+        bearish = any(token in direction for token in ("short", "hedge", "avoid", "reduce"))
+        signed = -performance if bearish else performance
+        return round(signed, 2)
+
+    def _best_directional_outcome(self, outcomes: List[Dict[str, Any]], strongest: bool) -> Optional[Dict[str, Any]]:
+        valid = [
+            item
+            for item in outcomes
+            if isinstance(item.get("_directional_performance"), (int, float))
+        ]
+        if not valid:
+            return None
+        return max(valid, key=lambda item: item["_directional_performance"]) if strongest else min(
+            valid,
+            key=lambda item: item["_directional_performance"],
+        )
+
+    def _forecast_data_status(self, outcomes: List[Dict[str, Any]]) -> str:
+        if not outcomes:
+            return "no_outcomes"
+        statuses = {str(item.get("status") or "pending") for item in outcomes}
+        if "evaluated" in statuses:
+            return "evaluated"
+        if "pending_data" in statuses:
+            return "pending_data"
+        return "pending"
 
     def _group_quality(self, outcomes: List[Dict[str, Any]], key: str, weakest: bool = False) -> List[Dict[str, Any]]:
         buckets: Dict[str, List[Dict[str, Any]]] = {}

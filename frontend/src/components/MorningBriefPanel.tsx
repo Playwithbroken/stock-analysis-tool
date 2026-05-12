@@ -56,9 +56,10 @@ function decisionTone(value?: string) {
   return "bg-slate-500/10 text-slate-600";
 }
 
-function setupBucketTone(bucket: "now" | "next" | "avoid") {
+function setupBucketTone(bucket: "now" | "next" | "avoid" | "data_missing") {
   if (bucket === "now") return "border-emerald-500/16 bg-emerald-500/5 text-emerald-700";
   if (bucket === "avoid") return "brief-avoid-soft border-red-500/14 text-red-700";
+  if (bucket === "data_missing") return "border-sky-500/15 bg-sky-500/[0.06] text-sky-800";
   return "border-amber-500/16 bg-amber-500/5 text-amber-700";
 }
 
@@ -289,6 +290,9 @@ export default function MorningBriefPanel({
   const topLosers = Array.isArray(marketMovers.losers) ? marketMovers.losers.slice(0, 4) : [];
   const productCatalysts = Array.isArray(brief.product_catalysts) ? brief.product_catalysts.slice(0, 4) : [];
   const setupBoard = brief.setup_board || { now: [], next: [], avoid: [] };
+  const playbookSummary = brief.playbook_summary || {};
+  const dataHealth = brief.data_health || {};
+  const missingSignalReasons = Array.isArray(brief.missing_signal_reasons) ? brief.missing_signal_reasons : [];
   const earningsRows = (
     Array.isArray(brief.earnings_calendar) && brief.earnings_calendar.length
       ? brief.earnings_calendar
@@ -695,17 +699,20 @@ export default function MorningBriefPanel({
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Top Now / Next / Avoid
+              Trading Playbook
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              compressed brief
+              {dataHealth.status || "ready"}
             </div>
           </div>
+          <div className="mt-2 text-xs leading-5 text-slate-500">
+            {playbookSummary.message || "Now, Next, Avoid und Datenluecken zeigen, wo heute echte Edge oder Zurueckhaltung noetig ist."}
+          </div>
           <div className="mt-4 grid gap-3">
-            {(["now", "next", "avoid"] as const).map((bucket) => {
-              const rows = setupBoard[bucket] || [];
-              const title = bucket === "now" ? "Now" : bucket === "next" ? "Next" : "Avoid";
-              const tone = setupBucketTone(bucket);
+            {(["now", "next", "avoid", "data_missing"] as const).map((bucket) => {
+              const rows = bucket === "data_missing" ? [] : setupBoard[bucket] || [];
+              const title = bucket === "now" ? "Now" : bucket === "next" ? "Next" : bucket === "avoid" ? "Avoid" : "Data Missing";
+              const tone = bucket === "data_missing" ? "border-sky-500/15 bg-sky-500/[0.06] text-sky-800" : setupBucketTone(bucket);
               return (
                 <div key={bucket} className={`rounded-[1.2rem] border p-4 ${tone}`}>
                   <div className="flex items-center justify-between gap-2">
@@ -713,11 +720,21 @@ export default function MorningBriefPanel({
                       {title}
                     </div>
                     <div className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-70">
-                      {rows.length} setups
+                      {bucket === "data_missing" ? `${missingSignalReasons.length} Hinweise` : `${rows.length} Setups`}
                     </div>
                   </div>
                   <div className="mt-3 space-y-2">
-                    {rows.length ? rows.slice(0, 3).map((item: any, idx: number) => (
+                    {bucket === "data_missing" ? (
+                      missingSignalReasons.length ? missingSignalReasons.slice(0, 3).map((reason: string, idx: number) => (
+                        <div key={`missing-${idx}`} className="rounded-[1rem] border border-black/8 bg-white/80 p-3 text-sm text-slate-600">
+                          {reason}
+                        </div>
+                      )) : (
+                        <div className="rounded-[1rem] border border-black/8 bg-white/80 p-3 text-sm text-slate-500">
+                          Keine kritischen Datenluecken im aktuellen Brief.
+                        </div>
+                      )
+                    ) : rows.length ? rows.slice(0, 3).map((item: any, idx: number) => (
                       <div key={`${bucket}-${item.symbol}-${idx}`} className="rounded-[1rem] border border-black/8 bg-white/80 p-3 text-sm">
                         <div className="flex items-center justify-between gap-2">
                           <button

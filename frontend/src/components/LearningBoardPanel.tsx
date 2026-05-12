@@ -17,6 +17,14 @@ function resultClass(result?: string) {
   return "border border-black/8 bg-white text-slate-500";
 }
 
+function edgeClass(value: any) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "bg-slate-500/10 text-slate-600";
+  if (number > 0) return "bg-emerald-500/10 text-emerald-700";
+  if (number < 0) return "bg-red-500/10 text-red-700";
+  return "bg-slate-500/10 text-slate-600";
+}
+
 function qualityTone(hitRate: any) {
   const rate = Number(hitRate);
   if (!Number.isFinite(rate)) return "text-slate-500";
@@ -83,7 +91,7 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
           ["Prognosen", summary.forecasts || 0],
           ["Ausgewertet", summary.evaluated || 0],
           ["Trefferquote", `${Number(summary.hit_rate || 0).toFixed(1)}%`],
-          ["Durchschn. Move", formatPct(summary.avg_performance_pct)],
+          ["Richtungs-Edge", formatPct(summary.avg_favorable_pct ?? summary.avg_performance_pct)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">{label}</div>
@@ -216,6 +224,19 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
                     </div>
                   </div>
                   <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{item.thesis}</div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className={`rounded-[1rem] px-3 py-2 text-xs font-bold ${edgeClass(item.max_favorable_pct)}`}>
+                      Best Case {formatPct(item.max_favorable_pct)}
+                      {item.best_horizon_hours ? ` / ${item.best_horizon_hours}h` : ""}
+                    </div>
+                    <div className={`rounded-[1rem] px-3 py-2 text-xs font-bold ${edgeClass(item.max_adverse_pct)}`}>
+                      Gegenlauf {formatPct(item.max_adverse_pct)}
+                      {item.worst_horizon_hours ? ` / ${item.worst_horizon_hours}h` : ""}
+                    </div>
+                    <div className="rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                      Daten {item.data_status || "pending"}
+                    </div>
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(item.outcomes || []).map((outcome: any) => (
                       <span
@@ -223,7 +244,11 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
                         className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${resultClass(outcome.result)}`}
                       >
                         {outcome.horizon_hours}h - {outcome.result || outcome.status}
-                        {outcome.performance_pct != null ? ` - ${formatPct(outcome.performance_pct)}` : ""}
+                        {outcome.directional_performance_pct != null
+                          ? ` - Edge ${formatPct(outcome.directional_performance_pct)}`
+                          : outcome.performance_pct != null
+                            ? ` - ${formatPct(outcome.performance_pct)}`
+                            : ""}
                       </span>
                     ))}
                   </div>

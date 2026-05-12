@@ -478,6 +478,7 @@ class MorningBriefService:
             },
         }
         brief["quality"] = self._build_quality_report(brief)
+        self._attach_playbook_context(brief)
         self._cache = brief
         self._cache_time = now
         self._persist_snapshot(brief)
@@ -640,10 +641,56 @@ class MorningBriefService:
         }
         brief["quality"] = self._build_quality_report(brief)
         brief["quality"]["mode"] = "fast"
+        self._attach_playbook_context(brief)
         self._cache = brief
         self._cache_time = now
         self._persist_snapshot(brief)
         return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
+
+    def _attach_playbook_context(self, brief: Dict[str, Any]) -> None:
+        setup_board = brief.get("setup_board") or {}
+        quality = brief.get("quality") or {}
+        data_status = brief.get("data_status") or {}
+        sources = data_status.get("sources") if isinstance(data_status.get("sources"), dict) else {}
+        deferred = data_status.get("deferred") if isinstance(data_status.get("deferred"), list) else []
+        missing = quality.get("missing") if isinstance(quality.get("missing"), list) else []
+        missing_reasons: List[str] = []
+
+        if brief.get("trade_setups_status") == "insufficient_signal":
+            missing_reasons.append("Kein Setup erreicht aktuell Trigger-, Konfidenz- und Datenqualitaet gleichzeitig.")
+        if missing:
+            missing_reasons.append(f"Qualitaetscheck offen: {', '.join(str(item) for item in missing[:3])}.")
+        if deferred:
+            missing_reasons.append(f"Fast Mode laedt nach: {', '.join(str(item) for item in deferred[:4])}.")
+        delayed_sources = [
+            name
+            for name, state in sources.items()
+            if str(state) not in {"loaded", "ready", "live"}
+        ]
+        if delayed_sources:
+            missing_reasons.append(f"Datenquellen nicht vollstaendig: {', '.join(delayed_sources[:4])}.")
+
+        brief["data_health"] = {
+            "mode": data_status.get("mode") or quality.get("mode") or "full",
+            "status": "ready" if quality.get("status") == "ready" and not deferred else "refreshing" if deferred else quality.get("status") or "unknown",
+            "score": quality.get("score"),
+            "missing": missing[:6],
+            "deferred": deferred[:8],
+            "sources": sources,
+        }
+        brief["missing_signal_reasons"] = missing_reasons[:4]
+        brief["playbook_summary"] = {
+            "now": len(setup_board.get("now") or []),
+            "next": len(setup_board.get("next") or []),
+            "avoid": len(setup_board.get("avoid") or []),
+            "data_missing": len(missing_reasons),
+            "status": brief.get("trade_setups_status") or "unknown",
+            "message": (
+                "Setups bereit: Trigger, Zeitfenster und Ungueltig-wenn vor Ausfuehrung pruefen."
+                if brief.get("trade_setups")
+                else "Keine belastbare Edge: zuerst Datenluecken und fehlende Trigger pruefen."
+            ),
+        }
 
     def _build_quality_report(self, brief: Dict[str, Any]) -> Dict[str, Any]:
         now_utc = datetime.now(timezone.utc)

@@ -596,7 +596,7 @@ h3,
   }
 
   .mobile-market-tape {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.6rem;
   }
 
   .mobile-market-tape > div {
@@ -614,7 +614,11 @@ h3,
   }
 
   .mobile-market-tape .ticker-marquee-wrap > div:first-child {
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .mobile-market-tape .ticker-marquee-wrap > div:first-child .text-\[10px\]:last-child {
+    display: none;
   }
 
   .world-map-mobile-card {
@@ -623,7 +627,7 @@ h3,
   }
 
   .world-map-mobile-card .world-map-canvas {
-    min-height: 212px;
+    min-height: 246px;
   }
 
   .world-map-mobile-card .world-map-zoom-controls {

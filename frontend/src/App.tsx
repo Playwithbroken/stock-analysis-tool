@@ -1059,7 +1059,7 @@ function AppContent() {
       <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.06)] backdrop-blur-xl">
         {favoriteTape}
         {activeTab === "dashboard" && moversTape ? (
-          <div className="mt-2 max-h-[8.5rem] overflow-hidden">
+          <div className="mt-2 max-h-[6.4rem] overflow-hidden">
             {moversTape}
           </div>
         ) : null}
@@ -1068,7 +1068,7 @@ function AppContent() {
   );
 
   return (
-    <div className="min-h-screen pb-24 text-[var(--text-primary)] md:pb-8">
+    <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
         <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] md:hidden">
           <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] border border-white/70 bg-white/88 px-2.5 shadow-[0_12px_28px_rgba(17,24,39,0.08)] backdrop-blur-xl">
@@ -1265,7 +1265,7 @@ function AppContent() {
       </header>
 
       <main
-        className={`content-shell px-4 pb-[11rem] pt-3 transition-all duration-300 sm:px-6 sm:pb-8 md:pt-6 xl:px-8 2xl:px-10 ${
+        className={`content-shell px-4 pb-[9rem] pt-3 transition-all duration-300 sm:px-6 sm:pb-8 md:pt-6 xl:px-8 2xl:px-10 ${
           isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
         }`}
       >
@@ -1657,13 +1657,13 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.6rem] border border-black/8 bg-[rgba(255,255,255,0.94)] p-2 shadow-[0_20px_60px_rgba(17,24,39,0.14)] backdrop-blur-xl md:hidden">
+      <nav className="fixed bottom-[calc(0.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.35rem] border border-black/8 bg-[rgba(255,255,255,0.94)] p-1.5 shadow-[0_18px_46px_rgba(17,24,39,0.13)] backdrop-blur-xl md:hidden">
         <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => selectTab(item.id)}
-              className={`min-w-0 rounded-[1rem] px-2 py-3 text-center text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all ${
+              className={`min-w-0 rounded-[0.95rem] px-1.5 py-2.5 text-center text-[9px] font-extrabold uppercase tracking-[0.12em] transition-all ${
                 activeTab === item.id ? "bg-[#101114] text-white" : "text-slate-500 hover:bg-black/[0.04]"
               }`}
             >

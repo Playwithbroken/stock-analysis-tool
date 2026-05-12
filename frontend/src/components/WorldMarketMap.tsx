@@ -1328,7 +1328,7 @@ export default function WorldMarketMap({
             </button>
           </div>
 
-          <div className="world-map-canvas relative mt-3 h-[212px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
+          <div className="world-map-canvas relative mt-3 h-[246px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
             <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
             <img
               src={worldMapSvg}

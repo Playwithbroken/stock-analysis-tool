@@ -415,7 +415,7 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : `surface-panel fixed inset-x-2 top-auto z-50 flex w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.5rem+env(safe-area-inset-bottom))] h-[min(86dvh,56rem)]" : "bottom-[calc(5.9rem+env(safe-area-inset-bottom))] h-[min(50dvh,31rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
+          : `surface-panel fixed inset-x-2 top-auto z-50 flex w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.5rem+env(safe-area-inset-bottom))] h-[min(86dvh,56rem)]" : "bottom-[calc(5.15rem+env(safe-area-inset-bottom))] h-[min(47dvh,29rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
       }`}
     >
       {!isInline && (
@@ -827,7 +827,7 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-3 z-40${isOpen ? " hidden" : ""} flex h-[3.2rem] max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-[1.2rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-3 text-white shadow-[0_20px_44px_rgba(15,118,110,0.24)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
+        className={`group fixed bottom-[calc(5.15rem+env(safe-area-inset-bottom))] right-2.5 z-40${isOpen ? " hidden" : ""} flex h-[2.9rem] max-w-[calc(100vw-1.25rem)] items-center gap-2.5 rounded-[1.05rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-2.5 text-white shadow-[0_18px_38px_rgba(15,118,110,0.22)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>

@@ -3366,6 +3366,7 @@ async def admin_health_center():
                 "last_sent_at": last_event.get("sent_at") if last_event else None,
                 "last_success_at": job_status.get("last_success_at") or (last_event.get("sent_at") if last_event else None),
                 "last_error": job_status.get("last_error"),
+                "last_message": job_status.get("message"),
                 "last_status": job_status.get("status"),
                 "last_status_updated_at": job_status.get("updated_at"),
                 "next_due_at": next_due.isoformat() if next_due else None,

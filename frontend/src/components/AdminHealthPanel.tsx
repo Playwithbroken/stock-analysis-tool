@@ -26,6 +26,14 @@ function displayValue(value?: string | number | null, fallback = "offen") {
   return value;
 }
 
+function jobStateLabel(job: any) {
+  if (job.sent_today) return "heute gesendet";
+  if (job.due_now) return "jetzt faellig";
+  if (job.catchup_available) return "nachholbar";
+  if (job.missed_today) return "verpasst";
+  return "wartet";
+}
+
 export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelProps) {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -149,7 +157,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Admin Health Center
             </div>
-            <h2 className="mt-1 text-3xl text-slate-900">Delivery, scheduler and data feeds</h2>
+            <h2 className="mt-1 text-3xl text-slate-900">Briefings, Scheduler und Datenfeeds</h2>
           </div>
           <div className="flex items-center gap-2">
             {health?.status ? (
@@ -163,7 +171,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
-              {loading ? "Refreshing" : "Refresh"}
+              {loading ? "Laedt" : "Neu laden"}
             </button>
             <button
               type="button"
@@ -171,7 +179,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
-              {runningDue ? "Running" : "Run Due/Missed"}
+              {runningDue ? "Laeuft" : "Faellige senden"}
             </button>
             <button
               type="button"
@@ -179,14 +187,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue}
               className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
-              {warming ? "Warming" : "Warm Brief Now"}
+              {warming ? "Waermt" : "Brief vorladen"}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-xl bg-[#101114] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
             >
-              Close
+              Schliessen
             </button>
           </div>
         </div>
@@ -200,18 +208,18 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
           {warmupResult ? (
             <div className="mb-4 rounded-[1.2rem] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800">
-              <span className="font-extrabold">Brief cache warmed.</span>{" "}
-              {warmupResult.headline || "Snapshot ready"} / {warmupResult.elapsed_ms ?? "offen"}ms,
+              <span className="font-extrabold">Brief-Cache vorgeladen.</span>{" "}
+              {warmupResult.headline || "Snapshot bereit"} / {warmupResult.elapsed_ms ?? "offen"}ms,
               {warmupResult.snapshot_items ?? 0} signal items, generated {fmtDate(warmupResult.generated_at)}.
             </div>
           ) : null}
 
           {runResult ? (
             <div className="mb-4 rounded-[1.2rem] border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-sky-800">
-              <span className="font-extrabold">Scheduled dispatcher ran.</span>{" "}
+              <span className="font-extrabold">Scheduler wurde manuell ausgefuehrt.</span>{" "}
               {Array.isArray(runResult) && runResult.length
-                ? runResult.map((item: any) => `${item.job}: ${item.status}`).join(", ")
-                : "No due brief inside the current grace window."}
+                ? runResult.map((item: any) => `${item.job || "scheduler"}: ${item.status}${item.message ? ` (${item.message})` : ""}`).join(", ")
+                : "Kein Brief im aktuellen Grace-Zeitfenster faellig."}
             </div>
           ) : null}
 
@@ -227,7 +235,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-600">
-                  Scheduler Verdict
+                  Scheduler-Urteil
                 </div>
                 <div className="mt-1 text-lg font-black text-slate-900">
                   {schedulerVerdict}
@@ -237,24 +245,24 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
               </div>
               <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
-                Next: {nextAction}
+                Naechster Schritt: {nextAction}
               </div>
             </div>
             <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
-              <div>Next due: {displayValue(scheduleSummary.next_label)} / {fmtDate(scheduleSummary.next_due_at)}</div>
+              <div>Naechster Brief: {displayValue(scheduleSummary.next_label)} / {fmtDate(scheduleSummary.next_due_at)}</div>
               <div>Loop: {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}</div>
               <div>
-                Loop age: {typeof schedule.loop_age_minutes === "number" ? `${schedule.loop_age_minutes}m` : "offen"}
-                {schedule.loop_stale ? ` stale after ${schedule.loop_stale_after_minutes ?? "?"}m` : ""}
+                Loop-Alter: {typeof schedule.loop_age_minutes === "number" ? `${schedule.loop_age_minutes}m` : "offen"}
+                {schedule.loop_stale ? ` / stale nach ${schedule.loop_stale_after_minutes ?? "?"}m` : ""}
               </div>
-              <div>Telegram: {telegram.sendable ? "sendable" : "blocked / fehlt"}</div>
+              <div>Telegram: {telegram.sendable ? "sendbar" : "blockiert / fehlt"}</div>
             </div>
           </div>
 
           <div className="mb-5 grid gap-3 lg:grid-cols-4">
             <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Next Brief
+                Naechster Brief
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
                 {displayValue(scheduleSummary.next_label)}
@@ -263,19 +271,19 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
             <div className="rounded-[1.4rem] border border-emerald-500/15 bg-emerald-500/6 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
-                Last Sent
+                Zuletzt gesendet
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
-                {scheduleSummary.last_success_job || "none"}
+                {scheduleSummary.last_success_job || "keiner"}
               </div>
               <div className="mt-1 text-xs text-slate-500">{fmtDate(scheduleSummary.last_success_at)}</div>
             </div>
             <div className="rounded-[1.4rem] border border-amber-500/15 bg-amber-500/6 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
-                Queue
+                Warteschlange
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
-                {scheduleSummary.due_now_count ?? 0} due / {scheduleSummary.catchup_count ?? 0} catch-up / {scheduleSummary.missed_count ?? 0} missed
+                {scheduleSummary.due_now_count ?? 0} faellig / {scheduleSummary.catchup_count ?? 0} nachholbar / {scheduleSummary.missed_count ?? 0} verpasst
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 Loop {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}
@@ -294,10 +302,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
             <div className={`rounded-[1.4rem] border p-4 ${scheduleSummary.last_error ? "border-red-500/15 bg-red-500/6" : "border-black/8 bg-white/80"}`}>
               <div className={`text-[10px] font-extrabold uppercase tracking-[0.18em] ${scheduleSummary.last_error ? "text-red-700" : "text-slate-500"}`}>
-                Last Error
+                Letzter Fehler
               </div>
               <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">
-                {scheduleSummary.last_error || "No active delivery error"}
+                {scheduleSummary.last_error || "Kein aktiver Versandfehler"}
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} / ` : ""}
@@ -312,7 +320,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{displayValue(telegram.status)}</div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(telegram.status)}`}>
-                  {telegram.sendable ? "sendable" : "blocked"}
+                  {telegram.sendable ? "sendbar" : "blockiert"}
                 </span>
               </div>
               <div className="mt-2 text-xs leading-5 text-slate-500">
@@ -403,13 +411,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                               ? "bg-red-500/10 text-red-700"
                               : "bg-slate-500/10 text-slate-500"
                       }`}>
-                        {job.sent_today ? "sent today" : job.due_now ? "due now" : job.catchup_available ? "catch-up" : job.missed_today ? "missed" : "pending"}
+                        {jobStateLabel(job)}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} / next {fmtDate(job.next_due_at)}</div>
-                    <div className="mt-1 text-xs text-slate-500">Due today {fmtDate(job.scheduled_at_today)} / grace until {fmtDate(job.grace_until)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} / naechster Termin {fmtDate(job.next_due_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Heute faellig {fmtDate(job.scheduled_at_today)} / Grace bis {fmtDate(job.grace_until)}</div>
                     {job.minutes_late != null ? (
-                      <div className="mt-1 text-xs text-slate-500">{job.minutes_late} minutes late</div>
+                      <div className="mt-1 text-xs text-slate-500">{job.minutes_late} Minuten verspaetet</div>
                     ) : null}
                     {job.catchup_available ? (
                       <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-700">
@@ -417,11 +425,16 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                       </div>
                     ) : null}
                     <div className="mt-1 text-xs text-slate-500">
-                      Last success {fmtDate(job.last_success_at || job.last_sent_at)}
+                      Letzter Erfolg {fmtDate(job.last_success_at || job.last_sent_at)}
                     </div>
                     {job.last_status ? (
                       <div className="mt-1 text-xs text-slate-500">
-                        Last status {job.last_status} / {fmtDate(job.last_status_updated_at)}
+                        Letzter Status {job.last_status} / {fmtDate(job.last_status_updated_at)}
+                      </div>
+                    ) : null}
+                    {job.last_message ? (
+                      <div className="mt-2 rounded-lg border border-black/8 bg-white/75 px-2 py-1 text-xs font-semibold text-slate-700">
+                        {job.last_message}
                       </div>
                     ) : null}
                     {job.last_error ? (
@@ -436,7 +449,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
             <section className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Recent Deliveries
+                Letzte Zustellungen
               </div>
               <div className="mt-4 space-y-2">
                 {deliveries.length ? deliveries.map((item: any) => (
@@ -446,7 +459,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   </div>
                 )) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white p-3 text-sm text-slate-500">
-                    No deliveries recorded yet.
+                    Noch keine Zustellungen gespeichert.
                   </div>
                 )}
               </div>
@@ -455,7 +468,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
           {health?.problems?.length ? (
             <div className="mt-5 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-800">
-              Problems: {health.problems.join(", ")}
+              Probleme: {health.problems.join(", ")}
             </div>
           ) : null}
         </div>

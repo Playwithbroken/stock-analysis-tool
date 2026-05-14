@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, LazyExoticComponent } from "react";
 import SearchBar from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
@@ -54,7 +54,6 @@ const DiscoveryPanel = lazyWithChunkRetry(() => import("./components/DiscoveryPa
 const BrokerChat = lazyWithChunkRetry(() => import("./components/BrokerChat"));
 const WorldMarketMap = lazyWithChunkRetry(() => import("./components/WorldMarketMap"));
 const EdgeDashboardPanel = lazyWithChunkRetry(() => import("./components/EdgeDashboardPanel"));
-const TradingEdgePanel = lazyWithChunkRetry(() => import("./components/TradingEdgePanel"));
 const MorningBriefPanel = lazyWithChunkRetry(() => import("./components/MorningBriefPanel"));
 const OnboardingWizard = lazyWithChunkRetry(() => import("./components/OnboardingWizard"));
 
@@ -151,7 +150,6 @@ function preloadLazyScreens() {
   safeImport(() => import("./components/BrokerChat"));
   safeImport(() => import("./components/WorldMarketMap"));
   safeImport(() => import("./components/EdgeDashboardPanel"));
-  safeImport(() => import("./components/TradingEdgePanel"));
   safeImport(() => import("./components/MorningBriefPanel"));
 }
 
@@ -362,7 +360,7 @@ function LoginScreen({
               {status ? (
                 <div className="mt-4 text-sm text-white/75">
                   {status.includes("500")
-                    ? "Cannot connect to the server — check that the backend is running."
+                    ? "Cannot connect to the server â€” check that the backend is running."
                     : status.includes("401") || status.includes("403")
                       ? "Incorrect code. Please try again."
                       : status}
@@ -747,8 +745,8 @@ function AppContent() {
     };
   }, [auth.authenticated, briefReloadTick]);
 
-  // Trading edge — heavy payload, loaded separately with own spinner.
-  // Refresh every 5 min; backend caches per-component (10min – 6h).
+  // Trading edge â€” heavy payload, loaded separately with own spinner.
+  // Refresh every 5 min; backend caches per-component (10min â€“ 6h).
   useEffect(() => {
     if (!auth.authenticated || activeTab !== "dashboard") return;
     let cancelled = false;
@@ -878,7 +876,7 @@ function AppContent() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {
-      // Network error — clear local session anyway
+      // Network error â€” clear local session anyway
     }
     setAuth((prev) => ({ ...prev, authenticated: false }));
     setAuthStatus("Abgemeldet.");
@@ -1206,7 +1204,7 @@ function AppContent() {
                     EUR
                   </button>
                 </div>
-                {/* Mobile: compact toggle that cycles USD ↔ EUR */}
+                {/* Mobile: compact toggle that cycles USD â†” EUR */}
                 <button
                   onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
                   aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
@@ -1233,7 +1231,7 @@ function AppContent() {
                 >
                   {installPrompt.installed ? "Installed" : "Install"}
                 </button>
-                {/* Username — visible on all screen sizes */}
+                {/* Username â€” visible on all screen sizes */}
                 <div className="max-w-[7.5rem] truncate rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)] sm:max-w-none sm:text-xs">
                   {auth.profile?.display_name || "Private"}
                 </div>
@@ -1333,11 +1331,11 @@ function AppContent() {
                     Dashboard
                   </div>
                   <h2 className="mt-2 max-w-4xl text-3xl text-slate-900 sm:text-4xl">
-                    World watch, sectors and live trading edge
+                    Erst Entscheidung, dann Marktbild, dann Details.
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    Übersicht über globale Märkte, Wars / Wahlen / Energie / Policy events
-                    sowie Squeeze-, Insider- und Options-Signale auf einen Blick.
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                    Das Dashboard ist die kurze Zusammenfassung. Tiefe Listen liegen in Markets,
+                    einzelne Werte im Analyzer und Positionen im Portfolio.
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <div className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
@@ -1358,7 +1356,7 @@ function AppContent() {
                   const r = (globalBrief.macro_regime || "").toLowerCase();
                   const isOn = r.includes("risk-on") || r.includes("on");
                   const isOff = r.includes("risk-off") || r.includes("off");
-                  const icon = isOn ? "↗" : isOff ? "↘" : "⚖";
+                  const icon = isOn ? "â†—" : isOff ? "â†˜" : "âš–";
                   const cls = isOn
                     ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
                     : isOff
@@ -1374,10 +1372,10 @@ function AppContent() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-                        Command Board
+                        Read order
                       </div>
                       <div className="mt-1 text-sm font-bold text-slate-900">
-                        Live brief readiness
+                        Decision / Market / Brief
                       </div>
                     </div>
                     <button
@@ -1402,8 +1400,7 @@ function AppContent() {
               </div>
             </section>
 
-            <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(440px,0.65fr)]">
-              <div className="space-y-6">
+            <div className="space-y-6">
                 {globalBrief && geoRegions.length ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
@@ -1447,24 +1444,6 @@ function AppContent() {
                     </button>
                   </section>
                 )}
-
-                {(tradingEdge || tradingEdgeLoading) ? (
-                  <ErrorBoundary>
-                    <Suspense fallback={<LoadingState />}>
-                      <TradingEdgePanel
-                        edge={tradingEdge}
-                        loading={tradingEdgeLoading && !tradingEdge}
-                        onSelectTicker={(t) => {
-                          setActiveTab("analyze");
-                          handleSearch(t);
-                        }}
-                      />
-                    </Suspense>
-                  </ErrorBoundary>
-                ) : null}
-              </div>
-
-              <div className="space-y-6 2xl:sticky 2xl:top-40">
                 {globalBrief ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
@@ -1481,7 +1460,6 @@ function AppContent() {
                 ) : (
                   <LoadingState />
                 )}
-              </div>
             </div>
           </div>
         ) : activeTab === "analyze" ? (
@@ -1637,10 +1615,10 @@ function AppContent() {
               <div className="mb-4 rounded-[1.4rem] border border-amber-400/30 bg-amber-50 p-5 shadow-sm">
                 <div className="flex flex-wrap items-start gap-4">
                   <div className="flex-1">
-                    <div className="text-sm font-extrabold text-amber-800">📦 Portfolios wiederherstellen</div>
+                    <div className="text-sm font-extrabold text-amber-800">ðŸ“¦ Portfolios wiederherstellen</div>
                     <p className="mt-1 text-sm text-amber-700">
-                      Der Server wurde neu gestartet und die Daten wurden zurückgesetzt.
-                      Es wurden <strong>{cachedPortfolios.length} Portfolio{cachedPortfolios.length > 1 ? "s" : ""}</strong> lokal gespeichert —
+                      Der Server wurde neu gestartet und die Daten wurden zurÃ¼ckgesetzt.
+                      Es wurden <strong>{cachedPortfolios.length} Portfolio{cachedPortfolios.length > 1 ? "s" : ""}</strong> lokal gespeichert â€”
                       sollen sie wiederhergestellt werden?
                     </p>
                     <div className="mt-1 text-xs text-amber-600">

@@ -11,7 +11,7 @@ import { useCurrency } from "../context/CurrencyContext";
 
 interface PortfolioViewProps {
   portfolios: Portfolio[];
-  onCreatePortfolio: (name: string) => void;
+  onCreatePortfolio: (name: string) => Promise<Portfolio>;
   onDeletePortfolio: (id: string) => void;
   onAddHolding: (portfolioId: string, holding: Holding) => void;
   onUpdateHolding: (portfolioId: string, ticker: string, patch: Partial<Holding>) => void;
@@ -99,6 +99,8 @@ export default function PortfolioView({
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [portfolioVerdict, setPortfolioVerdict] = useState<string | null>(null);
+  const [creatingPortfolio, setCreatingPortfolio] = useState(false);
+  const [createPortfolioError, setCreatePortfolioError] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [newAlertSymbol, setNewAlertSymbol] = useState("");
@@ -250,11 +252,21 @@ export default function PortfolioView({
     }
   };
 
-  const handleCreatePortfolio = () => {
-    if (newPortfolioName.trim()) {
-      onCreatePortfolio(newPortfolioName.trim());
+  const handleCreatePortfolio = async () => {
+    const name = newPortfolioName.trim();
+    if (name) {
+      setCreatingPortfolio(true);
+      setCreatePortfolioError(null);
+      try {
+        const created = await onCreatePortfolio(name);
+        setSelectedPortfolio(created.id);
       setNewPortfolioName("");
       setShowCreateModal(false);
+      } catch (error) {
+        setCreatePortfolioError(error instanceof Error ? error.message : "Portfolio konnte nicht gespeichert werden.");
+      } finally {
+        setCreatingPortfolio(false);
+      }
     }
   };
 
@@ -1123,24 +1135,36 @@ export default function PortfolioView({
             <input
               type="text"
               value={newPortfolioName}
-              onChange={(e) => setNewPortfolioName(e.target.value)}
+              onChange={(e) => {
+                setNewPortfolioName(e.target.value);
+                setCreatePortfolioError(null);
+              }}
               placeholder="Portfolio name"
               className="mt-5 w-full rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
               autoFocus
             />
+            {createPortfolioError ? (
+              <div className="mt-3 rounded-[1rem] border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-700">
+                {createPortfolioError}
+              </div>
+            ) : null}
             <div className="mt-5 flex justify-end gap-3">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setCreatePortfolioError(null);
+                  setShowCreateModal(false);
+                }}
+                disabled={creatingPortfolio}
                 className="rounded-[1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreatePortfolio}
-                disabled={!newPortfolioName.trim()}
+                disabled={!newPortfolioName.trim() || creatingPortfolio}
                 className="rounded-[1rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
               >
-                Create
+                {creatingPortfolio ? "Saving..." : "Create"}
               </button>
             </div>
           </div>

@@ -55,6 +55,14 @@ export function usePortfolios(enabled: boolean = true) {
     saveToCache(data)
   }
 
+  const applyServerPortfolios = (data: Portfolio[]) => {
+    setPortfolios(data)
+    saveToCache(data)
+    setNeedsRestore(false)
+    setDataSource(data.length ? 'server' : 'empty')
+    setDataSourceMessage('')
+  }
+
   const fetchPortfolios = async () => {
     if (!enabled) {
       setPortfolios([])
@@ -81,10 +89,7 @@ export function usePortfolios(enabled: boolean = true) {
             setDataSourceMessage('')
           }
         } else {
-          syncCache(data)
-          setNeedsRestore(false)
-          setDataSource('server')
-          setDataSourceMessage('')
+          applyServerPortfolios(data)
         }
       } else {
         // Fallback to cache on bad response
@@ -160,16 +165,41 @@ export function usePortfolios(enabled: boolean = true) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     })
+    if (!response.ok) {
+      let message = `Portfolio konnte nicht gespeichert werden (${response.status})`
+      try {
+        const payload = await response.json()
+        if (payload?.detail) message = payload.detail
+      } catch {
+        // ignore malformed error payload
+      }
+      throw new Error(message)
+    }
     const newPortfolio = await response.json()
-    const updated = [...portfolios, newPortfolio]
-    syncCache(updated)
+    setPortfolios((current) => {
+      const withoutDuplicate = current.filter((portfolio) => portfolio.id !== newPortfolio.id)
+      const updated = [...withoutDuplicate, newPortfolio]
+      saveToCache(updated)
+      return updated
+    })
+    setNeedsRestore(false)
+    setDataSource('server')
+    setDataSourceMessage('')
+    void fetchPortfolios()
     return newPortfolio
   }
 
   const deletePortfolio = async (id: string) => {
-    await fetch(`/api/portfolios/${id}`, { method: 'DELETE' })
-    const updated = portfolios.filter(p => p.id !== id)
-    syncCache(updated)
+    const response = await fetch(`/api/portfolios/${id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      throw new Error(`Portfolio konnte nicht geloescht werden (${response.status})`)
+    }
+    setPortfolios((current) => {
+      const updated = current.filter(p => p.id !== id)
+      saveToCache(updated)
+      return updated
+    })
+    void fetchPortfolios()
   }
 
   const addHolding = async (portfolioId: string, holding: Holding) => {

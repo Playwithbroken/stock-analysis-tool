@@ -51,7 +51,6 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
     };
 
-    void fetchRate();
     window.addEventListener("app:auth-state", onAuthState);
     return () => {
       cancelled = true;

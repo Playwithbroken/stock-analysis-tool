@@ -1179,7 +1179,7 @@ export default function WorldMarketMap({
   );
 
   return (
-    <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-5 sm:p-8">
+    <section className="surface-panel world-market-map relative overflow-hidden rounded-[2.5rem] p-5 sm:p-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.06),transparent_26%)]" />
 
       <div className="relative space-y-6">

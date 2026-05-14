@@ -558,14 +558,36 @@ h3,
 [data-theme="dark"] .analysis-card,
 [data-theme="dark"] .surface-panel .glass-card,
 [data-theme="dark"] .surface-panel .bg-white,
+[data-theme="dark"] .surface-panel .bg-white\/46,
+[data-theme="dark"] .surface-panel .bg-white\/50,
+[data-theme="dark"] .surface-panel .bg-white\/52,
+[data-theme="dark"] .surface-panel .bg-white\/65,
 [data-theme="dark"] .surface-panel .bg-white\/70,
 [data-theme="dark"] .surface-panel .bg-white\/72,
 [data-theme="dark"] .surface-panel .bg-white\/74,
 [data-theme="dark"] .surface-panel .bg-white\/75,
+[data-theme="dark"] .surface-panel .bg-white\/76,
 [data-theme="dark"] .surface-panel .bg-white\/78,
-[data-theme="dark"] .surface-panel .bg-white\/80 {
+[data-theme="dark"] .surface-panel .bg-white\/80,
+[data-theme="dark"] .surface-panel .bg-white\/82,
+[data-theme="dark"] .surface-panel .bg-white\/85,
+[data-theme="dark"] .surface-panel .bg-white\/88,
+[data-theme="dark"] .surface-panel .bg-white\/90,
+[data-theme="dark"] .surface-panel .bg-white\/92,
+[data-theme="dark"] .surface-panel .bg-white\/94,
+[data-theme="dark"] .surface-panel .bg-white\/95,
+[data-theme="dark"] .surface-panel .bg-slate-50,
+[data-theme="dark"] .surface-panel .bg-slate-100 {
   background-color: rgba(15, 23, 42, 0.82) !important;
   border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+[data-theme="dark"] .surface-panel .bg-white\/88,
+[data-theme="dark"] .surface-panel .bg-white\/90,
+[data-theme="dark"] .surface-panel .bg-white\/92,
+[data-theme="dark"] .surface-panel .bg-white\/94,
+[data-theme="dark"] .surface-panel .bg-white\/95 {
+  background-color: rgba(20, 29, 42, 0.92) !important;
 }
 
 [data-theme="dark"] .surface-panel .bg-black\/\[0\.025\] {
@@ -574,6 +596,73 @@ h3,
 
 [data-theme="dark"] .dashboard-command-panel {
   background: rgba(15, 23, 42, 0.74) !important;
+}
+
+[data-theme="dark"] .world-market-map {
+  color: #d7dee9;
+}
+
+[data-theme="dark"] .world-market-map .bg-white,
+[data-theme="dark"] .world-market-map .bg-white\/65,
+[data-theme="dark"] .world-market-map .bg-white\/70,
+[data-theme="dark"] .world-market-map .bg-white\/72,
+[data-theme="dark"] .world-market-map .bg-white\/75,
+[data-theme="dark"] .world-market-map .bg-white\/78,
+[data-theme="dark"] .world-market-map .bg-white\/80,
+[data-theme="dark"] .world-market-map .bg-white\/82,
+[data-theme="dark"] .world-market-map .bg-white\/85,
+[data-theme="dark"] .world-market-map .bg-white\/88,
+[data-theme="dark"] .world-market-map .bg-white\/90,
+[data-theme="dark"] .world-market-map .bg-white\/92,
+[data-theme="dark"] .world-market-map .bg-white\/95,
+[data-theme="dark"] .world-market-map .bg-slate-50,
+[data-theme="dark"] .world-market-map .bg-slate-100,
+[data-theme="dark"] .world-market-map .bg-\[\#eaf0f6\],
+[data-theme="dark"] .world-market-map .bg-\[\#edf2f8\] {
+  background-color: rgba(17, 24, 39, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  color: #d7dee9 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .world-market-map .bg-white\/92,
+[data-theme="dark"] .world-market-map .bg-white\/95,
+[data-theme="dark"] .world-market-map .bg-white\/90,
+[data-theme="dark"] .world-market-map .bg-white\/88 {
+  background-color: rgba(20, 29, 42, 0.94) !important;
+}
+
+[data-theme="dark"] .world-market-map .text-slate-950,
+[data-theme="dark"] .world-market-map .text-slate-900,
+[data-theme="dark"] .world-market-map .text-slate-800 {
+  color: #f4f7fb !important;
+}
+
+[data-theme="dark"] .world-market-map .text-slate-700,
+[data-theme="dark"] .world-market-map .text-slate-600 {
+  color: #c3ccda !important;
+}
+
+[data-theme="dark"] .world-market-map .text-slate-500,
+[data-theme="dark"] .world-market-map .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .world-market-map .border-black\/6,
+[data-theme="dark"] .world-market-map .border-black\/8,
+[data-theme="dark"] .world-market-map .border-black\/10,
+[data-theme="dark"] .world-market-map .border-black\/12,
+[data-theme="dark"] .world-market-map .border-slate-900\/6 {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+[data-theme="dark"] .world-market-map .hover\:bg-white:hover,
+[data-theme="dark"] .world-market-map .hover\:bg-white\/80:hover {
+  background-color: rgba(30, 41, 59, 0.96) !important;
+}
+
+[data-theme="dark"] .world-market-map .bg-slate-900\/75 {
+  background-color: rgba(45, 212, 191, 0.7) !important;
 }
 
 [data-theme="dark"] .mobile-topbar,

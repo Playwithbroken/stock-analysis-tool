@@ -36,3 +36,11 @@ Thumbs.db
 brain/
 artifacts/
 .gemini/
+.codex_uvicorn_*.log
+frontend/qa-artifacts/
+qa-artifacts/
+qa_smoke_playwright.mjs
+data/*.db
+data/*.db-*
+data/vapid_keys.json
+data/morning_brief_snapshot.json

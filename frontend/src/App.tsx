@@ -9,8 +9,8 @@ import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
-import { Activity, ArrowDownRight, ArrowUpRight, Bell, BellOff, BellRing, LockKeyhole, Moon, Sun } from "lucide-react";
-import usePushNotifications from "./hooks/usePushNotifications";
+import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
+import useInstallPrompt from "./hooks/useInstallPrompt";
 
 const CHUNK_RELOAD_GUARD_KEY = "brokerfreund:chunk-reload-once";
 
@@ -52,8 +52,8 @@ const AnalysisResult = lazyWithChunkRetry(() => import("./components/AnalysisRes
 const PortfolioView = lazyWithChunkRetry(() => import("./components/PortfolioView"));
 const DiscoveryPanel = lazyWithChunkRetry(() => import("./components/DiscoveryPanel"));
 const BrokerChat = lazyWithChunkRetry(() => import("./components/BrokerChat"));
-const MyRadar = lazyWithChunkRetry(() => import("./components/MyRadar"));
 const WorldMarketMap = lazyWithChunkRetry(() => import("./components/WorldMarketMap"));
+const EdgeDashboardPanel = lazyWithChunkRetry(() => import("./components/EdgeDashboardPanel"));
 const TradingEdgePanel = lazyWithChunkRetry(() => import("./components/TradingEdgePanel"));
 const MorningBriefPanel = lazyWithChunkRetry(() => import("./components/MorningBriefPanel"));
 const OnboardingWizard = lazyWithChunkRetry(() => import("./components/OnboardingWizard"));
@@ -149,8 +149,8 @@ function preloadLazyScreens() {
   safeImport(() => import("./components/DiscoveryPanel"));
   safeImport(() => import("./components/PortfolioView"));
   safeImport(() => import("./components/BrokerChat"));
-  safeImport(() => import("./components/MyRadar"));
   safeImport(() => import("./components/WorldMarketMap"));
+  safeImport(() => import("./components/EdgeDashboardPanel"));
   safeImport(() => import("./components/TradingEdgePanel"));
   safeImport(() => import("./components/MorningBriefPanel"));
 }
@@ -382,7 +382,7 @@ function AppContent() {
   const ONBOARDING_NUDGE_ENABLED = false;
   const { theme, setTheme } = useTheme();
   const toggleTheme = () => setTheme(theme === "dark" ? "premium-light" : "dark");
-  const push = usePushNotifications();
+  const installPrompt = useInstallPrompt();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     return (localStorage.getItem("activeTab") as Tab) || "dashboard";
   });
@@ -394,7 +394,7 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isHealthOpen, setIsHealthOpen] = useState(false);
-  const [showNotifHelp, setShowNotifHelp] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [hideOnboardingNudge, setHideOnboardingNudge] = useState(false);
   const [auth, setAuth] = useState<AuthState>({
     loading: true,
@@ -423,6 +423,8 @@ function AppContent() {
 
   const {
     portfolios,
+    dataSource: portfolioDataSource,
+    dataSourceMessage: portfolioDataSourceMessage,
     createPortfolio,
     deletePortfolio,
     addHolding,
@@ -932,6 +934,14 @@ function AppContent() {
     setActiveTab(tab);
   };
 
+  const handleInstallApp = async () => {
+    if (installPrompt.canInstall) {
+      await installPrompt.install();
+      return;
+    }
+    setShowInstallHelp(true);
+  };
+
   if (auth.loading) {
     return <div className="min-h-screen"><LoadingState /></div>;
   }
@@ -1110,6 +1120,16 @@ function AppContent() {
                 {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
               </button>
               <button
+                onClick={handleInstallApp}
+                aria-label="Install app"
+                className={`flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 ${
+                  installPrompt.installed ? "text-emerald-700" : "text-slate-700"
+                }`}
+                title={installPrompt.installed ? "App ist installiert" : "App installieren"}
+              >
+                {installPrompt.installed ? <Smartphone size={14} /> : <Download size={14} />}
+              </button>
+              <button
                 onClick={() => setIsHealthOpen(true)}
                 aria-label="Open health center"
                 className="flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 text-slate-700"
@@ -1202,42 +1222,17 @@ function AppContent() {
                 >
                   {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
                 </button>
-                {/* Push notifications toggle */}
-                {push.state !== "unsupported" && (
-                  <button
-                    onClick={() => {
-                      if (push.state === "subscribed") push.unsubscribe();
-                      else if (push.state === "denied") setShowNotifHelp(true);
-                      else push.subscribe();
-                    }}
-                    disabled={push.loading}
-                    aria-label="Toggle push notifications"
-                    title={
-                      push.state === "subscribed"
-                        ? "Push aktiv — klicke zum Deaktivieren"
-                        : push.state === "denied"
-                          ? "Notifications blockiert — klicken für Hilfe"
-                          : "Push Notifications aktivieren"
-                    }
-                    className={`rounded-[1rem] border p-2.5 transition-colors ${
-                      push.state === "subscribed"
-                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
-                        : push.state === "denied"
-                          ? "cursor-pointer border-amber-500/20 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
-                          : "border-[var(--line-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    {push.loading ? (
-                      <BellRing size={16} className="animate-pulse" />
-                    ) : push.state === "subscribed" ? (
-                      <Bell size={16} />
-                    ) : push.state === "denied" ? (
-                      <BellOff size={16} />
-                    ) : (
-                      <Bell size={16} />
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={handleInstallApp}
+                  className={`whitespace-nowrap rounded-[1rem] border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] transition-colors sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em] ${
+                    installPrompt.installed
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                      : "border-[var(--line-subtle)] bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
+                  }`}
+                  title={installPrompt.installed ? "App ist installiert" : "Als App installieren"}
+                >
+                  {installPrompt.installed ? "Installed" : "Install"}
+                </button>
                 {/* Username — visible on all screen sizes */}
                 <div className="max-w-[7.5rem] truncate rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)] sm:max-w-none sm:text-xs">
                   {auth.profile?.display_name || "Private"}
@@ -1305,6 +1300,31 @@ function AppContent() {
                 </div>
               </section>
             ) : null}
+
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingState />}>
+                <EdgeDashboardPanel
+                  signalScore={signalScoreContext}
+                  learning={learningContext}
+                  tradingEdge={tradingEdge}
+                  globalBrief={globalBrief}
+                  portfolios={portfolios}
+                  quotes={headerQuotes}
+                  loading={
+                    globalBriefStatus === "loading" ||
+                    tradingEdgeLoading ||
+                    !signalScoreContext ||
+                    !learningContext
+                  }
+                  onAnalyzeTicker={(ticker) => {
+                    setActiveTab("analyze");
+                    handleSearch(ticker);
+                  }}
+                  onOpenPortfolio={() => setActiveTab("portfolio")}
+                  onOpenMarkets={() => setActiveTab("discovery")}
+                />
+              </Suspense>
+            </ErrorBoundary>
 
             <section className="surface-panel dashboard-command-panel rounded-[2rem] p-5 sm:p-7">
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)] xl:items-center">
@@ -1468,11 +1488,6 @@ function AppContent() {
           <>
             {showHero && (
               <section className="mb-8 space-y-6">
-                <ErrorBoundary>
-                  <Suspense fallback={<LoadingState />}>
-                    <MyRadar onAnalyze={handleSearch} onOpenSignals={() => setActiveTab("discovery")} />
-                  </Suspense>
-                </ErrorBoundary>
                 <div>
                   <SearchBar onSearch={handleSearch} loading={loading} inputRef={searchInputRef} />
                 </div>
@@ -1608,6 +1623,16 @@ function AppContent() {
           </ErrorBoundary>
         ) : (
           <ErrorBoundary>
+            {portfolioDataSource !== "server" && portfolioDataSource !== "empty" ? (
+              <div className="mb-4 rounded-[1.4rem] border border-amber-400/30 bg-amber-50 p-5 shadow-sm">
+                <div className="text-sm font-extrabold text-amber-800">
+                  Portfolio-Datenquelle: {portfolioDataSource === "local-cache" ? "lokale Browser-Sicherung" : portfolioDataSource}
+                </div>
+                <p className="mt-1 text-sm leading-6 text-amber-700">
+                  {portfolioDataSourceMessage || "Serverdaten sind gerade nicht verfuegbar."}
+                </p>
+              </div>
+            ) : null}
             {needsRestore && cachedPortfolios.length > 0 && (
               <div className="mb-4 rounded-[1.4rem] border border-amber-400/30 bg-amber-50 p-5 shadow-sm">
                 <div className="flex flex-wrap items-start gap-4">
@@ -1675,7 +1700,7 @@ function AppContent() {
 
       <footer className="border-t border-black/6 bg-white/50">
         <div className="layout-shell px-4 py-6 text-center text-sm text-slate-500 sm:px-6 xl:px-8 2xl:px-10">
-          Local single-user workspace. Data provided for informational purposes only.
+          Broker Freund {__APP_VERSION__} beta. Local single-user workspace. Data is informational only.
         </div>
       </footer>
 
@@ -1720,41 +1745,37 @@ function AppContent() {
           }}
         />
       </Suspense>
-
-      {/* Push notifications blocked — help modal */}
-      {showNotifHelp && (
+      {showInstallHelp && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowNotifHelp(false)}
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+          onClick={() => setShowInstallHelp(false)}
         >
           <div
-            className="surface-panel mx-4 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl"
+            className="surface-panel w-full max-w-md rounded-[2rem] p-7 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-lg font-black text-[var(--text-primary)]">🔔 Benachrichtigungen entsperren</div>
-            <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-              Dein Browser hat Benachrichtigungen für diese Seite blockiert. So entsperrst du sie:
-            </p>
-            <ol className="mt-4 space-y-3 text-sm text-[var(--text-primary)]">
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">1</span>
-                <span>Klicke auf das <strong>🔒 Schloss-Symbol</strong> links in der Adressleiste</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">2</span>
-                <span>Wähle <strong>„Benachrichtigungen"</strong></span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">3</span>
-                <span>Stelle es auf <strong>„Erlauben"</strong> um</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-extrabold text-[var(--accent)]">4</span>
-                <span>Lade die Seite neu — die Glocke wird dann aktiv</span>
-              </li>
-            </ol>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] bg-[var(--accent-soft)] text-[var(--accent)]">
+                <Smartphone size={18} />
+              </div>
+              <div>
+                <div className="text-lg font-black text-[var(--text-primary)]">App installieren</div>
+                <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+                  Wenn kein Install-Dialog erscheint, nutze im Browser-Menue den Punkt
+                  "App installieren" oder "Zum Startbildschirm hinzufuegen".
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-700">
+                Desktop: Chrome oder Edge Menue oeffnen und "App installieren" waehlen.
+              </div>
+              <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-700">
+                iPhone: Teilen-Dialog oeffnen und "Zum Home-Bildschirm" waehlen.
+              </div>
+            </div>
             <button
-              onClick={() => setShowNotifHelp(false)}
+              onClick={() => setShowInstallHelp(false)}
               className="mt-6 w-full rounded-[1.2rem] bg-[var(--accent)] py-3 text-sm font-extrabold uppercase tracking-[0.16em] text-white hover:bg-[var(--accent-strong)]"
             >
               Verstanden

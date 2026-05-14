@@ -71,6 +71,15 @@ Artefakte:
 4. Analyzer:
    - Kursverlauf für `AAPL`, `PFE`, `BTC-USD` sichtbar (live/stale/fallback akzeptiert)
 
+5. PWA / Desktop:
+   - `/manifest.json`, `/sw.js`, `/registerSW.js`, `/icons/icon-192.png` liefern HTTP 200
+   - Browser registriert `/sw.js` als einzigen Root-Scope-Service-Worker
+   - Install-Button zeigt Install-Dialog oder klare Installationshilfe
+6. Private Daten:
+   - Health Center zeigt App-Version, SQLite-Status `ok` und einen aktiven `DB Backup`-Button
+   - Backup-Download liefert eine `.db`-Datei
+   - Portfolio-Tab zeigt klar, falls nur lokale Browser-Sicherung genutzt wird
+
 ## 6) Freigabeprotokoll (Kurzformat)
 
 In der Release-Notiz festhalten:
@@ -79,4 +88,3 @@ In der Release-Notiz festhalten:
 - Ergebnis `GO` oder `NO-GO`
 - Auffälligkeiten (falls vorhanden)
 - Verantwortlicher + Zeitpunkt
-

@@ -114,9 +114,9 @@ class EmailAlertService:
         return {
             "alerts_enabled": config.enabled,
             "email": {
-                "configured": bool(config.smtp_host and config.smtp_from and config.smtp_to),
-                "from": config.smtp_from,
-                "to": config.smtp_to,
+                "configured": False,
+                "disabled": True,
+                "message": "Email delivery is disabled. Telegram is the only briefing channel.",
             },
             "telegram": {
                 "enabled": config.telegram_enabled,
@@ -582,17 +582,7 @@ class EmailAlertService:
                     telegram_error = str(exc)
                     print(f"Scheduled Telegram brief failed for {job['job_key']}: {exc}")
                 # Browser push notification
-                if self.push_service:
-                    try:
-                        headline = brief.get("headline") or brief.get("opening_bias") or "Neues Briefing"
-                        self.push_service.notify_brief(str(job["session_label"]), headline)
-                    except Exception as exc:
-                        print(f"Scheduled push brief failed for {job['job_key']}: {exc}")
                 # Still send email via the normal path (events → HTML email)
-                delivered = (
-                    self._send_notifications(config, events, subject=str(job["subject"]), telegram=False)
-                    or delivered
-                )
                 if telegram_required and not telegram_delivered:
                     failure = {
                         "job": job["job_key"],
@@ -1221,11 +1211,6 @@ class EmailAlertService:
     ) -> bool:
         errors: List[str] = []
         delivered = False
-
-        try:
-            delivered = self._send_email(config, events, subject) or delivered
-        except Exception as exc:
-            errors.append(f"email failed: {exc}")
 
         if telegram:
             try:
@@ -2168,14 +2153,13 @@ class EmailAlertService:
         return lines
 
     def _validate_config(self, config: EmailAlertConfig) -> None:
-        email_ready = bool(config.smtp_host and config.smtp_from and config.smtp_to)
         telegram_ready = bool(
             config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id
         )
-        if email_ready or telegram_ready:
+        if telegram_ready:
             return
         raise ValueError(
-            "Missing notification config: set SMTP_* / ALERT_EMAIL_TO or Telegram bot settings."
+            "Missing Telegram notification config: set TELEGRAM_ALERTS_ENABLED=true, TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID."
         )
 
     def _normalize_telegram_bot_token(self, token: str) -> str:

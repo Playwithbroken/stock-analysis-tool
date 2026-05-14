@@ -10,15 +10,9 @@ APP_SESSION_SECRET=generate-a-long-random-secret
 APP_ALLOWED_ORIGINS=https://your-app.up.railway.app
 APP_LOGIN_MAX_ATTEMPTS=5
 APP_LOGIN_LOCKOUT_MINUTES=15
+APP_DATA_DIR=/app/data
 
 SIGNAL_ALERTS_ENABLED=true
-SMTP_HOST=...
-SMTP_PORT=587
-SMTP_USER=...
-SMTP_PASSWORD=...
-SMTP_FROM=...
-ALERT_EMAIL_TO=...
-SMTP_STARTTLS=true
 
 TELEGRAM_ALERTS_ENABLED=true
 TELEGRAM_BOT_TOKEN=...
@@ -35,6 +29,7 @@ Notes:
 - Frontend assets are built during deploy with `cd frontend && npm run build`.
 - Keep `.env` local and do not upload local secrets to git.
 - For a private single-user setup, keep the app behind the local access code and use a strong `APP_SESSION_SECRET`.
+- Briefings und Alerts laufen in dieser Beta nur ueber Telegram. SMTP/E-Mail und Browser-Push fuer Briefings bleiben aus.
 
 ## Persistente SQLite auf Railway (Volume)
 
@@ -45,7 +40,16 @@ Damit Portfolios, Alerts und Watchlists nach Redeploys erhalten bleiben:
 3. Healthcheck:
    - `GET /api/health` -> `status: ok`
    - Neues Portfolio anlegen, Redeploy ausfuehren, danach `GET /api/portfolios` pruefen.
+   - Im Health Center `DB Backup` klicken und pruefen, dass eine `.db`-Datei heruntergeladen wird.
 4. Recovery-Checkliste:
    - Wenn Daten fehlen: Mount-Pfad `/app/data` kontrollieren.
    - Sicherstellen, dass nur ein Service auf dieselbe DB schreibt.
    - Backup der `data/portfolios.db` regelmaessig exportieren.
+
+## Restore aus Backup
+
+1. Railway Service stoppen oder kurzfristig auf Maintenance setzen.
+2. Backup-Datei als `/app/data/portfolios.db` in das Volume legen.
+3. Service neu starten.
+4. `GET /api/health` pruefen und im Health Center den SQLite-Quick-Check kontrollieren.
+5. Portfolio-Liste oeffnen und ein bekanntes Portfolio gegenpruefen.

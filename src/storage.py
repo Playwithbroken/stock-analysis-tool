@@ -4,7 +4,37 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'portfolios.db')
+DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+DATA_DIR = os.path.abspath(os.getenv('APP_DATA_DIR', DEFAULT_DATA_DIR))
+DB_PATH = os.path.abspath(os.getenv('PORTFOLIO_DB_PATH', os.path.join(DATA_DIR, 'portfolios.db')))
+
+
+def get_database_status() -> Dict[str, Any]:
+    db_dir = os.path.dirname(DB_PATH)
+    exists = os.path.exists(DB_PATH)
+    writable = os.access(db_dir, os.W_OK) if os.path.isdir(db_dir) else False
+    quick_check = None
+    error = None
+    if exists:
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA quick_check')
+            row = cursor.fetchone()
+            quick_check = row[0] if row else None
+            conn.close()
+        except Exception as exc:
+            error = exc.__class__.__name__
+    return {
+        "path": DB_PATH,
+        "directory": db_dir,
+        "directory_exists": os.path.isdir(db_dir),
+        "exists": exists,
+        "size_bytes": os.path.getsize(DB_PATH) if exists else 0,
+        "writable": writable,
+        "quick_check": quick_check,
+        "error": error,
+    }
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)

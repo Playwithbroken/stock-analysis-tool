@@ -44,18 +44,19 @@ from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
 from src.realtime_market_service import RealtimeMarketService
 from src.public_signal_service import PublicSignalService
-from src.storage import PortfolioManager
+from src.storage import DB_PATH, PortfolioManager, get_database_status
 
 # Load environment variables
 from dotenv import load_dotenv
 import os
 load_dotenv()
 
+APP_VERSION = "0.9.0-beta.1"
 
 app = FastAPI(
     title="Stock Analysis API",
     description="Professional stock market analysis tool",
-    version="1.0.0"
+    version=APP_VERSION,
 )
 
 # Enable CORS for frontend
@@ -767,11 +768,6 @@ async def _price_alert_loop():
 
                     condition = f"{direction} {target:.2f}"
                     try:
-                        get_push_service().notify_price_alert(symbol, float(current_price), condition)
-                    except Exception as push_error:
-                        print(f"Push price alert failed for {symbol}: {push_error}")
-
-                    try:
                         get_email_alert_service().send_price_alert(
                             symbol=symbol,
                             direction=direction,
@@ -969,7 +965,11 @@ def serialize_analysis_result(result) -> Dict[str, Any]:
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "message": "Stock Analysis API is running (v2)"}
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "message": "Stock Analysis API is running",
+    }
 
 
 @app.get("/api/auth/status")
@@ -3041,13 +3041,6 @@ async def send_telegram_brief_now(session: str = "global"):
         raise HTTPException(status_code=400, detail=f"session must be one of {sorted(valid)}")
     try:
         result = get_email_alert_service().send_session_brief_now(session)
-        # Also send browser push notification
-        try:
-            brief = get_morning_brief_service().get_brief()
-            headline = brief.get("headline") or brief.get("opening_bias") or "Neues Briefing verfuegbar"
-            get_push_service().notify_brief(session, headline)
-        except Exception:
-            pass
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -3305,6 +3298,7 @@ async def admin_health_center():
         tz_name = "Europe/Berlin"
     now_local = datetime.now(tz)
     notification_status = get_email_alert_service().get_notification_status()
+    database_status = get_database_status()
     schedule_status = notification_status.get("schedule", {})
     on_time_window_minutes = int(schedule_status.get("on_time_window_minutes") or 30)
     grace_minutes = int(schedule_status.get("delivery_grace_minutes") or 720)
@@ -3453,6 +3447,12 @@ async def admin_health_center():
         problems.append("yfinance")
     if not notification_status.get("schedule", {}).get("enabled"):
         problems.append("schedule_disabled")
+    if not database_status.get("exists"):
+        problems.append("database_missing")
+    if database_status.get("quick_check") not in {None, "ok"}:
+        problems.append("database_integrity")
+    if not database_status.get("writable"):
+        problems.append("database_not_writable")
     if notification_status.get("schedule", {}).get("enabled") and not scheduler_loop_seen_at:
         problems.append("scheduler_not_seen")
     if scheduler_loop_stale:
@@ -3504,6 +3504,14 @@ async def admin_health_center():
             "timezone": tz_name,
             "telegram": telegram,
             "notifications": notification_status,
+            "app": {
+                "version": APP_VERSION,
+                "environment": os.getenv("APP_ENV", "development"),
+                "cookie_secure": use_secure_cookies(),
+                "allowed_origins": allowed_origins,
+                "auth_configured": bool(get_app_password() and get_session_secret()),
+            },
+            "database": database_status,
             "schedule": {
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
@@ -3541,6 +3549,19 @@ async def admin_health_center():
             "recent_deliveries": sent_events[:12],
             "problems": problems,
         }
+    )
+
+
+@app.get("/api/admin/backup/portfolio-db")
+async def download_portfolio_db_backup():
+    """Download the private workspace SQLite database for manual backup."""
+    if not os.path.exists(DB_PATH):
+        raise HTTPException(status_code=404, detail="Portfolio database not found.")
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    return FileResponse(
+        DB_PATH,
+        media_type="application/vnd.sqlite3",
+        filename=f"broker-freund-portfolio-backup-{stamp}.db",
     )
 
 @app.get("/api/signals/scoreboard")

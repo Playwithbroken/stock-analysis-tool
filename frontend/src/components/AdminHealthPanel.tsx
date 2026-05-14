@@ -26,6 +26,18 @@ function displayValue(value?: string | number | null, fallback = "offen") {
   return value;
 }
 
+function formatBytes(value?: number | null) {
+  if (!value || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 function jobStateLabel(job: any) {
   if (job.sent_today) return "heute gesendet";
   if (job.due_now) return "jetzt faellig";
@@ -39,6 +51,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [loading, setLoading] = useState(false);
   const [warming, setWarming] = useState(false);
   const [runningDue, setRunningDue] = useState(false);
+  const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [warmupResult, setWarmupResult] = useState<any>(null);
   const [runResult, setRunResult] = useState<any>(null);
   const [error, setError] = useState("");
@@ -92,6 +105,34 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     }
   };
 
+  const downloadBackup = async () => {
+    setDownloadingBackup(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/backup/portfolio-db");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Backup download failed");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^"]+)"?/i);
+      const filename = match?.[1] || `broker-freund-portfolio-backup-${Date.now()}.db`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Backup download failed");
+    } finally {
+      setDownloadingBackup(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) load();
   }, [isOpen]);
@@ -100,6 +141,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
   const telegram = health?.telegram || {};
   const feeds = health?.data_feeds || {};
+  const appInfo = health?.app || {};
+  const database = health?.database || {};
   const jobs = health?.schedule?.jobs || [];
   const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
@@ -176,15 +219,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <button
               type="button"
               onClick={runDueBriefs}
-              disabled={loading || warming || runningDue}
+              disabled={loading || warming || runningDue || downloadingBackup}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
               {runningDue ? "Laeuft" : "Faellige senden"}
             </button>
             <button
               type="button"
+              onClick={downloadBackup}
+              disabled={loading || warming || runningDue || downloadingBackup || !database.exists}
+              className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700 disabled:opacity-50"
+            >
+              {downloadingBackup ? "Laedt" : "DB Backup"}
+            </button>
+            <button
+              type="button"
               onClick={warmBrief}
-              disabled={loading || warming || runningDue}
+              disabled={loading || warming || runningDue || downloadingBackup}
               className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
               {warming ? "Waermt" : "Brief vorladen"}
@@ -315,6 +366,35 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">App Release</div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="text-lg font-black text-slate-900">{displayValue(appInfo.version)}</div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${appInfo.auth_configured ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
+                  {appInfo.auth_configured ? "auth ok" : "auth fehlt"}
+                </span>
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Env: {displayValue(appInfo.environment)} / Secure cookie: {appInfo.cookie_secure ? "ja" : "nein"}
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">SQLite Datenbank</div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="text-lg font-black text-slate-900">{formatBytes(database.size_bytes)}</div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${database.exists && database.writable && database.quick_check === "ok" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
+                  {database.exists && database.quick_check === "ok" ? "ok" : "pruefen"}
+                </span>
+              </div>
+              <div className="mt-2 truncate text-xs leading-5 text-slate-500" title={database.path || ""}>
+                {database.path || "kein Pfad"}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Schreibbar: {database.writable ? "ja" : "nein"} / Quick check: {displayValue(database.quick_check)}
+              </div>
+            </div>
+
             <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Telegram</div>
               <div className="mt-3 flex items-center justify-between gap-2">

@@ -439,11 +439,11 @@ export default function AnalysisResult({
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19.5rem] 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:gap-8">
+    <div className="analysis-result-layout grid gap-6 xl:grid-cols-[minmax(0,1fr)_19.5rem] 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:gap-8">
       <div className="min-w-0">
         <div className="space-y-6 pb-20">
           {/* Header Info */}
-          <div className="surface-panel overflow-hidden rounded-[2.4rem] p-5 sm:p-8">
+          <div className="surface-panel analysis-hero overflow-hidden rounded-[2rem] p-5 sm:p-7">
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
                 Analysis Desk
@@ -457,7 +457,7 @@ export default function AnalysisResult({
                 </span>
               ) : null}
             </div>
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:items-center">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,20rem)] lg:items-center">
               <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.2rem] bg-[var(--accent)] text-xl font-bold text-white sm:h-16 sm:w-16 sm:rounded-[1.4rem] sm:text-2xl">
                   {data.ticker?.slice(0, 2)}
@@ -475,14 +475,14 @@ export default function AnalysisResult({
                   </div>
                 </div>
               </div>
-              <div className="grid gap-4 rounded-[1.8rem] border border-black/8 bg-white/72 p-4 sm:p-5">
+              <div className="analysis-card grid gap-3 rounded-[1.35rem] border border-black/8 bg-white/72 p-4">
                 <button
                   onClick={exportToPDF}
-                  className="flex min-h-[4.5rem] items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] sm:min-h-[5.6rem]"
+                  className="flex min-h-[3.2rem] items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
                 >
                   <Download size={16} /> Broker-Dossier (PDF)
                 </button>
-                <div className="text-left sm:text-right">
+                <div className="rounded-xl border border-black/8 bg-white/70 px-4 py-3 text-left">
                   <div className="text-2xl font-bold text-slate-900 sm:text-3xl">
                     {formatPrice(liveQuote?.price ?? price_data?.current_price)}
                   </div>
@@ -495,7 +495,7 @@ export default function AnalysisResult({
                     {realtimeConnected ? "Live quote" : "Snapshot"}
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
@@ -1059,7 +1059,7 @@ export default function AnalysisResult({
         </div>
       </div>
 
-      <aside className="min-w-0 xl:sticky xl:top-[7.25rem] xl:w-full xl:max-w-[21rem] xl:self-start xl:justify-self-end">
+      <aside className="analysis-side-panel min-w-0 xl:sticky xl:top-[7.25rem] xl:w-full xl:max-w-[21rem] xl:self-start xl:justify-self-end">
         <div className="surface-panel rounded-[2.2rem] p-6 sm:p-7">
           <div className="mb-8 flex items-center gap-4 text-slate-900">
             <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(145deg,var(--accent),#0f766e)] text-white shadow-[0_18px_40px_rgba(15,118,110,0.24)]">

@@ -5,16 +5,19 @@ type PushState = "unsupported" | "default" | "denied" | "granted" | "subscribed"
 
 async function getPushRegistration(): Promise<ServiceWorkerRegistration> {
   const registrations = await navigator.serviceWorker.getRegistrations();
-  for (const registration of registrations) {
+  const pwaRegistration = registrations.find((registration) => {
     const scriptUrl = registration.active?.scriptURL
       || registration.waiting?.scriptURL
       || registration.installing?.scriptURL
       || "";
-    if (scriptUrl && !scriptUrl.endsWith("/push-sw.js")) {
-      await registration.unregister();
-    }
+    return scriptUrl.endsWith("/sw.js");
+  });
+
+  if (pwaRegistration) {
+    return pwaRegistration;
   }
-  return navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
+
+  return navigator.serviceWorker.register("/sw.js", { scope: "/" });
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {

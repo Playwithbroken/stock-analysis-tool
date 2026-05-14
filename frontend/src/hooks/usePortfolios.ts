@@ -14,6 +14,8 @@ export interface Portfolio {
   createdAt: string
 }
 
+export type PortfolioDataSource = 'server' | 'local-cache' | 'empty' | 'disabled'
+
 const CACHE_KEY = 'portfolios_local_cache'
 const CACHE_VERSION = 2
 
@@ -44,6 +46,8 @@ export function usePortfolios(enabled: boolean = true) {
   const [portfolios, setPortfolios] = useState<Portfolio[]>(() => loadFromCache())
   const [loading, setLoading] = useState(true)
   const [needsRestore, setNeedsRestore] = useState(false)
+  const [dataSource, setDataSource] = useState<PortfolioDataSource>('local-cache')
+  const [dataSourceMessage, setDataSourceMessage] = useState('')
   const pendingRestoreRef = useRef<Portfolio[]>([])
 
   const syncCache = (data: Portfolio[]) => {
@@ -54,6 +58,8 @@ export function usePortfolios(enabled: boolean = true) {
   const fetchPortfolios = async () => {
     if (!enabled) {
       setPortfolios([])
+      setDataSource('disabled')
+      setDataSourceMessage('')
       setLoading(false)
       return
     }
@@ -67,22 +73,36 @@ export function usePortfolios(enabled: boolean = true) {
           if (cached.length > 0) {
             pendingRestoreRef.current = cached
             setNeedsRestore(true)
+            setDataSource('server')
+            setDataSourceMessage('Server ist leer. Lokale Sicherung kann wiederhergestellt werden.')
           } else {
             syncCache([])
+            setDataSource('empty')
+            setDataSourceMessage('')
           }
         } else {
           syncCache(data)
           setNeedsRestore(false)
+          setDataSource('server')
+          setDataSourceMessage('')
         }
       } else {
         // Fallback to cache on bad response
         const cached = loadFromCache()
-        if (cached.length > 0) setPortfolios(cached)
+        if (cached.length > 0) {
+          setPortfolios(cached)
+          setDataSource('local-cache')
+          setDataSourceMessage('Portfolio-Daten kommen aus der lokalen Browser-Sicherung, weil die Serverantwort ungueltig war.')
+        }
       }
     } catch {
       // Network error — use cache silently
       const cached = loadFromCache()
-      if (cached.length > 0) setPortfolios(cached)
+      if (cached.length > 0) {
+        setPortfolios(cached)
+        setDataSource('local-cache')
+        setDataSourceMessage('Portfolio-Daten kommen aus der lokalen Browser-Sicherung, weil der Server nicht erreichbar war.')
+      }
     } finally {
       setLoading(false)
     }
@@ -117,6 +137,8 @@ export function usePortfolios(enabled: boolean = true) {
       }
     }
     syncCache(restored)
+    setDataSource('server')
+    setDataSourceMessage('Lokale Sicherung wurde an den Server uebertragen.')
   }
 
   const discardRestore = () => {
@@ -124,6 +146,8 @@ export function usePortfolios(enabled: boolean = true) {
     setNeedsRestore(false)
     clearCache()
     syncCache([])
+    setDataSource('empty')
+    setDataSourceMessage('')
   }
 
   useEffect(() => {
@@ -195,6 +219,8 @@ export function usePortfolios(enabled: boolean = true) {
   return {
     portfolios,
     loading,
+    dataSource,
+    dataSourceMessage,
     needsRestore,
     cachedPortfolios: pendingRestoreRef.current,
     createPortfolio,

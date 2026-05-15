@@ -233,25 +233,45 @@ class PortfolioManager:
                 return existing_norm or new_norm
         return new_norm or existing_norm
 
+    def _normalize_ticker(self, ticker: str) -> str:
+        clean_ticker = (ticker or "").strip().upper().replace(" ", "")
+        if clean_ticker in {"BRK.B", "BRKB"}:
+            return "BRK-B"
+        if clean_ticker == "BTC":
+            return "BTC-USD"
+        if clean_ticker == "ETH":
+            return "ETH-USD"
+        if clean_ticker == "SOL":
+            return "SOL-USD"
+        return clean_ticker
+
     def create_portfolio(self, name: str) -> Dict[str, Any]:
+        clean_name = (name or "").strip()
+        if not clean_name:
+            raise ValueError("Portfolio name is required")
+
         portfolio_id = str(uuid.uuid4())
         created_at = datetime.now().isoformat()
         
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('INSERT INTO portfolios (id, name, created_at) VALUES (?, ?, ?)',
-                       (portfolio_id, name, created_at))
+                       (portfolio_id, clean_name, created_at))
+        if cursor.rowcount != 1:
+            conn.rollback()
+            conn.close()
+            raise RuntimeError("Portfolio could not be saved")
         conn.commit()
         conn.close()
         
-        return {"id": portfolio_id, "name": name, "createdAt": created_at, "holdings": []}
+        return {"id": portfolio_id, "name": clean_name, "createdAt": created_at, "holdings": []}
 
     def get_portfolios(self) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        cursor.execute('SELECT * FROM portfolios')
+        cursor.execute('SELECT * FROM portfolios ORDER BY datetime(created_at) DESC')
         portfolios = [dict(row) for row in cursor.fetchall()]
         
         for p in portfolios:
@@ -281,16 +301,27 @@ class PortfolioManager:
         shares: float,
         buy_price: Optional[float] = None,
         purchase_date: Optional[str] = None,
-    ):
+    ) -> bool:
+        clean_ticker = self._normalize_ticker(ticker)
+        if not clean_ticker:
+            raise ValueError("Ticker is required")
+        if shares is None or float(shares) <= 0:
+            raise ValueError("Shares must be greater than zero")
+
         holding_id = str(uuid.uuid4())
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         normalized_purchase_date = self._normalize_purchase_date(purchase_date)
+
+        cursor.execute('SELECT 1 FROM portfolios WHERE id = ?', (portfolio_id,))
+        if cursor.fetchone() is None:
+            conn.close()
+            return False
         
         # Check if holding already exists for this ticker
         cursor.execute(
             'SELECT id, shares, buy_price, purchase_date FROM holdings WHERE portfolio_id = ? AND ticker = ?',
-            (portfolio_id, ticker.upper()),
+            (portfolio_id, clean_ticker),
         )
         existing = cursor.fetchone()
         
@@ -320,16 +351,17 @@ class PortfolioManager:
         else:
             cursor.execute(
                 'INSERT INTO holdings (id, portfolio_id, ticker, shares, buy_price, purchase_date) VALUES (?, ?, ?, ?, ?, ?)',
-                (holding_id, portfolio_id, ticker.upper(), shares, buy_price, normalized_purchase_date),
+                (holding_id, portfolio_id, clean_ticker, shares, buy_price, normalized_purchase_date),
             )
                            
         conn.commit()
         conn.close()
+        return True
 
     def remove_holding(self, portfolio_id: str, ticker: str):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM holdings WHERE portfolio_id = ? AND ticker = ?', (portfolio_id, ticker.upper()))
+        cursor.execute('DELETE FROM holdings WHERE portfolio_id = ? AND ticker = ?', (portfolio_id, self._normalize_ticker(ticker)))
         conn.commit()
         conn.close()
 
@@ -503,9 +535,10 @@ class PortfolioManager:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+        clean_ticker = self._normalize_ticker(ticker)
         cursor.execute(
             'SELECT id, ticker, shares, buy_price, purchase_date FROM holdings WHERE portfolio_id = ? AND ticker = ?',
-            (portfolio_id, ticker.upper()),
+            (portfolio_id, clean_ticker),
         )
         existing = cursor.fetchone()
         if not existing:

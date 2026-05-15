@@ -56,6 +56,15 @@ const LOCAL_SEARCH_ASSETS = [
   "PepsiCo Inc. (PEP)",
   "Abbott Laboratories (ABT)",
   "Palantir Technologies Inc. (PLTR)",
+  "Rocket Lab USA Inc. (RKLB)",
+  "AST SpaceMobile Inc. (ASTS)",
+  "IonQ Inc. (IONQ)",
+  "UiPath Inc. (PATH)",
+  "SoundHound AI Inc. (SOUN)",
+  "Recursion Pharmaceuticals Inc. (RXRX)",
+  "Joby Aviation Inc. (JOBY)",
+  "Archer Aviation Inc. (ACHR)",
+  "Oklo Inc. (OKLO)",
   "SPDR S&P 500 ETF Trust (SPY)",
   "Invesco QQQ Trust (QQQ)",
   "iShares Russell 2000 ETF (IWM)",
@@ -117,6 +126,26 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   supermicro: "Super Micro Computer Inc. (SMCI)",
   arm: "Arm Holdings plc (ARM)",
   dell: "Dell Technologies Inc. (DELL)",
+  brkb: "Berkshire Hathaway Inc. (BRK-B)",
+  "brk.b": "Berkshire Hathaway Inc. (BRK-B)",
+  "brk-b": "Berkshire Hathaway Inc. (BRK-B)",
+  berkshire: "Berkshire Hathaway Inc. (BRK-B)",
+  rocketlab: "Rocket Lab USA Inc. (RKLB)",
+  rklb: "Rocket Lab USA Inc. (RKLB)",
+  asts: "AST SpaceMobile Inc. (ASTS)",
+  spacemobile: "AST SpaceMobile Inc. (ASTS)",
+  ionq: "IonQ Inc. (IONQ)",
+  quantum: "IonQ Inc. (IONQ)",
+  uipath: "UiPath Inc. (PATH)",
+  path: "UiPath Inc. (PATH)",
+  soundhound: "SoundHound AI Inc. (SOUN)",
+  soun: "SoundHound AI Inc. (SOUN)",
+  recursion: "Recursion Pharmaceuticals Inc. (RXRX)",
+  rxrx: "Recursion Pharmaceuticals Inc. (RXRX)",
+  joby: "Joby Aviation Inc. (JOBY)",
+  archer: "Archer Aviation Inc. (ACHR)",
+  achr: "Archer Aviation Inc. (ACHR)",
+  oklo: "Oklo Inc. (OKLO)",
 };
 
 interface SearchBarProps {
@@ -137,6 +166,18 @@ function extractTicker(value: string): string {
 
 function normalizeSearchValue(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeTickerInput(value: string): string {
+  const raw = extractTicker(value).trim();
+  const compact = raw.toLowerCase().replace(/\s+/g, "");
+  const alias = LOCAL_SEARCH_ALIASES[compact] || LOCAL_SEARCH_ALIASES[normalizeSearchValue(raw)];
+  if (alias) return extractTicker(alias);
+  if (/^brk[.\s-]?b$/i.test(raw)) return "BRK-B";
+  if (/^btc$/i.test(raw)) return "BTC-USD";
+  if (/^eth$/i.test(raw)) return "ETH-USD";
+  if (/^sol$/i.test(raw)) return "SOL-USD";
+  return raw.toUpperCase().replace(/\s+/g, "-");
 }
 
 function uniqueValues(values: string[]): string[] {
@@ -185,7 +226,7 @@ function buildDefaultSuggestions(): Record<string, string[]> {
 }
 
 function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
-  const value = query.trim().toUpperCase();
+  const value = normalizeTickerInput(query);
   return value.length >= 2 ? { "Direkt suchen": [value] } : {};
 }
 
@@ -318,7 +359,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
   const handleQuickSelect = useCallback(
     (value: string) => {
-      const ticker = extractTicker(value);
+      const ticker = normalizeTickerInput(value);
       setQuery(ticker);
       setGhostText("");
       onSearch(ticker);
@@ -390,7 +431,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       handleQuickSelect(fallbackLocal);
       return;
     }
-    onSearch(raw.toUpperCase());
+    onSearch(normalizeTickerInput(raw));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

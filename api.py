@@ -6,7 +6,7 @@ Provides REST API endpoints for stock analysis.
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, Any, List, Optional
 import copy
 import difflib
@@ -212,6 +212,15 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "PM", "name": "Philip Morris"},
     {"ticker": "PEP", "name": "PepsiCo"},
     {"ticker": "ABT", "name": "Abbott Laboratories"},
+    {"ticker": "RKLB", "name": "Rocket Lab"},
+    {"ticker": "ASTS", "name": "AST SpaceMobile"},
+    {"ticker": "IONQ", "name": "IonQ Quantum"},
+    {"ticker": "PATH", "name": "UiPath Automation"},
+    {"ticker": "SOUN", "name": "SoundHound AI"},
+    {"ticker": "RXRX", "name": "Recursion Pharmaceuticals AI Biotech"},
+    {"ticker": "JOBY", "name": "Joby Aviation eVTOL"},
+    {"ticker": "ACHR", "name": "Archer Aviation eVTOL"},
+    {"ticker": "OKLO", "name": "Oklo Nuclear Energy"},
     {"ticker": "SPY", "name": "SPDR S&P 500 ETF"},
     {"ticker": "QQQ", "name": "Invesco QQQ Nasdaq ETF"},
     {"ticker": "DIA", "name": "SPDR Dow Jones ETF"},
@@ -268,6 +277,23 @@ SEARCH_ALIASES: Dict[str, str] = {
     "rheinmetall": "RHM.DE",
     "siemens": "SIE.DE",
     "brkb": "BRK-B",
+    "brkbshares": "BRK-B",
+    "rocketlab": "RKLB",
+    "rklb": "RKLB",
+    "asts": "ASTS",
+    "spacemobile": "ASTS",
+    "ionq": "IONQ",
+    "quantum": "IONQ",
+    "uipath": "PATH",
+    "path": "PATH",
+    "soundhound": "SOUN",
+    "soun": "SOUN",
+    "recursion": "RXRX",
+    "rxrx": "RXRX",
+    "joby": "JOBY",
+    "archer": "ACHR",
+    "achr": "ACHR",
+    "oklo": "OKLO",
 }
 
 
@@ -925,10 +951,12 @@ class AnalysisResponse(BaseModel):
 
 
 class PortfolioHolding(BaseModel):
+    model_config = ConfigDict(validate_by_name=True)
+
     ticker: str
     shares: float
-    buy_price: Optional[float] = None
-    purchase_date: Optional[str] = None
+    buy_price: Optional[float] = Field(default=None, alias="buyPrice")
+    purchase_date: Optional[str] = Field(default=None, alias="purchaseDate")
 
 
 class PortfolioRequest(BaseModel):
@@ -938,16 +966,20 @@ class CreatePortfolioRequest(BaseModel):
     name: str
 
 class AddHoldingRequest(BaseModel):
+    model_config = ConfigDict(validate_by_name=True)
+
     ticker: str
     shares: float
-    buy_price: Optional[float] = None
-    purchase_date: Optional[str] = None
+    buy_price: Optional[float] = Field(default=None, alias="buyPrice")
+    purchase_date: Optional[str] = Field(default=None, alias="purchaseDate")
 
 
 class UpdateHoldingRequest(BaseModel):
+    model_config = ConfigDict(validate_by_name=True)
+
     shares: Optional[float] = None
-    buy_price: Optional[float] = None
-    purchase_date: Optional[str] = None
+    buy_price: Optional[float] = Field(default=None, alias="buyPrice")
+    purchase_date: Optional[str] = Field(default=None, alias="purchaseDate")
 
 class OracleRequest(BaseModel):
     message: str
@@ -2519,7 +2551,12 @@ async def get_suggestions(p_id: str):
 
 @app.post("/api/portfolios")
 async def create_portfolio(req: CreatePortfolioRequest):
-    return get_portfolio_manager().create_portfolio(req.name)
+    try:
+        return get_portfolio_manager().create_portfolio(req.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Portfolio could not be saved: {exc.__class__.__name__}")
 
 @app.delete("/api/portfolios/{p_id}")
 async def delete_portfolio(p_id: str):
@@ -2528,7 +2565,12 @@ async def delete_portfolio(p_id: str):
 
 @app.post("/api/portfolios/{p_id}/holdings")
 async def add_holding(p_id: str, req: AddHoldingRequest):
-    get_portfolio_manager().add_holding(p_id, req.ticker, req.shares, req.buy_price, req.purchase_date)
+    try:
+        saved = get_portfolio_manager().add_holding(p_id, req.ticker, req.shares, req.buy_price, req.purchase_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not saved:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
     return {"status": "added"}
 
 @app.patch("/api/portfolios/{p_id}/holdings/{ticker}")

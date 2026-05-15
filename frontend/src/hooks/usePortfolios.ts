@@ -41,6 +41,16 @@ function clearCache() {
   try { localStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
 }
 
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload = await response.json()
+    if (payload?.detail) return String(payload.detail)
+  } catch {
+    // ignore malformed error payload
+  }
+  return fallback
+}
+
 export function usePortfolios(enabled: boolean = true) {
   // Seed from cache immediately so UI doesn't flash empty on load
   const [portfolios, setPortfolios] = useState<Portfolio[]>(() => loadFromCache())
@@ -73,6 +83,7 @@ export function usePortfolios(enabled: boolean = true) {
     }
     try {
       const response = await fetch('/api/portfolios')
+      if (!response.ok) throw new Error(`Portfolio-Liste konnte nicht geladen werden (${response.status})`)
       const data = await response.json()
       if (Array.isArray(data)) {
         if (data.length === 0) {
@@ -166,14 +177,7 @@ export function usePortfolios(enabled: boolean = true) {
       body: JSON.stringify({ name }),
     })
     if (!response.ok) {
-      let message = `Portfolio konnte nicht gespeichert werden (${response.status})`
-      try {
-        const payload = await response.json()
-        if (payload?.detail) message = payload.detail
-      } catch {
-        // ignore malformed error payload
-      }
-      throw new Error(message)
+      throw new Error(await readApiError(response, `Portfolio konnte nicht gespeichert werden (${response.status})`))
     }
     const newPortfolio = await response.json()
     setPortfolios((current) => {
@@ -185,41 +189,47 @@ export function usePortfolios(enabled: boolean = true) {
     setNeedsRestore(false)
     setDataSource('server')
     setDataSourceMessage('')
-    void fetchPortfolios()
+    await fetchPortfolios()
     return newPortfolio
   }
 
   const deletePortfolio = async (id: string) => {
     const response = await fetch(`/api/portfolios/${id}`, { method: 'DELETE' })
     if (!response.ok) {
-      throw new Error(`Portfolio konnte nicht geloescht werden (${response.status})`)
+      throw new Error(await readApiError(response, `Portfolio konnte nicht geloescht werden (${response.status})`))
     }
     setPortfolios((current) => {
       const updated = current.filter(p => p.id !== id)
       saveToCache(updated)
       return updated
     })
-    void fetchPortfolios()
+    await fetchPortfolios()
   }
 
   const addHolding = async (portfolioId: string, holding: Holding) => {
-    await fetch(`/api/portfolios/${portfolioId}/holdings`, {
+    const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ticker: holding.ticker,
         shares: holding.shares,
-        buy_price: holding.buyPrice,
-        purchase_date: holding.purchaseDate
+        buyPrice: holding.buyPrice,
+        purchaseDate: holding.purchaseDate
       }),
     })
+    if (!response.ok) {
+      throw new Error(await readApiError(response, `Position konnte nicht gespeichert werden (${response.status})`))
+    }
     await fetchPortfolios()
   }
 
   const removeHolding = async (portfolioId: string, ticker: string) => {
-    await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
+    const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
       method: 'DELETE'
     })
+    if (!response.ok) {
+      throw new Error(await readApiError(response, `Position konnte nicht geloescht werden (${response.status})`))
+    }
     await fetchPortfolios()
   }
 
@@ -229,19 +239,12 @@ export function usePortfolios(enabled: boolean = true) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         shares: patch.shares,
-        buy_price: patch.buyPrice,
-        purchase_date: patch.purchaseDate,
+        buyPrice: patch.buyPrice,
+        purchaseDate: patch.purchaseDate,
       }),
     })
     if (!response.ok) {
-      let message = `Failed to update holding (${response.status})`
-      try {
-        const payload = await response.json()
-        if (payload?.detail) message = payload.detail
-      } catch {
-        // ignore malformed error payload
-      }
-      throw new Error(message)
+      throw new Error(await readApiError(response, `Position konnte nicht aktualisiert werden (${response.status})`))
     }
     await fetchPortfolios()
   }

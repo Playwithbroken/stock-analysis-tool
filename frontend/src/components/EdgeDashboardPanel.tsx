@@ -176,6 +176,14 @@ export default function EdgeDashboardPanel({
   const snapshot = portfolioSnapshot(portfolios, quotes);
   const hitRate = toNumber(learning?.summary?.hit_rate ?? learning?.summary?.accuracy);
   const evaluated = toNumber(learning?.summary?.evaluated ?? learning?.summary?.evaluated_forecasts);
+  const topNewsSummary = learning?.top_news?.summary || {};
+  const topNewsHitRate = toNumber(topNewsSummary.hit_rate);
+  const topNewsPending = toNumber(topNewsSummary.pending);
+  const topNewsEvaluated = toNumber(topNewsSummary.evaluated);
+  const topNewsLesson = String(
+    learning?.top_news?.lesson ||
+      "Top-News-Lernen startet, sobald tickerbezogene Telegram-News als Forecasts gespeichert werden.",
+  );
   const weakSetups = Array.isArray(learning?.weak_setup_types) ? learning.weak_setup_types : [];
   const weakSources = Array.isArray(learning?.weak_sources) ? learning.weak_sources : [];
   const lessons = Array.isArray(learning?.lessons) ? learning.lessons : [];
@@ -327,6 +335,35 @@ export default function EdgeDashboardPanel({
         })}
       </div>
 
+      <div className="mt-4 rounded-[1.25rem] border border-[var(--accent)]/18 bg-[linear-gradient(135deg,rgba(20,184,166,0.11),rgba(255,255,255,0.76))] p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+              Top-News Forecast Learning
+            </div>
+            <div className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-slate-700">
+              {topNewsLesson}
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+            <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Hit</div>
+              <div className="mt-1 text-base font-black text-slate-950">
+                {topNewsHitRate != null ? `${formatNumber(topNewsHitRate, 0)}%` : "n/a"}
+              </div>
+            </div>
+            <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Check</div>
+              <div className="mt-1 text-base font-black text-slate-950">{formatNumber(topNewsEvaluated, 0)}</div>
+            </div>
+            <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Open</div>
+              <div className="mt-1 text-base font-black text-slate-950">{formatNumber(topNewsPending, 0)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700">
@@ -389,7 +426,7 @@ export default function EdgeDashboardPanel({
                 Lernsignal
               </div>
               <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700">
-                {String(lessons[0]?.lesson || lessons[0]?.text || lessons[0])}
+                {String(lessons[0]?.message || lessons[0]?.lesson || lessons[0]?.text || lessons[0])}
               </div>
             </div>
           ) : null}

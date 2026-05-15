@@ -33,6 +33,20 @@ function qualityTone(hitRate: any) {
   return "text-amber-700";
 }
 
+function labelFor(value: any) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Briefing";
+  const labels: Record<string, string> = {
+    top_news_forecast: "Top-News",
+    trusted_news: "Trusted News",
+    congress_watch: "Congress",
+    morning_brief: "Morning Brief",
+    product_news: "Produkt-News",
+    earnings: "Earnings",
+  };
+  return labels[raw] || raw.replaceAll("_", " ");
+}
+
 function QualityList({ title, rows, empty, showMove = false }: any) {
   return (
     <div className="rounded-[1.8rem] border border-black/8 bg-white/72 p-5">
@@ -67,6 +81,12 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
   const lessons = data?.lessons || [];
   const pendingByHorizon = data?.pending_by_horizon || [];
   const recent = data?.recent_forecasts || [];
+  const topNews = data?.top_news || {};
+  const topNewsSummary = topNews.summary || {};
+  const topNewsRecent = topNews.recent || [];
+  const topNewsLesson =
+    topNews.lesson ||
+    "Top-News-Lernen wird aktiv, sobald das naechste tickerbezogene Telegram-Briefing Prognosen speichert.";
 
   return (
     <section className="surface-panel rounded-[2.5rem] p-6 sm:p-8">
@@ -98,6 +118,91 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
             <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-4 rounded-[1.8rem] border border-[var(--accent)]/18 bg-[linear-gradient(135deg,rgba(20,184,166,0.12),rgba(255,255,255,0.86))] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[var(--accent)]">
+              Top-News Prognose-Lernen
+            </div>
+            <h3 className="mt-2 text-xl font-black text-slate-900">Sofortmeldungen werden messbar.</h3>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+              Jede wichtige Nachricht mit Richtung wird als Forecast gespeichert. Die App lernt, ob
+              schnelle Telegram-Pushes wirklich einen Vorteil bringen oder erst bestaetigt werden muessen.
+            </p>
+          </div>
+          <div className={`rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] ${edgeClass(topNewsSummary.avg_favorable_pct)}`}>
+            Edge {formatPct(topNewsSummary.avg_favorable_pct)}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          {[
+            ["Top-News", topNewsSummary.forecasts || 0],
+            ["Geprueft", topNewsSummary.evaluated || 0],
+            ["Treffer", `${Number(topNewsSummary.hit_rate || 0).toFixed(1)}%`],
+            ["Offen", topNewsSummary.pending || 0],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-[1.1rem] border border-black/8 bg-white/75 p-3">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{label}</div>
+              <div className="mt-1 text-xl font-black text-slate-900">{value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Aktuelle Lernregel
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-700">{topNewsLesson}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
+                Hits {topNewsSummary.hits || 0}
+              </span>
+              <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-red-700">
+                Misses {topNewsSummary.misses || 0}
+              </span>
+              <span className="rounded-full bg-slate-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                Neutral {topNewsSummary.neutral || 0}
+              </span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {topNewsRecent.length ? (
+              topNewsRecent.slice(0, 3).map((item: any) => (
+                <div key={item.id} className="rounded-[1.2rem] border border-black/8 bg-white/75 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black uppercase tracking-[0.14em] text-slate-900">
+                        {item.symbol}
+                      </span>
+                      <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--accent)]">
+                        {item.direction || "watch"}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                      Daten {item.data_status || "pending"}
+                    </span>
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{item.thesis}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${edgeClass(item.max_favorable_pct)}`}>
+                      Best {formatPct(item.max_favorable_pct)}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${edgeClass(item.max_adverse_pct)}`}>
+                      Risk {formatPct(item.max_adverse_pct)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.2rem] border border-dashed border-black/10 bg-white/70 p-4 text-sm text-slate-500">
+                Noch keine Top-News-Forecasts vorhanden. Nach dem naechsten Telegram-Briefing mit
+                tickerbezogener Top-Meldung erscheinen sie hier.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
@@ -216,7 +321,7 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
                         {item.direction || "watch"}
                       </span>
                       <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
-                        {item.source_label || item.setup_type || "briefing"}
+                        {labelFor(item.source_label || item.setup_type)}
                       </span>
                     </div>
                     <div className="text-[11px] font-bold text-slate-500">

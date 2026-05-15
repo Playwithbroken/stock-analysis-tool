@@ -177,6 +177,7 @@ class ForecastLearningService:
         recent = self._build_recent_forecasts(forecasts[:12], outcomes)
         pending_by_horizon = self._pending_by_horizon(pending)
         lessons = self._build_lessons(by_source, weak_sources, by_setup_type, weak_setup_types, pending_by_horizon)
+        top_news = self._build_top_news_dashboard(forecasts, outcomes)
 
         return {
             "summary": {
@@ -205,6 +206,7 @@ class ForecastLearningService:
             "pending_by_horizon": pending_by_horizon,
             "lessons": lessons,
             "recent_forecasts": recent,
+            "top_news": top_news,
             "last_updated": datetime.utcnow().isoformat(),
         }
 
@@ -361,6 +363,73 @@ class ForecastLearningService:
                 }
             )
         return recent
+
+    def _build_top_news_dashboard(
+        self,
+        forecasts: List[Dict[str, Any]],
+        outcomes: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        top_news_forecasts = [
+            forecast
+            for forecast in forecasts
+            if str(forecast.get("setup_type") or "") == "top_news_forecast"
+            or str(forecast.get("source_label") or "") == "trusted_news"
+        ]
+        forecast_ids = {str(forecast.get("id")) for forecast in top_news_forecasts}
+        top_news_outcomes = [
+            outcome
+            for outcome in outcomes
+            if str(outcome.get("forecast_id")) in forecast_ids
+        ]
+        evaluated = [item for item in top_news_outcomes if item.get("status") == "evaluated"]
+        pending = [item for item in top_news_outcomes if item.get("status") in {"pending", "pending_data"}]
+        hits = [item for item in evaluated if item.get("result") == "hit"]
+        misses = [item for item in evaluated if item.get("result") == "miss"]
+        neutrals = [item for item in evaluated if item.get("result") == "neutral"]
+        direction_by_id = {
+            str(forecast.get("id")): forecast.get("direction")
+            for forecast in top_news_forecasts
+        }
+        favorable_moves = [
+            self._directional_performance(
+                {
+                    **item,
+                    "direction": direction_by_id.get(str(item.get("forecast_id"))),
+                }
+            )
+            for item in evaluated
+        ]
+        hit_rate = round((len(hits) / max(1, len(hits) + len(misses))) * 100, 1)
+
+        if len(evaluated) < 3:
+            lesson = (
+                "Noch zu wenig ausgewertete Top-News-Prognosen. Erst nach mehreren Treffern und "
+                "Fehlschlaegen als Ranking-Faktor hoeher gewichten."
+            )
+        elif hit_rate >= 60:
+            lesson = "Top-News liefern aktuell bestaetigten Edge. Weiter nutzen, aber nur mit Volumen- und Marktbreite-Check."
+        elif hit_rate <= 35:
+            lesson = "Top-News erzeugen aktuell zu viele Fehlsignale. Nur noch mit Folgequelle und Preisbestaetigung pushen."
+        else:
+            lesson = "Top-News sind gemischt. Neutral behandeln, bis ein klarer Treffer- oder Fehlertrend sichtbar ist."
+
+        return {
+            "summary": {
+                "forecasts": len(top_news_forecasts),
+                "outcomes": len(top_news_outcomes),
+                "evaluated": len(evaluated),
+                "pending": len(pending),
+                "hits": len(hits),
+                "misses": len(misses),
+                "neutral": len(neutrals),
+                "hit_rate": hit_rate,
+                "avg_favorable_pct": self._avg(favorable_moves),
+                "avg_adverse_pct": self._avg([value for value in favorable_moves if value is not None and value < 0]),
+            },
+            "pending_by_horizon": self._pending_by_horizon(pending),
+            "lesson": lesson,
+            "recent": self._build_recent_forecasts(top_news_forecasts[:8], top_news_outcomes),
+        }
 
     def _directional_performance(self, item: Dict[str, Any]) -> Optional[float]:
         performance = self._safe_float(item.get("performance_pct"))

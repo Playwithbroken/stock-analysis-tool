@@ -902,7 +902,7 @@ function AppContent() {
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
         { signal: controller.signal },
-        { retries: 0, retryDelayMs: 400, timeoutMs: 15000 },
+        { retries: 0, retryDelayMs: 400, timeoutMs: 45000 },
       );
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
       setAnalysis(data);

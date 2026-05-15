@@ -158,6 +158,29 @@ class EmailAlertService:
         self.portfolio_manager.mark_signal_events_sent(new_events)
         return {"status": "ok", "sent": len(new_events), "message": "Alert email sent."}
 
+    def check_and_send_critical_market_alerts(self, force: bool = False) -> Dict[str, Any]:
+        """Send immediate Telegram alerts for high-impact market events.
+
+        This is intentionally Telegram-only through _send_notifications; email delivery
+        stays disabled for the private beta.
+        """
+        if not force and os.getenv("CRITICAL_MARKET_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            return {"status": "disabled", "message": "Critical market alerts are disabled."}
+
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        items = self.portfolio_manager.get_signal_watch_items()
+        snapshot = self.public_signal_service.build_watchlist_snapshot(items)
+        brief = self.morning_brief_service.get_brief_fast(snapshot, False)
+        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
+        events = self._extract_critical_market_events(brief, sent_keys)
+        if not events:
+            return {"status": "ok", "sent": 0, "message": "No critical market alerts."}
+
+        self._send_notifications(config, events[:8], subject="Sofort-Alert: Wichtige Marktinformation")
+        self.portfolio_manager.mark_signal_events_sent(events[:8])
+        return {"status": "ok", "sent": len(events[:8]), "message": "Critical Telegram alerts sent."}
+
     def send_test_email(self) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
@@ -1188,6 +1211,91 @@ class EmailAlertService:
 
         new_events.sort(key=self._event_priority)
         return new_events
+
+    def _extract_critical_market_events(self, brief: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
+        events: List[Dict[str, Any]] = []
+        today = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).strftime("%Y-%m-%d")
+
+        for item in (brief.get("event_layer") or [])[:12]:
+            title = str(item.get("title") or item.get("headline") or "").strip()
+            impact = str(item.get("impact") or item.get("severity") or item.get("level") or "").lower()
+            score = item.get("impact_score") or item.get("score")
+            numeric_score = None
+            try:
+                numeric_score = float(score)
+            except Exception:
+                pass
+            high_impact = impact in {"high", "critical", "risk", "risk_off"} or (numeric_score is not None and numeric_score >= 75)
+            if not title or not high_impact:
+                continue
+            event_key = f"critical-market:{today}:{re.sub(r'[^a-zA-Z0-9]+', '-', title.lower())[:80]}"
+            if event_key in sent_keys:
+                continue
+            region = item.get("region") or item.get("asset") or "Market"
+            line = f"{region}: {title}"
+            if item.get("summary"):
+                line += f" | {item.get('summary')}"
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "critical_market",
+                    "title": title,
+                    "line": line,
+                    "source_url": item.get("source_url") or item.get("url") or "",
+                    "source_label": item.get("source_label") or item.get("publisher") or "Market radar",
+                    "conviction_score": numeric_score,
+                }
+            )
+
+        for item in (brief.get("watchlist_impact") or [])[:10]:
+            summary = str(item.get("summary") or "").strip()
+            if not summary:
+                continue
+            severity = str(item.get("severity") or item.get("impact") or "").lower()
+            actionable = bool(item.get("actionable") or item.get("ticker"))
+            if severity not in {"high", "critical", "risk"} and not actionable:
+                continue
+            ticker = item.get("ticker") or item.get("symbol") or "Watchlist"
+            event_key = f"critical-watchlist:{today}:{ticker}:{re.sub(r'[^a-zA-Z0-9]+', '-', summary.lower())[:70]}"
+            if event_key in sent_keys:
+                continue
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "critical_watchlist",
+                    "title": str(ticker),
+                    "line": f"{ticker}: {summary}",
+                    "source_url": item.get("source_url") or item.get("url") or "",
+                    "source_label": "Watchlist impact",
+                }
+            )
+
+        for item in (brief.get("earnings_calendar") or [])[:12]:
+            ticker = str(item.get("ticker") or "").upper()
+            days_until = item.get("days_until")
+            importance = str(item.get("importance") or "").lower()
+            try:
+                near = int(days_until) <= 1
+            except Exception:
+                scheduled = str(item.get("scheduled_for") or "")
+                near = scheduled.startswith(today)
+            if not ticker or not (near and importance in {"watchlist", "portfolio", "sp500"}):
+                continue
+            event_key = f"critical-earnings:{today}:{ticker}"
+            if event_key in sent_keys:
+                continue
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "critical_earnings",
+                    "title": f"{ticker} Earnings",
+                    "line": f"{ticker}: Earnings-Fenster steht an. Danach Umsatz, EPS, Guidance und Kursreaktion gegen Plan pruefen.",
+                    "source_url": "",
+                    "source_label": "Earnings radar",
+                }
+            )
+
+        return events
 
     def _event_priority(self, event: Dict[str, Any]) -> tuple[int, str]:
         category = event.get("category")

@@ -262,6 +262,12 @@ SEARCH_ALIASES: Dict[str, str] = {
     "crypto": "BTC-USD",
     "ethereum": "ETH-USD",
     "eth": "ETH-USD",
+    "nvidea": "NVDA",
+    "tesler": "TSLA",
+    "meta": "META",
+    "rheinmetall": "RHM.DE",
+    "siemens": "SIE.DE",
+    "brkb": "BRK-B",
 }
 
 
@@ -330,6 +336,116 @@ async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]
             seen.add(ticker)
             merged.append(item)
     return _cache_set(cache_key, merged[:limit])
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value in (None, ""):
+            return None
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except Exception:
+        return None
+
+
+def _format_ratio_pct(value: Optional[float]) -> str:
+    if value is None:
+        return "n/a"
+    pct = value * 100 if abs(value) <= 1 else value
+    return f"{pct:+.1f}%"
+
+
+def _format_dividend_yield(value: Optional[float]) -> str:
+    if value is None:
+        return "n/a"
+    # yfinance is inconsistent across symbols: some feeds return 0.036,
+    # others return 3.6. Treat >20% as suspicious but keep the value visible.
+    pct = value * 100 if 0 <= value <= 0.2 else value
+    return f"{pct:+.1f}%"
+
+
+def _build_business_quality_checks(data: Dict[str, Any]) -> Dict[str, Any]:
+    fundamentals = data.get("fundamentals", {}) if isinstance(data.get("fundamentals"), dict) else {}
+    statements = fundamentals.get("financial_statements", {}) if isinstance(fundamentals.get("financial_statements"), dict) else {}
+    trends = statements.get("trends", {}) if isinstance(statements.get("trends"), dict) else {}
+    annual = statements.get("annual", []) if isinstance(statements.get("annual"), list) else []
+    latest_annual = annual[0] if annual and isinstance(annual[0], dict) else {}
+    earnings_history = data.get("earnings_history", []) if isinstance(data.get("earnings_history"), list) else []
+    latest_earnings = earnings_history[0] if earnings_history and isinstance(earnings_history[0], dict) else {}
+
+    revenue_growth = _safe_float(fundamentals.get("revenue_growth"))
+    revenue_yoy = _safe_float(trends.get("revenue_yoy"))
+    quarterly_revenue_yoy = _safe_float(trends.get("quarterly_revenue_yoy"))
+    revenue_cagr = _safe_float(trends.get("revenue_cagr"))
+    profit_margin = _safe_float(fundamentals.get("profit_margin"))
+    fcf_margin = _safe_float(latest_annual.get("fcf_margin"))
+    dividend_yield = _safe_float(fundamentals.get("dividend_yield"))
+    payout_ratio = _safe_float(fundamentals.get("payout_ratio"))
+    free_cashflow = _safe_float(fundamentals.get("free_cashflow") or latest_annual.get("free_cashflow"))
+    eps_surprise = _safe_float(latest_earnings.get("eps_surprise_pct"))
+
+    revenue_inputs = [revenue_growth, revenue_yoy, quarterly_revenue_yoy, revenue_cagr]
+    revenue_known = sum(value is not None for value in revenue_inputs)
+    revenue_positive = sum(
+        1
+        for value, hurdle in [
+            (revenue_growth, 0.05),
+            (revenue_yoy, 0),
+            (quarterly_revenue_yoy, 0),
+            (revenue_cagr, 0.03),
+        ]
+        if value is not None and value >= hurdle
+    )
+    revenue_status = "unknown"
+    if revenue_known:
+        revenue_status = "met" if revenue_positive >= max(1, math.ceil(revenue_known / 2)) else "missed"
+
+    dividend_reasons: List[str] = []
+    dividend_status = "not_dividend_stock"
+    if dividend_yield is not None and dividend_yield > 0:
+        dividend_status = "solid"
+        dividend_reasons.append(f"Yield {_format_dividend_yield(dividend_yield)}")
+        if payout_ratio is not None:
+            dividend_reasons.append(f"Payout {_format_ratio_pct(payout_ratio)}")
+            if payout_ratio > 0.8:
+                dividend_status = "watch"
+        if free_cashflow is not None and free_cashflow <= 0:
+            dividend_status = "risk"
+            dividend_reasons.append("Free Cashflow negativ")
+        if revenue_yoy is not None and revenue_yoy < 0 and dividend_status == "solid":
+            dividend_status = "watch"
+            dividend_reasons.append("Umsatz ruecklaeufig")
+
+    return {
+        "revenue_status": revenue_status,
+        "dividend_status": dividend_status,
+        "checks": [
+            {
+                "label": "Umsatzziele / Revenue-Qualitaet",
+                "status": revenue_status,
+                "value": _format_ratio_pct(quarterly_revenue_yoy if quarterly_revenue_yoy is not None else revenue_growth),
+                "detail": "Erfuellt" if revenue_status == "met" else "Nicht klar erfuellt" if revenue_status == "missed" else "Zu wenig Daten",
+            },
+            {
+                "label": "Earnings-Erwartung",
+                "status": latest_earnings.get("status") or "unknown",
+                "value": f"{eps_surprise:+.1f}%" if eps_surprise is not None else "n/a",
+                "detail": "Letztes Quartal gegen Konsens",
+            },
+            {
+                "label": "Dividenden-Nutzung",
+                "status": dividend_status,
+                "value": ", ".join(dividend_reasons[:2]) if dividend_reasons else "Keine belastbare Dividendenbasis",
+                "detail": "Yield, Payout, Cashflow und Umsatztrend kombiniert",
+            },
+            {
+                "label": "Cash-/Margenqualitaet",
+                "status": "solid" if (profit_margin or 0) > 0 and (fcf_margin or 0) > 0 else "watch",
+                "value": f"Margin {_format_ratio_pct(profit_margin)} / FCF {_format_ratio_pct(fcf_margin)}",
+                "detail": "Langfristige Haltbarkeit der Aktie",
+            },
+        ],
+    }
 
 
 def get_app_password() -> str:
@@ -543,6 +659,8 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
     )
     if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
         await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
+    if _env_enabled("CRITICAL_MARKET_ALERTS_ENABLED", "true"):
+        await asyncio.to_thread(get_email_alert_service().check_and_send_critical_market_alerts, False)
     await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs, include_missed)
 
 
@@ -1105,7 +1223,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             )
             if looks_like_name:
                 try:
-                    suggestions = await get_discovery_service().search_ticker(ticker)
+                    suggestions = await _resolve_search_results(ticker, limit=3)
                     if suggestions:
                         resolved_ticker = suggestions[0]['ticker']
                         print(f"Resolved '{ticker}' -> '{resolved_ticker}'")
@@ -1221,6 +1339,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "comparison": data.get("comparison"),
             "earnings_history": data.get("earnings_history", []),
             "guidance_signal": data.get("guidance_signal", {}),
+            "business_quality": _build_business_quality_checks(data),
             "analysis": analyses,
             "etf_analysis": analyzer.analyze_etf() if data.get("fundamentals", {}).get("quote_type") == "ETF" else None,
             "recommendation": result.get("recommendation"),

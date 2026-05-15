@@ -131,6 +131,7 @@ export default function AnalysisResult({
     news,
     earnings_history,
     guidance_signal,
+    business_quality,
   } = data;
   const liveQuote = realtimeQuotes[data.ticker];
   const scoreValue = clampScore(total_score);
@@ -151,6 +152,7 @@ export default function AnalysisResult({
   const earningsHistory = Array.isArray(earnings_history) ? earnings_history : [];
   const latestEarnings = earningsHistory[0] || null;
   const guidanceSignal = guidance_signal || {};
+  const businessQualityChecks = Array.isArray(business_quality?.checks) ? business_quality.checks : [];
   const quarterlyRevenueYoY = financialTrends?.quarterly_revenue_yoy;
   const analystData = data.analyst_data || {};
   const shortInterest = data.short_interest || {};
@@ -861,6 +863,42 @@ export default function AnalysisResult({
                 {guidanceSignal?.summary
                   ? guidanceSignal.summary
                   : "Kein klares Guidance-Signal aus den juengsten Headline-Quellen. Deshalb EPS immer zusammen mit Umsatztrend und Preisreaktion lesen."}
+              </div>
+            </section>
+          )}
+
+          {businessQualityChecks.length > 0 && (
+            <section className="surface-panel rounded-[1.6rem] p-5">
+              <div className="mb-4">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Business Quality Check
+                </div>
+                <h3 className="mt-2 text-2xl font-black text-slate-900">
+                  Umsatz, Earnings, Dividende und Cashflow auf einen Blick
+                </h3>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {businessQualityChecks.map((check: any) => {
+                  const status = String(check.status || "").toLowerCase();
+                  const tone =
+                    ["met", "beat", "solid"].includes(status)
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800"
+                      : ["missed", "miss", "risk"].includes(status)
+                        ? "border-red-500/20 bg-red-500/10 text-red-800"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-800";
+                  return (
+                    <div key={check.label} className={`rounded-[1.2rem] border p-4 ${tone}`}>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
+                        {check.label}
+                      </div>
+                      <div className="mt-2 text-xl font-black">{check.value || "n/a"}</div>
+                      <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em]">
+                        {check.status || "unknown"}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 opacity-80">{check.detail}</p>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}

@@ -71,6 +71,7 @@ const LOCAL_SEARCH_ASSETS = [
 const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   ai: "NVIDIA Corporation (NVDA)",
   nvdia: "NVIDIA Corporation (NVDA)",
+  nvidea: "NVIDIA Corporation (NVDA)",
   nvidia: "NVIDIA Corporation (NVDA)",
   gpu: "NVIDIA Corporation (NVDA)",
   grafikarte: "NVIDIA Corporation (NVDA)",
@@ -92,6 +93,7 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   auto: "BMW AG (BMW.DE)",
   byd: "BYD Company Limited (BYDDY)",
   ev: "Tesla Inc. (TSLA)",
+  tesler: "Tesla Inc. (TSLA)",
   elektroauto: "Tesla Inc. (TSLA)",
   airbus: "Airbus SE (AIR.PA)",
   rheinmetall: "Rheinmetall AG (RHM.DE)",

@@ -25,6 +25,11 @@ interface DiscoveryStock {
   score?: number;
   trend_context?: string;
   reason?: string;
+  catalysts?: string[];
+  risk_flags?: string[];
+  quality_gate?: string;
+  profit_margin?: number;
+  volume_ratio?: number;
 }
 
 interface DiscoveryPanelProps {
@@ -86,6 +91,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   const [rebounds, setRebounds] = useState<DiscoveryStock[]>([]);
   const [smallCaps, setSmallCaps] = useState<DiscoveryStock[]>([]);
   const [moonshots, setMoonshots] = useState<DiscoveryStock[]>([]);
+  const [futureStars, setFutureStars] = useState<DiscoveryStock[]>([]);
   const [cryptos, setCryptos] = useState<DiscoveryStock[]>([]);
   const [commodities, setCommodities] = useState<DiscoveryStock[]>([]);
   const [etfs, setEtfs] = useState<any[]>([]);
@@ -180,14 +186,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
         const deferredResults = await Promise.allSettled([
           deferredFetch<DiscoveryStock[]>("/api/discovery/rebounds"),
           deferredFetch<DiscoveryStock[]>("/api/discovery/small-caps"),
+          deferredFetch<DiscoveryStock[]>("/api/discovery/future-stars"),
           deferredFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
           deferredFetch<DiscoveryStock[]>("/api/discovery/commodities"),
           deferredFetch<any[]>("/api/discovery/etfs"),
         ]);
         if (cancelled) return;
-        const [r, sc, cur, com, e] = deferredResults;
+        const [r, sc, fs, cur, com, e] = deferredResults;
         setRebounds(val(r, []));
         setSmallCaps(val(sc, []));
+        setFutureStars(val(fs, []));
         setCryptos(val(cur, []));
         setCommodities(val(com, []));
         setEtfs(val(e, []));
@@ -206,18 +214,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     setAiError(null);
     const safeFetch = <T,>(url: string) =>
       withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 700 }), 11000);
-    const [moon, highRisk] = await Promise.allSettled([
+    const [moon, highRisk, future] = await Promise.allSettled([
       safeFetch<DiscoveryStock[]>("/api/discovery/moonshots"),
       safeFetch<any[]>("/api/discovery/high-risk-opportunities"),
+      safeFetch<DiscoveryStock[]>("/api/discovery/future-stars"),
     ]);
     const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>
       r.status === "fulfilled" && r.value != null ? r.value : fallback;
     const nextMoonshots = val(moon, []);
     const nextHighRisk = val(highRisk, []);
+    const nextFutureStars = val(future, []);
     setMoonshots(nextMoonshots);
     setHighRiskOpps(nextHighRisk);
+    setFutureStars(nextFutureStars);
     aiLoadedRef.current = true;
-    if (!nextMoonshots.length && !nextHighRisk.length) {
+    if (!nextMoonshots.length && !nextHighRisk.length && !nextFutureStars.length) {
       setAiError("scanner_empty_or_delayed");
     }
     setAiLoading(false);
@@ -928,6 +939,44 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 </div>
               </div>
 
+              {futureStars.length > 0 && (
+                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {futureStars.slice(0, 4).map((stock) => (
+                    <div
+                      key={stock.ticker}
+                      className="surface-panel cursor-pointer rounded-[1.5rem] p-5 transition-all hover:-translate-y-0.5"
+                      onClick={() => openMarketDetails(stock, "ai")}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                            Future Star {stock.quality_gate === "passed" ? "geprueft" : "watch"}
+                          </div>
+                          <div className="mt-2 text-2xl font-black text-slate-900">{stock.ticker}</div>
+                          <div className="text-sm text-slate-500">{stock.name}</div>
+                        </div>
+                        <div className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-black text-emerald-700">
+                          {stock.score || 0}/100
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-2 text-xs font-bold text-slate-600 sm:grid-cols-3">
+                        <div>Growth {stock.growth != null ? `${stock.growth.toFixed(1)}%` : "n/a"}</div>
+                        <div>MCap {stock.market_cap ? `${(stock.market_cap / 1e9).toFixed(1)}B` : "n/a"}</div>
+                        <div>Vol {stock.volume_ratio ? `${Number(stock.volume_ratio).toFixed(1)}x` : "n/a"}</div>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Noch kein sauberer News-Katalysator."}
+                      </p>
+                      {stock.risk_flags?.[0] ? (
+                        <p className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-bold text-amber-800">
+                          Risiko: {stock.risk_flags[0]}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {moonshots.length > 0 ? moonshots.map((stock) => (
                   <div
@@ -1329,6 +1378,45 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
         {activeTab === "screener" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            {futureStars.length > 0 && (
+              <section className="surface-panel rounded-[2rem] p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-700">
+                      Future Stars
+                    </div>
+                    <h3 className="mt-2 text-2xl text-slate-900">
+                      Kleine Werte mit echter Chance nach News- und Datencheck
+                    </h3>
+                  </div>
+                  <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-700">
+                    {futureStars.filter((item) => item.quality_gate === "passed").length} geprueft
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {futureStars.slice(0, 4).map((stock) => (
+                    <button
+                      key={stock.ticker}
+                      onClick={() => onAnalyze(stock.ticker)}
+                      className="rounded-[1.2rem] border border-black/8 bg-white p-4 text-left transition-all hover:-translate-y-0.5"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xl font-black text-slate-900">{stock.ticker}</div>
+                        <div className="text-xs font-black text-emerald-700">{stock.score}/100</div>
+                      </div>
+                      <div className="mt-1 truncate text-xs font-semibold text-slate-500">{stock.name}</div>
+                      <div className="mt-3 text-xs font-bold text-slate-700">
+                        {stock.growth != null ? `${stock.growth.toFixed(1)}% Wachstum` : "Growth n/a"} · {stock.market_cap ? `${(stock.market_cap / 1e9).toFixed(1)}B` : "MCap n/a"}
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                        {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Katalysator beobachten."}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="surface-panel rounded-[2rem] p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

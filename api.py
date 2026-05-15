@@ -3923,6 +3923,20 @@ async def get_small_cap_growth():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/discovery/future-stars")
+async def get_future_stars():
+    """Small/mid-cap future-star candidates validated against news and fundamentals."""
+    try:
+        cache_key = "discovery:future-stars"
+        cached = _cache_get(cache_key, _safe_int_env("DISCOVERY_FUTURE_STARS_CACHE_TTL_SECONDS", 900, minimum=60))
+        if cached is not None:
+            return convert_numpy_types(cached)
+        payload = await get_discovery_service().get_future_stars()
+        return convert_numpy_types(_cache_set(cache_key, payload))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/screener")
 async def run_market_screener(
     rsi_max: Optional[float] = None,

@@ -433,6 +433,7 @@ class MorningBriefService:
             "event_pings": event_pings,
             "product_catalysts": product_catalysts,
             "market_movers": market_movers,
+            "future_stars": self._build_future_stars_brief(),
             "contrarian_signals": contrarian_signals,
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
@@ -591,6 +592,7 @@ class MorningBriefService:
             "event_pings": event_pings,
             "product_catalysts": product_catalysts,
             "market_movers": {"gainers": [], "losers": []},
+            "future_stars": self._build_future_stars_brief(fast=True),
             "contrarian_signals": self._build_contrarian_signals(top_news, watchlist_snapshot),
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
@@ -691,6 +693,62 @@ class MorningBriefService:
                 else "Keine belastbare Edge: zuerst Datenluecken und fehlende Trigger pruefen."
             ),
         }
+
+    def _build_future_stars_brief(self, fast: bool = False) -> List[Dict[str, Any]]:
+        cache_key = "_future_stars_fast" if fast else "_future_stars_full"
+        cache_time_key = f"{cache_key}_time"
+        cached = getattr(self, cache_key, None)
+        cached_at = getattr(self, cache_time_key, None)
+        if cached is not None and isinstance(cached_at, datetime):
+            if (datetime.now(timezone.utc) - cached_at).total_seconds() < 3600:
+                return cached
+
+        universe = ["RKLB", "LUNR", "SOFI", "HOOD", "PATH", "OKLO"] if fast else [
+            "RKLB", "LUNR", "SOFI", "HOOD", "PATH", "OKLO", "S", "IONQ", "ASTS", "HIMS",
+        ]
+        positive_terms = ("contract", "partnership", "approval", "launch", "growth", "beat", "raises", "ai", "space", "customer", "record")
+        risk_terms = ("offering", "dilution", "lawsuit", "downgrade", "miss", "delay", "cash burn", "short report")
+        candidates: List[Dict[str, Any]] = []
+        for ticker in universe:
+            try:
+                fetcher = DataFetcher(ticker)
+                info = fetcher.info or {}
+                market_cap = info.get("marketCap") or 0
+                if not market_cap or market_cap > 35e9:
+                    continue
+                fundamentals = fetcher.get_fundamentals()
+                revenue_growth = fundamentals.get("revenue_growth") or 0
+                profit_margin = fundamentals.get("profit_margin") or 0
+                free_cashflow = fundamentals.get("free_cashflow") or 0
+                news = fetcher.get_news()
+                titles = [str(item.get("title") or item.get("headline") or "") for item in news[:6] if isinstance(item, dict)]
+                catalysts = [title for title in titles if any(term in title.lower() for term in positive_terms)]
+                risks = [title for title in titles if any(term in title.lower() for term in risk_terms)]
+                score = 35 + min(30, max(0, revenue_growth) * 100)
+                score += 12 if profit_margin > 0 else -8
+                score += 10 if free_cashflow > 0 else -5
+                score += min(25, len(catalysts) * 9)
+                score -= min(25, len(risks) * 12)
+                score = max(0, min(100, round(score)))
+                if score < 62 and not catalysts:
+                    continue
+                candidates.append({
+                    "ticker": ticker,
+                    "name": info.get("shortName") or info.get("longName") or ticker,
+                    "market_cap": market_cap,
+                    "score": score,
+                    "revenue_growth": revenue_growth * 100 if revenue_growth is not None else None,
+                    "quality_gate": "passed" if score >= 72 and catalysts else "watch",
+                    "catalyst": catalysts[0] if catalysts else "Noch kein harter News-Katalysator; weiter beobachten.",
+                    "risk": risks[0] if risks else "",
+                })
+            except Exception:
+                continue
+        candidates.sort(key=lambda item: (item.get("quality_gate") != "passed", -(item.get("score") or 0)))
+        result = candidates[:5]
+        setattr(self, cache_key, result)
+        setattr(self, cache_time_key, datetime.now(timezone.utc))
+        return result
 
     def _build_quality_report(self, brief: Dict[str, Any]) -> Dict[str, Any]:
         now_utc = datetime.now(timezone.utc)

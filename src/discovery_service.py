@@ -18,6 +18,10 @@ class DiscoveryService:
         # Sample universes for scanning
         self.tech_universe = ["NVDA", "AMD", "TSLA", "PLTR", "SMCI", "ARM", "CELH", "MSFT", "AAPL", "GOOGL", "META", "NFLX"]
         self.small_cap_watch = ["FRGT", "SOFI", "PATH", "MSTR", "HOOD", "UPST", "OKLO", "S", "LUNR", "RKLB"]
+        self.future_star_watch = [
+            "RKLB", "LUNR", "SOFI", "HOOD", "PATH", "OKLO", "S", "IONQ", "RGTI", "ASTS",
+            "HIMS", "CELH", "DUOL", "TTD", "CRSP", "BEAM", "RXRX", "ENVX", "JOBY", "ACHR",
+        ]
         self.dividend_watch = ["PEP", "KO", "PG", "JNJ", "MMM", "O", "MAIN", "XOM", "CVX", "ABBV", "T", "VZ", "MO", "PM"]
         self.moonshot_watch = ["FRGT", "SOFI", "PATH", "MSTR", "HOOD", "UPST", "AI", "PLTR", "ARM", "OKLO", "LUNR", "DNA"]
         self.crypto_universe = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "DOGE-USD", "DOT-USD"]
@@ -313,6 +317,92 @@ class DiscoveryService:
             results = [r for r in await asyncio.gather(*fallback_tasks) if r]
             
         return results
+
+    def _score_future_star_news(self, news: List[Dict[str, Any]]) -> Dict[str, Any]:
+        positive_terms = {
+            "beat", "growth", "contract", "partnership", "approval", "launch", "guidance",
+            "raises", "upgrade", "expands", "record", "profit", "margin", "revenue",
+            "backlog", "customer", "deal", "ai", "satellite", "space", "platform",
+        }
+        risk_terms = {
+            "offering", "dilution", "sec investigation", "lawsuit", "downgrade", "miss",
+            "delay", "bankruptcy", "cash burn", "going concern", "short report",
+        }
+        catalyst_hits: List[str] = []
+        risk_hits: List[str] = []
+        for item in news[:8]:
+            title = str(item.get("title") or item.get("headline") or "")
+            normalized = title.lower()
+            if any(term in normalized for term in positive_terms):
+                catalyst_hits.append(title)
+            if any(term in normalized for term in risk_terms):
+                risk_hits.append(title)
+        return {
+            "score": min(30, len(catalyst_hits) * 10) - min(25, len(risk_hits) * 12),
+            "catalysts": catalyst_hits[:3],
+            "risks": risk_hits[:2],
+        }
+
+    async def get_future_stars(self) -> List[Dict[str, Any]]:
+        """Find smaller stocks with real future-star potential after news and fundamentals checks."""
+        import asyncio
+
+        async def fetch_candidate(ticker: str) -> Optional[Dict[str, Any]]:
+            try:
+                def fetch() -> Optional[Dict[str, Any]]:
+                    f = DataFetcher(ticker)
+                    info = f.info or {}
+                    market_cap = info.get("marketCap") or 0
+                    if not market_cap or market_cap > 35e9:
+                        return None
+                    price = f.get_price_data_fast()
+                    fund = f.get_fundamentals()
+                    news = f.get_news()
+                    revenue_growth = fund.get("revenue_growth") or 0
+                    profit_margin = fund.get("profit_margin") or 0
+                    free_cashflow = fund.get("free_cashflow") or 0
+                    debt_to_equity = fund.get("debt_to_equity")
+                    news_score = self._score_future_star_news(news if isinstance(news, list) else [])
+                    change_1m = price.get("change_1m") or 0
+                    volume_context = f.get_volatility_data().get("volume_ratio") or 1
+
+                    score = 35
+                    score += min(30, max(0, revenue_growth) * 100)
+                    score += 12 if profit_margin > 0 else -8
+                    score += 10 if free_cashflow > 0 else -6
+                    score += 8 if change_1m > 0 else -4
+                    score += 6 if volume_context and volume_context >= 1.15 else 0
+                    score += news_score["score"]
+                    if debt_to_equity is not None and debt_to_equity > 180:
+                        score -= 10
+                    score = max(0, min(100, round(score)))
+                    if score < 62 and not news_score["catalysts"]:
+                        return None
+                    return {
+                        "ticker": ticker,
+                        "name": info.get("longName") or info.get("shortName") or ticker,
+                        "price": price.get("current_price"),
+                        "change": change_1m,
+                        "market_cap": market_cap,
+                        "growth": revenue_growth * 100 if revenue_growth is not None else None,
+                        "profit_margin": profit_margin * 100 if profit_margin is not None else None,
+                        "free_cashflow": free_cashflow,
+                        "volume_ratio": volume_context,
+                        "score": score,
+                        "trend_context": "Future-Star Check: Wachstum, News-Katalysator, Volumen und Cashflow gegengeprueft.",
+                        "reason": news_score["catalysts"][0] if news_score["catalysts"] else "Kleinerer Growth-Wert mit Daten-Setup, aber News-Katalysator noch beobachten.",
+                        "catalysts": news_score["catalysts"],
+                        "risk_flags": news_score["risks"],
+                        "quality_gate": "passed" if score >= 72 and news_score["catalysts"] else "watchlist",
+                    }
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(None, fetch)
+            except Exception:
+                return None
+
+        tasks = [fetch_candidate(ticker) for ticker in self.future_star_watch[:20]]
+        results = [item for item in await asyncio.gather(*tasks) if item]
+        return sorted(results, key=lambda item: (item.get("quality_gate") != "passed", -(item.get("score") or 0)))[:10]
 
     async def get_cryptos(self) -> List[Dict[str, Any]]:
         import asyncio

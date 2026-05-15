@@ -289,6 +289,7 @@ export default function MorningBriefPanel({
   const topGainers = Array.isArray(marketMovers.gainers) ? marketMovers.gainers.slice(0, 4) : [];
   const topLosers = Array.isArray(marketMovers.losers) ? marketMovers.losers.slice(0, 4) : [];
   const productCatalysts = Array.isArray(brief.product_catalysts) ? brief.product_catalysts.slice(0, 4) : [];
+  const futureStars = Array.isArray(brief.future_stars) ? brief.future_stars.slice(0, 5) : [];
   const setupBoard = brief.setup_board || { now: [], next: [], avoid: [] };
   const playbookSummary = brief.playbook_summary || {};
   const dataHealth = brief.data_health || {};
@@ -496,6 +497,43 @@ export default function MorningBriefPanel({
           </div>
         ) : null}
       </section>
+
+      {futureStars.length > 0 && (
+        <section className="surface-panel rounded-[2rem] p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-700">
+                Future Stars Briefing
+              </div>
+              <h3 className="mt-2 text-2xl text-slate-900">
+                Kleine Werte erst nach News-, Umsatz- und Risiko-Check
+              </h3>
+            </div>
+            <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-700">
+              {futureStars.filter((item: any) => item.quality_gate === "passed").length} passed
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {futureStars.map((item: any) => (
+              <button
+                key={item.ticker}
+                onClick={() => item.ticker && onAnalyze(item.ticker)}
+                className="rounded-[1.15rem] border border-black/8 bg-white/75 p-4 text-left transition-all hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-lg font-black text-slate-900">{item.ticker}</span>
+                  <span className="text-xs font-black text-emerald-700">{item.score}/100</span>
+                </div>
+                <div className="mt-1 truncate text-xs font-semibold text-slate-500">{item.name}</div>
+                <div className="mt-3 text-xs font-bold text-slate-700">
+                  {item.revenue_growth != null ? `${Number(item.revenue_growth).toFixed(1)}% Umsatz` : "Umsatz n/a"}
+                </div>
+                <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-500">{item.catalyst}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {!hideMap && (
         <WorldMarketMap

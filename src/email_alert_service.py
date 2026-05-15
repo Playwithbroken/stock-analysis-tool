@@ -1631,6 +1631,30 @@ class EmailAlertService:
                 if title:
                     lines2.append(f"   {title[:180]}")
 
+        future_stars = brief.get("future_stars") or []
+        if future_stars:
+            lines2.extend(["", "<b>Future Stars Radar</b>"])
+            for item in future_stars[:5]:
+                ticker = self._tg_esc(item.get("ticker") or "")
+                score = item.get("score")
+                score_str = f"{float(score):.0f}/100" if isinstance(score, (int, float)) else "score offen"
+                quality_gate = self._tg_esc(str(item.get("quality_gate") or "watch").upper())
+                revenue = item.get("revenue_growth") or item.get("growth")
+                revenue_str = (
+                    f"{float(revenue):+.1f}% Umsatz"
+                    if isinstance(revenue, (int, float))
+                    else "Umsatz n/a"
+                )
+                catalyst = self._tg_esc(str(item.get("catalyst") or item.get("reason") or "")[:180])
+                risk_flags = item.get("risk_flags") if isinstance(item.get("risk_flags"), list) else []
+                risk_value = item.get("risk") or (risk_flags[0] if risk_flags else "")
+                risk = self._tg_esc(str(risk_value)[:160])
+                lines2.append(f"{quality_gate} <code>{ticker}</code> {score_str} | {revenue_str}")
+                if catalyst:
+                    lines2.append(f"   Katalysator: {catalyst}")
+                if risk:
+                    lines2.append(f"   Risiko: {risk}")
+
         market_movers = brief.get("market_movers") or {}
         gainers = market_movers.get("gainers") or []
         losers = market_movers.get("losers") or []

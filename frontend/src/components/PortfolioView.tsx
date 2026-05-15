@@ -20,7 +20,7 @@ interface PortfolioViewProps {
   onUpdateHolding: (portfolioId: string, ticker: string, patch: Partial<Holding>) => void;
   onRemoveHolding: (portfolioId: string, ticker: string) => void;
   onAnalyzeStock: (ticker: string) => void;
-  onRefresh: () => Promise<void> | void;
+  onRefresh: () => Promise<unknown> | unknown;
 }
 
 interface PortfolioAnalysis {
@@ -122,7 +122,12 @@ export default function PortfolioView({
   const isEditingHolding = (ticker?: string) => !!ticker && editingHoldingTicker === ticker;
 
   useEffect(() => {
-    if (!selectedPortfolio && portfolios.length > 0) {
+    if (portfolios.length === 0) {
+      if (selectedPortfolio) setSelectedPortfolio(null);
+      return;
+    }
+    const selectedStillExists = portfolios.some((portfolio) => portfolio.id === selectedPortfolio);
+    if (!selectedPortfolio || !selectedStillExists) {
       setSelectedPortfolio(portfolios[0].id);
     }
   }, [portfolios, selectedPortfolio]);
@@ -269,8 +274,8 @@ export default function PortfolioView({
       try {
         const created = await onCreatePortfolio(name);
         setSelectedPortfolio(created.id);
-      setNewPortfolioName("");
-      setShowCreateModal(false);
+        setNewPortfolioName("");
+        setShowCreateModal(false);
       } catch (error) {
         setCreatePortfolioError(error instanceof Error ? error.message : "Portfolio konnte nicht gespeichert werden.");
       } finally {

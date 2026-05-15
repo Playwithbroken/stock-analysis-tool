@@ -73,16 +73,16 @@ export function usePortfolios(enabled: boolean = true) {
     setDataSourceMessage('')
   }
 
-  const fetchPortfolios = async () => {
+  const fetchPortfolios = async (): Promise<Portfolio[] | null> => {
     if (!enabled) {
       setPortfolios([])
       setDataSource('disabled')
       setDataSourceMessage('')
       setLoading(false)
-      return
+      return []
     }
     try {
-      const response = await fetch('/api/portfolios')
+      const response = await fetch('/api/portfolios', { credentials: 'same-origin' })
       if (!response.ok) throw new Error(`Portfolio-Liste konnte nicht geladen werden (${response.status})`)
       const data = await response.json()
       if (Array.isArray(data)) {
@@ -94,13 +94,16 @@ export function usePortfolios(enabled: boolean = true) {
             setNeedsRestore(true)
             setDataSource('server')
             setDataSourceMessage('Server ist leer. Lokale Sicherung kann wiederhergestellt werden.')
+            return cached
           } else {
             syncCache([])
             setDataSource('empty')
             setDataSourceMessage('')
+            return []
           }
         } else {
           applyServerPortfolios(data)
+          return data
         }
       } else {
         // Fallback to cache on bad response
@@ -109,6 +112,7 @@ export function usePortfolios(enabled: boolean = true) {
           setPortfolios(cached)
           setDataSource('local-cache')
           setDataSourceMessage('Portfolio-Daten kommen aus der lokalen Browser-Sicherung, weil die Serverantwort ungueltig war.')
+          return cached
         }
       }
     } catch {
@@ -118,10 +122,12 @@ export function usePortfolios(enabled: boolean = true) {
         setPortfolios(cached)
         setDataSource('local-cache')
         setDataSourceMessage('Portfolio-Daten kommen aus der lokalen Browser-Sicherung, weil der Server nicht erreichbar war.')
+        return cached
       }
     } finally {
       setLoading(false)
     }
+    return null
   }
 
   /** Re-create all portfolios from local cache on the backend */
@@ -134,6 +140,7 @@ export function usePortfolios(enabled: boolean = true) {
       try {
         const res = await fetch('/api/portfolios', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: cached.name }),
         })
@@ -142,6 +149,7 @@ export function usePortfolios(enabled: boolean = true) {
         for (const h of cached.holdings) {
           await fetch(`/api/portfolios/${newP.id}/holdings`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ticker: h.ticker, shares: h.shares, buy_price: h.buyPrice, purchase_date: h.purchaseDate }),
           })
@@ -173,6 +181,7 @@ export function usePortfolios(enabled: boolean = true) {
   const createPortfolio = async (name: string): Promise<Portfolio> => {
     const response = await fetch('/api/portfolios', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     })
@@ -189,12 +198,21 @@ export function usePortfolios(enabled: boolean = true) {
     setNeedsRestore(false)
     setDataSource('server')
     setDataSourceMessage('')
-    await fetchPortfolios()
+    const refreshed = await fetchPortfolios()
+    if (refreshed && !refreshed.some((portfolio) => portfolio.id === newPortfolio.id)) {
+      setPortfolios((current) => {
+        const updated = [newPortfolio, ...current.filter((portfolio) => portfolio.id !== newPortfolio.id)]
+        saveToCache(updated)
+        return updated
+      })
+      setDataSource('server')
+      setDataSourceMessage('Portfolio wurde gespeichert. Die Serverliste wird im Hintergrund aktualisiert.')
+    }
     return newPortfolio
   }
 
   const deletePortfolio = async (id: string) => {
-    const response = await fetch(`/api/portfolios/${id}`, { method: 'DELETE' })
+    const response = await fetch(`/api/portfolios/${id}`, { method: 'DELETE', credentials: 'same-origin' })
     if (!response.ok) {
       throw new Error(await readApiError(response, `Portfolio konnte nicht geloescht werden (${response.status})`))
     }
@@ -209,6 +227,7 @@ export function usePortfolios(enabled: boolean = true) {
   const addHolding = async (portfolioId: string, holding: Holding) => {
     const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ticker: holding.ticker,
@@ -225,7 +244,8 @@ export function usePortfolios(enabled: boolean = true) {
 
   const removeHolding = async (portfolioId: string, ticker: string) => {
     const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      credentials: 'same-origin',
     })
     if (!response.ok) {
       throw new Error(await readApiError(response, `Position konnte nicht geloescht werden (${response.status})`))
@@ -236,6 +256,7 @@ export function usePortfolios(enabled: boolean = true) {
   const updateHolding = async (portfolioId: string, ticker: string, patch: Partial<Holding>) => {
     const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
       method: 'PATCH',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         shares: patch.shares,

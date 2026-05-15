@@ -980,6 +980,46 @@ function AppContent() {
     ["Earnings", globalBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
     ["Products", globalBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
   ];
+  const dashboardPriorityCards = [
+    {
+      label: "Jetzt wichtig",
+      title:
+        globalBrief?.opening_bias ||
+        globalBrief?.headline ||
+        "Noch kein klares Marktsignal",
+      detail:
+        globalBrief?.macro_regime
+          ? `Regime: ${globalBrief.macro_regime}`
+          : "Feed laedt Setups, Events und Portfolio-Bezug.",
+      tone: "border-emerald-500/18 bg-emerald-500/8 text-emerald-800",
+    },
+    {
+      label: "Naechster Check",
+      title:
+        globalBrief?.trade_setups?.[0]?.ticker ||
+        globalBrief?.watchlist_impact?.[0]?.ticker ||
+        globalBrief?.product_catalysts?.[0]?.ticker ||
+        "Watchlist",
+      detail:
+        globalBrief?.trade_setups?.[0]?.thesis ||
+        globalBrief?.watchlist_impact?.[0]?.reason ||
+        globalBrief?.product_catalysts?.[0]?.title ||
+        "Nur starke Signale werden in Analyzer/Markets vertieft.",
+      tone: "border-sky-500/18 bg-sky-500/8 text-sky-800",
+    },
+    {
+      label: "Risiko",
+      title:
+        globalBrief?.risk_note ||
+        globalBrief?.event_pings?.[0]?.title ||
+        "Keine harte Bremse",
+      detail:
+        globalBrief?.event_pings?.[0]?.summary ||
+        globalBrief?.opening_read?.summary ||
+        "Bei unklaren Daten erst beobachten, dann handeln.",
+      tone: "border-amber-500/18 bg-amber-500/8 text-amber-800",
+    },
+  ];
   const favoriteTape = (
     <div className="overflow-x-auto no-scrollbar">
       <div className="flex min-w-max items-center gap-2">
@@ -1081,7 +1121,7 @@ function AppContent() {
     <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
         <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] md:hidden">
-          <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] border border-white/70 bg-white/88 px-2.5 shadow-[0_12px_28px_rgba(17,24,39,0.08)] backdrop-blur-xl">
+          <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#101114] text-white">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1108,21 +1148,21 @@ function AppContent() {
               <button
                 onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
                 aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
-                className="rounded-full border border-black/8 bg-white/76 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-800"
+                className="mobile-topbar-button px-2.5 py-1.5 text-[10px]"
               >
                 {currency}
               </button>
               <button
                 onClick={toggleTheme}
                 aria-label="Toggle dark mode"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 text-slate-600"
+                className="mobile-topbar-icon"
               >
                 {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
               </button>
               <button
                 onClick={handleInstallApp}
                 aria-label="Install app"
-                className={`flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 ${
+                className={`mobile-topbar-icon ${
                   installPrompt.installed ? "text-emerald-700" : "text-slate-700"
                 }`}
                 title={installPrompt.installed ? "App ist installiert" : "App installieren"}
@@ -1132,7 +1172,7 @@ function AppContent() {
               <button
                 onClick={() => setIsHealthOpen(true)}
                 aria-label="Open health center"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-black/8 bg-white/76 text-slate-700"
+                className="mobile-topbar-icon"
                 title="Health center"
               >
                 <Activity size={14} />
@@ -1402,26 +1442,44 @@ function AppContent() {
               </div>
             </section>
 
-            <div className="space-y-6">
+            <div className="dashboard-priority-strip">
+              {dashboardPriorityCards.map((item) => (
+                <div key={item.label} className={`dashboard-priority-card ${item.tone}`}>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-70">
+                    {item.label}
+                  </div>
+                  <div className="mt-2 line-clamp-1 text-base font-black text-slate-950 dark:text-white">
+                    {String(item.title).slice(0, 96)}
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
+                    {String(item.detail).slice(0, 180)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="dashboard-intel-grid">
                 {globalBrief && geoRegions.length ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
-                      <WorldMarketMap
-                        regions={geoRegions}
-                        selectedRegion={selectedGeoRegion}
-                        onSelectRegion={setSelectedGeoRegion}
-                        news={globalBrief.top_news || []}
-                        eventLayer={globalBrief.event_layer || []}
-                        eventPings={globalBrief.event_pings || []}
-                        watchlistImpact={globalBrief.watchlist_impact || []}
-                        contrarianSignals={globalBrief.contrarian_signals || []}
-                        openingTimeline={globalBrief.opening_timeline || []}
-                        onAnalyze={(t) => {
-                          setActiveTab("analyze");
-                          handleSearch(t);
-                        }}
-                        focusTicker={analysis?.ticker}
-                      />
+                      <div className="dashboard-map-slot">
+                        <WorldMarketMap
+                          regions={geoRegions}
+                          selectedRegion={selectedGeoRegion}
+                          onSelectRegion={setSelectedGeoRegion}
+                          news={globalBrief.top_news || []}
+                          eventLayer={globalBrief.event_layer || []}
+                          eventPings={globalBrief.event_pings || []}
+                          watchlistImpact={globalBrief.watchlist_impact || []}
+                          contrarianSignals={globalBrief.contrarian_signals || []}
+                          openingTimeline={globalBrief.opening_timeline || []}
+                          onAnalyze={(t) => {
+                            setActiveTab("analyze");
+                            handleSearch(t);
+                          }}
+                          focusTicker={analysis?.ticker}
+                        />
+                      </div>
                     </Suspense>
                   </ErrorBoundary>
                 ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
@@ -1449,14 +1507,16 @@ function AppContent() {
                 {globalBrief ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
-                      <MorningBriefPanel
-                        brief={globalBrief}
-                        onAnalyze={(t) => {
-                          setActiveTab("analyze");
-                          handleSearch(t);
-                        }}
-                        hideMap
-                      />
+                      <div className="dashboard-brief-slot">
+                        <MorningBriefPanel
+                          brief={globalBrief}
+                          onAnalyze={(t) => {
+                            setActiveTab("analyze");
+                            handleSearch(t);
+                          }}
+                          hideMap
+                        />
+                      </div>
                     </Suspense>
                   </ErrorBoundary>
                 ) : (
@@ -1666,7 +1726,7 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="fixed bottom-[calc(0.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.35rem] border border-black/8 bg-[rgba(255,255,255,0.94)] p-1.5 shadow-[0_18px_46px_rgba(17,24,39,0.13)] backdrop-blur-xl md:hidden">
+      <nav className="mobile-tabbar fixed bottom-[calc(0.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.35rem] p-1.5 md:hidden">
         <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button

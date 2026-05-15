@@ -827,17 +827,14 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[calc(5.15rem+env(safe-area-inset-bottom))] right-2.5 z-40${isOpen ? " hidden" : ""} flex h-[2.9rem] max-w-[calc(100vw-1.25rem)] items-center gap-2.5 rounded-[1.05rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-2.5 text-white shadow-[0_18px_38px_rgba(15,118,110,0.22)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
+        className={`group fixed bottom-[calc(5.85rem+env(safe-area-inset-bottom))] right-3 z-40${isOpen ? " hidden" : ""} flex h-12 w-12 items-center justify-center rounded-[1.05rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-0 text-white shadow-[0_18px_38px_rgba(15,118,110,0.22)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
-        <div className="absolute -top-2 right-3 rounded-full border border-white/15 bg-[#0b1216]/70 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.16)] md:hidden">
-          Live
-        </div>
         <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/16 bg-white/14 md:h-11 md:w-11 md:rounded-[1rem]">
           <Bot size={20} />
         </div>
-        <div className="relative min-w-0 pr-1 text-left md:hidden">
+        <div className="relative hidden min-w-0 pr-1 text-left">
           <div className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-white/70">
             Broker Freund
           </div>

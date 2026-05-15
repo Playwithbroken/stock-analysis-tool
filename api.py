@@ -11,6 +11,7 @@ from typing import Dict, Any, List, Optional
 import copy
 import difflib
 import json
+import re
 import uvicorn
 import numpy as np
 import asyncio
@@ -299,6 +300,30 @@ SEARCH_ALIASES: Dict[str, str] = {
 
 def _normalize_search_query(value: str) -> str:
     return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _normalize_ticker_input(value: str) -> str:
+    text = (value or "").strip()
+    if "(" in text and ")" in text:
+        match = re.search(r"\(([A-Z0-9.\-^=]+)\)", text.upper())
+        if match:
+            return match.group(1)
+    cleaned = re.sub(r"^[#$]+", "", text)
+    cleaned = re.sub(r"\b(aktie|stock|share|shares|kurs|analyse|analysis|usd|eur)\b", " ", cleaned, flags=re.I)
+    cleaned = re.sub(r"[/:]+", "-", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    compact = re.sub(r"[^a-z0-9.\-]+", "", cleaned.lower())
+    alias = SEARCH_ALIASES.get(compact) or SEARCH_ALIASES.get(_normalize_search_query(cleaned))
+    if alias:
+        return alias
+    if re.fullmatch(r"brk[.\s-]?b", cleaned, flags=re.I):
+        return "BRK-B"
+    crypto_aliases = {"btc": "BTC-USD", "eth": "ETH-USD", "sol": "SOL-USD"}
+    if cleaned.lower() in crypto_aliases:
+        return crypto_aliases[cleaned.lower()]
+    normalized = re.sub(r"[^A-Z0-9.\-^=]+", "-", cleaned.upper())
+    normalized = re.sub(r"-+", "-", normalized).strip("-")
+    return normalized
 
 
 def _fuzzy_catalog_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
@@ -1235,11 +1260,10 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             }
 
         # Check for company names or 'Name (TICKER)' format
-        resolved_ticker = ticker.upper().strip()
+        resolved_ticker = _normalize_ticker_input(ticker)
 
         # If input contains brackets like 'Pfizer Inc. (PFE)', extract the ticker
         if "(" in ticker and ")" in ticker:
-            import re
             match = re.search(r'\(([A-Z0-9.\-^=]+)\)', ticker.upper())
             if match:
                 resolved_ticker = match.group(1)

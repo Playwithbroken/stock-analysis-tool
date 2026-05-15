@@ -169,15 +169,21 @@ function normalizeSearchValue(value: string): string {
 }
 
 function normalizeTickerInput(value: string): string {
-  const raw = extractTicker(value).trim();
-  const compact = raw.toLowerCase().replace(/\s+/g, "");
+  const raw = extractTicker(value)
+    .trim()
+    .replace(/^[#$]+/, "")
+    .replace(/\b(aktie|stock|share|shares|kurs|analyse|analysis|usd|eur)\b/gi, " ")
+    .replace(/[/:]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  const compact = raw.toLowerCase().replace(/[^a-z0-9.-]+/g, "");
   const alias = LOCAL_SEARCH_ALIASES[compact] || LOCAL_SEARCH_ALIASES[normalizeSearchValue(raw)];
   if (alias) return extractTicker(alias);
   if (/^brk[.\s-]?b$/i.test(raw)) return "BRK-B";
   if (/^btc$/i.test(raw)) return "BTC-USD";
   if (/^eth$/i.test(raw)) return "ETH-USD";
   if (/^sol$/i.test(raw)) return "SOL-USD";
-  return raw.toUpperCase().replace(/\s+/g, "-");
+  return raw.toUpperCase().replace(/[^A-Z0-9.^=-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
 function uniqueValues(values: string[]): string[] {

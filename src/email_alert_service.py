@@ -177,9 +177,10 @@ class EmailAlertService:
         if not events:
             return {"status": "ok", "sent": 0, "message": "No critical market alerts."}
 
-        self._send_notifications(config, events[:8], subject="Sofort-Alert: Wichtige Marktinformation")
-        self.portfolio_manager.mark_signal_events_sent(events[:8])
-        return {"status": "ok", "sent": len(events[:8]), "message": "Critical Telegram alerts sent."}
+        selected_events = events[: self._safe_int_env("CRITICAL_MARKET_ALERT_MAX_ITEMS", 5, minimum=1)]
+        self._send_notifications(config, selected_events, subject="Sofort-Alert: Wichtige Marktinformation")
+        self.portfolio_manager.mark_signal_events_sent(selected_events)
+        return {"status": "ok", "sent": len(selected_events), "message": "Critical Telegram alerts sent."}
 
     def send_test_email(self) -> Dict[str, Any]:
         config = self.get_config()
@@ -1215,6 +1216,9 @@ class EmailAlertService:
     def _extract_critical_market_events(self, brief: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
         events: List[Dict[str, Any]] = []
         today = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).strftime("%Y-%m-%d")
+        min_critical_score = self._safe_int_env("CRITICAL_MARKET_ALERT_MIN_SCORE", 82, minimum=50)
+        portfolio_tickers = self._portfolio_tickers()
+        watchlist_tickers = self._watchlist_tickers()
 
         for item in (brief.get("event_layer") or [])[:12]:
             title = str(item.get("title") or item.get("headline") or "").strip()
@@ -1225,14 +1229,24 @@ class EmailAlertService:
                 numeric_score = float(score)
             except Exception:
                 pass
-            high_impact = impact in {"high", "critical", "risk", "risk_off"} or (numeric_score is not None and numeric_score >= 75)
+            related_tickers = self._event_related_tickers(item)
+            portfolio_hit = bool(portfolio_tickers.intersection(related_tickers))
+            watchlist_hit = bool(watchlist_tickers.intersection(related_tickers))
+            hard_impact = impact in {"critical", "risk", "risk_off"}
+            high_impact = (
+                hard_impact
+                or (impact == "high" and (portfolio_hit or watchlist_hit))
+                or (numeric_score is not None and numeric_score >= min_critical_score)
+            )
             if not title or not high_impact:
                 continue
             event_key = f"critical-market:{today}:{re.sub(r'[^a-zA-Z0-9]+', '-', title.lower())[:80]}"
             if event_key in sent_keys:
                 continue
             region = item.get("region") or item.get("asset") or "Market"
-            line = f"{region}: {title}"
+            direction = self._event_direction_label(item)
+            scope = "Portfolio" if portfolio_hit else "Watchlist" if watchlist_hit else "Market"
+            line = f"{direction} {scope} | {region}: {title}"
             if item.get("summary"):
                 line += f" | {item.get('summary')}"
             events.append(
@@ -1244,6 +1258,13 @@ class EmailAlertService:
                     "source_url": item.get("source_url") or item.get("url") or "",
                     "source_label": item.get("source_label") or item.get("publisher") or "Market radar",
                     "conviction_score": numeric_score,
+                    "priority": self._critical_event_priority(
+                        "critical_market",
+                        numeric_score,
+                        portfolio_hit,
+                        watchlist_hit,
+                        hard_impact,
+                    ),
                 }
             )
 
@@ -1259,14 +1280,46 @@ class EmailAlertService:
             event_key = f"critical-watchlist:{today}:{ticker}:{re.sub(r'[^a-zA-Z0-9]+', '-', summary.lower())[:70]}"
             if event_key in sent_keys:
                 continue
+            direction = self._event_direction_label(item)
             events.append(
                 {
                     "event_key": event_key,
                     "category": "critical_watchlist",
                     "title": str(ticker),
-                    "line": f"{ticker}: {summary}",
+                    "line": f"{direction} Watchlist | {ticker}: {summary}",
                     "source_url": item.get("source_url") or item.get("url") or "",
                     "source_label": "Watchlist impact",
+                    "priority": 5,
+                }
+            )
+
+        for item in (brief.get("earnings_results") or [])[:10]:
+            ticker = str(item.get("ticker") or "").upper()
+            status = str(item.get("status") or "").lower()
+            if not ticker or status not in {"beat", "miss"}:
+                continue
+            revenue_yoy = item.get("revenue_yoy")
+            guidance_label = str(item.get("guidance_label") or "").lower()
+            portfolio_hit = ticker in portfolio_tickers
+            watchlist_hit = ticker in watchlist_tickers
+            important = portfolio_hit or watchlist_hit or status == "miss" or "raise" in guidance_label or "cut" in guidance_label
+            if not important:
+                continue
+            event_key = f"critical-earnings-result:{today}:{ticker}:{status}:{guidance_label[:24]}"
+            if event_key in sent_keys:
+                continue
+            direction = "↑" if status == "beat" and "cut" not in guidance_label else "↓" if status == "miss" or "cut" in guidance_label else "→"
+            revenue_label = f"{float(revenue_yoy):+.1f}% YoY Umsatz" if isinstance(revenue_yoy, (int, float)) else "Umsatz offen"
+            scope = "Portfolio" if portfolio_hit else "Watchlist" if watchlist_hit else "Earnings"
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "critical_earnings_result",
+                    "title": f"{ticker} Earnings {status}",
+                    "line": f"{direction} {scope} | {ticker}: {status.upper()} | {revenue_label} | Guidance {guidance_label or 'offen'}",
+                    "source_url": item.get("source_url") or item.get("url") or "",
+                    "source_label": "Earnings results",
+                    "priority": 4 if portfolio_hit else 8,
                 }
             )
 
@@ -1284,14 +1337,17 @@ class EmailAlertService:
             event_key = f"critical-earnings:{today}:{ticker}"
             if event_key in sent_keys:
                 continue
+            portfolio_hit = ticker in portfolio_tickers
+            watchlist_hit = ticker in watchlist_tickers
             events.append(
                 {
                     "event_key": event_key,
                     "category": "critical_earnings",
                     "title": f"{ticker} Earnings",
-                    "line": f"{ticker}: Earnings-Fenster steht an. Danach Umsatz, EPS, Guidance und Kursreaktion gegen Plan pruefen.",
+                    "line": f"→ {'Portfolio' if portfolio_hit else 'Watchlist' if watchlist_hit else 'Earnings'} | {ticker}: Earnings-Fenster steht an. Danach Umsatz, EPS, Guidance und Kursreaktion gegen Plan pruefen.",
                     "source_url": "",
                     "source_label": "Earnings radar",
+                    "priority": 9,
                 }
             )
 
@@ -1308,14 +1364,14 @@ class EmailAlertService:
             quality_gate = str(item.get("quality_gate") or "").lower()
             if quality_gate != "passed" and numeric_score < min_future_star_score:
                 continue
-            event_key = f"future-star:{today}:{ticker}:{int(numeric_score)}"
+            event_key = f"future-star:{today}:{ticker}"
             if event_key in sent_keys:
                 continue
             revenue = item.get("revenue_growth")
             revenue_label = f"{float(revenue):+.1f}% Umsatz" if revenue not in (None, "") else "Umsatz n/a"
             catalyst = str(item.get("catalyst") or item.get("reason") or "").strip()
             risk = str(item.get("risk") or "").strip()
-            line = f"{ticker}: Future-Star Kandidat {numeric_score:.0f}/100 | {revenue_label}"
+            line = f"↑ Future Star | {ticker}: Kandidat {numeric_score:.0f}/100 | {revenue_label}"
             if catalyst:
                 line += f" | Katalysator: {catalyst}"
             if risk:
@@ -1329,10 +1385,82 @@ class EmailAlertService:
                     "source_url": "",
                     "source_label": "Future Stars scanner",
                     "conviction_score": numeric_score,
+                    "priority": 18,
                 }
             )
 
-        return events
+        return sorted(events, key=lambda event: (int(event.get("priority") or 99), str(event.get("event_key") or "")))
+
+    def _portfolio_tickers(self) -> set[str]:
+        tickers: set[str] = set()
+        try:
+            for portfolio in self.portfolio_manager.get_portfolios():
+                for holding in portfolio.get("holdings") or []:
+                    ticker = str(holding.get("ticker") or "").upper().strip()
+                    if ticker:
+                        tickers.add(ticker)
+        except Exception:
+            return set()
+        return tickers
+
+    def _watchlist_tickers(self) -> set[str]:
+        tickers: set[str] = set()
+        try:
+            for item in self.portfolio_manager.get_signal_watch_items():
+                value = str(item.get("value") or "").upper().strip()
+                kind = str(item.get("kind") or "").lower()
+                if value and kind in {"ticker", "symbol", "watchlist"}:
+                    tickers.add(value)
+        except Exception:
+            return set()
+        return tickers
+
+    def _event_related_tickers(self, item: Dict[str, Any]) -> set[str]:
+        tickers: set[str] = set()
+        for key in ("ticker", "symbol", "asset"):
+            value = str(item.get(key) or "").upper().strip()
+            if value and re.fullmatch(r"[A-Z0-9.\-]{1,12}", value):
+                tickers.add(value)
+        for key in ("tickers", "symbols", "matched_holdings"):
+            values = item.get(key)
+            if isinstance(values, list):
+                for value in values:
+                    if isinstance(value, dict):
+                        raw = str(value.get("ticker") or value.get("symbol") or "").upper().strip()
+                    else:
+                        raw = str(value or "").upper().strip()
+                    if raw and re.fullmatch(r"[A-Z0-9.\-]{1,12}", raw):
+                        tickers.add(raw)
+        return tickers
+
+    def _event_direction_label(self, item: Dict[str, Any]) -> str:
+        text = " ".join(
+            str(item.get(key) or "")
+            for key in ("direction", "direction_hint", "action", "summary", "title", "headline", "severity")
+        ).lower()
+        if any(token in text for token in ("negative", "risk-off", "miss", "cut", "downgrade", "avoid", "hedge", "bear")):
+            return "↓"
+        if any(token in text for token in ("positive", "risk-on", "beat", "raise", "upgrade", "buy", "bull")):
+            return "↑"
+        return "→"
+
+    def _critical_event_priority(
+        self,
+        category: str,
+        score: float | None,
+        portfolio_hit: bool,
+        watchlist_hit: bool,
+        hard_impact: bool,
+    ) -> int:
+        if portfolio_hit:
+            return 1
+        if watchlist_hit:
+            return 2
+        if category == "critical_market" and hard_impact:
+            return 12
+        if score is not None and score >= 90:
+            return 14
+        return 30
 
     def _event_priority(self, event: Dict[str, Any]) -> tuple[int, str]:
         category = event.get("category")

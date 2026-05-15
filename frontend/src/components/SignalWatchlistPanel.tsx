@@ -312,17 +312,6 @@ export default function SignalWatchlistPanel({
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <div className="rounded-[1.3rem] border border-black/8 bg-white/70 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Email
-              </div>
-              <div className="mt-2 text-sm font-black text-slate-900">
-                {notificationStatus.email?.configured ? "Configured" : "Not configured"}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                {notificationStatus.email?.to || "No recipient"}
-              </div>
-            </div>
-            <div className="rounded-[1.3rem] border border-black/8 bg-white/70 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                 Telegram
               </div>
               <div className="mt-2 text-sm font-black text-slate-900">
@@ -333,7 +322,18 @@ export default function SignalWatchlistPanel({
                   : "Bot missing"}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Bot token + chat id required
+                Sofort-Alerts und Briefings laufen nur ueber Telegram.
+              </div>
+            </div>
+            <div className="rounded-[1.3rem] border border-black/8 bg-white/70 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Email / Browser Push
+              </div>
+              <div className="mt-2 text-sm font-black text-slate-900">
+                Aus
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Bewusst deaktiviert, damit keine doppelten Alerts entstehen.
               </div>
             </div>
             <div className="rounded-[1.3rem] border border-black/8 bg-white/70 p-4">

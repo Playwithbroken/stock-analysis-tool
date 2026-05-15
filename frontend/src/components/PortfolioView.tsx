@@ -595,7 +595,7 @@ export default function PortfolioView({
                     Price Alerts
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
-                    Touch-Trigger mit 5 Minuten Cooldown. Push und Telegram werden automatisch versendet.
+                    Touch-Trigger mit 5 Minuten Cooldown. Fuer diese Beta werden Alerts nur per Telegram versendet.
                   </p>
                 </div>
                 <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">

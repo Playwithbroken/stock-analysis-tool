@@ -156,7 +156,7 @@ class EmailAlertService:
             subject=f"Signal Alert: {len(new_events)} neue Watchlist-Signale",
         )
         self.portfolio_manager.mark_signal_events_sent(new_events)
-        return {"status": "ok", "sent": len(new_events), "message": "Alert email sent."}
+        return {"status": "ok", "sent": len(new_events), "message": "Telegram alerts sent."}
 
     def check_and_send_critical_market_alerts(self, force: bool = False) -> Dict[str, Any]:
         """Send immediate Telegram alerts for high-impact market events.
@@ -182,18 +182,22 @@ class EmailAlertService:
         self.portfolio_manager.mark_signal_events_sent(selected_events)
         return {"status": "ok", "sent": len(selected_events), "message": "Critical Telegram alerts sent."}
 
-    def send_test_email(self) -> Dict[str, Any]:
+    def send_test_telegram(self) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)
         sample_event = {
             "event_key": f"test:{datetime.now().isoformat()}",
             "category": "test",
-            "title": "Test Alert",
-            "line": "Das ist eine Test-Mail fuer dein Signal-Alert-System.",
+            "title": "Telegram Test Alert",
+            "line": "Telegram ist aktiv. Briefings, Price Alerts und wichtige Marktinfos laufen ueber diesen Kanal.",
             "source_url": "",
         }
-        self._send_notifications(config, [sample_event], subject="Test Alert: Mailversand aktiv")
-        return {"status": "ok", "message": "Test email sent."}
+        self._send_notifications(config, [sample_event], subject="Test Alert: Telegram aktiv")
+        return {"status": "ok", "message": "Telegram test sent."}
+
+    def send_test_email(self) -> Dict[str, Any]:
+        """Backward-compatible endpoint name; delivery is Telegram-only."""
+        return self.send_test_telegram()
 
     def send_price_alert(
         self,

@@ -421,6 +421,7 @@ function AppContent() {
 
   const {
     portfolios,
+    loading: portfolioLoading,
     dataSource: portfolioDataSource,
     dataSourceMessage: portfolioDataSourceMessage,
     createPortfolio,
@@ -432,6 +433,7 @@ function AppContent() {
     cachedPortfolios,
     restoreFromCache,
     discardRestore,
+    refresh: refreshPortfolios,
   } = usePortfolios(auth.authenticated);
 
   const { currency, setCurrency, formatPrice } = useCurrency();
@@ -1645,11 +1647,15 @@ function AppContent() {
             <Suspense fallback={<LoadingState />}>
               <PortfolioView
                 portfolios={portfolios}
+                dataSource={portfolioDataSource}
+                dataSourceMessage={portfolioDataSourceMessage}
+                loading={portfolioLoading}
                 onCreatePortfolio={createPortfolio}
                 onDeletePortfolio={deletePortfolio}
                 onAddHolding={addHolding}
                 onUpdateHolding={updateHolding}
                 onRemoveHolding={removeHolding}
+                onRefresh={refreshPortfolios}
                 onAnalyzeStock={(ticker) => {
                   setActiveTab("analyze");
                   handleSearch(ticker);

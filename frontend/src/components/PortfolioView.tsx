@@ -6,17 +6,21 @@ import RiskCorrelationMatrix from "./RiskCorrelationMatrix";
 import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
 import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X } from "lucide-react";
-import { Portfolio, Holding } from "../hooks/usePortfolios";
+import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
 
 interface PortfolioViewProps {
   portfolios: Portfolio[];
+  dataSource: PortfolioDataSource;
+  dataSourceMessage?: string;
+  loading?: boolean;
   onCreatePortfolio: (name: string) => Promise<Portfolio>;
   onDeletePortfolio: (id: string) => void;
   onAddHolding: (portfolioId: string, holding: Holding) => void;
   onUpdateHolding: (portfolioId: string, ticker: string, patch: Partial<Holding>) => void;
   onRemoveHolding: (portfolioId: string, ticker: string) => void;
   onAnalyzeStock: (ticker: string) => void;
+  onRefresh: () => Promise<void> | void;
 }
 
 interface PortfolioAnalysis {
@@ -70,12 +74,16 @@ const formatHoldingPeriod = (days?: number | null): string => {
 
 export default function PortfolioView({
   portfolios,
+  dataSource,
+  dataSourceMessage,
+  loading: portfoliosLoading = false,
   onCreatePortfolio,
   onDeletePortfolio,
   onAddHolding,
   onUpdateHolding,
   onRemoveHolding,
   onAnalyzeStock,
+  onRefresh,
 }: PortfolioViewProps) {
   const { formatPrice } = useCurrency();
   const [selectedPortfolio, setSelectedPortfolio] = useState<string | null>(null);
@@ -101,6 +109,7 @@ export default function PortfolioView({
   const [portfolioVerdict, setPortfolioVerdict] = useState<string | null>(null);
   const [creatingPortfolio, setCreatingPortfolio] = useState(false);
   const [createPortfolioError, setCreatePortfolioError] = useState<string | null>(null);
+  const [refreshingPortfolios, setRefreshingPortfolios] = useState(false);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [newAlertSymbol, setNewAlertSymbol] = useState("");
@@ -325,6 +334,46 @@ export default function PortfolioView({
   const returnValue = analysis?.summary.return_since_buy ?? analysis?.summary.gain_loss ?? 0;
   const returnPct = analysis?.summary.return_since_buy_pct ?? analysis?.summary.gain_loss_pct ?? 0;
   const avgHoldingDays = analysis?.summary.avg_holding_days;
+  const sourceCopy = (() => {
+    if (dataSource === "server") {
+      return {
+        label: "Server gespeichert",
+        detail: "SQLite/Server ist aktiv. Neue Portfolios bleiben nach Reload erhalten.",
+        tone: "border-emerald-400/30 bg-emerald-50 text-emerald-800",
+        dot: "bg-emerald-500",
+      };
+    }
+    if (dataSource === "local-cache") {
+      return {
+        label: "Lokale Sicherung",
+        detail: dataSourceMessage || "Serverdaten sind gerade nicht erreichbar. Aenderungen bleiben im Browser-Fallback.",
+        tone: "border-amber-400/40 bg-amber-50 text-amber-800",
+        dot: "bg-amber-500",
+      };
+    }
+    if (dataSource === "disabled") {
+      return {
+        label: "Gesperrt",
+        detail: "Login erforderlich, bevor Portfolios geladen oder gespeichert werden.",
+        tone: "border-slate-300 bg-slate-50 text-slate-700",
+        dot: "bg-slate-400",
+      };
+    }
+    return {
+      label: "Bereit",
+      detail: "Noch kein Portfolio gespeichert. Das naechste neue Portfolio wird serverseitig angelegt.",
+      tone: "border-slate-300 bg-white text-slate-700",
+      dot: "bg-slate-400",
+    };
+  })();
+  const refreshPortfolioList = async () => {
+    setRefreshingPortfolios(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshingPortfolios(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -343,7 +392,22 @@ export default function PortfolioView({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className={`flex max-w-md items-center gap-3 rounded-[1.2rem] border px-4 py-3 text-xs font-bold ${sourceCopy.tone}`}>
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${sourceCopy.dot}`} />
+              <div>
+                <div className="font-extrabold uppercase tracking-[0.14em]">{sourceCopy.label}</div>
+                <div className="mt-1 normal-case leading-5 opacity-80">{sourceCopy.detail}</div>
+              </div>
+            </div>
+            <button
+              onClick={refreshPortfolioList}
+              disabled={portfoliosLoading || refreshingPortfolios}
+              className="inline-flex items-center gap-2 rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${portfoliosLoading || refreshingPortfolios ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
             <button
               onClick={() => setShowCreateModal(true)}
               className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700"

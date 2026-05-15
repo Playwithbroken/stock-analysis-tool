@@ -415,11 +415,11 @@ export default function BrokerChat({
       className={`${
         isInline
           ? "flex h-full flex-col"
-          : `surface-panel fixed inset-x-2 top-auto z-50 flex w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[calc(0.5rem+env(safe-area-inset-bottom))] h-[min(86dvh,56rem)]" : "bottom-[calc(5.15rem+env(safe-area-inset-bottom))] h-[min(47dvh,29rem)]"} md:inset-y-0 md:right-0 md:left-auto md:bottom-0 md:top-0 md:h-auto md:w-full md:max-w-md md:rounded-none md:rounded-l-[2rem] md:border-l md:border-t-0 md:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
+          : `surface-panel fixed inset-x-2 top-auto z-50 flex w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(250,248,244,0.98)] shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl transition-[height,bottom] duration-300 ${mobileSheetMode === "full" ? "bottom-[var(--mobile-tabbar-bottom)] h-[min(82dvh,54rem)]" : "bottom-[var(--mobile-desk-bottom)] h-[min(43dvh,27rem)]"} lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-0 lg:top-0 lg:h-auto lg:w-full lg:max-w-md lg:rounded-none lg:rounded-l-[2rem] lg:border-l lg:border-t-0 lg:shadow-[-20px_0_50px_rgba(17,24,39,0.12)] xl:max-w-[28rem] 2xl:max-w-[31rem]`
       }`}
     >
       {!isInline && (
-        <div className="flex justify-center pt-2 md:hidden">
+        <div className="flex justify-center pt-2 lg:hidden">
           <button
             type="button"
             onClick={() => setMobileSheetMode((prev) => (prev === "peek" ? "full" : "peek"))}
@@ -465,7 +465,7 @@ export default function BrokerChat({
         className={`flex-1 overflow-y-auto ${isInline ? "px-0 py-4" : "p-4 sm:p-6"} space-y-6 scrollbar-hide`}
       >
         {!isInline && mobileSheetMode === "peek" ? (
-          <div className="space-y-4 md:hidden">
+          <div className="space-y-4 lg:hidden">
             <div className="rounded-[1.3rem] border border-black/8 bg-white/82 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                 Desk-Snapshot
@@ -692,7 +692,7 @@ export default function BrokerChat({
       </div>
 
       <div
-        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6"}`}
+        className={`${isInline ? "border-t border-black/8 pt-4" : "border-t border-black/8 bg-white/60 p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pb-6"}`}
       >
         {currentTicker && !isInline && (
           <div className="mb-4 flex items-center gap-2">
@@ -775,7 +775,7 @@ export default function BrokerChat({
           </div>
         )}
         {!isInline && mobileSheetMode === "peek" ? (
-          <div className="grid gap-2 md:hidden">
+          <div className="grid gap-2 lg:hidden">
             <button
               type="button"
               onClick={() => setMobileSheetMode("full")}
@@ -827,11 +827,11 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[calc(5.85rem+env(safe-area-inset-bottom))] right-3 z-40${isOpen ? " hidden" : ""} flex h-12 w-12 items-center justify-center rounded-[1.05rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-0 text-white shadow-[0_18px_38px_rgba(15,118,110,0.22)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] md:bottom-5 md:left-auto md:right-5 md:h-16 md:w-16 md:justify-center md:rounded-[1.45rem] md:px-0`}
+        className={`group fixed bottom-[var(--mobile-desk-bottom)] right-3 z-40${isOpen ? " hidden" : ""} flex h-12 w-12 items-center justify-center rounded-[1.05rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-0 text-white shadow-[0_18px_38px_rgba(15,118,110,0.22)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
-        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/16 bg-white/14 md:h-11 md:w-11 md:rounded-[1rem]">
+        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/16 bg-white/14 lg:h-11 lg:w-11 lg:rounded-[1rem]">
           <Bot size={20} />
         </div>
         <div className="relative hidden min-w-0 pr-1 text-left">
@@ -870,7 +870,7 @@ export default function BrokerChat({
               setIsOpen(false);
               onClose?.();
             }}
-            className="fixed inset-0 z-40 bg-black/12 backdrop-blur-[1px] md:hidden"
+            className="fixed inset-0 z-40 bg-black/12 backdrop-blur-[1px] lg:hidden"
           />
           {chatContent}
         </>

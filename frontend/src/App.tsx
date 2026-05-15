@@ -1105,7 +1105,7 @@ function AppContent() {
     </div>
   ) : null;
   const mobileMarketTape = (
-    <section className="mobile-market-tape md:hidden">
+    <section className="mobile-market-tape lg:hidden">
       <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.06)] backdrop-blur-xl">
         {favoriteTape}
         {activeTab === "dashboard" && moversTape ? (
@@ -1120,7 +1120,7 @@ function AppContent() {
   return (
     <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
-        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] md:hidden">
+        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] lg:hidden">
           <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#101114] text-white">
@@ -1189,31 +1189,31 @@ function AppContent() {
           </div>
         </div>
 
-        <div className="layout-shell hidden px-3 pt-3 pb-3 md:block sm:px-6 xl:px-8 2xl:px-10">
-          <div className="app-shell app-shell-header rounded-[1.7rem] px-3 py-3 sm:rounded-[2.1rem] sm:px-5">
+        <div className="layout-shell hidden px-3 pb-2 pt-2 lg:block sm:px-6 xl:px-8 2xl:px-10">
+          <div className="app-shell app-shell-header app-shell-header-compact rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#101114] text-white">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex h-9 w-9 items-center justify-center rounded-[0.9rem] bg-[#101114] text-white">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l5-5 4 4 7-8" />
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold uppercase tracking-[0.28em] text-slate-500">
+                  <div className="truncate text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
                     Broker Freund
                   </div>
-                  <div className="truncate text-lg font-semibold text-slate-900">
+                  <div className="truncate text-base font-semibold text-slate-900">
                     Market Intelligence Terminal
                   </div>
                 </div>
               </div>
 
-              <div className="hidden items-center gap-2 rounded-[1.2rem] bg-[var(--bg-elevated)] p-1.5 ring-1 ring-[var(--line-subtle)] md:flex">
+              <div className="hidden items-center gap-1.5 rounded-[1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] lg:flex">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => selectTab(item.id)}
-                    className={`rounded-[1rem] px-4 py-2.5 text-sm font-bold transition-all ${
+                    className={`rounded-[0.85rem] px-3 py-2 text-xs font-bold transition-all ${
                       activeTab === item.id
                         ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
                         : "text-slate-600 hover:bg-black/[0.04] hover:text-slate-900"
@@ -1291,7 +1291,7 @@ function AppContent() {
                 </button>
               </div>
             </div>
-            <div className="mt-3 space-y-2">
+            <div className="mt-2 grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
               {favoriteTape}
               {moversTape}
             </div>
@@ -1300,7 +1300,7 @@ function AppContent() {
       </header>
 
       <main
-        className={`content-shell px-4 pb-[9rem] pt-3 transition-all duration-300 sm:px-6 sm:pb-8 md:pt-6 xl:px-8 2xl:px-10 ${
+        className={`content-shell px-4 pt-3 transition-all duration-300 sm:px-6 lg:pt-5 xl:px-8 2xl:px-10 ${
           isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
         }`}
       >
@@ -1726,7 +1726,7 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="mobile-tabbar fixed bottom-[calc(0.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.35rem] p-1.5 md:hidden">
+      <nav className="mobile-tabbar fixed left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.35rem] p-1.5 lg:hidden">
         <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button

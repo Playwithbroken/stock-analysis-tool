@@ -54,6 +54,7 @@ class ForecastLearningService:
                 "catalysts": setup.get("catalysts") or [],
                 "congress_signal": setup.get("congress_signal"),
                 "product_catalyst": setup.get("product_catalyst"),
+                "news_item": setup.get("news_item"),
                 "decision_quality": setup.get("decision_quality"),
                 "size_guidance": setup.get("size_guidance"),
             }
@@ -258,6 +259,38 @@ class ForecastLearningService:
             )
             congress_limit -= 1
             if congress_limit <= 0:
+                break
+
+        news_limit = 4
+        for item in brief.get("top_news") or []:
+            if not isinstance(item, dict):
+                continue
+            symbol = str(item.get("ticker") or "").strip().upper()
+            if not symbol:
+                continue
+            direction = self._map_news_to_direction(item)
+            if direction == "watch":
+                continue
+            title = str(item.get("title") or item.get("headline") or "Trusted news headline.").strip()
+            publisher = str(item.get("publisher") or item.get("source_domain") or "trusted source").strip()
+            add(
+                {
+                    "symbol": symbol,
+                    "direction": direction,
+                    "setup_type": "top_news_forecast",
+                    "setup_source": "trusted_news",
+                    "source": "trusted_news",
+                    "thesis": f"{title} ({publisher})",
+                    "trigger": "Confirm first reaction with price, volume, index breadth and follow-up source quality.",
+                    "invalidation": "Invalidate if the first impulse fades, source context weakens, or broader market confirms the opposite direction.",
+                    "confidence": 58 if str(item.get("impact") or "").lower() == "high" else 50,
+                    "rank_score": 72 if str(item.get("severity") or "").lower() in {"critical", "elevated"} else 60,
+                    "expected_move": "Headline reaction forecast; measured on 1h, 24h, 72h and 120h horizons.",
+                    "news_item": item,
+                }
+            )
+            news_limit -= 1
+            if news_limit <= 0:
                 break
 
         return collected[: limit + 4]
@@ -491,9 +524,73 @@ class ForecastLearningService:
             return "hedge"
         return "watch"
 
+    def _map_news_to_direction(self, item: Dict[str, Any]) -> str:
+        text = " ".join(
+            str(value or "")
+            for value in (
+                item.get("title"),
+                item.get("headline"),
+                item.get("event_type"),
+                item.get("direction_hint"),
+            )
+        ).lower()
+        product = item.get("product_catalyst") if isinstance(item.get("product_catalyst"), dict) else {}
+        product_direction = str(product.get("direction_hint") or item.get("direction_hint") or "").lower()
+        severity = str(item.get("severity") or "").lower()
+        negative = (
+            product_direction == "negative"
+            or severity == "critical"
+            or any(
+                token in text
+                for token in (
+                    "risk-off",
+                    "missile",
+                    "attack",
+                    "war",
+                    "sanction",
+                    "tariff",
+                    "downgrade",
+                    "delay",
+                    "delayed",
+                    "postpone",
+                    "cuts guidance",
+                    "recession",
+                    "default",
+                )
+            )
+        )
+        positive = (
+            product_direction == "positive_watch"
+            or any(
+                token in text
+                for token in (
+                    "risk-on",
+                    "upgrade",
+                    "beat",
+                    "beats",
+                    "raises guidance",
+                    "launch",
+                    "unveil",
+                    "approval",
+                    "record high",
+                    "deal",
+                    "partnership",
+                    "stimulus",
+                    "rate cut",
+                )
+            )
+        )
+        if negative and not positive:
+            return "hedge"
+        if positive and not negative:
+            return "long"
+        return "watch"
+
     def _infer_source(self, setup: Dict[str, Any]) -> str:
         if setup.get("congress_signal"):
             return "congress_watch"
+        if setup.get("news_item"):
+            return "trusted_news"
         if setup.get("product_catalyst"):
             return "product_news"
         catalysts = " ".join(str(item) for item in (setup.get("catalysts") or []))

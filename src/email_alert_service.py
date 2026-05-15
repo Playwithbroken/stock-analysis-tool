@@ -1295,20 +1295,59 @@ class EmailAlertService:
                 }
             )
 
+        min_future_star_score = self._safe_int_env("FUTURE_STAR_ALERT_MIN_SCORE", 72, minimum=50)
+        for item in (brief.get("future_stars") or [])[:8]:
+            ticker = str(item.get("ticker") or "").upper()
+            if not ticker:
+                continue
+            score = item.get("score")
+            try:
+                numeric_score = float(score)
+            except Exception:
+                numeric_score = 0.0
+            quality_gate = str(item.get("quality_gate") or "").lower()
+            if quality_gate != "passed" and numeric_score < min_future_star_score:
+                continue
+            event_key = f"future-star:{today}:{ticker}:{int(numeric_score)}"
+            if event_key in sent_keys:
+                continue
+            revenue = item.get("revenue_growth")
+            revenue_label = f"{float(revenue):+.1f}% Umsatz" if revenue not in (None, "") else "Umsatz n/a"
+            catalyst = str(item.get("catalyst") or item.get("reason") or "").strip()
+            risk = str(item.get("risk") or "").strip()
+            line = f"{ticker}: Future-Star Kandidat {numeric_score:.0f}/100 | {revenue_label}"
+            if catalyst:
+                line += f" | Katalysator: {catalyst}"
+            if risk:
+                line += f" | Risiko: {risk}"
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "future_star",
+                    "title": f"Future Star {ticker}",
+                    "line": line,
+                    "source_url": "",
+                    "source_label": "Future Stars scanner",
+                    "conviction_score": numeric_score,
+                }
+            )
+
         return events
 
     def _event_priority(self, event: Dict[str, Any]) -> tuple[int, str]:
         category = event.get("category")
         line = (event.get("line") or "").lower()
-        if category == "ticker" and " buy " in f" {line} ":
+        if category == "future_star":
             return (0, line)
-        if category == "politician" and " buy " in f" {line} ":
+        if category == "ticker" and " buy " in f" {line} ":
             return (1, line)
-        if category == "ticker":
+        if category == "politician" and " buy " in f" {line} ":
             return (2, line)
-        if category == "politician":
+        if category == "ticker":
             return (3, line)
-        return (4, line)
+        if category == "politician":
+            return (4, line)
+        return (5, line)
 
     def _send_notifications(
         self,

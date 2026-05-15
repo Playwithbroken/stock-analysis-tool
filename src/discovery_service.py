@@ -343,6 +343,76 @@ class DiscoveryService:
             "risks": risk_hits[:2],
         }
 
+    def _future_star_grade(
+        self,
+        revenue_growth: float | None,
+        profit_margin: float | None,
+        free_cashflow: float | None,
+        debt_to_equity: float | None,
+        change_1m: float | None,
+        volume_ratio: float | None,
+        news_score: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        growth = revenue_growth or 0
+        margin = profit_margin or 0
+        cashflow = free_cashflow or 0
+        monthly_change = change_1m or 0
+        volume = volume_ratio or 1
+        catalysts = news_score.get("catalysts") or []
+        risks = news_score.get("risks") or []
+
+        checks = {
+            "growth": growth >= 0.18,
+            "catalyst": bool(catalysts),
+            "cash_quality": margin > 0 or cashflow > 0,
+            "confirmation": monthly_change > 0 and volume >= 1.05,
+            "balance_risk": debt_to_equity is None or debt_to_equity <= 180,
+            "risk_clean": not risks,
+        }
+
+        score = 25
+        score += min(26, max(0, growth) * 95)
+        score += 12 if checks["cash_quality"] else -10
+        score += 10 if monthly_change > 0 else -8
+        score += 8 if volume >= 1.15 else 4 if volume >= 1.05 else -4
+        score += news_score.get("score", 0)
+        if debt_to_equity is not None and debt_to_equity > 180:
+            score -= 12
+        if risks:
+            score -= min(18, len(risks) * 9)
+        score = max(0, min(100, round(score)))
+
+        passed_count = sum(1 for passed in checks.values() if passed)
+        if checks["growth"] and checks["catalyst"] and checks["cash_quality"] and checks["confirmation"] and checks["balance_risk"] and score >= 76:
+            gate = "passed"
+        elif score >= 66 and checks["catalyst"] and passed_count >= 4:
+            gate = "candidate"
+        else:
+            gate = "watchlist"
+
+        reasons = []
+        if not checks["growth"]:
+            reasons.append("Umsatzwachstum noch nicht stark genug")
+        if not checks["catalyst"]:
+            reasons.append("harter News-Katalysator fehlt")
+        if not checks["cash_quality"]:
+            reasons.append("Cashflow/Profitabilitaet noch schwach")
+        if not checks["confirmation"]:
+            reasons.append("Kurs/Volumen bestaetigen noch nicht sauber")
+        if not checks["balance_risk"]:
+            reasons.append("Debt-Risiko zu hoch")
+        if risks:
+            reasons.append("Risiko-News aktiv")
+
+        return {
+            "score": score,
+            "quality_gate": gate,
+            "gate_checks": checks,
+            "gate_passed": passed_count,
+            "gate_total": len(checks),
+            "gate_reason": " | ".join(reasons[:3]) if reasons else "Growth, Katalysator, Qualitaet und Bestaetigung passen zusammen.",
+        }
+
     async def get_future_stars(self) -> List[Dict[str, Any]]:
         """Find smaller stocks with real future-star potential after news and fundamentals checks."""
         import asyncio
@@ -366,16 +436,16 @@ class DiscoveryService:
                     change_1m = price.get("change_1m") or 0
                     volume_context = f.get_volatility_data().get("volume_ratio") or 1
 
-                    score = 35
-                    score += min(30, max(0, revenue_growth) * 100)
-                    score += 12 if profit_margin > 0 else -8
-                    score += 10 if free_cashflow > 0 else -6
-                    score += 8 if change_1m > 0 else -4
-                    score += 6 if volume_context and volume_context >= 1.15 else 0
-                    score += news_score["score"]
-                    if debt_to_equity is not None and debt_to_equity > 180:
-                        score -= 10
-                    score = max(0, min(100, round(score)))
+                    grade = self._future_star_grade(
+                        revenue_growth,
+                        profit_margin,
+                        free_cashflow,
+                        debt_to_equity,
+                        change_1m,
+                        volume_context,
+                        news_score,
+                    )
+                    score = grade["score"]
                     if score < 62 and not news_score["catalysts"]:
                         return None
                     return {
@@ -389,11 +459,15 @@ class DiscoveryService:
                         "free_cashflow": free_cashflow,
                         "volume_ratio": volume_context,
                         "score": score,
-                        "trend_context": "Future-Star Check: Wachstum, News-Katalysator, Volumen und Cashflow gegengeprueft.",
+                        "trend_context": f"Future-Star Gate: {grade['gate_passed']}/{grade['gate_total']} Checks bestanden.",
                         "reason": news_score["catalysts"][0] if news_score["catalysts"] else "Kleinerer Growth-Wert mit Daten-Setup, aber News-Katalysator noch beobachten.",
                         "catalysts": news_score["catalysts"],
                         "risk_flags": news_score["risks"],
-                        "quality_gate": "passed" if score >= 72 and news_score["catalysts"] else "watchlist",
+                        "quality_gate": grade["quality_gate"],
+                        "gate_checks": grade["gate_checks"],
+                        "gate_passed": grade["gate_passed"],
+                        "gate_total": grade["gate_total"],
+                        "gate_reason": grade["gate_reason"],
                     }
                 loop = asyncio.get_event_loop()
                 return await loop.run_in_executor(None, fetch)

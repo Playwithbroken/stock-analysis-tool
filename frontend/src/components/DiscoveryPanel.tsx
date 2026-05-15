@@ -28,6 +28,10 @@ interface DiscoveryStock {
   catalysts?: string[];
   risk_flags?: string[];
   quality_gate?: string;
+  gate_checks?: Record<string, boolean>;
+  gate_passed?: number;
+  gate_total?: number;
+  gate_reason?: string;
   profit_margin?: number;
   volume_ratio?: number;
 }
@@ -1408,9 +1412,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       <div className="mt-3 text-xs font-bold text-slate-700">
                         {stock.growth != null ? `${stock.growth.toFixed(1)}% Wachstum` : "Growth n/a"} · {stock.market_cap ? `${(stock.market_cap / 1e9).toFixed(1)}B` : "MCap n/a"}
                       </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
+                          Gate {stock.gate_passed ?? 0}/{stock.gate_total ?? 6}
+                        </span>
+                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                          {stock.quality_gate || "watch"}
+                        </span>
+                      </div>
                       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                         {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Katalysator beobachten."}
                       </p>
+                      {stock.gate_reason ? (
+                        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-amber-700">{stock.gate_reason}</p>
+                      ) : null}
                     </button>
                   ))}
                 </div>

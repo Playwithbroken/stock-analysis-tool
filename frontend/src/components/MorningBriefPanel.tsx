@@ -582,7 +582,18 @@ export default function MorningBriefPanel({
                 <div className="mt-3 text-xs font-bold text-slate-700">
                   {item.revenue_growth != null ? `${Number(item.revenue_growth).toFixed(1)}% Umsatz` : "Umsatz n/a"}
                 </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
+                    Gate {item.gate_passed ?? 0}/{item.gate_total ?? 6}
+                  </span>
+                  <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                    {item.quality_gate || "watch"}
+                  </span>
+                </div>
                 <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-500">{item.catalyst}</p>
+                {item.gate_reason ? (
+                  <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-amber-700">{item.gate_reason}</p>
+                ) : null}
               </button>
             ))}
           </div>

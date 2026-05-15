@@ -724,21 +724,72 @@ class MorningBriefService:
                 titles = [str(item.get("title") or item.get("headline") or "") for item in news[:6] if isinstance(item, dict)]
                 catalysts = [title for title in titles if any(term in title.lower() for term in positive_terms)]
                 risks = [title for title in titles if any(term in title.lower() for term in risk_terms)]
-                score = 35 + min(30, max(0, revenue_growth) * 100)
-                score += 12 if profit_margin > 0 else -8
-                score += 10 if free_cashflow > 0 else -5
+                price = fetcher.get_price_data_fast()
+                volatility = fetcher.get_volatility_data()
+                change_1m = price.get("change_1m") or 0
+                volume_ratio = volatility.get("volume_ratio") or 1
+                debt_to_equity = fundamentals.get("debt_to_equity")
+                gate_checks = {
+                    "growth": revenue_growth >= 0.18,
+                    "catalyst": bool(catalysts),
+                    "cash_quality": profit_margin > 0 or free_cashflow > 0,
+                    "confirmation": change_1m > 0 and volume_ratio >= 1.05,
+                    "balance_risk": debt_to_equity is None or debt_to_equity <= 180,
+                    "risk_clean": not risks,
+                }
+                score = 25 + min(26, max(0, revenue_growth) * 95)
+                score += 12 if gate_checks["cash_quality"] else -10
+                score += 10 if change_1m > 0 else -8
+                score += 8 if volume_ratio >= 1.15 else 4 if volume_ratio >= 1.05 else -4
                 score += min(25, len(catalysts) * 9)
-                score -= min(25, len(risks) * 12)
+                score -= min(18, len(risks) * 9)
+                if debt_to_equity is not None and debt_to_equity > 180:
+                    score -= 12
                 score = max(0, min(100, round(score)))
                 if score < 62 and not catalysts:
                     continue
+                passed_count = sum(1 for passed in gate_checks.values() if passed)
+                if (
+                    gate_checks["growth"]
+                    and gate_checks["catalyst"]
+                    and gate_checks["cash_quality"]
+                    and gate_checks["confirmation"]
+                    and gate_checks["balance_risk"]
+                    and score >= 76
+                ):
+                    quality_gate = "passed"
+                elif score >= 66 and gate_checks["catalyst"] and passed_count >= 4:
+                    quality_gate = "candidate"
+                else:
+                    quality_gate = "watch"
+                gate_reasons = []
+                if not gate_checks["growth"]:
+                    gate_reasons.append("Umsatzwachstum noch nicht stark genug")
+                if not gate_checks["catalyst"]:
+                    gate_reasons.append("harter News-Katalysator fehlt")
+                if not gate_checks["cash_quality"]:
+                    gate_reasons.append("Cashflow/Profitabilitaet noch schwach")
+                if not gate_checks["confirmation"]:
+                    gate_reasons.append("Kurs/Volumen bestaetigen noch nicht sauber")
+                if not gate_checks["balance_risk"]:
+                    gate_reasons.append("Debt-Risiko zu hoch")
+                if risks:
+                    gate_reasons.append("Risiko-News aktiv")
                 candidates.append({
                     "ticker": ticker,
                     "name": info.get("shortName") or info.get("longName") or ticker,
                     "market_cap": market_cap,
                     "score": score,
                     "revenue_growth": revenue_growth * 100 if revenue_growth is not None else None,
-                    "quality_gate": "passed" if score >= 72 and catalysts else "watch",
+                    "profit_margin": profit_margin * 100 if profit_margin is not None else None,
+                    "free_cashflow": free_cashflow,
+                    "change_1m": change_1m,
+                    "volume_ratio": volume_ratio,
+                    "quality_gate": quality_gate,
+                    "gate_checks": gate_checks,
+                    "gate_passed": passed_count,
+                    "gate_total": len(gate_checks),
+                    "gate_reason": " | ".join(gate_reasons[:3]) if gate_reasons else "Growth, Katalysator, Qualitaet und Bestaetigung passen zusammen.",
                     "catalyst": catalysts[0] if catalysts else "Noch kein harter News-Katalysator; weiter beobachten.",
                     "risk": risks[0] if risks else "",
                 })

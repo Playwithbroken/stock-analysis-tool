@@ -36,6 +36,60 @@ function toneBadge(tone?: string) {
   return { icon: "◆", color: "text-amber-700 bg-amber-500/10" };
 }
 
+function newsForecastMeta(item: any) {
+  const text = `${item?.title || ""} ${item?.headline || ""} ${item?.event_type || ""} ${item?.direction_hint || ""}`.toLowerCase();
+  const impact = String(item?.impact || "").toLowerCase();
+  const severity = String(item?.severity || "").toLowerCase();
+  const eventType = String(item?.event_type || "").toLowerCase();
+  const productDirection = String(item?.product_catalyst?.direction_hint || item?.direction_hint || "").toLowerCase();
+
+  const negative =
+    productDirection === "negative" ||
+    severity === "critical" ||
+    /risk-off|missile|attack|war|sanction|tariff|downgrade|delay|delayed|postpone|cuts guidance|recession|default/.test(text);
+  const positive =
+    productDirection === "positive_watch" ||
+    /risk-on|upgrade|beat|beats|raises guidance|launch|unveil|approval|record high|deal|partnership|stimulus|rate cut/.test(text);
+
+  if (negative && !positive) {
+    return {
+      direction: "down",
+      arrow: "↓",
+      label: "Prognose runter",
+      short: "Risk-off",
+      copy: eventType === "product_catalyst"
+        ? "Erste Reaktion eher negativ, bis Produkt-/Preisfolge bestaetigt ist."
+        : "Erste Reaktion eher defensiv. Bestaetigung ueber Futures, Renditen und Volumen abwarten.",
+      className: "border-red-500/18 bg-red-500/[0.07] text-red-800",
+      arrowClass: "bg-red-500 text-white",
+    };
+  }
+
+  if (positive && !negative) {
+    return {
+      direction: "up",
+      arrow: "↑",
+      label: "Prognose hoch",
+      short: "Risk-on",
+      copy: impact === "high"
+        ? "Erste Reaktion konstruktiv, aber nur mit Preis- und Volumenbestaetigung handeln."
+        : "Leicht positiver Impuls. Fuer Setup erst Marktbreite und Folge-News pruefen.",
+      className: "border-emerald-500/18 bg-emerald-500/[0.075] text-emerald-800",
+      arrowClass: "bg-emerald-500 text-white",
+    };
+  }
+
+  return {
+    direction: "neutral",
+    arrow: "→",
+    label: "Prognose neutral",
+    short: "Abwarten",
+    copy: "Noch kein sauberer Richtungsvorteil. Erst bestaetigen, dann in Analyzer oder Markets vertiefen.",
+    className: "border-slate-300 bg-white/68 text-slate-700",
+    arrowClass: "bg-slate-900 text-white",
+  };
+}
+
 function actionTone(action?: string) {
   if (action === "hedge") return "bg-sky-500/10 text-sky-700";
   if (action === "reduce") return "bg-red-500/10 text-red-700";
@@ -1139,39 +1193,76 @@ export default function MorningBriefPanel({
             </div>
           </div>
           <div className="mt-4 space-y-3">
-            {(regionNews.length ? regionNews : brief.top_news || []).slice(0, 6).map((item: any, index: number) => (
-              <a
-                key={`${item.title}-${index}`}
-                href={item.link}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-[1.2rem] border border-black/8 bg-white/70 p-4 transition-colors hover:bg-white"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    {item.region} / {item.impact}
+            {(regionNews.length ? regionNews : brief.top_news || []).slice(0, 6).map((item: any, index: number) => {
+              const forecast = newsForecastMeta(item);
+              return (
+                <a
+                  key={`${item.title}-${index}`}
+                  href={item.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group block overflow-hidden rounded-[1.35rem] border border-black/8 bg-white/72 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.055)] transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_22px_48px_rgba(15,23,42,0.09)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                          {item.region} / {item.impact}
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] ${forecast.className}`}>
+                          {forecast.label}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-sm font-black leading-5 text-slate-950">
+                        {item.title}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-[1rem] text-xl font-black shadow-[0_10px_22px_rgba(15,23,42,0.12)] ${forecast.arrowClass}`}>
+                        {forecast.arrow}
+                      </div>
+                      {item.ticker && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onAnalyze(item.ticker);
+                          }}
+                          className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white"
+                        >
+                          {item.ticker}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {item.ticker && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onAnalyze(item.ticker);
-                      }}
-                      className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white"
-                    >
-                      {item.ticker}
-                    </button>
-                  )}
-                </div>
-                <div className="mt-2 text-sm font-bold text-slate-900">{item.title}</div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span>{item.publisher}</span>
-                  <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    {item.source_quality || "trusted"}
-                  </span>
-                </div>
-              </a>
-            ))}
+
+                  <div className={`mt-3 rounded-[1rem] border px-3 py-2 ${forecast.className}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
+                        {forecast.short}
+                      </div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-65">
+                        Top-News Prognose
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs font-semibold leading-5">
+                      {forecast.copy}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span>{item.publisher}</span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      {item.source_quality || "trusted"}
+                    </span>
+                    {item.event_type ? (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                        {String(item.event_type).replace(/_/g, " ")}
+                      </span>
+                    ) : null}
+                  </div>
+                </a>
+              );
+            })}
           </div>
         </div>
 

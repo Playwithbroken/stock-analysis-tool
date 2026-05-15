@@ -716,6 +716,16 @@ h3,
   color: #cbd5e1 !important;
 }
 
+[data-theme="dark"] .group.bg-white\/72,
+[data-theme="dark"] a.bg-white\/72 {
+  background-color: rgba(15, 23, 42, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+[data-theme="dark"] a.bg-white\/72:hover {
+  background-color: rgba(20, 29, 42, 0.94) !important;
+}
+
 [data-theme="dark"] .world-market-map {
   color: #d7dee9;
 }

@@ -51,6 +51,10 @@ async function readApiError(response: Response, fallback: string): Promise<strin
   return fallback
 }
 
+async function delay(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 export function usePortfolios(enabled: boolean = true) {
   // Seed from cache immediately so UI doesn't flash empty on load
   const [portfolios, setPortfolios] = useState<Portfolio[]>(() => loadFromCache())
@@ -179,26 +183,39 @@ export function usePortfolios(enabled: boolean = true) {
   }, [enabled])
 
   const createPortfolio = async (name: string): Promise<Portfolio> => {
+    const cleanName = name.trim()
     const response = await fetch('/api/portfolios', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name: cleanName }),
     })
     if (!response.ok) {
       throw new Error(await readApiError(response, `Portfolio konnte nicht gespeichert werden (${response.status})`))
     }
     const newPortfolio = await response.json()
+    if (!newPortfolio?.id) {
+      throw new Error('Portfolio wurde vom Server nicht bestaetigt.')
+    }
     setPortfolios((current) => {
       const withoutDuplicate = current.filter((portfolio) => portfolio.id !== newPortfolio.id)
-      const updated = [...withoutDuplicate, newPortfolio]
+      const updated = [newPortfolio, ...withoutDuplicate]
       saveToCache(updated)
       return updated
     })
     setNeedsRestore(false)
     setDataSource('server')
-    setDataSourceMessage('')
-    const refreshed = await fetchPortfolios()
+    setDataSourceMessage('Portfolio wurde angelegt. Server-Bestaetigung laeuft.')
+    let refreshed: Portfolio[] | null = null
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) await delay(350 * attempt)
+      refreshed = await fetchPortfolios()
+      if (refreshed?.some((portfolio) => portfolio.id === newPortfolio.id)) {
+        setDataSource('server')
+        setDataSourceMessage('Portfolio wurde serverseitig gespeichert und verifiziert.')
+        return newPortfolio
+      }
+    }
     if (refreshed && !refreshed.some((portfolio) => portfolio.id === newPortfolio.id)) {
       setPortfolios((current) => {
         const updated = [newPortfolio, ...current.filter((portfolio) => portfolio.id !== newPortfolio.id)]
@@ -206,7 +223,7 @@ export function usePortfolios(enabled: boolean = true) {
         return updated
       })
       setDataSource('server')
-      setDataSourceMessage('Portfolio wurde gespeichert. Die Serverliste wird im Hintergrund aktualisiert.')
+      setDataSourceMessage('Portfolio ist angelegt, aber die Serverliste hat es noch nicht zurueckgemeldet. Bitte einmal Refresh pruefen.')
     }
     return newPortfolio
   }

@@ -109,6 +109,7 @@ export default function PortfolioView({
   const [portfolioVerdict, setPortfolioVerdict] = useState<string | null>(null);
   const [creatingPortfolio, setCreatingPortfolio] = useState(false);
   const [createPortfolioError, setCreatePortfolioError] = useState<string | null>(null);
+  const [createPortfolioNotice, setCreatePortfolioNotice] = useState<string | null>(null);
   const [refreshingPortfolios, setRefreshingPortfolios] = useState(false);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
@@ -271,12 +272,18 @@ export default function PortfolioView({
     if (name) {
       setCreatingPortfolio(true);
       setCreatePortfolioError(null);
+      setCreatePortfolioNotice("Portfolio wird gespeichert und danach serverseitig geprueft...");
       try {
         const created = await onCreatePortfolio(name);
         setSelectedPortfolio(created.id);
+        setCreatePortfolioNotice(`Gespeichert und geprueft: ${created.name}`);
         setNewPortfolioName("");
-        setShowCreateModal(false);
+        window.setTimeout(() => {
+          setShowCreateModal(false);
+          setCreatePortfolioNotice(null);
+        }, 700);
       } catch (error) {
+        setCreatePortfolioNotice(null);
         setCreatePortfolioError(error instanceof Error ? error.message : "Portfolio konnte nicht gespeichert werden.");
       } finally {
         setCreatingPortfolio(false);
@@ -414,7 +421,11 @@ export default function PortfolioView({
               Refresh
             </button>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setCreatePortfolioError(null);
+                setCreatePortfolioNotice(null);
+                setShowCreateModal(true);
+              }}
               className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700"
             >
               New portfolio
@@ -1185,7 +1196,11 @@ export default function PortfolioView({
           </p>
           {portfolios.length === 0 && (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setCreatePortfolioError(null);
+                setCreatePortfolioNotice(null);
+                setShowCreateModal(true);
+              }}
               className="mt-6 rounded-[1.3rem] bg-[var(--accent)] px-6 py-4 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
             >
               Create first portfolio
@@ -1217,10 +1232,16 @@ export default function PortfolioView({
                 {createPortfolioError}
               </div>
             ) : null}
+            {createPortfolioNotice ? (
+              <div className="mt-3 rounded-[1rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-700">
+                {createPortfolioNotice}
+              </div>
+            ) : null}
             <div className="mt-5 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setCreatePortfolioError(null);
+                  setCreatePortfolioNotice(null);
                   setShowCreateModal(false);
                 }}
                 disabled={creatingPortfolio}

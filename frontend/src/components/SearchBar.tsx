@@ -89,7 +89,22 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   geforce: "NVIDIA Corporation (NVDA)",
   blackwell: "NVIDIA Corporation (NVDA)",
   quartalszahlennvidia: "NVIDIA Corporation (NVDA)",
+  msft: "Microsoft Corporation (MSFT)",
+  microsoft: "Microsoft Corporation (MSFT)",
+  windows: "Microsoft Corporation (MSFT)",
+  azure: "Microsoft Corporation (MSFT)",
+  googl: "Alphabet Inc. (GOOGL)",
+  google: "Alphabet Inc. (GOOGL)",
+  alphabet: "Alphabet Inc. (GOOGL)",
+  youtube: "Alphabet Inc. (GOOGL)",
+  amazon: "Amazon.com Inc. (AMZN)",
+  amzn: "Amazon.com Inc. (AMZN)",
+  aws: "Amazon.com Inc. (AMZN)",
+  facebook: "Meta Platforms Inc. (META)",
+  instagram: "Meta Platforms Inc. (META)",
+  meta: "Meta Platforms Inc. (META)",
   iphone: "Apple Inc. (AAPL)",
+  aapl: "Apple Inc. (AAPL)",
   apple: "Apple Inc. (AAPL)",
   ios: "Apple Inc. (AAPL)",
   ipad: "Apple Inc. (AAPL)",
@@ -168,7 +183,7 @@ function normalizeSearchValue(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function normalizeTickerInput(value: string): string {
+export function normalizeTickerInput(value: string): string {
   const raw = extractTicker(value)
     .trim()
     .replace(/^[#$]+/, "")

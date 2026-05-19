@@ -1,6 +1,6 @@
 ﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, LazyExoticComponent } from "react";
-import SearchBar from "./components/SearchBar";
+import SearchBar, { normalizeTickerInput } from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AdminHealthPanel from "./components/AdminHealthPanel";
@@ -885,7 +885,7 @@ function AppContent() {
   };
 
   const handleSearch = async (ticker: string) => {
-    const searchTicker = ticker.trim().toUpperCase();
+    const searchTicker = normalizeTickerInput(ticker);
     if (!searchTicker) return;
     const requestId = searchRequestIdRef.current + 1;
     searchRequestIdRef.current = requestId;

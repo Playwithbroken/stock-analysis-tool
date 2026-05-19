@@ -827,12 +827,12 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[var(--mobile-desk-bottom)] right-3 z-40${isOpen ? " hidden" : ""} flex h-12 w-12 items-center justify-center rounded-[1.05rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.98),rgba(14,92,87,0.96))] px-0 text-white shadow-[0_18px_38px_rgba(15,118,110,0.22)] transition-all hover:scale-[1.01] hover:shadow-[0_28px_64px_rgba(15,118,110,0.3)] active:scale-[0.99] lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0`}
+        className={`group fixed bottom-[var(--mobile-desk-bottom)] right-2 z-40${isOpen ? " hidden" : ""} flex h-10 w-10 items-center justify-center rounded-[0.95rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.92),rgba(14,92,87,0.9))] px-0 text-white opacity-90 shadow-[0_12px_28px_rgba(15,118,110,0.18)] transition-all hover:scale-[1.01] hover:opacity-100 hover:shadow-[0_22px_48px_rgba(15,118,110,0.28)] active:scale-[0.99] lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0 lg:opacity-100`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
-        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/16 bg-white/14 lg:h-11 lg:w-11 lg:rounded-[1rem]">
-          <Bot size={20} />
+        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-white/16 bg-white/14 lg:h-11 lg:w-11 lg:rounded-[1rem]">
+          <Bot size={18} />
         </div>
         <div className="relative hidden min-w-0 pr-1 text-left">
           <div className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-white/70">

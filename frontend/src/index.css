@@ -245,11 +245,25 @@ h3,
 
 .mobile-tabbar {
   bottom: var(--mobile-tabbar-bottom);
+  overflow: hidden;
   border: 1px solid var(--line-subtle);
   background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
   box-shadow: 0 18px 46px rgba(17, 24, 39, 0.13);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+.mobile-tabbar-button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-dossier-copy {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 @supports (height: 100dvh) {
@@ -968,6 +982,10 @@ h3,
   .world-map-mobile-card .world-map-zoom-controls button {
     min-width: 2rem;
     min-height: 2rem;
+  }
+
+  .mobile-dossier-copy {
+    line-height: 1.75;
   }
 
   .ticker-marquee-wrap {

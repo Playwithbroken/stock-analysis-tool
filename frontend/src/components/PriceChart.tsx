@@ -717,7 +717,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           <div className="flex h-full w-full flex-col gap-2">
             <div style={{ height: mainHeightPx }} className="min-h-[200px]">
               <ResponsiveContainer width={size.w} height={mainHeightPx} minWidth={0} minHeight={180}>
-                <AreaChart data={chartData}>
+                <AreaChart data={chartData} margin={{ top: 8, right: 24, bottom: 0, left: 8 }}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={isPositive ? "#0f766e" : "#dc2626"} stopOpacity={0.22} />
@@ -835,7 +835,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         </div>
         <div>
           {connected && lastUpdated
-            ? `Live ${new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+            ? `Aktualisiert ${new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
             : "YFinance-Engine v2.0"}
         </div>
       </div>

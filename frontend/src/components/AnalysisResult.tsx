@@ -660,7 +660,7 @@ export default function AnalysisResult({
                 <h3 className="mt-2 text-3xl text-slate-900">
                   Was fuer diese Aktie wirklich wichtig ist
                 </h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                <p className="mobile-dossier-copy mt-2 max-w-3xl text-sm leading-7 text-slate-600">
                   Kompakte Investment-Story aus Fundamentaldaten, Earnings, Bewertung, Analysten, News und Risiko.
                   Keine Kaufempfehlung, sondern ein besserer Entscheidungsrahmen.
                 </p>

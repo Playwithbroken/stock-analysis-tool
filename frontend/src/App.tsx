@@ -1726,13 +1726,13 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="mobile-tabbar fixed left-1/2 z-50 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[1.35rem] p-1.5 lg:hidden">
+      <nav className="mobile-tabbar fixed inset-x-2 z-50 mx-auto w-auto max-w-md rounded-[1.35rem] p-1.5 lg:hidden">
         <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => selectTab(item.id)}
-              className={`min-w-0 rounded-[0.95rem] px-1.5 py-2.5 text-center text-[9px] font-extrabold uppercase tracking-[0.12em] transition-all ${
+              className={`mobile-tabbar-button rounded-[0.95rem] px-1.5 py-2.5 text-center text-[9px] font-extrabold uppercase tracking-[0.12em] transition-all ${
                 activeTab === item.id ? "bg-[#101114] text-white" : "text-slate-500 hover:bg-black/[0.04]"
               }`}
             >

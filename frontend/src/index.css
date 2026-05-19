@@ -266,6 +266,14 @@ h3,
   overflow: hidden;
 }
 
+.analysis-primary-panel {
+  position: relative;
+}
+
+.analysis-secondary-grid {
+  opacity: 0.92;
+}
+
 @supports (height: 100dvh) {
   .mobile-tabbar {
     transform: translateX(-50%) translateY(0);
@@ -986,6 +994,22 @@ h3,
 
   .mobile-dossier-copy {
     line-height: 1.75;
+  }
+
+  .analysis-primary-panel {
+    border-radius: 1.7rem;
+    box-shadow: 0 22px 58px rgba(17, 24, 39, 0.1);
+  }
+
+  .analysis-secondary-grid {
+    opacity: 0.78;
+  }
+
+  .chart-history-meta {
+    border-color: transparent;
+    background: transparent;
+    padding-inline: 0.25rem;
+    padding-block: 0;
   }
 
   .ticker-marquee-wrap {

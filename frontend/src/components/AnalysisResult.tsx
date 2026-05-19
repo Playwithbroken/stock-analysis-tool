@@ -765,7 +765,7 @@ export default function AnalysisResult({
           )}
 
           {/* Metrics Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="analysis-secondary-grid grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <MetricCard
               label="Market Cap"
               value={formatBigNumber(fundamentals?.market_cap, formatPrice)}

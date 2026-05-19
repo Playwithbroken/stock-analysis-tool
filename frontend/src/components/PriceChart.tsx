@@ -565,10 +565,10 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   );
 
   return (
-    <div className="surface-panel rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6">
+    <div className="analysis-primary-panel surface-panel rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6">
       <div className="mb-5 flex flex-col justify-between gap-4 md:mb-8 md:flex-row md:items-center">
         <div>
-          <div className="mb-1 flex items-center gap-2 text-slate-500">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-slate-500">
             <TrendingUp size={16} className={isPositive ? "text-emerald-600" : "text-red-600"} />
             <span className="text-sm font-semibold">Price History ({period.label})</span>
             <span
@@ -656,7 +656,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         ))}
       </div>
       {activeIndicatorHelp.length ? (
-        <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mb-4 hidden gap-2 sm:grid sm:grid-cols-2 xl:grid-cols-3">
           {activeIndicatorHelp.map((toggle) => (
             <div
               key={toggle.label}
@@ -855,7 +855,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         </div>
       ) : null}
       {historyMeta ? (
-        <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
+        <div className="chart-history-meta mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
           Historie: {displayMetaValue(historyMeta.source)} / {displayMetaValue(historyMeta.period)}/{displayMetaValue(historyMeta.interval)}
           {historyMeta.requested_period && historyMeta.requested_period !== historyMeta.period
             ? ` / angefragt ${historyMeta.requested_period}/${displayMetaValue(historyMeta.requested_interval)}`

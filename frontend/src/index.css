@@ -244,7 +244,12 @@ h3,
 }
 
 .mobile-tabbar {
+  right: max(0.5rem, env(safe-area-inset-right));
   bottom: var(--mobile-tabbar-bottom);
+  left: max(0.5rem, env(safe-area-inset-left));
+  width: auto;
+  max-width: min(28rem, calc(100vw - 1rem));
+  margin-inline: auto;
   overflow: hidden;
   border: 1px solid var(--line-subtle);
   background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
@@ -276,7 +281,7 @@ h3,
 
 @supports (height: 100dvh) {
   .mobile-tabbar {
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0) translateY(0);
   }
 }
 

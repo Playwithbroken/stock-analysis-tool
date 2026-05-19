@@ -52,6 +52,7 @@ export default function BrokerChat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mobileSheetMode, setMobileSheetMode] = useState<"peek" | "full">("peek");
+  const [fabCompact, setFabCompact] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +69,27 @@ export default function BrokerChat({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (isInline || isOpen) return;
+
+    let frame = 0;
+    const updateFab = () => {
+      frame = 0;
+      setFabCompact(window.scrollY > 120);
+    };
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(updateFab);
+    };
+
+    updateFab();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [isInline, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -827,12 +849,12 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[var(--mobile-desk-bottom)] right-2 z-40${isOpen ? " hidden" : ""} flex h-10 w-10 items-center justify-center rounded-[0.95rem] border border-white/65 bg-[linear-gradient(180deg,rgba(15,118,110,0.92),rgba(14,92,87,0.9))] px-0 text-white opacity-90 shadow-[0_12px_28px_rgba(15,118,110,0.18)] transition-all hover:scale-[1.01] hover:opacity-100 hover:shadow-[0_22px_48px_rgba(15,118,110,0.28)] active:scale-[0.99] lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0 lg:opacity-100`}
+        className={`group fixed bottom-[var(--mobile-desk-bottom)] right-[max(0.75rem,env(safe-area-inset-right))] z-40${isOpen ? " hidden" : ""} flex h-9 w-9 items-center justify-center rounded-[0.85rem] border border-white/55 bg-[linear-gradient(180deg,rgba(15,118,110,0.88),rgba(14,92,87,0.86))] px-0 text-white shadow-[0_8px_18px_rgba(15,118,110,0.14)] transition-all duration-300 hover:scale-[1.01] hover:opacity-100 hover:shadow-[0_16px_36px_rgba(15,118,110,0.24)] active:scale-[0.99] ${fabCompact ? "opacity-70 scale-[0.88]" : "opacity-88 scale-100"} lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0 lg:opacity-100 lg:scale-100`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-white/16 bg-white/14 lg:h-11 lg:w-11 lg:rounded-[1rem]">
-          <Bot size={18} />
+        <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.7rem] border border-white/16 bg-white/14 lg:h-11 lg:w-11 lg:rounded-[1rem]">
+          <Bot size={16} className="lg:h-[18px] lg:w-[18px]" />
         </div>
         <div className="relative hidden min-w-0 pr-1 text-left">
           <div className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-white/70">

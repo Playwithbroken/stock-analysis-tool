@@ -34,9 +34,10 @@
   --warning: #b54708;
   --shadow-soft: 0 20px 60px rgba(22, 28, 36, 0.08);
   --shadow-card: 0 12px 28px rgba(22, 28, 36, 0.06);
+  --mobile-browser-bottom: 0px;
   --mobile-chrome-gap: max(0.75rem, env(safe-area-inset-bottom));
   --mobile-tabbar-height: 4.55rem;
-  --mobile-tabbar-bottom: max(0.45rem, env(safe-area-inset-bottom));
+  --mobile-tabbar-bottom: max(0.45rem, env(safe-area-inset-bottom), var(--mobile-browser-bottom));
   --mobile-desk-bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 0.8rem);
 }
 

@@ -10,6 +10,19 @@ if (rootEl) {
   rootEl.removeAttribute('data-boot-pending')
 }
 
+const syncMobileViewportChrome = () => {
+  const viewport = window.visualViewport
+  const obstruction = viewport
+    ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+    : 0
+  document.documentElement.style.setProperty('--mobile-browser-bottom', `${Math.round(obstruction)}px`)
+}
+
+syncMobileViewportChrome()
+window.visualViewport?.addEventListener('resize', syncMobileViewportChrome)
+window.visualViewport?.addEventListener('scroll', syncMobileViewportChrome)
+window.addEventListener('orientationchange', () => window.setTimeout(syncMobileViewportChrome, 250))
+
 // Auto-reload when Vite lazy chunks fail to load after a new deploy (stale browser cache)
 window.addEventListener('vite:preloadError', () => {
   window.location.reload()

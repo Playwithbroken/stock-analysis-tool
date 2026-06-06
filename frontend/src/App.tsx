@@ -884,9 +884,37 @@ function AppContent() {
     setAuthStatus("Abgemeldet.");
   };
 
+  const shouldResolveBeforeAnalyze = (raw: string, normalized: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return false;
+    if (trimmed.includes("(") && trimmed.includes(")")) return false;
+    if (/^[#$]?[A-Z0-9.^=-]{1,12}$/i.test(trimmed) && normalized.length <= 12) return false;
+    return (
+      /\s/.test(trimmed) ||
+      /[&+]/.test(trimmed) ||
+      trimmed.length > 12 ||
+      normalized.split("-").length > 2 ||
+      trimmed !== trimmed.toUpperCase()
+    );
+  };
+
+  const resolveTickerForAnalyze = async (raw: string, controller: AbortController) => {
+    const normalized = normalizeTickerInput(raw);
+    if (!normalized || !shouldResolveBeforeAnalyze(raw, normalized)) return normalized;
+    try {
+      const payload = await fetchJsonWithRetry<any>(
+        `/api/search/suggestions?q=${encodeURIComponent(raw.trim())}`,
+        { signal: controller.signal },
+        { retries: 1, retryDelayMs: 200, timeoutMs: 4500 },
+      );
+      const bestTicker = payload?.Ticker?.[0] || normalizeTickerInput(payload?.Matches?.[0] || "");
+      return bestTicker || normalized;
+    } catch {
+      return normalized;
+    }
+  };
+
   const handleSearch = async (ticker: string) => {
-    const searchTicker = normalizeTickerInput(ticker);
-    if (!searchTicker) return;
     const requestId = searchRequestIdRef.current + 1;
     searchRequestIdRef.current = requestId;
     searchAbortRef.current?.abort();
@@ -898,7 +926,10 @@ function AppContent() {
     setAnalysis(null);
     setActiveTab("analyze");
 
+    let searchTicker = normalizeTickerInput(ticker);
     try {
+      searchTicker = await resolveTickerForAnalyze(ticker, controller);
+      if (controller.signal.aborted || searchRequestIdRef.current !== requestId || !searchTicker) return;
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
         { signal: controller.signal },

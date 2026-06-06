@@ -197,6 +197,8 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "PLTR", "name": "Palantir"},
     {"ticker": "PANW", "name": "Palo Alto Networks"},
     {"ticker": "CRWD", "name": "CrowdStrike"},
+    {"ticker": "SOFI", "name": "SoFi Technologies"},
+    {"ticker": "HIMS", "name": "Hims & Hers Health"},
     {"ticker": "TTWO", "name": "Take-Two Interactive Rockstar GTA 6"},
     {"ticker": "BMW.DE", "name": "BMW"},
     {"ticker": "MBG.DE", "name": "Mercedes-Benz"},
@@ -223,6 +225,12 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "JOBY", "name": "Joby Aviation eVTOL"},
     {"ticker": "ACHR", "name": "Archer Aviation eVTOL"},
     {"ticker": "OKLO", "name": "Oklo Nuclear Energy"},
+    {"ticker": "VOO", "name": "Vanguard S&P 500 ETF"},
+    {"ticker": "VTI", "name": "Vanguard Total Stock Market ETF"},
+    {"ticker": "SCHD", "name": "Schwab US Dividend Equity ETF"},
+    {"ticker": "SOXX", "name": "iShares Semiconductor ETF"},
+    {"ticker": "IBIT", "name": "iShares Bitcoin Trust BlackRock Bitcoin ETF"},
+    {"ticker": "FBTC", "name": "Fidelity Wise Origin Bitcoin Fund ETF"},
     {"ticker": "SPY", "name": "SPDR S&P 500 ETF"},
     {"ticker": "QQQ", "name": "Invesco QQQ Nasdaq ETF"},
     {"ticker": "DIA", "name": "SPDR Dow Jones ETF"},
@@ -234,6 +242,12 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "BTC-USD", "name": "Bitcoin"},
     {"ticker": "ETH-USD", "name": "Ethereum"},
     {"ticker": "SOL-USD", "name": "Solana"},
+    {"ticker": "DOGE-USD", "name": "Dogecoin"},
+    {"ticker": "XRP-USD", "name": "XRP Ripple"},
+    {"ticker": "ADA-USD", "name": "Cardano"},
+    {"ticker": "AVAX-USD", "name": "Avalanche"},
+    {"ticker": "DOT-USD", "name": "Polkadot"},
+    {"ticker": "LINK-USD", "name": "Chainlink"},
 ]
 SEARCH_ALIASES: Dict[str, str] = {
     "google": "GOOGL",
@@ -270,6 +284,10 @@ SEARCH_ALIASES: Dict[str, str] = {
     "crowdstrike": "CRWD",
     "bitcoin": "BTC-USD",
     "btc": "BTC-USD",
+    "bitcoinetf": "IBIT",
+    "blackrockbitcoinetf": "IBIT",
+    "isharesbitcointrust": "IBIT",
+    "ibit": "IBIT",
     "crypto": "BTC-USD",
     "hood": "HOOD",
     "hoodapp": "HOOD",
@@ -279,6 +297,18 @@ SEARCH_ALIASES: Dict[str, str] = {
     "tradingapp": "HOOD",
     "ethereum": "ETH-USD",
     "eth": "ETH-USD",
+    "dogecoin": "DOGE-USD",
+    "doge": "DOGE-USD",
+    "xrp": "XRP-USD",
+    "ripple": "XRP-USD",
+    "cardano": "ADA-USD",
+    "ada": "ADA-USD",
+    "avalanche": "AVAX-USD",
+    "avax": "AVAX-USD",
+    "polkadot": "DOT-USD",
+    "dot": "DOT-USD",
+    "chainlink": "LINK-USD",
+    "link": "LINK-USD",
     "nvidea": "NVDA",
     "tesler": "TSLA",
     "meta": "META",
@@ -369,6 +399,107 @@ def _fuzzy_catalog_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     return [row[1] for row in scored[:limit]]
 
 
+def _quote_search_score(query: str, item: Dict[str, Any]) -> float:
+    needle = _normalize_search_query(query)
+    ticker = _normalize_search_query(str(item.get("ticker", "")))
+    name = _normalize_search_query(str(item.get("name", "")))
+    quote_type = str(item.get("type") or "").upper()
+    score = 0.0
+    if quote_type == "ALIAS":
+        score += 145
+    elif quote_type == "FUZZY" and needle and (needle == ticker or name.startswith(needle)):
+        score += 132
+    elif quote_type == "CRYPTOCURRENCY" and needle and name == f"{needle}usd":
+        score += 138
+    elif quote_type == "CRYPTOCURRENCY" and len(needle) >= 4 and needle and name.startswith(needle) and ticker.endswith("usd"):
+        score += 126
+    elif quote_type == "ETF" and needle and ("etf" in needle or "fund" in needle) and name.startswith(needle):
+        score += 116
+    elif needle and needle == ticker:
+        score += 120
+    elif needle and ticker.startswith(needle):
+        score += 105
+    elif needle and name.startswith(needle):
+        score += 94
+    elif needle and (needle in ticker or needle in name):
+        score += 82
+    else:
+        score += max(
+            difflib.SequenceMatcher(None, needle, ticker).ratio(),
+            difflib.SequenceMatcher(None, needle, name).ratio(),
+        ) * 70
+
+    if quote_type in {"EQUITY", "ETF", "CRYPTOCURRENCY"}:
+        score += 12
+    elif quote_type in {"MUTUALFUND", "INDEX"}:
+        score += 4
+    if quote_type == "CRYPTOCURRENCY" and "tokenizedstock" in name and "tokenized" not in needle:
+        score -= 55
+    if "." in str(item.get("ticker", "")) and not any(part in needle for part in ("de", "to", "pa", "mi", "f")):
+        score -= 8
+    return score
+
+
+def _is_supported_search_quote(item: Dict[str, Any]) -> bool:
+    quote_type = str(item.get("type") or "").upper()
+    if not quote_type:
+        return True
+    return quote_type in {"ALIAS", "FUZZY", "EQUITY", "ETF", "CRYPTOCURRENCY", "MUTUALFUND", "INDEX"}
+
+
+def _yahoo_search_sync(query: str, limit: int = 8) -> List[Dict[str, Any]]:
+    try:
+        response = requests.get(
+            "https://query2.finance.yahoo.com/v1/finance/search",
+            params={
+                "q": query,
+                "quotesCount": max(10, limit),
+                "newsCount": 0,
+                "enableFuzzyQuery": "true",
+                "quotesQueryId": "tss_match_phrase_query",
+            },
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=3.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(f"Yahoo quote search error for '{query}': {exc}")
+        return []
+
+    results: List[Dict[str, Any]] = []
+    for item in payload.get("quotes", []) or []:
+        ticker = str(item.get("symbol") or "").strip().upper()
+        if not ticker:
+            continue
+        quote_type = str(item.get("quoteType") or item.get("typeDisp") or "").upper()
+        if quote_type and quote_type not in {"EQUITY", "ETF", "CRYPTOCURRENCY", "MUTUALFUND", "INDEX"}:
+            continue
+        name = (
+            item.get("longname")
+            or item.get("shortname")
+            or item.get("name")
+            or item.get("exchDisp")
+            or ticker
+        )
+        results.append({
+            "ticker": ticker,
+            "name": str(name),
+            "exchange": item.get("exchange") or item.get("exchDisp"),
+            "type": quote_type or item.get("typeDisp") or "quote",
+            "source": "yahoo_search",
+        })
+
+    scored = [(_quote_search_score(query, row), row) for row in results]
+    scored = [(score, row) for score, row in scored if score >= 62]
+    scored.sort(key=lambda row: row[0], reverse=True)
+    return [row for _, row in scored[:limit]]
+
+
+async def _search_yahoo_finance(query: str, limit: int = 8) -> List[Dict[str, Any]]:
+    return await asyncio.to_thread(_yahoo_search_sync, query, limit)
+
+
 async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]]:
     normalized_query = _normalize_search_query(q)
     if not normalized_query:
@@ -381,14 +512,27 @@ async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]
 
     catalog_results = _fuzzy_catalog_search(q, limit=limit)
     live_results: List[Dict[str, Any]] = []
+    yahoo_results: List[Dict[str, Any]] = []
+    live_task = asyncio.create_task(get_discovery_service().search_ticker(q))
+    yahoo_task = asyncio.create_task(_search_yahoo_finance(q, limit=max(limit, 8)))
     try:
-        live_results = await asyncio.wait_for(get_discovery_service().search_ticker(q), timeout=1.0)
+        live_results, yahoo_results = await asyncio.gather(
+            asyncio.wait_for(live_task, timeout=2.0),
+            asyncio.wait_for(yahoo_task, timeout=3.8),
+        )
     except Exception:
-        live_results = []
+        live_task.cancel()
+        yahoo_task.cancel()
+        try:
+            yahoo_results = await _search_yahoo_finance(q, limit=max(limit, 8))
+        except Exception:
+            yahoo_results = []
 
     merged: List[Dict[str, Any]] = []
     seen = set()
-    for item in [*catalog_results, *live_results]:
+    scored_items = [item for item in [*catalog_results, *yahoo_results, *live_results] if _is_supported_search_quote(item)]
+    scored_items.sort(key=lambda row: _quote_search_score(q, row), reverse=True)
+    for item in scored_items:
         ticker = str(item.get("ticker", "")).upper()
         if ticker and ticker not in seen:
             seen.add(ticker)

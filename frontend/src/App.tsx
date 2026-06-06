@@ -910,9 +910,9 @@ function AppContent() {
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
       const message = err instanceof Error ? err.message : "An error occurred";
       if (message.toLowerCase().includes("timeout")) {
-        setError("Analyse-Request Timeout. Bitte erneut versuchen.");
+        setError(`Analyse fuer ${searchTicker} dauert zu lange. Bitte noch einmal starten oder den Ticker direkt eingeben.`);
       } else {
-        setError(message);
+        setError(`Analyse fuer ${searchTicker} konnte nicht geladen werden. ${message}`);
       }
     } finally {
       if (!controller.signal.aborted && searchRequestIdRef.current === requestId) {

@@ -46,6 +46,7 @@ const LOCAL_SEARCH_ASSETS = [
   "Siemens AG (SIE.DE)",
   "Rheinmetall AG (RHM.DE)",
   "Coinbase Global Inc. (COIN)",
+  "Robinhood Markets Inc. (HOOD)",
   "MicroStrategy Incorporated (MSTR)",
   "Spirit Airlines Inc. (FLYYQ)",
   "Danaher Corporation (DHR)",
@@ -161,6 +162,12 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   archer: "Archer Aviation Inc. (ACHR)",
   achr: "Archer Aviation Inc. (ACHR)",
   oklo: "Oklo Inc. (OKLO)",
+  hood: "Robinhood Markets Inc. (HOOD)",
+  hoodapp: "Robinhood Markets Inc. (HOOD)",
+  robinhood: "Robinhood Markets Inc. (HOOD)",
+  robinhoodmarkets: "Robinhood Markets Inc. (HOOD)",
+  robinhoodapp: "Robinhood Markets Inc. (HOOD)",
+  tradingapp: "Robinhood Markets Inc. (HOOD)",
 };
 
 interface SearchBarProps {

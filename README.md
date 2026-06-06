@@ -46,6 +46,7 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
 ## Beta-Gate
 
 ```powershell
+python qa_search_resolution.py
 cd frontend
 npm run qa:release
 ```

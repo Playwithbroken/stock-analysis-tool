@@ -1243,7 +1243,7 @@ function AppContent() {
 
         <div className="layout-shell hidden px-3 pb-2 pt-2 lg:block sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header app-shell-header-compact rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="grid items-center gap-3 lg:grid-cols-[minmax(18rem,1fr)_auto_minmax(18rem,1fr)]">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-[0.9rem] bg-[#101114] text-white">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1260,7 +1260,7 @@ function AppContent() {
                 </div>
               </div>
 
-              <div className="hidden items-center gap-1.5 rounded-[1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] lg:flex">
+              <div className="hidden justify-self-center items-center gap-1.5 rounded-[1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] lg:flex">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
@@ -1276,7 +1276,7 @@ function AppContent() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2 md:flex-nowrap">
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 md:flex-nowrap">
                 {/* Desktop: full USD / EUR toggle */}
                 <div className="hidden rounded-[1.1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] sm:flex">
                   <button
@@ -1343,9 +1343,9 @@ function AppContent() {
                 </button>
               </div>
             </div>
-            <div className="mt-2 grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-              {favoriteTape}
-              {moversTape}
+            <div className="mt-2 space-y-2">
+              <div className="min-w-0">{favoriteTape}</div>
+              {moversTape ? <div className="min-w-0">{moversTape}</div> : null}
             </div>
           </div>
         </div>

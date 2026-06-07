@@ -4,6 +4,7 @@ import App from './App'
 import './index.css'
 
 const SW_RELOAD_GUARD_KEY = 'brokerfreund:sw-reload-once'
+const SW_RELOAD_GUARD_MS = 8000
 
 const rootEl = document.getElementById('root')
 if (rootEl) {
@@ -31,8 +32,10 @@ window.addEventListener('vite:preloadError', () => {
 if ('serviceWorker' in navigator) {
   const reloadOnce = () => {
     try {
-      if (sessionStorage.getItem(SW_RELOAD_GUARD_KEY) === '1') return
-      sessionStorage.setItem(SW_RELOAD_GUARD_KEY, '1')
+      const lastReload = Number(sessionStorage.getItem(SW_RELOAD_GUARD_KEY) || '0')
+      const now = Date.now()
+      if (lastReload && now - lastReload < SW_RELOAD_GUARD_MS) return
+      sessionStorage.setItem(SW_RELOAD_GUARD_KEY, String(now))
     } catch {
       // Ignore sessionStorage restrictions; fallback to direct reload.
     }
@@ -42,6 +45,15 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', reloadOnce)
 
   window.addEventListener('load', () => {
+    try {
+      const lastReload = Number(sessionStorage.getItem(SW_RELOAD_GUARD_KEY) || '0')
+      if (lastReload && Date.now() - lastReload > SW_RELOAD_GUARD_MS) {
+        sessionStorage.removeItem(SW_RELOAD_GUARD_KEY)
+      }
+    } catch {
+      // Ignore sessionStorage failures in hardened browsers.
+    }
+
     navigator.serviceWorker
       .getRegistrations()
       .then((registrations) => {

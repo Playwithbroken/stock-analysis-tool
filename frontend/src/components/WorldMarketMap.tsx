@@ -1239,6 +1239,37 @@ export default function WorldMarketMap({
     [activeGeoEvent],
   );
 
+  const macroDecisionFacts = useMemo(() => {
+    if (!activeGeoEvent) return [];
+    const intelligence = activeGeoEvent.event_intelligence || {};
+    return [
+      {
+        label: "Was",
+        value: activeVariantLabel || activeGeoEvent.markerLabel || activeGeoEvent.event_type || "Macro event",
+      },
+      {
+        label: "Wo",
+        value: activeGeoEvent.geoPlace || activeGeoEvent.geoZone || activeGeoEvent.region || "Global",
+      },
+      {
+        label: "Impact",
+        value: intelligence.impact_score ? `${intelligence.impact_score}/100` : activeGeoEvent.impact || "watch",
+      },
+      {
+        label: "Assets",
+        value: compactList(intelligence.affected_assets, 3).join(" | ") || activeGeoEvent.ticker || "Market basket",
+      },
+      {
+        label: "Trigger",
+        value: intelligence.trigger || "Bestaetigung und Preisreaktion abwarten.",
+      },
+      {
+        label: "Invalidierung",
+        value: intelligence.invalidation || "These faellt, wenn Story oder Preisreaktion nicht bestaetigt.",
+      },
+    ];
+  }, [activeGeoEvent, activeVariantLabel]);
+
   useEffect(() => {
     if (!activeGeoEvent) {
       setImpactDrawerOpen(false);
@@ -1608,8 +1639,22 @@ export default function WorldMarketMap({
                 {activeGeoEvent.title}
               </div>
               <div className="mt-1 text-xs font-semibold text-slate-500">
-                {activeGeoEvent.region || "Global"} · {activeGeoEvent.event_intelligence?.action || "watch"}
+                {activeGeoEvent.region || "Global"} / {activeGeoEvent.event_intelligence?.action || "watch"}
               </div>
+              {macroDecisionFacts.length ? (
+                <div className="mt-3 grid gap-2">
+                  {macroDecisionFacts.slice(0, 4).map((fact) => (
+                    <div key={fact.label} className="rounded-[0.85rem] border border-black/8 bg-white/78 px-3 py-2">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                        {fact.label}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-[11px] font-bold leading-4 text-slate-700">
+                        {fact.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </button>
           ) : null}
         </div>
@@ -1748,6 +1793,20 @@ export default function WorldMarketMap({
                     </span>
                   ) : null}
                 </div>
+                {macroDecisionFacts.length ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {macroDecisionFacts.slice(0, 4).map((fact) => (
+                      <div key={fact.label} className="rounded-[0.85rem] border border-black/8 bg-white/78 px-2.5 py-2">
+                        <div className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                          {fact.label}
+                        </div>
+                        <div className="mt-1 line-clamp-2 text-[10px] font-bold leading-4 text-slate-700">
+                          {fact.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

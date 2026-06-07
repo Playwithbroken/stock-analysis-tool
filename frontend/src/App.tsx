@@ -390,6 +390,12 @@ function AppContent() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchResolution, setSearchResolution] = useState<{
+    query: string;
+    ticker: string;
+    name?: string;
+    confidence?: string;
+  } | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isHealthOpen, setIsHealthOpen] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
@@ -900,7 +906,10 @@ function AppContent() {
 
   const resolveTickerForAnalyze = async (raw: string, controller: AbortController) => {
     const normalized = normalizeTickerInput(raw);
-    if (!normalized || !shouldResolveBeforeAnalyze(raw, normalized)) return normalized;
+    if (!normalized || !shouldResolveBeforeAnalyze(raw, normalized)) {
+      setSearchResolution(null);
+      return normalized;
+    }
     try {
       const payload = await fetchJsonWithRetry<any>(
         `/api/search/resolve?q=${encodeURIComponent(raw.trim())}`,
@@ -908,8 +917,19 @@ function AppContent() {
         { retries: 1, retryDelayMs: 200, timeoutMs: 4500 },
       );
       const bestTicker = payload?.ticker || normalizeTickerInput(payload?.normalized || "");
+      if (bestTicker && bestTicker !== normalized) {
+        setSearchResolution({
+          query: raw.trim(),
+          ticker: bestTicker,
+          name: payload?.name,
+          confidence: payload?.confidence,
+        });
+      } else {
+        setSearchResolution(null);
+      }
       return bestTicker || normalized;
     } catch {
+      setSearchResolution(null);
       return normalized;
     }
   };
@@ -923,6 +943,7 @@ function AppContent() {
 
     setLoading(true);
     setError(null);
+    setSearchResolution(null);
     setAnalysis(null);
     setActiveTab("analyze");
 
@@ -1568,6 +1589,23 @@ function AppContent() {
             {!showHero && (
               <div className="mb-8">
                 <SearchBar onSearch={handleSearch} loading={loading} />
+              </div>
+            )}
+
+            {searchResolution && (
+              <div className="surface-panel mb-8 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-emerald-500/18 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-900">
+                <div>
+                  <span className="font-extrabold">Aufgeloest:</span>{" "}
+                  <span className="text-emerald-800">{searchResolution.query}</span>{" "}
+                  <span className="text-emerald-700">{"->"}</span>{" "}
+                  <span className="font-black">{searchResolution.ticker}</span>
+                  {searchResolution.name ? (
+                    <span className="text-emerald-800"> / {searchResolution.name}</span>
+                  ) : null}
+                </div>
+                <span className="rounded-full border border-emerald-500/20 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-700">
+                  {searchResolution.confidence || "resolved"}
+                </span>
               </div>
             )}
 

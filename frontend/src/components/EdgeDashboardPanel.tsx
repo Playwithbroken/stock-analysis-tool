@@ -28,6 +28,20 @@ interface DecisionRow {
   tone: EdgeTone;
 }
 
+interface MacroPlaybookRow {
+  key: string;
+  title: string;
+  region: string;
+  type: string;
+  action: string;
+  impactScore: number | null;
+  assets: string[];
+  trigger: string;
+  invalidation: string;
+  whyNow: string;
+  tone: EdgeTone;
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -67,6 +81,40 @@ function toneLabel(tone: EdgeTone) {
   if (tone === "action") return "Action";
   if (tone === "avoid") return "Avoid";
   return "Watch";
+}
+
+function actionTone(value: unknown, impactScore: number | null): EdgeTone {
+  const text = String(value || "").toLowerCase();
+  if (
+    text.includes("avoid") ||
+    text.includes("risk") ||
+    text.includes("hedge") ||
+    text.includes("stand_down") ||
+    text.includes("stand down")
+  ) {
+    return "avoid";
+  }
+  if (
+    text.includes("act") ||
+    text.includes("action") ||
+    text.includes("constructive") ||
+    text.includes("watch_for_long") ||
+    (impactScore != null && impactScore >= 88)
+  ) {
+    return "action";
+  }
+  return "watch";
+}
+
+function titleCase(value: unknown) {
+  return String(value || "Macro")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function compactText(value: unknown, fallback: string) {
+  const text = String(value || "").trim();
+  return text || fallback;
 }
 
 function buildScoreRows(signalScore: any): DecisionRow[] {
@@ -116,6 +164,47 @@ function buildBriefRows(globalBrief: any): DecisionRow[] {
       tone: classify(score, text),
     };
   });
+}
+
+function buildMacroPlaybookRows(globalBrief: any): MacroPlaybookRow[] {
+  const events = Array.isArray(globalBrief?.event_layer) ? globalBrief.event_layer : [];
+  const rows: MacroPlaybookRow[] = events.map((item: any, index: number) => {
+    const intelligence = item?.event_intelligence || {};
+    const impactScore = toNumber(intelligence?.impact_score ?? item?.impact_score ?? item?.score);
+    const action = compactText(intelligence?.action || item?.action, "watch");
+    const assets = Array.isArray(intelligence?.affected_assets)
+      ? intelligence.affected_assets
+      : Array.isArray(item?.affected_assets)
+        ? item.affected_assets
+        : [];
+    const tone = actionTone(action, impactScore);
+    return {
+      key: `macro-${item?.event_key || item?.title || index}`,
+      title: compactText(item?.title || item?.headline, "Macro event"),
+      region: titleCase(item?.country || item?.region || item?.geoPlace || "Global"),
+      type: titleCase(item?.event_type || item?.type || "macro"),
+      action,
+      impactScore,
+      assets: assets.map((asset: any) => String(asset || "").trim()).filter(Boolean).slice(0, 4),
+      trigger: compactText(
+        item?.trigger || intelligence?.trigger,
+        "Erst handeln, wenn Preis, Volumen und breite Marktreaktion bestaetigen.",
+      ),
+      invalidation: compactText(
+        item?.invalidation || item?.risk || intelligence?.invalidation,
+        "These faellt, wenn der erste Impuls komplett dreht oder die Quelle nicht bestaetigt.",
+      ),
+      whyNow: compactText(intelligence?.why_now || item?.why_it_matters || item?.summary, "Aktiver Macro-Block im Briefing."),
+      tone,
+    };
+  });
+  const toneRank: Record<EdgeTone, number> = { action: 3, avoid: 2, watch: 1 };
+  return rows
+    .sort(
+      (a: MacroPlaybookRow, b: MacroPlaybookRow) =>
+        (b.impactScore ?? 0) - (a.impactScore ?? 0) || toneRank[b.tone] - toneRank[a.tone],
+    )
+    .slice(0, 3);
 }
 
 function dedupeRows(rows: DecisionRow[]) {
@@ -170,6 +259,7 @@ export default function EdgeDashboardPanel({
   const rows = dedupeRows([...buildScoreRows(signalScore), ...buildBriefRows(globalBrief)])
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     .slice(0, 8);
+  const macroPlaybookRows = buildMacroPlaybookRows(globalBrief);
   const actionRows = rows.filter((row) => row.tone === "action").slice(0, 3);
   const watchRows = rows.filter((row) => row.tone === "watch").slice(0, 3);
   const avoidRows = rows.filter((row) => row.tone === "avoid").slice(0, 3);
@@ -362,6 +452,73 @@ export default function EdgeDashboardPanel({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-[1.35rem] border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              Macro Playbook
+            </div>
+            <div className="mt-1 text-base font-black text-slate-950 dark:text-white">
+              Was bedeutet das fuer den Markt?
+            </div>
+          </div>
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Risiko / Chance / Trigger / Invalidierung
+          </div>
+        </div>
+
+        {macroPlaybookRows.length ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            {macroPlaybookRows.map((item) => (
+              <div key={item.key} className="rounded-[1.1rem] border border-black/8 bg-white/78 p-3 dark:border-white/10 dark:bg-slate-950/45">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.13em] ${toneClasses(item.tone)}`}>
+                      {toneLabel(item.tone)}
+                    </span>
+                    <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                      {item.region} / {item.type}
+                    </span>
+                  </div>
+                  <div className="text-sm font-black text-slate-950 dark:text-white">
+                    {item.impactScore != null ? `${formatNumber(item.impactScore, 0)}` : "n/a"}
+                  </div>
+                </div>
+                <div className="mt-3 line-clamp-2 text-sm font-black leading-5 text-slate-950 dark:text-white">
+                  {item.title}
+                </div>
+                <div className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
+                  {item.whyNow}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(item.assets.length ? item.assets : ["Market basket"]).slice(0, 4).map((asset) => (
+                    <span key={asset} className="rounded-full border border-black/8 bg-slate-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-600 dark:border-white/10 dark:bg-white/8 dark:text-slate-200">
+                      {asset}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-2 border-t border-black/6 pt-3 text-[11px] font-semibold leading-5 text-slate-600 dark:border-white/10 dark:text-slate-300">
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Trigger:</span> {item.trigger}
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Stop:</span> {item.invalidation}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4">
+            <EmptyDecision
+              icon={<Activity size={18} />}
+              title="Kein Macro-Playbook aktiv"
+              body={loading ? "Briefing wird noch geladen." : "Keine High-Impact-Ereignisse mit Trigger und Invalidierung im aktuellen Brief."}
+            />
+          </div>
+        )}
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-3">

@@ -1418,13 +1418,13 @@ function AppContent() {
               </Suspense>
             </ErrorBoundary>
 
-            <section className="surface-panel dashboard-command-panel rounded-[2rem] p-5 sm:p-7">
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)] xl:items-center">
+            <section className="surface-panel dashboard-command-panel dashboard-guide-panel rounded-[1.5rem] p-4 sm:p-5">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                 <div className="min-w-0">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Dashboard
+                    Lesereihenfolge
                   </div>
-                  <h2 className="mt-2 max-w-4xl text-3xl text-slate-900 sm:text-4xl">
+                  <h2 className="mt-1 max-w-4xl text-2xl text-slate-900 sm:text-3xl">
                     Erst Entscheidung, dann Marktbild, dann Details.
                   </h2>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
@@ -1462,11 +1462,11 @@ function AppContent() {
                     </div>
                   );
                 })() : null}
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/72 p-4 shadow-[0_16px_34px_rgba(17,24,39,0.06)]">
+                <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-3 shadow-[0_12px_28px_rgba(17,24,39,0.05)]">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-                        Read order
+                        Kurzstatus
                       </div>
                       <div className="mt-1 text-sm font-bold text-slate-900">
                         Decision / Market / Brief
@@ -1480,7 +1480,7 @@ function AppContent() {
                       Ask Buddy
                     </button>
                   </div>
-                  <div className="mt-4 grid grid-cols-5 gap-2">
+                  <div className="mt-3 grid grid-cols-5 gap-2">
                     {briefCommandStats.map(([label, value, tone]) => (
                       <div key={String(label)} className={`rounded-[1rem] border p-2 text-center ${tone}`}>
                         <div className="text-lg font-black leading-none">{value}</div>
@@ -1494,6 +1494,10 @@ function AppContent() {
               </div>
             </section>
 
+            <div className="dashboard-section-label">
+              <span>Heute wichtig</span>
+              <span>3 Prioritaeten, danach Details</span>
+            </div>
             <div className="dashboard-priority-strip">
               {dashboardPriorityCards.map((item) => (
                 <div key={item.label} className={`dashboard-priority-card ${item.tone}`}>
@@ -1510,6 +1514,10 @@ function AppContent() {
               ))}
             </div>
 
+            <div className="dashboard-section-label">
+              <span>Deep Dive</span>
+              <span>Marktbild links, Briefing rechts</span>
+            </div>
             <div className="dashboard-intel-grid">
                 {globalBrief && geoRegions.length ? (
                   <ErrorBoundary>

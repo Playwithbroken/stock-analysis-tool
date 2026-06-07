@@ -1,7 +1,7 @@
 import asyncio
 import sys
 
-from api import _normalize_ticker_input, _resolve_search_results
+from api import _normalize_ticker_input, _resolve_asset_query, _resolve_search_results
 
 
 CASES = [
@@ -27,15 +27,24 @@ async def main() -> int:
     for query, expected in CASES:
         normalized = _normalize_ticker_input(query)
         results = await _resolve_search_results(query, limit=5)
+        resolved = await _resolve_asset_query(query, limit=5)
         top = str(results[0].get("ticker", "")).upper() if results else ""
         tickers = [str(item.get("ticker", "")).upper() for item in results]
+        resolved_ticker = str(resolved.get("ticker", "")).upper()
+        confidence = str(resolved.get("confidence", ""))
 
-        ok = top == expected or (normalized == expected and expected in tickers)
+        ok = resolved_ticker == expected and (top == expected or (normalized == expected and expected in tickers))
         status = "OK" if ok else "FAIL"
-        print(f"{status} {query!r} -> normalized={normalized!r}, top={top!r}, expected={expected!r}")
+        print(
+            f"{status} {query!r} -> normalized={normalized!r}, "
+            f"resolved={resolved_ticker!r}, top={top!r}, confidence={confidence!r}, expected={expected!r}"
+        )
 
         if not ok:
-            failures.append(f"{query}: expected {expected}, got normalized={normalized}, top={top}, all={tickers}")
+            failures.append(
+                f"{query}: expected {expected}, got normalized={normalized}, "
+                f"resolved={resolved_ticker}, top={top}, all={tickers}"
+            )
 
     if failures:
         print("\nSearch resolution failures:")

@@ -903,11 +903,11 @@ function AppContent() {
     if (!normalized || !shouldResolveBeforeAnalyze(raw, normalized)) return normalized;
     try {
       const payload = await fetchJsonWithRetry<any>(
-        `/api/search/suggestions?q=${encodeURIComponent(raw.trim())}`,
+        `/api/search/resolve?q=${encodeURIComponent(raw.trim())}`,
         { signal: controller.signal },
         { retries: 1, retryDelayMs: 200, timeoutMs: 4500 },
       );
-      const bestTicker = payload?.Ticker?.[0] || normalizeTickerInput(payload?.Matches?.[0] || "");
+      const bestTicker = payload?.ticker || normalizeTickerInput(payload?.normalized || "");
       return bestTicker || normalized;
     } catch {
       return normalized;

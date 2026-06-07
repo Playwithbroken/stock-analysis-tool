@@ -540,6 +540,45 @@ async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]
     return _cache_set(cache_key, merged[:limit])
 
 
+async def _resolve_asset_query(q: str, limit: int = 6) -> Dict[str, Any]:
+    raw = (q or "").strip()
+    normalized = _normalize_ticker_input(raw)
+    results = await _resolve_search_results(raw, limit=max(limit, 3))
+    best = results[0] if results else None
+
+    if best:
+        best_score = _quote_search_score(raw, best)
+        best_type = str(best.get("type") or "").lower()
+        if best_type in {"alias", "fuzzy"}:
+            best_score = max(best_score, 118)
+        confidence = "high" if best_score >= 115 else "medium" if best_score >= 82 else "low"
+        return {
+            "query": raw,
+            "normalized": normalized,
+            "ticker": str(best.get("ticker", "")).upper(),
+            "name": best.get("name") or best.get("ticker"),
+            "exchange": best.get("exchange"),
+            "type": best.get("type"),
+            "source": best.get("source") or best.get("type") or "catalog",
+            "confidence": confidence,
+            "score": round(best_score, 2),
+            "alternatives": results[1:limit],
+        }
+
+    return {
+        "query": raw,
+        "normalized": normalized,
+        "ticker": normalized,
+        "name": normalized,
+        "exchange": None,
+        "type": "direct",
+        "source": "normalizer",
+        "confidence": "low",
+        "score": 0,
+        "alternatives": [],
+    }
+
+
 def _safe_float(value: Any) -> Optional[float]:
     try:
         if value in (None, ""):
@@ -1878,6 +1917,16 @@ async def search_ticker(q: str):
         return await _resolve_search_results(q, limit=6)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/search/resolve")
+async def resolve_search_query(q: str):
+    """Resolve a natural-language asset query to the best stock/ETF/crypto ticker."""
+    try:
+        return convert_numpy_types(await _resolve_asset_query(q, limit=6))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/discovery/moonshots")
 async def get_moonshot_stocks():

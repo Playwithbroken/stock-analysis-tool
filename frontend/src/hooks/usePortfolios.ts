@@ -19,6 +19,10 @@ export type PortfolioDataSource = 'server' | 'local-cache' | 'empty' | 'disabled
 const CACHE_KEY = 'portfolios_local_cache'
 const CACHE_VERSION = 2
 
+interface FetchPortfolioOptions {
+  preserveLocalOnEmpty?: boolean
+}
+
 function saveToCache(portfolios: Portfolio[]) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ v: CACHE_VERSION, data: portfolios, ts: Date.now() }))
@@ -77,7 +81,7 @@ export function usePortfolios(enabled: boolean = true) {
     setDataSourceMessage('')
   }
 
-  const fetchPortfolios = async (): Promise<Portfolio[] | null> => {
+  const fetchPortfolios = async (options: FetchPortfolioOptions = {}): Promise<Portfolio[] | null> => {
     if (!enabled) {
       setPortfolios([])
       setDataSource('disabled')
@@ -93,6 +97,12 @@ export function usePortfolios(enabled: boolean = true) {
         if (data.length === 0) {
           // Backend is empty — check if we have cached portfolios to restore
           const cached = loadFromCache()
+          if (options.preserveLocalOnEmpty && cached.length > 0) {
+            setPortfolios(cached)
+            setDataSource('server')
+            setDataSourceMessage('Server hat die Aenderung bestaetigt; Listen-Sync laeuft noch.')
+            return cached
+          }
           if (cached.length > 0) {
             pendingRestoreRef.current = cached
             setNeedsRestore(true)
@@ -184,6 +194,9 @@ export function usePortfolios(enabled: boolean = true) {
 
   const createPortfolio = async (name: string): Promise<Portfolio> => {
     const cleanName = name.trim()
+    if (!cleanName) {
+      throw new Error('Portfolio-Name ist erforderlich.')
+    }
     const response = await fetch('/api/portfolios', {
       method: 'POST',
       credentials: 'same-origin',
@@ -197,9 +210,15 @@ export function usePortfolios(enabled: boolean = true) {
     if (!newPortfolio?.id) {
       throw new Error('Portfolio wurde vom Server nicht bestaetigt.')
     }
+    const confirmedPortfolio: Portfolio = {
+      id: String(newPortfolio.id),
+      name: String(newPortfolio.name || cleanName),
+      holdings: Array.isArray(newPortfolio.holdings) ? newPortfolio.holdings : [],
+      createdAt: String(newPortfolio.createdAt || new Date().toISOString()),
+    }
     setPortfolios((current) => {
-      const withoutDuplicate = current.filter((portfolio) => portfolio.id !== newPortfolio.id)
-      const updated = [newPortfolio, ...withoutDuplicate]
+      const withoutDuplicate = current.filter((portfolio) => portfolio.id !== confirmedPortfolio.id)
+      const updated = [confirmedPortfolio, ...withoutDuplicate]
       saveToCache(updated)
       return updated
     })
@@ -209,23 +228,23 @@ export function usePortfolios(enabled: boolean = true) {
     let refreshed: Portfolio[] | null = null
     for (let attempt = 0; attempt < 3; attempt += 1) {
       if (attempt > 0) await delay(350 * attempt)
-      refreshed = await fetchPortfolios()
-      if (refreshed?.some((portfolio) => portfolio.id === newPortfolio.id)) {
+      refreshed = await fetchPortfolios({ preserveLocalOnEmpty: true })
+      if (refreshed?.some((portfolio) => portfolio.id === confirmedPortfolio.id)) {
         setDataSource('server')
         setDataSourceMessage('Portfolio wurde serverseitig gespeichert und verifiziert.')
-        return newPortfolio
+        return confirmedPortfolio
       }
     }
-    if (refreshed && !refreshed.some((portfolio) => portfolio.id === newPortfolio.id)) {
+    if (refreshed && !refreshed.some((portfolio) => portfolio.id === confirmedPortfolio.id)) {
       setPortfolios((current) => {
-        const updated = [newPortfolio, ...current.filter((portfolio) => portfolio.id !== newPortfolio.id)]
+        const updated = [confirmedPortfolio, ...current.filter((portfolio) => portfolio.id !== confirmedPortfolio.id)]
         saveToCache(updated)
         return updated
       })
       setDataSource('server')
       setDataSourceMessage('Portfolio ist angelegt, aber die Serverliste hat es noch nicht zurueckgemeldet. Bitte einmal Refresh pruefen.')
     }
-    return newPortfolio
+    return confirmedPortfolio
   }
 
   const deletePortfolio = async (id: string) => {
@@ -242,21 +261,52 @@ export function usePortfolios(enabled: boolean = true) {
   }
 
   const addHolding = async (portfolioId: string, holding: Holding) => {
+    const normalizedHolding: Holding = {
+      ticker: String(holding.ticker || '').trim().toUpperCase().replace(/\s+/g, ''),
+      shares: Number(holding.shares),
+      buyPrice: holding.buyPrice,
+      purchaseDate: holding.purchaseDate,
+    }
     const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ticker: holding.ticker,
-        shares: holding.shares,
-        buyPrice: holding.buyPrice,
-        purchaseDate: holding.purchaseDate
+        ticker: normalizedHolding.ticker,
+        shares: normalizedHolding.shares,
+        buyPrice: normalizedHolding.buyPrice,
+        buy_price: normalizedHolding.buyPrice,
+        purchaseDate: normalizedHolding.purchaseDate,
+        purchase_date: normalizedHolding.purchaseDate,
       }),
     })
     if (!response.ok) {
       throw new Error(await readApiError(response, `Position konnte nicht gespeichert werden (${response.status})`))
     }
-    await fetchPortfolios()
+    setPortfolios((current) => {
+      const updated = current.map((portfolio) => {
+        if (portfolio.id !== portfolioId) return portfolio
+        const existing = portfolio.holdings.find((item) => item.ticker === normalizedHolding.ticker)
+        const holdings = existing
+          ? portfolio.holdings.map((item) =>
+              item.ticker === normalizedHolding.ticker
+                ? {
+                    ...item,
+                    shares: Number(item.shares || 0) + normalizedHolding.shares,
+                    buyPrice: normalizedHolding.buyPrice ?? item.buyPrice,
+                    purchaseDate: normalizedHolding.purchaseDate ?? item.purchaseDate,
+                  }
+                : item,
+            )
+          : [...portfolio.holdings, normalizedHolding]
+        return { ...portfolio, holdings }
+      })
+      saveToCache(updated)
+      return updated
+    })
+    setDataSource('server')
+    setDataSourceMessage('Position wurde gespeichert. Serverliste wird abgeglichen.')
+    await fetchPortfolios({ preserveLocalOnEmpty: true })
   }
 
   const removeHolding = async (portfolioId: string, ticker: string) => {
@@ -278,13 +328,39 @@ export function usePortfolios(enabled: boolean = true) {
       body: JSON.stringify({
         shares: patch.shares,
         buyPrice: patch.buyPrice,
+        buy_price: patch.buyPrice,
         purchaseDate: patch.purchaseDate,
+        purchase_date: patch.purchaseDate,
       }),
     })
     if (!response.ok) {
       throw new Error(await readApiError(response, `Position konnte nicht aktualisiert werden (${response.status})`))
     }
-    await fetchPortfolios()
+    const updatedHolding = await response.json().catch(() => null)
+    setPortfolios((current) => {
+      const updated = current.map((portfolio) => {
+        if (portfolio.id !== portfolioId) return portfolio
+        return {
+          ...portfolio,
+          holdings: portfolio.holdings.map((holding) =>
+            holding.ticker === ticker
+              ? {
+                  ...holding,
+                  ...(updatedHolding || {}),
+                  shares: patch.shares ?? updatedHolding?.shares ?? holding.shares,
+                  buyPrice: patch.buyPrice ?? updatedHolding?.buyPrice ?? holding.buyPrice,
+                  purchaseDate: patch.purchaseDate ?? updatedHolding?.purchaseDate ?? holding.purchaseDate,
+                }
+              : holding,
+          ),
+        }
+      })
+      saveToCache(updated)
+      return updated
+    })
+    setDataSource('server')
+    setDataSourceMessage('Position wurde aktualisiert. Serverliste wird abgeglichen.')
+    await fetchPortfolios({ preserveLocalOnEmpty: true })
   }
 
   return {

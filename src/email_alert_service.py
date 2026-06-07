@@ -5,7 +5,7 @@ Email alert service for signal watchlists.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from html import escape
@@ -180,6 +180,7 @@ class EmailAlertService:
         selected_events = events[: self._safe_int_env("CRITICAL_MARKET_ALERT_MAX_ITEMS", 5, minimum=1)]
         self._send_notifications(config, selected_events, subject="Sofort-Alert: Wichtige Marktinformation")
         self.portfolio_manager.mark_signal_events_sent(selected_events)
+        self._record_macro_alert_delivery(selected_events)
         return {"status": "ok", "sent": len(selected_events), "message": "Critical Telegram alerts sent."}
 
     def send_test_telegram(self) -> Dict[str, Any]:
@@ -1224,53 +1225,20 @@ class EmailAlertService:
         portfolio_tickers = self._portfolio_tickers()
         watchlist_tickers = self._watchlist_tickers()
 
-        for item in (brief.get("event_layer") or [])[:12]:
-            title = str(item.get("title") or item.get("headline") or "").strip()
-            impact = str(item.get("impact") or item.get("severity") or item.get("level") or "").lower()
-            score = item.get("impact_score") or item.get("score")
-            numeric_score = None
-            try:
-                numeric_score = float(score)
-            except Exception:
-                pass
-            related_tickers = self._event_related_tickers(item)
-            portfolio_hit = bool(portfolio_tickers.intersection(related_tickers))
-            watchlist_hit = bool(watchlist_tickers.intersection(related_tickers))
-            hard_impact = impact in {"critical", "risk", "risk_off"}
-            high_impact = (
-                hard_impact
-                or (impact == "high" and (portfolio_hit or watchlist_hit))
-                or (numeric_score is not None and numeric_score >= min_critical_score)
-            )
-            if not title or not high_impact:
+        macro_candidates = [
+            *(brief.get("event_layer") or [])[:12],
+            *(brief.get("event_pings") or [])[:10],
+            *(brief.get("top_news") or [])[:12],
+        ]
+        for item in macro_candidates:
+            macro_event = self._normalize_macro_alert_event(item, min_critical_score)
+            if not macro_event:
                 continue
-            event_key = f"critical-market:{today}:{re.sub(r'[^a-zA-Z0-9]+', '-', title.lower())[:80]}"
-            if event_key in sent_keys:
+            if macro_event["event_key"] in sent_keys:
                 continue
-            region = item.get("region") or item.get("asset") or "Market"
-            direction = self._event_direction_label(item)
-            scope = "Portfolio" if portfolio_hit else "Watchlist" if watchlist_hit else "Market"
-            line = f"{direction} {scope} | {region}: {title}"
-            if item.get("summary"):
-                line += f" | {item.get('summary')}"
-            events.append(
-                {
-                    "event_key": event_key,
-                    "category": "critical_market",
-                    "title": title,
-                    "line": line,
-                    "source_url": item.get("source_url") or item.get("url") or "",
-                    "source_label": item.get("source_label") or item.get("publisher") or "Market radar",
-                    "conviction_score": numeric_score,
-                    "priority": self._critical_event_priority(
-                        "critical_market",
-                        numeric_score,
-                        portfolio_hit,
-                        watchlist_hit,
-                        hard_impact,
-                    ),
-                }
-            )
+            if not self._macro_alert_can_send(macro_event):
+                continue
+            events.append(macro_event)
 
         for item in (brief.get("watchlist_impact") or [])[:10]:
             summary = str(item.get("summary") or "").strip()
@@ -1394,6 +1362,259 @@ class EmailAlertService:
             )
 
         return sorted(events, key=lambda event: (int(event.get("priority") or 99), str(event.get("event_key") or "")))
+
+    def _normalize_macro_alert_event(self, item: Dict[str, Any], min_score: int) -> Dict[str, Any] | None:
+        if not isinstance(item, dict):
+            return None
+        title = str(item.get("title") or item.get("headline") or item.get("summary") or "").strip()
+        if not title:
+            return None
+
+        intelligence = item.get("event_intelligence") if isinstance(item.get("event_intelligence"), dict) else {}
+        trade_impact = item.get("trade_impact") if isinstance(item.get("trade_impact"), dict) else {}
+        intelligence_with_trade = {**trade_impact, **intelligence}
+        event_type = self._macro_event_type(item, title)
+        if not event_type:
+            return None
+
+        country = self._macro_event_country(item, title)
+        region = str(item.get("region") or country or "Global").strip()
+        if not country and region.lower() == "global":
+            return None
+
+        impact_score = self._macro_impact_score(item, intelligence)
+        severity = self._macro_severity(item, impact_score)
+        if severity not in {"high", "critical"} and impact_score < min_score:
+            return None
+
+        affected_assets = self._macro_affected_assets(item, intelligence_with_trade, event_type)
+        if not affected_assets:
+            return None
+
+        trigger = str(
+            intelligence.get("trigger")
+            or trade_impact.get("trigger")
+            or item.get("trigger")
+            or self._default_macro_trigger(event_type)
+            or ""
+        ).strip()
+        invalidation = str(
+            intelligence.get("invalidation")
+            or trade_impact.get("invalidation")
+            or item.get("invalidation")
+            or self._default_macro_invalidation(event_type)
+            or ""
+        ).strip()
+        if not (trigger or invalidation):
+            return None
+
+        source_status = str(item.get("source_status") or item.get("source_label") or item.get("publisher") or "Market radar").strip()
+        why = str(
+            intelligence.get("why_now")
+            or item.get("summary")
+            or item.get("reason")
+            or "Makro-Event mit potenzieller Auswirkung auf Risiko, Sektoren und Indizes."
+        ).strip()
+        action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
+        identity = self._macro_event_identity(event_type, country or region, title)
+        return {
+            "event_key": f"macro-alert:{identity}:{severity}",
+            "macro_identity": identity,
+            "category": "macro_alert",
+            "title": title,
+            "line": f"{country or region} / {event_type}: {title}",
+            "event_type": event_type,
+            "severity": severity,
+            "impact_score": int(round(impact_score)),
+            "country": country or region,
+            "region": region,
+            "why_it_matters": why,
+            "affected_assets": affected_assets[:8],
+            "trigger": trigger,
+            "invalidation": invalidation,
+            "action": action,
+            "source_url": item.get("source_url") or item.get("url") or item.get("link") or "",
+            "source_label": source_status,
+            "conviction_score": int(round(impact_score)),
+            "priority": 1 if severity == "critical" else 3,
+        }
+
+    def _macro_event_type(self, item: Dict[str, Any], title: str) -> str | None:
+        raw = str(item.get("event_type") or item.get("type") or "").lower()
+        haystack = f"{title} {raw} {item.get('impact') or ''} {item.get('severity') or ''}".lower()
+        if raw in {"conflict", "war"} or re.search(r"\b(war|missile|attack|conflict|invasion|strike|terror|escalation)\b", haystack):
+            return "Conflict"
+        if raw in {"election", "vote"} or re.search(r"\b(election|vote|ballot|president|parliament|coalition|campaign)\b", haystack):
+            return "Election"
+        if raw in {"central_bank", "cb"} or re.search(r"\b(fed|ecb|boj|central bank|rate decision|yield|inflation)\b", haystack):
+            return "Central Bank"
+        if raw in {"energy", "oil"} or re.search(r"\b(oil|crude|brent|opec|gas|lng|energy|red sea)\b", haystack):
+            return "Energy"
+        if raw in {"policy", "sanction"} or re.search(r"\b(tariff|sanction|policy|regulation|trade war|export control)\b", haystack):
+            return "Policy"
+        if raw in {"disaster", "nat"} or re.search(r"\b(earthquake|flood|wildfire|hurricane|typhoon|disaster)\b", haystack):
+            return "Disaster"
+        return None
+
+    def _macro_event_country(self, item: Dict[str, Any], title: str) -> str | None:
+        geo = item.get("geo") if isinstance(item.get("geo"), dict) else {}
+        direct = str(item.get("country") or geo.get("country") or geo.get("place") or "").strip()
+        if direct:
+            return direct
+        haystack = f"{title} {item.get('region') or ''}".lower()
+        lookup = [
+            ("Ukraine", ["ukraine", "kyiv", "odesa"]),
+            ("Russia", ["russia", "moscow"]),
+            ("United States", ["usa", "u.s.", "washington", "new york", "wall street", "federal reserve", "fed"]),
+            ("Germany", ["germany", "berlin", "dax"]),
+            ("France", ["france", "paris"]),
+            ("United Kingdom", ["united kingdom", "britain", "uk ", "london"]),
+            ("Israel", ["israel", "gaza", "jerusalem"]),
+            ("Iran", ["iran", "tehran"]),
+            ("Saudi Arabia", ["saudi", "riyadh", "opec"]),
+            ("Middle East", ["middle east", "red sea", "gulf"]),
+            ("China", ["china", "beijing", "shanghai"]),
+            ("Taiwan", ["taiwan", "taipei"]),
+            ("Japan", ["japan", "tokyo"]),
+            ("South Korea", ["korea", "seoul"]),
+            ("India", ["india", "mumbai", "delhi"]),
+            ("Europe", ["europe", "ecb", "eu "]),
+        ]
+        for country, terms in lookup:
+            if any(term in haystack for term in terms):
+                return country
+        region = str(item.get("region") or "").strip()
+        return region if region and region.lower() != "global" else None
+
+    def _macro_impact_score(self, item: Dict[str, Any], intelligence: Dict[str, Any]) -> float:
+        for value in [intelligence.get("impact_score"), item.get("impact_score"), item.get("score"), item.get("confidence")]:
+            try:
+                numeric = float(value)
+                if numeric > 0:
+                    return min(100.0, numeric)
+            except Exception:
+                pass
+        severity = str(item.get("severity") or item.get("impact") or "").lower()
+        if severity == "critical":
+            return 92.0
+        if severity in {"high", "risk", "risk_off"}:
+            return 84.0
+        if severity == "medium":
+            return 68.0
+        return 55.0
+
+    def _macro_severity(self, item: Dict[str, Any], impact_score: float) -> str:
+        raw = str(item.get("severity") or item.get("impact") or "").lower()
+        if raw in {"critical", "high"}:
+            return raw
+        if impact_score >= 90:
+            return "critical"
+        if impact_score >= 78:
+            return "high"
+        return "medium"
+
+    def _macro_affected_assets(self, item: Dict[str, Any], intelligence: Dict[str, Any], event_type: str) -> List[str]:
+        assets: List[str] = []
+        raw_values = [
+            intelligence.get("affected_assets"),
+            intelligence.get("symbols"),
+            item.get("affected_assets"),
+            item.get("symbols"),
+            item.get("tickers"),
+            item.get("ticker"),
+            item.get("symbol"),
+            item.get("asset"),
+        ]
+        for raw in raw_values:
+            values = raw if isinstance(raw, list) else [raw]
+            for value in values:
+                text = str(value or "").strip().upper()
+                if text and text not in assets:
+                    assets.append(text)
+        defaults = {
+            "Conflict": ["GLD", "XLE", "TLT", "SPY"],
+            "Energy": ["CL=F", "XLE", "USO", "DAX"],
+            "Central Bank": ["TLT", "QQQ", "SPY", "EUR/USD"],
+            "Election": ["SPY", "DAX", "XLF", "XLI"],
+            "Policy": ["SPY", "DAX", "CNH", "XLI"],
+            "Disaster": ["GLD", "DBA", "XLE"],
+        }
+        for value in defaults.get(event_type, []):
+            if value not in assets:
+                assets.append(value)
+        return assets
+
+    def _default_macro_trigger(self, event_type: str) -> str:
+        defaults = {
+            "Conflict": "Trusted headline confirmation, volume expansion and first market reaction after the next liquid open.",
+            "Energy": "Oil/energy futures hold the move for 30-60 minutes and linked sectors confirm.",
+            "Central Bank": "Rates, dollar and growth indices confirm the policy repricing after the statement.",
+            "Election": "Confirmed result/poll shift plus sector rotation in the first liquid session.",
+            "Policy": "Official confirmation and affected sector/index reaction, not rumour-only flow.",
+            "Disaster": "Confirmed operational/economic damage and commodity or insurance-sector reaction.",
+        }
+        return defaults.get(event_type, "Confirmed source plus price/volume follow-through.")
+
+    def _default_macro_invalidation(self, event_type: str) -> str:
+        defaults = {
+            "Conflict": "Ignore if official sources deny escalation or risk assets fully reverse the first move.",
+            "Energy": "Invalid if crude reverses below the pre-headline level or supply impact is denied.",
+            "Central Bank": "Invalid if rates/dollar reaction fades and equities reclaim the prior regime.",
+            "Election": "Invalid if result is unconfirmed or affected sectors do not react.",
+            "Policy": "Invalid if the story remains proposal-only or no affected asset reacts.",
+            "Disaster": "Invalid if economic damage is contained and cross-asset reaction fades.",
+        }
+        return defaults.get(event_type, "Invalid if the story remains unconfirmed or price does not react.")
+
+    def _macro_event_identity(self, event_type: str, country: str, title: str) -> str:
+        safe = re.sub(r"[^a-z0-9]+", "-", f"{event_type}-{country}-{title}".lower()).strip("-")
+        return safe[:96] or "macro-event"
+
+    def _macro_alert_state_key(self, identity: str) -> str:
+        safe = re.sub(r"[^a-zA-Z0-9:_-]+", "-", identity)[:120]
+        return f"macro_alert_state:{safe}"
+
+    def _macro_alert_can_send(self, event: Dict[str, Any]) -> bool:
+        identity = str(event.get("macro_identity") or event.get("event_key") or "")
+        if not identity:
+            return False
+        cooldown_hours = self._safe_int_env("MACRO_ALERT_COOLDOWN_HOURS", 3, minimum=1)
+        raw = self.portfolio_manager.get_app_setting(self._macro_alert_state_key(identity), "{}")
+        try:
+            previous = json.loads(raw) if raw else {}
+        except Exception:
+            previous = {}
+        previous_score = float(previous.get("impact_score") or 0)
+        current_score = float(event.get("impact_score") or 0)
+        if current_score >= previous_score + 8:
+            return True
+        sent_at = previous.get("sent_at")
+        if not sent_at:
+            return True
+        try:
+            sent_dt = datetime.fromisoformat(str(sent_at))
+        except Exception:
+            return True
+        return datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))) >= (
+            sent_dt + timedelta(hours=cooldown_hours)
+        )
+
+    def _record_macro_alert_delivery(self, events: List[Dict[str, Any]]) -> None:
+        now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
+        for event in events:
+            if event.get("category") != "macro_alert":
+                continue
+            identity = str(event.get("macro_identity") or event.get("event_key") or "")
+            if not identity:
+                continue
+            payload = {
+                "sent_at": now,
+                "event_key": event.get("event_key"),
+                "impact_score": event.get("impact_score"),
+                "severity": event.get("severity"),
+                "title": event.get("title"),
+            }
+            self.portfolio_manager.set_app_setting(self._macro_alert_state_key(identity), json.dumps(payload))
 
     def _portfolio_tickers(self) -> set[str]:
         tickers: set[str] = set()
@@ -2269,6 +2490,10 @@ class EmailAlertService:
                 current_section = line.rstrip(":")
                 lines.extend([f"<b>{self._tg_esc(current_section)}</b>", ""])
                 continue
+            if event.get("category") == "macro_alert":
+                lines.append(self._render_telegram_macro_alert(event))
+                lines.append("")
+                continue
 
             prefix = self._telegram_prefix_for_event(event)
             rendered_line = f"{prefix} {self._tg_esc(line)}".strip()
@@ -2284,6 +2509,38 @@ class EmailAlertService:
 
         self._tg_post(config.telegram_bot_token, config.telegram_chat_id, "\n".join(lines))
         return True
+
+    def _render_telegram_macro_alert(self, event: Dict[str, Any]) -> str:
+        severity = str(event.get("severity") or "high").lower()
+        marker = "CRITICAL" if severity == "critical" else "HIGH"
+        country = self._tg_esc(str(event.get("country") or event.get("region") or "Global"))
+        event_type = self._tg_esc(str(event.get("event_type") or "Macro"))
+        title = self._tg_esc(str(event.get("title") or "Macro alert"))
+        impact = self._tg_esc(str(event.get("impact_score") or "n/a"))
+        assets = ", ".join(self._tg_esc(str(asset)) for asset in (event.get("affected_assets") or [])[:8]) or "n/a"
+        trigger = self._tg_esc(str(event.get("trigger") or "Confirmation abwarten."))
+        invalidation = self._tg_esc(str(event.get("invalidation") or "Invalid wenn keine Preisreaktion folgt."))
+        action = self._tg_esc(str(event.get("action") or "watch"))
+        source = self._tg_esc(str(event.get("source_label") or "Market radar"))
+        why = self._tg_esc(str(event.get("why_it_matters") or ""))[:520]
+        link = str(event.get("source_url") or "").strip()
+        lines = [
+            f"<b>[{marker}] Macro Alert: {country} / {event_type}</b>",
+            f"{title}",
+            f"<b>Impact:</b> {impact}/100",
+            f"<b>Betroffen:</b> {assets}",
+        ]
+        if why:
+            lines.append(f"<b>Warum wichtig:</b> {why}")
+        lines.extend([
+            f"<b>Trigger:</b> {trigger}",
+            f"<b>Invalidierung:</b> {invalidation}",
+            f"<b>Aktion:</b> {action}",
+            f"<b>Quelle:</b> {source}",
+        ])
+        if link:
+            lines.append(f'<a href="{escape(link, quote=True)}">Quelle oeffnen</a>')
+        return "\n".join(lines)
 
     def _build_html_email(self, subject: str, events: List[Dict[str, Any]]) -> str:
         generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

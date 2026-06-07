@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import worldMapSvgRaw from "../assets/world-map-wikimedia.svg?raw";
 
 // Lazy-load world map SVG — keeps initial bundle ~280KB smaller
-const worldMapSvg = new URL("../assets/world-map-wikimedia.svg", import.meta.url).href;
+type CountryTone = "red" | "amber" | "blue" | "green" | "slate";
 
 interface RegionAsset {
   ticker: string;
@@ -128,7 +129,7 @@ interface WorldMarketMapProps {
 interface GeoEvent extends MapNewsItem {
   geoKey?: string;
   markerLabel: string;
-  markerTone: "red" | "amber" | "blue" | "slate";
+  markerTone: CountryTone;
   markerIcon: string;
   pulse: boolean;
   regionKey: "USA" | "Europe" | "Asia" | "Global";
@@ -269,6 +270,59 @@ const markerOffsets: Record<
   },
 };
 
+const COUNTRY_TOKEN_MAP: Array<{ ids: string[]; terms: string[] }> = [
+  { ids: ["us"], terms: ["united states", "usa", "u.s.", "us ", "washington", "new york", "wall street", "federal reserve", "fed"] },
+  { ids: ["de"], terms: ["germany", "berlin", "dax"] },
+  { ids: ["fr"], terms: ["france", "paris", "cac"] },
+  { ids: ["gb"], terms: ["united kingdom", "britain", "uk ", "london", "england", "ftse"] },
+  { ids: ["it"], terms: ["italy", "rome"] },
+  { ids: ["es"], terms: ["spain", "madrid"] },
+  { ids: ["pl"], terms: ["poland", "warsaw"] },
+  { ids: ["ua"], terms: ["ukraine", "kyiv", "odesa"] },
+  { ids: ["ru"], terms: ["russia", "moscow"] },
+  { ids: ["tr"], terms: ["turkey", "ankara"] },
+  { ids: ["il"], terms: ["israel", "gaza", "jerusalem"] },
+  { ids: ["ir"], terms: ["iran", "tehran"] },
+  { ids: ["sa"], terms: ["saudi", "riyadh", "opec"] },
+  { ids: ["ae"], terms: ["uae", "emirates", "dubai", "abu dhabi", "gulf"] },
+  { ids: ["cn"], terms: ["china", "beijing", "shanghai"] },
+  { ids: ["tw"], terms: ["taiwan", "taipei"] },
+  { ids: ["jp"], terms: ["japan", "tokyo", "nikkei"] },
+  { ids: ["kr"], terms: ["korea", "south korea", "seoul"] },
+  { ids: ["in"], terms: ["india", "mumbai", "delhi"] },
+  { ids: ["br"], terms: ["brazil", "sao paulo"] },
+  { ids: ["ca"], terms: ["canada", "toronto"] },
+  { ids: ["mx"], terms: ["mexico", "mexico city"] },
+  { ids: ["nl"], terms: ["netherlands", "amsterdam"] },
+  { ids: ["ch"], terms: ["switzerland", "zurich"] },
+  { ids: ["at"], terms: ["austria", "vienna"] },
+  { ids: ["se"], terms: ["sweden", "stockholm"] },
+  { ids: ["no"], terms: ["norway", "oslo"] },
+  { ids: ["fi"], terms: ["finland", "helsinki"] },
+  { ids: ["dk"], terms: ["denmark", "copenhagen"] },
+];
+
+const GEO_ZONE_COUNTRIES: Record<string, string[]> = {
+  "Middle East": ["il", "ir", "sa", "ae", "tr"],
+  "Eastern Europe": ["ua", "ru", "pl"],
+  "Western Europe": ["de", "fr", "gb", "it", "es", "nl", "ch", "at"],
+  "North Asia": ["cn", "tw", "jp", "kr"],
+  "South Asia": ["in"],
+  "US East": ["us"],
+  "US West": ["us"],
+  Europe: ["de", "fr", "gb", "it", "es", "nl", "pl"],
+  Asia: ["cn", "tw", "jp", "kr", "in"],
+  USA: ["us"],
+};
+
+const COUNTRY_TONE_PRIORITY: Record<CountryTone, number> = {
+  red: 5,
+  amber: 4,
+  blue: 3,
+  green: 2,
+  slate: 1,
+};
+
 function formatPct(value: number) {
   if (!Number.isFinite(value)) return "N/A";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -304,6 +358,7 @@ function markerClass(tone: GeoEvent["markerTone"]) {
   if (tone === "red") return "border-red-500/20 bg-red-500/10 text-red-700";
   if (tone === "amber") return "border-amber-500/20 bg-amber-500/10 text-amber-700";
   if (tone === "blue") return "border-blue-500/20 bg-blue-500/10 text-blue-700";
+  if (tone === "green") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700";
   return "border-slate-400/20 bg-slate-500/10 text-slate-700";
 }
 
@@ -311,7 +366,100 @@ function markerAccentClass(tone: GeoEvent["markerTone"]) {
   if (tone === "red") return "bg-red-600";
   if (tone === "amber") return "bg-amber-500";
   if (tone === "blue") return "bg-blue-600";
+  if (tone === "green") return "bg-emerald-600";
   return "bg-slate-600";
+}
+
+function countryHighlightClass(tone: CountryTone) {
+  if (tone === "red") return "macro-country-red";
+  if (tone === "amber") return "macro-country-amber";
+  if (tone === "blue") return "macro-country-blue";
+  if (tone === "green") return "macro-country-green";
+  return "macro-country-slate";
+}
+
+function countryToneForEvent(item: GeoEvent): CountryTone {
+  if (item.markerTone === "red" || item.markerTone === "amber" || item.markerTone === "blue" || item.markerTone === "green") {
+    return item.markerTone;
+  }
+  const action = (item.event_intelligence?.action || "").toLowerCase();
+  if (action === "long") return "green";
+  return "slate";
+}
+
+function countryIdsForEvent(item: GeoEvent) {
+  const ids = new Set<string>();
+  const addAll = (values?: string[]) => {
+    (values || []).forEach((value) => ids.add(value));
+  };
+  addAll(GEO_ZONE_COUNTRIES[item.geoZone || ""]);
+  addAll(GEO_ZONE_COUNTRIES[item.geoPlace || ""]);
+  addAll(GEO_ZONE_COUNTRIES[item.regionKey || ""]);
+
+  const haystack = [
+    item.geo?.country,
+    item.geo?.place,
+    item.geoPlace,
+    item.geoZone,
+    item.region,
+    item.title,
+    item.event_type,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  for (const entry of COUNTRY_TOKEN_MAP) {
+    if (entry.terms.some((term) => haystack.includes(term))) {
+      addAll(entry.ids);
+    }
+  }
+  return Array.from(ids);
+}
+
+function buildCountryHighlights(items: GeoEvent[]) {
+  const highlights = new Map<string, CountryTone>();
+  for (const item of items) {
+    const tone = countryToneForEvent(item);
+    for (const id of countryIdsForEvent(item)) {
+      const current = highlights.get(id);
+      if (!current || COUNTRY_TONE_PRIORITY[tone] > COUNTRY_TONE_PRIORITY[current]) {
+        highlights.set(id, tone);
+      }
+    }
+  }
+  return highlights;
+}
+
+function buildInlineWorldMapSvg(highlights: Map<string, CountryTone>) {
+  let svg = worldMapSvgRaw
+    .replace(/<\?xml[^>]*>\s*/i, "")
+    .replace(/<!DOCTYPE[^>]*>\s*/i, "")
+    .replace("<svg ", '<svg role="img" aria-label="Macro event world map" class="world-map-inline" ');
+
+  highlights.forEach((tone, id) => {
+    const className = `macro-country-highlight ${countryHighlightClass(tone)}`;
+    const pattern = new RegExp(`<g id="${id}"(?![^>]*macro-country-highlight)([^>]*)>`, "i");
+    svg = svg.replace(pattern, `<g id="${id}" class="${className}"$1>`);
+  });
+  return svg;
+}
+
+function InlineWorldMap({
+  highlights,
+  zoom,
+}: {
+  highlights: Map<string, CountryTone>;
+  zoom: number;
+}) {
+  const svg = useMemo(() => buildInlineWorldMapSvg(highlights), [highlights]);
+  return (
+    <div
+      className="world-map-inline-wrap absolute inset-0"
+      style={{ transform: `scale(${zoom})` }}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
 }
 
 function compactList(items?: string[] | null, limit = 3) {
@@ -1037,6 +1185,11 @@ export default function WorldMarketMap({
     [positionedGeoSignals, selectedGeoPlace],
   );
 
+  const countryHighlights = useMemo(
+    () => buildCountryHighlights(visibleEventLayerSignals.length ? visibleEventLayerSignals : positionedGeoSignals),
+    [positionedGeoSignals, visibleEventLayerSignals],
+  );
+
   const activeGeoEvent = useMemo(
     () =>
       (hoveredEventIndex != null ? positionedGeoSignals[hoveredEventIndex] : null) ||
@@ -1330,13 +1483,7 @@ export default function WorldMarketMap({
 
           <div className="world-map-canvas relative mt-3 h-[246px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
             <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
-            <img
-              src={worldMapSvg}
-              alt="World map"
-              className="world-map-image absolute inset-0 h-full w-full object-contain opacity-95 contrast-[1.04] saturate-[0.88] transition-transform duration-200"
-              style={{ transform: `scale(${mapZoom})` }}
-              draggable={false}
-            />
+            <InlineWorldMap highlights={countryHighlights} zoom={mapZoom} />
             <div className="world-map-zoom-controls absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 bg-white/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
               {[
                 { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },
@@ -1363,7 +1510,7 @@ export default function WorldMarketMap({
                   setPinnedEventIndex(index);
                   setImpactDrawerOpen(true);
                 }}
-                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-1.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] shadow-[0_10px_24px_rgba(15,23,42,0.14)] ${markerClass(
+                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] shadow-[0_12px_28px_rgba(15,23,42,0.18)] ${markerClass(
                   item.markerTone,
                 )} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
                 style={item.adjustedStyle}
@@ -1377,7 +1524,7 @@ export default function WorldMarketMap({
                   />
                 ) : null}
                 <span className="relative inline-flex items-center gap-1">
-                  <span className={`h-1.5 w-1.5 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                  <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
                   {item.markerIcon}
                 </span>
               </button>
@@ -1389,6 +1536,37 @@ export default function WorldMarketMap({
               </div>
             ) : null}
           </div>
+
+          {visibleEventLayerSignals.length ? (
+            <div className="mt-3 grid gap-2">
+              {visibleEventLayerSignals.slice(0, 3).map((item, index) => (
+                <button
+                  key={`mobile-top-${item.geoKey || item.title || index}`}
+                  type="button"
+                  onClick={() => {
+                    const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoKey === item.geoKey);
+                    setPinnedEventIndex(Math.max(0, nextIndex));
+                    setImpactDrawerOpen(true);
+                  }}
+                  className="rounded-[1rem] border border-black/8 bg-white/88 p-3 text-left"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(item.markerTone)}`}>
+                      <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                      {item.markerIcon}
+                    </span>
+                    <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      Impact {item.event_intelligence?.impact_score || item.impact || "watch"}
+                    </span>
+                  </div>
+                  <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900">{item.title}</div>
+                  <div className="mt-1 text-xs font-semibold text-slate-500">
+                    {item.geoPlace || item.geoZone || item.region || "Global"} / {item.event_intelligence?.action || "watch"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
             {regions.map((region) => (
@@ -1441,22 +1619,7 @@ export default function WorldMarketMap({
             <div className="world-map-canvas relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]">
             <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
               <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
-              <img
-                src={worldMapSvg}
-                alt="World map"
-                className="world-map-image absolute inset-0 block opacity-95 contrast-[1.05] saturate-[0.88]"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  objectPosition: "50% 50%",
-                  transform: `scale(${mapZoom})`,
-                  transition: "transform 200ms ease",
-                }}
-                draggable={false}
-              />
+              <InlineWorldMap highlights={countryHighlights} zoom={mapZoom} />
             </div>
 
             <div className="absolute left-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
@@ -1616,11 +1779,11 @@ export default function WorldMarketMap({
                     <div className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(item.markerTone)} animate-ping`} />
                   )}
                   <div
-                    className={`relative flex items-center gap-1.5 rounded-full border px-1.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${markerClass(item.markerTone)} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""} ${
+                    className={`relative flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] shadow-[0_12px_28px_rgba(15,23,42,0.16)] ${markerClass(item.markerTone)} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""} ${
                       isRegionFocusMatch(activeRegion?.label, item) ? "scale-100" : "scale-[0.94]"
                     }`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
                     <span>{item.markerIcon}</span>
                   </div>
                   <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">

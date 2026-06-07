@@ -16,6 +16,13 @@ interface NotificationStatus {
   alerts_enabled: boolean;
   email?: { configured: boolean; from?: string; to?: string };
   telegram?: { enabled: boolean; configured: boolean };
+  macro_alerts?: {
+    enabled: boolean;
+    channel: string;
+    min_score: number;
+    cooldown_hours: number;
+    max_items: number;
+  };
   schedule?: { timezone: string; europe_open: string; us_open: string };
 }
 
@@ -167,6 +174,19 @@ export default function NotificationSettingsPanel({
           </div>
           <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Macro alerts
+            </div>
+            <div className="mt-2 text-sm font-black text-slate-900">
+              {notificationStatus?.macro_alerts?.enabled ? "Live" : "Disabled"}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              Telegram-only / Min score {notificationStatus?.macro_alerts?.min_score ?? 82} /
+              Cooldown {notificationStatus?.macro_alerts?.cooldown_hours ?? 3}h / max{" "}
+              {notificationStatus?.macro_alerts?.max_items ?? 5}
+            </div>
+          </div>
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
               Scheduled briefs
             </div>
             <div className="mt-2 text-sm font-black text-slate-900">
@@ -179,8 +199,67 @@ export default function NotificationSettingsPanel({
         </div>
 
         <ManualTelegramTrigger />
+        <ManualMacroAlertTrigger />
       </div>
     </section>
+  );
+}
+
+function ManualMacroAlertTrigger() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>("");
+
+  const check = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/signals/alerts/critical-market", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(`Fehler: ${data.detail || "Macro check failed"}`);
+      } else if (Number(data.sent || 0) > 0) {
+        setMsg(`Gesendet: ${data.sent} Macro Alert${Number(data.sent) === 1 ? "" : "s"}.`);
+      } else {
+        setMsg(data.message || "Keine neuen Macro Alerts.");
+      }
+    } catch (e) {
+      setMsg(`Fehler: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setMsg(""), 6000);
+    }
+  };
+
+  return (
+    <div className="rounded-[1.4rem] border border-amber-500/20 bg-amber-50/50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
+            Check macro alerts
+          </div>
+          <div className="mt-1 text-xs leading-5 text-slate-600">
+            Prueft Krieg, Wahlen, Zentralbanken, Oel und Policy-News gegen das
+            Qualitaetsgate und sendet nur neue High-Impact-Treffer an Telegram.
+          </div>
+        </div>
+        <button
+          onClick={check}
+          disabled={busy}
+          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+        >
+          {busy ? "Checking..." : "Check now"}
+        </button>
+      </div>
+      {msg ? (
+        <div
+          className={`mt-3 text-xs font-semibold ${
+            msg.startsWith("Fehler") ? "text-rose-700" : "text-emerald-700"
+          }`}
+        >
+          {msg}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -122,6 +122,14 @@ class EmailAlertService:
                 "enabled": config.telegram_enabled,
                 "configured": bool(config.telegram_bot_token and config.telegram_chat_id),
             },
+            "macro_alerts": {
+                "enabled": os.getenv("CRITICAL_MARKET_ALERTS_ENABLED", "true").strip().lower()
+                not in {"0", "false", "no", "off"},
+                "channel": "telegram",
+                "min_score": self._safe_int_env("CRITICAL_MARKET_ALERT_MIN_SCORE", 82, minimum=1),
+                "cooldown_hours": self._safe_int_env("MACRO_ALERT_COOLDOWN_HOURS", 3, minimum=1),
+                "max_items": self._safe_int_env("CRITICAL_MARKET_ALERT_MAX_ITEMS", 5, minimum=1),
+            },
             "schedule": {
                 "enabled": config.scheduled_briefs_enabled,
                 "timezone": os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"),

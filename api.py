@@ -3224,6 +3224,17 @@ async def send_test_signal_alert():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/signals/alerts/critical-market")
+async def check_critical_market_alerts():
+    try:
+        return get_email_alert_service().check_and_send_critical_market_alerts(force=True)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/notifications/status")
 async def get_notification_status():
     try:

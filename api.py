@@ -205,6 +205,13 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "VOW3.DE", "name": "Volkswagen"},
     {"ticker": "SIE.DE", "name": "Siemens"},
     {"ticker": "RHM.DE", "name": "Rheinmetall"},
+    {"ticker": "RWE.DE", "name": "RWE"},
+    {"ticker": "DBK.DE", "name": "Deutsche Bank"},
+    {"ticker": "ALV.DE", "name": "Allianz"},
+    {"ticker": "BAS.DE", "name": "BASF"},
+    {"ticker": "DTE.DE", "name": "Deutsche Telekom"},
+    {"ticker": "DHL.DE", "name": "DHL Group Deutsche Post"},
+    {"ticker": "ADS.DE", "name": "Adidas"},
     {"ticker": "COIN", "name": "Coinbase"},
     {"ticker": "HOOD", "name": "Robinhood Markets trading app brokerage"},
     {"ticker": "MSTR", "name": "MicroStrategy"},
@@ -233,8 +240,10 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "FBTC", "name": "Fidelity Wise Origin Bitcoin Fund ETF"},
     {"ticker": "SPY", "name": "SPDR S&P 500 ETF"},
     {"ticker": "QQQ", "name": "Invesco QQQ Nasdaq ETF"},
+    {"ticker": "QQQM", "name": "Invesco NASDAQ 100 ETF"},
     {"ticker": "DIA", "name": "SPDR Dow Jones ETF"},
     {"ticker": "IWM", "name": "iShares Russell 2000 ETF"},
+    {"ticker": "URTH", "name": "iShares MSCI World ETF"},
     {"ticker": "GLD", "name": "SPDR Gold Shares ETF"},
     {"ticker": "TLT", "name": "iShares 20+ Year Treasury ETF"},
     {"ticker": "XLE", "name": "Energy Select Sector ETF"},
@@ -284,6 +293,15 @@ SEARCH_ALIASES: Dict[str, str] = {
     "crowdstrike": "CRWD",
     "bitcoin": "BTC-USD",
     "btc": "BTC-USD",
+    "sp500": "VOO",
+    "sp500etf": "VOO",
+    "sandp500": "VOO",
+    "sandp500etf": "VOO",
+    "sundp500": "VOO",
+    "nasdaq100": "QQQ",
+    "nasdaq100etf": "QQQ",
+    "msciworld": "URTH",
+    "msciworldetf": "URTH",
     "bitcoinetf": "IBIT",
     "blackrockbitcoinetf": "IBIT",
     "isharesbitcointrust": "IBIT",
@@ -314,8 +332,20 @@ SEARCH_ALIASES: Dict[str, str] = {
     "meta": "META",
     "rheinmetall": "RHM.DE",
     "siemens": "SIE.DE",
+    "rwe": "RWE.DE",
+    "deutschebank": "DBK.DE",
+    "dbank": "DBK.DE",
+    "allianz": "ALV.DE",
+    "basf": "BAS.DE",
+    "telekom": "DTE.DE",
+    "deutschetelekom": "DTE.DE",
+    "dhl": "DHL.DE",
+    "deutschepost": "DHL.DE",
+    "adidas": "ADS.DE",
     "brkb": "BRK-B",
     "brkbshares": "BRK-B",
+    "berkshirehathaway": "BRK-B",
+    "berkshirehathawayb": "BRK-B",
     "rocketlab": "RKLB",
     "rklb": "RKLB",
     "asts": "ASTS",
@@ -397,6 +427,22 @@ def _fuzzy_catalog_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 
     scored.sort(key=lambda row: row[0], reverse=True)
     return [row[1] for row in scored[:limit]]
+
+
+def _catalog_match_for_ticker(ticker: str) -> Dict[str, Any] | None:
+    normalized = (ticker or "").strip().upper()
+    if not normalized:
+        return None
+    exact = next((item for item in SEARCH_NAME_CATALOG if item["ticker"] == normalized), None)
+    if not exact:
+        return None
+    return {
+        "ticker": exact["ticker"],
+        "name": exact["name"],
+        "exchange": None,
+        "type": "alias",
+        "source": "catalog_normalized",
+    }
 
 
 def _quote_search_score(query: str, item: Dict[str, Any]) -> float:
@@ -510,7 +556,11 @@ async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]
     if cached is not None:
         return cached
 
+    normalized_ticker = _normalize_ticker_input(q)
+    pinned_catalog = _catalog_match_for_ticker(normalized_ticker)
     catalog_results = _fuzzy_catalog_search(q, limit=limit)
+    if pinned_catalog:
+        catalog_results = [pinned_catalog, *catalog_results]
     live_results: List[Dict[str, Any]] = []
     yahoo_results: List[Dict[str, Any]] = []
     live_task = asyncio.create_task(get_discovery_service().search_ticker(q))

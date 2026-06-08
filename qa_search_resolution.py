@@ -6,11 +6,18 @@ from api import _normalize_ticker_input, _resolve_asset_query, _resolve_search_r
 
 CASES = [
     ("robinhood", "HOOD"),
+    ("Robinhood Aktie", "HOOD"),
     ("hood app", "HOOD"),
+    ("HOOD stock", "HOOD"),
     ("Vanguard S&P 500", "VOO"),
+    ("s&p 500 etf", "VOO"),
     ("VOO", "VOO"),
+    ("nasdaq 100 etf", "QQQ"),
+    ("msci world etf", "URTH"),
     ("dogecoin", "DOGE-USD"),
     ("DOGE", "DOGE-USD"),
+    ("ethereum coin", "ETH-USD"),
+    ("solana crypto", "SOL-USD"),
     ("blackrock bitcoin etf", "IBIT"),
     ("iShares semiconductors", "SOXX"),
     ("sofi", "SOFI"),
@@ -18,6 +25,9 @@ CASES = [
     ("rocket lab", "RKLB"),
     ("rheinmetall", "RHM.DE"),
     ("berkshire b", "BRK-B"),
+    ("berkshire hathaway b", "BRK-B"),
+    ("rwe aktie", "RWE.DE"),
+    ("deutsche bank aktie", "DBK.DE"),
 ]
 
 

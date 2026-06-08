@@ -1343,9 +1343,9 @@ function AppContent() {
                 </button>
               </div>
             </div>
-            <div className="mt-2 space-y-2">
-              <div className="min-w-0">{favoriteTape}</div>
-              {moversTape ? <div className="min-w-0">{moversTape}</div> : null}
+            <div className="desktop-market-strip mt-2">
+              <div className="desktop-favorite-tape min-w-0">{favoriteTape}</div>
+              {moversTape ? <div className="desktop-movers-tape min-w-0">{moversTape}</div> : null}
             </div>
           </div>
         </div>

@@ -1399,23 +1399,6 @@ class EmailAlertService:
         if not affected_assets:
             return None
 
-        trigger = str(
-            intelligence.get("trigger")
-            or trade_impact.get("trigger")
-            or item.get("trigger")
-            or self._default_macro_trigger(event_type)
-            or ""
-        ).strip()
-        invalidation = str(
-            intelligence.get("invalidation")
-            or trade_impact.get("invalidation")
-            or item.get("invalidation")
-            or self._default_macro_invalidation(event_type)
-            or ""
-        ).strip()
-        if not (trigger or invalidation):
-            return None
-
         source_status = str(item.get("source_status") or item.get("source_label") or item.get("publisher") or "Market radar").strip()
         why = str(
             intelligence.get("why_now")
@@ -1423,6 +1406,27 @@ class EmailAlertService:
             or item.get("reason")
             or "Makro-Event mit potenzieller Auswirkung auf Risiko, Sektoren und Indizes."
         ).strip()
+        source_quality = self._macro_source_quality(item, source_status)
+        explicit_trigger = str(intelligence.get("trigger") or trade_impact.get("trigger") or item.get("trigger") or "").strip()
+        explicit_invalidation = str(
+            intelligence.get("invalidation") or trade_impact.get("invalidation") or item.get("invalidation") or ""
+        ).strip()
+        if not self._macro_alert_quality_gate(
+            title=title,
+            why=why,
+            affected_assets=affected_assets,
+            source_quality=source_quality,
+            explicit_trigger=explicit_trigger,
+            explicit_invalidation=explicit_invalidation,
+            impact_score=impact_score,
+            severity=severity,
+        ):
+            return None
+
+        trigger = explicit_trigger or self._default_macro_trigger(event_type)
+        invalidation = explicit_invalidation or self._default_macro_invalidation(event_type)
+        meaning = self._macro_alert_meaning(event_type, country or region, affected_assets)
+        confidence_label = self._macro_confidence_label(source_quality, explicit_trigger, explicit_invalidation, impact_score)
         action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
         identity = self._macro_event_identity(event_type, country or region, title)
         return {
@@ -1437,15 +1441,86 @@ class EmailAlertService:
             "country": country or region,
             "region": region,
             "why_it_matters": why,
+            "meaning": meaning,
             "affected_assets": affected_assets[:8],
             "trigger": trigger,
             "invalidation": invalidation,
             "action": action,
+            "confidence_label": confidence_label,
+            "source_quality": source_quality,
             "source_url": item.get("source_url") or item.get("url") or item.get("link") or "",
             "source_label": source_status,
             "conviction_score": int(round(impact_score)),
             "priority": 1 if severity == "critical" else 3,
         }
+
+    def _macro_alert_quality_gate(
+        self,
+        *,
+        title: str,
+        why: str,
+        affected_assets: List[str],
+        source_quality: str,
+        explicit_trigger: str,
+        explicit_invalidation: str,
+        impact_score: float,
+        severity: str,
+    ) -> bool:
+        if source_quality == "weak":
+            return False
+        if len(title.strip()) < 18 or len(why.strip()) < 36:
+            return False
+        if len(affected_assets) < 2:
+            return False
+        if not (explicit_trigger or explicit_invalidation):
+            return False
+        if severity != "critical" and impact_score < self._safe_int_env("MACRO_ALERT_STRICT_MIN_SCORE", 86, minimum=50):
+            return False
+        return True
+
+    def _macro_source_quality(self, item: Dict[str, Any], source_status: str) -> str:
+        text = " ".join(
+            str(value or "")
+            for value in [
+                source_status,
+                item.get("source_status"),
+                item.get("source_label"),
+                item.get("publisher"),
+                item.get("source"),
+            ]
+        ).lower()
+        if re.search(r"\b(rumou?r|unconfirmed|social|reddit|fast mode|unknown|n/a|none)\b", text):
+            return "weak"
+        if re.search(r"\b(official|confirmed|filing|central bank|government|sec|exchange|trusted|provider|wire)\b", text):
+            return "strong"
+        if item.get("source_url") or item.get("url") or item.get("link"):
+            return "medium"
+        return "weak"
+
+    def _macro_alert_meaning(self, event_type: str, country: str, assets: List[str]) -> str:
+        asset_label = ", ".join(assets[:4]) if assets else "Risk assets"
+        templates = {
+            "Conflict": f"Risk-off check fuer {asset_label}: Energie, Gold, Defense und Index-Risiko muessen gegen die erste Reaktion geprueft werden.",
+            "Energy": f"Inflations- und Margencheck fuer {asset_label}: Oel/Gas kann Indizes, Airlines, Chemie und Konsum kurzfristig verzerren.",
+            "Central Bank": f"Zins- und Bewertungscheck fuer {asset_label}: Duration, Growth, Banken und FX reagieren oft schneller als Fundamentaldaten.",
+            "Election": f"Policy- und Sektorrotationscheck fuer {asset_label}: erst Gewinner/Verlierer nach bestaetigtem Resultat trennen.",
+            "Policy": f"Regulierungs- und Lieferkettencheck fuer {asset_label}: wichtig ist, ob die Meldung offiziell ist und wer Umsatz/Margen verliert.",
+            "Disaster": f"Supply- und Versicherungsschadencheck fuer {asset_label}: nur relevant, wenn operative Schaeden oder Rohstoffpreise reagieren.",
+        }
+        return templates.get(event_type, f"Makro-Kontext fuer {country}: {asset_label} nur mit bestaetigter Preisreaktion einordnen.")
+
+    def _macro_confidence_label(
+        self,
+        source_quality: str,
+        explicit_trigger: str,
+        explicit_invalidation: str,
+        impact_score: float,
+    ) -> str:
+        if source_quality == "strong" and explicit_trigger and explicit_invalidation and impact_score >= 90:
+            return "hoch - Quelle und These pruefbar"
+        if source_quality in {"strong", "medium"} and (explicit_trigger or explicit_invalidation):
+            return "mittel - erst Marktreaktion bestaetigen"
+        return "niedrig - nur beobachten"
 
     def _macro_event_type(self, item: Dict[str, Any], title: str) -> str | None:
         raw = str(item.get("event_type") or item.get("type") or "").lower()
@@ -2531,18 +2606,24 @@ class EmailAlertService:
         action = self._tg_esc(str(event.get("action") or "watch"))
         source = self._tg_esc(str(event.get("source_label") or "Market radar"))
         why = self._tg_esc(str(event.get("why_it_matters") or ""))[:520]
+        meaning = self._tg_esc(str(event.get("meaning") or ""))[:520]
+        confidence = self._tg_esc(str(event.get("confidence_label") or "mittel - erst Marktreaktion bestaetigen"))
         link = str(event.get("source_url") or "").strip()
         lines = [
             f"<b>[{marker}] Macro Alert: {country} / {event_type}</b>",
             f"{title}",
             f"<b>Impact:</b> {impact}/100",
+            f"<b>Sicherheit:</b> {confidence}",
             f"<b>Betroffen:</b> {assets}",
         ]
         if why:
             lines.append(f"<b>Warum wichtig:</b> {why}")
+        if meaning:
+            lines.append(f"<b>Was es aussagt:</b> {meaning}")
         lines.extend([
             f"<b>Trigger:</b> {trigger}",
             f"<b>Invalidierung:</b> {invalidation}",
+            "<b>Kritischer Check:</b> Nicht handeln, bevor Quelle, Preisreaktion und Volumen zusammenpassen.",
             f"<b>Aktion:</b> {action}",
             f"<b>Quelle:</b> {source}",
         ])

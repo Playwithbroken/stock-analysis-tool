@@ -1386,6 +1386,8 @@ class EmailAlertService:
             return None
 
         country = self._macro_event_country(item, title)
+        if not country and event_type == "IPO":
+            country = "IPO Market"
         region = str(item.get("region") or country or "Global").strip()
         if not country and region.lower() == "global":
             return None
@@ -1412,6 +1414,7 @@ class EmailAlertService:
             intelligence.get("invalidation") or trade_impact.get("invalidation") or item.get("invalidation") or ""
         ).strip()
         if not self._macro_alert_quality_gate(
+            event_type=event_type,
             title=title,
             why=why,
             affected_assets=affected_assets,
@@ -1457,6 +1460,7 @@ class EmailAlertService:
     def _macro_alert_quality_gate(
         self,
         *,
+        event_type: str,
         title: str,
         why: str,
         affected_assets: List[str],
@@ -1472,7 +1476,8 @@ class EmailAlertService:
             return False
         if len(affected_assets) < 2:
             return False
-        if not (explicit_trigger or explicit_invalidation):
+        allows_generated_context = event_type in {"Public Figure", "IPO"} and source_quality == "strong" and impact_score >= 90
+        if not (explicit_trigger or explicit_invalidation or allows_generated_context):
             return False
         if severity != "critical" and impact_score < self._safe_int_env("MACRO_ALERT_STRICT_MIN_SCORE", 86, minimum=50):
             return False
@@ -1491,7 +1496,7 @@ class EmailAlertService:
         ).lower()
         if re.search(r"\b(rumou?r|unconfirmed|social|reddit|fast mode|unknown|n/a|none)\b", text):
             return "weak"
-        if re.search(r"\b(official|confirmed|filing|central bank|government|sec|exchange|trusted|provider|wire)\b", text):
+        if re.search(r"\b(official|confirmed|filing|central bank|government|sec|exchange|trusted|provider|wire|reuters|bloomberg|ap news|associated press|wsj|wall street journal|financial times|ft.com|cnbc|marketwatch)\b", text):
             return "strong"
         if item.get("source_url") or item.get("url") or item.get("link"):
             return "medium"
@@ -1505,6 +1510,8 @@ class EmailAlertService:
             "Central Bank": f"Zins- und Bewertungscheck fuer {asset_label}: Duration, Growth, Banken und FX reagieren oft schneller als Fundamentaldaten.",
             "Election": f"Policy- und Sektorrotationscheck fuer {asset_label}: erst Gewinner/Verlierer nach bestaetigtem Resultat trennen.",
             "Policy": f"Regulierungs- und Lieferkettencheck fuer {asset_label}: wichtig ist, ob die Meldung offiziell ist und wer Umsatz/Margen verliert.",
+            "Public Figure": f"Aussagen-Risiko fuer {asset_label}: entscheidend ist, ob Politik, Regulierung, Zinsen oder Sektorumsatz wirklich betroffen sind.",
+            "IPO": f"IPO-Read-through fuer {asset_label}: relevant sind Bewertung, Nachfrage, Lock-up, Peer-Multiples und ob der Sektor Kapital anzieht.",
             "Disaster": f"Supply- und Versicherungsschadencheck fuer {asset_label}: nur relevant, wenn operative Schaeden oder Rohstoffpreise reagieren.",
         }
         return templates.get(event_type, f"Makro-Kontext fuer {country}: {asset_label} nur mit bestaetigter Preisreaktion einordnen.")
@@ -1533,8 +1540,15 @@ class EmailAlertService:
             return "Central Bank"
         if raw in {"energy", "oil"} or re.search(r"\b(oil|crude|brent|opec|gas|lng|energy|red sea)\b", haystack):
             return "Energy"
+        if raw in {"public_figure", "person", "statement"} or (
+            re.search(r"\b(trump|powell|yellen|bessent|lutnick|musk|huang|cook|zuckerberg|bezos|dimon|lagarde|leyen)\b", haystack)
+            and re.search(r"\b(says|said|warns|warned|backs|calls for|announces|threatens|plans|pledges|statement|speech|interview|tariff|rate|crypto|oil|china|defense|ai)\b", haystack)
+        ):
+            return "Public Figure"
         if raw in {"policy", "sanction"} or re.search(r"\b(tariff|sanction|policy|regulation|trade war|export control)\b", haystack):
             return "Policy"
+        if raw in {"ipo", "listing"} or re.search(r"\b(ipo|initial public offering|go public|goes public|listing|listed|debut|prices shares|files for ipo|confidentially files)\b", haystack):
+            return "IPO"
         if raw in {"disaster", "nat"} or re.search(r"\b(earthquake|flood|wildfire|hurricane|typhoon|disaster)\b", haystack):
             return "Disaster"
         return None
@@ -1549,6 +1563,7 @@ class EmailAlertService:
             ("Ukraine", ["ukraine", "kyiv", "odesa"]),
             ("Russia", ["russia", "moscow"]),
             ("United States", ["usa", "u.s.", "washington", "new york", "wall street", "federal reserve", "fed"]),
+            ("United States", ["trump", "white house", "powell", "yellen", "bessent", "lutnick"]),
             ("Germany", ["germany", "berlin", "dax"]),
             ("France", ["france", "paris"]),
             ("United Kingdom", ["united kingdom", "britain", "uk ", "london"]),
@@ -1620,6 +1635,8 @@ class EmailAlertService:
             "Central Bank": ["TLT", "QQQ", "SPY", "EUR/USD"],
             "Election": ["SPY", "DAX", "XLF", "XLI"],
             "Policy": ["SPY", "DAX", "CNH", "XLI"],
+            "Public Figure": ["SPY", "QQQ", "DXY", "TLT"],
+            "IPO": ["IPO", "QQQ", "IWM", "XLY"],
             "Disaster": ["GLD", "DBA", "XLE"],
         }
         for value in defaults.get(event_type, []):
@@ -1634,6 +1651,8 @@ class EmailAlertService:
             "Central Bank": "Rates, dollar and growth indices confirm the policy repricing after the statement.",
             "Election": "Confirmed result/poll shift plus sector rotation in the first liquid session.",
             "Policy": "Official confirmation and affected sector/index reaction, not rumour-only flow.",
+            "Public Figure": "Official quote/source plus first cross-asset reaction in affected sectors, rates, dollar or index futures.",
+            "IPO": "Confirmed filing/pricing/debut details plus peer group or sector reaction after the first liquid print.",
             "Disaster": "Confirmed operational/economic damage and commodity or insurance-sector reaction.",
         }
         return defaults.get(event_type, "Confirmed source plus price/volume follow-through.")
@@ -1645,6 +1664,8 @@ class EmailAlertService:
             "Central Bank": "Invalid if rates/dollar reaction fades and equities reclaim the prior regime.",
             "Election": "Invalid if result is unconfirmed or affected sectors do not react.",
             "Policy": "Invalid if the story remains proposal-only or no affected asset reacts.",
+            "Public Figure": "Invalid if the statement is walked back, lacks official context or markets ignore the affected basket.",
+            "IPO": "Invalid if valuation, float, lock-up or first trading reaction does not support sector read-through.",
             "Disaster": "Invalid if economic damage is contained and cross-asset reaction fades.",
         }
         return defaults.get(event_type, "Invalid if the story remains unconfirmed or price does not react.")

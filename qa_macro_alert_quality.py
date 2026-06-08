@@ -60,6 +60,40 @@ def main() -> int:
         print(f"FAIL rendered alert missing sections: {missing}")
         return 1
 
+    weak_person = {
+        "title": "Trump comments circulate on social media",
+        "summary": "Unconfirmed posts claim a market-moving statement may be coming.",
+        "publisher": "social rumour",
+        "impact_score": 96,
+    }
+    if svc._normalize_macro_alert_event(weak_person, 82) is not None:
+        print("FAIL weak public-figure rumour passed the macro alert gate")
+        return 1
+
+    strong_person = {
+        "title": "Trump says new China tariff plan is under review",
+        "summary": "A confirmed policy statement can affect China-exposed equities, industrials, retailers, inflation expectations and broad index risk.",
+        "publisher": "Reuters",
+        "impact_score": 91,
+        "symbols": ["SPY", "DAX", "CNH", "XLI"],
+    }
+    normalized_person = svc._normalize_macro_alert_event(strong_person, 82)
+    if not normalized_person or normalized_person.get("event_type") != "Public Figure":
+        print("FAIL strong public-figure statement did not pass as Public Figure alert")
+        return 1
+
+    strong_ipo = {
+        "title": "AI infrastructure startup files for IPO after revenue doubles",
+        "summary": "A confirmed IPO filing can reset peer valuation, risk appetite and capital-market demand across AI infrastructure and small-cap growth.",
+        "publisher": "Bloomberg",
+        "impact_score": 90,
+        "symbols": ["QQQ", "IWM", "IPO", "AI"],
+    }
+    normalized_ipo = svc._normalize_macro_alert_event(strong_ipo, 82)
+    if not normalized_ipo or normalized_ipo.get("event_type") != "IPO":
+        print("FAIL strong IPO filing did not pass as IPO alert")
+        return 1
+
     print("Macro alert quality smoke passed.")
     return 0
 

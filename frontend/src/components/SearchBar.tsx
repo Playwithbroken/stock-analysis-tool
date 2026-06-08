@@ -45,6 +45,13 @@ const LOCAL_SEARCH_ASSETS = [
   "Volkswagen AG (VOW3.DE)",
   "Siemens AG (SIE.DE)",
   "Rheinmetall AG (RHM.DE)",
+  "RWE AG (RWE.DE)",
+  "Deutsche Bank AG (DBK.DE)",
+  "Allianz SE (ALV.DE)",
+  "BASF SE (BAS.DE)",
+  "Deutsche Telekom AG (DTE.DE)",
+  "DHL Group Deutsche Post AG (DHL.DE)",
+  "Adidas AG (ADS.DE)",
   "Coinbase Global Inc. (COIN)",
   "Robinhood Markets Inc. (HOOD)",
   "SoFi Technologies Inc. (SOFI)",
@@ -76,7 +83,9 @@ const LOCAL_SEARCH_ASSETS = [
   "Fidelity Wise Origin Bitcoin Fund ETF (FBTC)",
   "SPDR S&P 500 ETF Trust (SPY)",
   "Invesco QQQ Trust (QQQ)",
+  "Invesco NASDAQ 100 ETF (QQQM)",
   "iShares Russell 2000 ETF (IWM)",
+  "iShares MSCI World ETF (URTH)",
   "SPDR Gold Shares (GLD)",
   "iShares 20+ Year Treasury Bond ETF (TLT)",
   "Energy Select Sector SPDR Fund (XLE)",
@@ -138,6 +147,16 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   rheinmetall: "Rheinmetall AG (RHM.DE)",
   defense: "Rheinmetall AG (RHM.DE)",
   ruestung: "Rheinmetall AG (RHM.DE)",
+  rwe: "RWE AG (RWE.DE)",
+  deutschebank: "Deutsche Bank AG (DBK.DE)",
+  dbank: "Deutsche Bank AG (DBK.DE)",
+  allianz: "Allianz SE (ALV.DE)",
+  basf: "BASF SE (BAS.DE)",
+  telekom: "Deutsche Telekom AG (DTE.DE)",
+  deutschetelekom: "Deutsche Telekom AG (DTE.DE)",
+  dhl: "DHL Group Deutsche Post AG (DHL.DE)",
+  deutschepost: "DHL Group Deutsche Post AG (DHL.DE)",
+  adidas: "Adidas AG (ADS.DE)",
   pfizer: "Pfizer Inc. (PFE)",
   pfi: "Pfizer Inc. (PFE)",
   novo: "Novo Nordisk A/S (NVO)",
@@ -150,7 +169,11 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   isharesbitcointrust: "iShares Bitcoin Trust ETF (IBIT)",
   ibit: "iShares Bitcoin Trust ETF (IBIT)",
   ethereum: "Ethereum USD (ETH-USD)",
+  ethereumcoin: "Ethereum USD (ETH-USD)",
   eth: "Ethereum USD (ETH-USD)",
+  solana: "Solana USD (SOL-USD)",
+  solanacrypto: "Solana USD (SOL-USD)",
+  sol: "Solana USD (SOL-USD)",
   dogecoin: "Dogecoin USD (DOGE-USD)",
   doge: "Dogecoin USD (DOGE-USD)",
   xrp: "XRP USD (XRP-USD)",
@@ -176,6 +199,8 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   "brk.b": "Berkshire Hathaway Inc. (BRK-B)",
   "brk-b": "Berkshire Hathaway Inc. (BRK-B)",
   berkshire: "Berkshire Hathaway Inc. (BRK-B)",
+  berkshirehathaway: "Berkshire Hathaway Inc. (BRK-B)",
+  berkshirehathawayb: "Berkshire Hathaway Inc. (BRK-B)",
   rocketlab: "Rocket Lab USA Inc. (RKLB)",
   rklb: "Rocket Lab USA Inc. (RKLB)",
   asts: "AST SpaceMobile Inc. (ASTS)",
@@ -195,10 +220,22 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   sofi: "SoFi Technologies Inc. (SOFI)",
   hims: "Hims & Hers Health Inc. (HIMS)",
   voo: "Vanguard S&P 500 ETF (VOO)",
+  sp500: "Vanguard S&P 500 ETF (VOO)",
+  sp500etf: "Vanguard S&P 500 ETF (VOO)",
+  sandp500: "Vanguard S&P 500 ETF (VOO)",
+  sandp500etf: "Vanguard S&P 500 ETF (VOO)",
+  sundp500: "Vanguard S&P 500 ETF (VOO)",
   vti: "Vanguard Total Stock Market ETF (VTI)",
   schd: "Schwab U.S. Dividend Equity ETF (SCHD)",
   soxx: "iShares Semiconductor ETF (SOXX)",
   semiconductor_etf: "iShares Semiconductor ETF (SOXX)",
+  qqq: "Invesco QQQ Trust (QQQ)",
+  nasdaq100: "Invesco QQQ Trust (QQQ)",
+  nasdaq100etf: "Invesco QQQ Trust (QQQ)",
+  qqqm: "Invesco NASDAQ 100 ETF (QQQM)",
+  msciworld: "iShares MSCI World ETF (URTH)",
+  msciworldetf: "iShares MSCI World ETF (URTH)",
+  urth: "iShares MSCI World ETF (URTH)",
   hood: "Robinhood Markets Inc. (HOOD)",
   hoodapp: "Robinhood Markets Inc. (HOOD)",
   robinhood: "Robinhood Markets Inc. (HOOD)",
@@ -457,6 +494,22 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       if (localMatches.length > 0) {
         handleQuickSelect(localMatches[0]);
         return;
+      }
+      try {
+        const resolved = await fetchJsonWithRetry<any>(
+          `/api/search/resolve?q=${encodeURIComponent(raw)}`,
+          undefined,
+          { retries: 1, retryDelayMs: 300, timeoutMs: 4500 },
+        );
+        const bestTicker = resolved?.ticker || resolved?.normalized;
+        if (bestTicker && resolved?.confidence !== "low") {
+          setQuery(bestTicker);
+          setGhostText("");
+          onSearch(bestTicker);
+          return;
+        }
+      } catch {
+        // fallthrough
       }
       try {
         const data = await fetchJsonWithRetry<any>(

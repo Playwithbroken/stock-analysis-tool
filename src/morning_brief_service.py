@@ -3245,6 +3245,14 @@ class MorningBriefService:
                 "sectors": ["Industrials", "Semis", "Autos"],
                 "assets": ["Dollar", "Regional indices", "Commodity baskets"],
             },
+            "public_figure": {
+                "sectors": ["Policy-sensitive sectors", "Rates", "Mega-cap leadership"],
+                "assets": ["S&P 500 Futures", "Nasdaq Futures", "Dollar", "US 10Y Yield"],
+            },
+            "ipo": {
+                "sectors": ["New listings", "Small-cap growth", "Sector peers"],
+                "assets": ["IPO basket", "QQQ", "IWM", "Peer group"],
+            },
             "macro_data": {
                 "sectors": ["Growth", "Consumer", "Financials"],
                 "assets": ["Treasuries", "Dollar", "Index futures"],
@@ -3320,6 +3328,24 @@ class MorningBriefService:
                 "trigger": "Use only if affected sectors lose support and broad tape confirms the policy shock.",
                 "invalidation": "No short if the market absorbs the headline within the first impulse.",
                 "execution_window": "Headline to first trend confirmation",
+            }
+        if event_type == "public_figure":
+            return {
+                "action": "watch",
+                "leverage": "avoid",
+                "why_now": "Public statements can move risk fast, but many reverse once context, official follow-up or market depth appears.",
+                "trigger": "Only upgrade if the quote is from a trusted source and affected futures, rates, dollar or sector ETFs confirm together.",
+                "invalidation": "Stand down if the statement is walked back, lacks policy detail or the affected basket ignores it.",
+                "execution_window": "Headline to first 60 minutes",
+            }
+        if event_type == "ipo":
+            return {
+                "action": "watch",
+                "leverage": "conditional",
+                "why_now": "IPO filings and debuts can reveal capital-market appetite and reset peer valuations, especially in hot sectors.",
+                "trigger": "Only promote if filing/pricing/debut details are confirmed and peers or the IPO basket react with volume.",
+                "invalidation": "Ignore if valuation, float, lock-up or first trading reaction does not support sector read-through.",
+                "execution_window": "Filing/pricing to first two sessions",
             }
         if event_type == "product_catalyst":
             return {

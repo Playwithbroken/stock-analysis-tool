@@ -38,6 +38,18 @@ def main() -> int:
     if svc._news_relevance_score({"title": cases[1][0], "event_type": "ipo", "publisher": "Bloomberg", "source_quality": "tier_1"}) < 8:
         failures.append("IPO relevance score too low")
 
+    public_intel = svc._build_event_intelligence("public_figure", "high", "elevated", "tier_1", None)
+    ipo_intel = svc._build_event_intelligence("ipo", "high", "elevated", "tier_1", None)
+    for label, payload, expected_asset in [
+        ("public figure", public_intel, "S&P 500 Futures"),
+        ("IPO", ipo_intel, "IPO basket"),
+    ]:
+        if expected_asset not in payload.get("affected_assets", []):
+            failures.append(f"{label} intelligence missing {expected_asset}")
+        for field in ["why_now", "trigger", "invalidation", "execution_window"]:
+            if not payload.get(field):
+                failures.append(f"{label} intelligence missing {field}")
+
     if failures:
         print("\nClassification failures:")
         for failure in failures:

@@ -115,6 +115,61 @@ class MorningBriefService:
         "Nikkei Asia",
         "WSJ",
     }
+    MARKET_MOVING_PERSON_TERMS = {
+        "trump",
+        "powell",
+        "yellen",
+        "bessent",
+        "lutnick",
+        "musk",
+        "huang",
+        "jensen huang",
+        "cook",
+        "tim cook",
+        "zuckerberg",
+        "bezos",
+        "dimon",
+        "jamie dimon",
+        "lagarde",
+        "von der leyen",
+    }
+    MARKET_MOVING_STATEMENT_TERMS = {
+        "says",
+        "said",
+        "warns",
+        "warned",
+        "backs",
+        "calls for",
+        "announces",
+        "threatens",
+        "plans",
+        "pledges",
+        "statement",
+        "speech",
+        "interview",
+        "tariff",
+        "rates",
+        "rate",
+        "crypto",
+        "oil",
+        "china",
+        "defense",
+        "ai",
+        "regulation",
+    }
+    IPO_TERMS = {
+        "ipo",
+        "initial public offering",
+        "go public",
+        "goes public",
+        "listing",
+        "listed",
+        "market debut",
+        "debut",
+        "prices shares",
+        "files for ipo",
+        "confidentially files",
+    }
     ALLOWED_DOMAINS = {
         "reuters.com",
         "bloomberg.com",
@@ -1096,7 +1151,7 @@ class MorningBriefService:
         score = 0
         if ticker:
             score += 3
-        if event_type in {"conflict", "central_bank", "energy", "policy", "macro_data", "earnings", "product_catalyst"}:
+        if event_type in {"conflict", "central_bank", "energy", "policy", "public_figure", "ipo", "macro_data", "earnings", "product_catalyst"}:
             score += 4
         if any(term in title for term in [
             "fed", "rate", "yield", "inflation", "cpi", "ppi", "jobs", "payrolls",
@@ -1104,8 +1159,13 @@ class MorningBriefService:
             "tariff", "sanction", "market", "stock", "futures", "nasdaq", "s&p",
             "dow", "dollar", "gold", "bitcoin", "crypto", "launch", "unveil", "delay",
             "postpone", "iphone", "gpu", "gta", "model", "product", "preorder",
+            "ipo", "listing", "debut", "files for ipo", "prices shares",
         ]):
             score += 3
+        if self._is_market_moving_person_statement(title):
+            score += 5
+        if self._is_ipo_headline(title):
+            score += 5
         if any(term in title for term in [
             "retire", "retirees", "inherit", "estate", "adviser", "advisor",
             "irs", "tax", "401", "credit card", "mortgage", "personal finance",
@@ -3824,7 +3884,15 @@ class MorningBriefService:
         impact = "low"
         severity = "normal"
 
-        if any(term in text for term in ["war", "missile", "attack", "israel", "iran", "russia", "ukraine", "lebanon", "beirut"]):
+        if self._is_market_moving_person_statement(text):
+            event_type = "public_figure"
+            impact = "high"
+            severity = "elevated"
+        elif self._is_ipo_headline(text):
+            event_type = "ipo"
+            impact = "high"
+            severity = "elevated"
+        elif any(term in text for term in ["war", "missile", "attack", "israel", "iran", "russia", "ukraine", "lebanon", "beirut"]):
             event_type = "conflict"
             impact = "high"
             severity = "critical"
@@ -3876,10 +3944,26 @@ class MorningBriefService:
 
         return {
             "impact": impact,
-            "region": self._infer_region(text),
+            "region": "usa" if event_type in {"public_figure", "ipo"} and self._infer_region(text) == "global" else self._infer_region(text),
             "event_type": event_type,
             "severity": severity,
         }
+
+    def _is_market_moving_person_statement(self, text: str) -> bool:
+        normalized = str(text or "").lower()
+        if not normalized:
+            return False
+        has_person = any(term in normalized for term in self.MARKET_MOVING_PERSON_TERMS)
+        has_statement = any(term in normalized for term in self.MARKET_MOVING_STATEMENT_TERMS)
+        return has_person and has_statement
+
+    def _is_ipo_headline(self, text: str) -> bool:
+        normalized = str(text or "").lower()
+        if not normalized:
+            return False
+        if not any(term in normalized for term in self.IPO_TERMS):
+            return False
+        return any(term in normalized for term in ["file", "files", "pricing", "prices", "raise", "raises", "valuation", "debut", "listing", "shares", "revenue", "growth"])
 
     def _classify_product_catalyst(self, text: str) -> Dict[str, str] | None:
         normalized = (text or "").lower()

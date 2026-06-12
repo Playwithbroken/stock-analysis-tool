@@ -45,6 +45,7 @@ from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
 from src.realtime_market_service import RealtimeMarketService
 from src.public_signal_service import PublicSignalService
+from src.advisory_service import advisory_profile_subset, build_suitability_check
 from src.storage import DB_PATH, PortfolioManager, get_database_status
 
 # Load environment variables
@@ -1284,6 +1285,42 @@ class WorkspaceProfileRequest(BaseModel):
     browser_notifications: Optional[bool] = None
     theme: Optional[str] = None
     onboarding_done: Optional[bool] = None
+    advisory_enabled: Optional[bool] = None
+    investment_objective: Optional[str] = None
+    time_horizon: Optional[str] = None
+    risk_tolerance: Optional[str] = None
+    experience_level: Optional[str] = None
+    loss_capacity: Optional[str] = None
+    liquidity_need: Optional[str] = None
+    preferred_strategy: Optional[str] = None
+    max_single_position_pct: Optional[float] = None
+    max_portfolio_drawdown_pct: Optional[float] = None
+    suitability_notes: Optional[str] = None
+
+
+class AdvisoryProfileRequest(BaseModel):
+    advisory_enabled: Optional[bool] = None
+    investment_objective: Optional[str] = None
+    time_horizon: Optional[str] = None
+    risk_tolerance: Optional[str] = None
+    experience_level: Optional[str] = None
+    loss_capacity: Optional[str] = None
+    liquidity_need: Optional[str] = None
+    preferred_strategy: Optional[str] = None
+    max_single_position_pct: Optional[float] = None
+    max_portfolio_drawdown_pct: Optional[float] = None
+    suitability_notes: Optional[str] = None
+
+
+class SuitabilityCheckRequest(BaseModel):
+    symbol: Optional[str] = None
+    asset_class: Optional[str] = "equity"
+    action: Optional[str] = "watch"
+    strategy: Optional[str] = None
+    risk_level: Optional[str] = "medium"
+    position_pct: Optional[float] = None
+    time_horizon: Optional[str] = None
+    thesis: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -3304,6 +3341,32 @@ async def save_workspace_profile(req: WorkspaceProfileRequest):
     try:
         payload = req.model_dump(exclude_none=True)
         return convert_numpy_types(get_portfolio_manager().save_workspace_profile(payload))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/advisory/profile")
+async def get_advisory_profile():
+    try:
+        profile = get_portfolio_manager().get_workspace_profile()
+        return convert_numpy_types(advisory_profile_subset(profile))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/advisory/profile")
+async def save_advisory_profile(req: AdvisoryProfileRequest):
+    try:
+        payload = req.model_dump(exclude_none=True)
+        profile = get_portfolio_manager().save_workspace_profile(payload)
+        return convert_numpy_types(advisory_profile_subset(profile))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/advisory/suitability-check")
+async def check_signal_suitability(req: SuitabilityCheckRequest):
+    try:
+        profile = get_portfolio_manager().get_workspace_profile()
+        result = build_suitability_check(profile, req.model_dump(exclude_none=True))
+        return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

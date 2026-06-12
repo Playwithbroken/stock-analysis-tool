@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
+from src.advisory_service import merge_workspace_profile
+
 DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 DATA_DIR = os.path.abspath(os.getenv('APP_DATA_DIR', DEFAULT_DATA_DIR))
 DB_PATH = os.path.abspath(os.getenv('PORTFOLIO_DB_PATH', os.path.join(DATA_DIR, 'portfolios.db')))
@@ -677,27 +679,31 @@ class PortfolioManager:
 
     def get_workspace_profile(self) -> Dict[str, Any]:
         import json
+        default = merge_workspace_profile(
+            {
+                "display_name": "Maurice",
+                "email": "",
+                "timezone": "Europe/Berlin",
+                "browser_notifications": False,
+                "theme": "premium-light",
+                "onboarding_done": False,
+            },
+            {},
+        )
         raw = self.get_app_setting("workspace_profile")
         if raw:
             try:
-                return json.loads(raw)
+                return merge_workspace_profile(default, json.loads(raw))
             except json.JSONDecodeError:
                 pass
-        return {
-            "display_name": "Maurice",
-            "email": "",
-            "timezone": "Europe/Berlin",
-            "browser_notifications": False,
-            "theme": "premium-light",
-            "onboarding_done": False,
-        }
+        return default
 
     def save_workspace_profile(self, profile: Dict[str, Any]) -> Dict[str, Any]:
         import json
         current = self.get_workspace_profile()
-        current.update(profile or {})
-        self.set_app_setting("workspace_profile", json.dumps(current))
-        return current
+        updated = merge_workspace_profile(current, profile)
+        self.set_app_setting("workspace_profile", json.dumps(updated))
+        return updated
 
     def get_signal_score_settings(self) -> Dict[str, Any]:
         import json

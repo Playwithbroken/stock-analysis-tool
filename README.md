@@ -2,6 +2,10 @@
 
 Private Beta fuer Aktienanalyse, Portfolio-Tracking, Marktueberblick, Telegram-Briefings und Paper-Trading.
 
+## Produktplan
+
+- [World-Class Product Plan](WORLD_CLASS_PRODUCT_PLAN.md): Roadmap zur professionellen Anlageberater-App mit Advisory Core, Signal Quality Engine, Analyzer Dossier, Portfolio Brain, Future Stars, UX, Infrastruktur und Compliance.
+
 ## Beta lokal starten
 
 ```powershell

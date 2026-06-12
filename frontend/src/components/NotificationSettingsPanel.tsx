@@ -10,6 +10,18 @@ interface WorkspaceProfile {
   timezone: string;
   browser_notifications: boolean;
   theme: string;
+  advisory_enabled: boolean;
+  advisory_profile_complete?: boolean;
+  investment_objective: string;
+  time_horizon: string;
+  risk_tolerance: string;
+  experience_level: string;
+  loss_capacity: string;
+  liquidity_need: string;
+  preferred_strategy: string;
+  max_single_position_pct: number;
+  max_portfolio_drawdown_pct: number;
+  suitability_notes: string;
 }
 
 interface NotificationStatus {
@@ -31,6 +43,62 @@ const initialProfile: WorkspaceProfile = {
   timezone: "Europe/Berlin",
   browser_notifications: false,
   theme: "premium-light",
+  advisory_enabled: true,
+  advisory_profile_complete: false,
+  investment_objective: "mixed",
+  time_horizon: "medium",
+  risk_tolerance: "medium",
+  experience_level: "intermediate",
+  loss_capacity: "medium",
+  liquidity_need: "medium",
+  preferred_strategy: "mixed",
+  max_single_position_pct: 12.5,
+  max_portfolio_drawdown_pct: 20,
+  suitability_notes: "",
+};
+
+const advisoryOptions = {
+  investment_objective: [
+    ["mixed", "Balanced"],
+    ["growth", "Growth"],
+    ["income", "Income"],
+    ["capital_preservation", "Capital protection"],
+    ["speculation", "Speculation"],
+  ],
+  time_horizon: [
+    ["medium", "Medium"],
+    ["short", "Short"],
+    ["long", "Long"],
+  ],
+  risk_tolerance: [
+    ["medium", "Medium"],
+    ["low", "Low"],
+    ["high", "High"],
+    ["speculative", "Speculative"],
+  ],
+  experience_level: [
+    ["intermediate", "Intermediate"],
+    ["beginner", "Beginner"],
+    ["advanced", "Advanced"],
+    ["professional", "Professional"],
+  ],
+  loss_capacity: [
+    ["medium", "Medium"],
+    ["low", "Low"],
+    ["high", "High"],
+  ],
+  liquidity_need: [
+    ["medium", "Medium"],
+    ["low", "Low"],
+    ["high", "High"],
+  ],
+  preferred_strategy: [
+    ["mixed", "Mixed"],
+    ["long_term", "Long term"],
+    ["dividend", "Dividend"],
+    ["swing_trading", "Swing"],
+    ["day_trading", "Daytrading"],
+  ],
 };
 
 export default function NotificationSettingsPanel({
@@ -143,6 +211,13 @@ export default function NotificationSettingsPanel({
           </div>
         </div>
 
+        <AdvisoryProfilePanel
+          profile={profile}
+          setProfile={setProfile}
+          onSave={() => saveProfile()}
+          saving={saving}
+        />
+
         <div className="space-y-3">
           <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
@@ -202,6 +277,200 @@ export default function NotificationSettingsPanel({
         <ManualMacroAlertTrigger />
       </div>
     </section>
+  );
+}
+
+function AdvisoryProfilePanel({
+  profile,
+  setProfile,
+  onSave,
+  saving,
+}: {
+  profile: WorkspaceProfile;
+  setProfile: React.Dispatch<React.SetStateAction<WorkspaceProfile>>;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const setField = (field: keyof WorkspaceProfile, value: string | number | boolean) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const strictLimit =
+    Number(profile.max_single_position_pct || 0) <= 8 ||
+    Number(profile.max_portfolio_drawdown_pct || 0) <= 12 ||
+    profile.risk_tolerance === "low" ||
+    profile.loss_capacity === "low";
+
+  return (
+    <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+            Advisory profile
+          </div>
+          <div className="mt-2 text-xl font-black text-slate-950">Suitability rules</div>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-600">
+            Jeder Setup-Impuls wird gegen Ziel, Erfahrung, Verlusttragfaehigkeit und
+            Positionsgroesse geprueft. Das verhindert blinde Trades.
+          </p>
+        </div>
+        <div
+          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+            profile.advisory_profile_complete
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {profile.advisory_profile_complete ? "Active" : "Needs review"}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <AdvisorySelect
+          label="Objective"
+          value={profile.investment_objective}
+          options={advisoryOptions.investment_objective}
+          onChange={(value) => setField("investment_objective", value)}
+        />
+        <AdvisorySelect
+          label="Strategy"
+          value={profile.preferred_strategy}
+          options={advisoryOptions.preferred_strategy}
+          onChange={(value) => setField("preferred_strategy", value)}
+        />
+        <AdvisorySelect
+          label="Risk"
+          value={profile.risk_tolerance}
+          options={advisoryOptions.risk_tolerance}
+          onChange={(value) => setField("risk_tolerance", value)}
+        />
+        <AdvisorySelect
+          label="Experience"
+          value={profile.experience_level}
+          options={advisoryOptions.experience_level}
+          onChange={(value) => setField("experience_level", value)}
+        />
+        <AdvisorySelect
+          label="Loss capacity"
+          value={profile.loss_capacity}
+          options={advisoryOptions.loss_capacity}
+          onChange={(value) => setField("loss_capacity", value)}
+        />
+        <AdvisorySelect
+          label="Liquidity"
+          value={profile.liquidity_need}
+          options={advisoryOptions.liquidity_need}
+          onChange={(value) => setField("liquidity_need", value)}
+        />
+        <AdvisorySelect
+          label="Horizon"
+          value={profile.time_horizon}
+          options={advisoryOptions.time_horizon}
+          onChange={(value) => setField("time_horizon", value)}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <AdvisoryNumber
+          label="Max single position"
+          suffix="%"
+          value={profile.max_single_position_pct}
+          onChange={(value) => setField("max_single_position_pct", value)}
+        />
+        <AdvisoryNumber
+          label="Max drawdown"
+          suffix="%"
+          value={profile.max_portfolio_drawdown_pct}
+          onChange={(value) => setField("max_portfolio_drawdown_pct", value)}
+        />
+      </div>
+
+      <textarea
+        value={profile.suitability_notes}
+        onChange={(e) => setField("suitability_notes", e.target.value)}
+        placeholder="Eigene Regeln: z.B. keine Earnings-Gambles, kein Hebel, nur bestaetigte Trigger."
+        className="mt-3 min-h-[86px] w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-800 outline-none transition focus:border-teal-400"
+      />
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className={`text-xs font-semibold ${strictLimit ? "text-amber-700" : "text-emerald-700"}`}>
+          {strictLimit
+            ? "Konservativer Rahmen: riskante Setups werden schneller blockiert."
+            : "Aktiver Rahmen: passende Setups duerfen nach Trigger-Pruefung weiterlaufen."}
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="rounded-xl bg-slate-950 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition hover:bg-slate-800 disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save advisory"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AdvisorySelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[][];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block rounded-2xl border border-black/8 bg-white/70 p-3">
+      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-2 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-black text-slate-900"
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function AdvisoryNumber({
+  label,
+  value,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block rounded-2xl border border-black/8 bg-white/70 p-3">
+      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </span>
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-black/8 bg-white px-3 py-2">
+        <input
+          type="number"
+          min={1}
+          max={100}
+          step={0.5}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-full bg-transparent text-sm font-black text-slate-900 outline-none"
+        />
+        <span className="text-xs font-black text-slate-500">{suffix}</span>
+      </div>
+    </label>
   );
 }
 

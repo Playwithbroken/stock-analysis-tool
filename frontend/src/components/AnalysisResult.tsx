@@ -2,7 +2,7 @@
 import PriceChart from "./PriceChart";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
-import { Plus, Download, FileText } from "lucide-react";
+import { Plus, Download, FileText, ShieldCheck, ShieldAlert, Ban } from "lucide-react";
 // jsPDF and autoTable are dynamically imported inside exportToPDF to keep the initial bundle small
 import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
@@ -14,6 +14,24 @@ interface AnalysisResultProps {
   onAddHolding: (portfolioId: string, holding: Holding) => void;
   onOpenChat: () => void;
   onSelectTicker?: (ticker: string) => void;
+}
+
+interface SuitabilityCheck {
+  status: "ok" | "review" | "blocked" | "needs_profile" | string;
+  profile_complete: boolean;
+  decision: string;
+  suitability_score: number;
+  reasons: string[];
+  required_next_steps: string[];
+  risk_flags: string[];
+  profile_limits?: {
+    risk_tolerance?: string;
+    loss_capacity?: string;
+    experience_level?: string;
+    max_single_position_pct?: number;
+    max_portfolio_drawdown_pct?: number;
+  };
+  disclaimer?: string;
 }
 
 // Helper functions
@@ -69,6 +87,49 @@ const metricTone = (value: number | null | undefined, positiveAbove = 0): string
   return value >= positiveAbove ? "text-emerald-700" : "text-red-700";
 };
 
+const inferAssetClass = (ticker: string, data: any): string => {
+  const symbol = String(ticker || "").toUpperCase();
+  const quoteType = String(data?.quote_type || data?.fundamentals?.quote_type || "").toLowerCase();
+  const sector = String(data?.fundamentals?.sector || "").toLowerCase();
+  if (symbol.endsWith("-USD") || quoteType.includes("crypto")) return "crypto";
+  if (quoteType.includes("etf") || sector.includes("etf") || data?.etf_analysis) return "etf";
+  return "equity";
+};
+
+const inferRiskLevel = (score: number, chartChangePct?: number | null, assetClass?: string): string => {
+  const absMove = Math.abs(Number(chartChangePct ?? 0));
+  if (assetClass === "crypto" || absMove >= 35 || score <= 25) return "speculative";
+  if (absMove >= 18 || score <= 40) return "high";
+  if (score >= 70 && absMove <= 12) return "medium";
+  return "medium";
+};
+
+const suitabilityTone = (decision?: string): {
+  label: string;
+  classes: string;
+  icon: React.ReactNode;
+} => {
+  if (decision === "blocked" || decision === "needs_profile") {
+    return {
+      label: decision === "needs_profile" ? "Profil fehlt" : "Blockiert",
+      classes: "border-red-500/20 bg-red-500/10 text-red-800",
+      icon: <Ban size={16} />,
+    };
+  }
+  if (decision === "action_requires_review") {
+    return {
+      label: "Pruefen",
+      classes: "border-amber-500/25 bg-amber-500/10 text-amber-800",
+      icon: <ShieldAlert size={16} />,
+    };
+  }
+  return {
+    label: decision === "setup_allowed" ? "Passt zum Rahmen" : "Beobachten",
+    classes: "border-emerald-500/20 bg-emerald-500/10 text-emerald-800",
+    icon: <ShieldCheck size={16} />,
+  };
+};
+
 const METRIC_HELP: Record<string, string> = {
   "Market Cap": "Boersenwert des Unternehmens. Hilft einzuordnen, ob es Large Cap, Mid Cap oder Small Cap ist.",
   "P/E Ratio": "Kurs-Gewinn-Verhaeltnis. Niedriger kann guenstiger wirken, hoher braucht meist starkes Wachstum.",
@@ -107,6 +168,9 @@ export default function AnalysisResult({
   const [alertStatus, setAlertStatus] = React.useState<string | null>(null);
   const [isInWatchlist, setIsInWatchlist] = React.useState(false);
   const [watchlistBusy, setWatchlistBusy] = React.useState(false);
+  const [suitability, setSuitability] = React.useState<SuitabilityCheck | null>(null);
+  const [suitabilityLoading, setSuitabilityLoading] = React.useState(false);
+  const [suitabilityError, setSuitabilityError] = React.useState<string | null>(null);
   const [chartStats, setChartStats] = React.useState<{
     changePct: number;
     label: string;
@@ -135,6 +199,8 @@ export default function AnalysisResult({
   } = data;
   const liveQuote = realtimeQuotes[data.ticker];
   const scoreValue = clampScore(total_score);
+  const assetClass = inferAssetClass(data.ticker, data);
+  const inferredRiskLevel = inferRiskLevel(scoreValue, chartStats?.changePct ?? price_data?.change_1y, assetClass);
   const verdictTone =
     scoreValue >= 70
       ? "bg-emerald-500/12 text-emerald-700"
@@ -179,6 +245,60 @@ export default function AnalysisResult({
     fundamentals?.ps_ratio && fundamentals.ps_ratio > 8 ? "Sales-Multiple hoch, Umsatz muss liefern." : null,
     fundamentals?.peg_ratio && fundamentals.peg_ratio > 2 ? "PEG deutet auf teure Wachstumserwartung." : null,
   ].filter(Boolean);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const runSuitabilityCheck = async () => {
+      if (!data?.ticker) return;
+      setSuitabilityLoading(true);
+      setSuitabilityError(null);
+      try {
+        const response = await fetch("/api/advisory/suitability-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbol: data.ticker,
+            asset_class: assetClass,
+            action: scoreValue >= 65 ? "setup" : "watch",
+            strategy: assetClass === "etf" ? "long_term" : undefined,
+            risk_level: inferredRiskLevel,
+            position_pct: 0,
+            thesis: [
+              data.company_name,
+              recommendation ? `Rating: ${recommendation}` : null,
+              Number.isFinite(scoreValue) ? `Score: ${scoreValue}` : null,
+              valuationPressure[0] || null,
+            ]
+              .filter(Boolean)
+              .join(" / "),
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || "Suitability check failed");
+        if (!cancelled) setSuitability(payload);
+      } catch (error) {
+        if (!cancelled) {
+          setSuitability(null);
+          setSuitabilityError(error instanceof Error ? error.message : "Suitability check failed");
+        }
+      } finally {
+        if (!cancelled) setSuitabilityLoading(false);
+      }
+    };
+    runSuitabilityCheck();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    assetClass,
+    data?.ticker,
+    data.company_name,
+    inferredRiskLevel,
+    recommendation,
+    scoreValue,
+    valuationPressure[0],
+  ]);
+
   const dossierCatalysts = [
     latestEarnings
       ? `Letzte Earnings: ${latestEarnings.status || "n/a"} (${formatPercent(latestEarnings.eps_surprise_pct)} EPS surprise).`
@@ -301,6 +421,16 @@ export default function AnalysisResult({
       setAlertBusy(false);
     }
   };
+
+  const suitabilityView = suitabilityTone(suitability?.decision);
+  const suitabilityReasons = suitability?.reasons?.length
+    ? suitability.reasons.slice(0, 2)
+    : suitabilityLoading
+      ? ["Beratungsrahmen wird gegen dieses Dossier geprueft."]
+      : suitabilityError
+        ? [suitabilityError]
+        : ["Noch kein Suitability-Check geladen."];
+  const suitabilitySteps = suitability?.required_next_steps?.slice(0, 2) || [];
 
   const exportToPDF = async () => {
     const { default: jsPDF } = await import("jspdf");
@@ -546,6 +676,85 @@ export default function AnalysisResult({
             initialTicker={data.ticker}
             initialPrice={price_data?.current_price}
           />
+
+          <section className="surface-panel rounded-[1.7rem] border border-black/8 p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  Advisory Suitability
+                </div>
+                <h3 className="mt-2 text-2xl text-slate-900">
+                  Passt dieses Dossier zu deinem Beratungsrahmen?
+                </h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  Der Check verbindet Analyse, Asset-Klasse und Risikoniveau mit deinem Profil.
+                  Ergebnis ist ein Entscheidungsrahmen, keine blinde Kauf- oder Verkaufsempfehlung.
+                </p>
+              </div>
+              <div className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${suitabilityView.classes}`}>
+                {suitabilityLoading ? <ShieldAlert size={16} /> : suitabilityView.icon}
+                {suitabilityLoading ? "Prueft" : suitabilityView.label}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-[0.75fr_1.25fr_1fr]">
+              <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Suitability score
+                </div>
+                <div className="mt-2 text-4xl font-black text-slate-950">
+                  {suitabilityLoading ? "..." : suitability?.suitability_score ?? "--"}
+                </div>
+                <div className="mt-1 text-xs font-semibold text-slate-500">
+                  {assetClass.toUpperCase()} / Risiko {inferredRiskLevel}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Warum
+                </div>
+                <div className="mt-3 space-y-2">
+                  {suitabilityReasons.map((reason, index) => (
+                    <div key={`${reason}-${index}`} className="text-sm font-semibold leading-6 text-slate-700">
+                      {reason}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Naechster Schritt
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(suitabilitySteps.length ? suitabilitySteps : ["Trigger, Positionsgroesse und Invalidierung vor Umsetzung pruefen."]).map((step, index) => (
+                    <div key={`${step}-${index}`} className="text-sm font-semibold leading-6 text-slate-700">
+                      {step}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {suitability?.profile_limits ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  `Risiko: ${suitability.profile_limits.risk_tolerance || "offen"}`,
+                  `Verlust: ${suitability.profile_limits.loss_capacity || "offen"}`,
+                  `Erfahrung: ${suitability.profile_limits.experience_level || "offen"}`,
+                  `Max Position: ${suitability.profile_limits.max_single_position_pct ?? "--"}%`,
+                ].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </section>
 
           {alertModalOpen ? (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">

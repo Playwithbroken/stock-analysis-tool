@@ -5,7 +5,7 @@ import DividendDashboard from "./DividendDashboard";
 import RiskCorrelationMatrix from "./RiskCorrelationMatrix";
 import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
-import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X } from "lucide-react";
+import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
 
@@ -47,6 +47,16 @@ interface PriceAlert {
   enabled: boolean;
   cooldown_minutes: number;
   last_triggered_at?: string | null;
+}
+
+interface AdvisoryProfile {
+  advisory_profile_complete?: boolean;
+  risk_tolerance?: string;
+  loss_capacity?: string;
+  experience_level?: string;
+  max_single_position_pct?: number;
+  max_portfolio_drawdown_pct?: number;
+  preferred_strategy?: string;
 }
 
 const formatPercent = (value: number): string => {
@@ -116,6 +126,7 @@ export default function PortfolioView({
   const [newAlertSymbol, setNewAlertSymbol] = useState("");
   const [newAlertDirection, setNewAlertDirection] = useState<"above" | "below">("above");
   const [newAlertTarget, setNewAlertTarget] = useState("");
+  const [advisoryProfile, setAdvisoryProfile] = useState<AdvisoryProfile | null>(null);
 
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
@@ -171,6 +182,24 @@ export default function PortfolioView({
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAdvisoryProfile = async () => {
+      try {
+        const response = await fetch("/api/advisory/profile");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!cancelled) setAdvisoryProfile(payload);
+      } catch {
+        if (!cancelled) setAdvisoryProfile(null);
+      }
+    };
+    loadAdvisoryProfile();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -346,6 +375,48 @@ export default function PortfolioView({
   const returnValue = analysis?.summary.return_since_buy ?? analysis?.summary.gain_loss ?? 0;
   const returnPct = analysis?.summary.return_since_buy_pct ?? analysis?.summary.gain_loss_pct ?? 0;
   const avgHoldingDays = analysis?.summary.avg_holding_days;
+  const maxSinglePositionPct = Number(advisoryProfile?.max_single_position_pct ?? 12.5);
+  const topHolding = analysis?.holdings
+    ?.filter((holding) => !holding.error)
+    .reduce<any | null>((top, holding) => {
+      const value = Number(holding.position_value || 0);
+      if (!top || value > Number(top.position_value || 0)) return holding;
+      return top;
+    }, null);
+  const topHoldingPct =
+    analysis?.summary.total_value && topHolding?.position_value
+      ? (Number(topHolding.position_value) / Number(analysis.summary.total_value)) * 100
+      : null;
+  const advisoryIssues = [
+    advisoryProfile && !advisoryProfile.advisory_profile_complete
+      ? "Beratungsprofil ist noch nicht bestaetigt."
+      : null,
+    topHoldingPct != null && topHoldingPct > maxSinglePositionPct
+      ? `${topHolding?.ticker} liegt bei ${topHoldingPct.toFixed(1)}% und damit ueber dem Limit von ${maxSinglePositionPct.toFixed(1)}%.`
+      : null,
+    analysis?.summary.num_holdings != null && analysis.summary.num_holdings > 0 && analysis.summary.num_holdings < 5
+      ? "Weniger als 5 Positionen: Diversifikation ist noch duenn."
+      : null,
+    analysis?.summary.avg_score != null && analysis.summary.avg_score < 0
+      ? "Durchschnittlicher Portfolio-Score ist negativ."
+      : null,
+  ].filter(Boolean) as string[];
+  const advisoryStatus =
+    !analysis
+      ? "loading"
+      : advisoryIssues.length
+        ? "review"
+        : "ok";
+  const advisoryStatusCopy =
+    advisoryStatus === "ok"
+      ? "Portfolio passt zum aktuellen Beratungsrahmen."
+      : advisoryStatus === "review"
+        ? "Portfolio braucht Pruefung vor neuer Aktion."
+        : "Portfolio wird geprueft.";
+  const advisoryTone =
+    advisoryStatus === "ok"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800"
+      : "border-amber-500/25 bg-amber-500/10 text-amber-800";
   const sourceCopy = (() => {
     if (dataSource === "server") {
       return {
@@ -585,6 +656,86 @@ export default function PortfolioView({
                   )}
                 </div>
               </div>
+            )}
+
+            {analysis && (
+              <section className="mt-6 rounded-[1.7rem] border border-black/8 bg-white/75 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                      Advisory Portfolio Check
+                    </div>
+                    <h3 className="mt-2 text-2xl text-slate-900">
+                      Passt die Portfolio-Struktur zu deinem Rahmen?
+                    </h3>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      Prueft Konzentration, Positionslimit, Diversifikation und Score gegen dein Advisory-Profil.
+                    </p>
+                  </div>
+                  <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${advisoryTone}`}>
+                    {advisoryStatus === "ok" ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
+                    {advisoryStatus === "ok" ? "Passt" : "Pruefen"}
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 lg:grid-cols-4">
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Status
+                    </div>
+                    <div className="mt-2 text-sm font-black leading-6 text-slate-900">{advisoryStatusCopy}</div>
+                  </div>
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Top Position
+                    </div>
+                    <div className="mt-2 text-2xl font-black text-slate-900">
+                      {topHolding?.ticker || "n/a"}
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                      {topHoldingPct != null ? `${topHoldingPct.toFixed(1)}% vom Portfolio` : "Keine Bewertung"}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Positionslimit
+                    </div>
+                    <div className="mt-2 text-2xl font-black text-slate-900">
+                      {maxSinglePositionPct.toFixed(1)}%
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                      aus deinem Advisory-Profil
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Profil
+                    </div>
+                    <div className="mt-2 text-sm font-black leading-6 text-slate-900">
+                      {advisoryProfile?.preferred_strategy || "mixed"} / {advisoryProfile?.risk_tolerance || "medium"}
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                      Verlust {advisoryProfile?.loss_capacity || "medium"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    Naechster Schritt
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {(advisoryIssues.length
+                      ? advisoryIssues.slice(0, 3)
+                      : ["Keine harte Bremse. Neue Setups trotzdem nur mit Trigger, Positionsgroesse und Invalidierung umsetzen."]
+                    ).map((item) => (
+                      <div key={item} className="text-sm font-semibold leading-6 text-slate-700">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
             )}
 
             {holdingEditNotice && (

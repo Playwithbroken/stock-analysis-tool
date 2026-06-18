@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle, ArrowRight, Ban, BarChart3, CheckCircle2, Eye, ShieldAlert, Target, TrendingUp } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Portfolio } from "../hooks/usePortfolios";
 
 type EdgeTone = "action" | "watch" | "avoid";
@@ -26,6 +26,14 @@ interface DecisionRow {
   source: string;
   nextAction: string;
   tone: EdgeTone;
+}
+
+interface SuitabilitySummary {
+  decision: string;
+  status: string;
+  suitability_score: number;
+  reasons?: string[];
+  risk_flags?: string[];
 }
 
 interface MacroPlaybookRow {
@@ -81,6 +89,53 @@ function toneLabel(tone: EdgeTone) {
   if (tone === "action") return "Action";
   if (tone === "avoid") return "Avoid";
   return "Watch";
+}
+
+function inferAssetClass(ticker: string) {
+  const symbol = normalizeTicker(ticker);
+  if (symbol.endsWith("-USD")) return "crypto";
+  if (["SPY", "QQQ", "VOO", "VTI", "SCHD", "SOXX", "IBIT", "FBTC", "DIA", "IWM", "URTH", "GLD", "TLT", "XLE", "USO"].includes(symbol)) {
+    return "etf";
+  }
+  return "equity";
+}
+
+function advisoryAction(tone: EdgeTone) {
+  if (tone === "action") return "setup";
+  if (tone === "avoid") return "watch";
+  return "watch";
+}
+
+function advisoryRiskLevel(row: DecisionRow) {
+  if (row.tone === "avoid") return "high";
+  if ((row.score ?? 0) >= 88) return "high";
+  if (inferAssetClass(row.ticker) === "crypto") return "speculative";
+  return "medium";
+}
+
+function suitabilityBadge(summary?: SuitabilitySummary | null) {
+  if (!summary) {
+    return {
+      label: "Profil prueft",
+      classes: "border-slate-300 bg-white/70 text-slate-500",
+    };
+  }
+  if (summary.decision === "blocked" || summary.decision === "needs_profile") {
+    return {
+      label: summary.decision === "needs_profile" ? "Profil fehlt" : "Blockiert",
+      classes: "border-red-500/20 bg-red-500/10 text-red-800",
+    };
+  }
+  if (summary.decision === "action_requires_review") {
+    return {
+      label: "Profil: pruefen",
+      classes: "border-amber-500/25 bg-amber-500/10 text-amber-800",
+    };
+  }
+  return {
+    label: summary.decision === "setup_allowed" ? "Profil: passt" : "Profil: watch",
+    classes: "border-emerald-500/20 bg-emerald-500/10 text-emerald-800",
+  };
 }
 
 function actionTone(value: unknown, impactScore: number | null): EdgeTone {
@@ -256,13 +311,71 @@ export default function EdgeDashboardPanel({
   onOpenPortfolio,
   onOpenMarkets,
 }: EdgeDashboardPanelProps) {
-  const rows = dedupeRows([...buildScoreRows(signalScore), ...buildBriefRows(globalBrief)])
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .slice(0, 8);
+  const rows = useMemo(
+    () =>
+      dedupeRows([...buildScoreRows(signalScore), ...buildBriefRows(globalBrief)])
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 8),
+    [globalBrief, signalScore],
+  );
+  const suitabilityKey = rows.map((row) => `${row.key}:${row.ticker}:${row.tone}:${row.score ?? "n/a"}`).join("|");
+  const [suitabilityByKey, setSuitabilityByKey] = useState<Record<string, SuitabilitySummary>>({});
+  const [suitabilityLoading, setSuitabilityLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkRows = rows.filter((row) => row.ticker).slice(0, 8);
+    if (!checkRows.length) {
+      setSuitabilityByKey({});
+      setSuitabilityLoading(false);
+      return;
+    }
+    setSuitabilityLoading(true);
+    Promise.all(
+      checkRows.map(async (row) => {
+        try {
+          const response = await fetch("/api/advisory/suitability-check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              symbol: row.ticker,
+              asset_class: inferAssetClass(row.ticker),
+              action: advisoryAction(row.tone),
+              risk_level: advisoryRiskLevel(row),
+              position_pct: 0,
+              thesis: `${row.label} / ${row.headline} / ${row.nextAction}`,
+            }),
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !payload) return null;
+          return [row.key, payload] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((items) => {
+      if (cancelled) return;
+      const next: Record<string, SuitabilitySummary> = {};
+      items.forEach((item) => {
+        if (item) next[item[0]] = item[1];
+      });
+      setSuitabilityByKey(next);
+      setSuitabilityLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [suitabilityKey]);
+
   const macroPlaybookRows = buildMacroPlaybookRows(globalBrief);
   const actionRows = rows.filter((row) => row.tone === "action").slice(0, 3);
   const watchRows = rows.filter((row) => row.tone === "watch").slice(0, 3);
   const avoidRows = rows.filter((row) => row.tone === "avoid").slice(0, 3);
+  const suitabilityValues = Object.values(suitabilityByKey);
+  const profileActionCount = suitabilityValues.filter((item) => item.decision === "setup_allowed").length;
+  const profileReviewCount = suitabilityValues.filter((item) =>
+    ["blocked", "needs_profile", "action_requires_review"].includes(item.decision),
+  ).length;
   const snapshot = portfolioSnapshot(portfolios, quotes);
   const hitRate = toNumber(learning?.summary?.hit_rate ?? learning?.summary?.accuracy);
   const evaluated = toNumber(learning?.summary?.evaluated ?? learning?.summary?.evaluated_forecasts);
@@ -307,8 +420,12 @@ export default function EdgeDashboardPanel({
   const kpis = [
     {
       label: "Action candidates",
-      value: String(actionRows.length),
-      detail: rows.length ? `${rows.length} ranked signals` : loading ? "Signals loading" : "No ranked signal yet",
+      value: String(profileActionCount || actionRows.length),
+      detail: suitabilityLoading
+        ? "Advisory checks loading"
+        : rows.length
+          ? `${profileReviewCount} profile review / ${rows.length} ranked`
+          : loading ? "Signals loading" : "No ranked signal yet",
       icon: Target,
     },
     {
@@ -334,7 +451,11 @@ export default function EdgeDashboardPanel({
     },
   ];
 
-  const renderRow = (row: DecisionRow) => (
+  const renderRow = (row: DecisionRow) => {
+    const advisory = suitabilityByKey[row.key];
+    const badge = suitabilityBadge(advisory);
+    const reason = advisory?.reasons?.[0];
+    return (
     <div key={row.key} className="rounded-[1.1rem] border border-black/8 bg-white/78 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -352,9 +473,17 @@ export default function EdgeDashboardPanel({
               </button>
             ) : null}
             <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{row.source}</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] ${badge.classes}`}>
+              {suitabilityLoading && !advisory ? "Profil prueft" : badge.label}
+            </span>
           </div>
           <div className="mt-2 line-clamp-1 text-sm font-bold text-slate-900">{row.label}</div>
           <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{row.headline}</div>
+          {reason ? (
+            <div className="mt-2 line-clamp-1 text-[11px] font-semibold leading-5 text-slate-500">
+              Advisory: {reason}
+            </div>
+          ) : null}
         </div>
         <div className="text-right">
           <div className="text-xl font-black text-slate-950">{row.score != null ? formatNumber(row.score, 0) : "n/a"}</div>
@@ -374,7 +503,8 @@ export default function EdgeDashboardPanel({
         ) : null}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <section className="surface-panel rounded-[2rem] p-5 sm:p-7">

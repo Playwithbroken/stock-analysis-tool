@@ -126,7 +126,30 @@ def init_db():
         status TEXT NOT NULL,
         notes TEXT,
         exit_reason TEXT,
-        lessons_learned TEXT
+        lessons_learned TEXT,
+        underlying_entry_price REAL,
+        option_type TEXT,
+        contract_multiplier REAL DEFAULT 1,
+        max_holding_days INTEGER,
+        error_tag TEXT
+    )
+    ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_trade_outcomes (
+        id TEXT PRIMARY KEY,
+        trade_id TEXT NOT NULL,
+        horizon_hours INTEGER NOT NULL,
+        due_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        result TEXT,
+        checked_at TEXT,
+        check_price REAL,
+        performance_pct REAL,
+        notes TEXT,
+        error_tag TEXT,
+        UNIQUE(trade_id, horizon_hours),
+        FOREIGN KEY (trade_id) REFERENCES paper_trades (id) ON DELETE CASCADE
     )
     ''')
 
@@ -178,6 +201,26 @@ def init_db():
         pass
     try:
         cursor.execute('ALTER TABLE paper_trades ADD COLUMN lessons_learned TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN underlying_entry_price REAL')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN option_type TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN contract_multiplier REAL DEFAULT 1')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN max_holding_days INTEGER')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('ALTER TABLE paper_trades ADD COLUMN error_tag TEXT')
     except sqlite3.OperationalError:
         pass
     try:
@@ -831,6 +874,11 @@ class PortfolioManager:
             "notes": payload.get("notes") or "",
             "exit_reason": payload.get("exit_reason") or "",
             "lessons_learned": payload.get("lessons_learned") or "",
+            "underlying_entry_price": float(payload["underlying_entry_price"]) if payload.get("underlying_entry_price") not in (None, "") else None,
+            "option_type": payload.get("option_type") or None,
+            "contract_multiplier": float(payload.get("contract_multiplier") or 1),
+            "max_holding_days": int(payload["max_holding_days"]) if payload.get("max_holding_days") not in (None, "") else None,
+            "error_tag": payload.get("error_tag") or "",
         }
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -839,8 +887,9 @@ class PortfolioManager:
             INSERT INTO paper_trades (
                 id, ticker, asset_class, direction, setup_type, thesis, entry_price,
                 stop_price, target_price, quantity, confidence_score, leverage,
-                opened_at, closed_at, closed_price, status, notes, exit_reason, lessons_learned
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                opened_at, closed_at, closed_price, status, notes, exit_reason, lessons_learned,
+                underlying_entry_price, option_type, contract_multiplier, max_holding_days, error_tag
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 row["id"],
@@ -862,11 +911,122 @@ class PortfolioManager:
                 row["notes"],
                 row["exit_reason"],
                 row["lessons_learned"],
+                row["underlying_entry_price"],
+                row["option_type"],
+                row["contract_multiplier"],
+                row["max_holding_days"],
+                row["error_tag"],
             ),
         )
         conn.commit()
         conn.close()
         return row
+
+    def upsert_paper_trade_outcomes(self, trade_id: str, outcomes: List[Dict[str, Any]]) -> int:
+        if not outcomes:
+            return 0
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        inserted = 0
+        for outcome in outcomes:
+            cursor.execute(
+                '''
+                INSERT OR IGNORE INTO paper_trade_outcomes (
+                    id, trade_id, horizon_hours, due_at, status, result,
+                    checked_at, check_price, performance_pct, notes, error_tag
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    outcome.get("id"),
+                    trade_id,
+                    int(outcome.get("horizon_hours") or 0),
+                    outcome.get("due_at"),
+                    outcome.get("status") or "pending",
+                    outcome.get("result"),
+                    outcome.get("checked_at"),
+                    outcome.get("check_price"),
+                    outcome.get("performance_pct"),
+                    outcome.get("notes"),
+                    outcome.get("error_tag"),
+                ),
+            )
+            inserted += max(0, cursor.rowcount)
+        conn.commit()
+        conn.close()
+        return inserted
+
+    def list_due_paper_trade_outcomes(self, limit: int = 80) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT
+                o.*,
+                t.ticker,
+                t.asset_class,
+                t.direction,
+                t.setup_type,
+                t.entry_price,
+                t.stop_price,
+                t.target_price,
+                t.quantity,
+                t.leverage,
+                t.opened_at,
+                t.status AS trade_status,
+                t.underlying_entry_price,
+                t.option_type,
+                t.contract_multiplier,
+                t.max_holding_days
+            FROM paper_trade_outcomes o
+            JOIN paper_trades t ON t.id = o.trade_id
+            WHERE o.status IN ('pending', 'pending_data')
+              AND o.due_at <= ?
+            ORDER BY o.due_at ASC
+            LIMIT ?
+            ''',
+            (datetime.now().isoformat(), limit),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def update_paper_trade_outcome(self, outcome_id: str, updates: Dict[str, Any]) -> None:
+        allowed = {"status", "result", "checked_at", "check_price", "performance_pct", "notes", "error_tag"}
+        clean = {key: value for key, value in (updates or {}).items() if key in allowed}
+        if not clean:
+            return
+        assignments = ", ".join([f"{key} = ?" for key in clean.keys()])
+        values = list(clean.values()) + [outcome_id]
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE paper_trade_outcomes SET {assignments} WHERE id = ?", values)
+        conn.commit()
+        conn.close()
+
+    def list_paper_trade_outcomes(self, limit: int = 500) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT
+                o.*,
+                t.ticker,
+                t.asset_class,
+                t.direction,
+                t.setup_type,
+                t.opened_at
+            FROM paper_trade_outcomes o
+            JOIN paper_trades t ON t.id = o.trade_id
+            ORDER BY o.due_at DESC
+            LIMIT ?
+            ''',
+            (limit,),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
 
     def close_paper_trade(
         self,

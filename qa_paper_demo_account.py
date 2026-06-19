@@ -9,6 +9,7 @@ class FakePortfolioManager:
     def __init__(self, trades: List[Dict[str, Any]] | None = None) -> None:
         self.trades = trades or []
         self.created: List[Dict[str, Any]] = []
+        self.outcomes: List[Dict[str, Any]] = []
 
     def list_paper_trades(self, limit: int = 150) -> List[Dict[str, Any]]:
         return self.trades[:limit]
@@ -23,6 +24,35 @@ class FakePortfolioManager:
         self.created.append(trade)
         self.trades.append(trade)
         return trade
+
+    def upsert_paper_trade_outcomes(self, trade_id: str, outcomes: List[Dict[str, Any]]) -> int:
+        inserted = 0
+        existing = {(item["trade_id"], item["horizon_hours"]) for item in self.outcomes}
+        for outcome in outcomes:
+            key = (trade_id, outcome["horizon_hours"])
+            if key in existing:
+                continue
+            self.outcomes.append({**outcome, "trade_id": trade_id})
+            inserted += 1
+        return inserted
+
+    def list_paper_trade_outcomes(self, limit: int = 500) -> List[Dict[str, Any]]:
+        return self.outcomes[:limit]
+
+    def list_due_paper_trade_outcomes(self, limit: int = 80) -> List[Dict[str, Any]]:
+        due = []
+        for item in self.outcomes:
+            if item.get("status") not in {"pending", "pending_data"}:
+                continue
+            trade = next((row for row in self.trades if row.get("id") == item.get("trade_id")), {})
+            due.append({**trade, **item, "trade_status": trade.get("status")})
+        return due[:limit]
+
+    def update_paper_trade_outcome(self, outcome_id: str, updates: Dict[str, Any]) -> None:
+        for item in self.outcomes:
+            if item.get("id") == outcome_id:
+                item.update(updates)
+                return
 
 
 def build_service(manager: FakePortfolioManager) -> PaperTradingService:
@@ -114,6 +144,7 @@ def test_demo_account_sizing() -> None:
     assert created["ticker"] == "AAPL"
     assert created["quantity"] == 60
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
+    assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
 
     created_call = service.create_trade_from_playbook(
         {"playbook_id": "option-AAPL-call", "direction": "call", "quantity": 0, "leverage": 1},
@@ -127,6 +158,12 @@ def test_demo_account_sizing() -> None:
     assert created_call["entry_price"] == 2.5
     assert created_call["stop_price"] == 1.25
     assert created_call["target_price"] == 5.0
+    call_outcomes = [item for item in manager.outcomes if item["trade_id"] == created_call["id"]]
+    assert {item["horizon_hours"] for item in call_outcomes} == {1, 24, 72, 168, 240}
+
+    result = service.evaluate_due_outcomes()
+    assert result["evaluated"] >= 1
+    assert any(item.get("status") == "evaluated" for item in manager.outcomes)
 
 
 def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:

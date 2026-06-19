@@ -44,6 +44,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const closedTrades = data?.closed_trades || [];
   const setupPerformance = data?.setup_performance || [];
   const journal = data?.journal || [];
+  const outcomes = data?.outcomes || {};
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
   const learningFeedback = demoAccount.learning_feedback || {};
@@ -230,6 +231,41 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <span key={item.reason} className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-bold text-red-700">
                   {item.reason}: {item.count}
                 </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Auto Outcome Checks</div>
+              <div className="mt-2 text-slate-700">
+                Hit {outcomes.summary?.hit_rate || 0}% · Evaluated {outcomes.summary?.evaluated || 0} · Pending {outcomes.summary?.pending || 0}
+              </div>
+            </div>
+            {!!outcomes.top_errors?.length && (
+              <div className="flex max-w-xl flex-wrap gap-2">
+                {outcomes.top_errors.map((item: any) => (
+                  <span key={item.error_tag} className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-bold text-red-700">
+                    {item.error_tag}: {item.count}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          {!!outcomes.recent?.length && (
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {outcomes.recent.slice(0, 6).map((item: any) => (
+                <div key={item.id} className="rounded-[1rem] border border-black/8 bg-white px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-black text-slate-900">{item.ticker} · {item.horizon_hours}h</span>
+                    <span className="font-bold uppercase text-slate-500">{item.result || item.status}</span>
+                  </div>
+                  <div className="mt-1 text-slate-500">
+                    {item.performance_pct != null ? `Edge ${Number(item.performance_pct).toFixed(2)}%` : "Waiting for check"} {item.error_tag ? `· ${item.error_tag}` : ""}
+                  </div>
+                </div>
               ))}
             </div>
           )}

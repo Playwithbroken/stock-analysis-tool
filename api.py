@@ -1155,9 +1155,10 @@ async def _forecast_learning_loop():
     while True:
         try:
             result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
+            paper_result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
             get_portfolio_manager().set_app_setting(
                 "forecast_learning_last_result",
-                json.dumps({"checked_at": datetime.utcnow().isoformat(), **result}),
+                json.dumps({"checked_at": datetime.utcnow().isoformat(), **result, "paper_trades": paper_result}),
             )
         except Exception as e:
             print(f"Forecast learning loop error: {e}")
@@ -4260,6 +4261,18 @@ async def get_paper_trading_dashboard():
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
         dashboard = get_paper_trading_service().build_dashboard(scoreboard, settings)
         return convert_numpy_types(dashboard)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/trading/paper-outcomes/evaluate")
+async def evaluate_paper_trade_outcomes():
+    try:
+        result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
+        get_portfolio_manager().set_app_setting(
+            "paper_trade_outcomes_last_result",
+            json.dumps({"checked_at": datetime.utcnow().isoformat(), **result}),
+        )
+        return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

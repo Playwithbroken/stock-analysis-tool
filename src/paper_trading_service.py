@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import yfinance as yf
 
 from src.storage import PortfolioManager
+
+DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
 
 class PaperTradingService:
@@ -28,12 +30,14 @@ class PaperTradingService:
             "stats": self._build_stats(trades),
             "setup_performance": self._build_setup_performance(closed_trades),
             "journal": self._build_journal(trades),
+            "outcomes": self._build_outcome_dashboard(),
             "rules": rules,
             "demo_account": demo_account,
         }
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         trade = self.portfolio_manager.create_paper_trade(payload)
+        self._schedule_trade_outcomes(trade)
         return self._enrich_trade(trade)
 
     def create_trade_from_playbook(
@@ -92,6 +96,10 @@ class PaperTradingService:
                 "quantity": quantity,
                 "confidence_score": playbook.get("score"),
                 "leverage": leverage,
+                "underlying_entry_price": playbook.get("underlying_reference_price") if is_option else last_price,
+                "option_type": playbook.get("option_type") if is_option else None,
+                "contract_multiplier": playbook.get("contract_multiplier") or (100 if is_option else 1),
+                "max_holding_days": playbook.get("max_holding_days") if is_option else None,
                 "notes": (
                     f"Demo account idea. Suggested qty {playbook.get('suggested_quantity')}; "
                     f"risk {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}. "
@@ -100,7 +108,37 @@ class PaperTradingService:
                 ).strip(),
             }
         )
+        self._schedule_trade_outcomes(created)
         return self._enrich_trade(created)
+
+    def evaluate_due_outcomes(self, limit: int = 80) -> Dict[str, Any]:
+        due_items = self.portfolio_manager.list_due_paper_trade_outcomes(limit=limit)
+        evaluated = 0
+        pending_data = 0
+        errors: List[str] = []
+
+        for item in due_items:
+            outcome_id = str(item.get("id") or "")
+            if not outcome_id:
+                continue
+            checked_at = datetime.utcnow().isoformat()
+            try:
+                result = self._evaluate_outcome_item(item, checked_at)
+                self.portfolio_manager.update_paper_trade_outcome(outcome_id, result)
+                if result.get("status") == "evaluated":
+                    evaluated += 1
+                elif result.get("status") == "pending_data":
+                    pending_data += 1
+            except Exception as exc:
+                errors.append(f"{item.get('ticker') or outcome_id}: {exc}")
+
+        return {
+            "status": "ok" if not errors else "partial",
+            "due": len(due_items),
+            "evaluated": evaluated,
+            "pending_data": pending_data,
+            "errors": errors[:5],
+        }
 
     def close_trade(
         self,
@@ -113,9 +151,17 @@ class PaperTradingService:
         existing = next((item for item in self.portfolio_manager.list_paper_trades(limit=300) if item.get("id") == trade_id), None)
         if not existing:
             raise ValueError("Trade not found.")
-        exit_price = float(closed_price or 0) or self._get_last_price(existing.get("ticker")) or float(existing.get("entry_price") or 0)
+        if existing.get("asset_class") == "option":
+            exit_price = float(closed_price or 0) or float(existing.get("entry_price") or 0)
+        else:
+            exit_price = float(closed_price or 0) or self._get_last_price(existing.get("ticker")) or float(existing.get("entry_price") or 0)
         if exit_price <= 0:
             raise ValueError("No valid close price available.")
+        auto_error = self._classify_closed_trade_error(existing, exit_price)
+        if not exit_reason and auto_error.get("exit_reason"):
+            exit_reason = auto_error["exit_reason"]
+        if not lessons_learned and auto_error.get("lesson"):
+            lessons_learned = auto_error["lesson"]
         closed = self.portfolio_manager.close_paper_trade(trade_id, exit_price, notes, exit_reason, lessons_learned)
         if not closed:
             raise ValueError("Trade not found.")
@@ -243,6 +289,156 @@ class PaperTradingService:
             item["tradeable"] = len(rule_state["blocked"]) == 0
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:10]
+
+    def _schedule_trade_outcomes(self, trade: Dict[str, Any]) -> int:
+        trade_id = str(trade.get("id") or "")
+        if not trade_id:
+            return 0
+        opened_at = self._parse_datetime(trade.get("opened_at")) or datetime.utcnow()
+        horizons = list(DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS)
+        max_holding_days = int(trade.get("max_holding_days") or 0)
+        if trade.get("asset_class") == "option" and max_holding_days > 0:
+            horizons.append(max_holding_days * 24)
+        unique_horizons = sorted({int(hour) for hour in horizons if int(hour) > 0})
+        outcomes = [
+            {
+                "id": f"{trade_id}_{hours}h",
+                "trade_id": trade_id,
+                "horizon_hours": hours,
+                "due_at": (opened_at + timedelta(hours=hours)).isoformat(),
+                "status": "pending",
+                "result": None,
+                "checked_at": None,
+                "check_price": None,
+                "performance_pct": None,
+                "notes": None,
+                "error_tag": None,
+            }
+            for hours in unique_horizons
+        ]
+        return self.portfolio_manager.upsert_paper_trade_outcomes(trade_id, outcomes)
+
+    def _evaluate_outcome_item(self, item: Dict[str, Any], checked_at: str) -> Dict[str, Any]:
+        asset_class = str(item.get("asset_class") or "equity")
+        direction = str(item.get("direction") or "long").lower()
+        entry = float(item.get("entry_price") or 0)
+        ticker = str(item.get("ticker") or "").upper()
+        if entry <= 0 or not ticker:
+            return {
+                "status": "pending_data",
+                "checked_at": checked_at,
+                "notes": "Missing entry price or ticker; outcome not scored.",
+            }
+
+        if asset_class == "option":
+            underlying_entry = float(item.get("underlying_entry_price") or 0)
+            underlying_price = self._get_last_price(ticker)
+            if underlying_entry <= 0 or underlying_price is None:
+                return {
+                    "status": "pending_data",
+                    "checked_at": checked_at,
+                    "notes": "Underlying price unavailable; option outcome not scored.",
+                }
+            raw_move = ((underlying_price / underlying_entry) - 1) * 100
+            favorable = raw_move if direction == "call" else -raw_move
+            result, error_tag, notes = self._score_paper_outcome(favorable, item)
+            return {
+                "status": "evaluated",
+                "result": result,
+                "checked_at": checked_at,
+                "check_price": underlying_price,
+                "performance_pct": round(favorable, 2),
+                "notes": f"Underlying move model for paper {direction}: {notes}",
+                "error_tag": error_tag,
+            }
+
+        current_price = self._get_last_price(ticker)
+        if current_price is None:
+            return {
+                "status": "pending_data",
+                "checked_at": checked_at,
+                "notes": "Price data unavailable; outcome not scored.",
+            }
+        raw_move = ((current_price / entry) - 1) * 100
+        favorable = -raw_move if direction == "short" else raw_move
+        result, error_tag, notes = self._score_paper_outcome(favorable, item)
+        return {
+            "status": "evaluated",
+            "result": result,
+            "checked_at": checked_at,
+            "check_price": current_price,
+            "performance_pct": round(favorable, 2),
+            "notes": notes,
+            "error_tag": error_tag,
+        }
+
+    def _score_paper_outcome(self, favorable_pct: float, item: Dict[str, Any]) -> tuple[str, Optional[str], str]:
+        horizon = int(item.get("horizon_hours") or 0)
+        is_option = item.get("asset_class") == "option"
+        hit_threshold = 1.2 if is_option else 0.8
+        miss_threshold = -1.2 if is_option else -0.8
+        if horizon <= 1:
+            hit_threshold *= 0.5
+            miss_threshold *= 0.5
+        if favorable_pct >= hit_threshold:
+            return "hit", None, f"Favorable move {favorable_pct:+.2f}% met the {horizon}h threshold."
+        if favorable_pct <= miss_threshold:
+            error_tag = self._classify_error_tag(favorable_pct, item)
+            return "miss", error_tag, f"Adverse move {favorable_pct:+.2f}% missed the {horizon}h threshold."
+        return "neutral", None, f"Move {favorable_pct:+.2f}% was not decisive at {horizon}h."
+
+    def _classify_error_tag(self, favorable_pct: float, item: Dict[str, Any]) -> str:
+        setup_type = str(item.get("setup_type") or "")
+        asset_class = str(item.get("asset_class") or "")
+        horizon = int(item.get("horizon_hours") or 0)
+        if asset_class == "option" and horizon <= 24:
+            return "option_timing_too_early_or_premium_decay"
+        if "political" in setup_type:
+            return "delayed_signal_no_follow_through"
+        if "news" in setup_type:
+            return "headline_no_follow_through"
+        if favorable_pct < -3:
+            return "thesis_invalidated_fast"
+        return "weak_follow_through"
+
+    def _classify_closed_trade_error(self, trade: Dict[str, Any], exit_price: float) -> Dict[str, str]:
+        entry = float(trade.get("entry_price") or 0)
+        if entry <= 0 or exit_price <= 0:
+            return {}
+        direction_multiplier = -1 if trade.get("direction") == "short" else 1
+        pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, float(trade.get("leverage") or 1))
+        if pnl_pct is None or pnl_pct >= 0:
+            return {}
+        error_tag = self._classify_error_tag(float(pnl_pct), trade)
+        return {
+            "exit_reason": error_tag,
+            "lesson": f"Auto-classified loss: {error_tag}. Reduce score or wait for stronger confirmation next time.",
+        }
+
+    def _build_outcome_dashboard(self) -> Dict[str, Any]:
+        outcomes = self.portfolio_manager.list_paper_trade_outcomes(limit=500)
+        evaluated = [item for item in outcomes if item.get("status") == "evaluated"]
+        pending = [item for item in outcomes if item.get("status") in {"pending", "pending_data"}]
+        hits = [item for item in evaluated if item.get("result") == "hit"]
+        misses = [item for item in evaluated if item.get("result") == "miss"]
+        by_error: Dict[str, int] = {}
+        for item in misses:
+            key = str(item.get("error_tag") or "unclassified")
+            by_error[key] = by_error.get(key, 0) + 1
+        return {
+            "summary": {
+                "total": len(outcomes),
+                "evaluated": len(evaluated),
+                "pending": len(pending),
+                "hit_rate": round((len(hits) / max(1, len(hits) + len(misses))) * 100, 1),
+                "misses": len(misses),
+            },
+            "top_errors": [
+                {"error_tag": key, "count": count}
+                for key, count in sorted(by_error.items(), key=lambda item: item[1], reverse=True)[:6]
+            ],
+            "recent": outcomes[:12],
+        }
 
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         option_playbooks: List[Dict[str, Any]] = []
@@ -629,5 +825,13 @@ class PaperTradingService:
             if hist.empty:
                 return None
             return round(float(hist["Close"].dropna().iloc[-1]), 2)
+        except Exception:
+            return None
+
+    def _parse_datetime(self, value: Any) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
         except Exception:
             return None

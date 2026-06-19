@@ -45,7 +45,7 @@ from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
 from src.realtime_market_service import RealtimeMarketService
 from src.public_signal_service import PublicSignalService
-from src.advisory_service import advisory_profile_subset, build_suitability_check
+from src.advisory_service import advisory_profile_subset, build_portfolio_advisory_check, build_suitability_check
 from src.storage import DB_PATH, PortfolioManager, get_database_status
 
 # Load environment variables
@@ -1321,6 +1321,11 @@ class SuitabilityCheckRequest(BaseModel):
     position_pct: Optional[float] = None
     time_horizon: Optional[str] = None
     thesis: Optional[str] = None
+
+
+class PortfolioAdvisoryCheckRequest(BaseModel):
+    holdings: List[Dict[str, Any]] = []
+    summary: Dict[str, Any] = {}
 
 
 class LoginRequest(BaseModel):
@@ -3366,6 +3371,15 @@ async def check_signal_suitability(req: SuitabilityCheckRequest):
     try:
         profile = get_portfolio_manager().get_workspace_profile()
         result = build_suitability_check(profile, req.model_dump(exclude_none=True))
+        return convert_numpy_types(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/advisory/portfolio-check")
+async def check_portfolio_advisory(req: PortfolioAdvisoryCheckRequest):
+    try:
+        profile = get_portfolio_manager().get_workspace_profile()
+        result = build_portfolio_advisory_check(profile, req.model_dump())
         return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

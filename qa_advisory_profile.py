@@ -8,7 +8,7 @@ def main() -> int:
         os.environ["APP_DATA_DIR"] = tmp
         os.environ["PORTFOLIO_DB_PATH"] = os.path.join(tmp, "advisory-test.db")
 
-        from src.advisory_service import build_suitability_check
+        from src.advisory_service import build_portfolio_advisory_check, build_suitability_check
         from src.storage import PortfolioManager
 
         manager = PortfolioManager()
@@ -96,6 +96,55 @@ def main() -> int:
         )
         if allowed.get("decision") != "setup_allowed":
             print(f"FAIL suitable long-term setup not allowed: {allowed}")
+            return 1
+
+        concentrated = build_portfolio_advisory_check(
+            suitable_profile,
+            {
+                "summary": {
+                    "total_value": 10000,
+                    "num_holdings": 3,
+                    "avg_score": 22,
+                    "return_since_buy_pct": 4,
+                    "sector_allocation": {"Technology": 70, "Cash": 30},
+                },
+                "holdings": [
+                    {"ticker": "AAPL", "position_value": 6000, "score": 40, "sector": "Technology"},
+                    {"ticker": "MSFT", "position_value": 2500, "score": 35, "sector": "Technology"},
+                    {"ticker": "CASH", "position_value": 1500, "score": 0, "sector": "Cash"},
+                ],
+            },
+        )
+        if concentrated.get("decision") != "blocked_for_new_risk":
+            print(f"FAIL concentrated portfolio not blocked for new risk: {concentrated}")
+            return 1
+        if "single_position_limit_breach" not in concentrated.get("risk_flags", []):
+            print("FAIL concentrated portfolio missing single position risk flag")
+            return 1
+
+        balanced = build_portfolio_advisory_check(
+            suitable_profile,
+            {
+                "summary": {
+                    "total_value": 10000,
+                    "num_holdings": 6,
+                    "avg_score": 45,
+                    "return_since_buy_pct": 6,
+                    "sector_allocation": {"Technology": 30, "Healthcare": 20, "Consumer": 20, "ETF": 30},
+                },
+                "holdings": [
+                    {"ticker": "AAPL", "position_value": 1400, "score": 55, "sector": "Technology"},
+                    {"ticker": "MSFT", "position_value": 1300, "score": 55, "sector": "Technology"},
+                    {"ticker": "JNJ", "position_value": 1500, "score": 40, "sector": "Healthcare"},
+                    {"ticker": "PEP", "position_value": 1500, "score": 35, "sector": "Consumer"},
+                    {"ticker": "VOO", "position_value": 1400, "score": 45, "sector": "ETF"},
+                    {"ticker": "SCHD", "position_value": 1400, "score": 40, "sector": "ETF"},
+                    {"ticker": "TLT", "position_value": 1000, "score": 20, "sector": "ETF"},
+                ],
+            },
+        )
+        if balanced.get("decision") != "within_framework":
+            print(f"FAIL balanced portfolio not marked within framework: {balanced}")
             return 1
 
     print("Advisory profile smoke passed.")

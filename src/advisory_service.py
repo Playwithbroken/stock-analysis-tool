@@ -224,3 +224,138 @@ def build_suitability_check(profile: Dict[str, Any], request: Optional[Dict[str,
         },
         "disclaimer": "Informations- und Entscheidungsrahmen, keine automatische Kauf- oder Verkaufsempfehlung.",
     }
+
+
+def build_portfolio_advisory_check(profile: Dict[str, Any], portfolio: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    advisory = normalize_advisory_profile(profile)
+    payload = portfolio or {}
+    holdings = payload.get("holdings") if isinstance(payload.get("holdings"), list) else []
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+
+    total_value = _safe_float(summary.get("total_value"), 0.0, 0.0, 10_000_000_000.0)
+    avg_score = _safe_float(summary.get("avg_score"), 0.0, -100.0, 100.0)
+    num_holdings = int(_safe_float(summary.get("num_holdings"), float(len(holdings)), 0.0, 10000.0))
+    max_position_pct = float(advisory["max_single_position_pct"])
+    max_drawdown_pct = float(advisory["max_portfolio_drawdown_pct"])
+
+    normalized_holdings: List[Dict[str, Any]] = []
+    for item in holdings:
+        if not isinstance(item, dict) or item.get("error"):
+            continue
+        value = _safe_float(item.get("position_value"), 0.0, 0.0, 10_000_000_000.0)
+        pct = (value / total_value) * 100 if total_value > 0 else 0.0
+        normalized_holdings.append(
+            {
+                "ticker": _safe_string(item.get("ticker")).upper(),
+                "position_value": value,
+                "position_pct": round(pct, 2),
+                "score": _safe_float(item.get("score"), 0.0, -100.0, 100.0),
+                "sector": _safe_string(item.get("sector") or "Other"),
+            }
+        )
+
+    top_holding = max(normalized_holdings, key=lambda item: item["position_pct"], default=None)
+    sector_allocation = summary.get("sector_allocation") if isinstance(summary.get("sector_allocation"), dict) else {}
+    top_sector = None
+    if sector_allocation:
+        top_sector_name, top_sector_pct = max(
+            sector_allocation.items(),
+            key=lambda pair: _safe_float(pair[1], 0.0, 0.0, 100.0),
+        )
+        top_sector = {
+            "sector": _safe_string(top_sector_name),
+            "pct": _safe_float(top_sector_pct, 0.0, 0.0, 100.0),
+        }
+
+    issues: List[str] = []
+    next_steps: List[str] = []
+    risk_flags: List[str] = []
+    score = 82
+
+    if not advisory["advisory_enabled"]:
+        score -= 35
+        risk_flags.append("advisory_disabled")
+        issues.append("Beratungsprofil ist deaktiviert; Portfolio bleibt reine Information.")
+
+    if not advisory["advisory_profile_complete"]:
+        score -= 18
+        risk_flags.append("profile_incomplete")
+        issues.append("Beratungsprofil ist noch nicht bestaetigt.")
+        next_steps.append("Beratungsprofil vervollstaendigen, bevor neue Positionen aktiv aufgebaut werden.")
+
+    if num_holdings == 0:
+        score -= 25
+        risk_flags.append("empty_portfolio")
+        issues.append("Portfolio enthaelt keine bewertbaren Positionen.")
+    elif num_holdings < 5:
+        score -= 16
+        risk_flags.append("low_diversification")
+        issues.append("Weniger als 5 Positionen: Diversifikation ist noch duenn.")
+        next_steps.append("Vor neuen Einzelwetten Diversifikation und Zielgewicht definieren.")
+
+    if top_holding and top_holding["position_pct"] > max_position_pct:
+        score -= 26
+        risk_flags.append("single_position_limit_breach")
+        issues.append(
+            f"{top_holding['ticker']} liegt bei {top_holding['position_pct']:.2f}% und damit ueber dem Limit von {max_position_pct:.2f}%."
+        )
+        next_steps.append("Top-Position pruefen: reduzieren, absichern oder neues Kapital breiter verteilen.")
+
+    if top_sector and top_sector["pct"] > 45:
+        score -= 12
+        risk_flags.append("sector_concentration")
+        issues.append(f"Sektor {top_sector['sector']} macht {top_sector['pct']:.2f}% des Portfolios aus.")
+
+    if avg_score < 0:
+        score -= 14
+        risk_flags.append("negative_average_score")
+        issues.append("Durchschnittlicher Portfolio-Score ist negativ.")
+
+    drawdown_pct = abs(_safe_float(summary.get("return_since_buy_pct") or summary.get("gain_loss_pct"), 0.0, -100.0, 100.0))
+    if drawdown_pct > max_drawdown_pct and (summary.get("return_since_buy_pct") or summary.get("gain_loss_pct") or 0) < 0:
+        score -= 20
+        risk_flags.append("drawdown_limit_breach")
+        issues.append(f"Portfolio-Drawdown liegt bei {drawdown_pct:.2f}% und ueber dem Limit von {max_drawdown_pct:.2f}%.")
+        next_steps.append("Drawdown-Regel pruefen: These je Position erneuern oder Risiko senken.")
+
+    score = max(0, min(100, score))
+    if score < 45 or "single_position_limit_breach" in risk_flags or "drawdown_limit_breach" in risk_flags:
+        decision = "blocked_for_new_risk"
+        status = "blocked"
+    elif risk_flags:
+        decision = "review_before_new_risk"
+        status = "review"
+    else:
+        decision = "within_framework"
+        status = "ok"
+
+    if not issues:
+        issues.append("Portfolio passt grundsaetzlich zum hinterlegten Beratungsrahmen.")
+    if not next_steps:
+        next_steps.append("Neue Setups nur mit Trigger, Zielgewicht und Invalidierung umsetzen.")
+
+    return {
+        "status": status,
+        "decision": decision,
+        "profile_complete": advisory["advisory_profile_complete"],
+        "advisory_score": score,
+        "issues": issues,
+        "required_next_steps": next_steps,
+        "risk_flags": risk_flags,
+        "top_holding": top_holding,
+        "top_sector": top_sector,
+        "portfolio_metrics": {
+            "total_value": total_value,
+            "num_holdings": num_holdings,
+            "avg_score": avg_score,
+            "max_single_position_pct": max_position_pct,
+            "max_portfolio_drawdown_pct": max_drawdown_pct,
+        },
+        "profile_limits": {
+            "risk_tolerance": advisory["risk_tolerance"],
+            "loss_capacity": advisory["loss_capacity"],
+            "experience_level": advisory["experience_level"],
+            "preferred_strategy": advisory["preferred_strategy"],
+        },
+        "disclaimer": "Informations- und Entscheidungsrahmen, keine automatische Kauf- oder Verkaufsempfehlung.",
+    }

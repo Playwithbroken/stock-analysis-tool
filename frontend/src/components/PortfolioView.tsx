@@ -59,6 +59,29 @@ interface AdvisoryProfile {
   preferred_strategy?: string;
 }
 
+interface PortfolioAdvisoryCheck {
+  status: "ok" | "review" | "blocked" | string;
+  decision: string;
+  advisory_score: number;
+  issues: string[];
+  required_next_steps: string[];
+  risk_flags: string[];
+  top_holding?: {
+    ticker?: string;
+    position_pct?: number;
+    position_value?: number;
+  } | null;
+  portfolio_metrics?: {
+    max_single_position_pct?: number;
+    max_portfolio_drawdown_pct?: number;
+  };
+  profile_limits?: {
+    risk_tolerance?: string;
+    loss_capacity?: string;
+    preferred_strategy?: string;
+  };
+}
+
 const formatPercent = (value: number): string => {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
@@ -127,6 +150,8 @@ export default function PortfolioView({
   const [newAlertDirection, setNewAlertDirection] = useState<"above" | "below">("above");
   const [newAlertTarget, setNewAlertTarget] = useState("");
   const [advisoryProfile, setAdvisoryProfile] = useState<AdvisoryProfile | null>(null);
+  const [portfolioAdvisory, setPortfolioAdvisory] = useState<PortfolioAdvisoryCheck | null>(null);
+  const [portfolioAdvisoryLoading, setPortfolioAdvisoryLoading] = useState(false);
 
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
@@ -184,6 +209,39 @@ export default function PortfolioView({
       window.clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const runPortfolioAdvisoryCheck = async () => {
+      if (!analysis) {
+        setPortfolioAdvisory(null);
+        setPortfolioAdvisoryLoading(false);
+        return;
+      }
+      setPortfolioAdvisoryLoading(true);
+      try {
+        const response = await fetch("/api/advisory/portfolio-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            holdings: analysis.holdings,
+            summary: analysis.summary,
+          }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload) throw new Error("Portfolio advisory check failed");
+        if (!cancelled) setPortfolioAdvisory(payload);
+      } catch {
+        if (!cancelled) setPortfolioAdvisory(null);
+      } finally {
+        if (!cancelled) setPortfolioAdvisoryLoading(false);
+      }
+    };
+    runPortfolioAdvisoryCheck();
+    return () => {
+      cancelled = true;
+    };
+  }, [analysis]);
 
   useEffect(() => {
     let cancelled = false;
@@ -375,7 +433,11 @@ export default function PortfolioView({
   const returnValue = analysis?.summary.return_since_buy ?? analysis?.summary.gain_loss ?? 0;
   const returnPct = analysis?.summary.return_since_buy_pct ?? analysis?.summary.gain_loss_pct ?? 0;
   const avgHoldingDays = analysis?.summary.avg_holding_days;
-  const maxSinglePositionPct = Number(advisoryProfile?.max_single_position_pct ?? 12.5);
+  const maxSinglePositionPct = Number(
+    portfolioAdvisory?.portfolio_metrics?.max_single_position_pct ??
+      advisoryProfile?.max_single_position_pct ??
+      12.5,
+  );
   const topHolding = analysis?.holdings
     ?.filter((holding) => !holding.error)
     .reduce<any | null>((top, holding) => {
@@ -387,7 +449,7 @@ export default function PortfolioView({
     analysis?.summary.total_value && topHolding?.position_value
       ? (Number(topHolding.position_value) / Number(analysis.summary.total_value)) * 100
       : null;
-  const advisoryIssues = [
+  const localAdvisoryIssues = [
     advisoryProfile && !advisoryProfile.advisory_profile_complete
       ? "Beratungsprofil ist noch nicht bestaetigt."
       : null,
@@ -401,8 +463,15 @@ export default function PortfolioView({
       ? "Durchschnittlicher Portfolio-Score ist negativ."
       : null,
   ].filter(Boolean) as string[];
+  const advisoryIssues = portfolioAdvisory?.issues?.length ? portfolioAdvisory.issues : localAdvisoryIssues;
   const advisoryStatus =
-    !analysis
+    portfolioAdvisory?.status === "ok"
+      ? "ok"
+      : portfolioAdvisory?.status === "review" || portfolioAdvisory?.status === "blocked"
+        ? "review"
+        : portfolioAdvisoryLoading
+          ? "loading"
+          : !analysis
       ? "loading"
       : advisoryIssues.length
         ? "review"
@@ -417,6 +486,12 @@ export default function PortfolioView({
     advisoryStatus === "ok"
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800"
       : "border-amber-500/25 bg-amber-500/10 text-amber-800";
+  const advisoryTopHolding = portfolioAdvisory?.top_holding || topHolding;
+  const advisoryTopHoldingPct =
+    portfolioAdvisory?.top_holding?.position_pct != null
+      ? Number(portfolioAdvisory.top_holding.position_pct)
+      : topHoldingPct;
+  const advisoryProfileLimits = portfolioAdvisory?.profile_limits;
   const sourceCopy = (() => {
     if (dataSource === "server") {
       return {
@@ -674,7 +749,7 @@ export default function PortfolioView({
                   </div>
                   <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${advisoryTone}`}>
                     {advisoryStatus === "ok" ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
-                    {advisoryStatus === "ok" ? "Passt" : "Pruefen"}
+                    {portfolioAdvisoryLoading ? "Prueft" : advisoryStatus === "ok" ? "Passt" : "Pruefen"}
                   </div>
                 </div>
 
@@ -690,10 +765,10 @@ export default function PortfolioView({
                       Top Position
                     </div>
                     <div className="mt-2 text-2xl font-black text-slate-900">
-                      {topHolding?.ticker || "n/a"}
+                      {advisoryTopHolding?.ticker || "n/a"}
                     </div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
-                      {topHoldingPct != null ? `${topHoldingPct.toFixed(1)}% vom Portfolio` : "Keine Bewertung"}
+                      {advisoryTopHoldingPct != null ? `${advisoryTopHoldingPct.toFixed(1)}% vom Portfolio` : "Keine Bewertung"}
                     </div>
                   </div>
                   <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
@@ -712,10 +787,10 @@ export default function PortfolioView({
                       Profil
                     </div>
                     <div className="mt-2 text-sm font-black leading-6 text-slate-900">
-                      {advisoryProfile?.preferred_strategy || "mixed"} / {advisoryProfile?.risk_tolerance || "medium"}
+                      {advisoryProfileLimits?.preferred_strategy || advisoryProfile?.preferred_strategy || "mixed"} / {advisoryProfileLimits?.risk_tolerance || advisoryProfile?.risk_tolerance || "medium"}
                     </div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
-                      Verlust {advisoryProfile?.loss_capacity || "medium"}
+                      Verlust {advisoryProfileLimits?.loss_capacity || advisoryProfile?.loss_capacity || "medium"}
                     </div>
                   </div>
                 </div>

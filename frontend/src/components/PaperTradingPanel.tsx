@@ -25,6 +25,13 @@ function StatTile({
   );
 }
 
+const money = (value: any, currency = "EUR") =>
+  new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
 export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperTradingPanelProps) {
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -38,6 +45,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const setupPerformance = data?.setup_performance || [];
   const journal = data?.journal || [];
   const rules = data?.rules || {};
+  const demoAccount = data?.demo_account || {};
+  const currency = demoAccount.currency || "EUR";
 
   const openPnLTone = useMemo(() => {
     const value = Number(stats.avg_open_pnl_pct || 0);
@@ -61,7 +70,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         body: JSON.stringify({
           playbook_id: playbookId,
           direction,
-          quantity: 1,
+          quantity: 0,
           leverage: 1,
         }),
       });
@@ -174,6 +183,35 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Demo Equity" value={money(demoAccount.equity || demoAccount.starting_capital || 50000, currency)} />
+          <StatTile label="Risk / Trade" value={money(demoAccount.risk_budget_per_trade_value, currency)} />
+          <StatTile label="Open Risk" value={`${money(demoAccount.open_risk_value, currency)} · ${demoAccount.open_risk_pct || 0}%`} />
+          <StatTile label="Open Exposure" value={`${money(demoAccount.open_exposure_value, currency)} · ${demoAccount.open_exposure_pct || 0}%`} />
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[1.6rem] border border-emerald-500/20 bg-emerald-50/80 p-4 text-xs text-emerald-900">
+            <div className="font-extrabold uppercase tracking-[0.18em] text-emerald-700">Demo Account Guardrails</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>Startkapital: {money(demoAccount.starting_capital || 50000, currency)}</div>
+              <div>Max Position: {money(demoAccount.max_position_value, currency)} / Idee</div>
+              <div>Max Open Risk: {money(demoAccount.max_open_risk_value, currency)}</div>
+              <div>Freies Risiko: {money(demoAccount.remaining_risk_value, currency)}</div>
+              <div>Freie Slots: {demoAccount.open_trade_slots ?? 0}</div>
+              <div>Modus: Paper Learning Only</div>
+            </div>
+          </div>
+          <div className="rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
+            <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Learning Rules</div>
+            <div className="mt-3 grid gap-2">
+              {(demoAccount.guardrails || []).map((rule: string) => (
+                <div key={rule}>{rule}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Win Rate" value={`${stats.win_rate || 0}%`} tone={Number(stats.win_rate || 0) >= 50 ? "good" : "default"} />
           <StatTile label="Open PnL" value={`${Number(stats.avg_open_pnl_pct || 0) >= 0 ? "+" : ""}${Number(stats.avg_open_pnl_pct || 0).toFixed(2)}%`} tone={openPnLTone as any} />
           <StatTile label="Realized" value={`${Number(stats.realized_pnl_pct || 0) >= 0 ? "+" : ""}${Number(stats.realized_pnl_pct || 0).toFixed(2)}%`} tone={realizedTone as any} />
@@ -224,9 +262,20 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <span>Ref {item.reference_price ? `${item.reference_price}` : "N/A"}</span>
                     <span>RR target {item.reward_buffer_pct}% / risk {item.risk_buffer_pct}%</span>
                   </div>
+                  <div className="mt-3 grid gap-2 rounded-[1.1rem] border border-emerald-500/15 bg-emerald-50/70 p-3 text-xs text-emerald-900 sm:grid-cols-2">
+                    <div className="font-bold">Demo size: {item.suggested_quantity || 0}</div>
+                    <div>Notional: {money(item.suggested_notional_value, currency)}</div>
+                    <div>Max loss: {money(item.suggested_max_loss_value, currency)}</div>
+                    <div>Account/Risk: {item.suggested_account_pct || 0}% / {item.suggested_risk_pct || 0}%</div>
+                  </div>
                   {!!item.do_not_trade_reasons?.length && (
                     <div className="mt-3 rounded-[1rem] border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                       {item.do_not_trade_reasons.map((reason: string) => <div key={reason}>{reason}</div>)}
+                    </div>
+                  )}
+                  {!!item.demo_block_reasons?.length && (
+                    <div className="mt-3 rounded-[1rem] border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                      {item.demo_block_reasons.map((reason: string) => <div key={reason}>{reason}</div>)}
                     </div>
                   )}
                   {!!item.leverage_warnings?.length && (
@@ -242,14 +291,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     )}
                     <button
                       onClick={() => openFromPlaybook(item.id, "long")}
-                      disabled={busyId === item.id || item.tradeable === false}
+                      disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
                       className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
                     >
                       Paper long
                     </button>
                     <button
                       onClick={() => openFromPlaybook(item.id, "short")}
-                      disabled={busyId === item.id || item.tradeable === false}
+                      disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
                       className="rounded-xl border border-black/8 bg-[var(--secondary-strong)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
                     >
                       Paper short

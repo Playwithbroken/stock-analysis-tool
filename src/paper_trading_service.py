@@ -19,15 +19,17 @@ class PaperTradingService:
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
+        demo_account = self._build_demo_account(trades, playbooks)
         return {
             "generated_at": datetime.utcnow().isoformat(),
-            "playbooks": playbooks,
+            "playbooks": self._attach_demo_sizing(playbooks, demo_account),
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
             "stats": self._build_stats(trades),
             "setup_performance": self._build_setup_performance(closed_trades),
             "journal": self._build_journal(trades),
             "rules": rules,
+            "demo_account": demo_account,
         }
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -42,19 +44,27 @@ class PaperTradingService:
     ) -> Dict[str, Any]:
         playbook_id = payload.get("playbook_id")
         direction = (payload.get("direction") or "long").lower()
-        quantity = float(payload.get("quantity") or 1)
+        requested_quantity = float(payload.get("quantity") or 0)
         leverage = float(payload.get("leverage") or 1)
         rules = (settings or {}).get("do_not_trade") or {}
         playbooks = self._build_playbooks(scoreboard, rules)
+        trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
+        demo_account = self._build_demo_account(trades, playbooks)
+        playbooks = self._attach_demo_sizing(playbooks, demo_account)
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
         if playbook.get("do_not_trade_reasons"):
             raise ValueError("Playbook is blocked by do-not-trade rules.")
+        if playbook.get("demo_block_reasons"):
+            raise ValueError("Demo account risk gate blocks this playbook.")
 
         last_price = self._get_last_price(playbook.get("ticker")) or float(playbook.get("reference_price") or 0)
         if last_price <= 0:
             raise ValueError("No valid market price available for this playbook.")
+        quantity = requested_quantity if requested_quantity > 0 else float(playbook.get("suggested_quantity") or 1)
+        if quantity <= 0:
+            raise ValueError("No valid demo quantity available for this playbook.")
 
         risk_buffer = float(playbook.get("risk_buffer_pct") or 3.5) / 100
         reward_buffer = float(playbook.get("reward_buffer_pct") or 7.0) / 100
@@ -73,7 +83,11 @@ class PaperTradingService:
                 "quantity": quantity,
                 "confidence_score": playbook.get("score"),
                 "leverage": leverage,
-                "notes": playbook.get("headline"),
+                "notes": (
+                    f"Demo account idea. Suggested qty {playbook.get('suggested_quantity')}; "
+                    f"risk {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}. "
+                    f"{playbook.get('headline') or ''}"
+                ).strip(),
             }
         )
         return self._enrich_trade(created)
@@ -243,6 +257,113 @@ class PaperTradingService:
             },
             "loss_count": len(losers),
         }
+
+    def _demo_account_config(self) -> Dict[str, Any]:
+        return {
+            "starting_capital": 50_000.0,
+            "currency": "EUR",
+            "risk_per_trade_pct": 0.5,
+            "max_open_risk_pct": 4.0,
+            "max_position_pct": 12.0,
+            "max_open_trades": 10,
+            "mode": "paper_learning_only",
+        }
+
+    def _build_demo_account(self, trades: List[Dict[str, Any]], playbooks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        config = self._demo_account_config()
+        starting_capital = float(config["starting_capital"])
+        realized_value = sum(float(trade.get("realized_pnl_value") or 0) for trade in trades if trade.get("status") == "closed")
+        unrealized_value = sum(float(trade.get("unrealized_pnl_value") or 0) for trade in trades if trade.get("status") == "open")
+        equity = round(starting_capital + realized_value + unrealized_value, 2)
+        open_trades = [trade for trade in trades if trade.get("status") == "open"]
+        open_risk_value = round(sum(self._trade_open_risk_value(trade) for trade in open_trades), 2)
+        open_exposure_value = round(
+            sum(float(trade.get("entry_price") or 0) * float(trade.get("quantity") or 0) * float(trade.get("leverage") or 1) for trade in open_trades),
+            2,
+        )
+        risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
+        max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
+        max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
+        remaining_risk = round(max(0.0, max_open_risk_value - open_risk_value), 2)
+        return {
+            **config,
+            "equity": equity,
+            "realized_pnl_value": round(realized_value, 2),
+            "unrealized_pnl_value": round(unrealized_value, 2),
+            "open_risk_value": open_risk_value,
+            "open_risk_pct": round((open_risk_value / equity) * 100, 2) if equity > 0 else 0,
+            "open_exposure_value": open_exposure_value,
+            "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
+            "risk_budget_per_trade_value": risk_budget,
+            "max_open_risk_value": max_open_risk_value,
+            "remaining_risk_value": remaining_risk,
+            "max_position_value": max_position_value,
+            "open_trade_slots": max(0, int(config["max_open_trades"]) - len(open_trades)),
+            "candidate_count": len(playbooks),
+            "guardrails": [
+                "Demo-only learning account; no automatic real-money execution.",
+                "Every idea needs thesis, trigger, stop, target and post-trade journal.",
+                "Real-money use requires manual review, suitability check and current market validation.",
+            ],
+        }
+
+    def _attach_demo_sizing(self, playbooks: List[Dict[str, Any]], demo_account: Dict[str, Any]) -> List[Dict[str, Any]]:
+        sized: List[Dict[str, Any]] = []
+        for item in playbooks:
+            row = dict(item)
+            sizing = self._suggest_demo_sizing(row, demo_account)
+            row.update(sizing)
+            sized.append(row)
+        return sized
+
+    def _suggest_demo_sizing(self, playbook: Dict[str, Any], demo_account: Dict[str, Any]) -> Dict[str, Any]:
+        price = float(playbook.get("reference_price") or 0)
+        risk_buffer_pct = float(playbook.get("risk_buffer_pct") or 3.5)
+        risk_per_share = price * (risk_buffer_pct / 100)
+        risk_budget = min(
+            float(demo_account.get("risk_budget_per_trade_value") or 0),
+            float(demo_account.get("remaining_risk_value") or 0),
+        )
+        max_position_value = float(demo_account.get("max_position_value") or 0)
+        block_reasons: List[str] = []
+
+        if price <= 0:
+            block_reasons.append("No reference price for demo sizing.")
+        if risk_budget <= 0:
+            block_reasons.append("Open risk budget is exhausted.")
+        if int(demo_account.get("open_trade_slots") or 0) <= 0:
+            block_reasons.append("Maximum demo open trades reached.")
+        if playbook.get("tradeable") is False:
+            block_reasons.append("Playbook is blocked by signal rules.")
+
+        quantity_by_risk = risk_budget / risk_per_share if risk_per_share > 0 else 0
+        quantity_by_position = max_position_value / price if price > 0 else 0
+        quantity = max(0.0, min(quantity_by_risk, quantity_by_position))
+        if quantity < 0.0001:
+            block_reasons.append("Suggested quantity is too small for the configured risk budget.")
+
+        notional = quantity * price
+        max_loss = quantity * risk_per_share
+        return {
+            "suggested_quantity": round(quantity, 6),
+            "suggested_notional_value": round(notional, 2),
+            "suggested_max_loss_value": round(max_loss, 2),
+            "suggested_account_pct": round((notional / float(demo_account.get("equity") or 1)) * 100, 2),
+            "suggested_risk_pct": round((max_loss / float(demo_account.get("equity") or 1)) * 100, 2),
+            "demo_block_reasons": block_reasons,
+            "demo_tradeable": not block_reasons,
+        }
+
+    def _trade_open_risk_value(self, trade: Dict[str, Any]) -> float:
+        if trade.get("status") != "open":
+            return 0.0
+        entry = float(trade.get("entry_price") or 0)
+        stop = trade.get("stop_price")
+        quantity = float(trade.get("quantity") or 0)
+        leverage = float(trade.get("leverage") or 1)
+        if not entry or stop in (None, 0) or quantity <= 0:
+            return 0.0
+        return abs(entry - float(stop)) * quantity * leverage
 
     def _build_setup_performance(self, closed_trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         buckets: Dict[str, Dict[str, Any]] = {}

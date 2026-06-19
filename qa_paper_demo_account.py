@@ -149,6 +149,9 @@ def test_demo_account_sizing() -> None:
     assert created["ticker"] == "AAPL"
     assert created["quantity"] == 60
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
+    assert "Decision snapshot at paper entry" in created["notes"]
+    assert "Trigger:" in created["notes"]
+    assert "Invalidation:" in created["notes"]
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
 
     created_call = service.create_trade_from_playbook(
@@ -163,6 +166,8 @@ def test_demo_account_sizing() -> None:
     assert created_call["entry_price"] == 2.5
     assert created_call["stop_price"] == 1.25
     assert created_call["target_price"] == 5.0
+    assert "Options gate:" in created_call["notes"]
+    assert "paper-only premium model" in created_call["notes"]
     call_outcomes = [item for item in manager.outcomes if item["trade_id"] == created_call["id"]]
     assert {item["horizon_hours"] for item in call_outcomes} == {1, 24, 72, 168, 240}
 

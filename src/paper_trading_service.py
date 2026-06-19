@@ -103,12 +103,7 @@ class PaperTradingService:
                 "option_type": playbook.get("option_type") if is_option else None,
                 "contract_multiplier": playbook.get("contract_multiplier") or (100 if is_option else 1),
                 "max_holding_days": playbook.get("max_holding_days") if is_option else None,
-                "notes": (
-                    f"Demo account idea. Suggested qty {playbook.get('suggested_quantity')}; "
-                    f"risk {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}. "
-                    f"{'Paper option premium model. ' if is_option else ''}"
-                    f"{playbook.get('headline') or ''}"
-                ).strip(),
+                "notes": self._build_trade_note_snapshot(playbook, demo_account, is_option),
             }
         )
         self._schedule_trade_outcomes(created)
@@ -299,6 +294,26 @@ class PaperTradingService:
             item["decision_framework"] = self._build_decision_framework(item)
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:10]
+
+    def _build_trade_note_snapshot(self, playbook: Dict[str, Any], demo_account: Dict[str, Any], is_option: bool) -> str:
+        framework = playbook.get("decision_framework") or {}
+        checklist = framework.get("review_questions") or []
+        lines = [
+            "Decision snapshot at paper entry:",
+            f"Headline: {playbook.get('headline') or 'n/a'}",
+            f"Setup: {playbook.get('setup_type') or 'signal_playbook'} / {playbook.get('asset_class') or 'equity'} / {playbook.get('direction') or 'long'}",
+            f"Score: {playbook.get('score')}; evidence: {framework.get('evidence_level') or 'watch'}",
+            f"Demo sizing: suggested qty {playbook.get('suggested_quantity')}; max loss {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}.",
+            f"Trigger: {framework.get('entry_trigger') or 'Manual trigger review required.'}",
+            f"Invalidation: {framework.get('invalidation') or 'Manual invalidation review required.'}",
+            f"Risk plan: {framework.get('risk_plan') or 'Paper risk only.'}",
+        ]
+        if is_option:
+            lines.append("Options gate: paper-only premium model; manually verify strike, expiry, spread, IV and max premium risk.")
+        for question in checklist[:3]:
+            lines.append(f"Review question: {question}")
+        lines.append(framework.get("real_money_policy") or "Decision support only; no automatic real-money execution.")
+        return "\n".join(str(line) for line in lines if line)
 
     def _build_decision_framework(self, playbook: Dict[str, Any]) -> Dict[str, Any]:
         ticker = str(playbook.get("ticker") or "asset").upper()

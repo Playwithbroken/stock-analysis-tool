@@ -318,6 +318,19 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     ))}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">{item.thesis}</p>
+                  {item.learning_adjustment && (
+                    <div className="mt-3 rounded-[1rem] border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
+                      <div className="font-extrabold uppercase tracking-[0.14em]">Outcome Learning</div>
+                      <div className="mt-1">
+                        Score {Number(item.learning_adjustment.score_delta || 0) >= 0 ? "+" : ""}
+                        {item.learning_adjustment.score_delta || 0}
+                        {item.raw_score != null ? ` · raw ${item.raw_score}` : ""}
+                      </div>
+                      {(item.learning_adjustment.notes || []).map((note: string) => (
+                        <div key={note} className="mt-1">{note}</div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
                     <span>Ref {item.reference_price ? `${item.reference_price}` : "N/A"}</span>
                     <span>RR target {item.reward_buffer_pct}% / risk {item.risk_buffer_pct}%</span>

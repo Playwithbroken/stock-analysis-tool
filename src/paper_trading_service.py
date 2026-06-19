@@ -17,7 +17,8 @@ class PaperTradingService:
     def build_dashboard(self, scoreboard: Dict[str, Any], settings: Dict[str, Any] | None = None) -> Dict[str, Any]:
         settings = settings or {}
         rules = settings.get("do_not_trade") or {}
-        playbooks = self._build_playbooks(scoreboard, rules)
+        outcome_learning = self._build_outcome_learning_adjustments()
+        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning)
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
@@ -31,6 +32,7 @@ class PaperTradingService:
             "setup_performance": self._build_setup_performance(closed_trades),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
+            "outcome_learning": outcome_learning,
             "rules": rules,
             "demo_account": demo_account,
         }
@@ -51,7 +53,8 @@ class PaperTradingService:
         requested_quantity = float(payload.get("quantity") or 0)
         leverage = float(payload.get("leverage") or 1)
         rules = (settings or {}).get("do_not_trade") or {}
-        playbooks = self._build_playbooks(scoreboard, rules)
+        outcome_learning = self._build_outcome_learning_adjustments()
+        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning)
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         demo_account = self._build_demo_account(trades, playbooks)
         playbooks = self._attach_demo_sizing(playbooks, demo_account)
@@ -184,7 +187,12 @@ class PaperTradingService:
             raise ValueError("Trade not found.")
         return self._enrich_trade(updated)
 
-    def _build_playbooks(self, scoreboard: Dict[str, Any], rules: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _build_playbooks(
+        self,
+        scoreboard: Dict[str, Any],
+        rules: Dict[str, Any],
+        outcome_learning: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
         playbooks: List[Dict[str, Any]] = []
 
         for item in scoreboard.get("equities", [])[:4]:
@@ -281,6 +289,7 @@ class PaperTradingService:
             )
 
         playbooks.extend(self._build_option_learning_playbooks(playbooks))
+        self._apply_outcome_learning(playbooks, outcome_learning or {})
 
         for item in playbooks:
             rule_state = self._get_do_not_trade_state(item, rules)
@@ -439,6 +448,104 @@ class PaperTradingService:
             ],
             "recent": outcomes[:12],
         }
+
+    def _build_outcome_learning_adjustments(self) -> Dict[str, Any]:
+        outcomes = self.portfolio_manager.list_paper_trade_outcomes(limit=800)
+        evaluated = [item for item in outcomes if item.get("status") == "evaluated"]
+        by_setup: Dict[str, List[Dict[str, Any]]] = {}
+        by_asset: Dict[str, List[Dict[str, Any]]] = {}
+        by_error: Dict[str, int] = {}
+        for item in evaluated:
+            by_setup.setdefault(str(item.get("setup_type") or "unknown"), []).append(item)
+            by_asset.setdefault(str(item.get("asset_class") or "unknown"), []).append(item)
+            if item.get("result") == "miss":
+                key = str(item.get("error_tag") or "unclassified")
+                by_error[key] = by_error.get(key, 0) + 1
+
+        setup_adjustments: Dict[str, Dict[str, Any]] = {}
+        for setup_type, rows in by_setup.items():
+            misses = [item for item in rows if item.get("result") == "miss"]
+            hits = [item for item in rows if item.get("result") == "hit"]
+            decisive = len(hits) + len(misses)
+            if decisive < 4:
+                continue
+            hit_rate = round((len(hits) / max(1, decisive)) * 100, 1)
+            score_delta = 0
+            block = False
+            reason = ""
+            if decisive >= 8 and hit_rate < 25:
+                score_delta = -14
+                block = True
+                reason = f"Setup {setup_type} is blocked by paper outcomes: {hit_rate}% hit rate over {decisive} decisive checks."
+            elif hit_rate < 35:
+                score_delta = -8
+                reason = f"Setup {setup_type} is downgraded by paper outcomes: {hit_rate}% hit rate over {decisive} decisive checks."
+            elif decisive >= 8 and hit_rate >= 60:
+                score_delta = 4
+                reason = f"Setup {setup_type} has positive paper evidence: {hit_rate}% hit rate over {decisive} decisive checks."
+            if score_delta or block:
+                setup_adjustments[setup_type] = {
+                    "setup_type": setup_type,
+                    "evaluated": len(rows),
+                    "decisive": decisive,
+                    "hit_rate": hit_rate,
+                    "score_delta": score_delta,
+                    "block": block,
+                    "reason": reason,
+                }
+
+        option_rows = by_asset.get("option", [])
+        option_hits = [item for item in option_rows if item.get("result") == "hit"]
+        option_misses = [item for item in option_rows if item.get("result") == "miss"]
+        option_decisive = len(option_hits) + len(option_misses)
+        option_hit_rate = round((len(option_hits) / max(1, option_decisive)) * 100, 1) if option_decisive else 0
+
+        return {
+            "setup_adjustments": setup_adjustments,
+            "option_readiness": {
+                "decisive": option_decisive,
+                "hit_rate": option_hit_rate,
+                "real_money_ready": option_decisive >= 20 and option_hit_rate >= 55,
+                "reason": (
+                    "Options remain paper-only until 20 decisive checks and >=55% hit rate."
+                    if option_decisive < 20 or option_hit_rate < 55
+                    else "Options have enough paper evidence for manual review, not automatic execution."
+                ),
+            },
+            "top_error_tags": [
+                {"error_tag": key, "count": count}
+                for key, count in sorted(by_error.items(), key=lambda item: item[1], reverse=True)[:6]
+            ],
+        }
+
+    def _apply_outcome_learning(self, playbooks: List[Dict[str, Any]], outcome_learning: Dict[str, Any]) -> None:
+        setup_adjustments = outcome_learning.get("setup_adjustments") or {}
+        option_readiness = outcome_learning.get("option_readiness") or {}
+        for item in playbooks:
+            adjustment = setup_adjustments.get(str(item.get("setup_type") or ""))
+            notes: List[str] = []
+            score_delta = 0.0
+            blocked = False
+            if adjustment:
+                score_delta += float(adjustment.get("score_delta") or 0)
+                blocked = bool(adjustment.get("block"))
+                if adjustment.get("reason"):
+                    notes.append(str(adjustment["reason"]))
+            if item.get("asset_class") == "option":
+                if not option_readiness.get("real_money_ready"):
+                    score_delta -= 3
+                    notes.append(str(option_readiness.get("reason") or "Options remain paper-only."))
+            if score_delta:
+                item["raw_score"] = item.get("score")
+                item["score"] = max(0, round(float(item.get("score") or 0) + score_delta, 2))
+            if notes or blocked or score_delta:
+                item["learning_adjustment"] = {
+                    "score_delta": round(score_delta, 2),
+                    "blocked": blocked,
+                    "notes": notes,
+                }
+            if blocked:
+                item["learning_blocked"] = True
 
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         option_playbooks: List[Dict[str, Any]] = []
@@ -791,6 +898,8 @@ class PaperTradingService:
             leverage_rules.append("Crypto leverage is blocked in the current rule set.")
         if score < min_leverage_score:
             leverage_rules.append(f"No leverage allowed below score {min_leverage_score:.0f}.")
+        if playbook.get("learning_blocked"):
+            blocked.append("Paper outcome learning blocks this setup until results improve.")
         return {"blocked": blocked, "leverage": leverage_rules}
 
     def _calc_return_pct(self, entry_price: float, other_price: Optional[float], direction_multiplier: int, leverage: float) -> Optional[float]:

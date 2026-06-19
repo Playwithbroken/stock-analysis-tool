@@ -205,7 +205,38 @@ def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
         raise AssertionError("Risk-gated playbook should not open a demo trade.")
 
 
+def test_outcome_learning_penalizes_weak_setups() -> None:
+    manager = FakePortfolioManager()
+    for index in range(8):
+        manager.outcomes.append(
+            {
+                "id": f"bad-{index}",
+                "trade_id": f"trade-{index}",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "insider_follow",
+                "horizon_hours": 24,
+                "due_at": "2026-06-19T09:00:00",
+                "status": "evaluated",
+                "result": "miss",
+                "performance_pct": -1.8,
+                "error_tag": "weak_follow_through",
+            }
+        )
+    service = build_service(manager)
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+    aapl = next(item for item in dashboard["playbooks"] if item["id"] == "equity-AAPL-long")
+    assert aapl["raw_score"] == 95
+    assert aapl["score"] == 81
+    assert aapl["learning_blocked"] is True
+    assert aapl["tradeable"] is False
+    assert any("outcome learning" in reason.lower() for reason in aapl["do_not_trade_reasons"])
+    assert dashboard["outcome_learning"]["setup_adjustments"]["insider_follow"]["block"] is True
+
+
 if __name__ == "__main__":
     test_demo_account_sizing()
     test_demo_account_blocks_when_open_risk_is_exhausted()
+    test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

@@ -237,6 +237,14 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "VTI", "name": "Vanguard Total Stock Market ETF"},
     {"ticker": "SCHD", "name": "Schwab US Dividend Equity ETF"},
     {"ticker": "SOXX", "name": "iShares Semiconductor ETF"},
+    {"ticker": "VT", "name": "Vanguard Total World Stock ETF"},
+    {"ticker": "VXUS", "name": "Vanguard Total International Stock ETF"},
+    {"ticker": "VUG", "name": "Vanguard Growth ETF"},
+    {"ticker": "VTV", "name": "Vanguard Value ETF"},
+    {"ticker": "VNQ", "name": "Vanguard Real Estate ETF"},
+    {"ticker": "VYM", "name": "Vanguard High Dividend Yield ETF"},
+    {"ticker": "JEPI", "name": "JPMorgan Equity Premium Income ETF"},
+    {"ticker": "JEPQ", "name": "JPMorgan Nasdaq Equity Premium Income ETF"},
     {"ticker": "IBIT", "name": "iShares Bitcoin Trust BlackRock Bitcoin ETF"},
     {"ticker": "FBTC", "name": "Fidelity Wise Origin Bitcoin Fund ETF"},
     {"ticker": "SPY", "name": "SPDR S&P 500 ETF"},
@@ -258,6 +266,13 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "AVAX-USD", "name": "Avalanche"},
     {"ticker": "DOT-USD", "name": "Polkadot"},
     {"ticker": "LINK-USD", "name": "Chainlink"},
+    {"ticker": "BNB-USD", "name": "BNB Binance Coin"},
+    {"ticker": "TRX-USD", "name": "TRON"},
+    {"ticker": "TON11419-USD", "name": "Toncoin"},
+    {"ticker": "MATIC-USD", "name": "Polygon"},
+    {"ticker": "LTC-USD", "name": "Litecoin"},
+    {"ticker": "BCH-USD", "name": "Bitcoin Cash"},
+    {"ticker": "UNI7083-USD", "name": "Uniswap"},
 ]
 SEARCH_ALIASES: Dict[str, str] = {
     "google": "GOOGL",
@@ -292,6 +307,7 @@ SEARCH_ALIASES: Dict[str, str] = {
     "palantir": "PLTR",
     "paloalto": "PANW",
     "crowdstrike": "CRWD",
+    "coinbase": "COIN",
     "bitcoin": "BTC-USD",
     "btc": "BTC-USD",
     "sp500": "VOO",
@@ -307,6 +323,8 @@ SEARCH_ALIASES: Dict[str, str] = {
     "blackrockbitcoinetf": "IBIT",
     "isharesbitcointrust": "IBIT",
     "ibit": "IBIT",
+    "fidelitybitcoinetf": "FBTC",
+    "fbtc": "FBTC",
     "crypto": "BTC-USD",
     "hood": "HOOD",
     "hoodapp": "HOOD",
@@ -316,6 +334,8 @@ SEARCH_ALIASES: Dict[str, str] = {
     "tradingapp": "HOOD",
     "ethereum": "ETH-USD",
     "eth": "ETH-USD",
+    "solana": "SOL-USD",
+    "solanacrypto": "SOL-USD",
     "dogecoin": "DOGE-USD",
     "doge": "DOGE-USD",
     "xrp": "XRP-USD",
@@ -328,6 +348,21 @@ SEARCH_ALIASES: Dict[str, str] = {
     "dot": "DOT-USD",
     "chainlink": "LINK-USD",
     "link": "LINK-USD",
+    "bnb": "BNB-USD",
+    "binance": "BNB-USD",
+    "binancecoin": "BNB-USD",
+    "tron": "TRX-USD",
+    "trx": "TRX-USD",
+    "ton": "TON11419-USD",
+    "toncoin": "TON11419-USD",
+    "polygon": "MATIC-USD",
+    "matic": "MATIC-USD",
+    "litecoin": "LTC-USD",
+    "ltc": "LTC-USD",
+    "bitcoincash": "BCH-USD",
+    "bch": "BCH-USD",
+    "uniswap": "UNI7083-USD",
+    "uni": "UNI7083-USD",
     "nvidea": "NVDA",
     "tesler": "TSLA",
     "meta": "META",
@@ -363,11 +398,85 @@ SEARCH_ALIASES: Dict[str, str] = {
     "archer": "ACHR",
     "achr": "ACHR",
     "oklo": "OKLO",
+    "vanguardtotalmarket": "VTI",
+    "vanguardtotalmarketetf": "VTI",
+    "vanguardtotalworld": "VT",
+    "totalworldetf": "VT",
+    "worldetf": "VT",
+    "internationaletf": "VXUS",
+    "vanguardinternational": "VXUS",
+    "growthetf": "VUG",
+    "valueetf": "VTV",
+    "realestateetf": "VNQ",
+    "dividendetf": "SCHD",
+    "highdividendetf": "VYM",
+    "jepi": "JEPI",
+    "jepq": "JEPQ",
+}
+
+SEARCH_QUERY_NOISE_WORDS = {
+    "aktie",
+    "stock",
+    "stocks",
+    "share",
+    "shares",
+    "kurs",
+    "analyse",
+    "analysis",
+    "company",
+    "inc",
+    "corp",
+    "corporation",
+    "ag",
+    "se",
+    "plc",
+    "class",
+    "app",
+    "coin",
+    "token",
+    "crypto",
+    "cryptocurrency",
+    "etf",
+    "fund",
+    "trust",
+    "dividend",
+    "income",
+    "yield",
 }
 
 
 def _normalize_search_query(value: str) -> str:
     return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _strip_search_noise(value: str) -> str:
+    words = re.findall(r"[a-zA-Z0-9.\-^=]+", value or "")
+    kept = [word for word in words if word.lower() not in SEARCH_QUERY_NOISE_WORDS]
+    return " ".join(kept).strip()
+
+
+def _search_query_variants(value: str) -> List[str]:
+    raw = (value or "").strip()
+    if not raw:
+        return []
+    stripped = _strip_search_noise(raw)
+    normalized = _normalize_ticker_input(raw)
+    variants = [raw, stripped, normalized]
+    if normalized.endswith("-USD"):
+        variants.append(normalized.replace("-USD", ""))
+    compact = _normalize_search_query(stripped or raw)
+    alias = SEARCH_ALIASES.get(compact)
+    if alias:
+        variants.append(alias)
+    seen = set()
+    unique: List[str] = []
+    for item in variants:
+        text = str(item or "").strip()
+        key = text.lower()
+        if text and key not in seen:
+            seen.add(key)
+            unique.append(text)
+    return unique[:4]
 
 
 def _normalize_ticker_input(value: str) -> str:
@@ -384,9 +493,30 @@ def _normalize_ticker_input(value: str) -> str:
     alias = SEARCH_ALIASES.get(compact) or SEARCH_ALIASES.get(_normalize_search_query(cleaned))
     if alias:
         return alias
+    stripped = _strip_search_noise(cleaned)
+    stripped_alias = SEARCH_ALIASES.get(_normalize_search_query(stripped))
+    if stripped_alias:
+        return stripped_alias
     if re.fullmatch(r"brk[.\s-]?b", cleaned, flags=re.I):
         return "BRK-B"
-    crypto_aliases = {"btc": "BTC-USD", "eth": "ETH-USD", "sol": "SOL-USD"}
+    crypto_aliases = {
+        "btc": "BTC-USD",
+        "eth": "ETH-USD",
+        "sol": "SOL-USD",
+        "doge": "DOGE-USD",
+        "xrp": "XRP-USD",
+        "ada": "ADA-USD",
+        "avax": "AVAX-USD",
+        "dot": "DOT-USD",
+        "link": "LINK-USD",
+        "bnb": "BNB-USD",
+        "trx": "TRX-USD",
+        "ton": "TON11419-USD",
+        "matic": "MATIC-USD",
+        "ltc": "LTC-USD",
+        "bch": "BCH-USD",
+        "uni": "UNI7083-USD",
+    }
     if cleaned.lower() in crypto_aliases:
         return crypto_aliases[cleaned.lower()]
     normalized = re.sub(r"[^A-Z0-9.\-^=]+", "-", cleaned.upper())
@@ -482,6 +612,15 @@ def _quote_search_score(query: str, item: Dict[str, Any]) -> float:
         score += 4
     if quote_type == "CRYPTOCURRENCY" and "tokenizedstock" in name and "tokenized" not in needle:
         score -= 55
+    if quote_type == "CRYPTOCURRENCY":
+        normalized = _normalize_ticker_input(query)
+        symbol = str(item.get("ticker", "")).upper()
+        if normalized.endswith("-USD") and symbol == normalized:
+            score += 35
+        elif normalized.endswith("-USD") and not symbol.endswith("-USD"):
+            score -= 35
+        elif symbol.endswith("-USD"):
+            score += 8
     if "." in str(item.get("ticker", "")) and not any(part in needle for part in ("de", "to", "pa", "mi", "f")):
         score -= 8
     return score
@@ -559,25 +698,36 @@ async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]
 
     normalized_ticker = _normalize_ticker_input(q)
     pinned_catalog = _catalog_match_for_ticker(normalized_ticker)
-    catalog_results = _fuzzy_catalog_search(q, limit=limit)
+    query_variants = _search_query_variants(q)
+    catalog_results: List[Dict[str, Any]] = []
+    for variant in query_variants or [q]:
+        catalog_results.extend(_fuzzy_catalog_search(variant, limit=limit))
     if pinned_catalog:
         catalog_results = [pinned_catalog, *catalog_results]
     live_results: List[Dict[str, Any]] = []
     yahoo_results: List[Dict[str, Any]] = []
     live_task = asyncio.create_task(get_discovery_service().search_ticker(q))
-    yahoo_task = asyncio.create_task(_search_yahoo_finance(q, limit=max(limit, 8)))
+    yahoo_task = asyncio.gather(
+        *[
+            _search_yahoo_finance(variant, limit=max(limit, 8))
+            for variant in (query_variants or [q])[:3]
+        ]
+    )
     try:
-        live_results, yahoo_results = await asyncio.gather(
+        live_results, yahoo_batches = await asyncio.gather(
             asyncio.wait_for(live_task, timeout=2.0),
             asyncio.wait_for(yahoo_task, timeout=3.8),
         )
+        yahoo_results = [item for batch in yahoo_batches for item in (batch or [])]
     except Exception:
         live_task.cancel()
         yahoo_task.cancel()
-        try:
-            yahoo_results = await _search_yahoo_finance(q, limit=max(limit, 8))
-        except Exception:
-            yahoo_results = []
+        yahoo_results = []
+        for variant in (query_variants or [q])[:3]:
+            try:
+                yahoo_results.extend(await _search_yahoo_finance(variant, limit=max(limit, 8)))
+            except Exception:
+                continue
 
     merged: List[Dict[str, Any]] = []
     seen = set()

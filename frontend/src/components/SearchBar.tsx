@@ -168,6 +168,8 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   blackrockbitcoinetf: "iShares Bitcoin Trust ETF (IBIT)",
   isharesbitcointrust: "iShares Bitcoin Trust ETF (IBIT)",
   ibit: "iShares Bitcoin Trust ETF (IBIT)",
+  fidelitybitcoinetf: "Fidelity Wise Origin Bitcoin Fund ETF (FBTC)",
+  fbtc: "Fidelity Wise Origin Bitcoin Fund ETF (FBTC)",
   ethereum: "Ethereum USD (ETH-USD)",
   ethereumcoin: "Ethereum USD (ETH-USD)",
   eth: "Ethereum USD (ETH-USD)",
@@ -186,6 +188,21 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   dot: "Polkadot USD (DOT-USD)",
   chainlink: "Chainlink USD (LINK-USD)",
   link: "Chainlink USD (LINK-USD)",
+  bnb: "BNB USD (BNB-USD)",
+  binance: "BNB USD (BNB-USD)",
+  binancecoin: "BNB USD (BNB-USD)",
+  tron: "TRON USD (TRX-USD)",
+  trx: "TRON USD (TRX-USD)",
+  ton: "Toncoin USD (TON11419-USD)",
+  toncoin: "Toncoin USD (TON11419-USD)",
+  polygon: "Polygon USD (MATIC-USD)",
+  matic: "Polygon USD (MATIC-USD)",
+  litecoin: "Litecoin USD (LTC-USD)",
+  ltc: "Litecoin USD (LTC-USD)",
+  bitcoincash: "Bitcoin Cash USD (BCH-USD)",
+  bch: "Bitcoin Cash USD (BCH-USD)",
+  uniswap: "Uniswap USD (UNI7083-USD)",
+  uni: "Uniswap USD (UNI7083-USD)",
   spirit: "Spirit Airlines Inc. (FLYYQ)",
   airline: "Spirit Airlines Inc. (FLYYQ)",
   tsmc: "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
@@ -226,6 +243,14 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   sandp500etf: "Vanguard S&P 500 ETF (VOO)",
   sundp500: "Vanguard S&P 500 ETF (VOO)",
   vti: "Vanguard Total Stock Market ETF (VTI)",
+  vanguardtotalmarket: "Vanguard Total Stock Market ETF (VTI)",
+  vanguardtotalmarketetf: "Vanguard Total Stock Market ETF (VTI)",
+  vt: "Vanguard Total World Stock ETF (VT)",
+  vanguardtotalworld: "Vanguard Total World Stock ETF (VT)",
+  totalworldetf: "Vanguard Total World Stock ETF (VT)",
+  worldetf: "Vanguard Total World Stock ETF (VT)",
+  vxus: "Vanguard Total International Stock ETF (VXUS)",
+  internationaletf: "Vanguard Total International Stock ETF (VXUS)",
   schd: "Schwab U.S. Dividend Equity ETF (SCHD)",
   soxx: "iShares Semiconductor ETF (SOXX)",
   semiconductor_etf: "iShares Semiconductor ETF (SOXX)",
@@ -233,6 +258,12 @@ const LOCAL_SEARCH_ALIASES: Record<string, string> = {
   nasdaq100: "Invesco QQQ Trust (QQQ)",
   nasdaq100etf: "Invesco QQQ Trust (QQQ)",
   qqqm: "Invesco NASDAQ 100 ETF (QQQM)",
+  vug: "Vanguard Growth ETF (VUG)",
+  vtv: "Vanguard Value ETF (VTV)",
+  vnq: "Vanguard Real Estate ETF (VNQ)",
+  vym: "Vanguard High Dividend Yield ETF (VYM)",
+  jepi: "JPMorgan Equity Premium Income ETF (JEPI)",
+  jepq: "JPMorgan Nasdaq Equity Premium Income ETF (JEPQ)",
   msciworld: "iShares MSCI World ETF (URTH)",
   msciworldetf: "iShares MSCI World ETF (URTH)",
   urth: "iShares MSCI World ETF (URTH)",
@@ -264,6 +295,44 @@ function normalizeSearchValue(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+const SEARCH_NOISE_WORDS = new Set([
+  "aktie",
+  "stock",
+  "stocks",
+  "share",
+  "shares",
+  "kurs",
+  "analyse",
+  "analysis",
+  "company",
+  "inc",
+  "corp",
+  "corporation",
+  "ag",
+  "se",
+  "plc",
+  "class",
+  "app",
+  "coin",
+  "token",
+  "crypto",
+  "cryptocurrency",
+  "etf",
+  "fund",
+  "trust",
+  "dividend",
+  "income",
+  "yield",
+]);
+
+function stripSearchNoise(value: string): string {
+  return value
+    .split(/[^a-zA-Z0-9.^=-]+/)
+    .filter((word) => word && !SEARCH_NOISE_WORDS.has(word.toLowerCase()))
+    .join(" ")
+    .trim();
+}
+
 export function normalizeTickerInput(value: string): string {
   const raw = extractTicker(value)
     .trim()
@@ -275,6 +344,8 @@ export function normalizeTickerInput(value: string): string {
   const compact = raw.toLowerCase().replace(/[^a-z0-9.-]+/g, "");
   const alias = LOCAL_SEARCH_ALIASES[compact] || LOCAL_SEARCH_ALIASES[normalizeSearchValue(raw)];
   if (alias) return extractTicker(alias);
+  const strippedAlias = LOCAL_SEARCH_ALIASES[normalizeSearchValue(stripSearchNoise(raw))];
+  if (strippedAlias) return extractTicker(strippedAlias);
   if (/^brk[.\s-]?b$/i.test(raw)) return "BRK-B";
   if (/^btc$/i.test(raw)) return "BTC-USD";
   if (/^eth$/i.test(raw)) return "ETH-USD";

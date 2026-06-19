@@ -46,6 +46,8 @@ const summary = {
     http5xx: 0,
     marketsStressRuns: 0,
     marketsUnexpectedAnalyze: 0,
+    headerMoverLayoutIssues: 0,
+    analyzerLoadingPanelMissing: 0,
     chartStillLoading: 0,
     tickerRuns: 0,
   },
@@ -199,6 +201,67 @@ async function runMarketsStress(page, viewportName) {
   pushEvent(`[${viewportName}] Markets stress completed (${MARKETS_STRESS_COUNT}x)`);
 }
 
+async function checkHeaderMoverLayout(page, viewportName) {
+  const result = await page.evaluate(() => {
+    const header = document.querySelector(".app-shell-header");
+    const strip = document.querySelector(".desktop-market-strip");
+    const movers = document.querySelector(".desktop-movers-tape");
+    const wrap = document.querySelector(".desktop-movers-tape .ticker-marquee-wrap");
+    if (!header || !strip || !movers || !wrap) {
+      return {
+        skipped: true,
+        reason: "desktop header movers not present at this viewport",
+      };
+    }
+    const box = (el) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+    const headerBox = box(header);
+    const stripBox = box(strip);
+    const moversBox = box(movers);
+    const wrapBox = box(wrap);
+    const withinHeader = moversBox.top >= headerBox.top - 1 && moversBox.bottom <= headerBox.bottom + 1;
+    const stripReasonable = stripBox.height <= 86;
+    const wrapReasonable = wrapBox.height <= 78;
+    const hasWidth = moversBox.width >= 260;
+    return {
+      skipped: false,
+      withinHeader,
+      stripReasonable,
+      wrapReasonable,
+      hasWidth,
+      headerBox,
+      stripBox,
+      moversBox,
+      wrapBox,
+    };
+  });
+
+  if (result.skipped) {
+    pushEvent(`[${viewportName}] Header mover layout skipped: ${result.reason}`);
+    return;
+  }
+  if (!result.withinHeader || !result.stripReasonable || !result.wrapReasonable || !result.hasWidth) {
+    summary.metrics.headerMoverLayoutIssues += 1;
+    pushIssue({
+      kind: "layout",
+      viewport: viewportName,
+      text: "Header market movers layout is unstable",
+      details: result,
+    });
+  } else {
+    pushEvent(`[${viewportName}] Header mover layout ok`);
+  }
+}
+
 async function runTickerChecks(page, viewportName) {
   const analyzerTab = await findTabButton(page, [/^Analyzer$/i, /^Analyze$/i]);
   if (analyzerTab) {
@@ -256,7 +319,17 @@ async function runTickerChecks(page, viewportName) {
     if (!ready) continue;
     await searchInput.fill(ticker);
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(2200);
+    await page.waitForTimeout(350);
+    const loadingPanelVisible = await page.locator(".analyzer-loading-panel").isVisible().catch(() => false);
+    if (!loadingPanelVisible) {
+      summary.metrics.analyzerLoadingPanelMissing += 1;
+      pushIssue({
+        kind: "ui",
+        viewport: viewportName,
+        text: `Analyzer loading panel was not visible after submitting ${ticker}`,
+      });
+    }
+    await page.waitForTimeout(1850);
     summary.metrics.tickerRuns += 1;
 
     const chartSettled = await waitForChartSettled(20000);
@@ -317,6 +390,8 @@ async function runViewportScenario(browser, viewport) {
       pushIssue({ kind: "ui", viewport: viewportName, text: "Navigation shell did not appear after login window" });
       return;
     }
+
+    await checkHeaderMoverLayout(page, viewportName);
 
     const navTargets = [
       { name: "Analyzer", file: `${viewportName}-tab-analyzer.png` },

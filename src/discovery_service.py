@@ -68,6 +68,83 @@ class DiscoveryService:
             },
         ]
 
+    def _etf_fallbacks(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "ticker": "VOO",
+                "name": "Vanguard S&P 500 ETF",
+                "price": None,
+                "change": 0,
+                "ter": 0.0003,
+                "total_assets": None,
+                "category": "US Large Blend",
+                "trend_context": "Fallback core ETF; provider data temporarily unavailable.",
+            },
+            {
+                "ticker": "QQQ",
+                "name": "Invesco QQQ Trust",
+                "price": None,
+                "change": 0,
+                "ter": 0.002,
+                "total_assets": None,
+                "category": "US Growth",
+                "trend_context": "Fallback Nasdaq ETF; verify live quote before action.",
+            },
+            {
+                "ticker": "SCHD",
+                "name": "Schwab U.S. Dividend Equity ETF",
+                "price": None,
+                "change": 0,
+                "ter": 0.0006,
+                "total_assets": None,
+                "category": "Dividend",
+                "trend_context": "Fallback dividend ETF; use as watch item only.",
+            },
+        ]
+
+    def _market_mover_fallbacks(self, side: str = "gainers") -> List[Dict[str, Any]]:
+        data = [
+            ("NVDA", "NVIDIA Corporation", 0.0, "AI large-cap watch"),
+            ("AAPL", "Apple Inc.", 0.0, "Mega-cap quality watch"),
+            ("SPY", "SPDR S&P 500 ETF Trust", 0.0, "Broad market benchmark"),
+        ]
+        return [
+            {
+                "ticker": ticker,
+                "name": name,
+                "price": None,
+                "change": change,
+                "change_1d": change,
+                "change_1w": change,
+                "change_1m": change,
+                "trend_context": f"Fallback {side}; live market mover provider unavailable.",
+            }
+            for ticker, name, change, _context in data
+        ]
+
+    def _sentiment_heatmap_fallbacks(self) -> List[Dict[str, Any]]:
+        sectors = [
+            ("Artificial Intelligence", ["NVDA", "PLTR", "ARM"], 0.15),
+            ("Semiconductors", ["AMD", "TSM", "AVGO"], 0.05),
+            ("USA", ["AAPL", "MSFT", "AMZN"], 0.0),
+            ("Europe", ["SAP", "ASML", "SIE.DE"], 0.0),
+            ("Energy", ["XOM", "CVX", "SHEL"], -0.05),
+        ]
+        return [
+            {
+                "sector": sector,
+                "sentiment_score": score,
+                "status": "NEUTRAL",
+                "strength": 35,
+                "fallback": True,
+                "hot_stocks": [
+                    {"ticker": ticker, "price": None, "change_1w": 0, "name": ticker}
+                    for ticker in tickers
+                ],
+            }
+            for sector, tickers, score in sectors
+        ]
+
     @staticmethod
     def _compute_rsi(prices: List[float], period: int = 14) -> Optional[float]:
         if len(prices) <= period:
@@ -519,7 +596,7 @@ class DiscoveryService:
         import asyncio
         tasks = [fetch_etf_data(t) for t in pool]
         results = [r for r in await asyncio.gather(*tasks) if r]
-        return results
+        return results or self._etf_fallbacks()
 
     async def get_dividend_aristocrats(self) -> List[Dict[str, Any]]:
         async def fetch_div(ticker):
@@ -585,9 +662,17 @@ class DiscoveryService:
     async def get_star_assets(self) -> Dict[str, Any]:
         """Identify stars with parallel movers fetch."""
         import asyncio
-        movers_task = self.get_market_movers(type='gainers')
-        losers_task = self.get_market_movers(type='losers')
-        movers, losers = await asyncio.gather(movers_task, losers_task)
+        try:
+            movers_task = self.get_market_movers(type='gainers')
+            losers_task = self.get_market_movers(type='losers')
+            movers, losers = await asyncio.gather(movers_task, losers_task)
+        except Exception:
+            movers = self._market_mover_fallbacks("gainers")
+            losers = self._market_mover_fallbacks("losers")
+        if not movers:
+            movers = self._market_mover_fallbacks("gainers")
+        if not losers:
+            losers = self._market_mover_fallbacks("losers")
         
         return {
             "day_winner": movers[0] if movers else None,
@@ -618,22 +703,37 @@ class DiscoveryService:
             top_stocks = []
             
             for t in tickers:
-                fetcher = DataFetcher(t)
-                price_data = fetcher.get_price_data()
-                news = fetcher.get_news()
+                try:
+                    fetcher = DataFetcher(t)
+                    price_data = fetcher.get_price_data()
+                    info = fetcher.info or {}
+                except Exception:
+                    price_data = None
+                    info = {}
                 
                 # Mock average sentiment
                 # Simplified: logic based on price change + news volume
-                change = price_data.get("change_1w", 0)
+                change = price_data.get("change_1w", 0) if price_data else None
+                if change is None:
+                    top_stocks.append({
+                        "ticker": t,
+                        "price": None,
+                        "change_1w": 0,
+                        "name": info.get("shortName", t),
+                        "fallback": True,
+                    })
+                    continue
                 sentiment = 1 if change > 0 else -1
                 sentiments.append(sentiment)
                 
                 top_stocks.append({
                     "ticker": t,
-                    "price": price_data.get("current_price"),
+                    "price": price_data.get("current_price") if price_data else None,
                     "change_1w": change,
-                    "name": fetcher.info.get("shortName", t)
+                    "name": info.get("shortName", t)
                 })
+            if not sentiments:
+                continue
             
             avg_score = sum(sentiments) / len(sentiments)
             status = "BULLISH" if avg_score > 0.5 else "NEUTRAL" if avg_score > -0.5 else "BEARISH"
@@ -645,7 +745,7 @@ class DiscoveryService:
                 "strength": min(100, (abs(avg_score) + 1) * 35),
                 "hot_stocks": top_stocks
             })
-        return heatmap
+        return heatmap or self._sentiment_heatmap_fallbacks()
 
     async def get_diversification_suggestions(self, current_tickers: List[str]) -> List[Dict[str, Any]]:
         """Suggest assets to balance the portfolio."""

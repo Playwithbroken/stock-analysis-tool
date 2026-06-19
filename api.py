@@ -2194,7 +2194,10 @@ async def get_moonshot_stocks():
 
 @app.get("/api/discovery/sentiment-heatmap")
 async def get_sentiment_heatmap():
-    return await get_discovery_service().get_sentiment_heatmap()
+    try:
+        return convert_numpy_types(await get_discovery_service().get_sentiment_heatmap())
+    except Exception:
+        return convert_numpy_types(get_discovery_service()._sentiment_heatmap_fallbacks())
 
 
 @app.get("/api/search/suggestions")
@@ -3357,17 +3360,27 @@ async def get_trending_commodities():
 async def get_discovery_etfs():
     """Get popular ETFs for discovery."""
     try:
-        return await get_discovery_service().get_etfs()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return convert_numpy_types(await get_discovery_service().get_etfs())
+    except Exception:
+        return convert_numpy_types(get_discovery_service()._etf_fallbacks())
 
 @app.get("/api/discovery/stars")
 async def get_star_assets():
     """Get the spotlight assets (Day/Week winners/losers)."""
     try:
-        return await get_discovery_service().get_star_assets()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return convert_numpy_types(await get_discovery_service().get_star_assets())
+    except Exception:
+        service = get_discovery_service()
+        movers = service._market_mover_fallbacks("gainers")
+        losers = service._market_mover_fallbacks("losers")
+        return convert_numpy_types({
+            "day_winner": movers[0],
+            "week_winner": movers[0],
+            "day_loser": losers[0],
+            "week_loser": losers[0],
+            "for_you": movers[:1] + losers[:1],
+            "fallback": True,
+        })
 
 @app.get("/api/discovery/public-signals")
 async def get_public_signals():

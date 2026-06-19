@@ -41,6 +41,18 @@ CASES = [
 
 
 async def main() -> int:
+    import api
+
+    async def fake_yahoo_search(query: str, limit: int = 8):
+        return []
+
+    class FakeDiscoveryService:
+        async def search_ticker(self, query: str):
+            return []
+
+    api._search_yahoo_finance = fake_yahoo_search
+    api.get_discovery_service = lambda: FakeDiscoveryService()
+
     failures: list[str] = []
 
     for query, expected in CASES:

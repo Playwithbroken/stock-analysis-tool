@@ -186,9 +186,11 @@ h3,
 
 .desktop-market-strip {
   display: grid;
-  grid-template-columns: minmax(18rem, 0.74fr) minmax(28rem, 1.26fr);
-  align-items: stretch;
-  gap: 0.65rem;
+  grid-template-columns: minmax(18rem, 0.82fr) minmax(26rem, 1.18fr);
+  align-items: center;
+  gap: 0.55rem;
+  max-height: 4.7rem;
+  overflow: hidden;
 }
 
 .desktop-favorite-tape,
@@ -208,6 +210,26 @@ h3,
 
 .desktop-movers-tape .ticker-marquee-wrap {
   height: 100%;
+  min-height: 3.35rem;
+  max-height: 4.55rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.header-movers-tape .header-movers-meta {
+  min-height: 1.5rem;
+  margin-bottom: 0.28rem;
+}
+
+.header-movers-tape .ticker-marquee-track {
+  min-height: 1.95rem;
+}
+
+.desktop-favorite-tape {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
 .dashboard-command-panel {
@@ -425,6 +447,7 @@ h3,
 @media (min-width: 1024px) and (max-width: 1320px) {
   .desktop-market-strip {
     grid-template-columns: 1fr;
+    max-height: none;
   }
 
   .desktop-movers-tape .ticker-marquee-wrap {

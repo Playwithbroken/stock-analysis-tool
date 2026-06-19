@@ -223,6 +223,61 @@ function HeaderTickerChip({
   );
 }
 
+function AnalyzerLoadingPanel({ ticker }: { ticker?: string }) {
+  const label = ticker ? ticker.toUpperCase() : "Dossier";
+  return (
+    <section className="analyzer-loading-panel surface-panel rounded-[2rem] p-5 sm:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Analysis Desk
+          </div>
+          <h3 className="mt-2 text-2xl text-slate-900 sm:text-3xl">
+            {label} wird aufgebaut
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Kursdaten, Fundamentaldaten, Suitability und Chart werden getrennt geladen, damit die App nicht leer wirkt.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+          <Activity size={14} className="animate-pulse" />
+          Loading
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="rounded-[1.5rem] border border-black/8 bg-white/68 p-4">
+          <div className="h-48 rounded-[1.1rem] bg-[linear-gradient(90deg,rgba(15,23,42,0.05),rgba(15,118,110,0.10),rgba(15,23,42,0.05))] bg-[length:200%_100%] loading-pulse sm:h-64" />
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {["Kursverlauf", "Risiko", "Trigger"].map((item) => (
+              <div key={item} className="rounded-[1rem] border border-black/8 bg-white/70 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{item}</div>
+                <div className="mt-3 h-3 w-3/4 rounded-full bg-slate-200 loading-pulse" />
+                <div className="mt-2 h-3 w-1/2 rounded-full bg-slate-200 loading-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-[1.5rem] border border-black/8 bg-white/72 p-4">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+            Loading Steps
+          </div>
+          <div className="mt-4 space-y-3">
+            {["Symbol aufloesen", "Provider pruefen", "Dossier berechnen", "UI stabilisieren"].map((step, index) => (
+              <div key={step} className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-black text-[var(--accent)]">
+                  {index + 1}
+                </span>
+                {step}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LoginScreen({
   configured,
   onLogin,
@@ -389,6 +444,7 @@ function AppContent() {
     return saved ? JSON.parse(saved) : null;
   });
   const [loading, setLoading] = useState(false);
+  const [pendingAnalysisTicker, setPendingAnalysisTicker] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searchResolution, setSearchResolution] = useState<{
     query: string;
@@ -948,9 +1004,11 @@ function AppContent() {
     setActiveTab("analyze");
 
     let searchTicker = normalizeTickerInput(ticker);
+    setPendingAnalysisTicker(searchTicker || ticker);
     try {
       searchTicker = await resolveTickerForAnalyze(ticker, controller);
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId || !searchTicker) return;
+      setPendingAnalysisTicker(searchTicker);
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
         { signal: controller.signal },
@@ -969,6 +1027,7 @@ function AppContent() {
     } finally {
       if (!controller.signal.aborted && searchRequestIdRef.current === requestId) {
         setLoading(false);
+        setPendingAnalysisTicker("");
       }
     }
   };
@@ -1087,12 +1146,12 @@ function AppContent() {
     </div>
   );
   const moversTape = tapeMovers.length ? (
-    <div className="ticker-marquee-wrap rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-2 sm:px-3">
-      <div className="mb-2 flex flex-col items-start gap-2 px-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+    <div className="ticker-marquee-wrap header-movers-tape rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-1.5 sm:px-3">
+      <div className="header-movers-meta flex items-center justify-between gap-3 px-1">
         <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
           Market movers
         </div>
-        <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-2">
           <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
             {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
               <button
@@ -1109,7 +1168,7 @@ function AppContent() {
               </button>
             ))}
           </div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <div className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 xl:block">
             Winners, losers ({marketMoversWindow.toUpperCase()})
           </div>
         </div>
@@ -1623,7 +1682,7 @@ function AppContent() {
               </div>
             )}
 
-            {loading && <LoadingState />}
+            {loading && <AnalyzerLoadingPanel ticker={pendingAnalysisTicker} />}
 
             {analysis && !loading && (
               <div className="space-y-8">

@@ -59,17 +59,26 @@ class PaperTradingService:
         if playbook.get("demo_block_reasons"):
             raise ValueError("Demo account risk gate blocks this playbook.")
 
-        last_price = self._get_last_price(playbook.get("ticker")) or float(playbook.get("reference_price") or 0)
+        is_option = playbook.get("asset_class") == "option"
+        if is_option:
+            direction = playbook.get("direction") or direction
+            last_price = float(playbook.get("reference_price") or 0)
+        else:
+            last_price = self._get_last_price(playbook.get("ticker")) or float(playbook.get("reference_price") or 0)
         if last_price <= 0:
             raise ValueError("No valid market price available for this playbook.")
         quantity = requested_quantity if requested_quantity > 0 else float(playbook.get("suggested_quantity") or 1)
         if quantity <= 0:
             raise ValueError("No valid demo quantity available for this playbook.")
 
-        risk_buffer = float(playbook.get("risk_buffer_pct") or 3.5) / 100
-        reward_buffer = float(playbook.get("reward_buffer_pct") or 7.0) / 100
-        stop_price = last_price * (1 - risk_buffer) if direction == "long" else last_price * (1 + risk_buffer)
-        target_price = last_price * (1 + reward_buffer) if direction == "long" else last_price * (1 - reward_buffer)
+        if is_option:
+            stop_price = round(last_price * 0.5, 2)
+            target_price = round(last_price * 2.0, 2)
+        else:
+            risk_buffer = float(playbook.get("risk_buffer_pct") or 3.5) / 100
+            reward_buffer = float(playbook.get("reward_buffer_pct") or 7.0) / 100
+            stop_price = last_price * (1 - risk_buffer) if direction == "long" else last_price * (1 + risk_buffer)
+            target_price = last_price * (1 + reward_buffer) if direction == "long" else last_price * (1 - reward_buffer)
         created = self.portfolio_manager.create_paper_trade(
             {
                 "ticker": playbook["ticker"],
@@ -86,6 +95,7 @@ class PaperTradingService:
                 "notes": (
                     f"Demo account idea. Suggested qty {playbook.get('suggested_quantity')}; "
                     f"risk {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}. "
+                    f"{'Paper option premium model. ' if is_option else ''}"
                     f"{playbook.get('headline') or ''}"
                 ).strip(),
             }
@@ -224,6 +234,8 @@ class PaperTradingService:
                 }
             )
 
+        playbooks.extend(self._build_option_learning_playbooks(playbooks))
+
         for item in playbooks:
             rule_state = self._get_do_not_trade_state(item, rules)
             item["do_not_trade_reasons"] = rule_state["blocked"]
@@ -231,6 +243,49 @@ class PaperTradingService:
             item["tradeable"] = len(rule_state["blocked"]) == 0
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:10]
+
+    def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        option_playbooks: List[Dict[str, Any]] = []
+        for item in base_playbooks:
+            score = float(item.get("score") or 0)
+            price = float(item.get("reference_price") or 0)
+            if item.get("asset_class") not in {"equity", "etf"} or score < 88 or price <= 5:
+                continue
+            direction = item.get("direction")
+            option_type = "call" if direction == "long" else "put" if direction == "short" else None
+            if not option_type:
+                continue
+            estimated_premium = round(max(0.35, price * 0.025), 2)
+            option_playbooks.append(
+                {
+                    "id": f"option-{item.get('ticker')}-{option_type}",
+                    "ticker": item.get("ticker"),
+                    "asset_class": "option",
+                    "direction": option_type,
+                    "setup_type": f"option_{option_type}_learning",
+                    "title": f"Paper {option_type.upper()} learning setup",
+                    "headline": item.get("headline"),
+                    "score": max(0, score - 3),
+                    "risk_buffer_pct": 100.0,
+                    "reward_buffer_pct": 100.0,
+                    "thesis": (
+                        f"Options-Demo auf {item.get('ticker')}: nur testen, wenn Underlying-These, Timing und Volumen bestaetigt sind. "
+                        "Maximaler Verlust ist die Demo-Praemie; kein Real-Money-Einsatz ohne manuelle Optionskettenpruefung."
+                    ),
+                    "tags": ["option", option_type, "paper only", "defined risk"],
+                    "reference_price": estimated_premium,
+                    "underlying_reference_price": price,
+                    "option_type": option_type,
+                    "contract_multiplier": 100,
+                    "max_holding_days": 10,
+                    "quality_gate": [
+                        "Underlying signal score >= 88",
+                        "Price reference exists",
+                        "Use only as demo option idea until IV, strike and expiry are verified",
+                    ],
+                }
+            )
+        return option_playbooks[:4]
 
     def _build_stats(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         closed = [trade for trade in trades if trade.get("status") == "closed" and trade.get("realized_pnl_pct") is not None]
@@ -265,6 +320,8 @@ class PaperTradingService:
             "risk_per_trade_pct": 0.5,
             "max_open_risk_pct": 4.0,
             "max_position_pct": 12.0,
+            "max_option_premium_pct": 1.0,
+            "risk_per_option_trade_pct": 0.5,
             "max_open_trades": 10,
             "mode": "paper_learning_only",
         }
@@ -284,6 +341,8 @@ class PaperTradingService:
         risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
         max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
         max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
+        max_option_premium_value = round(equity * (float(config["max_option_premium_pct"]) / 100), 2)
+        option_risk_budget = round(equity * (float(config["risk_per_option_trade_pct"]) / 100), 2)
         remaining_risk = round(max(0.0, max_open_risk_value - open_risk_value), 2)
         return {
             **config,
@@ -295,16 +354,20 @@ class PaperTradingService:
             "open_exposure_value": open_exposure_value,
             "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
             "risk_budget_per_trade_value": risk_budget,
+            "risk_budget_per_option_trade_value": option_risk_budget,
             "max_open_risk_value": max_open_risk_value,
             "remaining_risk_value": remaining_risk,
             "max_position_value": max_position_value,
+            "max_option_premium_value": max_option_premium_value,
             "open_trade_slots": max(0, int(config["max_open_trades"]) - len(open_trades)),
             "candidate_count": len(playbooks),
             "guardrails": [
                 "Demo-only learning account; no automatic real-money execution.",
                 "Every idea needs thesis, trigger, stop, target and post-trade journal.",
+                "Calls and puts are paper-only until option chain, IV, strike, expiry and spread are checked.",
                 "Real-money use requires manual review, suitability check and current market validation.",
             ],
+            "learning_feedback": self._build_learning_feedback(trades),
         }
 
     def _attach_demo_sizing(self, playbooks: List[Dict[str, Any]], demo_account: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -319,12 +382,24 @@ class PaperTradingService:
     def _suggest_demo_sizing(self, playbook: Dict[str, Any], demo_account: Dict[str, Any]) -> Dict[str, Any]:
         price = float(playbook.get("reference_price") or 0)
         risk_buffer_pct = float(playbook.get("risk_buffer_pct") or 3.5)
-        risk_per_share = price * (risk_buffer_pct / 100)
+        contract_multiplier = float(playbook.get("contract_multiplier") or 1)
+        is_option = playbook.get("asset_class") == "option"
+        risk_per_unit = price * (risk_buffer_pct / 100) * contract_multiplier
         risk_budget = min(
-            float(demo_account.get("risk_budget_per_trade_value") or 0),
+            float(
+                demo_account.get("risk_budget_per_option_trade_value")
+                if is_option
+                else demo_account.get("risk_budget_per_trade_value")
+                or 0
+            ),
             float(demo_account.get("remaining_risk_value") or 0),
         )
-        max_position_value = float(demo_account.get("max_position_value") or 0)
+        max_position_value = float(
+            demo_account.get("max_option_premium_value")
+            if is_option
+            else demo_account.get("max_position_value")
+            or 0
+        )
         block_reasons: List[str] = []
 
         if price <= 0:
@@ -336,20 +411,23 @@ class PaperTradingService:
         if playbook.get("tradeable") is False:
             block_reasons.append("Playbook is blocked by signal rules.")
 
-        quantity_by_risk = risk_budget / risk_per_share if risk_per_share > 0 else 0
-        quantity_by_position = max_position_value / price if price > 0 else 0
+        quantity_by_risk = risk_budget / risk_per_unit if risk_per_unit > 0 else 0
+        quantity_by_position = max_position_value / (price * contract_multiplier) if price > 0 else 0
         quantity = max(0.0, min(quantity_by_risk, quantity_by_position))
+        if is_option:
+            quantity = float(int(quantity))
         if quantity < 0.0001:
             block_reasons.append("Suggested quantity is too small for the configured risk budget.")
 
-        notional = quantity * price
-        max_loss = quantity * risk_per_share
+        notional = quantity * price * contract_multiplier
+        max_loss = quantity * risk_per_unit
         return {
             "suggested_quantity": round(quantity, 6),
             "suggested_notional_value": round(notional, 2),
             "suggested_max_loss_value": round(max_loss, 2),
             "suggested_account_pct": round((notional / float(demo_account.get("equity") or 1)) * 100, 2),
             "suggested_risk_pct": round((max_loss / float(demo_account.get("equity") or 1)) * 100, 2),
+            "contract_multiplier": contract_multiplier,
             "demo_block_reasons": block_reasons,
             "demo_tradeable": not block_reasons,
         }
@@ -361,9 +439,35 @@ class PaperTradingService:
         stop = trade.get("stop_price")
         quantity = float(trade.get("quantity") or 0)
         leverage = float(trade.get("leverage") or 1)
+        contract_multiplier = 100 if trade.get("asset_class") == "option" else 1
         if not entry or stop in (None, 0) or quantity <= 0:
             return 0.0
-        return abs(entry - float(stop)) * quantity * leverage
+        return abs(entry - float(stop)) * quantity * leverage * contract_multiplier
+
+    def _build_learning_feedback(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        closed = [trade for trade in trades if trade.get("status") == "closed" and trade.get("realized_pnl_pct") is not None]
+        option_closed = [trade for trade in closed if trade.get("asset_class") == "option"]
+        mistakes: Dict[str, int] = {}
+        for trade in closed:
+            if float(trade.get("realized_pnl_pct") or 0) >= 0:
+                continue
+            key = (trade.get("exit_reason") or trade.get("setup_type") or "unclassified").strip() or "unclassified"
+            mistakes[key] = mistakes.get(key, 0) + 1
+        option_wins = [trade for trade in option_closed if float(trade.get("realized_pnl_pct") or 0) > 0]
+        return {
+            "closed_trades": len(closed),
+            "option_closed_trades": len(option_closed),
+            "option_win_rate": round((len(option_wins) / len(option_closed)) * 100, 1) if option_closed else 0,
+            "top_mistakes": [
+                {"reason": reason, "count": count}
+                for reason, count in sorted(mistakes.items(), key=lambda item: item[1], reverse=True)[:5]
+            ],
+            "next_rule": (
+                "No real-money calls or puts until at least 20 paper option trades show repeatable positive expectancy."
+                if len(option_closed) < 20
+                else "Review option expectancy by setup before increasing demo risk."
+            ),
+        }
 
     def _build_setup_performance(self, closed_trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         buckets: Dict[str, Dict[str, Any]] = {}
@@ -442,22 +546,24 @@ class PaperTradingService:
         entry = float(row.get("entry_price") or 0)
         quantity = float(row.get("quantity") or 0)
         leverage = float(row.get("leverage") or 1)
-        current_price = self._get_last_price(row.get("ticker"))
+        is_option = row.get("asset_class") == "option"
+        current_price = None if is_option else self._get_last_price(row.get("ticker"))
         row["current_price"] = current_price
-        direction_multiplier = 1 if row.get("direction") == "long" else -1
+        direction_multiplier = -1 if row.get("direction") == "short" else 1
+        contract_multiplier = 100 if is_option else 1
 
         if row.get("status") == "closed":
             exit_price = float(row.get("closed_price") or 0)
             pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, leverage)
             row["realized_pnl_pct"] = pnl_pct
-            row["realized_pnl_value"] = round(((exit_price - entry) * quantity * direction_multiplier * leverage), 2)
+            row["realized_pnl_value"] = round(((exit_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
             row["unrealized_pnl_pct"] = None
             row["unrealized_pnl_value"] = None
         else:
             pnl_pct = self._calc_return_pct(entry, current_price, direction_multiplier, leverage) if current_price else None
             row["unrealized_pnl_pct"] = pnl_pct
             row["unrealized_pnl_value"] = (
-                round(((current_price - entry) * quantity * direction_multiplier * leverage), 2)
+                round(((current_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
                 if current_price is not None
                 else None
             )

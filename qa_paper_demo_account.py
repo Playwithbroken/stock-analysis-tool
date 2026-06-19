@@ -85,7 +85,9 @@ def test_demo_account_sizing() -> None:
     assert demo["starting_capital"] == 50_000.0
     assert demo["equity"] == 50_000.0
     assert demo["risk_budget_per_trade_value"] == 250.0
+    assert demo["risk_budget_per_option_trade_value"] == 250.0
     assert demo["max_position_value"] == 6_000.0
+    assert demo["max_option_premium_value"] == 500.0
 
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert aapl["demo_tradeable"] is True
@@ -95,6 +97,15 @@ def test_demo_account_sizing() -> None:
     assert aapl["suggested_account_pct"] <= 12.0
     assert aapl["suggested_risk_pct"] <= 0.5
 
+    aapl_call = next(item for item in dashboard["playbooks"] if item["id"] == "option-AAPL-call")
+    assert aapl_call["asset_class"] == "option"
+    assert aapl_call["direction"] == "call"
+    assert aapl_call["demo_tradeable"] is True
+    assert aapl_call["suggested_quantity"] == 1
+    assert aapl_call["suggested_notional_value"] == 250.0
+    assert aapl_call["suggested_max_loss_value"] == 250.0
+    assert aapl_call["suggested_risk_pct"] == 0.5
+
     created = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
         sample_scoreboard(),
@@ -103,6 +114,19 @@ def test_demo_account_sizing() -> None:
     assert created["ticker"] == "AAPL"
     assert created["quantity"] == 60
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
+
+    created_call = service.create_trade_from_playbook(
+        {"playbook_id": "option-AAPL-call", "direction": "call", "quantity": 0, "leverage": 1},
+        sample_scoreboard(),
+        sample_settings(),
+    )
+    assert created_call["ticker"] == "AAPL"
+    assert created_call["asset_class"] == "option"
+    assert created_call["direction"] == "call"
+    assert created_call["quantity"] == 1
+    assert created_call["entry_price"] == 2.5
+    assert created_call["stop_price"] == 1.25
+    assert created_call["target_price"] == 5.0
 
 
 def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:

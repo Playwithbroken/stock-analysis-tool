@@ -46,6 +46,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const journal = data?.journal || [];
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
+  const learningFeedback = demoAccount.learning_feedback || {};
   const currency = demoAccount.currency || "EUR";
 
   const openPnLTone = useMemo(() => {
@@ -197,6 +198,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div>Max Position: {money(demoAccount.max_position_value, currency)} / Idee</div>
               <div>Max Open Risk: {money(demoAccount.max_open_risk_value, currency)}</div>
               <div>Freies Risiko: {money(demoAccount.remaining_risk_value, currency)}</div>
+              <div>Option Risk/Trade: {money(demoAccount.risk_budget_per_option_trade_value, currency)}</div>
+              <div>Max Option Premium: {money(demoAccount.max_option_premium_value, currency)}</div>
               <div>Freie Slots: {demoAccount.open_trade_slots ?? 0}</div>
               <div>Modus: Paper Learning Only</div>
             </div>
@@ -209,6 +212,27 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               ))}
             </div>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
+          <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Error Learning</div>
+          <div className="mt-3 grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>Closed: {learningFeedback.closed_trades || 0}</div>
+              <div>Options: {learningFeedback.option_closed_trades || 0}</div>
+              <div>Option Win: {learningFeedback.option_win_rate || 0}%</div>
+            </div>
+            <div className="font-semibold text-slate-800">{learningFeedback.next_rule || "No option learning data yet."}</div>
+          </div>
+          {!!learningFeedback.top_mistakes?.length && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {learningFeedback.top_mistakes.map((item: any) => (
+                <span key={item.reason} className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-bold text-red-700">
+                  {item.reason}: {item.count}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -267,6 +291,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div>Notional: {money(item.suggested_notional_value, currency)}</div>
                     <div>Max loss: {money(item.suggested_max_loss_value, currency)}</div>
                     <div>Account/Risk: {item.suggested_account_pct || 0}% / {item.suggested_risk_pct || 0}%</div>
+                    {item.asset_class === "option" && <div>Contract: x{item.contract_multiplier || 100} · {item.option_type?.toUpperCase?.()}</div>}
+                    {item.asset_class === "option" && <div>Max hold: {item.max_holding_days || 10}d</div>}
                   </div>
                   {!!item.do_not_trade_reasons?.length && (
                     <div className="mt-3 rounded-[1rem] border border-red-200 bg-red-50 p-3 text-xs text-red-700">
@@ -289,20 +315,32 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         Analyze
                       </button>
                     )}
-                    <button
-                      onClick={() => openFromPlaybook(item.id, "long")}
-                      disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
-                      className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
-                    >
-                      Paper long
-                    </button>
-                    <button
-                      onClick={() => openFromPlaybook(item.id, "short")}
-                      disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
-                      className="rounded-xl border border-black/8 bg-[var(--secondary-strong)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
-                    >
-                      Paper short
-                    </button>
+                    {item.asset_class === "option" ? (
+                      <button
+                        onClick={() => openFromPlaybook(item.id, item.direction)}
+                        disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
+                        className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+                      >
+                        Paper {item.direction}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => openFromPlaybook(item.id, "long")}
+                          disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
+                          className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+                        >
+                          Paper long
+                        </button>
+                        <button
+                          onClick={() => openFromPlaybook(item.id, "short")}
+                          disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
+                          className="rounded-xl border border-black/8 bg-[var(--secondary-strong)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+                        >
+                          Paper short
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))

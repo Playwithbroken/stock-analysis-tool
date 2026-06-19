@@ -226,6 +226,24 @@ def build_suitability_check(profile: Dict[str, Any], request: Optional[Dict[str,
     }
 
 
+def _portfolio_review_action(
+    priority: int,
+    level: str,
+    title: str,
+    detail: str,
+    next_step: str,
+    flag: str,
+) -> Dict[str, Any]:
+    return {
+        "priority": priority,
+        "level": level,
+        "title": title,
+        "detail": detail,
+        "next_step": next_step,
+        "flag": flag,
+    }
+
+
 def build_portfolio_advisory_check(profile: Dict[str, Any], portfolio: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     advisory = normalize_advisory_profile(profile)
     payload = portfolio or {}
@@ -270,28 +288,69 @@ def build_portfolio_advisory_check(profile: Dict[str, Any], portfolio: Optional[
     issues: List[str] = []
     next_steps: List[str] = []
     risk_flags: List[str] = []
+    review_actions: List[Dict[str, Any]] = []
     score = 82
 
     if not advisory["advisory_enabled"]:
         score -= 35
         risk_flags.append("advisory_disabled")
         issues.append("Beratungsprofil ist deaktiviert; Portfolio bleibt reine Information.")
+        review_actions.append(
+            _portfolio_review_action(
+                10,
+                "review",
+                "Beratungsrahmen aktivieren",
+                "Ohne aktives Profil koennen Portfolio-Risiken nur allgemein eingeordnet werden.",
+                "Profil aktivieren oder bewusst als reines Informationsdepot markieren.",
+                "advisory_disabled",
+            )
+        )
 
     if not advisory["advisory_profile_complete"]:
         score -= 18
         risk_flags.append("profile_incomplete")
         issues.append("Beratungsprofil ist noch nicht bestaetigt.")
         next_steps.append("Beratungsprofil vervollstaendigen, bevor neue Positionen aktiv aufgebaut werden.")
+        review_actions.append(
+            _portfolio_review_action(
+                20,
+                "blocker",
+                "Profil vervollstaendigen",
+                "Risikotoleranz, Verlusttragfaehigkeit und Strategie muessen bestaetigt sein.",
+                "Advisory-Profil speichern, dann Portfolio erneut pruefen.",
+                "profile_incomplete",
+            )
+        )
 
     if num_holdings == 0:
         score -= 25
         risk_flags.append("empty_portfolio")
         issues.append("Portfolio enthaelt keine bewertbaren Positionen.")
+        review_actions.append(
+            _portfolio_review_action(
+                30,
+                "review",
+                "Portfolio aufbauen",
+                "Noch keine Positionen vorhanden; es gibt keine belastbare Strukturpruefung.",
+                "Erste Positionen mit Zielgewicht, These und Invalidierung erfassen.",
+                "empty_portfolio",
+            )
+        )
     elif num_holdings < 5:
         score -= 16
         risk_flags.append("low_diversification")
         issues.append("Weniger als 5 Positionen: Diversifikation ist noch duenn.")
         next_steps.append("Vor neuen Einzelwetten Diversifikation und Zielgewicht definieren.")
+        review_actions.append(
+            _portfolio_review_action(
+                45,
+                "review",
+                "Diversifikation erhoehen",
+                f"{num_holdings} Positionen sind fuer viele Strategien noch anfaellig fuer Einzeltitelrisiko.",
+                "Neue Setups erst gegen Zielallokation, Korrelation und Cash-Plan pruefen.",
+                "low_diversification",
+            )
+        )
 
     if top_holding and top_holding["position_pct"] > max_position_pct:
         score -= 26
@@ -300,16 +359,46 @@ def build_portfolio_advisory_check(profile: Dict[str, Any], portfolio: Optional[
             f"{top_holding['ticker']} liegt bei {top_holding['position_pct']:.2f}% und damit ueber dem Limit von {max_position_pct:.2f}%."
         )
         next_steps.append("Top-Position pruefen: reduzieren, absichern oder neues Kapital breiter verteilen.")
+        review_actions.append(
+            _portfolio_review_action(
+                5,
+                "blocker",
+                "Top-Position ueber Limit",
+                f"{top_holding['ticker']} liegt bei {top_holding['position_pct']:.2f}% statt maximal {max_position_pct:.2f}%.",
+                "Vor neuen Kaeufen Positionsgroesse, Stop/Invalidierung und Reduktionsplan pruefen.",
+                "single_position_limit_breach",
+            )
+        )
 
     if top_sector and top_sector["pct"] > 45:
         score -= 12
         risk_flags.append("sector_concentration")
         issues.append(f"Sektor {top_sector['sector']} macht {top_sector['pct']:.2f}% des Portfolios aus.")
+        review_actions.append(
+            _portfolio_review_action(
+                50,
+                "review",
+                "Sektor-Konzentration pruefen",
+                f"{top_sector['sector']} dominiert mit {top_sector['pct']:.2f}% das Portfolio.",
+                "Sektor-These, Gegenrisiken und Alternativen ausserhalb des Clusters vergleichen.",
+                "sector_concentration",
+            )
+        )
 
     if avg_score < 0:
         score -= 14
         risk_flags.append("negative_average_score")
         issues.append("Durchschnittlicher Portfolio-Score ist negativ.")
+        review_actions.append(
+            _portfolio_review_action(
+                35,
+                "review",
+                "Schwache Score-Basis klaeren",
+                f"Der durchschnittliche Portfolio-Score liegt bei {avg_score:.2f}.",
+                "Die schlechtesten Positionen nach These, Zahlenlage und News-Risiko neu bewerten.",
+                "negative_average_score",
+            )
+        )
 
     drawdown_pct = abs(_safe_float(summary.get("return_since_buy_pct") or summary.get("gain_loss_pct"), 0.0, -100.0, 100.0))
     if drawdown_pct > max_drawdown_pct and (summary.get("return_since_buy_pct") or summary.get("gain_loss_pct") or 0) < 0:
@@ -317,6 +406,16 @@ def build_portfolio_advisory_check(profile: Dict[str, Any], portfolio: Optional[
         risk_flags.append("drawdown_limit_breach")
         issues.append(f"Portfolio-Drawdown liegt bei {drawdown_pct:.2f}% und ueber dem Limit von {max_drawdown_pct:.2f}%.")
         next_steps.append("Drawdown-Regel pruefen: These je Position erneuern oder Risiko senken.")
+        review_actions.append(
+            _portfolio_review_action(
+                15,
+                "blocker",
+                "Drawdown-Limit verletzt",
+                f"Der Drawdown liegt bei {drawdown_pct:.2f}% und damit ueber dem Limit von {max_drawdown_pct:.2f}%.",
+                "Keine neue Risikoaufnahme, bevor Verlusttreiber und Reduktionsregel dokumentiert sind.",
+                "drawdown_limit_breach",
+            )
+        )
 
     score = max(0, min(100, score))
     if score < 45 or "single_position_limit_breach" in risk_flags or "drawdown_limit_breach" in risk_flags:
@@ -333,14 +432,36 @@ def build_portfolio_advisory_check(profile: Dict[str, Any], portfolio: Optional[
         issues.append("Portfolio passt grundsaetzlich zum hinterlegten Beratungsrahmen.")
     if not next_steps:
         next_steps.append("Neue Setups nur mit Trigger, Zielgewicht und Invalidierung umsetzen.")
+    if not review_actions:
+        review_actions.append(
+            _portfolio_review_action(
+                80,
+                "opportunity",
+                "Rahmen passt",
+                "Keine harte Portfolio-Bremse erkannt; die Struktur passt zum hinterlegten Profil.",
+                "Naechste Idee nur mit Trigger, Zielgewicht, Risiko und Invalidierung dokumentieren.",
+                "within_framework",
+            )
+        )
+
+    review_actions = sorted(review_actions, key=lambda item: int(item.get("priority", 999)))[:5]
+    headline = (
+        "Neue Risiken blockieren, erst Portfolio reparieren."
+        if status == "blocked"
+        else "Vor neuen Risiken diese Punkte pruefen."
+        if status == "review"
+        else "Portfolio im Rahmen, neue Setups diszipliniert pruefen."
+    )
 
     return {
         "status": status,
         "decision": decision,
+        "advisory_headline": headline,
         "profile_complete": advisory["advisory_profile_complete"],
         "advisory_score": score,
         "issues": issues,
         "required_next_steps": next_steps,
+        "review_actions": review_actions,
         "risk_flags": risk_flags,
         "top_holding": top_holding,
         "top_sector": top_sector,

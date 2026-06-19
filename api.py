@@ -1324,8 +1324,8 @@ class SuitabilityCheckRequest(BaseModel):
 
 
 class PortfolioAdvisoryCheckRequest(BaseModel):
-    holdings: List[Dict[str, Any]] = []
-    summary: Dict[str, Any] = {}
+    holdings: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
 
 
 class LoginRequest(BaseModel):

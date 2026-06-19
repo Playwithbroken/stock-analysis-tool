@@ -121,6 +121,13 @@ def main() -> int:
         if "single_position_limit_breach" not in concentrated.get("risk_flags", []):
             print("FAIL concentrated portfolio missing single position risk flag")
             return 1
+        concentrated_actions = concentrated.get("review_actions", [])
+        if not any(action.get("level") == "blocker" for action in concentrated_actions):
+            print(f"FAIL concentrated portfolio missing blocker review action: {concentrated}")
+            return 1
+        if not any(action.get("flag") == "sector_concentration" for action in concentrated_actions):
+            print(f"FAIL concentrated portfolio missing sector concentration action: {concentrated}")
+            return 1
 
         balanced = build_portfolio_advisory_check(
             suitable_profile,
@@ -145,6 +152,10 @@ def main() -> int:
         )
         if balanced.get("decision") != "within_framework":
             print(f"FAIL balanced portfolio not marked within framework: {balanced}")
+            return 1
+        balanced_actions = balanced.get("review_actions", [])
+        if not any(action.get("level") == "opportunity" for action in balanced_actions):
+            print(f"FAIL balanced portfolio missing opportunity review action: {balanced}")
             return 1
 
     print("Advisory profile smoke passed.")

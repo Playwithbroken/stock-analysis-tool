@@ -62,9 +62,18 @@ interface AdvisoryProfile {
 interface PortfolioAdvisoryCheck {
   status: "ok" | "review" | "blocked" | string;
   decision: string;
+  advisory_headline?: string;
   advisory_score: number;
   issues: string[];
   required_next_steps: string[];
+  review_actions?: Array<{
+    priority?: number;
+    level?: "blocker" | "review" | "opportunity" | string;
+    title?: string;
+    detail?: string;
+    next_step?: string;
+    flag?: string;
+  }>;
   risk_flags: string[];
   top_holding?: {
     ticker?: string;
@@ -492,6 +501,28 @@ export default function PortfolioView({
       ? Number(portfolioAdvisory.top_holding.position_pct)
       : topHoldingPct;
   const advisoryProfileLimits = portfolioAdvisory?.profile_limits;
+  const advisoryHeadline =
+    portfolioAdvisory?.advisory_headline ||
+    (advisoryStatus === "ok"
+      ? "Portfolio im Rahmen, neue Setups diszipliniert pruefen."
+      : "Vor neuen Risiken diese Punkte pruefen.");
+  const advisoryReviewActions =
+    portfolioAdvisory?.review_actions?.length
+      ? portfolioAdvisory.review_actions.slice(0, 3)
+      : advisoryIssues.slice(0, 3).map((issue, index) => ({
+          priority: 50 + index,
+          level: "review",
+          title: "Pruefpunkt",
+          detail: issue,
+          next_step: "These, Positionsgroesse und Invalidierung dokumentieren.",
+          flag: `local_${index}`,
+        }));
+  const advisoryActionTone = (level?: string) =>
+    level === "blocker"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : level === "opportunity"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+        : "border-amber-200 bg-amber-50 text-amber-800";
   const sourceCopy = (() => {
     if (dataSource === "server") {
       return {
@@ -725,8 +756,13 @@ export default function PortfolioView({
                     {analysis.summary.num_holdings}
                   </div>
                   {avgHoldingDays != null && (
-                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <div className="hidden">
                       Ø Haltedauer {formatHoldingPeriod(avgHoldingDays)}
+                    </div>
+                  )}
+                  {avgHoldingDays != null && (
+                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                      Avg Haltedauer {formatHoldingPeriod(avgHoldingDays)}
                     </div>
                   )}
                 </div>
@@ -741,7 +777,7 @@ export default function PortfolioView({
                       Advisory Portfolio Check
                     </div>
                     <h3 className="mt-2 text-2xl text-slate-900">
-                      Passt die Portfolio-Struktur zu deinem Rahmen?
+                      {advisoryHeadline}
                     </h3>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                       Prueft Konzentration, Positionslimit, Diversifikation und Score gegen dein Advisory-Profil.
@@ -796,16 +832,32 @@ export default function PortfolioView({
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    Naechster Schritt
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      Priorisierte Review-Liste
+                    </div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                      Score {portfolioAdvisoryLoading ? "--" : portfolioAdvisory?.advisory_score ?? "--"}/100
+                    </div>
                   </div>
-                  <div className="mt-2 space-y-2">
-                    {(advisoryIssues.length
-                      ? advisoryIssues.slice(0, 3)
-                      : ["Keine harte Bremse. Neue Setups trotzdem nur mit Trigger, Positionsgroesse und Invalidierung umsetzen."]
-                    ).map((item) => (
-                      <div key={item} className="text-sm font-semibold leading-6 text-slate-700">
-                        {item}
+                  <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                    {advisoryReviewActions.map((item, index) => (
+                      <div
+                        key={`${item.flag || item.title || "review"}-${index}`}
+                        className={`rounded-2xl border p-4 ${advisoryActionTone(item.level)}`}
+                      >
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
+                          {item.level || "review"} #{index + 1}
+                        </div>
+                        <div className="mt-2 text-sm font-black leading-5">
+                          {item.title || "Pruefpunkt"}
+                        </div>
+                        <div className="mt-2 text-xs font-semibold leading-5 opacity-90">
+                          {item.detail || "Keine harte Bremse erkannt."}
+                        </div>
+                        <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold leading-5 text-slate-700">
+                          {item.next_step || "Trigger, Zielgewicht und Invalidierung dokumentieren."}
+                        </div>
                       </div>
                     ))}
                   </div>

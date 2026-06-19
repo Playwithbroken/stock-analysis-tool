@@ -709,7 +709,6 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   aria-autocomplete="list"
                   className="relative w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0 sm:text-lg"
                   style={{ caretColor: "currentColor" }}
-                  disabled={loading}
                   autoComplete="off"
                   spellCheck={false}
                 />

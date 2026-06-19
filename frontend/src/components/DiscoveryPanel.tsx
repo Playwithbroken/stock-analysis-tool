@@ -69,9 +69,25 @@ interface ScreenerRow {
   low52_proximity?: number;
 }
 
-const formatMove = (value?: number) => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "offen";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatMove = (value?: number | string | null, fallback = "offen") => {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(2)}%`;
+};
+
+const formatNumber = (value: unknown, digits = 1, fallback = "n/a") => {
+  const number = toFiniteNumber(value);
+  return number == null ? fallback : number.toFixed(digits);
+};
+
+const formatTer = (value: unknown) => {
+  const number = toFiniteNumber(value);
+  return number == null ? "offen" : `${number.toFixed(2)}%`;
 };
 
 const emptyTicker = "Offen";
@@ -755,7 +771,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     </div>
                     <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                       {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
-                      {(selectedMarketDetail.change || 0).toFixed(2)}%
+                      {formatMove(selectedMarketDetail.change)}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
@@ -964,9 +980,9 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         </div>
                       </div>
                       <div className="mt-4 grid gap-2 text-xs font-bold text-slate-600 sm:grid-cols-3">
-                        <div>Growth {stock.growth != null ? `${stock.growth.toFixed(1)}%` : "n/a"}</div>
-                        <div>MCap {stock.market_cap ? `${(stock.market_cap / 1e9).toFixed(1)}B` : "n/a"}</div>
-                        <div>Vol {stock.volume_ratio ? `${Number(stock.volume_ratio).toFixed(1)}x` : "n/a"}</div>
+                        <div>{toFiniteNumber(stock.growth) != null ? `Growth ${formatNumber(stock.growth)}%` : "Growth n/a"}</div>
+                        <div>MCap {toFiniteNumber(stock.market_cap) != null ? `${formatNumber(toFiniteNumber(stock.market_cap)! / 1e9)}B` : "n/a"}</div>
+                        <div>Vol {toFiniteNumber(stock.volume_ratio) != null ? `${formatNumber(stock.volume_ratio)}x` : "n/a"}</div>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-slate-600">
                         {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Noch kein sauberer News-Katalysator."}
@@ -1065,7 +1081,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     </div>
                     <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                       {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
-                      {(selectedMarketDetail.change || 0).toFixed(2)}%
+                      {formatMove(selectedMarketDetail.change)}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
@@ -1115,7 +1131,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-700">
-                        +{stock.change?.toFixed(2)}%
+                        {formatMove(stock.change)}
                       </div>
                       <div className="text-[8px] font-black uppercase text-slate-500">
                         {stock.trend_context}
@@ -1147,7 +1163,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-red-700">
-                        {stock.change?.toFixed(2)}%
+                        {formatMove(stock.change)}
                       </div>
                       <div className="text-[8px] font-black uppercase text-slate-500">
                         Pullback
@@ -1193,7 +1209,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             Jährliche Kosten (TER)
                           </span>
                             <div className="text-2xl font-black text-emerald-700">
-                            {etf.ter?.toFixed(2)}%
+                            {formatTer(etf.ter)}
                           </div>
                         </div>
 
@@ -1204,8 +1220,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           <div
                             className={`text-2xl font-black ${(etf.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                           >
-                            {(etf.change || 0) >= 0 ? "+" : ""}
-                            {etf.change?.toFixed(2)}%
+                            {formatMove(etf.change)}
                           </div>
                         </div>
 
@@ -1249,10 +1264,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         </div>
                         <div className={`mt-3 text-xl font-black ${(selectedEtfDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                           {(selectedEtfDetail.change || 0) >= 0 ? "+" : ""}
-                          {(selectedEtfDetail.change || 0).toFixed(2)}%
+                          {formatMove(selectedEtfDetail.change)}
                         </div>
                         <div className="mt-2 text-xs text-slate-500">
-                          Kategorie: {selectedEtfDetail.category || "Diverse"} / TER: {selectedEtfDetail.ter ? `${selectedEtfDetail.ter.toFixed(2)}%` : "offen"}
+                          Kategorie: {selectedEtfDetail.category || "Diverse"} / TER: {formatTer(selectedEtfDetail.ter)}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1325,7 +1340,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                               Kosten (TER)
                             </div>
                             <div className="text-lg font-black text-emerald-700">
-                              {etf.ter ? `${etf.ter.toFixed(2)}%` : "offen"}
+                              {formatTer(etf.ter)}
                             </div>
                           </div>
                           <div className="rounded-2xl border border-black/8 bg-white/75 p-3">
@@ -1335,8 +1350,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             <div
                               className={`text-lg font-black ${(etf.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                             >
-                              {(etf.change || 0) >= 0 ? "+" : ""}
-                              {etf.change?.toFixed(2)}%
+                              {formatMove(etf.change)}
                             </div>
                           </div>
                         </div>
@@ -1410,7 +1424,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       </div>
                       <div className="mt-1 truncate text-xs font-semibold text-slate-500">{stock.name}</div>
                       <div className="mt-3 text-xs font-bold text-slate-700">
-                        {stock.growth != null ? `${stock.growth.toFixed(1)}% Wachstum` : "Growth n/a"} · {stock.market_cap ? `${(stock.market_cap / 1e9).toFixed(1)}B` : "MCap n/a"}
+                        {toFiniteNumber(stock.growth) != null ? `${formatNumber(stock.growth)}% Wachstum` : "Growth n/a"} · {toFiniteNumber(stock.market_cap) != null ? `${formatNumber(toFiniteNumber(stock.market_cap)! / 1e9)}B` : "MCap n/a"}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
                         <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
@@ -1552,16 +1566,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             {row.price != null ? formatPrice(row.price) : "-"}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {row.rsi_14 != null ? row.rsi_14.toFixed(1) : "-"}
+                            {formatNumber(row.rsi_14, 1, "-")}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {row.market_cap != null ? `${(row.market_cap / 1e9).toFixed(1)}B` : "-"}
+                            {toFiniteNumber(row.market_cap) != null ? `${formatNumber(toFiniteNumber(row.market_cap)! / 1e9)}B` : "-"}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {row.high52_proximity != null ? `${row.high52_proximity.toFixed(1)}%` : "-"}
+                            {toFiniteNumber(row.high52_proximity) != null ? `${formatNumber(row.high52_proximity)}%` : "-"}
                           </td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {row.low52_proximity != null ? `${row.low52_proximity.toFixed(1)}%` : "-"}
+                            {toFiniteNumber(row.low52_proximity) != null ? `${formatNumber(row.low52_proximity)}%` : "-"}
                           </td>
                           <td className="px-5 py-4 text-right">
                             <button
@@ -1598,7 +1612,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     </div>
                     <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                       {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
-                      {(selectedMarketDetail.change || 0).toFixed(2)}%
+                      {formatMove(selectedMarketDetail.change)}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
@@ -1652,7 +1666,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         className={`text-xs font-bold ${coin.change && coin.change > 0 ? "text-emerald-700" : "text-red-700"}`}
                       >
                         {coin.change && coin.change > 0 ? "+" : ""}
-                        {coin.change?.toFixed(2)}%
+                        {formatMove(coin.change)}
                       </div>
                     </div>
                   </div>
@@ -1691,7 +1705,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         className={`text-xs font-bold ${(item.change || 0) > 0 ? "text-emerald-700" : "text-red-700"}`}
                       >
                         {(item.change || 0) > 0 ? "+" : ""}
-                        {item.change?.toFixed(2)}%
+                        {formatMove(item.change)}
                       </div>
                     </div>
                   </div>
@@ -1832,7 +1846,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         >
                           <div className="text-xs font-black text-slate-900">{s.symbol}</div>
                           <div className={`mt-1 text-lg font-black ${(s.change_1d || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                            {(s.change_1d || 0) >= 0 ? "+" : ""}{s.change_1d?.toFixed(2)}%
+                            {formatMove(s.change_1d)}
                           </div>
                           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                             <div

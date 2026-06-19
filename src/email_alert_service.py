@@ -243,6 +243,68 @@ class EmailAlertService:
         )
         return {"status": "ok", "message": "Price alert notification sent."}
 
+    def send_paper_learning_alerts(self, learning: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
+        if not force and os.getenv("PAPER_LEARNING_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            return {"status": "disabled", "message": "Paper learning alerts are disabled."}
+
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
+        events = self._extract_paper_learning_events(learning, sent_keys)
+        if not events:
+            return {"status": "ok", "sent": 0, "message": "No new paper learning alerts."}
+
+        self._send_notifications(config, events[:5], subject="Learning Alert: Paper-Trading Feedback")
+        self.portfolio_manager.mark_signal_events_sent(events[:5])
+        return {"status": "ok", "sent": len(events[:5]), "message": "Paper learning Telegram alerts sent."}
+
+    def _extract_paper_learning_events(self, learning: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
+        events: List[Dict[str, Any]] = []
+        setup_adjustments = learning.get("setup_adjustments") or {}
+        for setup_type, adjustment in setup_adjustments.items():
+            if not adjustment.get("block") and float(adjustment.get("score_delta") or 0) > -8:
+                continue
+            key = f"paper-learning:{setup_type}:{adjustment.get('block')}:{adjustment.get('score_delta')}:{adjustment.get('decisive')}"
+            if key in sent_keys:
+                continue
+            severity = "BLOCK" if adjustment.get("block") else "DOWNGRADE"
+            line = (
+                f"{severity}: {setup_type} | hit {adjustment.get('hit_rate')}% over "
+                f"{adjustment.get('decisive')} checks | score {adjustment.get('score_delta')}. "
+                f"{adjustment.get('reason')}"
+            )
+            events.append(
+                {
+                    "event_key": key,
+                    "category": "paper_learning",
+                    "title": f"Paper learning {severity.lower()}",
+                    "line": line,
+                    "source_label": "Paper outcome learning",
+                    "source_url": "",
+                    "conviction_score": None,
+                }
+            )
+
+        option = learning.get("option_readiness") or {}
+        if option and not option.get("real_money_ready") and int(option.get("decisive") or 0) in {5, 10, 15, 19}:
+            key = f"paper-learning:options:not-ready:{option.get('decisive')}:{option.get('hit_rate')}"
+            if key not in sent_keys:
+                events.append(
+                    {
+                        "event_key": key,
+                        "category": "paper_learning",
+                        "title": "Options remain paper-only",
+                        "line": (
+                            f"CALL/PUT learning: {option.get('decisive')} decisive checks, "
+                            f"{option.get('hit_rate')}% hit rate. {option.get('reason')}"
+                        ),
+                        "source_label": "Options paper learning",
+                        "source_url": "",
+                        "conviction_score": None,
+                    }
+                )
+        return events
+
     def send_daily_brief(self) -> Dict[str, Any]:
         config = self.get_config()
         self._validate_config(config)

@@ -1156,9 +1156,25 @@ async def _forecast_learning_loop():
         try:
             result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
             paper_result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
+            paper_learning = get_paper_trading_service()._build_outcome_learning_adjustments()
+            try:
+                paper_alert_result = await asyncio.to_thread(
+                    get_email_alert_service().send_paper_learning_alerts,
+                    paper_learning,
+                    False,
+                )
+            except Exception as alert_error:
+                paper_alert_result = {"status": "error", "message": str(alert_error)}
             get_portfolio_manager().set_app_setting(
                 "forecast_learning_last_result",
-                json.dumps({"checked_at": datetime.utcnow().isoformat(), **result, "paper_trades": paper_result}),
+                json.dumps(
+                    {
+                        "checked_at": datetime.utcnow().isoformat(),
+                        **result,
+                        "paper_trades": paper_result,
+                        "paper_learning_alerts": paper_alert_result,
+                    }
+                ),
             )
         except Exception as e:
             print(f"Forecast learning loop error: {e}")
@@ -4268,11 +4284,20 @@ async def get_paper_trading_dashboard():
 async def evaluate_paper_trade_outcomes():
     try:
         result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
+        paper_learning = get_paper_trading_service()._build_outcome_learning_adjustments()
+        try:
+            alert_result = await asyncio.to_thread(
+                get_email_alert_service().send_paper_learning_alerts,
+                paper_learning,
+                True,
+            )
+        except Exception as alert_error:
+            alert_result = {"status": "error", "message": str(alert_error)}
         get_portfolio_manager().set_app_setting(
             "paper_trade_outcomes_last_result",
-            json.dumps({"checked_at": datetime.utcnow().isoformat(), **result}),
+            json.dumps({"checked_at": datetime.utcnow().isoformat(), **result, "paper_learning_alerts": alert_result}),
         )
-        return convert_numpy_types(result)
+        return convert_numpy_types({**result, "paper_learning_alerts": alert_result})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -126,6 +126,9 @@ def test_demo_account_sizing() -> None:
     assert aapl["suggested_max_loss_value"] <= 250.0
     assert aapl["suggested_account_pct"] <= 12.0
     assert aapl["suggested_risk_pct"] <= 0.5
+    assert aapl["decision_framework"]["entry_trigger"]
+    assert aapl["decision_framework"]["invalidation"]
+    assert aapl["decision_framework"]["real_money_policy"].startswith("Decision support only")
 
     aapl_call = next(item for item in dashboard["playbooks"] if item["id"] == "option-AAPL-call")
     assert aapl_call["asset_class"] == "option"
@@ -135,6 +138,8 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["suggested_notional_value"] == 250.0
     assert aapl_call["suggested_max_loss_value"] == 250.0
     assert aapl_call["suggested_risk_pct"] == 0.5
+    assert aapl_call["decision_framework"]["evidence_level"] in {"paper_candidate", "high_quality_paper", "watch"}
+    assert "premium" in aapl_call["decision_framework"]["risk_plan"].lower()
 
     created = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},

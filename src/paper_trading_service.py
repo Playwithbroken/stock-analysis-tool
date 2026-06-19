@@ -296,8 +296,75 @@ class PaperTradingService:
             item["do_not_trade_reasons"] = rule_state["blocked"]
             item["leverage_warnings"] = rule_state["leverage"]
             item["tradeable"] = len(rule_state["blocked"]) == 0
+            item["decision_framework"] = self._build_decision_framework(item)
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:10]
+
+    def _build_decision_framework(self, playbook: Dict[str, Any]) -> Dict[str, Any]:
+        ticker = str(playbook.get("ticker") or "asset").upper()
+        asset_class = str(playbook.get("asset_class") or "equity")
+        direction = str(playbook.get("direction") or "long").lower()
+        setup_type = str(playbook.get("setup_type") or "signal_playbook")
+        score = float(playbook.get("score") or 0)
+        risk_pct = float(playbook.get("risk_buffer_pct") or 0)
+        reward_pct = float(playbook.get("reward_buffer_pct") or 0)
+        blocked = list(playbook.get("do_not_trade_reasons") or [])
+        warnings = list(playbook.get("leverage_warnings") or [])
+        is_option = asset_class == "option"
+
+        direction_label = "upside" if direction in {"long", "call"} else "downside"
+        entry_trigger = (
+            f"{ticker} confirms {direction_label} follow-through after the signal with clean price action and volume."
+        )
+        invalidation = (
+            f"Thesis fails if {ticker} breaks the planned stop zone, news quality weakens, or the move is not confirmed by market breadth."
+        )
+        risk_plan = (
+            f"Paper size only. Planned risk buffer {risk_pct}% and target buffer {reward_pct}%; no size increase after entry."
+        )
+        if is_option:
+            entry_trigger = (
+                f"Only paper-test the {direction.upper()} after the underlying confirms direction, liquidity and timing."
+            )
+            invalidation = (
+                "Invalid if underlying momentum fades, spread is wide, IV/expiry are unattractive, or max premium risk is not documented."
+            )
+            risk_plan = "Defined-risk paper option only; max loss is premium, no real-money execution from this model."
+
+        evidence_level = "watch"
+        if blocked:
+            evidence_level = "blocked"
+        elif score >= 90:
+            evidence_level = "high_quality_paper"
+        elif score >= 78:
+            evidence_level = "paper_candidate"
+
+        review_questions = [
+            "Is the signal still fresh and confirmed by price, volume and market context?",
+            "What exact event would prove the thesis wrong?",
+            "Is the position risk acceptable before opening the trade?",
+        ]
+        if setup_type == "political_copy_delay":
+            review_questions.append("Is the political filing too delayed to still have an edge?")
+        if is_option:
+            review_questions.append("Were strike, expiry, spread, IV and premium risk checked manually?")
+
+        return {
+            "evidence_level": evidence_level,
+            "entry_trigger": entry_trigger,
+            "invalidation": invalidation,
+            "risk_plan": risk_plan,
+            "data_checks": [
+                "Price reference available",
+                "Stop and target defined",
+                "No blocked learning setup" if not blocked else "Blocked reason must be resolved first",
+                "Manual review required before real money",
+            ],
+            "review_questions": review_questions,
+            "blocked_reasons": blocked,
+            "warnings": warnings,
+            "real_money_policy": "Decision support only; real-money execution requires manual review and documented risk.",
+        }
 
     def _schedule_trade_outcomes(self, trade: Dict[str, Any]) -> int:
         trade_id = str(trade.get("id") or "")

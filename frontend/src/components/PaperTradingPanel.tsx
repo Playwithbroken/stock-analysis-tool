@@ -427,6 +427,34 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     ))}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">{item.thesis}</p>
+                  {item.decision_framework && (
+                    <div className="mt-3 grid gap-2 rounded-[1.1rem] border border-slate-200 bg-slate-50/90 p-3 text-xs text-slate-700 lg:grid-cols-3">
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Trigger</div>
+                        <div className="mt-1 leading-5">{item.decision_framework.entry_trigger}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Invalidation</div>
+                        <div className="mt-1 leading-5">{item.decision_framework.invalidation}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Risk</div>
+                        <div className="mt-1 leading-5">{item.decision_framework.risk_plan}</div>
+                      </div>
+                      <div className="lg:col-span-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-black/8 bg-white px-2.5 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                            {item.decision_framework.evidence_level}
+                          </span>
+                          {(item.decision_framework.review_questions || []).slice(0, 2).map((question: string) => (
+                            <span key={question} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-600">
+                              {question}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {item.learning_adjustment && (
                     <div className="mt-3 rounded-[1rem] border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
                       <div className="font-extrabold uppercase tracking-[0.14em]">Outcome Learning</div>

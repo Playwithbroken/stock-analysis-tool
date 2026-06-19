@@ -20,6 +20,17 @@ interface MarketSentimentProps {
   onAnalyze?: (ticker: string) => void;
 }
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatPercent = (value: unknown, digits = 1, fallback = "offen") => {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
+};
+
 export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
   const { formatPrice } = useCurrency();
   const [heatmap, setHeatmap] = useState<HeatmapItem[]>([]);
@@ -55,11 +66,13 @@ export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {heatmap
-          .sort((a, b) => b.strength - a.strength)
+          .sort((a, b) => (toFiniteNumber(b.strength) ?? 0) - (toFiniteNumber(a.strength) ?? 0))
           .map((item) => {
-            const isBullish = item.sentiment_score > 0;
+            const sentimentScore = toFiniteNumber(item.sentiment_score) ?? 0;
+            const strength = Math.max(0, Math.min(100, toFiniteNumber(item.strength) ?? 0));
+            const isBullish = sentimentScore > 0;
             const sortedStocks = [...(item.hot_stocks || [])].sort(
-              (a, b) => b.change_1w - a.change_1w,
+              (a, b) => (toFiniteNumber(b.change_1w) ?? 0) - (toFiniteNumber(a.change_1w) ?? 0),
             );
 
             return (
@@ -96,14 +109,14 @@ export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
                 <div className="mt-6">
                   <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
                     <span>Strength</span>
-                    <span>{item.strength.toFixed(0)}%</span>
+                    <span>{strength.toFixed(0)}%</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/[0.06]">
                     <div
                       className={`h-full rounded-full ${
                         isBullish ? "bg-emerald-600" : "bg-red-600"
                       }`}
-                      style={{ width: `${item.strength}%` }}
+                      style={{ width: `${strength}%` }}
                     />
                   </div>
                 </div>
@@ -133,11 +146,10 @@ export default function MarketSentiment({ onAnalyze }: MarketSentimentProps) {
                           </div>
                           <div
                             className={`text-xs font-extrabold ${
-                              stock.change_1w >= 0 ? "text-emerald-700" : "text-red-700"
+                              (toFiniteNumber(stock.change_1w) ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"
                             }`}
                           >
-                            {stock.change_1w >= 0 ? "+" : ""}
-                            {stock.change_1w.toFixed(1)}%
+                            {formatPercent(stock.change_1w)}
                           </div>
                         </div>
                       </button>

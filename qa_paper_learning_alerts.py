@@ -22,12 +22,31 @@ def test_paper_learning_alert_extraction() -> None:
             "real_money_ready": False,
             "reason": "Options remain paper-only until 20 decisive checks and >=55% hit rate.",
         },
+        "learning_summary": {
+            "review_focus": [
+                "Stop using blocked setup types: insider_follow.",
+                "Main error to fix next: weak_follow_through.",
+            ],
+            "manual_review_checklist": [
+                "Thesis is written before entry.",
+                "Trigger, stop, target and invalidation are clear.",
+            ],
+        },
     }
     events = service._extract_paper_learning_events(learning, set())
     assert len(events) == 2
     assert events[0]["category"] == "paper_learning"
+    assert events[0]["severity"] == "block"
+    assert events[0]["action"] == "Block setup"
+    assert events[0]["review_focus"]
     assert "BLOCK" in events[0]["line"]
     assert "CALL/PUT" in events[1]["line"]
+
+    rendered = service._render_telegram_paper_learning_alert(events[0])
+    assert "[LEARNING BLOCK]" in rendered
+    assert "Manual money gate" in rendered
+    assert "Critical check" in rendered
+    assert "weak_follow_through" in rendered
 
     sent = {event["event_key"] for event in events}
     assert service._extract_paper_learning_events(learning, sent) == []

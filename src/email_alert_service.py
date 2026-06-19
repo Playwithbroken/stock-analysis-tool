@@ -260,6 +260,9 @@ class EmailAlertService:
 
     def _extract_paper_learning_events(self, learning: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
         events: List[Dict[str, Any]] = []
+        summary = learning.get("learning_summary") or {}
+        review_focus = summary.get("review_focus") or []
+        manual_review_checklist = summary.get("manual_review_checklist") or []
         setup_adjustments = learning.get("setup_adjustments") or {}
         for setup_type, adjustment in setup_adjustments.items():
             if not adjustment.get("block") and float(adjustment.get("score_delta") or 0) > -8:
@@ -277,8 +280,19 @@ class EmailAlertService:
                 {
                     "event_key": key,
                     "category": "paper_learning",
+                    "severity": severity.lower(),
                     "title": f"Paper learning {severity.lower()}",
                     "line": line,
+                    "setup_type": setup_type,
+                    "hit_rate": adjustment.get("hit_rate"),
+                    "decisive": adjustment.get("decisive"),
+                    "score_delta": adjustment.get("score_delta"),
+                    "blocked": bool(adjustment.get("block")),
+                    "reason": adjustment.get("reason") or "",
+                    "review_focus": review_focus[:3],
+                    "manual_review_checklist": manual_review_checklist[:5],
+                    "critical_check": "Do not use this setup with real money until the miss reason is fixed and new paper evidence improves.",
+                    "action": "Block setup" if adjustment.get("block") else "Reduce size and require stronger confirmation",
                     "source_label": "Paper outcome learning",
                     "source_url": "",
                     "conviction_score": None,
@@ -293,11 +307,22 @@ class EmailAlertService:
                     {
                         "event_key": key,
                         "category": "paper_learning",
+                        "severity": "options_gate",
                         "title": "Options remain paper-only",
                         "line": (
                             f"CALL/PUT learning: {option.get('decisive')} decisive checks, "
                             f"{option.get('hit_rate')}% hit rate. {option.get('reason')}"
                         ),
+                        "setup_type": "call_put_learning",
+                        "hit_rate": option.get("hit_rate"),
+                        "decisive": option.get("decisive"),
+                        "score_delta": None,
+                        "blocked": True,
+                        "reason": option.get("reason") or "",
+                        "review_focus": review_focus[:3],
+                        "manual_review_checklist": manual_review_checklist[:5],
+                        "critical_check": "No real-money calls or puts before enough paper checks, strike/expiry/spread review and max premium risk are documented.",
+                        "action": "Keep options paper-only",
                         "source_label": "Options paper learning",
                         "source_url": "",
                         "conviction_score": None,
@@ -2715,6 +2740,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_macro_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "paper_learning":
+                lines.append(self._render_telegram_paper_learning_alert(event))
+                lines.append("")
+                continue
 
             prefix = self._telegram_prefix_for_event(event)
             rendered_line = f"{prefix} {self._tg_esc(line)}".strip()
@@ -2730,6 +2759,45 @@ class EmailAlertService:
 
         self._tg_post(config.telegram_bot_token, config.telegram_chat_id, "\n".join(lines))
         return True
+
+    def _render_telegram_paper_learning_alert(self, event: Dict[str, Any]) -> str:
+        severity = str(event.get("severity") or "learning").upper()
+        setup = self._tg_esc(str(event.get("setup_type") or "setup"))
+        title = self._tg_esc(str(event.get("title") or "Paper learning alert"))
+        hit_rate = self._tg_esc(str(event.get("hit_rate") if event.get("hit_rate") is not None else "n/a"))
+        decisive = self._tg_esc(str(event.get("decisive") if event.get("decisive") is not None else "n/a"))
+        score_delta = event.get("score_delta")
+        reason = self._tg_esc(str(event.get("reason") or event.get("line") or ""))[:620]
+        action = self._tg_esc(str(event.get("action") or "Review manually"))
+        critical_check = self._tg_esc(
+            str(event.get("critical_check") or "Do not move to real money without documented paper evidence.")
+        )[:520]
+        review_focus = [self._tg_esc(str(item))[:260] for item in (event.get("review_focus") or [])[:3]]
+        checklist = [self._tg_esc(str(item))[:220] for item in (event.get("manual_review_checklist") or [])[:5]]
+        source = self._tg_esc(str(event.get("source_label") or "Paper outcome learning"))
+        lines = [
+            f"<b>[LEARNING {severity}] {title}</b>",
+            f"<b>Setup:</b> {setup}",
+            f"<b>Evidence:</b> {decisive} decisive checks / {hit_rate}% hit rate",
+        ]
+        if score_delta is not None:
+            lines.append(f"<b>Score impact:</b> {self._tg_esc(str(score_delta))}")
+        if reason:
+            lines.append(f"<b>Why it matters:</b> {reason}")
+        if review_focus:
+            lines.append("<b>Review focus:</b>")
+            lines.extend(f"- {item}" for item in review_focus)
+        if checklist:
+            lines.append("<b>Manual money gate:</b>")
+            lines.extend(f"- {item}" for item in checklist)
+        lines.extend(
+            [
+                f"<b>Critical check:</b> {critical_check}",
+                f"<b>Action:</b> {action}",
+                f"<b>Source:</b> {source}",
+            ]
+        )
+        return "\n".join(lines)
 
     def _render_telegram_macro_alert(self, event: Dict[str, Any]) -> str:
         severity = str(event.get("severity") or "high").lower()

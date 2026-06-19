@@ -233,6 +233,14 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
     assert aapl["tradeable"] is False
     assert any("outcome learning" in reason.lower() for reason in aapl["do_not_trade_reasons"])
     assert dashboard["outcome_learning"]["setup_adjustments"]["insider_follow"]["block"] is True
+    learning = dashboard["outcome_learning"]["learning_summary"]
+    assert learning["blocked_setups"] == 1
+    assert learning["real_money_policy"] == "Decision support only: no automatic real-money execution."
+    assert any("blocked setup" in item.lower() for item in learning["review_focus"])
+    option = dashboard["outcome_learning"]["option_readiness"]
+    assert option["status"] == "paper_only"
+    assert option["required_decisive"] == 20
+    assert option["required_hit_rate"] == 55
 
 
 if __name__ == "__main__":

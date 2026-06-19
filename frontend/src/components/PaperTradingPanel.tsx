@@ -47,7 +47,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
   const optionReadiness = outcomeLearning.option_readiness || {};
+  const learningSummary = outcomeLearning.learning_summary || {};
   const setupAdjustments = Object.values(outcomeLearning.setup_adjustments || {});
+  const reviewFocus = learningSummary.review_focus || [];
+  const manualReviewChecklist = learningSummary.manual_review_checklist || [];
+  const topLearningErrors = outcomeLearning.top_error_tags || [];
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
   const learningFeedback = demoAccount.learning_feedback || {};
@@ -207,6 +211,56 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} tracked trades
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 text-xs lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[1.6rem] border border-sky-200 bg-sky-50/80 p-4 text-sky-900">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-extrabold uppercase tracking-[0.18em] text-sky-700">Next Review Focus</div>
+              <span
+                className={`rounded-full px-3 py-1 font-extrabold uppercase tracking-[0.14em] ${
+                  optionReadiness.real_money_ready
+                    ? "bg-emerald-50 text-emerald-700"
+                    : optionReadiness.status === "building_evidence"
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-white/80 text-slate-600"
+                }`}
+              >
+                {optionReadiness.label || "Paper only"}
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {reviewFocus.map((item: string) => (
+                <div key={item}>{item}</div>
+              ))}
+            </div>
+            {!!topLearningErrors.length && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {topLearningErrors.slice(0, 4).map((item: any) => (
+                  <span key={item.error_tag} className="rounded-full border border-sky-200 bg-white/80 px-3 py-1 font-bold text-sky-800">
+                    {item.error_tag}: {item.count}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 text-sky-800">
+              Options need {optionReadiness.required_decisive || 20} decisive checks and {optionReadiness.required_hit_rate || 55}% hit rate.
+              {!optionReadiness.real_money_ready && optionReadiness.checks_remaining != null
+                ? ` ${optionReadiness.checks_remaining} checks still missing.`
+                : ""}
+            </div>
+          </div>
+          <div className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-slate-700">
+            <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Manual Money Gate</div>
+            <div className="mt-3 grid gap-2">
+              {manualReviewChecklist.map((item: string) => (
+                <div key={item}>{item}</div>
+              ))}
+            </div>
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-700">
+              {learningSummary.real_money_policy || "Decision support only: no automatic real-money execution."}
             </div>
           </div>
         </div>

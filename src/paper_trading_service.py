@@ -499,23 +499,81 @@ class PaperTradingService:
         option_misses = [item for item in option_rows if item.get("result") == "miss"]
         option_decisive = len(option_hits) + len(option_misses)
         option_hit_rate = round((len(option_hits) / max(1, option_decisive)) * 100, 1) if option_decisive else 0
+        option_ready = option_decisive >= 20 and option_hit_rate >= 55
+        checks_remaining = max(0, 20 - option_decisive)
+        top_error_tags = [
+            {"error_tag": key, "count": count}
+            for key, count in sorted(by_error.items(), key=lambda item: item[1], reverse=True)[:6]
+        ]
+        blocked_setups = [item for item in setup_adjustments.values() if item.get("block")]
+        downgraded_setups = [
+            item
+            for item in setup_adjustments.values()
+            if not item.get("block") and float(item.get("score_delta") or 0) < 0
+        ]
+        upgraded_setups = [
+            item
+            for item in setup_adjustments.values()
+            if float(item.get("score_delta") or 0) > 0
+        ]
+
+        readiness_status = "paper_only"
+        readiness_label = "Paper only"
+        if option_ready:
+            readiness_status = "manual_review_ready"
+            readiness_label = "Manual review ready"
+        elif option_decisive >= 10 and option_hit_rate >= 45:
+            readiness_status = "building_evidence"
+            readiness_label = "Building evidence"
+
+        review_focus: List[str] = []
+        if blocked_setups:
+            review_focus.append(f"Stop using blocked setup types: {', '.join(item['setup_type'] for item in blocked_setups[:3])}.")
+        if downgraded_setups:
+            review_focus.append(f"Reduce size or require stronger confirmation for: {', '.join(item['setup_type'] for item in downgraded_setups[:3])}.")
+        if upgraded_setups:
+            review_focus.append(f"Keep testing stronger setups: {', '.join(item['setup_type'] for item in upgraded_setups[:3])}.")
+        if top_error_tags:
+            review_focus.append(f"Main error to fix next: {top_error_tags[0]['error_tag']} ({top_error_tags[0]['count']} misses).")
+        if not review_focus:
+            review_focus.append("Collect more closed and auto-evaluated paper trades before changing real-money rules.")
+
+        manual_review_checklist = [
+            "Thesis is written before entry.",
+            "Trigger, stop, target and invalidation are clear.",
+            "Position risk is within the account guardrails.",
+            "No blocked setup type is involved.",
+            "For options: expiry, strike, spread and max premium risk were reviewed manually.",
+        ]
 
         return {
             "setup_adjustments": setup_adjustments,
             "option_readiness": {
                 "decisive": option_decisive,
                 "hit_rate": option_hit_rate,
-                "real_money_ready": option_decisive >= 20 and option_hit_rate >= 55,
+                "real_money_ready": option_ready,
+                "status": readiness_status,
+                "label": readiness_label,
+                "checks_remaining": checks_remaining,
+                "required_decisive": 20,
+                "required_hit_rate": 55,
                 "reason": (
                     "Options remain paper-only until 20 decisive checks and >=55% hit rate."
-                    if option_decisive < 20 or option_hit_rate < 55
+                    if not option_ready
                     else "Options have enough paper evidence for manual review, not automatic execution."
                 ),
             },
-            "top_error_tags": [
-                {"error_tag": key, "count": count}
-                for key, count in sorted(by_error.items(), key=lambda item: item[1], reverse=True)[:6]
-            ],
+            "top_error_tags": top_error_tags,
+            "learning_summary": {
+                "readiness_status": readiness_status,
+                "readiness_label": readiness_label,
+                "blocked_setups": len(blocked_setups),
+                "downgraded_setups": len(downgraded_setups),
+                "upgraded_setups": len(upgraded_setups),
+                "review_focus": review_focus,
+                "manual_review_checklist": manual_review_checklist,
+                "real_money_policy": "Decision support only: no automatic real-money execution.",
+            },
         }
 
     def _apply_outcome_learning(self, playbooks: List[Dict[str, Any]], outcome_learning: Dict[str, Any]) -> None:

@@ -54,7 +54,15 @@ def main() -> int:
         print("FAIL strong confirmed event did not pass the macro alert gate")
         return 1
     rendered = svc._render_telegram_macro_alert(normalized)
-    required = ["Sicherheit:", "Warum wichtig:", "Was es aussagt:", "Kritischer Check:", "Trigger:", "Invalidierung:"]
+    required = [
+        "Sicherheit:",
+        "Warum wichtig:",
+        "Was es aussagt:",
+        "Read-through:",
+        "Kritischer Check:",
+        "Trigger:",
+        "Invalidierung:",
+    ]
     missing = [part for part in required if part not in rendered]
     if missing:
         print(f"FAIL rendered alert missing sections: {missing}")
@@ -81,6 +89,10 @@ def main() -> int:
     if not normalized_person or normalized_person.get("event_type") != "Public Figure":
         print("FAIL strong public-figure statement did not pass as Public Figure alert")
         return 1
+    person_rendered = svc._render_telegram_macro_alert(normalized_person)
+    if "voller Wortlaut" not in person_rendered or "Statement-Read-through" not in person_rendered:
+        print(f"FAIL public-figure alert missing critical statement context: {person_rendered}")
+        return 1
 
     strong_ipo = {
         "title": "AI infrastructure startup files for IPO after revenue doubles",
@@ -92,6 +104,10 @@ def main() -> int:
     normalized_ipo = svc._normalize_macro_alert_event(strong_ipo, 82)
     if not normalized_ipo or normalized_ipo.get("event_type") != "IPO":
         print("FAIL strong IPO filing did not pass as IPO alert")
+        return 1
+    ipo_rendered = svc._render_telegram_macro_alert(normalized_ipo)
+    if "Filing/Pricing" not in ipo_rendered or "Kapitalmarkt-Read-through" not in ipo_rendered:
+        print(f"FAIL IPO alert missing critical IPO context: {ipo_rendered}")
         return 1
 
     print("Macro alert quality smoke passed.")

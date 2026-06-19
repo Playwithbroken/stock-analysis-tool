@@ -1429,6 +1429,8 @@ class EmailAlertService:
         trigger = explicit_trigger or self._default_macro_trigger(event_type)
         invalidation = explicit_invalidation or self._default_macro_invalidation(event_type)
         meaning = self._macro_alert_meaning(event_type, country or region, affected_assets)
+        read_through = self._macro_alert_read_through(event_type, country or region, affected_assets, title)
+        critical_check = self._macro_alert_critical_check(event_type, source_quality)
         confidence_label = self._macro_confidence_label(source_quality, explicit_trigger, explicit_invalidation, impact_score)
         action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
         identity = self._macro_event_identity(event_type, country or region, title)
@@ -1445,6 +1447,8 @@ class EmailAlertService:
             "region": region,
             "why_it_matters": why,
             "meaning": meaning,
+            "read_through": read_through,
+            "critical_check": critical_check,
             "affected_assets": affected_assets[:8],
             "trigger": trigger,
             "invalidation": invalidation,
@@ -1515,6 +1519,57 @@ class EmailAlertService:
             "Disaster": f"Supply- und Versicherungsschadencheck fuer {asset_label}: nur relevant, wenn operative Schaeden oder Rohstoffpreise reagieren.",
         }
         return templates.get(event_type, f"Makro-Kontext fuer {country}: {asset_label} nur mit bestaetigter Preisreaktion einordnen.")
+
+    def _macro_alert_read_through(self, event_type: str, country: str, assets: List[str], title: str) -> str:
+        asset_label = ", ".join(assets[:4]) if assets else "Risk assets"
+        templates = {
+            "Conflict": (
+                f"Erst Rohstoffe, Defense, Gold und breite Futures gegenpruefen. Fuer {asset_label} ist die Aussage nur stark, "
+                "wenn die erste Risk-off-Reaktion nicht sofort verkauft wird."
+            ),
+            "Energy": (
+                f"Kosten-, Inflations- und Margendruck fuer {asset_label} pruefen. Relevant wird es erst, wenn Futures und "
+                "Energieaktien gemeinsam bestaetigen."
+            ),
+            "Central Bank": (
+                f"Duration-Read-through fuer {asset_label}: Zinsen und Dollar muessen dieselbe Richtung zeigen, sonst ist die "
+                "Aktienreaktion oft nur Rauschen."
+            ),
+            "Election": (
+                f"Policy-Read-through fuer {asset_label}: keine voreilige Rotation, bis Resultat, Koalition oder Umfragen belastbar sind."
+            ),
+            "Policy": (
+                f"Umsatz- und Margen-Read-through fuer {asset_label}: nur handeln, wenn betroffene Firmen/Sektoren wirklich Exposure haben."
+            ),
+            "Public Figure": (
+                f"Statement-Read-through fuer {asset_label}: wichtig ist nicht die Person, sondern ob Politik, Zinsen, Tarife, "
+                "Regulierung oder Nachfrage konkret betroffen sind."
+            ),
+            "IPO": (
+                f"Kapitalmarkt-Read-through fuer {asset_label}: stark nur, wenn Nachfrage, Bewertung, Lock-up und Peer-Reaktion zusammenpassen."
+            ),
+            "Disaster": (
+                f"Operationaler Read-through fuer {asset_label}: wichtig nur bei messbarem Schaden an Produktion, Transport oder Versicherung."
+            ),
+        }
+        return templates.get(
+            event_type,
+            f"Read-through fuer {country}: {title[:90]} nur mit Quelle, Preisreaktion und Volumen ernst nehmen.",
+        )
+
+    def _macro_alert_critical_check(self, event_type: str, source_quality: str) -> str:
+        source_part = "Primaerquelle oder verifizierte Wire" if source_quality == "strong" else "zweite bestaetigende Quelle"
+        checks = {
+            "Conflict": "Kein Reflex-Trade: offizielle Bestaetigung, Oel/Gold/Defense und Index-Futures muessen gemeinsam reagieren.",
+            "Energy": "Nicht handeln, wenn nur Oel spike't: Energieaktien, Spreads und betroffene Margensektoren muessen bestaetigen.",
+            "Central Bank": "Statement erst nach Rates/Dollar/Index-Reaktion einordnen; Pressekonferenz kann die erste Bewegung drehen.",
+            "Election": "Keine These auf einzelne Schlagzeile: Resultat/Koalition und Sektorreaktion abwarten.",
+            "Policy": "Nur ernst nehmen, wenn Massnahme offiziell, zeitlich konkret und Umsatz-/Kostenexposure klar ist.",
+            "Public Figure": "Zitat auf Kontext pruefen: offizieller Kanal, voller Wortlaut, direkte Policy-Relevanz und Marktreaktion.",
+            "IPO": "Filing/Pricing bestaetigen: Umsatzwachstum, Bewertung, Free Float, Lock-up und Peer-Multiples vergleichen.",
+            "Disaster": "Schaden quantifizieren: betroffene Anlagen, Lieferketten, Versicherer und Rohstoffpreise pruefen.",
+        }
+        return f"{source_part} noetig. {checks.get(event_type, 'Quelle, Preisreaktion, Volumen und Gegenargument vor Aktion pruefen.')}"
 
     def _macro_confidence_label(
         self,
@@ -2628,6 +2683,8 @@ class EmailAlertService:
         source = self._tg_esc(str(event.get("source_label") or "Market radar"))
         why = self._tg_esc(str(event.get("why_it_matters") or ""))[:520]
         meaning = self._tg_esc(str(event.get("meaning") or ""))[:520]
+        read_through = self._tg_esc(str(event.get("read_through") or ""))[:520]
+        critical_check = self._tg_esc(str(event.get("critical_check") or ""))[:520]
         confidence = self._tg_esc(str(event.get("confidence_label") or "mittel - erst Marktreaktion bestaetigen"))
         link = str(event.get("source_url") or "").strip()
         lines = [
@@ -2641,10 +2698,12 @@ class EmailAlertService:
             lines.append(f"<b>Warum wichtig:</b> {why}")
         if meaning:
             lines.append(f"<b>Was es aussagt:</b> {meaning}")
+        if read_through:
+            lines.append(f"<b>Read-through:</b> {read_through}")
         lines.extend([
             f"<b>Trigger:</b> {trigger}",
             f"<b>Invalidierung:</b> {invalidation}",
-            "<b>Kritischer Check:</b> Nicht handeln, bevor Quelle, Preisreaktion und Volumen zusammenpassen.",
+            f"<b>Kritischer Check:</b> {critical_check or 'Nicht handeln, bevor Quelle, Preisreaktion und Volumen zusammenpassen.'}",
             f"<b>Aktion:</b> {action}",
             f"<b>Quelle:</b> {source}",
         ])

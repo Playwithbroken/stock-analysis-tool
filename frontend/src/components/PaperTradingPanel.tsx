@@ -45,6 +45,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const setupPerformance = data?.setup_performance || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
+  const outcomeLearning = data?.outcome_learning || {};
+  const optionReadiness = outcomeLearning.option_readiness || {};
+  const setupAdjustments = Object.values(outcomeLearning.setup_adjustments || {});
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
   const learningFeedback = demoAccount.learning_feedback || {};
@@ -123,6 +126,23 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
+  const evaluateOutcomes = async () => {
+    setBusyId("evaluate-outcomes");
+    setStatus("");
+    try {
+      const response = await fetch("/api/trading/paper-outcomes/evaluate", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Outcome evaluation failed.");
+      await onRefresh?.();
+      const alertStatus = payload.paper_learning_alerts?.status ? ` · alerts ${payload.paper_learning_alerts.status}` : "";
+      setStatus(`Outcomes evaluated: ${payload.evaluated || 0}, pending data ${payload.pending_data || 0}${alertStatus}.`);
+    } catch (error: any) {
+      setStatus(error?.message || "Outcome evaluation failed.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const startEditing = (entry: any) => {
     setEditingId(entry.id);
     setJournalDraft((prev) => ({
@@ -177,6 +197,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
               A-Setup digest
+            </button>
+            <button
+              onClick={evaluateOutcomes}
+              disabled={busyId === "evaluate-outcomes"}
+              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+            >
+              Evaluate outcomes
             </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} tracked trades
@@ -269,6 +296,34 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               ))}
             </div>
           )}
+        </div>
+
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Learning Control</div>
+              <div className="mt-2 font-semibold text-slate-800">
+                Options: {optionReadiness.decisive || 0} decisive · {optionReadiness.hit_rate || 0}% hit ·{" "}
+                {optionReadiness.real_money_ready ? "manual review ready" : "paper only"}
+              </div>
+              <div className="mt-1 text-slate-500">{optionReadiness.reason || "No options learning evidence yet."}</div>
+            </div>
+            {!!setupAdjustments.length && (
+              <div className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-2">
+                {setupAdjustments.slice(0, 4).map((item: any) => (
+                  <div key={item.setup_type} className="rounded-[1rem] border border-black/8 bg-white px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-black text-slate-900">{item.setup_type}</span>
+                      <span className={item.block ? "font-bold text-red-700" : item.score_delta < 0 ? "font-bold text-amber-700" : "font-bold text-emerald-700"}>
+                        {item.block ? "blocked" : item.score_delta > 0 ? `+${item.score_delta}` : item.score_delta}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-slate-500">Hit {item.hit_rate}% · {item.decisive} checks</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

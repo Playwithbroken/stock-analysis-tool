@@ -322,12 +322,19 @@ async function runTickerChecks(page, viewportName) {
     await page.waitForTimeout(350);
     const loadingPanelVisible = await page.locator(".analyzer-loading-panel").isVisible().catch(() => false);
     if (!loadingPanelVisible) {
-      summary.metrics.analyzerLoadingPanelMissing += 1;
-      pushIssue({
-        kind: "ui",
-        viewport: viewportName,
-        text: `Analyzer loading panel was not visible after submitting ${ticker}`,
-      });
+      const alreadySettled =
+        (await page.locator(".analysis-result-layout, [data-testid='analysis-result']").first().isVisible().catch(() => false)) ||
+        (await page.locator("text=/konnte nicht geladen|dauert zu lange|nicht gefunden/i").first().isVisible().catch(() => false));
+      if (!alreadySettled) {
+        summary.metrics.analyzerLoadingPanelMissing += 1;
+        pushIssue({
+          kind: "ui",
+          viewport: viewportName,
+          text: `Analyzer loading panel was not visible after submitting ${ticker}`,
+        });
+      } else {
+        log(`[${viewportName}] Analyzer loading panel skipped: ${ticker} settled before loading check`);
+      }
     }
     await page.waitForTimeout(1850);
     summary.metrics.tickerRuns += 1;

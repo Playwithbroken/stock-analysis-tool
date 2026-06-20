@@ -25,8 +25,14 @@ const COLORS = [
   "#93c5fd",
 ];
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
 const CustomizedContent = (props: any) => {
   const { x, y, width, height, index, ticker, position_value, formatPrice } = props;
+  const positionValue = toFiniteNumber(position_value) ?? 0;
 
   return (
     <g>
@@ -65,8 +71,8 @@ const CustomizedContent = (props: any) => {
           className="pointer-events-none"
         >
           {typeof formatPrice === "function"
-            ? formatPrice(position_value)
-            : `$${position_value?.toFixed(0)}`}
+            ? formatPrice(positionValue)
+            : `$${positionValue.toFixed(0)}`}
         </text>
       )}
     </g>
@@ -76,13 +82,13 @@ const CustomizedContent = (props: any) => {
 export default function PortfolioHeatmap({ holdings }: PortfolioHeatmapProps) {
   const { formatPrice } = useCurrency();
   const data = holdings
-    .filter((h) => h.position_value > 0)
     .map((h) => ({
       name: h.name,
       ticker: h.ticker,
-      size: h.position_value,
-      position_value: h.position_value,
+      size: toFiniteNumber(h.position_value) ?? 0,
+      position_value: toFiniteNumber(h.position_value) ?? 0,
     }))
+    .filter((h) => h.position_value > 0)
     .sort((a, b) => b.size - a.size);
 
   if (data.length === 0) return null;

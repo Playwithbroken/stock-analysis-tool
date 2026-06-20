@@ -91,9 +91,21 @@ interface PortfolioAdvisoryCheck {
   };
 }
 
-const formatPercent = (value: number): string => {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatPercent = (value: unknown, digits = 2, fallback = "N/A"): string => {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  const sign = number >= 0 ? "+" : "";
+  return `${sign}${number.toFixed(digits)}%`;
+};
+
+const formatNumber = (value: unknown, digits = 1, fallback = "N/A"): string => {
+  const number = toFiniteNumber(value);
+  return number == null ? fallback : number.toFixed(digits);
 };
 
 const formatPurchaseDate = (value?: string | null): string => {
@@ -463,7 +475,7 @@ export default function PortfolioView({
       ? "Beratungsprofil ist noch nicht bestaetigt."
       : null,
     topHoldingPct != null && topHoldingPct > maxSinglePositionPct
-      ? `${topHolding?.ticker} liegt bei ${topHoldingPct.toFixed(1)}% und damit ueber dem Limit von ${maxSinglePositionPct.toFixed(1)}%.`
+      ? `${topHolding?.ticker} liegt bei ${formatNumber(topHoldingPct)}% und damit ueber dem Limit von ${formatNumber(maxSinglePositionPct)}%.`
       : null,
     analysis?.summary.num_holdings != null && analysis.summary.num_holdings > 0 && analysis.summary.num_holdings < 5
       ? "Weniger als 5 Positionen: Diversifikation ist noch duenn."
@@ -745,7 +757,7 @@ export default function PortfolioView({
                     Portfolio score
                   </div>
                   <div className={`mt-2 text-3xl font-black ${scoreTone(analysis.summary.avg_score)}`}>
-                    {analysis.summary.avg_score.toFixed(1)}
+                    {formatNumber(analysis.summary.avg_score)}
                   </div>
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
@@ -804,7 +816,7 @@ export default function PortfolioView({
                       {advisoryTopHolding?.ticker || "n/a"}
                     </div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
-                      {advisoryTopHoldingPct != null ? `${advisoryTopHoldingPct.toFixed(1)}% vom Portfolio` : "Keine Bewertung"}
+                      {advisoryTopHoldingPct != null ? `${formatNumber(advisoryTopHoldingPct)}% vom Portfolio` : "Keine Bewertung"}
                     </div>
                   </div>
                   <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
@@ -812,7 +824,7 @@ export default function PortfolioView({
                       Positionslimit
                     </div>
                     <div className="mt-2 text-2xl font-black text-slate-900">
-                      {maxSinglePositionPct.toFixed(1)}%
+                      {formatNumber(maxSinglePositionPct)}%
                     </div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
                       aus deinem Advisory-Profil
@@ -1051,7 +1063,7 @@ export default function PortfolioView({
                             />
                           </div>
                           <div className="text-right text-sm font-bold text-slate-500">
-                            {pct.toFixed(1)}%
+                            {formatNumber(pct)}%
                           </div>
                         </div>
                       ))}
@@ -1121,7 +1133,7 @@ export default function PortfolioView({
                             Seit Kauf {formatHoldingPeriod(holding.holding_days)}
                           </span>
                           <span className={`rounded-full px-3 py-1 ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
-                            Score {(holding.score || 0).toFixed(0)}
+                            Score {formatNumber(holding.score, 0, "0")}
                           </span>
                         </div>
                         {!hasEntry && (
@@ -1311,7 +1323,7 @@ export default function PortfolioView({
                             </td>
                             <td className="px-4 py-4 text-right">
                               <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
-                                {(holding.score || 0).toFixed(0)}
+                                {formatNumber(holding.score, 0, "0")}
                               </span>
                             </td>
                             <td className="px-4 py-4 text-center">

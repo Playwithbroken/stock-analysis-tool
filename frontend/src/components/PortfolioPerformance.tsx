@@ -29,6 +29,17 @@ const PERIODS = [
   { id: "max", label: "MAX" },
 ];
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatPercent = (value: unknown, digits = 2, fallback = "0.00%") => {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
+};
+
 export default function PortfolioPerformance({
   portfolioId,
   refreshKey = 0,
@@ -48,14 +59,19 @@ export default function PortfolioPerformance({
         );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const histData: PerformanceItem[] = await response.json();
-        setData(histData);
+        const normalized = (Array.isArray(histData) ? histData : [])
+          .map((item) => ({ ...item, price: toFiniteNumber(item.price) ?? 0 }))
+          .filter((item) => item.price > 0);
+        setData(normalized);
 
-        if (histData.length > 1) {
-          const first = histData[0].price;
-          const last = histData[histData.length - 1].price;
+        if (normalized.length > 1) {
+          const first = normalized[0].price;
+          const last = normalized[normalized.length - 1].price;
           const change = last - first;
-          const changePct = (change / first) * 100;
+          const changePct = first > 0 ? (change / first) * 100 : 0;
           setStats({ change, changePct });
+        } else {
+          setStats({ change: 0, changePct: 0 });
         }
       } catch {
         setData([]);
@@ -107,8 +123,7 @@ export default function PortfolioPerformance({
                 isPositive ? "text-emerald-700" : "text-red-700"
               }`}
             >
-              {isPositive ? "+" : ""}
-              {stats.changePct.toFixed(2)}%
+              {formatPercent(stats.changePct)}
             </div>
             <div className="text-sm font-mono text-slate-500">
               {isPositive ? "+" : ""}

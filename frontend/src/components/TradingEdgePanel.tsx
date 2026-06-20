@@ -170,7 +170,7 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
                 {regime.vix.value}
               </div>
               <div className={`text-sm font-semibold ${colorPct(regime.vix.change)}`}>
-                {arrow(regime.vix.change)} {regime.vix.change.toFixed(2)}
+                {arrow(Number(regime.vix.change || 0))} {Number(regime.vix.change || 0).toFixed(2)}
               </div>
             </div>
             <div className="text-xs text-slate-600 mt-1 capitalize">
@@ -205,7 +205,7 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
               }`}
             >
               {yield_curve.inverted ? "⚠ INVERTED" : "Normal"} (10-5 spread{" "}
-              {yield_curve.spread_10y_5y?.toFixed(2)}pp)
+              {Number(yield_curve.spread_10y_5y || 0).toFixed(2)}pp)
             </div>
           </div>
         )}

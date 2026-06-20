@@ -32,6 +32,17 @@ const money = (value: any, currency = "EUR") =>
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
+};
+
 export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperTradingPanelProps) {
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -381,9 +392,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Win Rate" value={`${stats.win_rate || 0}%`} tone={Number(stats.win_rate || 0) >= 50 ? "good" : "default"} />
-          <StatTile label="Open PnL" value={`${Number(stats.avg_open_pnl_pct || 0) >= 0 ? "+" : ""}${Number(stats.avg_open_pnl_pct || 0).toFixed(2)}%`} tone={openPnLTone as any} />
-          <StatTile label="Realized" value={`${Number(stats.realized_pnl_pct || 0) >= 0 ? "+" : ""}${Number(stats.realized_pnl_pct || 0).toFixed(2)}%`} tone={realizedTone as any} />
+          <StatTile label="Win Rate" value={formatPct(stats.win_rate, 0, "0%").replace("+", "")} tone={Number(stats.win_rate || 0) >= 50 ? "good" : "default"} />
+          <StatTile label="Open PnL" value={formatPct(stats.avg_open_pnl_pct, 2, "+0.00%")} tone={openPnLTone as any} />
+          <StatTile label="Realized" value={formatPct(stats.realized_pnl_pct, 2, "+0.00%")} tone={realizedTone as any} />
           <StatTile label="Long / Short" value={`${stats.long_short_split?.long || 0} / ${stats.long_short_split?.short || 0}`} />
         </div>
 
@@ -551,7 +562,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div className="mt-1 text-xs text-slate-500">{trade.setup_type}</div>
                       </div>
                       <div className={`text-sm font-black ${(trade.unrealized_pnl_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                        {(trade.unrealized_pnl_pct || 0) >= 0 ? "+" : ""}{trade.unrealized_pnl_pct?.toFixed(2)}%
+                        {formatPct(trade.unrealized_pnl_pct, 2, "+0.00%")}
                       </div>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
@@ -596,7 +607,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div className="mt-1 text-xs text-slate-500">{trade.setup_type}</div>
                       </div>
                       <div className={`text-sm font-black ${(trade.realized_pnl_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                        {(trade.realized_pnl_pct || 0) >= 0 ? "+" : ""}{trade.realized_pnl_pct?.toFixed(2)}%
+                        {formatPct(trade.realized_pnl_pct, 2, "+0.00%")}
                       </div>
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
@@ -661,7 +672,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div className="mt-1 text-xs text-slate-500">{entry.setup_type}</div>
                       </div>
                       <div className={`text-sm font-black ${(entry.pnl_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                        {(entry.pnl_pct || 0) >= 0 ? "+" : ""}{entry.pnl_pct?.toFixed?.(2) ?? "0.00"}%
+                        {formatPct(entry.pnl_pct, 2, "+0.00%")}
                       </div>
                     </div>
                     {editing ? (

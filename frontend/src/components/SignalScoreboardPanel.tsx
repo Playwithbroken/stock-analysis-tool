@@ -6,6 +6,17 @@ interface SignalScoreboardPanelProps {
   onRefresh?: () => Promise<void>;
 }
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
+};
+
 function ScoreCard({
   item,
   onAnalyze,
@@ -242,11 +253,10 @@ export default function SignalScoreboardPanel({
                       </div>
                       <div
                         className={`text-sm font-black ${
-                          (item.performance_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"
+                          (toFiniteNumber(item.performance_pct) ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"
                         }`}
                       >
-                        {(item.performance_pct || 0) >= 0 ? "+" : ""}
-                        {item.performance_pct?.toFixed(2)}%
+                        {formatPct(item.performance_pct, 2, "+0.00%")}
                       </div>
                     </div>
                   </div>

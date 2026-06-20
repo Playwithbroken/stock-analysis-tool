@@ -36,6 +36,7 @@ Thumbs.db
 brain/
 artifacts/
 .gemini/
+.claude/
 .codex_uvicorn_*.log
 frontend/qa-artifacts/
 qa-artifacts/

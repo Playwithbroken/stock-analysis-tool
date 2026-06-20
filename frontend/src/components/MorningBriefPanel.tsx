@@ -9,9 +9,26 @@ interface MorningBriefPanelProps {
   hideMap?: boolean;
 }
 
-function fmt(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return "N/A";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+function toFiniteNumber(value: unknown): number | null {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function fmt(value?: number | string | null) {
+  const number = toFiniteNumber(value);
+  if (number == null) return "N/A";
+  return `${number >= 0 ? "+" : ""}${number.toFixed(2)}%`;
+}
+
+function fixed(value: unknown, digits = 2, fallback = "offen") {
+  const number = toFiniteNumber(value);
+  return number == null ? fallback : number.toFixed(digits);
+}
+
+function signedPercent(value: unknown, digits = 1, fallback = "offen") {
+  const number = toFiniteNumber(value);
+  if (number == null) return fallback;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
 }
 
 function regimeStyle(regime?: string) {
@@ -251,9 +268,8 @@ function extractTickerCandidates(text?: string) {
   return [...new Set(matches)];
 }
 
-function moveLabel(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return "offen";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+function moveLabel(value?: number | string | null) {
+  return signedPercent(value, 2);
 }
 
 function openValue(value: unknown, fallback = "offen"): string | number {
@@ -590,7 +606,7 @@ export default function MorningBriefPanel({
                 </div>
                 <div className="mt-1 truncate text-xs font-semibold text-slate-500">{item.name}</div>
                 <div className="mt-3 text-xs font-bold text-slate-700">
-                  {item.revenue_growth != null ? `${Number(item.revenue_growth).toFixed(1)}% Umsatz` : "Umsatz n/a"}
+                  {toFiniteNumber(item.revenue_growth) != null ? `${fixed(item.revenue_growth, 1)}% Umsatz` : "Umsatz n/a"}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
                   <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
@@ -1935,8 +1951,8 @@ export default function MorningBriefPanel({
               const prob = probability != null ? Math.round(probability * 100) : null;
               const signalStatus = String(pm.signal_status || "active").toLowerCase();
               const isWatchOnly = signalStatus === "watch";
-              const volume = Number(pm.volume_usd);
-              const volumeLabel = Number.isFinite(volume) && volume > 0 ? `$${(volume / 1e6).toFixed(1)}M vol` : null;
+              const volume = toFiniteNumber(pm.volume_usd);
+              const volumeLabel = volume != null && volume > 0 ? `$${fixed(volume / 1e6, 1)}M vol` : null;
               return (
                 <div
                   key={`pm-signal-${i}`}
@@ -2049,7 +2065,8 @@ export default function MorningBriefPanel({
                 ? (probabilityRaw > 1 ? probabilityRaw / 100 : probabilityRaw)
                 : null;
               const prob = probability != null ? Math.round(probability * 100) : null;
-              const vol = pm.volume_usd ? `$${(pm.volume_usd / 1e6).toFixed(1)}M` : null;
+              const volume = toFiniteNumber(pm.volume_usd);
+              const vol = volume != null && volume > 0 ? `$${fixed(volume / 1e6, 1)}M` : null;
               return (
                 <a
                   key={`pm-${i}`}
@@ -2186,16 +2203,16 @@ export default function MorningBriefPanel({
                   <div className="mt-1 line-clamp-1 text-xs text-slate-500">{item.company}</div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      EPS {item.reported_eps != null ? item.reported_eps.toFixed(2) : "offen"}
+                      EPS {fixed(item.reported_eps)}
                     </div>
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      Est {item.eps_estimate != null ? item.eps_estimate.toFixed(2) : "offen"}
+                      Est {fixed(item.eps_estimate)}
                     </div>
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      Surprise {item.eps_surprise_pct != null ? `${item.eps_surprise_pct >= 0 ? "+" : ""}${item.eps_surprise_pct.toFixed(1)}%` : "offen"}
+                      Surprise {signedPercent(item.eps_surprise_pct)}
                     </div>
                     <div className="rounded-xl border border-black/8 bg-white px-3 py-2">
-                      Revenue {item.revenue_yoy != null ? `${item.revenue_yoy >= 0 ? "+" : ""}${(item.revenue_yoy * 100).toFixed(1)}%` : "offen"}
+                      Revenue {toFiniteNumber(item.revenue_yoy) != null ? signedPercent(toFiniteNumber(item.revenue_yoy)! * 100) : "offen"}
                     </div>
                   </div>
                   {item.guidance_label && (
@@ -2268,7 +2285,7 @@ export default function MorningBriefPanel({
                 </div>
                 {item.eps_estimate != null && (
                   <div className="mt-1 text-[10px] text-slate-500">
-                    EPS est. {item.eps_estimate.toFixed(2)}
+                    EPS est. {fixed(item.eps_estimate)}
                   </div>
                 )}
               </div>

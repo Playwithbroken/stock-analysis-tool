@@ -2,16 +2,16 @@ import { readdir, rm, stat } from "node:fs/promises";
 import { join, extname, basename } from "node:path";
 
 const assetsDir = join(process.cwd(), "dist", "assets");
-const keepPerChunk = Number.parseInt(process.env.DIST_ASSET_KEEP_PER_CHUNK || "3", 10);
+const keepPerChunk = Number.parseInt(process.env.DIST_ASSET_KEEP_PER_CHUNK || "1", 10);
 const hashedExts = new Set([".js", ".css"]);
 
 function chunkPrefix(fileName) {
   const ext = extname(fileName);
   if (!hashedExts.has(ext)) return null;
   const stem = basename(fileName, ext);
-  const idx = stem.lastIndexOf("-");
-  if (idx <= 0) return null;
-  return `${stem.slice(0, idx)}${ext}`;
+  const match = stem.match(/^(.+)-([A-Za-z0-9_-]{8})$/);
+  if (!match) return null;
+  return `${match[1]}${ext}`;
 }
 
 try {

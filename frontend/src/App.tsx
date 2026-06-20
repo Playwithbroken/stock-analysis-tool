@@ -140,17 +140,42 @@ function scheduleIdle(task: () => void, timeout = 1500) {
   return () => window.clearTimeout(timer);
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isPageHidden() {
+  return document.visibilityState === "hidden";
+}
+
+function shouldReduceBackgroundWork() {
+  const connection = (navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+  }).connection;
+  const effectiveType = String(connection?.effectiveType || "").toLowerCase();
+  return Boolean(connection?.saveData) || /(^|-)2g$/.test(effectiveType);
+}
+
+let lazyScreensPreloadStarted = false;
+
 function preloadLazyScreens() {
-  const safeImport = (loader: () => Promise<unknown>) => {
-    void loader().catch(() => undefined);
-  };
-  safeImport(() => import("./components/AnalysisResult"));
-  safeImport(() => import("./components/DiscoveryPanel"));
-  safeImport(() => import("./components/PortfolioView"));
-  safeImport(() => import("./components/BrokerChat"));
-  safeImport(() => import("./components/WorldMarketMap"));
-  safeImport(() => import("./components/EdgeDashboardPanel"));
-  safeImport(() => import("./components/MorningBriefPanel"));
+  if (lazyScreensPreloadStarted || shouldReduceBackgroundWork()) return;
+  lazyScreensPreloadStarted = true;
+  const loaders = [
+    () => import("./components/AnalysisResult"),
+    () => import("./components/WorldMarketMap"),
+    () => import("./components/MorningBriefPanel"),
+    () => import("./components/EdgeDashboardPanel"),
+    () => import("./components/PortfolioView"),
+    () => import("./components/DiscoveryPanel"),
+    () => import("./components/BrokerChat"),
+  ];
+  loaders.forEach((loader, index) => {
+    window.setTimeout(() => {
+      if (isPageHidden()) return;
+      void loader().catch(() => undefined);
+    }, 450 * index);
+  });
 }
 
 function formatTickerPrice(value?: number | null) {
@@ -716,6 +741,10 @@ function AppContent() {
     let cancelled = false;
 
     const warmBackgroundData = async () => {
+      if (isPageHidden() || shouldReduceBackgroundWork()) {
+        preloadLazyScreens();
+        return;
+      }
       const ticker = analysis?.ticker?.toUpperCase();
       const historyPath = ticker
         ? `/api/history/${encodeURIComponent(ticker)}?period=1mo&interval=1d`
@@ -727,25 +756,29 @@ function AppContent() {
         historyPath,
       ].filter(Boolean) as string[];
 
-      await Promise.allSettled(
-        paths.map((path) =>
-          fetchJsonWithRetry<any>(path, undefined, {
-            retries: 0,
-            retryDelayMs: 250,
-            timeoutMs: 12000,
-          }),
-        ),
-      );
+      for (const path of paths) {
+        if (cancelled || isPageHidden()) break;
+        await fetchJsonWithRetry<any>(path, undefined, {
+          retries: 0,
+          retryDelayMs: 250,
+          timeoutMs: 9000,
+        }).catch(() => undefined);
+        await wait(250);
+      }
       if (cancelled) return;
       preloadLazyScreens();
     };
 
-    const cancelIdle = scheduleIdle(() => {
+    const warmVisibleData = () => {
       void warmBackgroundData();
-    }, 8000);
+    };
+
+    const cancelIdle = scheduleIdle(warmVisibleData, 8000);
 
     const interval = window.setInterval(() => {
-      void warmBackgroundData();
+      if (!isPageHidden()) {
+        warmVisibleData();
+      }
     }, 600000);
 
     return () => {

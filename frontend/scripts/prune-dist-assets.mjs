@@ -2,7 +2,7 @@ import { readdir, rm, stat } from "node:fs/promises";
 import { join, extname, basename } from "node:path";
 
 const assetsDir = join(process.cwd(), "dist", "assets");
-const keepPerChunk = Number.parseInt(process.env.DIST_ASSET_KEEP_PER_CHUNK || "1", 10);
+const keepPerChunk = Number.parseInt(process.env.DIST_ASSET_KEEP_PER_CHUNK || "0", 10);
 const hashedExts = new Set([".js", ".css"]);
 
 function chunkPrefix(fileName) {
@@ -31,7 +31,7 @@ try {
   let removed = 0;
   for (const list of groups.values()) {
     list.sort((a, b) => b.mtimeMs - a.mtimeMs);
-    for (const item of list.slice(Math.max(1, keepPerChunk))) {
+    for (const item of list.slice(Math.max(0, keepPerChunk))) {
       await rm(item.filePath, { force: true });
       removed += 1;
     }

@@ -1165,7 +1165,7 @@ function AppContent() {
     },
   ];
   const favoriteTape = (
-    <div className="overflow-x-auto no-scrollbar">
+    <div className="header-favorites-tape overflow-x-auto no-scrollbar">
       <div className="flex min-w-max items-center gap-2">
         <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
           {headerRealtimeConnected

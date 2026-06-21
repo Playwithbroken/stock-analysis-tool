@@ -853,6 +853,121 @@ async def _resolve_asset_query(q: str, limit: int = 6) -> Dict[str, Any]:
     }
 
 
+DEFAULT_SEARCH_SUGGESTIONS = {
+    "Jetzt interessant": [
+        "NVIDIA Corporation (NVDA)",
+        "Apple Inc. (AAPL)",
+        "Robinhood Markets Inc. (HOOD)",
+        "NIKE Inc. (NKE)",
+        "Palantir Technologies Inc. (PLTR)",
+    ],
+    "ETFs & Makro": [
+        "SPDR S&P 500 ETF Trust (SPY)",
+        "Invesco QQQ Trust (QQQ)",
+        "SPDR Gold Shares (GLD)",
+        "iShares 20+ Year Treasury Bond ETF (TLT)",
+        "Energy Select Sector SPDR Fund (XLE)",
+    ],
+    "Crypto": ["Bitcoin USD (BTC-USD)", "Ethereum USD (ETH-USD)", "Solana USD (SOL-USD)"],
+}
+
+
+def _search_display_for_ticker(ticker: str, fallback_name: str = "") -> str:
+    symbol = (ticker or "").strip().upper()
+    if not symbol:
+        return ""
+    catalog = _catalog_match_for_ticker(symbol)
+    name = fallback_name or (catalog or {}).get("name") or symbol
+    return f"{name} ({symbol})"
+
+
+def _extract_search_symbol(item: Any) -> str:
+    if not isinstance(item, dict):
+        return ""
+    return str(item.get("ticker") or item.get("symbol") or item.get("asset") or item.get("value") or "").strip().upper()
+
+
+def _add_search_suggestion(bucket: List[str], seen: set[str], item: Any, limit: int = 6) -> None:
+    if len(bucket) >= limit:
+        return
+    symbol = _extract_search_symbol(item)
+    if not symbol:
+        return
+    normalized = _normalize_ticker_input(symbol)
+    if not normalized or normalized in seen:
+        return
+    name = ""
+    if isinstance(item, dict):
+        name = str(item.get("name") or item.get("company") or item.get("label") or "").strip()
+    display = _search_display_for_ticker(normalized, name)
+    if display:
+        seen.add(normalized)
+        bucket.append(display)
+
+
+async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
+    cache_key = "search:suggestions:dynamic"
+    cached = _cache_get(cache_key, _safe_int_env("SEARCH_SUGGESTIONS_CACHE_TTL_SECONDS", 120, minimum=20))
+    if cached is not None:
+        return cached
+
+    brief = get_morning_brief_service().get_cached_or_last_brief() or {}
+    market_movers = brief.get("market_movers", {}) if isinstance(brief, dict) else {}
+    if not isinstance(market_movers, dict):
+        market_movers = {}
+
+    suggestions: Dict[str, List[str]] = {}
+    seen: set[str] = set()
+
+    def add_category(name: str, rows: List[Any], limit: int = 6) -> None:
+        bucket: List[str] = []
+        for row in rows or []:
+            _add_search_suggestion(bucket, seen, row, limit=limit)
+        if bucket:
+            suggestions[name] = bucket
+
+    if isinstance(brief, dict):
+        mover_gainers = (market_movers.get("gainers") or [])[:3] if isinstance(market_movers, dict) else []
+        add_category(
+            "Jetzt interessant",
+            [
+                *(brief.get("trade_setups") or [])[:3],
+                *(brief.get("watchlist_impact") or [])[:3],
+                *(brief.get("product_catalysts") or [])[:3],
+                *mover_gainers,
+            ],
+        )
+        add_category(
+            "Katalysatoren",
+            [
+                *(brief.get("earnings_calendar") or [])[:3],
+                *(brief.get("earnings_results") or [])[:3],
+                *(brief.get("product_catalysts") or [])[:4],
+            ],
+        )
+
+    if isinstance(market_movers, dict):
+        add_category("Market Movers", [*(market_movers.get("gainers") or [])[:4], *(market_movers.get("losers") or [])[:4]])
+
+    try:
+        radar_rows: List[Dict[str, Any]] = []
+        for item in get_portfolio_manager().get_signal_watch_items()[:8]:
+            if isinstance(item, dict) and str(item.get("kind", "")).lower() == "ticker":
+                radar_rows.append({"ticker": item.get("value"), "name": item.get("value")})
+        for portfolio in get_portfolio_manager().get_portfolios()[:3]:
+            for holding in (portfolio.get("holdings") or [])[:4]:
+                radar_rows.append(holding)
+        add_category("Mein Radar", radar_rows, limit=6)
+    except Exception:
+        pass
+
+    for category, values in DEFAULT_SEARCH_SUGGESTIONS.items():
+        if category not in suggestions:
+            suggestions[category] = values
+
+    return _cache_set(cache_key, {key: values[:6] for key, values in suggestions.items() if values})
+
+
 def _safe_float(value: Any) -> Optional[float]:
     try:
         if value in (None, ""):
@@ -2283,12 +2398,7 @@ async def get_search_suggestions(q: str = None):
             "Ticker": [r['ticker'] for r in results[:5]]
         }
 
-    return {
-        "Aktien": ["Apple Inc. (AAPL)", "Microsoft Corporation (MSFT)", "NVIDIA Corporation (NVDA)", "Amazon.com Inc. (AMZN)", "Advanced Micro Devices Inc. (AMD)"],
-        "AI & Growth": ["Palantir Technologies Inc. (PLTR)", "Arm Holdings plc (ARM)", "Broadcom Inc. (AVGO)", "Super Micro Computer Inc. (SMCI)", "SoFi Technologies Inc. (SOFI)"],
-        "ETFs & Makro": ["SPDR S&P 500 ETF Trust (SPY)", "Invesco QQQ Trust (QQQ)", "SPDR Gold Shares (GLD)", "iShares 20+ Year Treasury Bond ETF (TLT)", "Energy Select Sector SPDR Fund (XLE)"],
-        "Crypto": ["Bitcoin USD (BTC-USD)", "Ethereum USD (ETH-USD)", "Solana USD (SOL-USD)"],
-    }
+    return convert_numpy_types(await _build_dynamic_search_suggestions())
 
 
 @app.post("/api/oracle/chat")

@@ -394,8 +394,8 @@ function buildLocalMatches(query: string): string[] {
 
 function buildDefaultSuggestions(): Record<string, string[]> {
   return {
-    "Aktien": LOCAL_SEARCH_ASSETS.slice(0, 14),
-    "Themen": ["NVIDIA Corporation (NVDA)", "Apple Inc. (AAPL)", "Take-Two Interactive Software Inc. (TTWO)", "BMW AG (BMW.DE)", "Pfizer Inc. (PFE)", "Palo Alto Networks Inc. (PANW)"],
+    "Jetzt interessant": ["NVIDIA Corporation (NVDA)", "Apple Inc. (AAPL)", "Robinhood Markets Inc. (HOOD)", "NIKE Inc. (NKE)", "Palantir Technologies Inc. (PLTR)"],
+    "Themen": ["Take-Two Interactive Software Inc. (TTWO)", "BMW AG (BMW.DE)", "Pfizer Inc. (PFE)", "Palo Alto Networks Inc. (PANW)", "Rocket Lab USA Inc. (RKLB)"],
     "ETFs & Makro": ["SPDR S&P 500 ETF Trust (SPY)", "Invesco QQQ Trust (QQQ)", "iShares Russell 2000 ETF (IWM)", "SPDR Gold Shares (GLD)", "iShares 20+ Year Treasury Bond ETF (TLT)", "Energy Select Sector SPDR Fund (XLE)"],
     "Crypto": ["Bitcoin USD (BTC-USD)", "Ethereum USD (ETH-USD)", "Solana USD (SOL-USD)"],
   };

@@ -1,8 +1,28 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import worldMapSvgRaw from "../assets/world-map-wikimedia.svg?raw";
 
 // Lazy-load world map SVG — keeps initial bundle ~280KB smaller
 type CountryTone = "red" | "amber" | "blue" | "green" | "slate";
+type MapViewState = { zoom: number; x: number; y: number };
+
+const MAP_MIN_ZOOM = 1;
+const MAP_MAX_ZOOM = 2.8;
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function clampMapView(view: MapViewState): MapViewState {
+  const zoom = clampNumber(Number.isFinite(view.zoom) ? view.zoom : 1, MAP_MIN_ZOOM, MAP_MAX_ZOOM);
+  if (zoom <= 1.01) return { zoom: 1, x: 0, y: 0 };
+  const maxX = 190 * zoom;
+  const maxY = 120 * zoom;
+  return {
+    zoom,
+    x: clampNumber(view.x, -maxX, maxX),
+    y: clampNumber(view.y, -maxY, maxY),
+  };
+}
 
 interface RegionAsset {
   ticker: string;
@@ -447,16 +467,13 @@ function buildInlineWorldMapSvg(highlights: Map<string, CountryTone>) {
 
 function InlineWorldMap({
   highlights,
-  zoom,
 }: {
   highlights: Map<string, CountryTone>;
-  zoom: number;
 }) {
   const svg = useMemo(() => buildInlineWorldMapSvg(highlights), [highlights]);
   return (
     <div
       className="world-map-inline-wrap absolute inset-0"
-      style={{ transform: `scale(${zoom})` }}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
@@ -950,7 +967,97 @@ export default function WorldMarketMap({
   const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
   const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
   const [impactDrawerOpen, setImpactDrawerOpen] = useState(false);
-  const [mapZoom, setMapZoom] = useState(1);
+  const [mapView, setMapView] = useState<MapViewState>({ zoom: 1, x: 0, y: 0 });
+  const [isMapDragging, setIsMapDragging] = useState(false);
+  const mapPointerRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const mapDragRef = useRef<{ x: number; y: number; view: MapViewState } | null>(null);
+  const mapPinchRef = useRef<{ distance: number; view: MapViewState } | null>(null);
+  const mapZoom = mapView.zoom;
+  const setMapZoom = useCallback((next: number | ((value: number) => number)) => {
+    setMapView((current) => {
+      const nextZoom = typeof next === "function" ? next(current.zoom) : next;
+      return clampMapView({ ...current, zoom: nextZoom });
+    });
+  }, []);
+  const resetMapView = useCallback(() => {
+    setMapView({ zoom: 1, x: 0, y: 0 });
+    mapPointerRef.current.clear();
+    mapDragRef.current = null;
+    mapPinchRef.current = null;
+    setIsMapDragging(false);
+  }, []);
+  const mapContentStyle = useMemo(
+    () => ({
+      transform: `translate3d(${mapView.x}px, ${mapView.y}px, 0) scale(${mapView.zoom})`,
+      cursor: isMapDragging ? "grabbing" : mapView.zoom > 1.01 ? "grab" : "default",
+    }),
+    [isMapDragging, mapView],
+  );
+  const mapCanvasHandlers = useMemo(() => {
+    const pointerDistance = () => {
+      const points = [...mapPointerRef.current.values()];
+      if (points.length < 2) return 0;
+      const [a, b] = points;
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+
+    return {
+      onWheel: (event: React.WheelEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const direction = event.deltaY > 0 ? -1 : 1;
+        const step = event.ctrlKey ? 0.18 : 0.1;
+        setMapZoom((value) => Number((value + direction * step).toFixed(2)));
+      },
+      onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0 && event.pointerType === "mouse") return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        mapPointerRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (mapPointerRef.current.size >= 2) {
+          mapPinchRef.current = { distance: pointerDistance(), view: mapView };
+          mapDragRef.current = null;
+          setIsMapDragging(true);
+          return;
+        }
+
+        mapDragRef.current = { x: event.clientX, y: event.clientY, view: mapView };
+        setIsMapDragging(mapView.zoom > 1.01 || event.pointerType !== "mouse");
+      },
+      onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
+        if (!mapPointerRef.current.has(event.pointerId)) return;
+        mapPointerRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (mapPointerRef.current.size >= 2 && mapPinchRef.current) {
+          const distance = pointerDistance();
+          if (distance <= 0 || mapPinchRef.current.distance <= 0) return;
+          const nextZoom = mapPinchRef.current.view.zoom * (distance / mapPinchRef.current.distance);
+          setMapView(clampMapView({ ...mapPinchRef.current.view, zoom: nextZoom }));
+          return;
+        }
+
+        if (!mapDragRef.current) return;
+        const dx = event.clientX - mapDragRef.current.x;
+        const dy = event.clientY - mapDragRef.current.y;
+        setMapView(clampMapView({
+          ...mapDragRef.current.view,
+          x: mapDragRef.current.view.x + dx,
+          y: mapDragRef.current.view.y + dy,
+        }));
+      },
+      onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => {
+        mapPointerRef.current.delete(event.pointerId);
+        mapDragRef.current = null;
+        mapPinchRef.current = null;
+        setIsMapDragging(false);
+      },
+      onPointerCancel: (event: React.PointerEvent<HTMLDivElement>) => {
+        mapPointerRef.current.delete(event.pointerId);
+        mapDragRef.current = null;
+        mapPinchRef.current = null;
+        setIsMapDragging(false);
+      },
+    };
+  }, [mapView, setMapZoom]);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
   const displayRegion = activeRegion;
@@ -1512,14 +1619,46 @@ export default function WorldMarketMap({
             </button>
           </div>
 
-          <div className="world-map-canvas relative mt-3 h-[246px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]">
+          <div
+            className="world-map-canvas interactive-world-map relative mt-3 h-[246px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]"
+            {...mapCanvasHandlers}
+          >
             <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
-            <InlineWorldMap highlights={countryHighlights} zoom={mapZoom} />
+            <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
+              <InlineWorldMap highlights={countryHighlights} />
+              {positionedGeoSignals.slice(0, 12).map((item, index) => (
+                <button
+                  key={item.geoKey || `${item.title}-${index}`}
+                  type="button"
+                  onClick={() => {
+                    setPinnedEventIndex(index);
+                    setImpactDrawerOpen(true);
+                  }}
+                  className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] shadow-[0_12px_28px_rgba(15,23,42,0.18)] ${markerClass(
+                    item.markerTone,
+                  )} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
+                  style={item.adjustedStyle}
+                  aria-label={`Open ${item.title}`}
+                >
+                  {item.pulse ? (
+                    <span
+                      className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(
+                        item.markerTone,
+                      )} animate-ping`}
+                    />
+                  ) : null}
+                  <span className="relative inline-flex items-center gap-1">
+                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
+                    {item.markerIcon}
+                  </span>
+                </button>
+              ))}
+            </div>
             <div className="world-map-zoom-controls absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 bg-white/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
               {[
-                { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },
-                { label: "1x", action: () => setMapZoom(1) },
-                { label: "+", action: () => setMapZoom((value) => Math.min(1.42, Number((value + 0.12).toFixed(2)))) },
+                { label: "-", action: () => setMapZoom((value) => Number((value - 0.18).toFixed(2))) },
+                { label: "1x", action: resetMapView },
+                { label: "+", action: () => setMapZoom((value) => Number((value + 0.18).toFixed(2))) },
               ].map((item) => (
                 <button
                   key={item.label}
@@ -1532,34 +1671,6 @@ export default function WorldMarketMap({
                 </button>
               ))}
             </div>
-
-            {positionedGeoSignals.slice(0, 12).map((item, index) => (
-              <button
-                key={item.geoKey || `${item.title}-${index}`}
-                type="button"
-                onClick={() => {
-                  setPinnedEventIndex(index);
-                  setImpactDrawerOpen(true);
-                }}
-                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] shadow-[0_12px_28px_rgba(15,23,42,0.18)] ${markerClass(
-                  item.markerTone,
-                )} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
-                style={item.adjustedStyle}
-                aria-label={`Open ${item.title}`}
-              >
-                {item.pulse ? (
-                  <span
-                    className={`absolute inset-0 rounded-full opacity-25 blur-sm ${markerAccentClass(
-                      item.markerTone,
-                    )} animate-ping`}
-                  />
-                ) : null}
-                <span className="relative inline-flex items-center gap-1">
-                  <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
-                  {item.markerIcon}
-                </span>
-              </button>
-            ))}
 
             {!positionedGeoSignals.length ? (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-[1rem] border border-black/8 bg-white/88 p-3 text-center text-xs font-semibold text-slate-600">
@@ -1661,10 +1772,15 @@ export default function WorldMarketMap({
 
         <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
           <div className="world-map-shell relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
-            <div className="world-map-canvas relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]">
-            <div className="absolute inset-0 overflow-hidden rounded-[1.4rem] opacity-95">
+            <div
+              className="world-map-canvas interactive-world-map relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] overflow-hidden rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]"
+              {...mapCanvasHandlers}
+            >
+            <div className="absolute inset-0 rounded-[1.4rem] opacity-95">
               <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
-              <InlineWorldMap highlights={countryHighlights} zoom={mapZoom} />
+              <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
+                <InlineWorldMap highlights={countryHighlights} />
+              </div>
             </div>
 
             <div className="absolute left-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
@@ -1681,9 +1797,9 @@ export default function WorldMarketMap({
 
             <div className="world-map-zoom-controls absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
               {[
-                { label: "+", action: () => setMapZoom((value) => Math.min(1.42, Number((value + 0.12).toFixed(2)))) },
-                { label: "-", action: () => setMapZoom((value) => Math.max(0.9, Number((value - 0.12).toFixed(2)))) },
-                { label: "1x", action: () => setMapZoom(1) },
+                { label: "+", action: () => setMapZoom((value) => Number((value + 0.18).toFixed(2))) },
+                { label: "-", action: () => setMapZoom((value) => Number((value - 0.18).toFixed(2))) },
+                { label: "1x", action: resetMapView },
               ].map((item) => (
                 <button
                   key={item.label}
@@ -1810,10 +1926,11 @@ export default function WorldMarketMap({
               </div>
             ) : null}
 
+            <div className="world-map-interactive-layer pointer-events-none absolute inset-0" style={mapContentStyle}>
             {positionedGeoSignals.map((item, index) => (
               <a
                 key={item.geoKey || `${item.title}-${index}`}
-                className={`absolute z-10 group transition-opacity ${
+                className={`pointer-events-auto absolute z-10 group transition-opacity ${
                   isRegionFocusMatch(activeRegion?.label, item) &&
                   (!selectedGeoPlace || item.geoPlace === selectedGeoPlace)
                     ? "opacity-100"
@@ -1893,6 +2010,7 @@ export default function WorldMarketMap({
                 </div>
               </a>
             ))}
+            </div>
 
             {showLiveAlert && activePulseEvent && hoveredEventIndex == null ? (
                 <a

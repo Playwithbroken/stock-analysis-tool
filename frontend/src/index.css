@@ -1131,7 +1131,17 @@ h3,
   align-items: center;
   justify-content: center;
   transform-origin: center;
-  transition: transform 200ms ease;
+}
+
+.interactive-world-map {
+  touch-action: none;
+  user-select: none;
+}
+
+.world-map-interactive-layer {
+  transform-origin: center;
+  will-change: transform;
+  transition: transform 120ms ease;
 }
 
 .world-map-inline {

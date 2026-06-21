@@ -406,6 +406,22 @@ function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
   return value.length >= 2 ? { "Direkt suchen": [value] } : {};
 }
 
+function normalizeSuggestionGroups(payload: unknown): Record<string, string[]> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+  return Object.fromEntries(
+    Object.entries(payload as Record<string, unknown>)
+      .map(([category, values]) => {
+        const normalizedValues = Array.isArray(values)
+          ? values.map((value) => String(value || "").trim()).filter(Boolean)
+          : typeof values === "string" && values.trim()
+            ? [values.trim()]
+            : [];
+        return [category, normalizedValues] as const;
+      })
+      .filter(([, values]) => values.length > 0),
+  );
+}
+
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>(() => buildDefaultSuggestions());
@@ -422,7 +438,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const flatSuggestions = useMemo(
     () =>
       Object.entries(suggestions).flatMap(([category, values]) =>
-        (values || []).filter(Boolean).map((value) => ({ category, value })),
+        (Array.isArray(values) ? values : []).filter(Boolean).map((value) => ({ category, value })),
       ),
     [suggestions],
   );
@@ -449,14 +465,15 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   // Load default suggestions on mount
   useEffect(() => {
     const controller = new AbortController();
-    fetchJsonWithRetry<Record<string, string[]>>("/api/search/suggestions", { signal: controller.signal }, {
+    fetchJsonWithRetry<unknown>("/api/search/suggestions", { signal: controller.signal }, {
       retries: 2,
       retryDelayMs: 900,
       timeoutMs: 2500,
     })
       .then((data) => {
-        if (!controller.signal.aborted && !latestQueryRef.current.trim() && data && Object.keys(data).length > 0) {
-          setSuggestions(data);
+        const normalized = normalizeSuggestionGroups(data);
+        if (!controller.signal.aborted && !latestQueryRef.current.trim() && Object.keys(normalized).length > 0) {
+          setSuggestions(normalized);
         }
       })
       .catch(() => undefined);
@@ -493,8 +510,9 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         })
           .then((data) => {
             if (controller.signal.aborted || searchRequestRef.current !== requestId) return;
-            if (data.Matches && data.Matches.length > 0) {
-              setSuggestions({ Treffer: uniqueValues([...localMatches, ...data.Matches]).slice(0, 8) });
+            const remoteMatches = Array.isArray(data?.Matches) ? data.Matches : [];
+            if (remoteMatches.length > 0) {
+              setSuggestions({ Treffer: uniqueValues([...localMatches, ...remoteMatches]).slice(0, 8) });
             } else if (localMatches.length === 0) {
               setSuggestions(buildDirectSearchSuggestion(trimmedQuery));
             }

@@ -849,7 +849,7 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`group fixed bottom-[var(--mobile-desk-bottom)] right-[max(0.75rem,env(safe-area-inset-right))] z-40${isOpen ? " hidden" : ""} flex h-9 w-9 items-center justify-center rounded-[0.85rem] border border-white/55 bg-[linear-gradient(180deg,rgba(15,118,110,0.88),rgba(14,92,87,0.86))] px-0 text-white shadow-[0_8px_18px_rgba(15,118,110,0.14)] transition-all duration-300 hover:scale-[1.01] hover:opacity-100 hover:shadow-[0_16px_36px_rgba(15,118,110,0.24)] active:scale-[0.99] ${fabCompact ? "opacity-70 scale-[0.88]" : "opacity-88 scale-100"} lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0 lg:opacity-100 lg:scale-100`}
+        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex h-9 w-9 items-center justify-center rounded-[0.85rem] border border-white/55 bg-[linear-gradient(180deg,rgba(15,118,110,0.88),rgba(14,92,87,0.86))] px-0 text-white shadow-[0_8px_18px_rgba(15,118,110,0.14)] transition-all duration-300 hover:scale-[1.01] hover:opacity-100 hover:shadow-[0_16px_36px_rgba(15,118,110,0.24)] active:scale-[0.99] ${fabCompact ? "opacity-70 scale-[0.88]" : "opacity-88 scale-100"} lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0 lg:opacity-100 lg:scale-100`}
         aria-label="Open Broker Freund Desk"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>

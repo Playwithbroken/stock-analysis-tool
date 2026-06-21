@@ -47,6 +47,8 @@
 
 html {
   scroll-behavior: smooth;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 body {
@@ -62,6 +64,8 @@ body {
   min-height: 100svh;
   min-height: 100dvh;
   overscroll-behavior-y: none;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 a {
@@ -79,6 +83,8 @@ h3,
 
 #root {
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .layout-shell {
@@ -88,7 +94,9 @@ h3,
 
 .content-shell {
   width: 100%;
+  max-width: 100%;
   margin-inline: auto;
+  overflow-x: clip;
   padding-bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 3.25rem);
 }
 
@@ -271,6 +279,9 @@ h3,
 
 .mobile-topbar {
   min-height: 54px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--line-subtle) 90%, white 10%);
   box-shadow: 0 14px 30px rgba(17, 24, 39, 0.08);
@@ -297,6 +308,7 @@ h3,
   display: flex;
   height: 2rem;
   width: 2rem;
+  flex: 0 0 2rem;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
@@ -311,7 +323,7 @@ h3,
   bottom: var(--mobile-tabbar-bottom);
   left: max(0.5rem, env(safe-area-inset-left));
   width: auto;
-  max-width: min(28rem, calc(100vw - 1rem));
+  max-width: calc(100vw - 1rem);
   margin-inline: auto;
   overflow: hidden;
   border: 1px solid var(--line-subtle);
@@ -325,6 +337,11 @@ h3,
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.broker-chat-fab {
+  right: max(0.55rem, env(safe-area-inset-right));
+  bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 0.55rem);
 }
 
 .mobile-dossier-copy {
@@ -1181,8 +1198,54 @@ h3,
   }
 
   .mobile-topbar-shell {
-    padding-inline: 0.55rem;
+    max-width: 100%;
+    overflow: hidden;
+    padding-inline: clamp(0.45rem, 2.4vw, 0.7rem);
     padding-bottom: 0.45rem;
+  }
+
+  .mobile-topbar {
+    height: 52px !important;
+    min-height: 52px;
+    gap: 0.4rem !important;
+    padding-inline: 0.5rem !important;
+  }
+
+  .mobile-topbar > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.5rem !important;
+  }
+
+  .mobile-topbar > div:last-child {
+    flex: 0 0 auto;
+    gap: 0.28rem !important;
+  }
+
+  .mobile-topbar > div:first-child > div:first-child {
+    height: 2rem !important;
+    width: 2rem !important;
+    border-radius: 0.78rem !important;
+  }
+
+  .mobile-topbar-button {
+    padding: 0.45rem 0.66rem !important;
+    font-size: 0.62rem !important;
+    letter-spacing: 0.1em;
+  }
+
+  .mobile-topbar-icon,
+  .mobile-topbar button[aria-label="Lock workspace"] {
+    height: 2rem !important;
+    width: 2rem !important;
+    flex-basis: 2rem;
+  }
+
+  .content-shell {
+    max-width: 100vw;
+    overflow-x: clip;
+    padding-inline: clamp(0.68rem, 3.2vw, 1rem);
+    padding-bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 5.25rem);
   }
 
   .mobile-market-tape {
@@ -1212,12 +1275,18 @@ h3,
   }
 
   .world-map-mobile-card {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
     border-radius: 1.15rem !important;
-    padding: 0.75rem !important;
+    padding: 0.7rem !important;
   }
 
   .world-map-mobile-card .world-map-canvas {
-    min-height: 246px;
+    width: 100%;
+    max-width: 100%;
+    min-height: 236px;
+    max-height: 46vh;
   }
 
   .world-map-mobile-card .world-map-zoom-controls {
@@ -1269,6 +1338,28 @@ h3,
 
   .ticker-marquee-chip {
     padding: 0.4rem 0.7rem;
+  }
+
+  .mobile-tabbar {
+    right: max(0.45rem, env(safe-area-inset-right));
+    left: max(0.45rem, env(safe-area-inset-left));
+    max-width: calc(100vw - 0.9rem);
+    padding: 0.32rem !important;
+    border-radius: 1.18rem !important;
+  }
+
+  .mobile-tabbar-button {
+    padding: 0.72rem 0.35rem !important;
+    border-radius: 0.88rem !important;
+    font-size: 0.55rem !important;
+    letter-spacing: 0.09em !important;
+  }
+
+  .broker-chat-fab {
+    height: 2.2rem !important;
+    width: 2.2rem !important;
+    border-radius: 0.78rem !important;
+    opacity: 0.78;
   }
 }
 

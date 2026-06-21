@@ -5,6 +5,7 @@ import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AdminHealthPanel from "./components/AdminHealthPanel";
 import { usePortfolios } from "./hooks/usePortfolios";
+import type { Holding, Portfolio } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
@@ -524,11 +525,15 @@ function AppContent() {
   } = usePortfolios(auth.authenticated);
 
   const { currency, setCurrency, formatPrice } = useCurrency();
-  const watchlistTickerSymbols = (watchlist?.items || [])
+  const safeWatchlistItems = Array.isArray(watchlist?.items) ? watchlist.items : [];
+  const safePortfolios: Portfolio[] = Array.isArray(portfolios) ? portfolios : [];
+  const getSafeHoldings = (portfolio: Portfolio): Holding[] =>
+    Array.isArray(portfolio?.holdings) ? portfolio.holdings : [];
+  const watchlistTickerSymbols = safeWatchlistItems
     .filter((item) => item.kind === "ticker" && item.value)
     .map((item) => (item.value || "").toUpperCase());
-  const portfolioTickerSymbols = portfolios
-    .flatMap((portfolio) => portfolio.holdings || [])
+  const portfolioTickerSymbols = safePortfolios
+    .flatMap((portfolio) => getSafeHoldings(portfolio))
     .map((holding) => (holding.ticker || "").toUpperCase())
     .filter(Boolean);
   const userTrackedSymbols = Array.from(
@@ -547,8 +552,8 @@ function AppContent() {
     transportMode: headerTransportMode,
   } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
   const portfolioSnapshotForChat = useMemo(() => {
-    const holdings = portfolios.flatMap((portfolio) =>
-      (portfolio.holdings || []).map((holding) => {
+    const holdings = safePortfolios.flatMap((portfolio) =>
+      getSafeHoldings(portfolio).map((holding) => {
         const ticker = String(holding.ticker || "").toUpperCase();
         const shares = Number(holding.shares || 0);
         const buyPrice = holding.buyPrice != null ? Number(holding.buyPrice) : null;
@@ -580,14 +585,14 @@ function AppContent() {
     return {
       summary: {
         num_holdings: holdings.length,
-        portfolios: portfolios.length,
+        portfolios: safePortfolios.length,
         total_value: totalValue || null,
         return_since_buy: totalReturn || null,
         return_since_buy_pct: totalCost > 0 ? (totalReturn / totalCost) * 100 : null,
       },
       holdings: holdings.slice(0, 50),
     };
-  }, [headerQuotes, portfolios]);
+  }, [headerQuotes, safePortfolios]);
   const briefSummaryForChat = useMemo(
     () =>
       globalBrief

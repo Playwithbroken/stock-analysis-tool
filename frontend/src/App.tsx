@@ -983,7 +983,10 @@ function AppContent() {
     const trimmed = raw.trim();
     if (!trimmed) return false;
     if (trimmed.includes("(") && trimmed.includes(")")) return false;
-    if (/^[#$]?[A-Z0-9.^=-]{1,12}$/i.test(trimmed) && normalized.length <= 12) return false;
+    const compactInput = trimmed.replace(/^[#$]+/, "");
+    const directTickerShape = /^[A-Z0-9.^=-]{1,12}$/.test(compactInput);
+    if (directTickerShape && normalized.length <= 12) return false;
+    if (/^[a-z][a-z0-9.-]{2,20}$/.test(compactInput) && normalized === compactInput.toUpperCase()) return true;
     return (
       /\s/.test(trimmed) ||
       /[&+]/.test(trimmed) ||

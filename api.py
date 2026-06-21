@@ -190,6 +190,7 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "ASML", "name": "ASML"},
     {"ticker": "INTC", "name": "Intel"},
     {"ticker": "AMD", "name": "Advanced Micro Devices"},
+    {"ticker": "NKE", "name": "Nike"},
     {"ticker": "NFLX", "name": "Netflix"},
     {"ticker": "CRM", "name": "Salesforce"},
     {"ticker": "ORCL", "name": "Oracle"},
@@ -202,6 +203,7 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "HIMS", "name": "Hims & Hers Health"},
     {"ticker": "TTWO", "name": "Take-Two Interactive Rockstar GTA 6"},
     {"ticker": "BMW.DE", "name": "BMW"},
+    {"ticker": "AIR.PA", "name": "Airbus"},
     {"ticker": "MBG.DE", "name": "Mercedes-Benz"},
     {"ticker": "VOW3.DE", "name": "Volkswagen"},
     {"ticker": "SIE.DE", "name": "Siemens"},
@@ -297,6 +299,8 @@ SEARCH_ALIASES: Dict[str, str] = {
     "gta6": "TTWO",
     "rockstar": "TTWO",
     "bmw": "BMW.DE",
+    "airbus": "AIR.PA",
+    "nike": "NKE",
     "mercedes": "MBG.DE",
     "volkswagen": "VOW3.DE",
     "vw": "VOW3.DE",
@@ -328,6 +332,7 @@ SEARCH_ALIASES: Dict[str, str] = {
     "crypto": "BTC-USD",
     "hood": "HOOD",
     "hoodapp": "HOOD",
+    "robin": "HOOD",
     "robinhood": "HOOD",
     "robinhoodmarkets": "HOOD",
     "robinhoodapp": "HOOD",
@@ -443,6 +448,71 @@ SEARCH_QUERY_NOISE_WORDS = {
     "income",
     "yield",
 }
+
+KNOWN_CRYPTO_TICKERS = {
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "DOGE-USD",
+    "XRP-USD",
+    "ADA-USD",
+    "AVAX-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "BNB-USD",
+    "TRX-USD",
+    "TON11419-USD",
+    "MATIC-USD",
+    "LTC-USD",
+    "BCH-USD",
+    "UNI7083-USD",
+}
+
+CRYPTO_INTENT_WORDS = {
+    "bitcoin",
+    "btc",
+    "ethereum",
+    "eth",
+    "solana",
+    "sol",
+    "dogecoin",
+    "doge",
+    "xrp",
+    "ripple",
+    "cardano",
+    "ada",
+    "avalanche",
+    "avax",
+    "polkadot",
+    "dot",
+    "chainlink",
+    "link",
+    "bnb",
+    "binance",
+    "tron",
+    "trx",
+    "ton",
+    "toncoin",
+    "polygon",
+    "matic",
+    "litecoin",
+    "ltc",
+    "bitcoincash",
+    "bch",
+    "uniswap",
+    "uni",
+    "crypto",
+    "coin",
+    "token",
+}
+
+
+def _has_crypto_search_intent(query: str) -> bool:
+    compact = _normalize_search_query(query)
+    normalized = _normalize_ticker_input(query)
+    if normalized in KNOWN_CRYPTO_TICKERS:
+        return True
+    return compact in CRYPTO_INTENT_WORDS or any(word in compact for word in ("crypto", "coin", "token"))
 
 
 def _normalize_search_query(value: str) -> str:
@@ -581,6 +651,8 @@ def _quote_search_score(query: str, item: Dict[str, Any]) -> float:
     ticker = _normalize_search_query(str(item.get("ticker", "")))
     name = _normalize_search_query(str(item.get("name", "")))
     quote_type = str(item.get("type") or "").upper()
+    symbol = str(item.get("ticker", "")).upper()
+    has_crypto_intent = _has_crypto_search_intent(query)
     score = 0.0
     if quote_type == "ALIAS":
         score += 145
@@ -614,15 +686,16 @@ def _quote_search_score(query: str, item: Dict[str, Any]) -> float:
         score -= 55
     if quote_type == "CRYPTOCURRENCY":
         normalized = _normalize_ticker_input(query)
-        symbol = str(item.get("ticker", "")).upper()
+        if symbol not in KNOWN_CRYPTO_TICKERS and not has_crypto_intent:
+            score -= 140
         if normalized.endswith("-USD") and symbol == normalized:
             score += 35
         elif normalized.endswith("-USD") and not symbol.endswith("-USD"):
             score -= 35
         elif symbol.endswith("-USD"):
             score += 8
-    if "." in str(item.get("ticker", "")) and not any(part in needle for part in ("de", "to", "pa", "mi", "f")):
-        score -= 8
+    if "." in str(item.get("ticker", "")) and not any(part in needle for part in ("de", "to", "pa", "mi", "f", "bk")):
+        score -= 30
     return score
 
 

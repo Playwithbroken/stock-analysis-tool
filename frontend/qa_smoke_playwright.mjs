@@ -333,7 +333,7 @@ async function runTickerChecks(page, viewportName) {
           text: `Analyzer loading panel was not visible after submitting ${ticker}`,
         });
       } else {
-        log(`[${viewportName}] Analyzer loading panel skipped: ${ticker} settled before loading check`);
+        pushEvent(`[${viewportName}] Analyzer loading panel skipped: ${ticker} settled before loading check`);
       }
     }
     await page.waitForTimeout(1850);

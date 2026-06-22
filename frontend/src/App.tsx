@@ -100,6 +100,43 @@ const marketMoversToTape = (marketMovers: any, limit = 6): TapeMover[] => {
   return [...winners, ...losers] as TapeMover[];
 };
 
+const DEFAULT_GEO_REGIONS = [
+  {
+    label: "Asia",
+    tone: "mixed",
+    avg_change_1d: 0,
+    assets: [{ ticker: "^N225", label: "Nikkei 225", change_1d: 0 }],
+  },
+  {
+    label: "Europe",
+    tone: "mixed",
+    avg_change_1d: 0,
+    assets: [{ ticker: "^GDAXI", label: "DAX", change_1d: 0 }],
+  },
+  {
+    label: "USA",
+    tone: "mixed",
+    avg_change_1d: 0,
+    assets: [{ ticker: "SPY", label: "S&P 500 ETF", change_1d: 0 }],
+  },
+];
+
+const normalizeGeoRegions = (regions: any) =>
+  DEFAULT_GEO_REGIONS.map((fallback) => {
+    const key = fallback.label.toLowerCase();
+    const source = regions?.[key] && typeof regions[key] === "object" ? regions[key] : {};
+    const assets = Array.isArray(source.assets) && source.assets.length ? source.assets : fallback.assets;
+    const change = Number(source.avg_change_1d ?? source.change_1d ?? fallback.avg_change_1d);
+    return {
+      ...fallback,
+      ...source,
+      label: source.label || fallback.label,
+      tone: source.tone || fallback.tone,
+      avg_change_1d: Number.isFinite(change) ? change : fallback.avg_change_1d,
+      assets,
+    };
+  });
+
 interface AuthState {
   loading: boolean;
   authenticated: boolean;
@@ -1109,11 +1146,7 @@ function AppContent() {
   }
 
   const showHero = activeTab === "analyze" && !analysis && !loading;
-  const geoRegions = [
-    globalBrief?.regions?.asia,
-    globalBrief?.regions?.europe,
-    globalBrief?.regions?.usa,
-  ].filter(Boolean);
+  const geoRegions = normalizeGeoRegions(globalBrief?.regions);
   const onboardingDone = Boolean(auth.profile?.onboarding_done);
   const onboardingDismissedAtRaw = localStorage.getItem(ONBOARDING_DISMISSED_AT_KEY);
   const onboardingDismissedAt = onboardingDismissedAtRaw ? Number(onboardingDismissedAtRaw) : 0;

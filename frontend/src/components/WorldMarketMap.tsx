@@ -979,6 +979,9 @@ export default function WorldMarketMap({
       return clampMapView({ ...current, zoom: nextZoom });
     });
   }, []);
+  const zoomIntoMap = useCallback(() => {
+    setMapZoom((value) => Number((value + 0.32).toFixed(2)));
+  }, [setMapZoom]);
   const resetMapView = useCallback(() => {
     setMapView({ zoom: 1, x: 0, y: 0 });
     mapPointerRef.current.clear();
@@ -993,6 +996,7 @@ export default function WorldMarketMap({
     }),
     [isMapDragging, mapView],
   );
+  const mapZoomLabel = `${Math.round(mapZoom * 100)}%`;
   const mapCanvasHandlers = useMemo(() => {
     const pointerDistance = () => {
       const points = [...mapPointerRef.current.values()];
@@ -1007,6 +1011,10 @@ export default function WorldMarketMap({
         const direction = event.deltaY > 0 ? -1 : 1;
         const step = event.ctrlKey ? 0.18 : 0.1;
         setMapZoom((value) => Number((value + direction * step).toFixed(2)));
+      },
+      onDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        zoomIntoMap();
       },
       onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
         if (event.button !== 0 && event.pointerType === "mouse") return;
@@ -1057,7 +1065,14 @@ export default function WorldMarketMap({
         setIsMapDragging(false);
       },
     };
-  }, [mapView, setMapZoom]);
+  }, [mapView, setMapZoom, zoomIntoMap]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") resetMapView();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [resetMapView]);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
   const displayRegion = activeRegion;
@@ -1671,6 +1686,9 @@ export default function WorldMarketMap({
                 </button>
               ))}
             </div>
+            <div className="world-map-gesture-hint absolute bottom-2 left-2 z-30 rounded-full border border-black/8 bg-white/88 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
+              Ziehen / Pinch / {mapZoomLabel}
+            </div>
 
             {!positionedGeoSignals.length ? (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-[1rem] border border-black/8 bg-white/88 p-3 text-center text-xs font-semibold text-slate-600">
@@ -1811,6 +1829,9 @@ export default function WorldMarketMap({
                   {item.label}
                 </button>
               ))}
+            </div>
+            <div className="world-map-gesture-hint absolute bottom-4 left-4 z-30 hidden rounded-full border border-black/8 bg-white/90 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.1)] md:block">
+              Rad zoomt / ziehen bewegt / Esc reset / {mapZoomLabel}
             </div>
 
             {showRegionCards

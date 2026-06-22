@@ -895,6 +895,13 @@ h3,
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34) !important;
 }
 
+[data-theme="dark"] .world-map-gesture-hint {
+  background: rgba(15, 23, 42, 0.84) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(226, 232, 240, 0.82) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3) !important;
+}
+
 [data-theme="dark"] .analysis-card,
 [data-theme="dark"] .surface-panel .glass-card,
 [data-theme="dark"] .surface-panel .bg-white,

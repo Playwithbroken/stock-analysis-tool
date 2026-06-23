@@ -107,22 +107,22 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   };
 
   const sendJobBrief = async (job: any) => {
-    const session = String(job?.session || "").trim();
-    if (!session) return;
-    setSendingSession(session);
+    const jobKey = String(job?.job_key || "").trim();
+    if (!jobKey) return;
+    setSendingSession(jobKey);
     setError("");
     setRunResult(null);
     try {
-      const res = await fetch(`/api/admin/send-telegram-brief?session=${encodeURIComponent(session)}`, {
+      const res = await fetch(`/api/admin/send-brief-job/${encodeURIComponent(jobKey)}`, {
         method: "POST",
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Telegram brief failed");
       setRunResult([
         {
-          job: job?.label || session,
+          job: data.label || job?.label || jobKey,
           status: data.status || "ok",
-          message: data.message || "Rich Telegram Brief wurde gesendet.",
+          message: data.message || "Rich Telegram Brief wurde gesendet und als erledigt markiert.",
         },
       ]);
       await load();
@@ -557,7 +557,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                         disabled={loading || warming || runningDue || downloadingBackup || !!sendingSession}
                         className="rounded-full border border-black/8 bg-[#101114] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
                       >
-                        {sendingSession === job.session ? "Sendet" : "Jetzt senden"}
+                        {sendingSession === job.job_key ? "Sendet" : "Jetzt senden"}
                       </button>
                     </div>
                   </div>

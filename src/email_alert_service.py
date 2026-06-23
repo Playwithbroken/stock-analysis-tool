@@ -787,6 +787,36 @@ class EmailAlertService:
         except Exception:
             return {}
 
+    def mark_manual_brief_job_sent(
+        self,
+        job_key: str,
+        title: str,
+        category: str,
+        event_key: str,
+        session_label: str,
+    ) -> Dict[str, Any]:
+        sent_at = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
+        self.portfolio_manager.mark_signal_events_sent(
+            [
+                {
+                    "event_key": event_key,
+                    "category": category,
+                    "title": title,
+                }
+            ]
+        )
+        payload = {
+            "job": job_key,
+            "status": "sent",
+            "event_key": event_key,
+            "sent_at": sent_at,
+            "manual": True,
+            "session_label": session_label,
+            "message": "Brief wurde manuell als Rich-Telegram-Brief gesendet.",
+        }
+        self._set_brief_job_status(job_key, payload)
+        return payload
+
     def _brief_status_key(self, job_key: str) -> str:
         safe_key = re.sub(r"[^a-zA-Z0-9:_-]+", "_", str(job_key or "unknown"))
         return f"brief_scheduler_job_status:{safe_key}"

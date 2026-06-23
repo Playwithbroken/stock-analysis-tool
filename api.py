@@ -3934,6 +3934,43 @@ async def send_telegram_brief_now(session: str = "global"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/admin/send-brief-job/{job_key}")
+async def send_brief_job_now(job_key: str):
+    """Manually resend a specific scheduled brief and mark that job as done today."""
+    job = next((item for item in _brief_schedule_jobs_for_health() if item.get("job_key") == job_key), None)
+    if not job:
+        raise HTTPException(status_code=404, detail="Brief job not found.")
+    try:
+        tz = ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))
+    except Exception:
+        tz = ZoneInfo("Europe/Berlin")
+    event_key = f"{job['job_key']}:{datetime.now(tz).date().isoformat()}"
+    try:
+        result = get_email_alert_service().send_session_brief_now(str(job["session"]))
+        marked = get_email_alert_service().mark_manual_brief_job_sent(
+            job_key=str(job["job_key"]),
+            title=str(job["label"]),
+            category="manual_scheduled_brief",
+            event_key=event_key,
+            session_label=str(job["session"]),
+        )
+        return convert_numpy_types(
+            {
+                **result,
+                "job_key": job["job_key"],
+                "label": job["label"],
+                "event_key": event_key,
+                "marked": marked,
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/admin/warm-brief")
 async def warm_brief_now():
     """Precompute the market brief cache on demand.

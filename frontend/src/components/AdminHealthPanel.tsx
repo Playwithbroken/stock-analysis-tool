@@ -51,6 +51,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [loading, setLoading] = useState(false);
   const [warming, setWarming] = useState(false);
   const [runningDue, setRunningDue] = useState(false);
+  const [sendingSession, setSendingSession] = useState("");
   const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [warmupResult, setWarmupResult] = useState<any>(null);
   const [runResult, setRunResult] = useState<any>(null);
@@ -102,6 +103,33 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
       setError(err instanceof Error ? err.message : "Scheduled brief run failed");
     } finally {
       setRunningDue(false);
+    }
+  };
+
+  const sendJobBrief = async (job: any) => {
+    const session = String(job?.session || "").trim();
+    if (!session) return;
+    setSendingSession(session);
+    setError("");
+    setRunResult(null);
+    try {
+      const res = await fetch(`/api/admin/send-telegram-brief?session=${encodeURIComponent(session)}`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Telegram brief failed");
+      setRunResult([
+        {
+          job: job?.label || session,
+          status: data.status || "ok",
+          message: data.message || "Rich Telegram Brief wurde gesendet.",
+        },
+      ]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Telegram brief failed");
+    } finally {
+      setSendingSession("");
     }
   };
 
@@ -184,7 +212,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     schedulerVerdict === "action"
       ? "Run Due/Missed klicken"
       : schedulerVerdict === "missed"
-        ? "Warm Brief Now, danach manuell senden"
+        ? "Brief direkt nachsenden"
         : schedulerVerdict === "error"
           ? "Fehlertext beheben und Health neu laden"
           : "Naechsten Termin abwarten";
@@ -522,6 +550,16 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                         {job.last_error}
                       </div>
                     ) : null}
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => sendJobBrief(job)}
+                        disabled={loading || warming || runningDue || downloadingBackup || !!sendingSession}
+                        className="rounded-full border border-black/8 bg-[#101114] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                      >
+                        {sendingSession === job.session ? "Sendet" : "Jetzt senden"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

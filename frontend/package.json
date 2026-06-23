@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && node scripts/prune-dist-assets.mjs && vite build",
     "preview": "vite preview",
+    "test:geo": "node scripts/test-geo-regions.mjs",
     "qa:release": "node qa_smoke_playwright.mjs"
   },
   "devDependencies": {

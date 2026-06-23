@@ -4568,7 +4568,7 @@ async def get_market_session_lists():
 @app.post("/api/signals/alerts/morning-brief")
 async def send_morning_brief():
     try:
-        return get_email_alert_service().send_morning_brief()
+        return get_email_alert_service().send_session_brief_now("global")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
@@ -4579,7 +4579,14 @@ async def send_morning_brief():
 @app.post("/api/signals/alerts/open-brief/{session}")
 async def send_open_brief(session: str):
     try:
-        return get_email_alert_service().send_open_brief(session)
+        normalized = (session or "").strip().lower()
+        if normalized not in {"europe", "usa"}:
+            raise HTTPException(status_code=400, detail="session must be 'europe' or 'usa'")
+        return get_email_alert_service().send_session_brief_now(normalized)
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

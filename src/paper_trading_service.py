@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 import yfinance as yf
 
 from src.storage import PortfolioManager
+from src.strategy_library import StrategyLibrary
 
 DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
@@ -28,6 +29,8 @@ class PaperTradingService:
         return {
             "generated_at": datetime.utcnow().isoformat(),
             "playbooks": sized_playbooks,
+            "strategy_library": StrategyLibrary.all(),
+            "strategy_readiness": StrategyLibrary.build_readiness(trades, self.portfolio_manager.list_paper_trade_outcomes(limit=800)),
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
             "stats": self._build_stats(trades),
@@ -341,6 +344,7 @@ class PaperTradingService:
         self._apply_outcome_learning(playbooks, outcome_learning or {})
 
         for item in playbooks:
+            item["strategy"] = StrategyLibrary.find_for_playbook(item)
             rule_state = self._get_do_not_trade_state(item, rules)
             item["do_not_trade_reasons"] = rule_state["blocked"]
             item["leverage_warnings"] = rule_state["leverage"]
@@ -380,12 +384,13 @@ class PaperTradingService:
         blocked = list(playbook.get("do_not_trade_reasons") or [])
         warnings = list(playbook.get("leverage_warnings") or [])
         is_option = asset_class == "option"
+        strategy = playbook.get("strategy") or StrategyLibrary.find_for_playbook(playbook)
 
         direction_label = "upside" if direction in {"long", "call"} else "downside"
-        entry_trigger = (
+        entry_trigger = str(strategy.get("trigger_template") or "").format(ticker=ticker) or (
             f"{ticker} confirms {direction_label} follow-through after the signal with clean price action and volume."
         )
-        invalidation = (
+        invalidation = str(strategy.get("invalidation_template") or "").format(ticker=ticker) or (
             f"Thesis fails if {ticker} breaks the planned stop zone, news quality weakens, or the move is not confirmed by market breadth."
         )
         risk_plan = (
@@ -432,6 +437,12 @@ class PaperTradingService:
             "review_questions": review_questions,
             "blocked_reasons": blocked,
             "warnings": warnings,
+            "strategy_id": strategy.get("id"),
+            "strategy_label": strategy.get("label"),
+            "strategy_horizon": strategy.get("horizon"),
+            "quality_gates": strategy.get("quality_gates") or [],
+            "risk_notes": strategy.get("risk_notes") or [],
+            "real_world_gate": strategy.get("real_world_gate"),
             "real_money_policy": "Decision support only; real-money execution requires manual review and documented risk.",
         }
 
@@ -797,6 +808,8 @@ class PaperTradingService:
                 "asset_class": playbook.get("asset_class"),
                 "direction": playbook.get("direction"),
                 "setup_type": playbook.get("setup_type"),
+                "strategy_id": (playbook.get("strategy") or {}).get("id"),
+                "strategy_label": (playbook.get("strategy") or {}).get("label"),
                 "score": score,
                 "title": playbook.get("title"),
                 "headline": playbook.get("headline"),

@@ -39,6 +39,7 @@ from src.email_alert_service import (
 )
 from src.morning_brief_service import MorningBriefService
 from src.paper_trading_service import PaperTradingService
+from src.strategy_library import StrategyLibrary
 from src.forecast_learning_service import ForecastLearningService
 from src.signal_score_service import SignalScoreService
 from src.session_list_service import SessionListService
@@ -4546,6 +4547,24 @@ async def get_trading_intelligence():
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         payload = get_trading_intelligence_service().build_snapshot(snapshot)
         return convert_numpy_types(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/strategy-library")
+async def get_strategy_library():
+    try:
+        trades = get_paper_trading_service()._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
+        outcomes = get_portfolio_manager().list_paper_trade_outcomes(limit=800)
+        return convert_numpy_types(
+            {
+                "status": "ok",
+                "generated_at": datetime.utcnow().isoformat(),
+                "strategies": StrategyLibrary.all(),
+                "readiness": StrategyLibrary.build_readiness(trades, outcomes),
+                "policy": "Paper learning first. Real-money use requires manual review and documented risk.",
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

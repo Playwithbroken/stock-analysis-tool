@@ -60,6 +60,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
   const autoSelection = data?.auto_selection || {};
+  const strategyReadiness = data?.strategy_readiness || [];
   const optionReadiness = outcomeLearning.option_readiness || {};
   const learningSummary = outcomeLearning.learning_summary || {};
   const setupAdjustments = Object.values(outcomeLearning.setup_adjustments || {});
@@ -322,6 +323,62 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               ))}
             </div>
           ) : null}
+        </div>
+
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-xs text-slate-700">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Strategy Library</div>
+              <div className="mt-2 max-w-3xl leading-5">
+                Jede Strategie hat eigene Gates, Paper-Mindestdaten und einen Real-World-Review-Status. Echtgeld bleibt
+                manuell, bis die Demo-Daten einen wiederholbaren Vorteil zeigen.
+              </div>
+            </div>
+            <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
+              {strategyReadiness.filter((item: any) => item.real_world_ready).length} review ready
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            {strategyReadiness.slice(0, 6).map((item: any) => (
+              <div key={item.id} className="rounded-[1.1rem] border border-black/8 bg-white/80 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-black text-slate-900">{item.label}</div>
+                    <div className="mt-1 text-slate-500">{item.horizon}</div>
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 font-extrabold uppercase tracking-[0.12em] ${
+                      item.real_world_ready
+                        ? "bg-emerald-50 text-emerald-700"
+                        : item.status === "learning"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {item.status?.replace(/_/g, " ") || "learning"}
+                  </span>
+                </div>
+                <p className="mt-3 leading-5 text-slate-600">{item.objective}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-slate-500">
+                  <div>
+                    <div className="font-black text-slate-900">{item.decisive_checks || 0}</div>
+                    <div>Checks</div>
+                  </div>
+                  <div>
+                    <div className="font-black text-slate-900">{item.hit_rate || 0}%</div>
+                    <div>Hit</div>
+                  </div>
+                  <div>
+                    <div className="font-black text-slate-900">{formatPct(item.avg_closed_pnl_pct, 2, "0.00%")}</div>
+                    <div>Avg</div>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+                  {item.next_step}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 text-xs lg:grid-cols-[1.1fr_0.9fr]">

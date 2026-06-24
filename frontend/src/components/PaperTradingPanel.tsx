@@ -162,14 +162,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
-  const runAutopilot = async (execute: boolean) => {
-    setBusyId(execute ? "autopilot-execute" : "autopilot-preview");
+  const runAutopilot = async (execute: boolean, mode: "strict" | "learn" = "strict") => {
+    setBusyId(`${mode}-${execute ? "autopilot-execute" : "autopilot-preview"}`);
     setStatus("");
     try {
       const response = await fetch("/api/trading/paper-autopilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ execute, max_trades: 3 }),
+        body: JSON.stringify({ execute, max_trades: 3, mode }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Paper autopilot failed.");
@@ -249,18 +249,32 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               Evaluate outcomes
             </button>
             <button
-              onClick={() => runAutopilot(false)}
-              disabled={busyId === "autopilot-preview"}
+              onClick={() => runAutopilot(false, "strict")}
+              disabled={busyId === "strict-autopilot-preview"}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
               Auto preview
             </button>
             <button
-              onClick={() => runAutopilot(true)}
-              disabled={busyId === "autopilot-execute"}
+              onClick={() => runAutopilot(true, "strict")}
+              disabled={busyId === "strict-autopilot-execute"}
               className="rounded-xl bg-[#101114] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
               Auto paper open
+            </button>
+            <button
+              onClick={() => runAutopilot(false, "learn")}
+              disabled={busyId === "learn-autopilot-preview"}
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-800 disabled:opacity-50"
+            >
+              Learn preview
+            </button>
+            <button
+              onClick={() => runAutopilot(true, "learn")}
+              disabled={busyId === "learn-autopilot-execute"}
+              className="rounded-xl bg-amber-600 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+            >
+              Learn paper open
             </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} tracked trades
@@ -274,11 +288,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Demo Autopilot Selection</div>
               <div className="mt-2 max-w-3xl leading-5">
                 Waehlt nur Paper-Trades mit Score &gt;= {autoSelection.min_score || 88}, voller These, Trigger,
-                Invalidation, freiem Risikobudget und ohne offene Duplikate. Keine Real-Money-Ausfuehrung.
+                Invalidation, freiem Risikobudget und ohne offene Duplikate. Learn Mode testet ab Score &gt;= {autoSelection.exploration_min_score || 72}
+                mit reduziertem Demo-Risiko ({Math.round(Number(autoSelection.exploration_risk_multiplier || 0.25) * 100)}%). Keine Real-Money-Ausfuehrung.
               </div>
             </div>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
-              {autoSelection.selected?.length || 0} ready / {autoSelection.rejected?.length || 0} rejected
+              {autoSelection.selected?.length || 0} strict / {autoSelection.exploration?.length || 0} learn
             </div>
           </div>
           {autoSelection.selected?.length ? (
@@ -301,6 +316,24 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               Noch kein Setup erfuellt alle Auto-Gates. Das ist korrekt: kein Paper-Trade ohne sauberen Trigger.
             </div>
           )}
+          {autoSelection.exploration?.length ? (
+            <div className="mt-3">
+              <div className="font-extrabold uppercase tracking-[0.18em] text-amber-700">Learning candidates</div>
+              <div className="mt-2 grid gap-3 lg:grid-cols-3">
+                {autoSelection.exploration.slice(0, 3).map((item: any) => (
+                  <div key={item.id} className="rounded-[1.1rem] border border-amber-500/20 bg-amber-50/80 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-black text-slate-900">{item.ticker} · {item.direction}</div>
+                      <div className="font-black text-amber-700">{item.score}</div>
+                    </div>
+                    <div className="mt-1 text-slate-500">{item.strategy_label || item.setup_type}</div>
+                    <div className="mt-2 text-slate-700">Small demo loss {money(item.suggested_max_loss_value, currency)}</div>
+                    <div className="mt-2 text-amber-900">Nur zum Lernen: kleine Position, gleiche These, gleiche Invalidierung.</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {autoSelection.rejected?.length ? (
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               {autoSelection.rejected.slice(0, 4).map((item: any) => (

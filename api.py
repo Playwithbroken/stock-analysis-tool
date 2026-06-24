@@ -1716,6 +1716,7 @@ class PaperTradeFromPlaybookRequest(BaseModel):
 class PaperAutoSelectionRequest(BaseModel):
     execute: bool = False
     max_trades: int = Field(default=3, ge=1, le=5)
+    mode: str = Field(default="strict", pattern="^(strict|learn)$")
 
 
 class PaperTradeCloseRequest(BaseModel):
@@ -4602,6 +4603,7 @@ async def run_paper_autopilot(req: PaperAutoSelectionRequest):
             settings,
             max_trades=req.max_trades,
             execute=req.execute,
+            mode=req.mode,
         )
         if req.execute and result.get("opened"):
             try:

@@ -49,16 +49,25 @@ class PaperTradingService:
         settings: Dict[str, Any] | None = None,
         max_trades: int = 3,
         execute: bool = False,
+        mode: str = "strict",
     ) -> Dict[str, Any]:
         dashboard = self.build_dashboard(scoreboard, settings)
-        selected = dashboard.get("auto_selection", {}).get("selected", [])[: max(1, int(max_trades or 1))]
+        selection = dashboard.get("auto_selection", {})
+        mode = "learn" if str(mode or "").lower() == "learn" else "strict"
+        source_key = "exploration" if mode == "learn" else "selected"
+        selected = selection.get(source_key, [])[: max(1, int(max_trades or 1))]
         if not execute:
             return {
                 "status": "preview",
                 "execute": False,
+                "mode": mode,
                 "selected": selected,
                 "opened": [],
-                "message": f"{len(selected)} demo candidate(s) passed the auto-selection gates.",
+                "message": (
+                    f"{len(selected)} learning candidate(s) passed the exploration gates."
+                    if mode == "learn"
+                    else f"{len(selected)} demo candidate(s) passed the auto-selection gates."
+                ),
             }
 
         opened: List[Dict[str, Any]] = []
@@ -70,7 +79,7 @@ class PaperTradingService:
                         {
                             "playbook_id": candidate.get("id"),
                             "direction": candidate.get("direction") or "long",
-                            "quantity": 0,
+                            "quantity": candidate.get("suggested_quantity") or 0,
                             "leverage": 1,
                         },
                         scoreboard,
@@ -88,10 +97,15 @@ class PaperTradingService:
         return {
             "status": "ok" if not errors else "partial",
             "execute": True,
+            "mode": mode,
             "selected": selected,
             "opened": opened,
             "errors": errors,
-            "message": f"Opened {len(opened)} paper trade(s); {len(errors)} blocked during final gate.",
+            "message": (
+                f"Opened {len(opened)} paper learning trade(s); {len(errors)} blocked during final gate."
+                if mode == "learn"
+                else f"Opened {len(opened)} paper trade(s); {len(errors)} blocked during final gate."
+            ),
         }
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -770,11 +784,18 @@ class PaperTradingService:
             if trade.get("status") == "open"
         }
         min_score = float(os.getenv("PAPER_TRADING_AUTO_MIN_SCORE", "88"))
+        exploration_min_score = float(os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "72"))
+        exploration_risk_multiplier = min(
+            0.5,
+            max(0.05, float(os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.25"))),
+        )
         selected: List[Dict[str, Any]] = []
+        exploration: List[Dict[str, Any]] = []
         rejected: List[Dict[str, Any]] = []
 
         for playbook in playbooks:
             reasons: List[str] = []
+            exploration_reasons: List[str] = []
             score = float(playbook.get("score") or 0)
             key = (
                 str(playbook.get("ticker") or "").upper(),
@@ -785,22 +806,32 @@ class PaperTradingService:
             framework = playbook.get("decision_framework") or {}
             if score < min_score:
                 reasons.append(f"score below auto minimum {min_score:.0f}")
+            if score < exploration_min_score:
+                exploration_reasons.append(f"score below learning minimum {exploration_min_score:.0f}")
             if playbook.get("tradeable") is False or playbook.get("demo_tradeable") is False:
                 reasons.append("trade or demo risk gate blocked")
+                exploration_reasons.append("trade or demo risk gate blocked")
             if playbook.get("demo_block_reasons"):
                 reasons.extend(str(item) for item in playbook.get("demo_block_reasons")[:3])
+                exploration_reasons.extend(str(item) for item in playbook.get("demo_block_reasons")[:3])
             if key in open_keys:
                 reasons.append("same ticker/setup/direction already open")
+                exploration_reasons.append("same ticker/setup/direction already open")
             if not playbook.get("ticker") or not playbook.get("reference_price"):
                 reasons.append("missing ticker or reference price")
+                exploration_reasons.append("missing ticker or reference price")
             if not framework.get("entry_trigger") or not framework.get("invalidation") or not playbook.get("thesis"):
                 reasons.append("missing thesis, trigger or invalidation")
+                exploration_reasons.append("missing thesis, trigger or invalidation")
             if playbook.get("asset_class") == "option":
                 readiness = (demo_account.get("learning_feedback") or {}).get("option_win_rate")
                 if readiness is None:
                     reasons.append("option remains paper-only and needs manual chain review")
+                    exploration_reasons.append("option chain must be reviewed manually before exploration")
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected):
                 reasons.append("demo account open-trade slots exhausted")
+            if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration):
+                exploration_reasons.append("demo account open-trade slots exhausted")
 
             row = {
                 "id": playbook.get("id"),
@@ -816,6 +847,7 @@ class PaperTradingService:
                 "suggested_quantity": playbook.get("suggested_quantity"),
                 "suggested_notional_value": playbook.get("suggested_notional_value"),
                 "suggested_max_loss_value": playbook.get("suggested_max_loss_value"),
+                "learning_mode": False,
                 "trigger": framework.get("entry_trigger"),
                 "invalidation": framework.get("invalidation"),
                 "reasons": reasons,
@@ -824,15 +856,26 @@ class PaperTradingService:
                 rejected.append(row)
             else:
                 selected.append(row)
+            if not exploration_reasons and reasons and playbook.get("asset_class") != "option":
+                learning_row = dict(row)
+                learning_row["learning_mode"] = True
+                learning_row["suggested_quantity"] = round(float(playbook.get("suggested_quantity") or 0) * exploration_risk_multiplier, 6)
+                learning_row["suggested_notional_value"] = round(float(playbook.get("suggested_notional_value") or 0) * exploration_risk_multiplier, 2)
+                learning_row["suggested_max_loss_value"] = round(float(playbook.get("suggested_max_loss_value") or 0) * exploration_risk_multiplier, 2)
+                learning_row["reasons"] = [f"learning mode: reduced risk x{exploration_risk_multiplier:g}"]
+                exploration.append(learning_row)
             if len(selected) >= max_candidates:
                 break
 
         return {
             "mode": "paper_autopilot_preview",
             "min_score": min_score,
+            "exploration_min_score": exploration_min_score,
+            "exploration_risk_multiplier": exploration_risk_multiplier,
             "selected": selected,
+            "exploration": exploration[:max_candidates],
             "rejected": rejected[:8],
-            "policy": "Paper-only auto-selection. Real-money decisions require manual review.",
+            "policy": "Paper-only auto-selection. Strict mode is quality first; learn mode uses smaller demo risk to collect evidence.",
         }
 
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

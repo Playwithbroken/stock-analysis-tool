@@ -290,6 +290,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   </div>
                   <div className="mt-1 text-slate-500">{item.setup_type}</div>
                   <div className="mt-2 text-slate-700">Max loss {money(item.suggested_max_loss_value, currency)}</div>
+                  {item.trigger ? <div className="mt-2 text-emerald-900">Trigger: {item.trigger}</div> : null}
+                  {item.invalidation ? <div className="mt-1 text-emerald-800">Invalidation: {item.invalidation}</div> : null}
                 </div>
               ))}
             </div>
@@ -298,6 +300,28 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               Noch kein Setup erfuellt alle Auto-Gates. Das ist korrekt: kein Paper-Trade ohne sauberen Trigger.
             </div>
           )}
+          {autoSelection.rejected?.length ? (
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {autoSelection.rejected.slice(0, 4).map((item: any) => (
+                <div key={item.id} className="rounded-[1.1rem] border border-red-500/15 bg-red-50/80 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="font-black text-slate-900">{item.ticker} · {item.direction}</div>
+                      <div className="mt-1 text-slate-500">{item.setup_type} · score {item.score}</div>
+                    </div>
+                    <div className="rounded-full border border-red-200 bg-white px-2 py-1 font-extrabold uppercase tracking-[0.12em] text-red-700">
+                      no trade
+                    </div>
+                  </div>
+                  <div className="mt-2 grid gap-1 text-red-800">
+                    {(item.reasons || []).slice(0, 3).map((reason: string) => (
+                      <div key={reason}>Block: {reason}</div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-4 grid gap-3 text-xs lg:grid-cols-[1.1fr_0.9fr]">

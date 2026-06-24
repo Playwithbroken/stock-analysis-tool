@@ -258,6 +258,56 @@ class EmailAlertService:
         self.portfolio_manager.mark_signal_events_sent(events[:5])
         return {"status": "ok", "sent": len(events[:5]), "message": "Paper learning Telegram alerts sent."}
 
+    def send_paper_trade_opened_alerts(self, opened: List[Dict[str, Any]], selected: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if os.getenv("PAPER_TRADE_OPEN_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            return {"status": "disabled", "message": "Paper trade open alerts are disabled."}
+        if not opened:
+            return {"status": "ok", "sent": 0, "message": "No opened paper trades."}
+
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        by_id = {str(item.get("id") or ""): item for item in selected or []}
+        events: List[Dict[str, Any]] = []
+        for trade in opened[:5]:
+            playbook_id = str(trade.get("playbook_id") or "")
+            selected_item = by_id.get(playbook_id) or next(
+                (
+                    item
+                    for item in selected or []
+                    if item.get("ticker") == trade.get("ticker")
+                    and item.get("direction") == trade.get("direction")
+                    and item.get("setup_type") == trade.get("setup_type")
+                ),
+                {},
+            )
+            event_key = f"paper-open:{trade.get('id') or datetime.utcnow().isoformat()}"
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "paper_trade_opened",
+                    "title": f"Paper trade opened: {trade.get('ticker')} {trade.get('direction')}",
+                    "ticker": trade.get("ticker"),
+                    "asset_class": trade.get("asset_class"),
+                    "direction": trade.get("direction"),
+                    "setup_type": trade.get("setup_type"),
+                    "entry_price": trade.get("entry_price"),
+                    "stop_price": trade.get("stop_price"),
+                    "target_price": trade.get("target_price"),
+                    "quantity": trade.get("quantity"),
+                    "risk_reward": trade.get("risk_reward"),
+                    "confidence_score": trade.get("confidence_score"),
+                    "trigger": selected_item.get("trigger"),
+                    "invalidation": selected_item.get("invalidation"),
+                    "suggested_max_loss_value": selected_item.get("suggested_max_loss_value"),
+                    "line": f"{trade.get('ticker')} {trade.get('direction')} paper trade opened.",
+                    "source_label": "Paper autopilot",
+                    "source_url": "",
+                }
+            )
+        self._send_notifications(config, events, subject="Paper Autopilot: Demo trade opened")
+        self.portfolio_manager.mark_signal_events_sent(events)
+        return {"status": "ok", "sent": len(events), "message": "Paper trade Telegram alerts sent."}
+
     def _extract_paper_learning_events(self, learning: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
         events: List[Dict[str, Any]] = []
         summary = learning.get("learning_summary") or {}
@@ -2774,6 +2824,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_learning_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "paper_trade_opened":
+                lines.append(self._render_telegram_paper_trade_opened_alert(event))
+                lines.append("")
+                continue
 
             prefix = self._telegram_prefix_for_event(event)
             rendered_line = f"{prefix} {self._tg_esc(line)}".strip()
@@ -2789,6 +2843,37 @@ class EmailAlertService:
 
         self._tg_post(config.telegram_bot_token, config.telegram_chat_id, "\n".join(lines))
         return True
+
+    def _render_telegram_paper_trade_opened_alert(self, event: Dict[str, Any]) -> str:
+        ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
+        direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
+        asset_class = self._tg_esc(str(event.get("asset_class") or "asset"))
+        setup = self._tg_esc(str(event.get("setup_type") or "setup"))
+        entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
+        stop = self._tg_esc(str(event.get("stop_price") if event.get("stop_price") is not None else "n/a"))
+        target = self._tg_esc(str(event.get("target_price") if event.get("target_price") is not None else "n/a"))
+        qty = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
+        max_loss = self._tg_esc(
+            str(event.get("suggested_max_loss_value") if event.get("suggested_max_loss_value") is not None else "n/a")
+        )
+        confidence = self._tg_esc(
+            str(event.get("confidence_score") if event.get("confidence_score") is not None else "n/a")
+        )
+        trigger = self._tg_esc(str(event.get("trigger") or "Follow-through must stay confirmed."))[:520]
+        invalidation = self._tg_esc(str(event.get("invalidation") or "Close/review if thesis fails."))[:520]
+        rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
+        return "\n".join(
+            [
+                f"<b>[PAPER OPEN] <code>{ticker}</code> {direction}</b>",
+                f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
+                f"<b>Entry:</b> {entry} | <b>Qty:</b> {qty}",
+                f"<b>Stop:</b> {stop} | <b>Target:</b> {target} | <b>RR:</b> {rr}",
+                f"<b>Max demo loss:</b> {max_loss}",
+                f"<b>Trigger:</b> {trigger}",
+                f"<b>Invalidation:</b> {invalidation}",
+                "<b>Mode:</b> 500k demo learning only. No automatic real-money execution.",
+            ]
+        )
 
     def _render_telegram_paper_learning_alert(self, event: Dict[str, Any]) -> str:
         severity = str(event.get("severity") or "learning").upper()

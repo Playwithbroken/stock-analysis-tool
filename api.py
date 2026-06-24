@@ -4584,6 +4584,14 @@ async def run_paper_autopilot(req: PaperAutoSelectionRequest):
             max_trades=req.max_trades,
             execute=req.execute,
         )
+        if req.execute and result.get("opened"):
+            try:
+                result["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
+                    result.get("opened") or [],
+                    result.get("selected") or [],
+                )
+            except Exception as alert_error:
+                result["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
         return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

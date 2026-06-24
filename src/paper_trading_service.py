@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -757,15 +758,29 @@ class PaperTradingService:
         }
 
     def _demo_account_config(self) -> Dict[str, Any]:
+        def env_float(name: str, default: float, minimum: float = 0.0) -> float:
+            try:
+                value = float(os.getenv(name, str(default)).strip())
+            except Exception:
+                value = default
+            return max(minimum, value)
+
+        def env_int(name: str, default: int, minimum: int = 0) -> int:
+            try:
+                value = int(os.getenv(name, str(default)).strip())
+            except Exception:
+                value = default
+            return max(minimum, value)
+
         return {
-            "starting_capital": 50_000.0,
-            "currency": "EUR",
-            "risk_per_trade_pct": 0.5,
-            "max_open_risk_pct": 4.0,
-            "max_position_pct": 12.0,
-            "max_option_premium_pct": 1.0,
-            "risk_per_option_trade_pct": 0.5,
-            "max_open_trades": 10,
+            "starting_capital": env_float("PAPER_TRADING_STARTING_CAPITAL", 500_000.0, minimum=1_000.0),
+            "currency": os.getenv("PAPER_TRADING_CURRENCY", "EUR").strip().upper() or "EUR",
+            "risk_per_trade_pct": env_float("PAPER_TRADING_RISK_PER_TRADE_PCT", 0.35, minimum=0.01),
+            "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", 3.0, minimum=0.1),
+            "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", 10.0, minimum=0.1),
+            "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 0.75, minimum=0.01),
+            "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.25, minimum=0.01),
+            "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", 12, minimum=1),
             "mode": "paper_learning_only",
         }
 

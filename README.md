@@ -40,6 +40,19 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
 - Desktop: Chrome/Edge koennen die PWA ueber den Install-Button oder das Browser-Menue als App installieren.
 - Briefings/Alerts: Versand laeuft in der Beta nur ueber Telegram, nicht per E-Mail oder Browser-Push.
 
+## Paper-Learning-Konto
+
+- Standard-Demo-Kapital: `500000` EUR, nur Paper-Learning, keine automatische Real-Money-Ausfuehrung.
+- Optional steuerbar per Env:
+  - `PAPER_TRADING_STARTING_CAPITAL=500000`
+  - `PAPER_TRADING_CURRENCY=EUR`
+  - `PAPER_TRADING_RISK_PER_TRADE_PCT=0.35`
+  - `PAPER_TRADING_MAX_OPEN_RISK_PCT=3.0`
+  - `PAPER_TRADING_MAX_POSITION_PCT=10.0`
+  - `PAPER_TRADING_MAX_OPTION_PREMIUM_PCT=0.75`
+  - `PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT=0.25`
+  - `PAPER_TRADING_MAX_OPEN_TRADES=12`
+
 ## Daten und Backups
 
 - Die SQLite-Datenbank liegt standardmaessig unter `data/portfolios.db`.

@@ -43,6 +43,8 @@ const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
   return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
 };
 
+const DEFAULT_DEMO_CAPITAL = 500000;
+
 export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperTradingPanelProps) {
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -277,7 +279,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Demo Equity" value={money(demoAccount.equity || demoAccount.starting_capital || 50000, currency)} />
+          <StatTile label="Demo Equity" value={money(demoAccount.equity || demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)} />
           <StatTile label="Risk / Trade" value={money(demoAccount.risk_budget_per_trade_value, currency)} />
           <StatTile label="Open Risk" value={`${money(demoAccount.open_risk_value, currency)} · ${demoAccount.open_risk_pct || 0}%`} />
           <StatTile label="Open Exposure" value={`${money(demoAccount.open_exposure_value, currency)} · ${demoAccount.open_exposure_pct || 0}%`} />
@@ -287,7 +289,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           <div className="rounded-[1.6rem] border border-emerald-500/20 bg-emerald-50/80 p-4 text-xs text-emerald-900">
             <div className="font-extrabold uppercase tracking-[0.18em] text-emerald-700">Demo Account Guardrails</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div>Startkapital: {money(demoAccount.starting_capital || 50000, currency)}</div>
+              <div>Startkapital: {money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)}</div>
               <div>Max Position: {money(demoAccount.max_position_value, currency)} / Idee</div>
               <div>Max Open Risk: {money(demoAccount.max_open_risk_value, currency)}</div>
               <div>Freies Risiko: {money(demoAccount.remaining_risk_value, currency)}</div>

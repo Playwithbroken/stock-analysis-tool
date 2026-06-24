@@ -1712,6 +1712,11 @@ class PaperTradeFromPlaybookRequest(BaseModel):
     leverage: float = 1
 
 
+class PaperAutoSelectionRequest(BaseModel):
+    execute: bool = False
+    max_trades: int = Field(default=3, ge=1, le=5)
+
+
 class PaperTradeCloseRequest(BaseModel):
     closed_price: Optional[float] = None
     notes: Optional[str] = None
@@ -4564,6 +4569,25 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         return convert_numpy_types(trade)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/paper-autopilot")
+async def run_paper_autopilot(req: PaperAutoSelectionRequest):
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        settings = get_portfolio_manager().get_signal_score_settings()
+        scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+        result = get_paper_trading_service().run_auto_selection(
+            scoreboard,
+            settings,
+            max_trades=req.max_trades,
+            execute=req.execute,
+        )
+        return convert_numpy_types(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/trading/paper-trades/{trade_id}/close")
 async def close_paper_trade(trade_id: str, req: PaperTradeCloseRequest):

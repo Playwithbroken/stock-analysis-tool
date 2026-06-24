@@ -59,6 +59,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
+  const autoSelection = data?.auto_selection || {};
   const optionReadiness = outcomeLearning.option_readiness || {};
   const learningSummary = outcomeLearning.learning_summary || {};
   const setupAdjustments = Object.values(outcomeLearning.setup_adjustments || {});
@@ -160,6 +161,30 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
+  const runAutopilot = async (execute: boolean) => {
+    setBusyId(execute ? "autopilot-execute" : "autopilot-preview");
+    setStatus("");
+    try {
+      const response = await fetch("/api/trading/paper-autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ execute, max_trades: 3 }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Paper autopilot failed.");
+      await onRefresh?.();
+      setStatus(
+        execute
+          ? payload.message || `Opened ${payload.opened?.length || 0} paper trade(s).`
+          : payload.message || `${payload.selected?.length || 0} candidate(s) passed the gates.`,
+      );
+    } catch (error: any) {
+      setStatus(error?.message || "Paper autopilot failed.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const startEditing = (entry: any) => {
     setEditingId(entry.id);
     setJournalDraft((prev) => ({
@@ -222,10 +247,57 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             >
               Evaluate outcomes
             </button>
+            <button
+              onClick={() => runAutopilot(false)}
+              disabled={busyId === "autopilot-preview"}
+              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+            >
+              Auto preview
+            </button>
+            <button
+              onClick={() => runAutopilot(true)}
+              disabled={busyId === "autopilot-execute"}
+              className="rounded-xl bg-[#101114] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+            >
+              Auto paper open
+            </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} tracked trades
             </div>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-xs text-slate-700">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Demo Autopilot Selection</div>
+              <div className="mt-2 max-w-3xl leading-5">
+                Waehlt nur Paper-Trades mit Score &gt;= {autoSelection.min_score || 88}, voller These, Trigger,
+                Invalidation, freiem Risikobudget und ohne offene Duplikate. Keine Real-Money-Ausfuehrung.
+              </div>
+            </div>
+            <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
+              {autoSelection.selected?.length || 0} ready / {autoSelection.rejected?.length || 0} rejected
+            </div>
+          </div>
+          {autoSelection.selected?.length ? (
+            <div className="mt-3 grid gap-3 lg:grid-cols-3">
+              {autoSelection.selected.slice(0, 3).map((item: any) => (
+                <div key={item.id} className="rounded-[1.1rem] border border-emerald-500/20 bg-emerald-50/80 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-black text-slate-900">{item.ticker} · {item.direction}</div>
+                    <div className="font-black text-emerald-700">{item.score}</div>
+                  </div>
+                  <div className="mt-1 text-slate-500">{item.setup_type}</div>
+                  <div className="mt-2 text-slate-700">Max loss {money(item.suggested_max_loss_value, currency)}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-[1rem] border border-amber-500/20 bg-amber-50 px-3 py-2 font-semibold text-amber-800">
+              Noch kein Setup erfuellt alle Auto-Gates. Das ist korrekt: kein Paper-Trade ohne sauberen Trigger.
+            </div>
+          )}
         </div>
 
         <div className="mt-4 grid gap-3 text-xs lg:grid-cols-[1.1fr_0.9fr]">

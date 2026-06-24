@@ -288,8 +288,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Demo Autopilot Selection</div>
               <div className="mt-2 max-w-3xl leading-5">
                 Waehlt nur Paper-Trades mit Score &gt;= {autoSelection.min_score || 88}, voller These, Trigger,
-                Invalidation, freiem Risikobudget und ohne offene Duplikate. Learn Mode testet ab Score &gt;= {autoSelection.exploration_min_score || 72}
-                mit reduziertem Demo-Risiko ({Math.round(Number(autoSelection.exploration_risk_multiplier || 0.25) * 100)}%). Keine Real-Money-Ausfuehrung.
+                Invalidation, freiem Risikobudget und ohne offene Duplikate. Learn Mode testet ab Score &gt;= {autoSelection.exploration_min_score || 60}
+                mit sehr kleinem Demo-Risiko ({Math.round(Number(autoSelection.exploration_risk_multiplier || 0.1) * 100)}%). Keine Real-Money-Ausfuehrung.
               </div>
             </div>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">

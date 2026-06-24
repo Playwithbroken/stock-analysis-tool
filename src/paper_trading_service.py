@@ -784,10 +784,10 @@ class PaperTradingService:
             if trade.get("status") == "open"
         }
         min_score = float(os.getenv("PAPER_TRADING_AUTO_MIN_SCORE", "88"))
-        exploration_min_score = float(os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "72"))
+        exploration_min_score = float(os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "60"))
         exploration_risk_multiplier = min(
-            0.5,
-            max(0.05, float(os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.25"))),
+            0.35,
+            max(0.03, float(os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.10"))),
         )
         selected: List[Dict[str, Any]] = []
         exploration: List[Dict[str, Any]] = []
@@ -804,16 +804,27 @@ class PaperTradingService:
                 str(playbook.get("asset_class") or ""),
             )
             framework = playbook.get("decision_framework") or {}
+            hard_rule_reasons = [
+                str(item)
+                for item in playbook.get("do_not_trade_reasons", [])
+                if not str(item).lower().startswith("score below minimum trade score")
+            ]
             if score < min_score:
                 reasons.append(f"score below auto minimum {min_score:.0f}")
             if score < exploration_min_score:
                 exploration_reasons.append(f"score below learning minimum {exploration_min_score:.0f}")
             if playbook.get("tradeable") is False or playbook.get("demo_tradeable") is False:
                 reasons.append("trade or demo risk gate blocked")
-                exploration_reasons.append("trade or demo risk gate blocked")
+            if hard_rule_reasons:
+                exploration_reasons.extend(hard_rule_reasons[:3])
             if playbook.get("demo_block_reasons"):
                 reasons.extend(str(item) for item in playbook.get("demo_block_reasons")[:3])
-                exploration_reasons.extend(str(item) for item in playbook.get("demo_block_reasons")[:3])
+                hard_demo_reasons = [
+                    str(item)
+                    for item in playbook.get("demo_block_reasons", [])
+                    if str(item) != "Playbook is blocked by signal rules." or hard_rule_reasons
+                ]
+                exploration_reasons.extend(hard_demo_reasons[:3])
             if key in open_keys:
                 reasons.append("same ticker/setup/direction already open")
                 exploration_reasons.append("same ticker/setup/direction already open")

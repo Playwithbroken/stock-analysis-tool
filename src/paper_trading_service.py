@@ -189,6 +189,14 @@ class PaperTradingService:
             reward_buffer = float(playbook.get("reward_buffer_pct") or 7.0) / 100
             stop_price = last_price * (1 - risk_buffer) if direction == "long" else last_price * (1 + risk_buffer)
             target_price = last_price * (1 + reward_buffer) if direction == "long" else last_price * (1 - reward_buffer)
+        note_playbook = dict(playbook)
+        if learning_mode:
+            contract_multiplier = float(playbook.get("contract_multiplier") or (100 if is_option else 1))
+            risk_per_unit = last_price * (float(playbook.get("risk_buffer_pct") or 0) / 100) * contract_multiplier
+            note_playbook["suggested_quantity"] = round(quantity, 6)
+            note_playbook["suggested_notional_value"] = round(quantity * last_price * contract_multiplier, 2)
+            note_playbook["suggested_max_loss_value"] = round(quantity * risk_per_unit, 2)
+            note_playbook["learning_mode"] = True
         created = self.portfolio_manager.create_paper_trade(
             {
                 "ticker": playbook["ticker"],
@@ -206,7 +214,7 @@ class PaperTradingService:
                 "option_type": playbook.get("option_type") if is_option else None,
                 "contract_multiplier": playbook.get("contract_multiplier") or (100 if is_option else 1),
                 "max_holding_days": playbook.get("max_holding_days") if is_option else None,
-                "notes": self._build_trade_note_snapshot(playbook, demo_account, is_option),
+                "notes": self._build_trade_note_snapshot(note_playbook, demo_account, is_option),
             }
         )
         self._schedule_trade_outcomes(created)
@@ -412,6 +420,8 @@ class PaperTradingService:
             f"Invalidation: {framework.get('invalidation') or 'Manual invalidation review required.'}",
             f"Risk plan: {framework.get('risk_plan') or 'Paper risk only.'}",
         ]
+        if playbook.get("learning_mode"):
+            lines.append("Learning mode: reduced-size demo exploration, not a strict top setup and not real-money ready.")
         if is_option:
             lines.append("Options gate: paper-only premium model; manually verify strike, expiry, spread, IV and max premium risk.")
         for question in checklist[:3]:

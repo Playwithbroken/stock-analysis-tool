@@ -276,6 +276,73 @@ class PaperTradingService:
             raise ValueError("Trade not found.")
         return self._enrich_trade(closed)
 
+    def close_trades_on_management_exits(self, limit: int = 50) -> Dict[str, Any]:
+        open_trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(status="open", limit=limit))
+        closed: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+        errors: List[Dict[str, Any]] = []
+        exit_statuses = {"stop_hit", "target_hit"}
+
+        for trade in open_trades:
+            management = trade.get("management_plan") or {}
+            status = str(management.get("status") or "")
+            if status not in exit_statuses:
+                skipped.append(
+                    {
+                        "id": trade.get("id"),
+                        "ticker": trade.get("ticker"),
+                        "status": status or "monitor",
+                    }
+                )
+                continue
+            current_price = trade.get("current_price")
+            if current_price in (None, 0):
+                errors.append(
+                    {
+                        "id": trade.get("id"),
+                        "ticker": trade.get("ticker"),
+                        "error": "Current price unavailable for managed close.",
+                    }
+                )
+                continue
+            try:
+                exit_reason = f"managed_{status}"
+                lesson = (
+                    "Paper target reached: record whether the setup should be repeated."
+                    if status == "target_hit"
+                    else "Paper stop hit: review trigger quality, timing and invalidation."
+                )
+                notes = (
+                    f"Auto-managed paper exit: {status}. "
+                    f"{management.get('summary') or 'Management plan triggered.'}"
+                )
+                closed.append(
+                    self.close_trade(
+                        str(trade.get("id")),
+                        closed_price=float(current_price),
+                        notes=notes,
+                        exit_reason=exit_reason,
+                        lessons_learned=lesson,
+                    )
+                )
+            except Exception as exc:
+                errors.append(
+                    {
+                        "id": trade.get("id"),
+                        "ticker": trade.get("ticker"),
+                        "error": str(exc),
+                    }
+                )
+
+        return {
+            "status": "ok" if not errors else "partial",
+            "checked": len(open_trades),
+            "closed": closed,
+            "skipped": skipped[:8],
+            "errors": errors[:5],
+            "policy": "Paper-only managed exits. No real-money execution.",
+        }
+
     def update_trade_journal(
         self,
         trade_id: str,

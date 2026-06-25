@@ -1354,6 +1354,7 @@ async def _forecast_learning_loop():
                 )
             except Exception as alert_error:
                 paper_alert_result = {"status": "error", "message": str(alert_error)}
+            paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
             get_portfolio_manager().set_app_setting(
                 "forecast_learning_last_result",
                 json.dumps(
@@ -1362,6 +1363,7 @@ async def _forecast_learning_loop():
                         **result,
                         "paper_trades": paper_result,
                         "paper_learning_alerts": paper_alert_result,
+                        "paper_learning_autopilot": paper_autopilot_result,
                     }
                 ),
             )
@@ -1373,6 +1375,65 @@ async def _forecast_learning_loop():
                 pass
         interval_minutes = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", 30, minimum=5)
         await asyncio.sleep(interval_minutes * 60)
+
+
+def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
+    if not _env_enabled("PAPER_TRADING_AUTO_LEARN_ENABLED", "true"):
+        return {"status": "disabled", "message": "Paper auto-learn is disabled."}
+
+    now = datetime.utcnow()
+    cooldown_minutes = _safe_int_env("PAPER_TRADING_AUTO_LEARN_COOLDOWN_MINUTES", 360, minimum=30)
+    last_raw = get_portfolio_manager().get_app_setting("paper_learning_autopilot_last_run")
+    if last_raw:
+        try:
+            last_payload = json.loads(last_raw)
+            last_run = datetime.fromisoformat(str(last_payload.get("checked_at")))
+            next_allowed = last_run + timedelta(minutes=cooldown_minutes)
+            if now < next_allowed:
+                return {
+                    "status": "cooldown",
+                    "checked_at": now.isoformat(),
+                    "next_allowed_at": next_allowed.isoformat(),
+                    "message": "Paper auto-learn cooldown active.",
+                }
+        except Exception:
+            pass
+
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        settings = get_portfolio_manager().get_signal_score_settings()
+        scoreboard = asyncio.run(get_signal_score_service().build_scoreboard(snapshot, settings))
+        result = get_paper_trading_service().run_auto_selection(
+            scoreboard,
+            settings,
+            max_trades=_safe_int_env("PAPER_TRADING_AUTO_LEARN_MAX_TRADES", 1, minimum=1),
+            execute=True,
+            mode="learn",
+        )
+        if result.get("opened"):
+            try:
+                result["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
+                    result.get("opened") or [],
+                    result.get("selected") or [],
+                )
+            except Exception as alert_error:
+                result["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
+        payload = {
+            "checked_at": now.isoformat(),
+            "cooldown_minutes": cooldown_minutes,
+            **convert_numpy_types(result),
+        }
+        get_portfolio_manager().set_app_setting("paper_learning_autopilot_last_run", json.dumps(payload))
+        return payload
+    except Exception as exc:
+        payload = {
+            "status": "error",
+            "checked_at": now.isoformat(),
+            "message": str(exc),
+        }
+        get_portfolio_manager().set_app_setting("paper_learning_autopilot_last_run", json.dumps(payload))
+        return payload
 
 
 def _task_state(task: Any) -> str:

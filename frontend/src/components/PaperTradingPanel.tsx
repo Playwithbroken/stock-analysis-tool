@@ -60,6 +60,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
   const autoSelection = data?.auto_selection || {};
+  const autoLearnStatus = data?.auto_learn_status || {};
   const strategyReadiness = data?.strategy_readiness || [];
   const optionReadiness = outcomeLearning.option_readiness || {};
   const learningSummary = outcomeLearning.learning_summary || {};
@@ -295,6 +296,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
               {autoSelection.selected?.length || 0} strict / {autoSelection.exploration?.length || 0} learn
             </div>
+          </div>
+          <div className="mt-3 rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-slate-600">
+            <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Scheduled learn:</span>{" "}
+            <span className="font-bold text-slate-800">{autoLearnStatus.status || "not_started"}</span>
+            {autoLearnStatus.opened?.length ? ` · opened ${autoLearnStatus.opened.length}` : ""}
+            {autoLearnStatus.next_allowed_at ? ` · next ${new Date(autoLearnStatus.next_allowed_at).toLocaleString()}` : ""}
+            {autoLearnStatus.message ? ` · ${autoLearnStatus.message}` : ""}
           </div>
           {autoSelection.selected?.length ? (
             <div className="mt-3 grid gap-3 lg:grid-cols-3">

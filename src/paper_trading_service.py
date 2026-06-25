@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -41,6 +42,25 @@ class PaperTradingService:
             "rules": rules,
             "demo_account": demo_account,
             "auto_selection": self._build_auto_selection(sized_playbooks, trades, demo_account),
+            "auto_learn_status": self._build_auto_learn_status(),
+        }
+
+    def _build_auto_learn_status(self) -> Dict[str, Any]:
+        raw = self.portfolio_manager.get_app_setting("paper_learning_autopilot_last_run")
+        if not raw:
+            return {
+                "status": "not_started",
+                "message": "Scheduled paper auto-learn has not run yet.",
+            }
+        try:
+            payload = json.loads(raw)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+        return {
+            "status": "unknown",
+            "message": "Scheduled paper auto-learn status could not be parsed.",
         }
 
     def run_auto_selection(

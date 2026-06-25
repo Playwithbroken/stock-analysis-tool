@@ -1397,7 +1397,15 @@ def _run_paper_managed_exits() -> Dict[str, Any]:
     if not _env_enabled("PAPER_TRADE_AUTO_CLOSE_ON_STOP_TARGET", "true"):
         return {"status": "disabled", "message": "Paper managed exits are disabled."}
     try:
-        return get_paper_trading_service().close_trades_on_management_exits(limit=50)
+        result = get_paper_trading_service().close_trades_on_management_exits(limit=50)
+        if result.get("closed"):
+            try:
+                result["telegram_alerts"] = get_email_alert_service().send_paper_trade_closed_alerts(
+                    result.get("closed") or []
+                )
+            except Exception as alert_error:
+                result["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
+        return result
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
 

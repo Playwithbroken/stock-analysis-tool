@@ -357,6 +357,47 @@ class EmailAlertService:
         self.portfolio_manager.mark_signal_events_sent(events[:5])
         return {"status": "ok", "sent": len(events[:5]), "message": "Paper management Telegram alerts sent."}
 
+    def send_paper_trade_closed_alerts(self, closed: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if os.getenv("PAPER_TRADE_CLOSE_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            return {"status": "disabled", "message": "Paper trade close alerts are disabled."}
+        if not closed:
+            return {"status": "ok", "sent": 0, "message": "No closed paper trades."}
+
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
+        events: List[Dict[str, Any]] = []
+        for trade in closed[:5]:
+            event_key = f"paper-close:{trade.get('id')}"
+            if event_key in sent_keys:
+                continue
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "paper_trade_closed",
+                    "title": f"Paper trade closed: {trade.get('ticker')} {trade.get('direction')}",
+                    "ticker": trade.get("ticker"),
+                    "direction": trade.get("direction"),
+                    "setup_type": trade.get("setup_type"),
+                    "entry_price": trade.get("entry_price"),
+                    "closed_price": trade.get("closed_price"),
+                    "realized_pnl_pct": trade.get("realized_pnl_pct"),
+                    "realized_pnl_value": trade.get("realized_pnl_value"),
+                    "exit_reason": trade.get("exit_reason"),
+                    "lessons_learned": trade.get("lessons_learned"),
+                    "risk_reward": trade.get("risk_reward"),
+                    "line": f"{trade.get('ticker')} paper trade closed.",
+                    "source_label": "Paper trade exit",
+                    "source_url": "",
+                }
+            )
+        if not events:
+            return {"status": "ok", "sent": 0, "message": "No new paper close alerts."}
+
+        self._send_notifications(config, events, subject="Paper Trade Closed")
+        self.portfolio_manager.mark_signal_events_sent(events)
+        return {"status": "ok", "sent": len(events), "message": "Paper close Telegram alerts sent."}
+
     def _extract_paper_learning_events(self, learning: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
         events: List[Dict[str, Any]] = []
         summary = learning.get("learning_summary") or {}
@@ -2881,6 +2922,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_trade_management_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "paper_trade_closed":
+                lines.append(self._render_telegram_paper_trade_closed_alert(event))
+                lines.append("")
+                continue
 
             prefix = self._telegram_prefix_for_event(event)
             rendered_line = f"{prefix} {self._tg_esc(line)}".strip()
@@ -2925,6 +2970,28 @@ class EmailAlertService:
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidation:</b> {invalidation}",
                 "<b>Mode:</b> 500k demo learning only. No automatic real-money execution.",
+            ]
+        )
+
+    def _render_telegram_paper_trade_closed_alert(self, event: Dict[str, Any]) -> str:
+        ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
+        direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
+        setup = self._tg_esc(str(event.get("setup_type") or "setup"))
+        entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
+        exit_price = self._tg_esc(str(event.get("closed_price") if event.get("closed_price") is not None else "n/a"))
+        pnl_pct = self._tg_esc(str(event.get("realized_pnl_pct") if event.get("realized_pnl_pct") is not None else "n/a"))
+        pnl_value = self._tg_esc(str(event.get("realized_pnl_value") if event.get("realized_pnl_value") is not None else "n/a"))
+        exit_reason = self._tg_esc(str(event.get("exit_reason") or "paper_exit"))
+        lesson = self._tg_esc(str(event.get("lessons_learned") or "Review journal before reusing this setup."))[:620]
+        rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
+        return "\n".join(
+            [
+                f"<b>[PAPER CLOSED] <code>{ticker}</code> {direction}</b>",
+                f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
+                f"<b>Entry:</b> {entry} | <b>Close:</b> {exit_price} | <b>RR:</b> {rr}",
+                f"<b>Result:</b> {pnl_pct}% | {pnl_value}",
+                f"<b>Lesson:</b> {lesson}",
+                "<b>Mode:</b> Demo learning only. Use the lesson before any real-money review.",
             ]
         )
 

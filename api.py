@@ -1355,6 +1355,7 @@ async def _forecast_learning_loop():
             except Exception as alert_error:
                 paper_alert_result = {"status": "error", "message": str(alert_error)}
             paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
+            paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
             get_portfolio_manager().set_app_setting(
                 "forecast_learning_last_result",
                 json.dumps(
@@ -1364,6 +1365,7 @@ async def _forecast_learning_loop():
                         "paper_trades": paper_result,
                         "paper_learning_alerts": paper_alert_result,
                         "paper_learning_autopilot": paper_autopilot_result,
+                        "paper_management_alerts": paper_management_alerts,
                     }
                 ),
             )
@@ -1375,6 +1377,18 @@ async def _forecast_learning_loop():
                 pass
         interval_minutes = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", 30, minimum=5)
         await asyncio.sleep(interval_minutes * 60)
+
+
+def _send_paper_trade_management_alerts() -> Dict[str, Any]:
+    if not _env_enabled("PAPER_TRADE_MANAGEMENT_ALERTS_ENABLED", "true"):
+        return {"status": "disabled", "message": "Paper trade management alerts are disabled."}
+    try:
+        trades = get_paper_trading_service()._enrich_trades(
+            get_portfolio_manager().list_paper_trades(status="open", limit=50)
+        )
+        return get_email_alert_service().send_paper_trade_management_alerts(trades)
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
 
 
 def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:

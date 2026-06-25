@@ -308,6 +308,55 @@ class EmailAlertService:
         self.portfolio_manager.mark_signal_events_sent(events)
         return {"status": "ok", "sent": len(events), "message": "Paper trade Telegram alerts sent."}
 
+    def send_paper_trade_management_alerts(self, open_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if os.getenv("PAPER_TRADE_MANAGEMENT_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            return {"status": "disabled", "message": "Paper trade management alerts are disabled."}
+        if not open_trades:
+            return {"status": "ok", "sent": 0, "message": "No open paper trades."}
+
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
+        alert_statuses = {"stop_hit", "target_hit", "near_stop", "near_target", "weak_follow_through"}
+        events: List[Dict[str, Any]] = []
+        for trade in open_trades:
+            management = trade.get("management_plan") or {}
+            status = str(management.get("status") or "")
+            if status not in alert_statuses:
+                continue
+            event_key = f"paper-manage:{trade.get('id')}:{status}"
+            if event_key in sent_keys:
+                continue
+            events.append(
+                {
+                    "event_key": event_key,
+                    "category": "paper_trade_management",
+                    "title": f"Paper management: {trade.get('ticker')} {status}",
+                    "ticker": trade.get("ticker"),
+                    "direction": trade.get("direction"),
+                    "setup_type": trade.get("setup_type"),
+                    "entry_price": trade.get("entry_price"),
+                    "current_price": trade.get("current_price"),
+                    "stop_price": trade.get("stop_price"),
+                    "target_price": trade.get("target_price"),
+                    "unrealized_pnl_pct": trade.get("unrealized_pnl_pct"),
+                    "risk_distance_pct": management.get("risk_distance_pct"),
+                    "target_progress_pct": management.get("target_progress_pct"),
+                    "management_status": status,
+                    "management_action": management.get("action"),
+                    "management_summary": management.get("summary"),
+                    "line": f"{trade.get('ticker')} paper trade management alert: {status}.",
+                    "source_label": "Paper trade management",
+                    "source_url": "",
+                }
+            )
+        if not events:
+            return {"status": "ok", "sent": 0, "message": "No new paper management alerts."}
+
+        self._send_notifications(config, events[:5], subject="Paper Trade Management")
+        self.portfolio_manager.mark_signal_events_sent(events[:5])
+        return {"status": "ok", "sent": len(events[:5]), "message": "Paper management Telegram alerts sent."}
+
     def _extract_paper_learning_events(self, learning: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
         events: List[Dict[str, Any]] = []
         summary = learning.get("learning_summary") or {}
@@ -2828,6 +2877,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_trade_opened_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "paper_trade_management":
+                lines.append(self._render_telegram_paper_trade_management_alert(event))
+                lines.append("")
+                continue
 
             prefix = self._telegram_prefix_for_event(event)
             rendered_line = f"{prefix} {self._tg_esc(line)}".strip()
@@ -2872,6 +2925,31 @@ class EmailAlertService:
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidation:</b> {invalidation}",
                 "<b>Mode:</b> 500k demo learning only. No automatic real-money execution.",
+            ]
+        )
+
+    def _render_telegram_paper_trade_management_alert(self, event: Dict[str, Any]) -> str:
+        ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
+        direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
+        status = self._tg_esc(str(event.get("management_status") or "monitor").upper())
+        action = self._tg_esc(str(event.get("management_action") or "review"))
+        summary = self._tg_esc(str(event.get("management_summary") or "Review the paper trade."))[:520]
+        entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
+        current = self._tg_esc(str(event.get("current_price") if event.get("current_price") is not None else "n/a"))
+        stop = self._tg_esc(str(event.get("stop_price") if event.get("stop_price") is not None else "n/a"))
+        target = self._tg_esc(str(event.get("target_price") if event.get("target_price") is not None else "n/a"))
+        pnl = self._tg_esc(str(event.get("unrealized_pnl_pct") if event.get("unrealized_pnl_pct") is not None else "n/a"))
+        risk_distance = self._tg_esc(str(event.get("risk_distance_pct") if event.get("risk_distance_pct") is not None else "n/a"))
+        target_progress = self._tg_esc(str(event.get("target_progress_pct") if event.get("target_progress_pct") is not None else "n/a"))
+        return "\n".join(
+            [
+                f"<b>[PAPER MANAGE] <code>{ticker}</code> {direction} | {status}</b>",
+                f"<b>Action:</b> {action}",
+                f"<b>Price:</b> entry {entry} | now {current} | PnL {pnl}%",
+                f"<b>Plan:</b> stop {stop} | target {target}",
+                f"<b>Distance:</b> stop {risk_distance}% | target progress {target_progress}%",
+                f"<b>Why:</b> {summary}",
+                "<b>Mode:</b> Demo learning only. Review manually; no automatic real-money execution.",
             ]
         )
 

@@ -1388,12 +1388,19 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
         try:
             last_payload = json.loads(last_raw)
             last_run = datetime.fromisoformat(str(last_payload.get("checked_at")))
-            next_allowed = last_run + timedelta(minutes=cooldown_minutes)
+            last_opened = len(last_payload.get("opened") or []) if isinstance(last_payload, dict) else 0
+            effective_cooldown = cooldown_minutes if last_opened else _safe_int_env(
+                "PAPER_TRADING_AUTO_LEARN_EMPTY_COOLDOWN_MINUTES",
+                30,
+                minimum=5,
+            )
+            next_allowed = last_run + timedelta(minutes=effective_cooldown)
             if now < next_allowed:
                 return {
                     "status": "cooldown",
                     "checked_at": now.isoformat(),
                     "next_allowed_at": next_allowed.isoformat(),
+                    "cooldown_minutes": effective_cooldown,
                     "message": "Paper auto-learn cooldown active.",
                 }
         except Exception:

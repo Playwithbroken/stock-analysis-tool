@@ -101,6 +101,7 @@ class PaperTradingService:
                             "direction": candidate.get("direction") or "long",
                             "quantity": candidate.get("suggested_quantity") or 0,
                             "leverage": 1,
+                            "learning_mode": mode == "learn" or bool(candidate.get("learning_mode")),
                         },
                         scoreboard,
                         settings,
@@ -152,9 +153,20 @@ class PaperTradingService:
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
-        if playbook.get("do_not_trade_reasons"):
+        learning_mode = bool(payload.get("learning_mode"))
+        hard_rule_reasons = [
+            str(item)
+            for item in playbook.get("do_not_trade_reasons", [])
+            if not str(item).lower().startswith("score below minimum trade score")
+        ]
+        hard_demo_reasons = [
+            str(item)
+            for item in playbook.get("demo_block_reasons", [])
+            if str(item) != "Playbook is blocked by signal rules." or hard_rule_reasons
+        ]
+        if playbook.get("do_not_trade_reasons") and (not learning_mode or hard_rule_reasons):
             raise ValueError("Playbook is blocked by do-not-trade rules.")
-        if playbook.get("demo_block_reasons"):
+        if playbook.get("demo_block_reasons") and (not learning_mode or hard_demo_reasons):
             raise ValueError("Demo account risk gate blocks this playbook.")
 
         is_option = playbook.get("asset_class") == "option"

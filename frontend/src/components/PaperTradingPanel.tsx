@@ -391,7 +391,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     className={`rounded-full px-2.5 py-1 font-extrabold uppercase tracking-[0.12em] ${
                       item.real_world_ready
                         ? "bg-emerald-50 text-emerald-700"
-                        : item.status === "learning"
+                        : item.status === "learning" || item.status === "active_learning"
                           ? "bg-amber-50 text-amber-700"
                           : "bg-slate-100 text-slate-600"
                     }`}
@@ -410,13 +410,32 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div>Hit</div>
                   </div>
                   <div>
+                    <div className="font-black text-slate-900">{item.open_trades || 0}</div>
+                    <div>Open</div>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-slate-500">
+                  <div>
                     <div className="font-black text-slate-900">{formatPct(item.avg_closed_pnl_pct, 2, "0.00%")}</div>
-                    <div>Avg</div>
+                    <div>Closed avg</div>
+                  </div>
+                  <div>
+                    <div className="font-black text-slate-900">{formatPct(item.avg_open_pnl_pct, 2, "0.00%")}</div>
+                    <div>Open avg</div>
                   </div>
                 </div>
                 <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
                   {item.next_step}
                 </div>
+                <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 text-slate-600">
+                  Recommendation: <span className="font-bold text-slate-900">{item.recommendation?.replace(/_/g, " ") || "collect evidence"}</span>
+                </div>
+                {item.last_closed && (
+                  <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 text-slate-600">
+                    Last close: <span className="font-bold text-slate-900">{item.last_closed.ticker}</span>{" "}
+                    {formatPct(item.last_closed.realized_pnl_pct, 2, "0.00%")} · {item.last_closed.exit_reason || "paper exit"}
+                  </div>
+                )}
               </div>
             ))}
           </div>

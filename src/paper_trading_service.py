@@ -1277,7 +1277,93 @@ class PaperTradingService:
             row.get("target_price"),
             row.get("direction"),
         )
+        if row.get("status") == "open":
+            row["management_plan"] = self._build_trade_management_plan(row)
         return row
+
+    def _build_trade_management_plan(self, trade: Dict[str, Any]) -> Dict[str, Any]:
+        entry = float(trade.get("entry_price") or 0)
+        current = trade.get("current_price")
+        stop = trade.get("stop_price")
+        target = trade.get("target_price")
+        direction = str(trade.get("direction") or "long").lower()
+        if not entry or current in (None, 0):
+            return {
+                "status": "pending_data",
+                "action": "wait",
+                "summary": "Current price unavailable; keep paper trade under review.",
+            }
+
+        current_price = float(current)
+        stop_price = float(stop) if stop not in (None, 0) else None
+        target_price = float(target) if target not in (None, 0) else None
+        favorable_pct = float(trade.get("unrealized_pnl_pct") or 0)
+        risk_distance = None
+        target_progress = None
+        action = "hold"
+        status = "monitor"
+        summary = "Hold paper position while trigger remains valid."
+
+        if stop_price is not None:
+            if direction == "short":
+                stop_hit = current_price >= stop_price
+                risk_distance = ((stop_price - current_price) / entry) * 100
+            else:
+                stop_hit = current_price <= stop_price
+                risk_distance = ((current_price - stop_price) / entry) * 100
+            if stop_hit:
+                return {
+                    "status": "stop_hit",
+                    "action": "close_review",
+                    "summary": "Stop zone is hit or breached. Review closing the paper trade and log the lesson.",
+                    "risk_distance_pct": round(risk_distance, 2),
+                    "target_progress_pct": None,
+                }
+            if risk_distance is not None and risk_distance <= 0.6:
+                status = "near_stop"
+                action = "reduce_or_close_review"
+                summary = "Price is close to stop. Do not add; prepare exit review if weakness continues."
+
+        if target_price is not None:
+            if direction == "short":
+                target_hit = current_price <= target_price
+                total_reward = max(0.0001, entry - target_price)
+                achieved = entry - current_price
+            else:
+                target_hit = current_price >= target_price
+                total_reward = max(0.0001, target_price - entry)
+                achieved = current_price - entry
+            target_progress = max(0.0, min(150.0, (achieved / total_reward) * 100))
+            if target_hit:
+                return {
+                    "status": "target_hit",
+                    "action": "take_profit_review",
+                    "summary": "Target zone reached. Review taking profit or closing the paper trade.",
+                    "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
+                    "target_progress_pct": round(target_progress, 1),
+                }
+            if target_progress >= 75 and favorable_pct > 0 and status == "monitor":
+                status = "near_target"
+                action = "protect_profit_review"
+                summary = "Trade is near target. Review whether to protect profit or tighten the paper plan."
+
+        if favorable_pct <= -1.5 and status == "monitor":
+            status = "weak_follow_through"
+            action = "thesis_check"
+            summary = "Adverse follow-through. Check whether the original trigger is failing."
+        elif favorable_pct >= 1.5 and status == "monitor":
+            status = "working"
+            action = "hold_with_plan"
+            summary = "Trade is working. Hold only while invalidation remains false."
+
+        return {
+            "status": status,
+            "action": action,
+            "summary": summary,
+            "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
+            "target_progress_pct": round(target_progress, 1) if target_progress is not None else None,
+            "unrealized_pnl_pct": round(favorable_pct, 2),
+        }
 
     def _get_do_not_trade_state(self, playbook: Dict[str, Any], rules: Dict[str, Any]) -> Dict[str, List[str]]:
         blocked: List[str] = []

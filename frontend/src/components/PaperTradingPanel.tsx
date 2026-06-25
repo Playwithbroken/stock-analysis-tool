@@ -769,6 +769,27 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div>Lev {trade.leverage}x</div>
                       <div>RR {trade.risk_reward || "N/A"}</div>
                     </div>
+                    {trade.management_plan && (
+                      <div className="mt-3 rounded-[1rem] border border-black/8 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                            {trade.management_plan.status || "monitor"}
+                          </span>
+                          <span className="font-bold text-slate-900">{trade.management_plan.action || "hold"}</span>
+                        </div>
+                        <div className="mt-1 leading-5">
+                          {trade.management_plan.summary || "Hold paper position while plan remains valid."}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-slate-500">
+                          {trade.management_plan.risk_distance_pct != null ? (
+                            <span>Stop distance {formatPct(trade.management_plan.risk_distance_pct, 2, "0.00%")}</span>
+                          ) : null}
+                          {trade.management_plan.target_progress_pct != null ? (
+                            <span>Target progress {Number(trade.management_plan.target_progress_pct).toFixed(1)}%</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button onClick={() => onAnalyze(trade.ticker)} className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700">
                         Analyze

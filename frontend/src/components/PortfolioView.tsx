@@ -5,6 +5,7 @@ import DividendDashboard from "./DividendDashboard";
 import RiskCorrelationMatrix from "./RiskCorrelationMatrix";
 import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
+import PaperTradingPanel from "./PaperTradingPanel";
 import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
@@ -173,6 +174,8 @@ export default function PortfolioView({
   const [advisoryProfile, setAdvisoryProfile] = useState<AdvisoryProfile | null>(null);
   const [portfolioAdvisory, setPortfolioAdvisory] = useState<PortfolioAdvisoryCheck | null>(null);
   const [portfolioAdvisoryLoading, setPortfolioAdvisoryLoading] = useState(false);
+  const [paperDashboard, setPaperDashboard] = useState<any>(null);
+  const [paperDashboardLoading, setPaperDashboardLoading] = useState(false);
 
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
@@ -228,6 +231,41 @@ export default function PortfolioView({
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+    };
+  }, []);
+
+  const refreshPaperDashboard = async () => {
+    setPaperDashboardLoading(true);
+    try {
+      const response = await fetch("/api/trading/paper-dashboard");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      setPaperDashboard(payload || null);
+    } catch {
+      setPaperDashboard(null);
+    } finally {
+      setPaperDashboardLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPaperDashboard = async () => {
+      setPaperDashboardLoading(true);
+      try {
+        const response = await fetch("/api/trading/paper-dashboard");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!cancelled) setPaperDashboard(payload || null);
+      } catch {
+        if (!cancelled) setPaperDashboard(null);
+      } finally {
+        if (!cancelled) setPaperDashboardLoading(false);
+      }
+    };
+    loadPaperDashboard();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -1496,6 +1534,25 @@ export default function PortfolioView({
               Create first portfolio
             </button>
           )}
+        </section>
+      )}
+
+      {paperDashboard ? (
+        <PaperTradingPanel
+          data={paperDashboard}
+          onAnalyze={onAnalyzeStock}
+          onRefresh={refreshPaperDashboard}
+        />
+      ) : (
+        <section className="surface-panel rounded-[2rem] p-6">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            Paper Learning Account
+          </div>
+          <div className="mt-3 text-sm leading-6 text-slate-600">
+            {paperDashboardLoading
+              ? "Demo-Trades und Geldfluss werden geladen."
+              : "Noch keine Paper-Trading-Daten verfuegbar. Sobald der Lernmodus einen Trade oeffnet, siehst du hier Einsatz, aktuellen Wert und Abschluss-Ergebnis."}
+          </div>
         </section>
       )}
 

@@ -294,6 +294,10 @@ class EmailAlertService:
                     "stop_price": trade.get("stop_price"),
                     "target_price": trade.get("target_price"),
                     "quantity": trade.get("quantity"),
+                    "invested_value": trade.get("invested_value"),
+                    "current_value": trade.get("current_value"),
+                    "result_value_delta": trade.get("result_value_delta"),
+                    "result_label": trade.get("result_label"),
                     "risk_reward": trade.get("risk_reward"),
                     "confidence_score": trade.get("confidence_score"),
                     "trigger": selected_item.get("trigger"),
@@ -381,6 +385,10 @@ class EmailAlertService:
                     "setup_type": trade.get("setup_type"),
                     "entry_price": trade.get("entry_price"),
                     "closed_price": trade.get("closed_price"),
+                    "invested_value": trade.get("invested_value"),
+                    "final_value": trade.get("final_value"),
+                    "result_value_delta": trade.get("result_value_delta"),
+                    "result_label": trade.get("result_label"),
                     "realized_pnl_pct": trade.get("realized_pnl_pct"),
                     "realized_pnl_value": trade.get("realized_pnl_value"),
                     "exit_reason": trade.get("exit_reason"),
@@ -2951,6 +2959,10 @@ class EmailAlertService:
         stop = self._tg_esc(str(event.get("stop_price") if event.get("stop_price") is not None else "n/a"))
         target = self._tg_esc(str(event.get("target_price") if event.get("target_price") is not None else "n/a"))
         qty = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
+        invested = self._tg_esc(str(event.get("invested_value") if event.get("invested_value") is not None else "n/a"))
+        current_value = self._tg_esc(str(event.get("current_value") if event.get("current_value") is not None else "n/a"))
+        result_delta = self._tg_esc(str(event.get("result_value_delta") if event.get("result_value_delta") is not None else "n/a"))
+        result_label = self._tg_esc(str(event.get("result_label") or "flat"))
         max_loss = self._tg_esc(
             str(event.get("suggested_max_loss_value") if event.get("suggested_max_loss_value") is not None else "n/a")
         )
@@ -2965,6 +2977,7 @@ class EmailAlertService:
                 f"<b>[PAPER OPEN] <code>{ticker}</code> {direction}</b>",
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 f"<b>Entry:</b> {entry} | <b>Qty:</b> {qty}",
+                f"<b>Demo money:</b> invested {invested} | now {current_value} | open P/L {result_delta} ({result_label})",
                 f"<b>Stop:</b> {stop} | <b>Target:</b> {target} | <b>RR:</b> {rr}",
                 f"<b>Max demo loss:</b> {max_loss}",
                 f"<b>Trigger:</b> {trigger}",
@@ -2979,6 +2992,9 @@ class EmailAlertService:
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
         entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
         exit_price = self._tg_esc(str(event.get("closed_price") if event.get("closed_price") is not None else "n/a"))
+        invested = self._tg_esc(str(event.get("invested_value") if event.get("invested_value") is not None else "n/a"))
+        final_value = self._tg_esc(str(event.get("final_value") if event.get("final_value") is not None else "n/a"))
+        result_label = self._tg_esc(str(event.get("result_label") or "flat"))
         pnl_pct = self._tg_esc(str(event.get("realized_pnl_pct") if event.get("realized_pnl_pct") is not None else "n/a"))
         pnl_value = self._tg_esc(str(event.get("realized_pnl_value") if event.get("realized_pnl_value") is not None else "n/a"))
         exit_reason = self._tg_esc(str(event.get("exit_reason") or "paper_exit"))
@@ -2989,6 +3005,7 @@ class EmailAlertService:
                 f"<b>[PAPER CLOSED] <code>{ticker}</code> {direction}</b>",
                 f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
                 f"<b>Entry:</b> {entry} | <b>Close:</b> {exit_price} | <b>RR:</b> {rr}",
+                f"<b>Demo money:</b> invested {invested} | final {final_value} | {result_label}",
                 f"<b>Result:</b> {pnl_pct}% | {pnl_value}",
                 f"<b>Lesson:</b> {lesson}",
                 "<b>Mode:</b> Demo learning only. Use the lesson before any real-money review.",

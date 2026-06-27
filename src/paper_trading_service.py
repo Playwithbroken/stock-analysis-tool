@@ -1292,6 +1292,11 @@ class PaperTradingService:
                     "exit_reason": trade.get("exit_reason"),
                     "lessons_learned": trade.get("lessons_learned"),
                     "pnl_pct": pnl_pct,
+                    "invested_value": trade.get("invested_value"),
+                    "current_value": trade.get("current_value"),
+                    "final_value": trade.get("final_value"),
+                    "result_value_delta": trade.get("result_value_delta"),
+                    "result_label": trade.get("result_label"),
                     "risk_reward": trade.get("risk_reward"),
                     "confidence_score": trade.get("confidence_score"),
                 }
@@ -1319,24 +1324,37 @@ class PaperTradingService:
         row["current_price"] = current_price
         direction_multiplier = -1 if row.get("direction") == "short" else 1
         contract_multiplier = 100 if is_option else 1
+        invested_value = round(entry * quantity * leverage * contract_multiplier, 2)
+        row["invested_value"] = invested_value
+        row["position_notional_value"] = invested_value
 
         if row.get("status") == "closed":
             exit_price = float(row.get("closed_price") or 0)
             pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, leverage)
+            pnl_value = round(((exit_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
             row["realized_pnl_pct"] = pnl_pct
-            row["realized_pnl_value"] = round(((exit_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
+            row["realized_pnl_value"] = pnl_value
             row["unrealized_pnl_pct"] = None
             row["unrealized_pnl_value"] = None
+            row["current_value"] = None
+            row["final_value"] = round(invested_value + pnl_value, 2)
+            row["result_value_delta"] = pnl_value
+            row["result_label"] = "more" if pnl_value > 0 else "less" if pnl_value < 0 else "flat"
         else:
             pnl_pct = self._calc_return_pct(entry, current_price, direction_multiplier, leverage) if current_price else None
-            row["unrealized_pnl_pct"] = pnl_pct
-            row["unrealized_pnl_value"] = (
+            pnl_value = (
                 round(((current_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
                 if current_price is not None
                 else None
             )
+            row["unrealized_pnl_pct"] = pnl_pct
+            row["unrealized_pnl_value"] = pnl_value
             row["realized_pnl_pct"] = None
             row["realized_pnl_value"] = None
+            row["current_value"] = round(invested_value + pnl_value, 2) if pnl_value is not None else None
+            row["final_value"] = None
+            row["result_value_delta"] = pnl_value
+            row["result_label"] = "more" if (pnl_value or 0) > 0 else "less" if (pnl_value or 0) < 0 else "flat"
 
         row["risk_reward"] = self._calc_risk_reward(
             entry,

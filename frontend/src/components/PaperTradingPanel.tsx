@@ -37,6 +37,11 @@ const toFiniteNumber = (value: unknown): number | null => {
   return Number.isFinite(number) ? number : null;
 };
 
+const moneyOrNA = (value: any, currency = "EUR") => {
+  const number = toFiniteNumber(value);
+  return number == null ? "N/A" : money(number, currency);
+};
+
 const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
   const number = toFiniteNumber(value);
   if (number == null) return fallback;
@@ -788,6 +793,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div>Lev {trade.leverage}x</div>
                       <div>RR {trade.risk_reward || "N/A"}</div>
                     </div>
+                    <div className="mt-3 grid gap-2 rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs text-slate-700 sm:grid-cols-3">
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Invested</div>
+                        <div className="mt-1 font-black text-slate-900">{moneyOrNA(trade.invested_value, currency)}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Now</div>
+                        <div className="mt-1 font-black text-slate-900">{moneyOrNA(trade.current_value, currency)}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Open P/L</div>
+                        <div className={`mt-1 font-black ${(trade.result_value_delta || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {moneyOrNA(trade.result_value_delta, currency)} / {trade.result_label || "flat"}
+                        </div>
+                      </div>
+                    </div>
                     {trade.management_plan && (
                       <div className="mt-3 rounded-[1rem] border border-black/8 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -848,6 +869,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       Entry {trade.entry_price} · Exit {trade.closed_price} · {trade.closed_at ? new Date(trade.closed_at).toLocaleString() : ""}
+                    </div>
+                    <div className="mt-3 grid gap-2 rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs text-slate-700 sm:grid-cols-3">
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Invested</div>
+                        <div className="mt-1 font-black text-slate-900">{moneyOrNA(trade.invested_value, currency)}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Final</div>
+                        <div className="mt-1 font-black text-slate-900">{moneyOrNA(trade.final_value, currency)}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Result</div>
+                        <div className={`mt-1 font-black ${(trade.realized_pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {moneyOrNA(trade.realized_pnl_value, currency)} / {trade.result_label || "flat"}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))

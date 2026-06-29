@@ -88,6 +88,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     return value > 0 ? "good" : value < 0 ? "bad" : "default";
   }, [stats.realized_pnl_pct]);
 
+  const accountTone = useMemo(() => {
+    const value = Number(demoAccount.net_pnl_value || 0);
+    return value > 0 ? "good" : value < 0 ? "bad" : "default";
+  }, [demoAccount.net_pnl_value]);
+
   if (!data) return null;
 
   const openFromPlaybook = async (playbookId: string, direction: string) => {
@@ -285,6 +290,40 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} tracked trades
             </div>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-[1.8rem] border border-black/8 bg-white/80 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Paper Account Money Flow
+              </div>
+              <div className="mt-2 text-sm leading-6 text-slate-600">
+                Demo-Konto startet mit {money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)}.
+                Aktuell sind {money(demoAccount.open_exposure_value, currency)} investiert und{" "}
+                {money(demoAccount.cash_available_value, currency)} frei. Ergebnis seit Start:{" "}
+                <span className={`font-black ${Number(demoAccount.net_pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  {money(demoAccount.net_pnl_value, currency)} / {formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}
+                </span>
+                .
+              </div>
+            </div>
+            <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+              demoAccount.capital_status === "ahead"
+                ? "bg-emerald-50 text-emerald-700"
+                : demoAccount.capital_status === "behind"
+                  ? "bg-red-50 text-red-700"
+                  : "border border-black/8 bg-white text-slate-500"
+            }`}>
+              {demoAccount.capital_status || "flat"}
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <StatTile label="Start Capital" value={money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)} />
+            <StatTile label="Invested Now" value={money(demoAccount.open_exposure_value, currency)} />
+            <StatTile label="Free Demo Cash" value={money(demoAccount.cash_available_value, currency)} />
+            <StatTile label="Net Result" value={`${money(demoAccount.net_pnl_value, currency)} / ${formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
           </div>
         </div>
 

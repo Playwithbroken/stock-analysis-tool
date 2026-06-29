@@ -1101,11 +1101,16 @@ class PaperTradingService:
         unrealized_value = sum(float(trade.get("unrealized_pnl_value") or 0) for trade in trades if trade.get("status") == "open")
         equity = round(starting_capital + realized_value + unrealized_value, 2)
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
+        closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
         open_risk_value = round(sum(self._trade_open_risk_value(trade) for trade in open_trades), 2)
         open_exposure_value = round(
-            sum(float(trade.get("entry_price") or 0) * float(trade.get("quantity") or 0) * float(trade.get("leverage") or 1) for trade in open_trades),
+            sum(float(trade.get("invested_value") or 0) for trade in open_trades),
             2,
         )
+        net_pnl_value = round(realized_value + unrealized_value, 2)
+        net_pnl_pct = round((net_pnl_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
+        cash_available_value = round(max(0.0, equity - open_exposure_value), 2)
+        capital_status = "ahead" if net_pnl_value > 0 else "behind" if net_pnl_value < 0 else "flat"
         risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
         max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
         max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
@@ -1117,10 +1122,16 @@ class PaperTradingService:
             "equity": equity,
             "realized_pnl_value": round(realized_value, 2),
             "unrealized_pnl_value": round(unrealized_value, 2),
+            "net_pnl_value": net_pnl_value,
+            "net_pnl_pct": net_pnl_pct,
+            "cash_available_value": cash_available_value,
+            "capital_status": capital_status,
             "open_risk_value": open_risk_value,
             "open_risk_pct": round((open_risk_value / equity) * 100, 2) if equity > 0 else 0,
             "open_exposure_value": open_exposure_value,
             "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
+            "open_trade_count": len(open_trades),
+            "closed_trade_count": len(closed_trades),
             "risk_budget_per_trade_value": risk_budget,
             "risk_budget_per_option_trade_value": option_risk_budget,
             "max_open_risk_value": max_open_risk_value,

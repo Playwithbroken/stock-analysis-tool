@@ -93,6 +93,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     return value > 0 ? "good" : value < 0 ? "bad" : "default";
   }, [demoAccount.net_pnl_value]);
 
+  const activePaperDecisions = useMemo(() => {
+    return [...openTrades]
+      .sort((a: any, b: any) => Math.abs(Number(b.result_value_delta || 0)) - Math.abs(Number(a.result_value_delta || 0)))
+      .slice(0, 4);
+  }, [openTrades]);
+
   if (!data) return null;
 
   const openFromPlaybook = async (playbookId: string, direction: string) => {
@@ -325,6 +331,68 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Free Demo Cash" value={money(demoAccount.cash_available_value, currency)} />
             <StatTile label="Net Result" value={`${money(demoAccount.net_pnl_value, currency)} / ${formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
           </div>
+        </div>
+
+        <div className="mt-4 rounded-[1.8rem] border border-black/8 bg-white/75 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Active Paper Decisions
+              </div>
+              <div className="mt-1 text-sm text-slate-600">
+                Was gerade im Demo-Konto laeuft, wie viel gebunden ist und was als naechstes zu tun ist.
+              </div>
+            </div>
+            <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+              {activePaperDecisions.length} open
+            </div>
+          </div>
+          {activePaperDecisions.length ? (
+            <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+              {activePaperDecisions.map((trade: any) => {
+                const management = trade.management_plan || {};
+                const pnlValue = Number(trade.result_value_delta || 0);
+                return (
+                  <button
+                    key={`decision-${trade.id}`}
+                    onClick={() => trade.ticker && onAnalyze(trade.ticker)}
+                    className="rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-left transition hover:border-[var(--accent)]/30 hover:bg-[var(--accent-soft)]/35"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-black text-slate-900">
+                          {trade.ticker} / {String(trade.direction || "").toUpperCase()}
+                        </div>
+                        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          {trade.setup_type || "paper setup"}
+                        </div>
+                      </div>
+                      <div className={`text-sm font-black ${pnlValue >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        {moneyOrNA(trade.result_value_delta, currency)}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-400">Invested</div>
+                        <div className="mt-1 font-bold text-slate-900">{moneyOrNA(trade.invested_value, currency)}</div>
+                      </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-400">Plan</div>
+                        <div className="mt-1 font-bold text-slate-900">{management.action || "hold"}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
+                      {management.summary || "Hold paper position while trigger remains valid."}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Keine offenen Demo-Trades. Der Autopilot wartet auf ein Setup mit sauberem Trigger, Risiko und freiem Slot.
+            </div>
+          )}
         </div>
 
         <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-xs text-slate-700">

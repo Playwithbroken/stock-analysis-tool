@@ -348,6 +348,8 @@ class EmailAlertService:
                     "target_progress_pct": management.get("target_progress_pct"),
                     "management_status": status,
                     "management_action": management.get("action"),
+                    "decision_grade": management.get("decision_grade"),
+                    "next_check": management.get("next_check"),
                     "management_summary": management.get("summary"),
                     "line": f"{trade.get('ticker')} paper trade management alert: {status}.",
                     "source_label": "Paper trade management",
@@ -3017,6 +3019,8 @@ class EmailAlertService:
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
         status = self._tg_esc(str(event.get("management_status") or "monitor").upper())
         action = self._tg_esc(str(event.get("management_action") or "review"))
+        grade = self._tg_esc(str(event.get("decision_grade") or "review").upper())
+        next_check = self._tg_esc(str(event.get("next_check") or "Re-check trigger, stop and target."))[:520]
         summary = self._tg_esc(str(event.get("management_summary") or "Review the paper trade."))[:520]
         entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
         current = self._tg_esc(str(event.get("current_price") if event.get("current_price") is not None else "n/a"))
@@ -3028,11 +3032,12 @@ class EmailAlertService:
         return "\n".join(
             [
                 f"<b>[PAPER MANAGE] <code>{ticker}</code> {direction} | {status}</b>",
-                f"<b>Action:</b> {action}",
+                f"<b>Action:</b> {action} | <b>Grade:</b> {grade}",
                 f"<b>Price:</b> entry {entry} | now {current} | PnL {pnl}%",
                 f"<b>Plan:</b> stop {stop} | target {target}",
                 f"<b>Distance:</b> stop {risk_distance}% | target progress {target_progress}%",
                 f"<b>Why:</b> {summary}",
+                f"<b>Next:</b> {next_check}",
                 "<b>Mode:</b> Demo learning only. Review manually; no automatic real-money execution.",
             ]
         )

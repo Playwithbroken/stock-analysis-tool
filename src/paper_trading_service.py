@@ -1387,6 +1387,8 @@ class PaperTradingService:
             return {
                 "status": "pending_data",
                 "action": "wait",
+                "decision_grade": "wait",
+                "next_check": "Wait for a reliable current price before changing the paper position.",
                 "summary": "Current price unavailable; keep paper trade under review.",
             }
 
@@ -1411,6 +1413,8 @@ class PaperTradingService:
                 return {
                     "status": "stop_hit",
                     "action": "close_review",
+                    "decision_grade": "exit",
+                    "next_check": "Close or log why the stop should not be respected; do not average down.",
                     "summary": "Stop zone is hit or breached. Review closing the paper trade and log the lesson.",
                     "risk_distance_pct": round(risk_distance, 2),
                     "target_progress_pct": None,
@@ -1434,6 +1438,8 @@ class PaperTradingService:
                 return {
                     "status": "target_hit",
                     "action": "take_profit_review",
+                    "decision_grade": "exit",
+                    "next_check": "Record the target hit, close or document a tighter trailing plan.",
                     "summary": "Target zone reached. Review taking profit or closing the paper trade.",
                     "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
                     "target_progress_pct": round(target_progress, 1),
@@ -1452,9 +1458,23 @@ class PaperTradingService:
             action = "hold_with_plan"
             summary = "Trade is working. Hold only while invalidation remains false."
 
+        decision_grade = "hold"
+        next_check = "Keep the planned stop and target; re-check after the next meaningful price update."
+        if status in {"near_stop", "weak_follow_through"}:
+            decision_grade = "review"
+            next_check = "Re-check trigger quality and invalidation before adding or holding longer."
+        elif status == "near_target":
+            decision_grade = "protect"
+            next_check = "Review profit protection; do not let a near-target winner become an unreviewed loser."
+        elif status == "working":
+            decision_grade = "hold"
+            next_check = "Hold while the original trigger remains valid; no size increase without a new setup."
+
         return {
             "status": status,
             "action": action,
+            "decision_grade": decision_grade,
+            "next_check": next_check,
             "summary": summary,
             "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
             "target_progress_pct": round(target_progress, 1) if target_progress is not None else None,

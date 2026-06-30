@@ -367,8 +367,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           {trade.setup_type || "paper setup"}
                         </div>
                       </div>
-                      <div className={`text-sm font-black ${pnlValue >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                        {moneyOrNA(trade.result_value_delta, currency)}
+                      <div className="text-right">
+                        <div className={`text-sm font-black ${pnlValue >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {moneyOrNA(trade.result_value_delta, currency)}
+                        </div>
+                        <div className="mt-1 rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                          {management.decision_grade || "hold"}
+                        </div>
                       </div>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
@@ -383,6 +388,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     </div>
                     <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
                       {management.summary || "Hold paper position while trigger remains valid."}
+                    </div>
+                    <div className="mt-2 text-xs font-bold leading-5 text-slate-700">
+                      Next: {management.next_check || "Re-check trigger, stop and target before changing the plan."}
                     </div>
                   </button>
                 );
@@ -927,7 +935,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div className="mt-1 leading-5">
                           {trade.management_plan.summary || "Hold paper position while plan remains valid."}
                         </div>
+                        <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 font-semibold leading-5 text-slate-700">
+                          Next: {trade.management_plan.next_check || "Re-check trigger, stop and target before changing the plan."}
+                        </div>
                         <div className="mt-2 flex flex-wrap gap-2 text-slate-500">
+                          {trade.management_plan.decision_grade ? (
+                            <span>Grade {trade.management_plan.decision_grade}</span>
+                          ) : null}
                           {trade.management_plan.risk_distance_pct != null ? (
                             <span>Stop distance {formatPct(trade.management_plan.risk_distance_pct, 2, "0.00%")}</span>
                           ) : null}

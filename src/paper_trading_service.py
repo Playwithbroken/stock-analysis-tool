@@ -1111,6 +1111,25 @@ class PaperTradingService:
         net_pnl_pct = round((net_pnl_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
         cash_available_value = round(max(0.0, equity - open_exposure_value), 2)
         capital_status = "ahead" if net_pnl_value > 0 else "behind" if net_pnl_value < 0 else "flat"
+        management_counts: Dict[str, int] = {}
+        for trade in open_trades:
+            grade = str((trade.get("management_plan") or {}).get("decision_grade") or "hold")
+            management_counts[grade] = management_counts.get(grade, 0) + 1
+        if management_counts.get("exit"):
+            day_status = "action_required"
+            day_action = "Review exits before opening any new paper trade."
+        elif management_counts.get("review"):
+            day_status = "risk_review"
+            day_action = "Check weak or near-stop trades before adding new exposure."
+        elif management_counts.get("protect"):
+            day_status = "protect_profit"
+            day_action = "Review profit protection on near-target winners."
+        elif open_trades:
+            day_status = "monitor"
+            day_action = "Hold current paper plan; no change without trigger or invalidation."
+        else:
+            day_status = "no_open_trades"
+            day_action = "Wait for a clean setup with trigger, invalidation and free risk budget."
         risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
         max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
         max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
@@ -1132,6 +1151,9 @@ class PaperTradingService:
             "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
             "open_trade_count": len(open_trades),
             "closed_trade_count": len(closed_trades),
+            "management_counts": management_counts,
+            "day_status": day_status,
+            "day_action": day_action,
             "risk_budget_per_trade_value": risk_budget,
             "risk_budget_per_option_trade_value": option_risk_budget,
             "max_open_risk_value": max_open_risk_value,

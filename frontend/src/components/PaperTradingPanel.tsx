@@ -314,15 +314,31 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 </span>
                 .
               </div>
+              <div className="mt-3 rounded-[1rem] border border-black/8 bg-slate-50 px-3 py-2 text-sm font-semibold leading-6 text-slate-700">
+                Today: {demoAccount.day_action || "Follow the current paper plan and wait for a clear trigger."}
+              </div>
             </div>
-            <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
-              demoAccount.capital_status === "ahead"
-                ? "bg-emerald-50 text-emerald-700"
-                : demoAccount.capital_status === "behind"
+            <div className="flex flex-wrap gap-2">
+              <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+                demoAccount.capital_status === "ahead"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : demoAccount.capital_status === "behind"
+                    ? "bg-red-50 text-red-700"
+                    : "border border-black/8 bg-white text-slate-500"
+              }`}>
+                {demoAccount.capital_status || "flat"}
+              </div>
+              <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+                demoAccount.day_status === "action_required"
                   ? "bg-red-50 text-red-700"
-                  : "border border-black/8 bg-white text-slate-500"
-            }`}>
-              {demoAccount.capital_status || "flat"}
+                  : demoAccount.day_status === "risk_review"
+                    ? "bg-amber-50 text-amber-700"
+                    : demoAccount.day_status === "protect_profit"
+                      ? "bg-sky-50 text-sky-700"
+                      : "border border-black/8 bg-white text-slate-500"
+              }`}>
+                {demoAccount.day_status || "monitor"}
+              </div>
             </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">

@@ -274,6 +274,7 @@ export default function NotificationSettingsPanel({
         </div>
 
         <ManualTelegramTrigger />
+        <ManualPaperAccountStatusTrigger />
         <ManualMacroAlertTrigger />
       </div>
     </section>
@@ -602,6 +603,68 @@ function ManualTelegramTrigger() {
             {busy ? "Sending..." : "Send to Telegram"}
           </button>
         </div>
+      </div>
+      {msg ? (
+        <div
+          className={`mt-3 text-xs font-semibold ${
+            msg.startsWith("Gesendet") ? "text-emerald-700" : "text-rose-700"
+          }`}
+        >
+          {msg}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ManualPaperAccountStatusTrigger() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>("");
+
+  const send = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/send-paper-account-status", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(`Fehler: ${data.detail || "Send failed"}`);
+      } else {
+        const account = data.demo_account || {};
+        const status = account.day_status || data.status || "sent";
+        const pnl =
+          account.net_pnl_value != null
+            ? ` / P&L ${Number(account.net_pnl_value).toFixed(2)} (${Number(account.net_pnl_pct || 0).toFixed(2)}%)`
+            : "";
+        setMsg(`Gesendet: ${status}${pnl}`);
+      }
+    } catch (e) {
+      setMsg(`Fehler: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setMsg(""), 7000);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-[1.4rem] border border-emerald-500/20 bg-emerald-50/45 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+            Paper account to Telegram
+          </div>
+          <div className="mt-1 text-xs leading-5 text-slate-600">
+            Sendet den aktuellen 500k-Demo-Status mit Equity, offenem Risiko,
+            P&L und den wichtigsten Trade-Checks.
+          </div>
+        </div>
+        <button
+          onClick={send}
+          disabled={busy}
+          className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
+        >
+          {busy ? "Sending..." : "Send paper status"}
+        </button>
       </div>
       {msg ? (
         <div

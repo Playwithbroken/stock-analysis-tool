@@ -4057,6 +4057,39 @@ async def send_telegram_brief_now(session: str = "global"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/admin/send-paper-account-status")
+async def send_paper_account_status_now():
+    """Manually send the current paper-account status to Telegram."""
+    try:
+        service = get_paper_trading_service()
+        trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
+        open_trades = [trade for trade in trades if trade.get("status") == "open"]
+        demo_account = service._build_demo_account(trades, [])
+        alert_result = get_email_alert_service().send_paper_account_status_alert(
+            demo_account,
+            open_trades,
+            force=True,
+        )
+        return convert_numpy_types(
+            {
+                **alert_result,
+                "demo_account": {
+                    "equity": demo_account.get("equity"),
+                    "day_status": demo_account.get("day_status"),
+                    "day_action": demo_account.get("day_action"),
+                    "net_pnl_value": demo_account.get("net_pnl_value"),
+                    "net_pnl_pct": demo_account.get("net_pnl_pct"),
+                    "open_trade_count": demo_account.get("open_trade_count"),
+                    "management_counts": demo_account.get("management_counts") or {},
+                },
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/admin/send-brief-job/{job_key}")
 async def send_brief_job_now(job_key: str):
     """Manually resend a specific scheduled brief and mark that job as done today."""

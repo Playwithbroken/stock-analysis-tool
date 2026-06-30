@@ -1356,6 +1356,7 @@ async def _forecast_learning_loop():
                 paper_alert_result = {"status": "error", "message": str(alert_error)}
             paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
             paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
+            paper_account_status_alerts = await asyncio.to_thread(_send_paper_account_status_alerts)
             paper_managed_exits = await asyncio.to_thread(_run_paper_managed_exits)
             get_portfolio_manager().set_app_setting(
                 "forecast_learning_last_result",
@@ -1367,6 +1368,7 @@ async def _forecast_learning_loop():
                         "paper_learning_alerts": paper_alert_result,
                         "paper_learning_autopilot": paper_autopilot_result,
                         "paper_management_alerts": paper_management_alerts,
+                        "paper_account_status_alerts": paper_account_status_alerts,
                         "paper_managed_exits": paper_managed_exits,
                     }
                 ),
@@ -1389,6 +1391,19 @@ def _send_paper_trade_management_alerts() -> Dict[str, Any]:
             get_portfolio_manager().list_paper_trades(status="open", limit=50)
         )
         return get_email_alert_service().send_paper_trade_management_alerts(trades)
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def _send_paper_account_status_alerts() -> Dict[str, Any]:
+    if not _env_enabled("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true"):
+        return {"status": "disabled", "message": "Paper account status alerts are disabled."}
+    try:
+        service = get_paper_trading_service()
+        trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
+        open_trades = [trade for trade in trades if trade.get("status") == "open"]
+        demo_account = service._build_demo_account(trades, [])
+        return get_email_alert_service().send_paper_account_status_alert(demo_account, open_trades)
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
 

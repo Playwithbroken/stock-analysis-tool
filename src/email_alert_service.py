@@ -363,6 +363,78 @@ class EmailAlertService:
         self.portfolio_manager.mark_signal_events_sent(events[:5])
         return {"status": "ok", "sent": len(events[:5]), "message": "Paper management Telegram alerts sent."}
 
+    def send_paper_account_status_alert(
+        self,
+        demo_account: Dict[str, Any],
+        open_trades: List[Dict[str, Any]],
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        if not force and os.getenv("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            return {"status": "disabled", "message": "Paper account status alerts are disabled."}
+
+        status = str(demo_account.get("day_status") or "monitor")
+        actionable_statuses = {"action_required", "risk_review", "protect_profit"}
+        monitor_enabled = os.getenv("PAPER_ACCOUNT_STATUS_ALERT_MONITOR_ENABLED", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not force and status not in actionable_statuses and not monitor_enabled:
+            return {"status": "ok", "sent": 0, "message": f"Paper account status is {status}; no Telegram needed."}
+
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        if not force and not self._paper_account_status_can_send(demo_account):
+            return {"status": "cooldown", "sent": 0, "message": "Paper account status alert cooldown active."}
+
+        ranked = sorted(
+            open_trades or [],
+            key=lambda trade: self._paper_trade_status_rank(
+                str((trade.get("management_plan") or {}).get("decision_grade") or "hold")
+            ),
+        )
+        top_trades: List[Dict[str, Any]] = []
+        for trade in ranked[:3]:
+            management = trade.get("management_plan") or {}
+            top_trades.append(
+                {
+                    "ticker": trade.get("ticker"),
+                    "direction": trade.get("direction"),
+                    "grade": management.get("decision_grade"),
+                    "status": management.get("status"),
+                    "result_value_delta": trade.get("result_value_delta"),
+                    "unrealized_pnl_pct": trade.get("unrealized_pnl_pct"),
+                    "summary": management.get("summary"),
+                    "next_check": management.get("next_check"),
+                }
+            )
+
+        event = {
+            "event_key": f"paper-account-status:{status}:{datetime.utcnow().date().isoformat()}",
+            "category": "paper_account_status",
+            "title": f"Paper account status: {status}",
+            "day_status": status,
+            "day_action": demo_account.get("day_action"),
+            "capital_status": demo_account.get("capital_status"),
+            "starting_capital": demo_account.get("starting_capital"),
+            "equity": demo_account.get("equity"),
+            "net_pnl_value": demo_account.get("net_pnl_value"),
+            "net_pnl_pct": demo_account.get("net_pnl_pct"),
+            "open_exposure_value": demo_account.get("open_exposure_value"),
+            "cash_available_value": demo_account.get("cash_available_value"),
+            "open_trade_count": demo_account.get("open_trade_count"),
+            "closed_trade_count": demo_account.get("closed_trade_count"),
+            "management_counts": demo_account.get("management_counts") or {},
+            "top_trades": top_trades,
+            "line": f"Paper account status: {status}",
+            "source_label": "Paper account monitor",
+            "source_url": "",
+        }
+        self._send_notifications(config, [event], subject="Paper Account Status")
+        self._record_paper_account_status_delivery(demo_account)
+        return {"status": "ok", "sent": 1, "message": "Paper account status Telegram alert sent."}
+
     def send_paper_trade_closed_alerts(self, closed: List[Dict[str, Any]]) -> Dict[str, Any]:
         if os.getenv("PAPER_TRADE_CLOSE_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
             return {"status": "disabled", "message": "Paper trade close alerts are disabled."}
@@ -2042,6 +2114,56 @@ class EmailAlertService:
             }
             self.portfolio_manager.set_app_setting(self._macro_alert_state_key(identity), json.dumps(payload))
 
+    def _paper_account_status_state_key(self) -> str:
+        return "paper_account_status_alert_state"
+
+    def _paper_trade_status_rank(self, grade: str) -> int:
+        return {
+            "exit": 0,
+            "review": 1,
+            "protect": 2,
+            "hold": 3,
+            "wait": 4,
+        }.get((grade or "").lower(), 5)
+
+    def _paper_account_status_can_send(self, demo_account: Dict[str, Any]) -> bool:
+        status = str(demo_account.get("day_status") or "monitor")
+        raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
+        try:
+            previous = json.loads(raw) if raw else {}
+        except Exception:
+            previous = {}
+        if status != str(previous.get("day_status") or ""):
+            return True
+
+        current_counts = demo_account.get("management_counts") if isinstance(demo_account.get("management_counts"), dict) else {}
+        previous_counts = previous.get("management_counts") if isinstance(previous.get("management_counts"), dict) else {}
+        if current_counts != previous_counts:
+            return True
+
+        sent_at = previous.get("sent_at")
+        if not sent_at:
+            return True
+        try:
+            sent_dt = datetime.fromisoformat(str(sent_at))
+        except Exception:
+            return True
+        cooldown_hours = self._safe_int_env("PAPER_ACCOUNT_STATUS_ALERT_COOLDOWN_HOURS", 4, minimum=1)
+        now = datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
+        return now >= sent_dt + timedelta(hours=cooldown_hours)
+
+    def _record_paper_account_status_delivery(self, demo_account: Dict[str, Any]) -> None:
+        now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
+        payload = {
+            "sent_at": now,
+            "day_status": demo_account.get("day_status"),
+            "day_action": demo_account.get("day_action"),
+            "management_counts": demo_account.get("management_counts") or {},
+            "equity": demo_account.get("equity"),
+            "net_pnl_value": demo_account.get("net_pnl_value"),
+        }
+        self.portfolio_manager.set_app_setting(self._paper_account_status_state_key(), json.dumps(payload))
+
     def _portfolio_tickers(self) -> set[str]:
         tickers: set[str] = set()
         try:
@@ -2932,6 +3054,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_trade_management_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "paper_account_status":
+                lines.append(self._render_telegram_paper_account_status_alert(event))
+                lines.append("")
+                continue
             if event.get("category") == "paper_trade_closed":
                 lines.append(self._render_telegram_paper_trade_closed_alert(event))
                 lines.append("")
@@ -3041,6 +3167,45 @@ class EmailAlertService:
                 "<b>Mode:</b> Demo learning only. Review manually; no automatic real-money execution.",
             ]
         )
+
+    def _render_telegram_paper_account_status_alert(self, event: Dict[str, Any]) -> str:
+        status = self._tg_esc(str(event.get("day_status") or "monitor").upper())
+        action = self._tg_esc(str(event.get("day_action") or "Follow the current paper plan."))[:520]
+        capital_status = self._tg_esc(str(event.get("capital_status") or "flat"))
+        starting = self._tg_esc(str(event.get("starting_capital") if event.get("starting_capital") is not None else "n/a"))
+        equity = self._tg_esc(str(event.get("equity") if event.get("equity") is not None else "n/a"))
+        pnl_value = self._tg_esc(str(event.get("net_pnl_value") if event.get("net_pnl_value") is not None else "n/a"))
+        pnl_pct = self._tg_esc(str(event.get("net_pnl_pct") if event.get("net_pnl_pct") is not None else "n/a"))
+        invested = self._tg_esc(str(event.get("open_exposure_value") if event.get("open_exposure_value") is not None else "n/a"))
+        cash = self._tg_esc(str(event.get("cash_available_value") if event.get("cash_available_value") is not None else "n/a"))
+        open_count = self._tg_esc(str(event.get("open_trade_count") if event.get("open_trade_count") is not None else "0"))
+        closed_count = self._tg_esc(str(event.get("closed_trade_count") if event.get("closed_trade_count") is not None else "0"))
+        counts = event.get("management_counts") if isinstance(event.get("management_counts"), dict) else {}
+        count_text = ", ".join(f"{self._tg_esc(str(key))}: {self._tg_esc(str(value))}" for key, value in sorted(counts.items())) or "none"
+
+        lines = [
+            f"<b>[PAPER ACCOUNT] {status}</b>",
+            f"<b>Action today:</b> {action}",
+            f"<b>Capital:</b> start {starting} | equity {equity} | {capital_status}",
+            f"<b>Net result:</b> {pnl_value} ({pnl_pct}%)",
+            f"<b>Money:</b> invested {invested} | free cash {cash}",
+            f"<b>Trades:</b> open {open_count} | closed {closed_count} | grades {count_text}",
+        ]
+        top_trades = event.get("top_trades") if isinstance(event.get("top_trades"), list) else []
+        if top_trades:
+            lines.append("<b>Top checks:</b>")
+            for trade in top_trades[:3]:
+                ticker = self._tg_esc(str(trade.get("ticker") or "n/a"))
+                direction = self._tg_esc(str(trade.get("direction") or "n/a").upper())
+                grade = self._tg_esc(str(trade.get("grade") or "hold").upper())
+                result = self._tg_esc(str(trade.get("result_value_delta") if trade.get("result_value_delta") is not None else "n/a"))
+                summary = self._tg_esc(str(trade.get("summary") or "Review plan."))[:260]
+                next_check = self._tg_esc(str(trade.get("next_check") or "Re-check trigger, stop and target."))[:260]
+                lines.append(f"- <code>{ticker}</code> {direction} | {grade} | P/L {result}")
+                lines.append(f"  Why: {summary}")
+                lines.append(f"  Next: {next_check}")
+        lines.append("<b>Mode:</b> 500k demo learning only. No automatic real-money execution.")
+        return "\n".join(lines)
 
     def _render_telegram_paper_learning_alert(self, event: Dict[str, Any]) -> str:
         severity = str(event.get("severity") or "learning").upper()

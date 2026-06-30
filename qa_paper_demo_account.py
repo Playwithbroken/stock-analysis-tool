@@ -10,6 +10,7 @@ class FakePortfolioManager:
         self.trades = trades or []
         self.created: List[Dict[str, Any]] = []
         self.outcomes: List[Dict[str, Any]] = []
+        self.app_settings: Dict[str, str] = {}
 
     def list_paper_trades(self, limit: int = 150) -> List[Dict[str, Any]]:
         return self.trades[:limit]
@@ -53,6 +54,12 @@ class FakePortfolioManager:
             if item.get("id") == outcome_id:
                 item.update(updates)
                 return
+
+    def get_app_setting(self, key: str, default: str | None = None) -> str | None:
+        return self.app_settings.get(key, default)
+
+    def set_app_setting(self, key: str, value: str) -> None:
+        self.app_settings[key] = value
 
 
 def build_service(manager: FakePortfolioManager) -> PaperTradingService:
@@ -112,20 +119,20 @@ def test_demo_account_sizing() -> None:
     dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
 
     demo = dashboard["demo_account"]
-    assert demo["starting_capital"] == 50_000.0
-    assert demo["equity"] == 50_000.0
-    assert demo["risk_budget_per_trade_value"] == 250.0
-    assert demo["risk_budget_per_option_trade_value"] == 250.0
-    assert demo["max_position_value"] == 6_000.0
-    assert demo["max_option_premium_value"] == 500.0
+    assert demo["starting_capital"] == 500_000.0
+    assert demo["equity"] == 500_000.0
+    assert demo["risk_budget_per_trade_value"] == 1_750.0
+    assert demo["risk_budget_per_option_trade_value"] == 1_250.0
+    assert demo["max_position_value"] == 50_000.0
+    assert demo["max_option_premium_value"] == 3_750.0
 
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert aapl["demo_tradeable"] is True
-    assert aapl["suggested_quantity"] == 60
-    assert aapl["suggested_notional_value"] == 6_000.0
-    assert aapl["suggested_max_loss_value"] <= 250.0
-    assert aapl["suggested_account_pct"] <= 12.0
-    assert aapl["suggested_risk_pct"] <= 0.5
+    assert aapl["suggested_quantity"] == 500
+    assert aapl["suggested_notional_value"] == 50_000.0
+    assert aapl["suggested_max_loss_value"] <= 1_750.0
+    assert aapl["suggested_account_pct"] <= 10.0
+    assert aapl["suggested_risk_pct"] <= 0.35
     assert aapl["decision_framework"]["entry_trigger"]
     assert aapl["decision_framework"]["invalidation"]
     assert aapl["decision_framework"]["real_money_policy"].startswith("Decision support only")
@@ -134,10 +141,10 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["asset_class"] == "option"
     assert aapl_call["direction"] == "call"
     assert aapl_call["demo_tradeable"] is True
-    assert aapl_call["suggested_quantity"] == 1
-    assert aapl_call["suggested_notional_value"] == 250.0
-    assert aapl_call["suggested_max_loss_value"] == 250.0
-    assert aapl_call["suggested_risk_pct"] == 0.5
+    assert aapl_call["suggested_quantity"] == 5
+    assert aapl_call["suggested_notional_value"] == 1_250.0
+    assert aapl_call["suggested_max_loss_value"] == 1_250.0
+    assert aapl_call["suggested_risk_pct"] == 0.25
     assert aapl_call["decision_framework"]["evidence_level"] in {"paper_candidate", "high_quality_paper", "watch"}
     assert "premium" in aapl_call["decision_framework"]["risk_plan"].lower()
 
@@ -147,7 +154,7 @@ def test_demo_account_sizing() -> None:
         sample_settings(),
     )
     assert created["ticker"] == "AAPL"
-    assert created["quantity"] == 60
+    assert created["quantity"] == 500
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
     assert "Decision snapshot at paper entry" in created["notes"]
     assert "Trigger:" in created["notes"]
@@ -162,7 +169,7 @@ def test_demo_account_sizing() -> None:
     assert created_call["ticker"] == "AAPL"
     assert created_call["asset_class"] == "option"
     assert created_call["direction"] == "call"
-    assert created_call["quantity"] == 1
+    assert created_call["quantity"] == 5
     assert created_call["entry_price"] == 2.5
     assert created_call["stop_price"] == 1.25
     assert created_call["target_price"] == 5.0
@@ -190,7 +197,7 @@ def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
                 "entry_price": 100.0,
                 "stop_price": 95.0,
                 "target_price": 110.0,
-                "quantity": 400,
+                "quantity": 3000,
                 "confidence_score": 95,
                 "leverage": 1,
             }

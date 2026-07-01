@@ -1253,6 +1253,12 @@ class PaperTradingService:
     def _build_learning_feedback(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         closed = [trade for trade in trades if trade.get("status") == "closed" and trade.get("realized_pnl_pct") is not None]
         option_closed = [trade for trade in closed if trade.get("asset_class") == "option"]
+        missing_journal = [
+            trade
+            for trade in closed
+            if not str(trade.get("exit_reason") or "").strip()
+            or not str(trade.get("lessons_learned") or "").strip()
+        ]
         mistakes: Dict[str, int] = {}
         for trade in closed:
             if float(trade.get("realized_pnl_pct") or 0) >= 0:
@@ -1260,15 +1266,32 @@ class PaperTradingService:
             key = (trade.get("exit_reason") or trade.get("setup_type") or "unclassified").strip() or "unclassified"
             mistakes[key] = mistakes.get(key, 0) + 1
         option_wins = [trade for trade in option_closed if float(trade.get("realized_pnl_pct") or 0) > 0]
+        journal_complete = len(missing_journal) == 0
         return {
             "closed_trades": len(closed),
             "option_closed_trades": len(option_closed),
             "option_win_rate": round((len(option_wins) / len(option_closed)) * 100, 1) if option_closed else 0,
+            "journal_complete": journal_complete,
+            "journal_completion_rate": round(((len(closed) - len(missing_journal)) / len(closed)) * 100, 1) if closed else 100.0,
+            "missing_journal_count": len(missing_journal),
+            "missing_journal_trades": [
+                {
+                    "id": trade.get("id"),
+                    "ticker": trade.get("ticker"),
+                    "setup_type": trade.get("setup_type"),
+                    "result_value_delta": trade.get("result_value_delta"),
+                    "realized_pnl_pct": trade.get("realized_pnl_pct"),
+                }
+                for trade in missing_journal[:5]
+            ],
             "top_mistakes": [
                 {"reason": reason, "count": count}
                 for reason, count in sorted(mistakes.items(), key=lambda item: item[1], reverse=True)[:5]
             ],
             "next_rule": (
+                f"Complete {len(missing_journal)} missing paper journal(s) before trusting the learning loop."
+                if missing_journal
+                else
                 "No real-money calls or puts until at least 20 paper option trades show repeatable positive expectancy."
                 if len(option_closed) < 20
                 else "Review option expectancy by setup before increasing demo risk."

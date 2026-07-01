@@ -665,9 +665,23 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div>Closed: {learningFeedback.closed_trades || 0}</div>
               <div>Options: {learningFeedback.option_closed_trades || 0}</div>
               <div>Option Win: {learningFeedback.option_win_rate || 0}%</div>
+              <div>Journal: {learningFeedback.journal_completion_rate ?? 100}%</div>
+              <div>Missing Lessons: {learningFeedback.missing_journal_count || 0}</div>
             </div>
             <div className="font-semibold text-slate-800">{learningFeedback.next_rule || "No option learning data yet."}</div>
           </div>
+          {!!learningFeedback.missing_journal_trades?.length && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+              <div className="font-extrabold uppercase tracking-[0.16em]">Open learning notes</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {learningFeedback.missing_journal_trades.map((item: any) => (
+                  <span key={item.id} className="rounded-full border border-amber-200 bg-white/75 px-3 py-1 font-bold">
+                    {item.ticker} {formatPct(item.realized_pnl_pct, 2, "0.00%")}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {!!learningFeedback.top_mistakes?.length && (
             <div className="mt-3 flex flex-wrap gap-2">
               {learningFeedback.top_mistakes.map((item: any) => (

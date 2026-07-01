@@ -263,6 +263,60 @@ def test_demo_account_blocks_new_trades_during_risk_review() -> None:
         raise AssertionError("Risk-review gate should block opening new paper trades.")
 
 
+def test_learning_feedback_tracks_missing_journals() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "closed-missing-lesson",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_loss",
+                "status": "closed",
+                "opened_at": "2026-06-18T08:00:00",
+                "closed_at": "2026-06-19T08:00:00",
+                "entry_price": 100.0,
+                "closed_price": 97.0,
+                "stop_price": 95.0,
+                "target_price": 110.0,
+                "quantity": 10,
+                "confidence_score": 80,
+                "leverage": 1,
+                "exit_reason": "",
+                "lessons_learned": "",
+            },
+            {
+                "id": "closed-documented",
+                "ticker": "MSFT",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_win",
+                "status": "closed",
+                "opened_at": "2026-06-18T08:00:00",
+                "closed_at": "2026-06-19T08:00:00",
+                "entry_price": 100.0,
+                "closed_price": 104.0,
+                "stop_price": 95.0,
+                "target_price": 110.0,
+                "quantity": 10,
+                "confidence_score": 80,
+                "leverage": 1,
+                "exit_reason": "target_review",
+                "lessons_learned": "Repeat only with same trigger quality.",
+            },
+        ]
+    )
+    service = build_service(manager)
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+    feedback = dashboard["demo_account"]["learning_feedback"]
+    assert feedback["closed_trades"] == 2
+    assert feedback["journal_complete"] is False
+    assert feedback["journal_completion_rate"] == 50.0
+    assert feedback["missing_journal_count"] == 1
+    assert feedback["missing_journal_trades"][0]["ticker"] == "AAPL"
+    assert "missing paper journal" in feedback["next_rule"]
+
+
 def test_outcome_learning_penalizes_weak_setups() -> None:
     manager = FakePortfolioManager()
     for index in range(8):
@@ -305,5 +359,6 @@ if __name__ == "__main__":
     test_demo_account_sizing()
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()
+    test_learning_feedback_tracks_missing_journals()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

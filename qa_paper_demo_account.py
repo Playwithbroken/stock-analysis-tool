@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List
 
 from src.paper_trading_service import PaperTradingService
@@ -54,6 +55,30 @@ class FakePortfolioManager:
             if item.get("id") == outcome_id:
                 item.update(updates)
                 return
+
+    def close_paper_trade(
+        self,
+        trade_id: str,
+        closed_price: float,
+        notes: str | None = None,
+        exit_reason: str | None = None,
+        lessons_learned: str | None = None,
+    ) -> Dict[str, Any] | None:
+        for item in self.trades:
+            if item.get("id") != trade_id:
+                continue
+            item.update(
+                {
+                    "status": "closed",
+                    "closed_at": datetime.now().isoformat(),
+                    "closed_price": closed_price,
+                    "notes": item.get("notes") if notes is None else notes,
+                    "exit_reason": item.get("exit_reason") if exit_reason is None else exit_reason,
+                    "lessons_learned": item.get("lessons_learned") if lessons_learned is None else lessons_learned,
+                }
+            )
+            return dict(item)
+        return None
 
     def get_app_setting(self, key: str, default: str | None = None) -> str | None:
         return self.app_settings.get(key, default)
@@ -321,6 +346,40 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert "Complete exit reason" in qa_loss["next_action"]
 
 
+def test_close_trade_auto_documents_profitable_exit() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "open-winner",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_win",
+                "status": "open",
+                "opened_at": "2026-06-18T08:00:00",
+                "entry_price": 100.0,
+                "stop_price": 95.0,
+                "target_price": 104.0,
+                "quantity": 10,
+                "confidence_score": 90,
+                "leverage": 1,
+                "notes": "",
+                "exit_reason": "",
+                "lessons_learned": "",
+            }
+        ]
+    )
+    service = build_service(manager)
+    closed = service.close_trade("open-winner", closed_price=105.0)
+    assert closed["status"] == "closed"
+    assert closed["exit_reason"] == "target_or_profit_taken"
+    assert "Auto-classified win" in closed["lessons_learned"]
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+    feedback = dashboard["demo_account"]["learning_feedback"]
+    assert feedback["journal_complete"] is True
+    assert feedback["missing_journal_count"] == 0
+
+
 def test_outcome_learning_penalizes_weak_setups() -> None:
     manager = FakePortfolioManager()
     for index in range(8):
@@ -364,5 +423,6 @@ if __name__ == "__main__":
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()
     test_learning_feedback_tracks_missing_journals()
+    test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

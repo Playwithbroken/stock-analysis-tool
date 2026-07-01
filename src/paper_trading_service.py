@@ -266,11 +266,11 @@ class PaperTradingService:
             exit_price = float(closed_price or 0) or self._get_last_price(existing.get("ticker")) or float(existing.get("entry_price") or 0)
         if exit_price <= 0:
             raise ValueError("No valid close price available.")
-        auto_error = self._classify_closed_trade_error(existing, exit_price)
-        if not exit_reason and auto_error.get("exit_reason"):
-            exit_reason = auto_error["exit_reason"]
-        if not lessons_learned and auto_error.get("lesson"):
-            lessons_learned = auto_error["lesson"]
+        auto_outcome = self._classify_closed_trade_outcome(existing, exit_price)
+        if not exit_reason and auto_outcome.get("exit_reason"):
+            exit_reason = auto_outcome["exit_reason"]
+        if not lessons_learned and auto_outcome.get("lesson"):
+            lessons_learned = auto_outcome["lesson"]
         closed = self.portfolio_manager.close_paper_trade(trade_id, exit_price, notes, exit_reason, lessons_learned)
         if not closed:
             raise ValueError("Trade not found.")
@@ -680,14 +680,32 @@ class PaperTradingService:
             return "thesis_invalidated_fast"
         return "weak_follow_through"
 
-    def _classify_closed_trade_error(self, trade: Dict[str, Any], exit_price: float) -> Dict[str, str]:
+    def _classify_closed_trade_outcome(self, trade: Dict[str, Any], exit_price: float) -> Dict[str, str]:
         entry = float(trade.get("entry_price") or 0)
         if entry <= 0 or exit_price <= 0:
             return {}
         direction_multiplier = -1 if trade.get("direction") == "short" else 1
         pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, float(trade.get("leverage") or 1))
-        if pnl_pct is None or pnl_pct >= 0:
+        if pnl_pct is None:
             return {}
+        if pnl_pct > 0:
+            target = trade.get("target_price")
+            target_price = float(target) if target not in (None, 0) else None
+            target_hit = False
+            if target_price is not None:
+                target_hit = exit_price <= target_price if trade.get("direction") == "short" else exit_price >= target_price
+            exit_reason = "target_or_profit_taken" if target_hit else "profitable_discretionary_exit"
+            return {
+                "exit_reason": exit_reason,
+                "lesson": (
+                    f"Auto-classified win: {exit_reason}. Repeat only if the same trigger, risk/reward and market context are present."
+                ),
+            }
+        if abs(float(pnl_pct)) < 0.15:
+            return {
+                "exit_reason": "flat_exit",
+                "lesson": "Auto-classified flat exit. Check whether time in trade, signal quality or opportunity cost justified the entry.",
+            }
         error_tag = self._classify_error_tag(float(pnl_pct), trade)
         return {
             "exit_reason": error_tag,

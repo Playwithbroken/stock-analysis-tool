@@ -66,6 +66,7 @@ def build_service(manager: FakePortfolioManager) -> PaperTradingService:
     service = PaperTradingService(manager)  # type: ignore[arg-type]
     prices = {
         "AAPL": 100.0,
+        "MSFT": 100.0,
         "JEPI": 50.0,
         "BTC-USD": 50_000.0,
     }
@@ -222,6 +223,46 @@ def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
         raise AssertionError("Risk-gated playbook should not open a demo trade.")
 
 
+def test_demo_account_blocks_new_trades_during_risk_review() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "near-stop",
+                "ticker": "MSFT",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_review",
+                "status": "open",
+                "opened_at": "2026-06-19T08:00:00",
+                "entry_price": 100.0,
+                "stop_price": 99.5,
+                "target_price": 110.0,
+                "quantity": 10,
+                "confidence_score": 95,
+                "leverage": 1,
+            }
+        ]
+    )
+    service = build_service(manager)
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+    aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
+    assert dashboard["demo_account"]["day_status"] == "risk_review"
+    assert aapl["demo_tradeable"] is False
+    assert "Paper account is in risk review; check weak or near-stop trades before adding exposure." in aapl["demo_block_reasons"]
+    assert dashboard["auto_selection"]["selected"] == []
+
+    try:
+        service.create_trade_from_playbook(
+            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "risk gate" in str(exc)
+    else:
+        raise AssertionError("Risk-review gate should block opening new paper trades.")
+
+
 def test_outcome_learning_penalizes_weak_setups() -> None:
     manager = FakePortfolioManager()
     for index in range(8):
@@ -263,5 +304,6 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
 if __name__ == "__main__":
     test_demo_account_sizing()
     test_demo_account_blocks_when_open_risk_is_exhausted()
+    test_demo_account_blocks_new_trades_during_risk_review()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

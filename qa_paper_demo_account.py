@@ -315,6 +315,10 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert feedback["missing_journal_count"] == 1
     assert feedback["missing_journal_trades"][0]["ticker"] == "AAPL"
     assert "missing paper journal" in feedback["next_rule"]
+    qa_loss = next(item for item in dashboard["setup_performance"] if item["setup_type"] == "qa_loss")
+    assert qa_loss["quality_status"] == "needs_journal"
+    assert qa_loss["journal_completion_rate"] == 0.0
+    assert "Complete exit reason" in qa_loss["next_action"]
 
 
 def test_outcome_learning_penalizes_weak_setups() -> None:

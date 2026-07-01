@@ -1311,6 +1311,7 @@ class PaperTradingService:
                     "avg_pnl_pct": 0.0,
                     "best_pnl_pct": None,
                     "worst_pnl_pct": None,
+                    "missing_journal": 0,
                 },
             )
             pnl = float(trade.get("realized_pnl_pct") or 0)
@@ -1319,18 +1320,43 @@ class PaperTradingService:
             bucket["avg_pnl_pct"] += pnl
             bucket["best_pnl_pct"] = pnl if bucket["best_pnl_pct"] is None else max(bucket["best_pnl_pct"], pnl)
             bucket["worst_pnl_pct"] = pnl if bucket["worst_pnl_pct"] is None else min(bucket["worst_pnl_pct"], pnl)
+            if not str(trade.get("exit_reason") or "").strip() or not str(trade.get("lessons_learned") or "").strip():
+                bucket["missing_journal"] += 1
 
         rows = []
         for bucket in buckets.values():
             trades = max(1, int(bucket["trades"]))
+            avg_pnl = round(float(bucket["avg_pnl_pct"]) / trades, 2)
+            win_rate = round((int(bucket["wins"]) / trades) * 100, 1)
+            missing_journal = int(bucket.get("missing_journal") or 0)
+            journal_completion_rate = round(((trades - missing_journal) / trades) * 100, 1)
+            if missing_journal:
+                quality_status = "needs_journal"
+                next_action = "Complete exit reason and lesson before trusting this setup."
+            elif trades < 5:
+                quality_status = "building_evidence"
+                next_action = "Collect at least 5 closed paper trades before changing risk."
+            elif win_rate >= 55 and avg_pnl > 0:
+                quality_status = "promising"
+                next_action = "Keep paper-testing; consider slightly higher demo priority only after repeated clean journals."
+            elif win_rate < 45 or avg_pnl < 0:
+                quality_status = "downgrade"
+                next_action = "Reduce score weight and require stronger confirmation before next entry."
+            else:
+                quality_status = "neutral"
+                next_action = "Keep risk unchanged and wait for more decisive evidence."
             rows.append(
                 {
                     **bucket,
-                    "avg_pnl_pct": round(float(bucket["avg_pnl_pct"]) / trades, 2),
-                    "win_rate": round((int(bucket["wins"]) / trades) * 100, 1),
+                    "avg_pnl_pct": avg_pnl,
+                    "win_rate": win_rate,
+                    "journal_completion_rate": journal_completion_rate,
+                    "quality_status": quality_status,
+                    "next_action": next_action,
                 }
             )
-        rows.sort(key=lambda item: (item.get("win_rate", 0), item.get("avg_pnl_pct", 0)), reverse=True)
+        status_rank = {"promising": 0, "neutral": 1, "building_evidence": 2, "needs_journal": 3, "downgrade": 4}
+        rows.sort(key=lambda item: (status_rank.get(item.get("quality_status"), 5), -item.get("win_rate", 0), -item.get("avg_pnl_pct", 0)))
         return rows
 
     def _build_journal(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

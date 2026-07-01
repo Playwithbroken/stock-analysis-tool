@@ -4777,7 +4777,11 @@ async def close_paper_trade(trade_id: str, req: PaperTradeCloseRequest):
             exit_reason=req.exit_reason,
             lessons_learned=req.lessons_learned,
         )
-        return convert_numpy_types(trade)
+        try:
+            telegram_alerts = get_email_alert_service().send_paper_trade_closed_alerts([trade])
+        except Exception as alert_error:
+            telegram_alerts = {"status": "error", "message": str(alert_error)}
+        return convert_numpy_types({**trade, "telegram_alerts": telegram_alerts})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

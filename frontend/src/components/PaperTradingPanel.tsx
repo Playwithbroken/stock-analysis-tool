@@ -139,7 +139,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Closing trade failed.");
       await onRefresh?.();
-      setStatus("Paper trade closed.");
+      const alertStatus = payload.telegram_alerts?.status ? ` · Telegram ${payload.telegram_alerts.status}` : "";
+      setStatus(`Paper trade closed${alertStatus}.`);
     } catch (error: any) {
       setStatus(error?.message || "Closing trade failed.");
     } finally {

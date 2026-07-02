@@ -448,11 +448,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   <div className="font-extrabold uppercase tracking-[0.18em] text-amber-800">Warum kein Strict Trade?</div>
                   <div className="mt-1 text-slate-700">
                     {autoSelection.rejected_count || autoSelection.blocker_summary.checked || 0} Kandidaten wurden geblockt, weil die Gates noch nicht sauber genug sind.
+                    {autoSelection.blocker_summary.duplicate_blocked_count ? ` ${autoSelection.blocker_summary.duplicate_blocked_count} davon laufen bereits als Paper-Trade.` : ""}
                   </div>
                 </div>
                 {autoSelection.blocker_summary.next_best_rejected ? (
                   <div className="rounded-full border border-amber-200 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.12em] text-amber-800">
-                    nächster: {autoSelection.blocker_summary.next_best_rejected.ticker} / {autoSelection.blocker_summary.next_best_rejected.score}
+                    {autoSelection.blocker_summary.next_best_rejected.source === "best_fixable" ? "fixbar" : "nächster"}: {autoSelection.blocker_summary.next_best_rejected.ticker} / {autoSelection.blocker_summary.next_best_rejected.score}
                   </div>
                 ) : null}
               </div>

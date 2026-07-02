@@ -1041,19 +1041,31 @@ class PaperTradingService:
         ]
         next_best = None
         if rejected:
-            next_best = max(rejected, key=lambda item: float(item.get("score") or 0))
+            actionable_rejected = [
+                item
+                for item in rejected
+                if "same ticker/setup/direction already open" not in {str(reason) for reason in item.get("reasons") or []}
+            ]
+            next_pool = actionable_rejected or rejected
+            next_best = max(next_pool, key=lambda item: float(item.get("score") or 0))
             next_best = {
                 "ticker": next_best.get("ticker"),
                 "direction": next_best.get("direction"),
                 "setup_type": next_best.get("setup_type"),
                 "score": next_best.get("score"),
                 "reasons": (next_best.get("reasons") or [])[:3],
+                "source": "best_fixable" if actionable_rejected else "best_overall",
             }
 
         return {
             "checked": len(rejected),
             "top_reasons": top_reasons,
             "next_best_rejected": next_best,
+            "duplicate_blocked_count": sum(
+                1
+                for item in rejected
+                if "same ticker/setup/direction already open" in {str(reason) for reason in item.get("reasons") or []}
+            ),
         }
 
     def _dedupe_reason_list(self, reasons: List[str]) -> List[str]:

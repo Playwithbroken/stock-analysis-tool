@@ -369,6 +369,31 @@ def test_learning_feedback_tracks_missing_journals() -> None:
         raise AssertionError("Missing journal gate should block opening new paper trades.")
 
 
+def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    summary = service._summarize_auto_rejections(
+        [
+            {
+                "ticker": "ETH-USD",
+                "direction": "long",
+                "setup_type": "crypto_flow",
+                "score": 95,
+                "reasons": ["same ticker/setup/direction already open"],
+            },
+            {
+                "ticker": "AAPL",
+                "direction": "long",
+                "setup_type": "insider_follow",
+                "score": 87,
+                "reasons": ["score below auto minimum 88"],
+            },
+        ]
+    )
+    assert summary["duplicate_blocked_count"] == 1
+    assert summary["next_best_rejected"]["ticker"] == "AAPL"
+    assert summary["next_best_rejected"]["source"] == "best_fixable"
+
+
 def test_close_trade_auto_documents_profitable_exit() -> None:
     manager = FakePortfolioManager(
         [
@@ -446,6 +471,7 @@ if __name__ == "__main__":
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()
     test_learning_feedback_tracks_missing_journals()
+    test_auto_rejection_summary_prefers_fixable_candidate()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

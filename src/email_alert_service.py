@@ -10,6 +10,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from html import escape
 import json
+import math
 import os
 import re
 import smtplib
@@ -2379,6 +2380,46 @@ class EmailAlertService:
         """Escape text for Telegram HTML mode."""
         return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+    def _tg_money(self, value: Any, currency: str = "EUR") -> str:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return "n/a"
+        if not math.isfinite(number):
+            return "n/a"
+        suffix = currency.upper()
+        formatted = f"{number:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return self._tg_esc(f"{formatted} {suffix}")
+
+    def _tg_signed_money(self, value: Any, currency: str = "EUR") -> str:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return "n/a"
+        if not math.isfinite(number):
+            return "n/a"
+        prefix = "+" if number > 0 else ""
+        return self._tg_esc(f"{prefix}{self._tg_money(number, currency)}")
+
+    def _tg_pct(self, value: Any) -> str:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return "n/a"
+        if not math.isfinite(number):
+            return "n/a"
+        prefix = "+" if number > 0 else ""
+        return self._tg_esc(f"{prefix}{number:.2f}%")
+
+    def _tg_price(self, value: Any) -> str:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return "n/a"
+        if not math.isfinite(number):
+            return "n/a"
+        return self._tg_esc(f"{number:.2f}")
+
     def _clean_text_value(self, value: Any) -> str:
         text = str(value or "").strip()
         if text.lower() in {"nan", "none", "null", "n/a", "na", "-", "--"}:
@@ -3083,17 +3124,15 @@ class EmailAlertService:
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
         asset_class = self._tg_esc(str(event.get("asset_class") or "asset"))
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
-        entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
-        stop = self._tg_esc(str(event.get("stop_price") if event.get("stop_price") is not None else "n/a"))
-        target = self._tg_esc(str(event.get("target_price") if event.get("target_price") is not None else "n/a"))
+        entry = self._tg_price(event.get("entry_price"))
+        stop = self._tg_price(event.get("stop_price"))
+        target = self._tg_price(event.get("target_price"))
         qty = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
-        invested = self._tg_esc(str(event.get("invested_value") if event.get("invested_value") is not None else "n/a"))
-        current_value = self._tg_esc(str(event.get("current_value") if event.get("current_value") is not None else "n/a"))
-        result_delta = self._tg_esc(str(event.get("result_value_delta") if event.get("result_value_delta") is not None else "n/a"))
+        invested = self._tg_money(event.get("invested_value"))
+        current_value = self._tg_money(event.get("current_value"))
+        result_delta = self._tg_signed_money(event.get("result_value_delta"))
         result_label = self._tg_esc(str(event.get("result_label") or "flat"))
-        max_loss = self._tg_esc(
-            str(event.get("suggested_max_loss_value") if event.get("suggested_max_loss_value") is not None else "n/a")
-        )
+        max_loss = self._tg_money(event.get("suggested_max_loss_value"))
         confidence = self._tg_esc(
             str(event.get("confidence_score") if event.get("confidence_score") is not None else "n/a")
         )
@@ -3105,9 +3144,10 @@ class EmailAlertService:
                 f"<b>[PAPER OPEN] <code>{ticker}</code> {direction}</b>",
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 f"<b>Entry:</b> {entry} | <b>Qty:</b> {qty}",
-                f"<b>Demo money:</b> invested {invested} | now {current_value} | open P/L {result_delta} ({result_label})",
+                f"<b>Demo money:</b> investiert {invested} | aktueller Wert {current_value}",
+                f"<b>Offenes Ergebnis:</b> {result_delta} ({result_label})",
                 f"<b>Stop:</b> {stop} | <b>Target:</b> {target} | <b>RR:</b> {rr}",
-                f"<b>Max demo loss:</b> {max_loss}",
+                f"<b>Max. Demo-Verlust:</b> {max_loss}",
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidation:</b> {invalidation}",
                 "<b>Mode:</b> 500k demo learning only. No automatic real-money execution.",
@@ -3118,13 +3158,13 @@ class EmailAlertService:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
-        entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
-        exit_price = self._tg_esc(str(event.get("closed_price") if event.get("closed_price") is not None else "n/a"))
-        invested = self._tg_esc(str(event.get("invested_value") if event.get("invested_value") is not None else "n/a"))
-        final_value = self._tg_esc(str(event.get("final_value") if event.get("final_value") is not None else "n/a"))
+        entry = self._tg_price(event.get("entry_price"))
+        exit_price = self._tg_price(event.get("closed_price"))
+        invested = self._tg_money(event.get("invested_value"))
+        final_value = self._tg_money(event.get("final_value"))
         result_label = self._tg_esc(str(event.get("result_label") or "flat"))
-        pnl_pct = self._tg_esc(str(event.get("realized_pnl_pct") if event.get("realized_pnl_pct") is not None else "n/a"))
-        pnl_value = self._tg_esc(str(event.get("realized_pnl_value") if event.get("realized_pnl_value") is not None else "n/a"))
+        pnl_pct = self._tg_pct(event.get("realized_pnl_pct"))
+        pnl_value = self._tg_signed_money(event.get("realized_pnl_value"))
         exit_reason = self._tg_esc(str(event.get("exit_reason") or "paper_exit"))
         lesson = self._tg_esc(str(event.get("lessons_learned") or "Review journal before reusing this setup."))[:620]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
@@ -3133,8 +3173,8 @@ class EmailAlertService:
                 f"<b>[PAPER CLOSED] <code>{ticker}</code> {direction}</b>",
                 f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
                 f"<b>Entry:</b> {entry} | <b>Close:</b> {exit_price} | <b>RR:</b> {rr}",
-                f"<b>Demo money:</b> invested {invested} | final {final_value} | {result_label}",
-                f"<b>Result:</b> {pnl_pct}% | {pnl_value}",
+                f"<b>Demo money:</b> investiert {invested} | final {final_value}",
+                f"<b>Result:</b> {pnl_value} | {pnl_pct} | {result_label}",
                 f"<b>Lesson:</b> {lesson}",
                 "<b>Mode:</b> Demo learning only. Use the lesson before any real-money review.",
             ]

@@ -1221,6 +1221,10 @@ class PaperTradingService:
         )
         block_reasons: List[str] = []
         day_status = str(demo_account.get("day_status") or "")
+        learning_feedback = demo_account.get("learning_feedback")
+        if not isinstance(learning_feedback, dict):
+            learning_feedback = {}
+        missing_journal_count = int(learning_feedback.get("missing_journal_count") or 0)
 
         if price <= 0:
             block_reasons.append("No reference price for demo sizing.")
@@ -1228,6 +1232,10 @@ class PaperTradingService:
             block_reasons.append("Paper account has exit actions open; review existing trades before adding new exposure.")
         elif day_status == "risk_review":
             block_reasons.append("Paper account is in risk review; check weak or near-stop trades before adding exposure.")
+        if missing_journal_count > 0:
+            block_reasons.append(
+                f"Complete {missing_journal_count} missing paper journal(s) before adding new exposure."
+            )
         if risk_budget <= 0:
             block_reasons.append("Open risk budget is exhausted.")
         if int(demo_account.get("open_trade_slots") or 0) <= 0:

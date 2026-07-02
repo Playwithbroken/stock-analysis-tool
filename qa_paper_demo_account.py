@@ -340,10 +340,25 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert feedback["missing_journal_count"] == 1
     assert feedback["missing_journal_trades"][0]["ticker"] == "AAPL"
     assert "missing paper journal" in feedback["next_rule"]
+    aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
+    assert aapl["demo_tradeable"] is False
+    assert "Complete 1 missing paper journal(s) before adding new exposure." in aapl["demo_block_reasons"]
+    assert dashboard["auto_selection"]["selected"] == []
     qa_loss = next(item for item in dashboard["setup_performance"] if item["setup_type"] == "qa_loss")
     assert qa_loss["quality_status"] == "needs_journal"
     assert qa_loss["journal_completion_rate"] == 0.0
     assert "Complete exit reason" in qa_loss["next_action"]
+
+    try:
+        service.create_trade_from_playbook(
+            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "risk gate" in str(exc)
+    else:
+        raise AssertionError("Missing journal gate should block opening new paper trades.")
 
 
 def test_close_trade_auto_documents_profitable_exit() -> None:

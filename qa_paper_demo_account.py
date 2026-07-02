@@ -275,6 +275,10 @@ def test_demo_account_blocks_new_trades_during_risk_review() -> None:
     assert aapl["demo_tradeable"] is False
     assert "Paper account is in risk review; check weak or near-stop trades before adding exposure." in aapl["demo_block_reasons"]
     assert dashboard["auto_selection"]["selected"] == []
+    blocker_summary = dashboard["auto_selection"]["blocker_summary"]
+    assert blocker_summary["checked"] >= 1
+    assert any("risk review" in item["reason"].lower() for item in blocker_summary["top_reasons"])
+    assert blocker_summary["next_best_rejected"]["ticker"]
 
     try:
         service.create_trade_from_playbook(
@@ -344,6 +348,8 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert aapl["demo_tradeable"] is False
     assert "Complete 1 missing paper journal(s) before adding new exposure." in aapl["demo_block_reasons"]
     assert dashboard["auto_selection"]["selected"] == []
+    blocker_summary = dashboard["auto_selection"]["blocker_summary"]
+    assert any("missing paper journal" in item["reason"].lower() for item in blocker_summary["top_reasons"])
     qa_loss = next(item for item in dashboard["setup_performance"] if item["setup_type"] == "qa_loss")
     assert qa_loss["quality_status"] == "needs_journal"
     assert qa_loss["journal_completion_rate"] == 0.0

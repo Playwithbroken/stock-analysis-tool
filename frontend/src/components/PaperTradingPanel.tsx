@@ -441,6 +441,37 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             {autoLearnStatus.next_allowed_at ? ` · next ${new Date(autoLearnStatus.next_allowed_at).toLocaleString()}` : ""}
             {autoLearnStatus.message ? ` · ${autoLearnStatus.message}` : ""}
           </div>
+          {autoSelection.blocker_summary?.top_reasons?.length ? (
+            <div className="mt-3 rounded-[1.1rem] border border-amber-500/20 bg-amber-50/80 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-extrabold uppercase tracking-[0.18em] text-amber-800">Warum kein Strict Trade?</div>
+                  <div className="mt-1 text-slate-700">
+                    {autoSelection.rejected_count || autoSelection.blocker_summary.checked || 0} Kandidaten wurden geblockt, weil die Gates noch nicht sauber genug sind.
+                  </div>
+                </div>
+                {autoSelection.blocker_summary.next_best_rejected ? (
+                  <div className="rounded-full border border-amber-200 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.12em] text-amber-800">
+                    nächster: {autoSelection.blocker_summary.next_best_rejected.ticker} / {autoSelection.blocker_summary.next_best_rejected.score}
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                {autoSelection.blocker_summary.top_reasons.slice(0, 4).map((item: any) => (
+                  <div key={item.reason} className="rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-slate-700">
+                    <span className="font-black text-amber-800">{item.count}x</span> {item.reason}
+                  </div>
+                ))}
+              </div>
+              {autoSelection.blocker_summary.next_best_rejected?.reasons?.length ? (
+                <div className="mt-3 rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-slate-700">
+                  <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Nächster Kandidat:</span>{" "}
+                  {autoSelection.blocker_summary.next_best_rejected.ticker} wird geblockt durch{" "}
+                  {autoSelection.blocker_summary.next_best_rejected.reasons.join(" / ")}.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {autoSelection.selected?.length ? (
             <div className="mt-3 grid gap-3 lg:grid-cols-3">
               {autoSelection.selected.slice(0, 3).map((item: any) => (

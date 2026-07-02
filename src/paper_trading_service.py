@@ -1013,7 +1013,39 @@ class PaperTradingService:
             "selected": selected,
             "exploration": exploration[:max_candidates],
             "rejected": rejected[:8],
+            "rejected_count": len(rejected),
+            "blocker_summary": self._summarize_auto_rejections(rejected),
             "policy": "Paper-only auto-selection. Strict mode is quality first; learn mode uses smaller demo risk to collect evidence.",
+        }
+
+    def _summarize_auto_rejections(self, rejected: List[Dict[str, Any]]) -> Dict[str, Any]:
+        reason_counts: Dict[str, int] = {}
+        for item in rejected:
+            for reason in item.get("reasons") or []:
+                label = str(reason or "").strip()
+                if not label:
+                    continue
+                reason_counts[label] = reason_counts.get(label, 0) + 1
+
+        top_reasons = [
+            {"reason": reason, "count": count}
+            for reason, count in sorted(reason_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:5]
+        ]
+        next_best = None
+        if rejected:
+            next_best = max(rejected, key=lambda item: float(item.get("score") or 0))
+            next_best = {
+                "ticker": next_best.get("ticker"),
+                "direction": next_best.get("direction"),
+                "setup_type": next_best.get("setup_type"),
+                "score": next_best.get("score"),
+                "reasons": (next_best.get("reasons") or [])[:3],
+            }
+
+        return {
+            "checked": len(rejected),
+            "top_reasons": top_reasons,
+            "next_best_rejected": next_best,
         }
 
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

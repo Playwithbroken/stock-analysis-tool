@@ -936,16 +936,24 @@ class PaperTradingService:
                 for item in playbook.get("do_not_trade_reasons", [])
                 if not str(item).lower().startswith("score below minimum trade score")
             ]
+            rule_reasons = [str(item) for item in playbook.get("do_not_trade_reasons", [])]
             if score < min_score:
                 reasons.append(f"score below auto minimum {min_score:.0f}")
             if score < exploration_min_score:
                 exploration_reasons.append(f"score below learning minimum {exploration_min_score:.0f}")
-            if playbook.get("tradeable") is False or playbook.get("demo_tradeable") is False:
-                reasons.append("trade or demo risk gate blocked")
+            if playbook.get("tradeable") is False:
+                reasons.extend(rule_reasons[:3] or ["trade signal rules blocked this playbook"])
+            if playbook.get("demo_tradeable") is False and not playbook.get("demo_block_reasons"):
+                reasons.append("demo risk gate blocked")
             if hard_rule_reasons:
                 exploration_reasons.extend(hard_rule_reasons[:3])
             if playbook.get("demo_block_reasons"):
-                reasons.extend(str(item) for item in playbook.get("demo_block_reasons")[:3])
+                demo_reasons = [
+                    str(item)
+                    for item in playbook.get("demo_block_reasons", [])
+                    if str(item) != "Playbook is blocked by signal rules."
+                ]
+                reasons.extend(demo_reasons[:3])
                 hard_demo_reasons = [
                     str(item)
                     for item in playbook.get("demo_block_reasons", [])
@@ -988,7 +996,7 @@ class PaperTradingService:
                 "learning_mode": False,
                 "trigger": framework.get("entry_trigger"),
                 "invalidation": framework.get("invalidation"),
-                "reasons": reasons,
+                "reasons": self._dedupe_reason_list(reasons),
             }
             if reasons:
                 rejected.append(row)
@@ -1047,6 +1055,20 @@ class PaperTradingService:
             "top_reasons": top_reasons,
             "next_best_rejected": next_best,
         }
+
+    def _dedupe_reason_list(self, reasons: List[str]) -> List[str]:
+        result: List[str] = []
+        seen: set[str] = set()
+        for reason in reasons:
+            label = str(reason or "").strip()
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(label)
+        return result
 
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         option_playbooks: List[Dict[str, Any]] = []

@@ -3188,20 +3188,20 @@ class EmailAlertService:
         grade = self._tg_esc(str(event.get("decision_grade") or "review").upper())
         next_check = self._tg_esc(str(event.get("next_check") or "Re-check trigger, stop and target."))[:520]
         summary = self._tg_esc(str(event.get("management_summary") or "Review the paper trade."))[:520]
-        entry = self._tg_esc(str(event.get("entry_price") if event.get("entry_price") is not None else "n/a"))
-        current = self._tg_esc(str(event.get("current_price") if event.get("current_price") is not None else "n/a"))
-        stop = self._tg_esc(str(event.get("stop_price") if event.get("stop_price") is not None else "n/a"))
-        target = self._tg_esc(str(event.get("target_price") if event.get("target_price") is not None else "n/a"))
-        pnl = self._tg_esc(str(event.get("unrealized_pnl_pct") if event.get("unrealized_pnl_pct") is not None else "n/a"))
-        risk_distance = self._tg_esc(str(event.get("risk_distance_pct") if event.get("risk_distance_pct") is not None else "n/a"))
-        target_progress = self._tg_esc(str(event.get("target_progress_pct") if event.get("target_progress_pct") is not None else "n/a"))
+        entry = self._tg_price(event.get("entry_price"))
+        current = self._tg_price(event.get("current_price"))
+        stop = self._tg_price(event.get("stop_price"))
+        target = self._tg_price(event.get("target_price"))
+        pnl = self._tg_pct(event.get("unrealized_pnl_pct"))
+        risk_distance = self._tg_pct(event.get("risk_distance_pct"))
+        target_progress = self._tg_pct(event.get("target_progress_pct"))
         return "\n".join(
             [
                 f"<b>[PAPER MANAGE] <code>{ticker}</code> {direction} | {status}</b>",
                 f"<b>Action:</b> {action} | <b>Grade:</b> {grade}",
-                f"<b>Price:</b> entry {entry} | now {current} | PnL {pnl}%",
+                f"<b>Price:</b> entry {entry} | now {current} | PnL {pnl}",
                 f"<b>Plan:</b> stop {stop} | target {target}",
-                f"<b>Distance:</b> stop {risk_distance}% | target progress {target_progress}%",
+                f"<b>Distance:</b> stop {risk_distance} | target progress {target_progress}",
                 f"<b>Why:</b> {summary}",
                 f"<b>Next:</b> {next_check}",
                 "<b>Mode:</b> Demo learning only. Review manually; no automatic real-money execution.",
@@ -3212,12 +3212,12 @@ class EmailAlertService:
         status = self._tg_esc(str(event.get("day_status") or "monitor").upper())
         action = self._tg_esc(str(event.get("day_action") or "Follow the current paper plan."))[:520]
         capital_status = self._tg_esc(str(event.get("capital_status") or "flat"))
-        starting = self._tg_esc(str(event.get("starting_capital") if event.get("starting_capital") is not None else "n/a"))
-        equity = self._tg_esc(str(event.get("equity") if event.get("equity") is not None else "n/a"))
-        pnl_value = self._tg_esc(str(event.get("net_pnl_value") if event.get("net_pnl_value") is not None else "n/a"))
-        pnl_pct = self._tg_esc(str(event.get("net_pnl_pct") if event.get("net_pnl_pct") is not None else "n/a"))
-        invested = self._tg_esc(str(event.get("open_exposure_value") if event.get("open_exposure_value") is not None else "n/a"))
-        cash = self._tg_esc(str(event.get("cash_available_value") if event.get("cash_available_value") is not None else "n/a"))
+        starting = self._tg_money(event.get("starting_capital"))
+        equity = self._tg_money(event.get("equity"))
+        pnl_value = self._tg_signed_money(event.get("net_pnl_value"))
+        pnl_pct = self._tg_pct(event.get("net_pnl_pct"))
+        invested = self._tg_money(event.get("open_exposure_value"))
+        cash = self._tg_money(event.get("cash_available_value"))
         open_count = self._tg_esc(str(event.get("open_trade_count") if event.get("open_trade_count") is not None else "0"))
         closed_count = self._tg_esc(str(event.get("closed_trade_count") if event.get("closed_trade_count") is not None else "0"))
         counts = event.get("management_counts") if isinstance(event.get("management_counts"), dict) else {}
@@ -3227,7 +3227,7 @@ class EmailAlertService:
             f"<b>[PAPER ACCOUNT] {status}</b>",
             f"<b>Action today:</b> {action}",
             f"<b>Capital:</b> start {starting} | equity {equity} | {capital_status}",
-            f"<b>Net result:</b> {pnl_value} ({pnl_pct}%)",
+            f"<b>Net result:</b> {pnl_value} ({pnl_pct})",
             f"<b>Money:</b> invested {invested} | free cash {cash}",
             f"<b>Trades:</b> open {open_count} | closed {closed_count} | grades {count_text}",
         ]
@@ -3238,7 +3238,7 @@ class EmailAlertService:
                 ticker = self._tg_esc(str(trade.get("ticker") or "n/a"))
                 direction = self._tg_esc(str(trade.get("direction") or "n/a").upper())
                 grade = self._tg_esc(str(trade.get("grade") or "hold").upper())
-                result = self._tg_esc(str(trade.get("result_value_delta") if trade.get("result_value_delta") is not None else "n/a"))
+                result = self._tg_signed_money(trade.get("result_value_delta"))
                 summary = self._tg_esc(str(trade.get("summary") or "Review plan."))[:260]
                 next_check = self._tg_esc(str(trade.get("next_check") or "Re-check trigger, stop and target."))[:260]
                 lines.append(f"- <code>{ticker}</code> {direction} | {grade} | P/L {result}")

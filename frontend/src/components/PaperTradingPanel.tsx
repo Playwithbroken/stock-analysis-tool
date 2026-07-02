@@ -357,7 +357,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 Active Paper Decisions
               </div>
               <div className="mt-1 text-sm text-slate-600">
-                Was gerade im Demo-Konto laeuft, wie viel gebunden ist und was als naechstes zu tun ist.
+                Was gerade im Demo-Konto läuft, wie viel gebunden ist und was als Nächstes zu tun ist.
               </div>
             </div>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
@@ -425,9 +425,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div>
               <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Demo Autopilot Selection</div>
               <div className="mt-2 max-w-3xl leading-5">
-                Waehlt nur Paper-Trades mit Score &gt;= {autoSelection.min_score || 88}, voller These, Trigger,
+                Wählt nur Paper-Trades mit Score &gt;= {autoSelection.min_score || 88}, voller These, Trigger,
                 Invalidation, freiem Risikobudget und ohne offene Duplikate. Learn Mode testet ab Score &gt;= {autoSelection.exploration_min_score || 60}
-                mit sehr kleinem Demo-Risiko ({Math.round(Number(autoSelection.exploration_risk_multiplier || 0.1) * 100)}%). Keine Real-Money-Ausfuehrung.
+                mit sehr kleinem Demo-Risiko ({Math.round(Number(autoSelection.exploration_risk_multiplier || 0.1) * 100)}%). Keine Real-Money-Ausführung.
               </div>
             </div>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
@@ -458,7 +458,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           ) : (
             <div className="mt-3 rounded-[1rem] border border-amber-500/20 bg-amber-50 px-3 py-2 font-semibold text-amber-800">
-              Noch kein Setup erfuellt alle Auto-Gates. Das ist korrekt: kein Paper-Trade ohne sauberen Trigger.
+              Noch kein Setup erfüllt alle Auto-Gates. Das ist korrekt: kein Paper-Trade ohne sauberen Trigger.
             </div>
           )}
           {autoSelection.exploration?.length ? (

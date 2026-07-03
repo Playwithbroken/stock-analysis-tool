@@ -145,11 +145,11 @@ class PaperTradingService:
         label = "learning" if mode == "learn" else "strict"
         next_best = blocker_summary.get("next_best_rejected") if isinstance(blocker_summary, dict) else None
         if isinstance(next_best, dict) and next_best.get("ticker"):
-            reasons = " / ".join(str(item) for item in (next_best.get("reasons") or [])[:2])
-            next_action = str(next_best.get("next_action") or "").strip()
+            reasons = " / ".join(str(item).strip().rstrip(".") for item in (next_best.get("reasons") or [])[:2])
+            next_action = str(next_best.get("next_action") or "").strip().rstrip(".")
             parts = [f"0 {label} paper candidate(s) passed. Next closest: {next_best.get('ticker')}"]
             if reasons:
-                parts.append(f"blocked by {reasons}")
+                parts.append(f"Blocked by {reasons}")
             if next_action:
                 parts.append(f"Next: {next_action}")
             return ". ".join(parts) + "."

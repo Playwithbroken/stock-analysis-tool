@@ -76,6 +76,15 @@ class PaperTradingService:
         mode = "learn" if str(mode or "").lower() == "learn" else "strict"
         source_key = "exploration" if mode == "learn" else "selected"
         selected = selection.get(source_key, [])[: max(1, int(max_trades or 1))]
+        blocker_summary = selection.get("blocker_summary") if isinstance(selection.get("blocker_summary"), dict) else {}
+        no_trade_message = self._auto_selection_no_trade_message(mode, blocker_summary)
+        preview_message = (
+            no_trade_message
+            if not selected
+            else f"{len(selected)} learning candidate(s) passed the exploration gates."
+            if mode == "learn"
+            else f"{len(selected)} demo candidate(s) passed the auto-selection gates."
+        )
         if not execute:
             return {
                 "status": "preview",
@@ -83,11 +92,9 @@ class PaperTradingService:
                 "mode": mode,
                 "selected": selected,
                 "opened": [],
-                "message": (
-                    f"{len(selected)} learning candidate(s) passed the exploration gates."
-                    if mode == "learn"
-                    else f"{len(selected)} demo candidate(s) passed the auto-selection gates."
-                ),
+                "rejected_count": selection.get("rejected_count"),
+                "blocker_summary": blocker_summary,
+                "message": preview_message,
             }
 
         opened: List[Dict[str, Any]] = []
@@ -115,6 +122,13 @@ class PaperTradingService:
                         "error": str(exc),
                     }
                 )
+        execution_message = (
+            no_trade_message
+            if not selected and not opened
+            else f"Opened {len(opened)} paper learning trade(s); {len(errors)} blocked during final gate."
+            if mode == "learn"
+            else f"Opened {len(opened)} paper trade(s); {len(errors)} blocked during final gate."
+        )
         return {
             "status": "ok" if not errors else "partial",
             "execute": True,
@@ -122,12 +136,28 @@ class PaperTradingService:
             "selected": selected,
             "opened": opened,
             "errors": errors,
-            "message": (
-                f"Opened {len(opened)} paper learning trade(s); {len(errors)} blocked during final gate."
-                if mode == "learn"
-                else f"Opened {len(opened)} paper trade(s); {len(errors)} blocked during final gate."
-            ),
+            "rejected_count": selection.get("rejected_count"),
+            "blocker_summary": blocker_summary,
+            "message": execution_message,
         }
+
+    def _auto_selection_no_trade_message(self, mode: str, blocker_summary: Dict[str, Any]) -> str:
+        label = "learning" if mode == "learn" else "strict"
+        next_best = blocker_summary.get("next_best_rejected") if isinstance(blocker_summary, dict) else None
+        if isinstance(next_best, dict) and next_best.get("ticker"):
+            reasons = " / ".join(str(item) for item in (next_best.get("reasons") or [])[:2])
+            next_action = str(next_best.get("next_action") or "").strip()
+            parts = [f"0 {label} paper candidate(s) passed. Next closest: {next_best.get('ticker')}"]
+            if reasons:
+                parts.append(f"blocked by {reasons}")
+            if next_action:
+                parts.append(f"Next: {next_action}")
+            return ". ".join(parts) + "."
+        top_reasons = blocker_summary.get("top_reasons") if isinstance(blocker_summary, dict) else []
+        if top_reasons:
+            reason = str((top_reasons[0] or {}).get("reason") or "quality gates")
+            return f"0 {label} paper candidate(s) passed. Main blocker: {reason}."
+        return f"0 {label} paper candidate(s) passed. Wait for a cleaner setup before opening demo risk."
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         trade = self.portfolio_manager.create_paper_trade(payload)

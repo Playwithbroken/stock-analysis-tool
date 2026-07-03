@@ -352,6 +352,13 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     blocker_summary = dashboard["auto_selection"]["blocker_summary"]
     assert any("missing paper journal" in item["reason"].lower() for item in blocker_summary["top_reasons"])
     assert all(item["reason"] != "Playbook is blocked by signal rules." for item in blocker_summary["top_reasons"])
+    preview = service.run_auto_selection(sample_scoreboard(), sample_settings(), execute=False)
+    assert preview["selected"] == []
+    assert "Next closest" in preview["message"]
+    assert "Paper-Journale" in preview["message"]
+    execute = service.run_auto_selection(sample_scoreboard(), sample_settings(), execute=True)
+    assert execute["opened"] == []
+    assert "Next closest" in execute["message"]
     qa_loss = next(item for item in dashboard["setup_performance"] if item["setup_type"] == "qa_loss")
     assert qa_loss["quality_status"] == "needs_journal"
     assert qa_loss["journal_completion_rate"] == 0.0

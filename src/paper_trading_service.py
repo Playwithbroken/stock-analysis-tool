@@ -81,9 +81,9 @@ class PaperTradingService:
         preview_message = (
             no_trade_message
             if not selected
-            else f"{len(selected)} learning candidate(s) passed the exploration gates."
+            else f"{len(selected)} Learning-Kandidat(en) erfüllen die Exploration-Gates."
             if mode == "learn"
-            else f"{len(selected)} demo candidate(s) passed the auto-selection gates."
+            else f"{len(selected)} Demo-Kandidat(en) erfüllen die Auto-Selection-Gates."
         )
         if not execute:
             return {
@@ -125,9 +125,9 @@ class PaperTradingService:
         execution_message = (
             no_trade_message
             if not selected and not opened
-            else f"Opened {len(opened)} paper learning trade(s); {len(errors)} blocked during final gate."
+            else f"{len(opened)} Paper-Learning-Trade(s) eröffnet; {len(errors)} im finalen Gate geblockt."
             if mode == "learn"
-            else f"Opened {len(opened)} paper trade(s); {len(errors)} blocked during final gate."
+            else f"{len(opened)} Paper-Trade(s) eröffnet; {len(errors)} im finalen Gate geblockt."
         )
         return {
             "status": "ok" if not errors else "partial",
@@ -142,22 +142,22 @@ class PaperTradingService:
         }
 
     def _auto_selection_no_trade_message(self, mode: str, blocker_summary: Dict[str, Any]) -> str:
-        label = "learning" if mode == "learn" else "strict"
+        label = "Learning" if mode == "learn" else "Strict"
         next_best = blocker_summary.get("next_best_rejected") if isinstance(blocker_summary, dict) else None
         if isinstance(next_best, dict) and next_best.get("ticker"):
             reasons = " / ".join(str(item).strip().rstrip(".") for item in (next_best.get("reasons") or [])[:2])
             next_action = str(next_best.get("next_action") or "").strip().rstrip(".")
-            parts = [f"0 {label} paper candidate(s) passed. Next closest: {next_best.get('ticker')}"]
+            parts = [f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Nächster Kandidat: {next_best.get('ticker')}"]
             if reasons:
-                parts.append(f"Blocked by {reasons}")
+                parts.append(f"Geblockt durch {reasons}")
             if next_action:
-                parts.append(f"Next: {next_action}")
+                parts.append(f"Nächster Schritt: {next_action}")
             return ". ".join(parts) + "."
         top_reasons = blocker_summary.get("top_reasons") if isinstance(blocker_summary, dict) else []
         if top_reasons:
             reason = str((top_reasons[0] or {}).get("reason") or "quality gates")
-            return f"0 {label} paper candidate(s) passed. Main blocker: {reason}."
-        return f"0 {label} paper candidate(s) passed. Wait for a cleaner setup before opening demo risk."
+            return f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Hauptblocker: {reason}."
+        return f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Erst auf ein saubereres Setup warten, bevor Demo-Risiko geöffnet wird."
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         trade = self.portfolio_manager.create_paper_trade(payload)

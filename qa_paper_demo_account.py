@@ -379,6 +379,7 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
                 "setup_type": "crypto_flow",
                 "score": 95,
                 "reasons": ["same ticker/setup/direction already open"],
+                "next_action": service._auto_rejection_next_action(["same ticker/setup/direction already open"]),
             },
             {
                 "ticker": "AAPL",
@@ -386,12 +387,15 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
                 "setup_type": "insider_follow",
                 "score": 87,
                 "reasons": ["score below auto minimum 88"],
+                "next_action": service._auto_rejection_next_action(["score below auto minimum 88"]),
             },
         ]
     )
     assert summary["duplicate_blocked_count"] == 1
     assert summary["next_best_rejected"]["ticker"] == "AAPL"
     assert summary["next_best_rejected"]["source"] == "best_fixable"
+    assert "Score 88+" in summary["next_best_rejected"]["next_action"]
+    assert "Duplikat" in service._auto_rejection_next_action(["same ticker/setup/direction already open"])
 
 
 def test_close_trade_auto_documents_profitable_exit() -> None:

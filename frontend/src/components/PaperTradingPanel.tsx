@@ -469,6 +469,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Nächster Kandidat:</span>{" "}
                   {autoSelection.blocker_summary.next_best_rejected.ticker} wird geblockt durch{" "}
                   {autoSelection.blocker_summary.next_best_rejected.reasons.join(" / ")}.
+                  {autoSelection.blocker_summary.next_best_rejected.next_action ? (
+                    <div className="mt-2 font-bold text-slate-900">
+                      Nächster Schritt: {autoSelection.blocker_summary.next_best_rejected.next_action}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -529,6 +534,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div key={reason}>Block: {reason}</div>
                     ))}
                   </div>
+                  {item.next_action ? (
+                    <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 font-semibold leading-5 text-slate-700">
+                      Nächster Schritt: {item.next_action}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

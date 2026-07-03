@@ -998,6 +998,7 @@ class PaperTradingService:
                 "invalidation": framework.get("invalidation"),
                 "reasons": self._dedupe_reason_list(reasons),
             }
+            row["next_action"] = self._auto_rejection_next_action(row["reasons"])
             if reasons:
                 rejected.append(row)
             else:
@@ -1054,6 +1055,7 @@ class PaperTradingService:
                 "setup_type": next_best.get("setup_type"),
                 "score": next_best.get("score"),
                 "reasons": (next_best.get("reasons") or [])[:3],
+                "next_action": next_best.get("next_action"),
                 "source": "best_fixable" if actionable_rejected else "best_overall",
             }
 
@@ -1067,6 +1069,30 @@ class PaperTradingService:
                 if "same ticker/setup/direction already open" in {str(reason) for reason in item.get("reasons") or []}
             ),
         }
+
+    def _auto_rejection_next_action(self, reasons: List[str]) -> str:
+        text = " | ".join(str(reason or "").lower() for reason in reasons)
+        if "missing paper journal" in text:
+            return "Erst fehlende Paper-Journale abschließen; danach darf der Lernloop wieder neue Trades öffnen."
+        if "risk review" in text or "exit actions open" in text:
+            return "Erst offene Paper-Trades prüfen, Stop/Target bestätigen und Risk-Review abschließen."
+        if "open risk budget is exhausted" in text or "open-trade slots exhausted" in text:
+            return "Kein neuer Entry: Risiko oder Slots freimachen, bevor neue Exposure aufgebaut wird."
+        if "same ticker/setup/direction already open" in text:
+            return "Kein Duplikat eröffnen; bestehenden Paper-Trade managen oder schließen."
+        if "score below auto minimum" in text:
+            return "Auf Score 88+ warten oder stärkere Bestätigung durch Preis, Volumen und Newsqualität verlangen."
+        if "score below minimum trade score" in text:
+            return "Nicht handeln; Setup braucht erst Score 78+ und bessere Signalqualität."
+        if "missing ticker or reference price" in text:
+            return "Erst Kursdaten laden oder Ticker/Asset-Zuordnung prüfen."
+        if "missing thesis, trigger or invalidation" in text:
+            return "Erst These, Einstiegstrigger und Invalidierung vollständig dokumentieren."
+        if "option remains paper-only" in text or "option chain" in text:
+            return "Optionskette, Strike, Laufzeit, Spread und IV manuell prüfen; bis dahin nur Paper."
+        if "paper outcome learning blocks" in text:
+            return "Setup erst wieder nutzen, wenn neue Paper-Ergebnisse die Fehlerquote verbessern."
+        return "Setup beobachten; erst handeln, wenn Trigger, Risiko und Lern-Gates sauber erfüllt sind."
 
     def _dedupe_reason_list(self, reasons: List[str]) -> List[str]:
         result: List[str] = []

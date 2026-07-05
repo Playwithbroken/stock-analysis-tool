@@ -53,7 +53,10 @@ const DEFAULT_DEMO_CAPITAL = 500000;
 const germanStatus = (value: unknown, fallback = "Lernen") => {
   const key = String(value || "").trim().toLowerCase();
   const labels: Record<string, string> = {
+    action_required: "Aktion nötig",
     active_learning: "aktives Lernen",
+    ahead: "im Plus",
+    behind: "im Minus",
     building_evidence: "Beweise sammeln",
     blocked: "geblockt",
     collect_evidence: "Beweise sammeln",
@@ -67,6 +70,7 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     miss: "Fehlschlag",
     monitor: "überwachen",
     needs_journal: "Journal fehlt",
+    no_open_trades: "keine offenen Trades",
     not_started: "noch nicht gestartet",
     ok: "ok",
     open: "offen",
@@ -74,8 +78,10 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     partial: "teilweise",
     pending: "wartet",
     promising: "vielversprechend",
+    protect_profit: "Gewinn schützen",
     reduce_risk: "Risiko senken",
     review: "prüfen",
+    risk_review: "Risiko prüfen",
     watch: "beobachten",
   };
   return labels[key] || (key ? key.replace(/_/g, " ") : fallback);
@@ -363,7 +369,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 .
               </div>
               <div className="mt-3 rounded-[1rem] border border-black/8 bg-slate-50 px-3 py-2 text-sm font-semibold leading-6 text-slate-700">
-                Today: {demoAccount.day_action || "Follow the current paper plan and wait for a clear trigger."}
+                Heute: {demoAccount.day_action || "Auf ein klares Setup mit Trigger warten."}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -374,7 +380,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     ? "bg-red-50 text-red-700"
                     : "border border-black/8 bg-white text-slate-500"
               }`}>
-                {demoAccount.capital_status || "flat"}
+                {germanStatus(demoAccount.capital_status, "neutral")}
               </div>
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
                 demoAccount.day_status === "action_required"
@@ -385,7 +391,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       ? "bg-sky-50 text-sky-700"
                       : "border border-black/8 bg-white text-slate-500"
               }`}>
-                {demoAccount.day_status || "monitor"}
+                {germanStatus(demoAccount.day_status, "überwachen")}
               </div>
             </div>
           </div>

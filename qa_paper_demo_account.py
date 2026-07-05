@@ -161,7 +161,7 @@ def test_demo_account_sizing() -> None:
     assert aapl["suggested_risk_pct"] <= 0.35
     assert aapl["decision_framework"]["entry_trigger"]
     assert aapl["decision_framework"]["invalidation"]
-    assert aapl["decision_framework"]["real_money_policy"].startswith("Decision support only")
+    assert aapl["decision_framework"]["real_money_policy"].startswith("Nur Entscheidungsrahmen")
 
     aapl_call = next(item for item in dashboard["playbooks"] if item["id"] == "option-AAPL-call")
     assert aapl_call["asset_class"] == "option"
@@ -172,7 +172,7 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["suggested_max_loss_value"] == 1_250.0
     assert aapl_call["suggested_risk_pct"] == 0.25
     assert aapl_call["decision_framework"]["evidence_level"] in {"paper_candidate", "high_quality_paper", "watch"}
-    assert "premium" in aapl_call["decision_framework"]["risk_plan"].lower()
+    assert "prämie" in aapl_call["decision_framework"]["risk_plan"].lower()
 
     created = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
@@ -182,9 +182,9 @@ def test_demo_account_sizing() -> None:
     assert created["ticker"] == "AAPL"
     assert created["quantity"] == 500
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
-    assert "Decision snapshot at paper entry" in created["notes"]
+    assert "Entscheidungs-Snapshot beim Paper-Einstieg" in created["notes"]
     assert "Trigger:" in created["notes"]
-    assert "Invalidation:" in created["notes"]
+    assert "Invalidierung:" in created["notes"]
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
 
     created_call = service.create_trade_from_playbook(
@@ -199,8 +199,8 @@ def test_demo_account_sizing() -> None:
     assert created_call["entry_price"] == 2.5
     assert created_call["stop_price"] == 1.25
     assert created_call["target_price"] == 5.0
-    assert "Options gate:" in created_call["notes"]
-    assert "paper-only premium model" in created_call["notes"]
+    assert "Options-Gate:" in created_call["notes"]
+    assert "nur Paper-Premienmodell" in created_call["notes"]
     call_outcomes = [item for item in manager.outcomes if item["trade_id"] == created_call["id"]]
     assert {item["horizon_hours"] for item in call_outcomes} == {1, 24, 72, 168, 240}
 
@@ -234,7 +234,7 @@ def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert dashboard["demo_account"]["remaining_risk_value"] == 0
     assert aapl["demo_tradeable"] is False
-    assert "Open risk budget is exhausted." in aapl["demo_block_reasons"]
+    assert "Offenes Risikobudget ist ausgeschöpft." in aapl["demo_block_reasons"]
 
     try:
         service.create_trade_from_playbook(
@@ -273,11 +273,11 @@ def test_demo_account_blocks_new_trades_during_risk_review() -> None:
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert dashboard["demo_account"]["day_status"] == "risk_review"
     assert aapl["demo_tradeable"] is False
-    assert "Paper account is in risk review; check weak or near-stop trades before adding exposure." in aapl["demo_block_reasons"]
+    assert "Paper-Konto ist im Risiko-Review; schwache oder stop-nahe Trades zuerst prüfen." in aapl["demo_block_reasons"]
     assert dashboard["auto_selection"]["selected"] == []
     blocker_summary = dashboard["auto_selection"]["blocker_summary"]
     assert blocker_summary["checked"] >= 1
-    assert any("risk review" in item["reason"].lower() for item in blocker_summary["top_reasons"])
+    assert any("risiko-review" in item["reason"].lower() for item in blocker_summary["top_reasons"])
     assert all(item["reason"] != "Playbook is blocked by signal rules." for item in blocker_summary["top_reasons"])
     assert blocker_summary["next_best_rejected"]["ticker"]
 
@@ -344,13 +344,13 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert feedback["journal_completion_rate"] == 50.0
     assert feedback["missing_journal_count"] == 1
     assert feedback["missing_journal_trades"][0]["ticker"] == "AAPL"
-    assert "missing paper journal" in feedback["next_rule"]
+    assert "fehlende Paper-Journale" in feedback["next_rule"]
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert aapl["demo_tradeable"] is False
-    assert "Complete 1 missing paper journal(s) before adding new exposure." in aapl["demo_block_reasons"]
+    assert "1 fehlende Paper-Journale abschließen, bevor neue Exposure hinzukommt." in aapl["demo_block_reasons"]
     assert dashboard["auto_selection"]["selected"] == []
     blocker_summary = dashboard["auto_selection"]["blocker_summary"]
-    assert any("missing paper journal" in item["reason"].lower() for item in blocker_summary["top_reasons"])
+    assert any("fehlende paper-journale" in item["reason"].lower() for item in blocker_summary["top_reasons"])
     assert all(item["reason"] != "Playbook is blocked by signal rules." for item in blocker_summary["top_reasons"])
     preview = service.run_auto_selection(sample_scoreboard(), sample_settings(), execute=False)
     assert preview["selected"] == []
@@ -368,7 +368,7 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     qa_loss = next(item for item in dashboard["setup_performance"] if item["setup_type"] == "qa_loss")
     assert qa_loss["quality_status"] == "needs_journal"
     assert qa_loss["journal_completion_rate"] == 0.0
-    assert "Complete exit reason" in qa_loss["next_action"]
+    assert "Exit-Grund" in qa_loss["next_action"]
 
     try:
         service.create_trade_from_playbook(
@@ -476,12 +476,12 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
     assert aapl["score"] == 81
     assert aapl["learning_blocked"] is True
     assert aapl["tradeable"] is False
-    assert any("outcome learning" in reason.lower() for reason in aapl["do_not_trade_reasons"])
+    assert any("paper-ergebnisse" in reason.lower() for reason in aapl["do_not_trade_reasons"])
     assert dashboard["outcome_learning"]["setup_adjustments"]["insider_follow"]["block"] is True
     learning = dashboard["outcome_learning"]["learning_summary"]
     assert learning["blocked_setups"] == 1
-    assert learning["real_money_policy"] == "Decision support only: no automatic real-money execution."
-    assert any("blocked setup" in item.lower() for item in learning["review_focus"])
+    assert learning["real_money_policy"] == "Nur Entscheidungsrahmen: keine automatische Echtgeld-Ausführung."
+    assert any("geblockte setup" in item.lower() for item in learning["review_focus"])
     option = dashboard["outcome_learning"]["option_readiness"]
     assert option["status"] == "paper_only"
     assert option["required_decisive"] == 20

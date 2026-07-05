@@ -183,9 +183,9 @@ class PaperTradingService:
             return "Ticker oder Referenzkurs fehlt"
         if "missing thesis, trigger or invalidation" in lower:
             return "These, Trigger oder Invalidierung fehlt"
-        if "option remains paper-only" in lower or "option chain" in lower:
+        if "option remains paper-only" in lower or "option chain" in lower or "option bleibt paper-only" in lower or "optionskette" in lower:
             return "Option bleibt Paper-only bis zur manuellen Optionskettenprüfung"
-        if "paper outcome learning blocks" in lower:
+        if "paper outcome learning blocks" in lower or "paper-ergebnisse" in lower:
             return "Paper-Learning blockiert dieses Setup"
         if "demo risk gate blocked" in lower:
             return "Demo-Risiko-Gate blockiert"
@@ -404,7 +404,7 @@ class PaperTradingService:
             "closed": closed,
             "skipped": skipped[:8],
             "errors": errors[:5],
-            "policy": "Paper-only managed exits. No real-money execution.",
+            "policy": "Nur gemanagte Paper-Exits. Keine Echtgeld-Ausführung.",
         }
 
     def update_trade_journal(
@@ -542,22 +542,22 @@ class PaperTradingService:
         framework = playbook.get("decision_framework") or {}
         checklist = framework.get("review_questions") or []
         lines = [
-            "Decision snapshot at paper entry:",
+            "Entscheidungs-Snapshot beim Paper-Einstieg:",
             f"Headline: {playbook.get('headline') or 'n/a'}",
             f"Setup: {playbook.get('setup_type') or 'signal_playbook'} / {playbook.get('asset_class') or 'equity'} / {playbook.get('direction') or 'long'}",
-            f"Score: {playbook.get('score')}; evidence: {framework.get('evidence_level') or 'watch'}",
-            f"Demo sizing: suggested qty {playbook.get('suggested_quantity')}; max loss {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}.",
-            f"Trigger: {framework.get('entry_trigger') or 'Manual trigger review required.'}",
-            f"Invalidation: {framework.get('invalidation') or 'Manual invalidation review required.'}",
-            f"Risk plan: {framework.get('risk_plan') or 'Paper risk only.'}",
+            f"Score: {playbook.get('score')}; Beweisniveau: {framework.get('evidence_level') or 'watch'}",
+            f"Demo-Größe: vorgeschlagene Menge {playbook.get('suggested_quantity')}; max. Verlust {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}.",
+            f"Trigger: {framework.get('entry_trigger') or 'Manuelle Trigger-Prüfung erforderlich.'}",
+            f"Invalidierung: {framework.get('invalidation') or 'Manuelle Invalidierungsprüfung erforderlich.'}",
+            f"Risikoplan: {framework.get('risk_plan') or 'Nur Paper-Risiko.'}",
         ]
         if playbook.get("learning_mode"):
-            lines.append("Learning mode: reduced-size demo exploration, not a strict top setup and not real-money ready.")
+            lines.append("Lernmodus: reduzierte Demo-Position, kein strenges Top-Setup und nicht Echtgeld-bereit.")
         if is_option:
-            lines.append("Options gate: paper-only premium model; manually verify strike, expiry, spread, IV and max premium risk.")
+            lines.append("Options-Gate: nur Paper-Premienmodell; Strike, Laufzeit, Spread, IV und maximalen Prämienverlust manuell prüfen.")
         for question in checklist[:3]:
-            lines.append(f"Review question: {question}")
-        lines.append(framework.get("real_money_policy") or "Decision support only; no automatic real-money execution.")
+            lines.append(f"Prüffrage: {question}")
+        lines.append(framework.get("real_money_policy") or "Nur Entscheidungsrahmen; keine automatische Echtgeld-Ausführung.")
         return "\n".join(str(line) for line in lines if line)
 
     def _build_decision_framework(self, playbook: Dict[str, Any]) -> Dict[str, Any]:
@@ -573,24 +573,24 @@ class PaperTradingService:
         is_option = asset_class == "option"
         strategy = playbook.get("strategy") or StrategyLibrary.find_for_playbook(playbook)
 
-        direction_label = "upside" if direction in {"long", "call"} else "downside"
+        direction_label = "Aufwärtsbewegung" if direction in {"long", "call"} else "Abwärtsbewegung"
         entry_trigger = str(strategy.get("trigger_template") or "").format(ticker=ticker) or (
-            f"{ticker} confirms {direction_label} follow-through after the signal with clean price action and volume."
+            f"{ticker} bestätigt die {direction_label} nach dem Signal mit sauberer Preisreaktion und Volumen."
         )
         invalidation = str(strategy.get("invalidation_template") or "").format(ticker=ticker) or (
-            f"Thesis fails if {ticker} breaks the planned stop zone, news quality weakens, or the move is not confirmed by market breadth."
+            f"These ist ungültig, wenn {ticker} die geplante Stop-Zone bricht, Newsqualität nachlässt oder die Marktbreite die Bewegung nicht bestätigt."
         )
         risk_plan = (
-            f"Paper size only. Planned risk buffer {risk_pct}% and target buffer {reward_pct}%; no size increase after entry."
+            f"Nur Paper-Größe. Geplanter Risikopuffer {risk_pct}% und Zielpuffer {reward_pct}%; keine Positionsvergrößerung nach Einstieg."
         )
         if is_option:
             entry_trigger = (
-                f"Only paper-test the {direction.upper()} after the underlying confirms direction, liquidity and timing."
+                f"{direction.upper()} nur als Paper-Test, nachdem Underlying, Liquidität und Timing bestätigt sind."
             )
             invalidation = (
-                "Invalid if underlying momentum fades, spread is wide, IV/expiry are unattractive, or max premium risk is not documented."
+                "Ungültig, wenn Underlying-Momentum nachlässt, Spread breit ist, IV/Laufzeit unattraktiv sind oder maximaler Prämienverlust nicht dokumentiert ist."
             )
-            risk_plan = "Defined-risk paper option only; max loss is premium, no real-money execution from this model."
+            risk_plan = "Nur Paper-Option mit definiertem Risiko; maximaler Verlust ist die Prämie, keine Echtgeld-Ausführung aus diesem Modell."
 
         evidence_level = "watch"
         if blocked:
@@ -601,14 +601,14 @@ class PaperTradingService:
             evidence_level = "paper_candidate"
 
         review_questions = [
-            "Is the signal still fresh and confirmed by price, volume and market context?",
-            "What exact event would prove the thesis wrong?",
-            "Is the position risk acceptable before opening the trade?",
+            "Ist das Signal noch frisch und durch Preis, Volumen und Marktumfeld bestätigt?",
+            "Welches konkrete Ereignis macht die These ungültig?",
+            "Ist das Positionsrisiko vor Eröffnung akzeptabel?",
         ]
         if setup_type == "political_copy_delay":
-            review_questions.append("Is the political filing too delayed to still have an edge?")
+            review_questions.append("Ist das politische Filing zu verspätet, um noch Edge zu haben?")
         if is_option:
-            review_questions.append("Were strike, expiry, spread, IV and premium risk checked manually?")
+            review_questions.append("Wurden Strike, Laufzeit, Spread, IV und Prämienrisiko manuell geprüft?")
 
         return {
             "evidence_level": evidence_level,
@@ -616,10 +616,10 @@ class PaperTradingService:
             "invalidation": invalidation,
             "risk_plan": risk_plan,
             "data_checks": [
-                "Price reference available",
-                "Stop and target defined",
-                "No blocked learning setup" if not blocked else "Blocked reason must be resolved first",
-                "Manual review required before real money",
+                "Preisreferenz vorhanden",
+                "Stop und Ziel definiert",
+                "Kein geblocktes Lernsetup beteiligt" if not blocked else "Blocker muss zuerst gelöst werden",
+                "Manuelle Prüfung vor Echtgeld erforderlich",
             ],
             "review_questions": review_questions,
             "blocked_reasons": blocked,
@@ -630,7 +630,7 @@ class PaperTradingService:
             "quality_gates": strategy.get("quality_gates") or [],
             "risk_notes": strategy.get("risk_notes") or [],
             "real_world_gate": strategy.get("real_world_gate"),
-            "real_money_policy": "Decision support only; real-money execution requires manual review and documented risk.",
+            "real_money_policy": "Nur Entscheidungsrahmen; Echtgeld-Ausführung erfordert manuelle Prüfung und dokumentiertes Risiko.",
         }
 
     def _schedule_trade_outcomes(self, trade: Dict[str, Any]) -> int:
@@ -828,13 +828,13 @@ class PaperTradingService:
             if decisive >= 8 and hit_rate < 25:
                 score_delta = -14
                 block = True
-                reason = f"Setup {setup_type} is blocked by paper outcomes: {hit_rate}% hit rate over {decisive} decisive checks."
+                reason = f"Setup {setup_type} wird durch Paper-Ergebnisse geblockt: {hit_rate}% Trefferquote über {decisive} klare Prüfungen."
             elif hit_rate < 35:
                 score_delta = -8
-                reason = f"Setup {setup_type} is downgraded by paper outcomes: {hit_rate}% hit rate over {decisive} decisive checks."
+                reason = f"Setup {setup_type} wird durch Paper-Ergebnisse herabgestuft: {hit_rate}% Trefferquote über {decisive} klare Prüfungen."
             elif decisive >= 8 and hit_rate >= 60:
                 score_delta = 4
-                reason = f"Setup {setup_type} has positive paper evidence: {hit_rate}% hit rate over {decisive} decisive checks."
+                reason = f"Setup {setup_type} hat positive Paper-Beweise: {hit_rate}% Trefferquote über {decisive} klare Prüfungen."
             if score_delta or block:
                 setup_adjustments[setup_type] = {
                     "setup_type": setup_type,
@@ -870,32 +870,32 @@ class PaperTradingService:
         ]
 
         readiness_status = "paper_only"
-        readiness_label = "Paper only"
+        readiness_label = "nur Paper"
         if option_ready:
             readiness_status = "manual_review_ready"
-            readiness_label = "Manual review ready"
+            readiness_label = "manuelle Prüfung bereit"
         elif option_decisive >= 10 and option_hit_rate >= 45:
             readiness_status = "building_evidence"
-            readiness_label = "Building evidence"
+            readiness_label = "Beweise sammeln"
 
         review_focus: List[str] = []
         if blocked_setups:
-            review_focus.append(f"Stop using blocked setup types: {', '.join(item['setup_type'] for item in blocked_setups[:3])}.")
+            review_focus.append(f"Geblockte Setup-Typen nicht mehr nutzen: {', '.join(item['setup_type'] for item in blocked_setups[:3])}.")
         if downgraded_setups:
-            review_focus.append(f"Reduce size or require stronger confirmation for: {', '.join(item['setup_type'] for item in downgraded_setups[:3])}.")
+            review_focus.append(f"Positionsgröße reduzieren oder stärkere Bestätigung verlangen für: {', '.join(item['setup_type'] for item in downgraded_setups[:3])}.")
         if upgraded_setups:
-            review_focus.append(f"Keep testing stronger setups: {', '.join(item['setup_type'] for item in upgraded_setups[:3])}.")
+            review_focus.append(f"Stärkere Setups weiter testen: {', '.join(item['setup_type'] for item in upgraded_setups[:3])}.")
         if top_error_tags:
-            review_focus.append(f"Main error to fix next: {top_error_tags[0]['error_tag']} ({top_error_tags[0]['count']} misses).")
+            review_focus.append(f"Nächster Hauptfehler zum Verbessern: {top_error_tags[0]['error_tag']} ({top_error_tags[0]['count']} Fehlschläge).")
         if not review_focus:
-            review_focus.append("Collect more closed and auto-evaluated paper trades before changing real-money rules.")
+            review_focus.append("Mehr geschlossene und automatisch geprüfte Paper-Trades sammeln, bevor Echtgeld-Regeln verändert werden.")
 
         manual_review_checklist = [
-            "Thesis is written before entry.",
-            "Trigger, stop, target and invalidation are clear.",
-            "Position risk is within the account guardrails.",
-            "No blocked setup type is involved.",
-            "For options: expiry, strike, spread and max premium risk were reviewed manually.",
+            "These wurde vor Einstieg schriftlich festgehalten.",
+            "Trigger, Stop, Ziel und Invalidierung sind klar.",
+            "Positionsrisiko liegt innerhalb der Konto-Leitplanken.",
+            "Kein geblockter Setup-Typ ist beteiligt.",
+            "Bei Optionen: Laufzeit, Strike, Spread und maximaler Prämienverlust wurden manuell geprüft.",
         ]
 
         return {
@@ -910,9 +910,9 @@ class PaperTradingService:
                 "required_decisive": 20,
                 "required_hit_rate": 55,
                 "reason": (
-                    "Options remain paper-only until 20 decisive checks and >=55% hit rate."
+                    "Optionen bleiben nur Paper, bis 20 klare Prüfungen und >=55% Trefferquote erreicht sind."
                     if not option_ready
-                    else "Options have enough paper evidence for manual review, not automatic execution."
+                    else "Optionen haben genug Paper-Beweise für manuelle Prüfung, nicht für automatische Ausführung."
                 ),
             },
             "top_error_tags": top_error_tags,
@@ -924,7 +924,7 @@ class PaperTradingService:
                 "upgraded_setups": len(upgraded_setups),
                 "review_focus": review_focus,
                 "manual_review_checklist": manual_review_checklist,
-                "real_money_policy": "Decision support only: no automatic real-money execution.",
+                "real_money_policy": "Nur Entscheidungsrahmen: keine automatische Echtgeld-Ausführung.",
             },
         }
 
@@ -944,7 +944,7 @@ class PaperTradingService:
             if item.get("asset_class") == "option":
                 if not option_readiness.get("real_money_ready"):
                     score_delta -= 3
-                    notes.append(str(option_readiness.get("reason") or "Options remain paper-only."))
+                    notes.append(str(option_readiness.get("reason") or "Optionen bleiben nur Paper."))
             if score_delta:
                 item["raw_score"] = item.get("score")
                 item["score"] = max(0, round(float(item.get("score") or 0) + score_delta, 2))
@@ -1036,8 +1036,8 @@ class PaperTradingService:
             if playbook.get("asset_class") == "option":
                 readiness = (demo_account.get("learning_feedback") or {}).get("option_win_rate")
                 if readiness is None:
-                    reasons.append("option remains paper-only and needs manual chain review")
-                    exploration_reasons.append("option chain must be reviewed manually before exploration")
+                    reasons.append("Option bleibt Paper-only und braucht manuelle Optionskettenprüfung")
+                    exploration_reasons.append("Optionskette muss vor Exploration manuell geprüft werden")
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected):
                 reasons.append("demo account open-trade slots exhausted")
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration):
@@ -1089,7 +1089,7 @@ class PaperTradingService:
             "rejected": rejected[:8],
             "rejected_count": len(rejected),
             "blocker_summary": self._summarize_auto_rejections(rejected),
-            "policy": "Paper-only auto-selection. Strict mode is quality first; learn mode uses smaller demo risk to collect evidence.",
+            "policy": "Paper-only Auto-Auswahl. Strict-Modus priorisiert Qualität; Lernmodus nutzt kleineres Demo-Risiko zum Sammeln von Beweisen.",
         }
 
     def _summarize_auto_rejections(self, rejected: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1157,9 +1157,9 @@ class PaperTradingService:
             return "Erst Kursdaten laden oder Ticker/Asset-Zuordnung prüfen."
         if "missing thesis, trigger or invalidation" in text:
             return "Erst These, Einstiegstrigger und Invalidierung vollständig dokumentieren."
-        if "option remains paper-only" in text or "option chain" in text:
+        if "option remains paper-only" in text or "option chain" in text or "option bleibt paper-only" in text or "optionskette" in text:
             return "Optionskette, Strike, Laufzeit, Spread und IV manuell prüfen; bis dahin nur Paper."
-        if "paper outcome learning blocks" in text:
+        if "paper outcome learning blocks" in text or "paper-ergebnisse" in text:
             return "Setup erst wieder nutzen, wenn neue Paper-Ergebnisse die Fehlerquote verbessern."
         return "Setup beobachten; erst handeln, wenn Trigger, Risiko und Lern-Gates sauber erfüllt sind."
 
@@ -1296,19 +1296,19 @@ class PaperTradingService:
             management_counts[grade] = management_counts.get(grade, 0) + 1
         if management_counts.get("exit"):
             day_status = "action_required"
-            day_action = "Review exits before opening any new paper trade."
+            day_action = "Exits prüfen, bevor ein neuer Paper-Trade geöffnet wird."
         elif management_counts.get("review"):
             day_status = "risk_review"
-            day_action = "Check weak or near-stop trades before adding new exposure."
+            day_action = "Schwache oder stop-nahe Trades prüfen, bevor neue Exposure hinzukommt."
         elif management_counts.get("protect"):
             day_status = "protect_profit"
-            day_action = "Review profit protection on near-target winners."
+            day_action = "Gewinnschutz bei Gewinnern nahe am Ziel prüfen."
         elif open_trades:
             day_status = "monitor"
-            day_action = "Hold current paper plan; no change without trigger or invalidation."
+            day_action = "Aktuellen Paper-Plan halten; keine Änderung ohne Trigger oder Invalidierung."
         else:
             day_status = "no_open_trades"
-            day_action = "Wait for a clean setup with trigger, invalidation and free risk budget."
+            day_action = "Auf ein sauberes Setup mit Trigger, Invalidierung und freiem Risikobudget warten."
         risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
         max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
         max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
@@ -1342,10 +1342,10 @@ class PaperTradingService:
             "open_trade_slots": max(0, int(config["max_open_trades"]) - len(open_trades)),
             "candidate_count": len(playbooks),
             "guardrails": [
-                "Demo-only learning account; no automatic real-money execution.",
-                "Every idea needs thesis, trigger, stop, target and post-trade journal.",
-                "Calls and puts are paper-only until option chain, IV, strike, expiry and spread are checked.",
-                "Real-money use requires manual review, suitability check and current market validation.",
+                "Nur Demo-Lernkonto; keine automatische Echtgeld-Ausführung.",
+                "Jede Idee braucht These, Trigger, Stop, Ziel und Nachtrade-Journal.",
+                "Calls und Puts bleiben Paper-only, bis Optionskette, IV, Strike, Laufzeit und Spread geprüft sind.",
+                "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],
             "learning_feedback": self._build_learning_feedback(trades),
         }
@@ -1388,21 +1388,21 @@ class PaperTradingService:
         missing_journal_count = int(learning_feedback.get("missing_journal_count") or 0)
 
         if price <= 0:
-            block_reasons.append("No reference price for demo sizing.")
+            block_reasons.append("Keine Preisreferenz für Demo-Größe.")
         if day_status == "action_required":
-            block_reasons.append("Paper account has exit actions open; review existing trades before adding new exposure.")
+            block_reasons.append("Paper-Konto hat offene Exit-Aktionen; bestehende Trades vor neuer Exposure prüfen.")
         elif day_status == "risk_review":
-            block_reasons.append("Paper account is in risk review; check weak or near-stop trades before adding exposure.")
+            block_reasons.append("Paper-Konto ist im Risiko-Review; schwache oder stop-nahe Trades zuerst prüfen.")
         if missing_journal_count > 0:
             block_reasons.append(
-                f"Complete {missing_journal_count} missing paper journal(s) before adding new exposure."
+                f"{missing_journal_count} fehlende Paper-Journale abschließen, bevor neue Exposure hinzukommt."
             )
         if risk_budget <= 0:
-            block_reasons.append("Open risk budget is exhausted.")
+            block_reasons.append("Offenes Risikobudget ist ausgeschöpft.")
         if int(demo_account.get("open_trade_slots") or 0) <= 0:
-            block_reasons.append("Maximum demo open trades reached.")
+            block_reasons.append("Maximale Anzahl offener Demo-Trades erreicht.")
         if playbook.get("tradeable") is False:
-            block_reasons.append("Playbook is blocked by signal rules.")
+            block_reasons.append("Playbook ist durch Signalregeln geblockt.")
 
         quantity_by_risk = risk_budget / risk_per_unit if risk_per_unit > 0 else 0
         quantity_by_position = max_position_value / (price * contract_multiplier) if price > 0 else 0
@@ -1410,7 +1410,7 @@ class PaperTradingService:
         if is_option:
             quantity = float(int(quantity))
         if quantity < 0.0001:
-            block_reasons.append("Suggested quantity is too small for the configured risk budget.")
+            block_reasons.append("Vorgeschlagene Menge ist zu klein für das konfigurierte Risikobudget.")
 
         notional = quantity * price * contract_multiplier
         max_loss = quantity * risk_per_unit
@@ -1476,12 +1476,12 @@ class PaperTradingService:
                 for reason, count in sorted(mistakes.items(), key=lambda item: item[1], reverse=True)[:5]
             ],
             "next_rule": (
-                f"Complete {len(missing_journal)} missing paper journal(s) before trusting the learning loop."
+                f"{len(missing_journal)} fehlende Paper-Journale abschließen, bevor der Lernschleife vertraut wird."
                 if missing_journal
                 else
-                "No real-money calls or puts until at least 20 paper option trades show repeatable positive expectancy."
+                "Keine Echtgeld-Calls oder -Puts, bis mindestens 20 Paper-Optionstrades wiederholbar positive Erwartung zeigen."
                 if len(option_closed) < 20
-                else "Review option expectancy by setup before increasing demo risk."
+                else "Options-Erwartung je Setup prüfen, bevor Demo-Risiko erhöht wird."
             ),
         }
 
@@ -1519,19 +1519,19 @@ class PaperTradingService:
             journal_completion_rate = round(((trades - missing_journal) / trades) * 100, 1)
             if missing_journal:
                 quality_status = "needs_journal"
-                next_action = "Complete exit reason and lesson before trusting this setup."
+                next_action = "Exit-Grund und Lektion vervollständigen, bevor diesem Setup vertraut wird."
             elif trades < 5:
                 quality_status = "building_evidence"
-                next_action = "Collect at least 5 closed paper trades before changing risk."
+                next_action = "Mindestens 5 geschlossene Paper-Trades sammeln, bevor Risiko verändert wird."
             elif win_rate >= 55 and avg_pnl > 0:
                 quality_status = "promising"
-                next_action = "Keep paper-testing; consider slightly higher demo priority only after repeated clean journals."
+                next_action = "Weiter per Paper testen; höhere Demo-Priorität erst nach wiederholt sauberen Journalen prüfen."
             elif win_rate < 45 or avg_pnl < 0:
                 quality_status = "downgrade"
-                next_action = "Reduce score weight and require stronger confirmation before next entry."
+                next_action = "Score-Gewichtung senken und vor dem nächsten Einstieg stärkere Bestätigung verlangen."
             else:
                 quality_status = "neutral"
-                next_action = "Keep risk unchanged and wait for more decisive evidence."
+                next_action = "Risiko unverändert lassen und auf klarere Beweise warten."
             rows.append(
                 {
                     **bucket,
@@ -1651,8 +1651,8 @@ class PaperTradingService:
                 "status": "pending_data",
                 "action": "wait",
                 "decision_grade": "wait",
-                "next_check": "Wait for a reliable current price before changing the paper position.",
-                "summary": "Current price unavailable; keep paper trade under review.",
+                "next_check": "Auf verlässlichen aktuellen Kurs warten, bevor die Paper-Position geändert wird.",
+                "summary": "Aktueller Kurs fehlt; Paper-Trade weiter prüfen.",
             }
 
         current_price = float(current)
@@ -1663,7 +1663,7 @@ class PaperTradingService:
         target_progress = None
         action = "hold"
         status = "monitor"
-        summary = "Hold paper position while trigger remains valid."
+        summary = "Paper-Position halten, solange der Trigger gültig bleibt."
 
         if stop_price is not None:
             if direction == "short":
@@ -1677,15 +1677,15 @@ class PaperTradingService:
                     "status": "stop_hit",
                     "action": "close_review",
                     "decision_grade": "exit",
-                    "next_check": "Close or log why the stop should not be respected; do not average down.",
-                    "summary": "Stop zone is hit or breached. Review closing the paper trade and log the lesson.",
+                    "next_check": "Schließen oder dokumentieren, warum der Stop nicht respektiert wird; nicht verbilligen.",
+                    "summary": "Stop-Zone wurde erreicht oder gebrochen. Paper-Trade-Schließung prüfen und Lektion loggen.",
                     "risk_distance_pct": round(risk_distance, 2),
                     "target_progress_pct": None,
                 }
             if risk_distance is not None and risk_distance <= 0.6:
                 status = "near_stop"
                 action = "reduce_or_close_review"
-                summary = "Price is close to stop. Do not add; prepare exit review if weakness continues."
+                summary = "Kurs ist nahe am Stop. Nicht aufstocken; Exit-Prüfung vorbereiten, falls Schwäche anhält."
 
         if target_price is not None:
             if direction == "short":
@@ -1702,36 +1702,36 @@ class PaperTradingService:
                     "status": "target_hit",
                     "action": "take_profit_review",
                     "decision_grade": "exit",
-                    "next_check": "Record the target hit, close or document a tighter trailing plan.",
-                    "summary": "Target zone reached. Review taking profit or closing the paper trade.",
+                    "next_check": "Zieltreffer dokumentieren, schließen oder engeren Trailing-Plan festhalten.",
+                    "summary": "Zielzone erreicht. Gewinnmitnahme oder Paper-Trade-Schließung prüfen.",
                     "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
                     "target_progress_pct": round(target_progress, 1),
                 }
             if target_progress >= 75 and favorable_pct > 0 and status == "monitor":
                 status = "near_target"
                 action = "protect_profit_review"
-                summary = "Trade is near target. Review whether to protect profit or tighten the paper plan."
+                summary = "Trade ist nahe am Ziel. Prüfen, ob Gewinn geschützt oder Paper-Plan enger geführt wird."
 
         if favorable_pct <= -1.5 and status == "monitor":
             status = "weak_follow_through"
             action = "thesis_check"
-            summary = "Adverse follow-through. Check whether the original trigger is failing."
+            summary = "Negative Anschlussbewegung. Prüfen, ob der ursprüngliche Trigger versagt."
         elif favorable_pct >= 1.5 and status == "monitor":
             status = "working"
             action = "hold_with_plan"
-            summary = "Trade is working. Hold only while invalidation remains false."
+            summary = "Trade funktioniert. Nur halten, solange die Invalidierung nicht ausgelöst ist."
 
         decision_grade = "hold"
-        next_check = "Keep the planned stop and target; re-check after the next meaningful price update."
+        next_check = "Geplanten Stop und Ziel halten; nach dem nächsten relevanten Kursupdate erneut prüfen."
         if status in {"near_stop", "weak_follow_through"}:
             decision_grade = "review"
-            next_check = "Re-check trigger quality and invalidation before adding or holding longer."
+            next_check = "Trigger-Qualität und Invalidierung erneut prüfen, bevor aufgestockt oder länger gehalten wird."
         elif status == "near_target":
             decision_grade = "protect"
-            next_check = "Review profit protection; do not let a near-target winner become an unreviewed loser."
+            next_check = "Gewinnschutz prüfen; Gewinner nahe am Ziel nicht ungeprüft zum Verlierer werden lassen."
         elif status == "working":
             decision_grade = "hold"
-            next_check = "Hold while the original trigger remains valid; no size increase without a new setup."
+            next_check = "Halten, solange der ursprüngliche Trigger gültig bleibt; keine Vergrößerung ohne neues Setup."
 
         return {
             "status": status,
@@ -1754,15 +1754,15 @@ class PaperTradingService:
             blocked.append(f"Score below minimum trade score {min_trade_score:.0f}.")
         if playbook.get("setup_type") == "political_copy_delay":
             if score < min_trade_score + 2:
-                blocked.append(f"Political delay setup needs stronger confirmation above {min_trade_score + 2:.0f}.")
+                blocked.append(f"Politisches Delay-Setup braucht stärkere Bestätigung über {min_trade_score + 2:.0f}.")
         if playbook.get("asset_class") == "crypto" and playbook.get("direction") == "short":
-            blocked.append("Crypto short playbooks are disabled in the current model.")
+            blocked.append("Crypto-Short-Playbooks sind im aktuellen Modell deaktiviert.")
         if playbook.get("asset_class") == "crypto" and bool(rules.get("block_crypto_leverage", True)):
-            leverage_rules.append("Crypto leverage is blocked in the current rule set.")
+            leverage_rules.append("Crypto-Hebel ist im aktuellen Regelwerk geblockt.")
         if score < min_leverage_score:
-            leverage_rules.append(f"No leverage allowed below score {min_leverage_score:.0f}.")
+            leverage_rules.append(f"Kein Hebel unter Score {min_leverage_score:.0f} erlaubt.")
         if playbook.get("learning_blocked"):
-            blocked.append("Paper outcome learning blocks this setup until results improve.")
+            blocked.append("Paper-Ergebnisse blockieren dieses Setup, bis die Resultate besser werden.")
         return {"blocked": blocked, "leverage": leverage_rules}
 
     def _calc_return_pct(self, entry_price: float, other_price: Optional[float], direction_multiplier: int, leverage: float) -> Optional[float]:

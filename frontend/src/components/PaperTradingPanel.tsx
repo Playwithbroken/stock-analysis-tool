@@ -460,7 +460,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div className="mt-3 grid gap-2 lg:grid-cols-2">
                 {autoSelection.blocker_summary.top_reasons.slice(0, 4).map((item: any) => (
                   <div key={item.reason} className="rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-slate-700">
-                    <span className="font-black text-amber-800">{item.count}x</span> {item.reason}
+                    <span className="font-black text-amber-800">{item.count}x</span> {item.display_reason || item.reason}
                   </div>
                 ))}
               </div>
@@ -468,7 +468,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <div className="mt-3 rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-slate-700">
                   <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Nächster Kandidat:</span>{" "}
                   {autoSelection.blocker_summary.next_best_rejected.ticker} wird geblockt durch{" "}
-                  {autoSelection.blocker_summary.next_best_rejected.reasons.join(" / ")}.
+                  {(autoSelection.blocker_summary.next_best_rejected.display_reasons || autoSelection.blocker_summary.next_best_rejected.reasons).join(" / ")}.
                   {autoSelection.blocker_summary.next_best_rejected.next_action ? (
                     <div className="mt-2 font-bold text-slate-900">
                       Nächster Schritt: {autoSelection.blocker_summary.next_best_rejected.next_action}
@@ -530,7 +530,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     </div>
                   </div>
                   <div className="mt-2 grid gap-1 text-red-800">
-                    {(item.reasons || []).slice(0, 3).map((reason: string) => (
+                    {(item.display_reasons || item.reasons || []).slice(0, 3).map((reason: string) => (
                       <div key={reason}>Block: {reason}</div>
                     ))}
                   </div>

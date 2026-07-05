@@ -145,7 +145,8 @@ class PaperTradingService:
         label = "Learning" if mode == "learn" else "Strict"
         next_best = blocker_summary.get("next_best_rejected") if isinstance(blocker_summary, dict) else None
         if isinstance(next_best, dict) and next_best.get("ticker"):
-            reasons = " / ".join(str(item).strip().rstrip(".") for item in (next_best.get("reasons") or [])[:2])
+            reason_values = next_best.get("display_reasons") or next_best.get("reasons") or []
+            reasons = " / ".join(str(item).strip().rstrip(".") for item in reason_values[:2])
             next_action = str(next_best.get("next_action") or "").strip().rstrip(".")
             parts = [f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Nächster Kandidat: {next_best.get('ticker')}"]
             if reasons:
@@ -155,9 +156,42 @@ class PaperTradingService:
             return ". ".join(parts) + "."
         top_reasons = blocker_summary.get("top_reasons") if isinstance(blocker_summary, dict) else []
         if top_reasons:
-            reason = str((top_reasons[0] or {}).get("reason") or "quality gates")
+            reason = str((top_reasons[0] or {}).get("display_reason") or (top_reasons[0] or {}).get("reason") or "Quality-Gates")
             return f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Hauptblocker: {reason}."
         return f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Erst auf ein saubereres Setup warten, bevor Demo-Risiko geöffnet wird."
+
+    def _auto_rejection_display_reason(self, reason: str) -> str:
+        text = str(reason or "").strip()
+        lower = text.lower()
+        if "score below auto minimum" in lower:
+            return "Score unter Auto-Minimum 88"
+        if "score below minimum trade score" in lower:
+            return "Score unter Mindestqualität 78"
+        if "same ticker/setup/direction already open" in lower:
+            return "gleicher Ticker/Setup/Richtung läuft bereits"
+        if "missing paper journal" in lower:
+            return "fehlendes Paper-Journal"
+        if "risk review" in lower:
+            return "Paper-Konto im Risiko-Review"
+        if "exit actions open" in lower:
+            return "offene Exit-Aktionen zuerst prüfen"
+        if "open risk budget is exhausted" in lower:
+            return "offenes Risikobudget ausgeschöpft"
+        if "open-trade slots exhausted" in lower or "maximum demo open trades reached" in lower:
+            return "maximale Anzahl offener Demo-Trades erreicht"
+        if "missing ticker or reference price" in lower:
+            return "Ticker oder Referenzkurs fehlt"
+        if "missing thesis, trigger or invalidation" in lower:
+            return "These, Trigger oder Invalidierung fehlt"
+        if "option remains paper-only" in lower or "option chain" in lower:
+            return "Option bleibt Paper-only bis zur manuellen Optionskettenprüfung"
+        if "paper outcome learning blocks" in lower:
+            return "Paper-Learning blockiert dieses Setup"
+        if "demo risk gate blocked" in lower:
+            return "Demo-Risiko-Gate blockiert"
+        if "trade signal rules blocked" in lower:
+            return "Signal-Regeln blockieren dieses Playbook"
+        return text
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         trade = self.portfolio_manager.create_paper_trade(payload)
@@ -1028,6 +1062,7 @@ class PaperTradingService:
                 "invalidation": framework.get("invalidation"),
                 "reasons": self._dedupe_reason_list(reasons),
             }
+            row["display_reasons"] = [self._auto_rejection_display_reason(reason) for reason in row["reasons"]]
             row["next_action"] = self._auto_rejection_next_action(row["reasons"])
             if reasons:
                 rejected.append(row)
@@ -1067,7 +1102,7 @@ class PaperTradingService:
                 reason_counts[label] = reason_counts.get(label, 0) + 1
 
         top_reasons = [
-            {"reason": reason, "count": count}
+            {"reason": reason, "display_reason": self._auto_rejection_display_reason(reason), "count": count}
             for reason, count in sorted(reason_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:5]
         ]
         next_best = None
@@ -1085,6 +1120,10 @@ class PaperTradingService:
                 "setup_type": next_best.get("setup_type"),
                 "score": next_best.get("score"),
                 "reasons": (next_best.get("reasons") or [])[:3],
+                "display_reasons": (
+                    next_best.get("display_reasons")
+                    or [self._auto_rejection_display_reason(reason) for reason in (next_best.get("reasons") or [])]
+                )[:3],
                 "next_action": next_best.get("next_action"),
                 "source": "best_fixable" if actionable_rejected else "best_overall",
             }

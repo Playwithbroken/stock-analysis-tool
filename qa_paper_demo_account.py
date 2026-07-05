@@ -405,8 +405,13 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
     assert summary["duplicate_blocked_count"] == 1
     assert summary["next_best_rejected"]["ticker"] == "AAPL"
     assert summary["next_best_rejected"]["source"] == "best_fixable"
+    assert summary["next_best_rejected"]["display_reasons"][0] == "Score unter Auto-Minimum 88"
+    assert summary["top_reasons"][0]["display_reason"]
     assert "Score 88+" in summary["next_best_rejected"]["next_action"]
     assert "Duplikat" in service._auto_rejection_next_action(["same ticker/setup/direction already open"])
+    message = service._auto_selection_no_trade_message("strict", summary)
+    assert "Score unter Auto-Minimum 88" in message
+    assert "score below auto minimum" not in message
 
 
 def test_close_trade_auto_documents_profitable_exit() -> None:

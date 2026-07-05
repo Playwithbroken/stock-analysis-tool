@@ -81,9 +81,9 @@ class PaperTradingService:
         preview_message = (
             no_trade_message
             if not selected
-            else f"{len(selected)} Learning-Kandidat(en) erfüllen die Exploration-Gates."
+            else f"{len(selected)} Learning-Kandidaten erfüllen die Exploration-Gates."
             if mode == "learn"
-            else f"{len(selected)} Demo-Kandidat(en) erfüllen die Auto-Selection-Gates."
+            else f"{len(selected)} Demo-Kandidaten erfüllen die Auto-Selection-Gates."
         )
         if not execute:
             return {
@@ -125,9 +125,9 @@ class PaperTradingService:
         execution_message = (
             no_trade_message
             if not selected and not opened
-            else f"{len(opened)} Paper-Learning-Trade(s) eröffnet; {len(errors)} im finalen Gate geblockt."
+            else f"{len(opened)} Paper-Learning-Trades eröffnet; {len(errors)} im finalen Gate geblockt."
             if mode == "learn"
-            else f"{len(opened)} Paper-Trade(s) eröffnet; {len(errors)} im finalen Gate geblockt."
+            else f"{len(opened)} Paper-Trades eröffnet; {len(errors)} im finalen Gate geblockt."
         )
         return {
             "status": "ok" if not errors else "partial",
@@ -148,7 +148,7 @@ class PaperTradingService:
             reason_values = next_best.get("display_reasons") or next_best.get("reasons") or []
             reasons = " / ".join(str(item).strip().rstrip(".") for item in reason_values[:2])
             next_action = str(next_best.get("next_action") or "").strip().rstrip(".")
-            parts = [f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Nächster Kandidat: {next_best.get('ticker')}"]
+            parts = [f"0 {label}-Paper-Kandidaten erfüllen die Gates. Nächster Kandidat: {next_best.get('ticker')}"]
             if reasons:
                 parts.append(f"Geblockt durch {reasons}")
             if next_action:
@@ -157,8 +157,8 @@ class PaperTradingService:
         top_reasons = blocker_summary.get("top_reasons") if isinstance(blocker_summary, dict) else []
         if top_reasons:
             reason = str((top_reasons[0] or {}).get("display_reason") or (top_reasons[0] or {}).get("reason") or "Quality-Gates")
-            return f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Hauptblocker: {reason}."
-        return f"0 {label}-Paper-Kandidat(en) erfüllen die Gates. Erst auf ein saubereres Setup warten, bevor Demo-Risiko geöffnet wird."
+            return f"0 {label}-Paper-Kandidaten erfüllen die Gates. Hauptblocker: {reason}."
+        return f"0 {label}-Paper-Kandidaten erfüllen die Gates. Erst auf ein saubereres Setup warten, bevor Demo-Risiko geöffnet wird."
 
     def _auto_rejection_display_reason(self, reason: str) -> str:
         text = str(reason or "").strip()

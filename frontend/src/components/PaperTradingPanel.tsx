@@ -118,7 +118,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Opening trade failed.");
       await onRefresh?.();
-      setStatus("Paper trade opened.");
+      setStatus("Paper-Trade eröffnet.");
     } catch (error: any) {
       setStatus(error?.message || "Opening trade failed.");
     } finally {
@@ -194,8 +194,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       await onRefresh?.();
       setStatus(
         execute
-          ? payload.message || `Opened ${payload.opened?.length || 0} paper trade(s).`
-          : payload.message || `${payload.selected?.length || 0} candidate(s) passed the gates.`,
+          ? payload.message || `${payload.opened?.length || 0} Paper-Trades eröffnet.`
+          : payload.message || `${payload.selected?.length || 0} Kandidaten erfüllen die Gates.`,
       );
     } catch (error: any) {
       setStatus(error?.message || "Paper autopilot failed.");
@@ -437,8 +437,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           <div className="mt-3 rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-slate-600">
             <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Scheduled learn:</span>{" "}
             <span className="font-bold text-slate-800">{autoLearnStatus.status || "not_started"}</span>
-            {autoLearnStatus.opened?.length ? ` · opened ${autoLearnStatus.opened.length}` : ""}
-            {autoLearnStatus.next_allowed_at ? ` · next ${new Date(autoLearnStatus.next_allowed_at).toLocaleString()}` : ""}
+            {autoLearnStatus.opened?.length ? ` · geöffnet ${autoLearnStatus.opened.length}` : ""}
+            {autoLearnStatus.next_allowed_at ? ` · nächster Lauf ${new Date(autoLearnStatus.next_allowed_at).toLocaleString()}` : ""}
             {autoLearnStatus.message ? ` · ${autoLearnStatus.message}` : ""}
           </div>
           {autoSelection.blocker_summary?.top_reasons?.length ? (
@@ -487,7 +487,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div className="font-black text-emerald-700">{item.score}</div>
                   </div>
                   <div className="mt-1 text-slate-500">{item.setup_type}</div>
-                  <div className="mt-2 text-slate-700">Max loss {money(item.suggested_max_loss_value, currency)}</div>
+                  <div className="mt-2 text-slate-700">Max. Verlust {money(item.suggested_max_loss_value, currency)}</div>
                   {item.trigger ? <div className="mt-2 text-emerald-900">Trigger: {item.trigger}</div> : null}
                   {item.invalidation ? <div className="mt-1 text-emerald-800">Invalidation: {item.invalidation}</div> : null}
                 </div>
@@ -500,7 +500,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           )}
           {autoSelection.exploration?.length ? (
             <div className="mt-3">
-              <div className="font-extrabold uppercase tracking-[0.18em] text-amber-700">Learning candidates</div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-amber-700">Lernkandidaten</div>
               <div className="mt-2 grid gap-3 lg:grid-cols-3">
                 {autoSelection.exploration.slice(0, 3).map((item: any) => (
                   <div key={item.id} className="rounded-[1.1rem] border border-amber-500/20 bg-amber-50/80 p-3">
@@ -509,7 +509,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div className="font-black text-amber-700">{item.score}</div>
                     </div>
                     <div className="mt-1 text-slate-500">{item.strategy_label || item.setup_type}</div>
-                    <div className="mt-2 text-slate-700">Small demo loss {money(item.suggested_max_loss_value, currency)}</div>
+                    <div className="mt-2 text-slate-700">Kleines Demo-Risiko {money(item.suggested_max_loss_value, currency)}</div>
                     <div className="mt-2 text-amber-900">Nur zum Lernen: kleine Position, gleiche These, gleiche Invalidierung.</div>
                   </div>
                 ))}
@@ -523,10 +523,10 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <div className="font-black text-slate-900">{item.ticker} · {item.direction}</div>
-                      <div className="mt-1 text-slate-500">{item.setup_type} · score {item.score}</div>
+                      <div className="mt-1 text-slate-500">{item.setup_type} · Score {item.score}</div>
                     </div>
                     <div className="rounded-full border border-red-200 bg-white px-2 py-1 font-extrabold uppercase tracking-[0.12em] text-red-700">
-                      no trade
+                      kein Trade
                     </div>
                   </div>
                   <div className="mt-2 grid gap-1 text-red-800">
@@ -894,7 +894,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   <div className="mt-3 grid gap-2 rounded-[1.1rem] border border-emerald-500/15 bg-emerald-50/70 p-3 text-xs text-emerald-900 sm:grid-cols-2">
                     <div className="font-bold">Demo size: {item.suggested_quantity || 0}</div>
                     <div>Notional: {money(item.suggested_notional_value, currency)}</div>
-                    <div>Max loss: {money(item.suggested_max_loss_value, currency)}</div>
+                    <div>Max. Verlust: {money(item.suggested_max_loss_value, currency)}</div>
                     <div>Account/Risk: {item.suggested_account_pct || 0}% / {item.suggested_risk_pct || 0}%</div>
                     {item.asset_class === "option" && <div>Contract: x{item.contract_multiplier || 100} · {item.option_type?.toUpperCase?.()}</div>}
                     {item.asset_class === "option" && <div>Max hold: {item.max_holding_days || 10}d</div>}

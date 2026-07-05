@@ -357,11 +357,13 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert "Nächster Kandidat" in preview["message"]
     assert "Paper-Journale" in preview["message"]
     assert "candidate(s)" not in preview["message"]
+    assert "Kandidat(en)" not in preview["message"]
     assert ".." not in preview["message"]
     execute = service.run_auto_selection(sample_scoreboard(), sample_settings(), execute=True)
     assert execute["opened"] == []
     assert "Nächster Kandidat" in execute["message"]
     assert "candidate(s)" not in execute["message"]
+    assert "Kandidat(en)" not in execute["message"]
     assert ".." not in execute["message"]
     qa_loss = next(item for item in dashboard["setup_performance"] if item["setup_type"] == "qa_loss")
     assert qa_loss["quality_status"] == "needs_journal"

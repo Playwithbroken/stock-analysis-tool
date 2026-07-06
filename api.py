@@ -962,6 +962,34 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
     except Exception:
         pass
 
+    try:
+        paper_rows: List[Dict[str, Any]] = []
+        for trade in get_portfolio_manager().list_paper_trades(status="open", limit=12):
+            if isinstance(trade, dict):
+                paper_rows.append(
+                    {
+                        "ticker": trade.get("ticker"),
+                        "name": trade.get("setup_type") or trade.get("direction") or trade.get("ticker"),
+                    }
+                )
+        add_category("Paper Trading", paper_rows, limit=6)
+    except Exception:
+        pass
+
+    try:
+        forecast_rows: List[Dict[str, Any]] = []
+        for forecast in get_portfolio_manager().list_signal_forecasts(limit=12):
+            if isinstance(forecast, dict):
+                forecast_rows.append(
+                    {
+                        "ticker": forecast.get("symbol"),
+                        "name": forecast.get("setup_type") or forecast.get("source_label") or forecast.get("symbol"),
+                    }
+                )
+        add_category("Lernsignale", forecast_rows, limit=6)
+    except Exception:
+        pass
+
     for category, values in DEFAULT_SEARCH_SUGGESTIONS.items():
         if category not in suggestions:
             suggestions[category] = values

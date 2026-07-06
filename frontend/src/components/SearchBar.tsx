@@ -408,8 +408,10 @@ function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
 
 function normalizeSuggestionGroups(payload: unknown): Record<string, string[]> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+  const hiddenCategories = new Set(["meta"]);
   return Object.fromEntries(
     Object.entries(payload as Record<string, unknown>)
+      .filter(([category]) => !hiddenCategories.has(category.trim().toLowerCase()))
       .map(([category, values]) => {
         const normalizedValues = Array.isArray(values)
           ? values.map((value) => String(value || "").trim()).filter(Boolean)
@@ -443,7 +445,16 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     [suggestions],
   );
   const quickSuggestions = useMemo(() => {
-    const preferredCategories = ["Jetzt interessant", "Mein Radar", "Market Movers", "Katalysatoren", "ETFs & Makro", "Crypto"];
+    const preferredCategories = [
+      "Jetzt interessant",
+      "Paper Trading",
+      "Lernsignale",
+      "Mein Radar",
+      "Market Movers",
+      "Katalysatoren",
+      "ETFs & Makro",
+      "Crypto",
+    ];
     const ordered = [
       ...preferredCategories.flatMap((category) => suggestions[category] || []),
       ...flatSuggestions.map((item) => item.value),

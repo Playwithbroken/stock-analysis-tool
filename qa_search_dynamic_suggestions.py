@@ -70,6 +70,9 @@ async def main() -> int:
         if any("paper_learning" in item or "learning_forecast" in item for item in [*paper, *learning]):
             print("FAIL: technical setup labels leaked into user-facing search suggestions")
             return 1
+        if any(item.split(" (", 1)[0].strip().islower() and "_" in item.split(" (", 1)[0] for item in [*paper, *learning]):
+            print("FAIL: underscored internal labels leaked into user-facing search suggestions")
+            return 1
         if "meta" in cached_suggestions:
             print("FAIL: cache metadata leaked as a search suggestion category")
             return 1

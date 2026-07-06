@@ -442,6 +442,23 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       ),
     [suggestions],
   );
+  const quickSuggestions = useMemo(() => {
+    const preferredCategories = ["Jetzt interessant", "Mein Radar", "Market Movers", "Katalysatoren", "ETFs & Makro", "Crypto"];
+    const ordered = [
+      ...preferredCategories.flatMap((category) => suggestions[category] || []),
+      ...flatSuggestions.map((item) => item.value),
+    ];
+    const seen = new Set<string>();
+    const tickers: string[] = [];
+    for (const value of ordered) {
+      const ticker = normalizeTickerInput(value);
+      if (!ticker || seen.has(ticker)) continue;
+      seen.add(ticker);
+      tickers.push(ticker);
+      if (tickers.length >= 5) break;
+    }
+    return tickers.length > 0 ? tickers : ["NVDA", "MSFT", "BRK-B", "SAP", "BTC-USD"];
+  }, [flatSuggestions, suggestions]);
   const directSearchActive = Boolean(query.trim()) && flatSuggestions.some((item) => item.category === "Direkt suchen");
 
   // Compute ghost-text: first flat suggestion that starts with query (case-insensitive)
@@ -767,7 +784,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
-          {["NVDA", "MSFT", "BRK-B", "SAP", "BTC-USD"].map((item) => (
+          {quickSuggestions.map((item) => (
             <button
               key={item}
               type="button"

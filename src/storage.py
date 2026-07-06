@@ -346,7 +346,7 @@ class PortfolioManager:
         shares: float,
         buy_price: Optional[float] = None,
         purchase_date: Optional[str] = None,
-    ) -> bool:
+    ) -> Optional[Dict[str, Any]]:
         clean_ticker = self._normalize_ticker(ticker)
         if not clean_ticker:
             raise ValueError("Ticker is required")
@@ -361,7 +361,7 @@ class PortfolioManager:
         cursor.execute('SELECT 1 FROM portfolios WHERE id = ?', (portfolio_id,))
         if cursor.fetchone() is None:
             conn.close()
-            return False
+            return None
         
         # Check if holding already exists for this ticker
         cursor.execute(
@@ -398,10 +398,22 @@ class PortfolioManager:
                 'INSERT INTO holdings (id, portfolio_id, ticker, shares, buy_price, purchase_date) VALUES (?, ?, ?, ?, ?, ?)',
                 (holding_id, portfolio_id, clean_ticker, shares, buy_price, normalized_purchase_date),
             )
-                           
+
         conn.commit()
+        cursor.execute(
+            'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE portfolio_id = ? AND ticker = ?',
+            (portfolio_id, clean_ticker),
+        )
+        row = cursor.fetchone()
         conn.close()
-        return True
+        if not row:
+            return None
+        return {
+            "ticker": row[0],
+            "shares": row[1],
+            "buyPrice": row[2],
+            "purchaseDate": row[3],
+        }
 
     def remove_holding(self, portfolio_id: str, ticker: str):
         conn = sqlite3.connect(DB_PATH)

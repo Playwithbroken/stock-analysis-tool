@@ -283,22 +283,24 @@ export function usePortfolios(enabled: boolean = true) {
     if (!response.ok) {
       throw new Error(await readApiError(response, `Position konnte nicht gespeichert werden (${response.status})`))
     }
+    const savedHolding = await response.json().catch(() => null)
+    const confirmedHolding: Holding = {
+      ticker: String(savedHolding?.ticker || normalizedHolding.ticker),
+      shares: Number(savedHolding?.shares ?? normalizedHolding.shares),
+      buyPrice: savedHolding?.buyPrice ?? savedHolding?.buy_price ?? normalizedHolding.buyPrice,
+      purchaseDate: savedHolding?.purchaseDate ?? savedHolding?.purchase_date ?? normalizedHolding.purchaseDate,
+    }
     setPortfolios((current) => {
       const updated = current.map((portfolio) => {
         if (portfolio.id !== portfolioId) return portfolio
-        const existing = portfolio.holdings.find((item) => item.ticker === normalizedHolding.ticker)
+        const existing = portfolio.holdings.find((item) => item.ticker === confirmedHolding.ticker)
         const holdings = existing
           ? portfolio.holdings.map((item) =>
-              item.ticker === normalizedHolding.ticker
-                ? {
-                    ...item,
-                    shares: Number(item.shares || 0) + normalizedHolding.shares,
-                    buyPrice: normalizedHolding.buyPrice ?? item.buyPrice,
-                    purchaseDate: normalizedHolding.purchaseDate ?? item.purchaseDate,
-                  }
+              item.ticker === confirmedHolding.ticker
+                ? confirmedHolding
                 : item,
             )
-          : [...portfolio.holdings, normalizedHolding]
+          : [...portfolio.holdings, confirmedHolding]
         return { ...portfolio, holdings }
       })
       saveToCache(updated)

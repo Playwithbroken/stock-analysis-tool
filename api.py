@@ -3363,7 +3363,7 @@ async def add_holding(p_id: str, req: AddHoldingRequest):
         raise HTTPException(status_code=400, detail=str(exc))
     if not saved:
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    return {"status": "added"}
+    return saved
 
 @app.patch("/api/portfolios/{p_id}/holdings/{ticker}")
 async def update_holding(p_id: str, ticker: str, req: UpdateHoldingRequest):

@@ -22,7 +22,11 @@ def main() -> None:
             buy_price=150.25,
             purchase_date="2026-06-07",
         )
-        assert saved is True, "holding was not saved"
+        assert saved is not None, "holding was not saved"
+        assert saved["ticker"] == "AAPL"
+        assert saved["shares"] == 2
+        assert saved["buyPrice"] == 150.25
+        assert saved["purchaseDate"] == "2026-06-07"
 
         portfolios = manager.get_portfolios()
         loaded = next((item for item in portfolios if item["id"] == portfolio["id"]), None)
@@ -33,6 +37,14 @@ def main() -> None:
         assert holding["shares"] == 2
         assert holding["buyPrice"] == 150.25
         assert holding["purchaseDate"] == "2026-06-07"
+
+        restarted_manager = PortfolioManager()
+        restarted = next(
+            (item for item in restarted_manager.get_portfolios() if item["id"] == portfolio["id"]),
+            None,
+        )
+        assert restarted is not None, "portfolio did not survive manager restart"
+        assert restarted["holdings"][0]["ticker"] == "AAPL"
 
         updated = manager.update_holding(
             portfolio["id"],
@@ -45,6 +57,17 @@ def main() -> None:
         assert updated["shares"] == 3
         assert updated["buyPrice"] == 155.5
         assert updated["purchaseDate"] == "2026-06-08"
+
+        merged = manager.add_holding(
+            portfolio["id"],
+            "AAPL",
+            1,
+            buy_price=170,
+            purchase_date="2026-06-10",
+        )
+        assert merged is not None, "merged holding was not returned"
+        assert merged["shares"] == 4
+        assert round(merged["buyPrice"], 4) == 159.125
 
     print("portfolio persistence QA ok")
 

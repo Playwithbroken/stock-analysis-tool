@@ -910,6 +910,8 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
     cache_key = "search:suggestions:dynamic"
     cached = _cache_get(cache_key, _safe_int_env("SEARCH_SUGGESTIONS_CACHE_TTL_SECONDS", 120, minimum=20))
     if cached is not None:
+        if isinstance(cached, dict):
+            cached.pop("meta", None)
         return cached
 
     brief = get_morning_brief_service().get_cached_or_last_brief() or {}

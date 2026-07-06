@@ -54,6 +54,7 @@ async def main() -> int:
         )
 
         suggestions = await api._build_dynamic_search_suggestions()
+        cached_suggestions = await api._build_dynamic_search_suggestions()
         paper = suggestions.get("Paper Trading") or []
         learning = suggestions.get("Lernsignale") or []
 
@@ -65,6 +66,9 @@ async def main() -> int:
             return 1
         if not any("(RKLB)" in item for item in learning):
             print("FAIL: RKLB learning forecast missing from dynamic suggestions")
+            return 1
+        if "meta" in cached_suggestions:
+            print("FAIL: cache metadata leaked as a search suggestion category")
             return 1
 
     print("dynamic search suggestions QA ok")

@@ -1385,7 +1385,7 @@ async def _forecast_learning_loop():
 
 def _send_paper_trade_management_alerts() -> Dict[str, Any]:
     if not _env_enabled("PAPER_TRADE_MANAGEMENT_ALERTS_ENABLED", "true"):
-        return {"status": "disabled", "message": "Paper trade management alerts are disabled."}
+        return {"status": "disabled", "message": "Paper-Trade-Management-Alerts sind deaktiviert."}
     try:
         trades = get_paper_trading_service()._enrich_trades(
             get_portfolio_manager().list_paper_trades(status="open", limit=50)
@@ -1397,7 +1397,7 @@ def _send_paper_trade_management_alerts() -> Dict[str, Any]:
 
 def _send_paper_account_status_alerts() -> Dict[str, Any]:
     if not _env_enabled("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true"):
-        return {"status": "disabled", "message": "Paper account status alerts are disabled."}
+        return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
     try:
         service = get_paper_trading_service()
         trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
@@ -4712,7 +4712,7 @@ async def get_strategy_library():
                 "generated_at": datetime.utcnow().isoformat(),
                 "strategies": StrategyLibrary.all(),
                 "readiness": StrategyLibrary.build_readiness(trades, outcomes),
-                "policy": "Paper learning first. Real-money use requires manual review and documented risk.",
+                "policy": "Paper-Lernen zuerst. Echtgeld-Nutzung erfordert manuelle Prüfung und dokumentiertes Risiko.",
             }
         )
     except Exception as e:

@@ -34,7 +34,7 @@ class StrategyLibrary:
             horizon="months-years",
             asset_classes=["equity", "etf"],
             setup_types=["quality_compounder", "dividend_quality", "etf_momentum"],
-            objective="Hold strong businesses, dividend engines and broad ETFs when fundamentals and trend agree.",
+            objective="Starke Unternehmen, Dividendenmotoren und breite ETFs halten, wenn Fundamentaldaten und Trend zusammenpassen.",
             quality_gates=[
                 "Positive or improving free cash flow",
                 "Revenue and margin trend are stable or improving",
@@ -44,7 +44,7 @@ class StrategyLibrary:
             trigger_template="{ticker} holds trend support while fundamentals and guidance stay intact.",
             invalidation_template="{ticker} loses fundamental quality, breaks the risk level, or guidance deteriorates.",
             risk_notes=[
-                "No leverage in the core sleeve.",
+                "Kein Hebel im Core-Baustein.",
                 "Use wider stops and smaller sizing than day-trading setups.",
             ],
             real_world_gate="At least 12 paper checks, no unresolved thesis break, and manual portfolio fit review.",
@@ -70,7 +70,7 @@ class StrategyLibrary:
             invalidation_template="{ticker} fails follow-through, loses the stop zone, or the market regime turns against the setup.",
             risk_notes=[
                 "No averaging down after failed confirmation.",
-                "Reduce size in mixed or risk-off market regimes.",
+                "Positionsgröße in gemischten oder Risk-off-Marktregimen reduzieren.",
             ],
             real_world_gate="At least 20 decisive paper outcomes with >=55% hit rate after costs/slippage assumption.",
             source_basis="Academic momentum evidence plus execution gates for trend confirmation.",
@@ -97,7 +97,7 @@ class StrategyLibrary:
                 "Avoid opening before earnings unless defined-risk only.",
                 "Treat huge gaps as higher risk, not automatic confirmation.",
             ],
-            real_world_gate="Needs repeated paper evidence around actual earnings events before real-money use.",
+            real_world_gate="Braucht wiederholte Paper-Beweise rund um echte Earnings-Events vor Echtgeld-Nutzung.",
             source_basis="Event-driven earnings analysis with revenue/guidance verification.",
             min_paper_trades=16,
             min_hit_rate=56,
@@ -147,7 +147,7 @@ class StrategyLibrary:
                 "Use smaller sizing than liquid large-cap setups.",
                 "Reject pump-like moves without filings or credible sources.",
             ],
-            real_world_gate="Needs manual due diligence plus paper evidence; never auto-real-money.",
+            real_world_gate="Braucht manuelle Due Diligence plus Paper-Beweise; niemals automatisch Echtgeld.",
             source_basis="Growth/catalyst screening combined with liquidity and fraud-risk filters.",
             min_paper_trades=20,
             min_hit_rate=58,
@@ -170,7 +170,7 @@ class StrategyLibrary:
             invalidation_template="Underlying momentum fades, IV/spread is unattractive, or time decay invalidates the setup.",
             risk_notes=[
                 "Max loss is premium; no naked option selling.",
-                "No real-money options until enough paper evidence exists.",
+                "Keine Echtgeld-Optionen, bis genug Paper-Beweise vorliegen.",
             ],
             real_world_gate="At least 20 decisive paper option checks and >=55% hit rate; still manual review only.",
             source_basis="Cboe/FINRA options education: defined risk, suitability and risk disclosure.",
@@ -242,7 +242,7 @@ class StrategyLibrary:
                 recommendation = "monitor_open_trade"
             else:
                 status = "not_started"
-                next_step = "Collect paper outcomes before trusting this strategy."
+                next_step = "Paper-Outcomes sammeln, bevor dieser Strategie vertraut wird."
                 recommendation = "collect_first_trade"
             rows.append(
                 {

@@ -13,23 +13,23 @@ def test_paper_learning_alert_extraction() -> None:
                 "hit_rate": 0.0,
                 "score_delta": -14,
                 "block": True,
-                "reason": "Setup insider_follow is blocked by paper outcomes.",
+                "reason": "Setup insider_follow wird durch Paper-Ergebnisse geblockt.",
             }
         },
         "option_readiness": {
             "decisive": 10,
             "hit_rate": 40.0,
             "real_money_ready": False,
-            "reason": "Options remain paper-only until 20 decisive checks and >=55% hit rate.",
+            "reason": "Optionen bleiben nur Paper, bis 20 klare Prüfungen und >=55% Trefferquote erreicht sind.",
         },
         "learning_summary": {
             "review_focus": [
-                "Stop using blocked setup types: insider_follow.",
-                "Main error to fix next: weak_follow_through.",
+                "Geblockte Setup-Typen nicht mehr nutzen: insider_follow.",
+                "Nächster Hauptfehler zum Verbessern: weak_follow_through.",
             ],
             "manual_review_checklist": [
-                "Thesis is written before entry.",
-                "Trigger, stop, target and invalidation are clear.",
+                "These wurde vor Einstieg schriftlich festgehalten.",
+                "Trigger, Stop, Ziel und Invalidierung sind klar.",
             ],
         },
     }
@@ -37,15 +37,15 @@ def test_paper_learning_alert_extraction() -> None:
     assert len(events) == 2
     assert events[0]["category"] == "paper_learning"
     assert events[0]["severity"] == "block"
-    assert events[0]["action"] == "Block setup"
+    assert events[0]["action"] == "Setup blockieren"
     assert events[0]["review_focus"]
     assert "BLOCK" in events[0]["line"]
-    assert "CALL/PUT" in events[1]["line"]
+    assert "CALL/PUT-Lernen" in events[1]["line"]
 
     rendered = service._render_telegram_paper_learning_alert(events[0])
     assert "[LEARNING BLOCK]" in rendered
-    assert "Manual money gate" in rendered
-    assert "Critical check" in rendered
+    assert "Manuelles Echtgeld-Gate" in rendered
+    assert "Kritischer Check" in rendered
     assert "weak_follow_through" in rendered
 
     sent = {event["event_key"] for event in events}
@@ -72,8 +72,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "suggested_max_loss_value": 450.0,
             "risk_reward": 2.4,
             "confidence_score": 91,
-            "trigger": "Breakout confirmed with volume.",
-            "invalidation": "Close if breakout fails.",
+            "trigger": "Breakout mit Volumen bestätigt.",
+            "invalidation": "Schließen, wenn Breakout scheitert.",
         }
     )
     assert "investiert 12.345,67 EUR" in opened
@@ -100,7 +100,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     )
     assert "investiert 12.345,67 EUR" in closed
     assert "final 13.412,33 EUR" in closed
-    assert "Result:</b> +1.066,66 EUR | +8.64%" in closed
+    assert "Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
     assert "target_or_profit_taken" in closed
 
     management = service._render_telegram_paper_trade_management_alert(
@@ -117,18 +117,18 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "unrealized_pnl_pct": 6.6,
             "risk_distance_pct": 9.95,
             "target_progress_pct": 76.4,
-            "management_summary": "Trade is near target.",
-            "next_check": "Review profit protection.",
+            "management_summary": "Trade ist nahe am Ziel.",
+            "next_check": "Gewinnschutz prüfen.",
         }
     )
     assert "PnL +6.60%" in management
-    assert "stop +9.95%" in management
-    assert "target progress +76.40%" in management
+    assert "Stop +9.95%" in management
+    assert "Ziel-Fortschritt +76.40%" in management
 
     account = service._render_telegram_paper_account_status_alert(
         {
             "day_status": "monitor",
-            "day_action": "Hold current paper plan.",
+            "day_action": "Aktuellen Paper-Plan halten.",
             "capital_status": "ahead",
             "starting_capital": 500000,
             "equity": 501250.5,
@@ -145,15 +145,15 @@ def test_paper_trade_telegram_money_formatting() -> None:
                     "direction": "long",
                     "grade": "hold",
                     "result_value_delta": 650.25,
-                    "summary": "Working.",
-                    "next_check": "Keep stop valid.",
+                    "summary": "Funktioniert.",
+                    "next_check": "Stop gültig halten.",
                 }
             ],
         }
     )
-    assert "equity 501.250,50 EUR" in account
-    assert "Net result:</b> +1.250,50 EUR (+0.25%)" in account
-    assert "invested 42.000,00 EUR" in account
+    assert "Equity 501.250,50 EUR" in account
+    assert "Netto-Ergebnis:</b> +1.250,50 EUR (+0.25%)" in account
+    assert "investiert 42.000,00 EUR" in account
     assert "P/L +650,25 EUR" in account
 
 

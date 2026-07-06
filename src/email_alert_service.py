@@ -246,24 +246,24 @@ class EmailAlertService:
 
     def send_paper_learning_alerts(self, learning: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
         if not force and os.getenv("PAPER_LEARNING_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-            return {"status": "disabled", "message": "Paper learning alerts are disabled."}
+            return {"status": "disabled", "message": "Paper-Learning-Alerts sind deaktiviert."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
         sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
         events = self._extract_paper_learning_events(learning, sent_keys)
         if not events:
-            return {"status": "ok", "sent": 0, "message": "No new paper learning alerts."}
+            return {"status": "ok", "sent": 0, "message": "Keine neuen Paper-Learning-Alerts."}
 
         self._send_notifications(config, events[:5], subject="Learning Alert: Paper-Trading Feedback")
         self.portfolio_manager.mark_signal_events_sent(events[:5])
-        return {"status": "ok", "sent": len(events[:5]), "message": "Paper learning Telegram alerts sent."}
+        return {"status": "ok", "sent": len(events[:5]), "message": "Paper-Learning-Telegram-Alerts gesendet."}
 
     def send_paper_trade_opened_alerts(self, opened: List[Dict[str, Any]], selected: List[Dict[str, Any]]) -> Dict[str, Any]:
         if os.getenv("PAPER_TRADE_OPEN_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-            return {"status": "disabled", "message": "Paper trade open alerts are disabled."}
+            return {"status": "disabled", "message": "Paper-Trade-Open-Alerts sind deaktiviert."}
         if not opened:
-            return {"status": "ok", "sent": 0, "message": "No opened paper trades."}
+            return {"status": "ok", "sent": 0, "message": "Keine geöffneten Paper-Trades."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
@@ -286,7 +286,7 @@ class EmailAlertService:
                 {
                     "event_key": event_key,
                     "category": "paper_trade_opened",
-                    "title": f"Paper trade opened: {trade.get('ticker')} {trade.get('direction')}",
+                    "title": f"Paper-Trade geöffnet: {trade.get('ticker')} {trade.get('direction')}",
                     "ticker": trade.get("ticker"),
                     "asset_class": trade.get("asset_class"),
                     "direction": trade.get("direction"),
@@ -304,20 +304,20 @@ class EmailAlertService:
                     "trigger": selected_item.get("trigger"),
                     "invalidation": selected_item.get("invalidation"),
                     "suggested_max_loss_value": selected_item.get("suggested_max_loss_value"),
-                    "line": f"{trade.get('ticker')} {trade.get('direction')} paper trade opened.",
-                    "source_label": "Paper autopilot",
+                    "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
+                    "source_label": "Paper-Autopilot",
                     "source_url": "",
                 }
             )
-        self._send_notifications(config, events, subject="Paper Autopilot: Demo trade opened")
+        self._send_notifications(config, events, subject="Paper Autopilot: Demo-Trade geöffnet")
         self.portfolio_manager.mark_signal_events_sent(events)
-        return {"status": "ok", "sent": len(events), "message": "Paper trade Telegram alerts sent."}
+        return {"status": "ok", "sent": len(events), "message": "Paper-Trade-Telegram-Alerts gesendet."}
 
     def send_paper_trade_management_alerts(self, open_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         if os.getenv("PAPER_TRADE_MANAGEMENT_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-            return {"status": "disabled", "message": "Paper trade management alerts are disabled."}
+            return {"status": "disabled", "message": "Paper-Trade-Management-Alerts sind deaktiviert."}
         if not open_trades:
-            return {"status": "ok", "sent": 0, "message": "No open paper trades."}
+            return {"status": "ok", "sent": 0, "message": "Keine offenen Paper-Trades."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
@@ -336,7 +336,7 @@ class EmailAlertService:
                 {
                     "event_key": event_key,
                     "category": "paper_trade_management",
-                    "title": f"Paper management: {trade.get('ticker')} {status}",
+                    "title": f"Paper-Management: {trade.get('ticker')} {status}",
                     "ticker": trade.get("ticker"),
                     "direction": trade.get("direction"),
                     "setup_type": trade.get("setup_type"),
@@ -352,17 +352,17 @@ class EmailAlertService:
                     "decision_grade": management.get("decision_grade"),
                     "next_check": management.get("next_check"),
                     "management_summary": management.get("summary"),
-                    "line": f"{trade.get('ticker')} paper trade management alert: {status}.",
-                    "source_label": "Paper trade management",
+                    "line": f"{trade.get('ticker')} Paper-Trade-Management-Alert: {status}.",
+                    "source_label": "Paper-Trade-Management",
                     "source_url": "",
                 }
             )
         if not events:
-            return {"status": "ok", "sent": 0, "message": "No new paper management alerts."}
+            return {"status": "ok", "sent": 0, "message": "Keine neuen Paper-Management-Alerts."}
 
         self._send_notifications(config, events[:5], subject="Paper Trade Management")
         self.portfolio_manager.mark_signal_events_sent(events[:5])
-        return {"status": "ok", "sent": len(events[:5]), "message": "Paper management Telegram alerts sent."}
+        return {"status": "ok", "sent": len(events[:5]), "message": "Paper-Management-Telegram-Alerts gesendet."}
 
     def send_paper_account_status_alert(
         self,
@@ -371,7 +371,7 @@ class EmailAlertService:
         force: bool = False,
     ) -> Dict[str, Any]:
         if not force and os.getenv("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-            return {"status": "disabled", "message": "Paper account status alerts are disabled."}
+            return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
 
         status = str(demo_account.get("day_status") or "monitor")
         actionable_statuses = {"action_required", "risk_review", "protect_profit"}
@@ -382,12 +382,12 @@ class EmailAlertService:
             "on",
         }
         if not force and status not in actionable_statuses and not monitor_enabled:
-            return {"status": "ok", "sent": 0, "message": f"Paper account status is {status}; no Telegram needed."}
+            return {"status": "ok", "sent": 0, "message": f"Paper-Konto-Status ist {status}; kein Telegram nötig."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
         if not force and not self._paper_account_status_can_send(demo_account):
-            return {"status": "cooldown", "sent": 0, "message": "Paper account status alert cooldown active."}
+            return {"status": "cooldown", "sent": 0, "message": "Paper-Konto-Status-Cooldown aktiv."}
 
         ranked = sorted(
             open_trades or [],
@@ -414,7 +414,7 @@ class EmailAlertService:
         event = {
             "event_key": f"paper-account-status:{status}:{datetime.utcnow().date().isoformat()}",
             "category": "paper_account_status",
-            "title": f"Paper account status: {status}",
+            "title": f"Paper-Konto-Status: {status}",
             "day_status": status,
             "day_action": demo_account.get("day_action"),
             "capital_status": demo_account.get("capital_status"),
@@ -428,19 +428,19 @@ class EmailAlertService:
             "closed_trade_count": demo_account.get("closed_trade_count"),
             "management_counts": demo_account.get("management_counts") or {},
             "top_trades": top_trades,
-            "line": f"Paper account status: {status}",
-            "source_label": "Paper account monitor",
+            "line": f"Paper-Konto-Status: {status}",
+            "source_label": "Paper-Konto-Monitor",
             "source_url": "",
         }
         self._send_notifications(config, [event], subject="Paper Account Status")
         self._record_paper_account_status_delivery(demo_account)
-        return {"status": "ok", "sent": 1, "message": "Paper account status Telegram alert sent."}
+        return {"status": "ok", "sent": 1, "message": "Paper-Konto-Status-Telegram-Alert gesendet."}
 
     def send_paper_trade_closed_alerts(self, closed: List[Dict[str, Any]]) -> Dict[str, Any]:
         if os.getenv("PAPER_TRADE_CLOSE_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-            return {"status": "disabled", "message": "Paper trade close alerts are disabled."}
+            return {"status": "disabled", "message": "Paper-Trade-Close-Alerts sind deaktiviert."}
         if not closed:
-            return {"status": "ok", "sent": 0, "message": "No closed paper trades."}
+            return {"status": "ok", "sent": 0, "message": "Keine geschlossenen Paper-Trades."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
@@ -454,7 +454,7 @@ class EmailAlertService:
                 {
                     "event_key": event_key,
                     "category": "paper_trade_closed",
-                    "title": f"Paper trade closed: {trade.get('ticker')} {trade.get('direction')}",
+                    "title": f"Paper-Trade geschlossen: {trade.get('ticker')} {trade.get('direction')}",
                     "ticker": trade.get("ticker"),
                     "direction": trade.get("direction"),
                     "setup_type": trade.get("setup_type"),
@@ -469,17 +469,17 @@ class EmailAlertService:
                     "exit_reason": trade.get("exit_reason"),
                     "lessons_learned": trade.get("lessons_learned"),
                     "risk_reward": trade.get("risk_reward"),
-                    "line": f"{trade.get('ticker')} paper trade closed.",
-                    "source_label": "Paper trade exit",
+                    "line": f"{trade.get('ticker')} Paper-Trade geschlossen.",
+                    "source_label": "Paper-Trade-Exit",
                     "source_url": "",
                 }
             )
         if not events:
-            return {"status": "ok", "sent": 0, "message": "No new paper close alerts."}
+            return {"status": "ok", "sent": 0, "message": "Keine neuen Paper-Close-Alerts."}
 
         self._send_notifications(config, events, subject="Paper Trade Closed")
         self.portfolio_manager.mark_signal_events_sent(events)
-        return {"status": "ok", "sent": len(events), "message": "Paper close Telegram alerts sent."}
+        return {"status": "ok", "sent": len(events), "message": "Paper-Close-Telegram-Alerts gesendet."}
 
     def _extract_paper_learning_events(self, learning: Dict[str, Any], sent_keys: set[str]) -> List[Dict[str, Any]]:
         events: List[Dict[str, Any]] = []
@@ -495,8 +495,8 @@ class EmailAlertService:
                 continue
             severity = "BLOCK" if adjustment.get("block") else "DOWNGRADE"
             line = (
-                f"{severity}: {setup_type} | hit {adjustment.get('hit_rate')}% over "
-                f"{adjustment.get('decisive')} checks | score {adjustment.get('score_delta')}. "
+                f"{severity}: {setup_type} | Treffer {adjustment.get('hit_rate')}% über "
+                f"{adjustment.get('decisive')} Prüfungen | Score {adjustment.get('score_delta')}. "
                 f"{adjustment.get('reason')}"
             )
             events.append(
@@ -504,7 +504,7 @@ class EmailAlertService:
                     "event_key": key,
                     "category": "paper_learning",
                     "severity": severity.lower(),
-                    "title": f"Paper learning {severity.lower()}",
+                    "title": f"Paper-Lernen {severity.lower()}",
                     "line": line,
                     "setup_type": setup_type,
                     "hit_rate": adjustment.get("hit_rate"),
@@ -514,9 +514,9 @@ class EmailAlertService:
                     "reason": adjustment.get("reason") or "",
                     "review_focus": review_focus[:3],
                     "manual_review_checklist": manual_review_checklist[:5],
-                    "critical_check": "Do not use this setup with real money until the miss reason is fixed and new paper evidence improves.",
-                    "action": "Block setup" if adjustment.get("block") else "Reduce size and require stronger confirmation",
-                    "source_label": "Paper outcome learning",
+                    "critical_check": "Dieses Setup nicht mit Echtgeld nutzen, bis der Fehlergrund behoben ist und neue Paper-Beweise besser werden.",
+                    "action": "Setup blockieren" if adjustment.get("block") else "Größe reduzieren und stärkere Bestätigung verlangen",
+                    "source_label": "Paper-Outcome-Lernen",
                     "source_url": "",
                     "conviction_score": None,
                 }
@@ -531,10 +531,10 @@ class EmailAlertService:
                         "event_key": key,
                         "category": "paper_learning",
                         "severity": "options_gate",
-                        "title": "Options remain paper-only",
+                        "title": "Optionen bleiben Paper-only",
                         "line": (
-                            f"CALL/PUT learning: {option.get('decisive')} decisive checks, "
-                            f"{option.get('hit_rate')}% hit rate. {option.get('reason')}"
+                            f"CALL/PUT-Lernen: {option.get('decisive')} klare Prüfungen, "
+                            f"{option.get('hit_rate')}% Trefferquote. {option.get('reason')}"
                         ),
                         "setup_type": "call_put_learning",
                         "hit_rate": option.get("hit_rate"),
@@ -544,9 +544,9 @@ class EmailAlertService:
                         "reason": option.get("reason") or "",
                         "review_focus": review_focus[:3],
                         "manual_review_checklist": manual_review_checklist[:5],
-                        "critical_check": "No real-money calls or puts before enough paper checks, strike/expiry/spread review and max premium risk are documented.",
-                        "action": "Keep options paper-only",
-                        "source_label": "Options paper learning",
+                        "critical_check": "Keine Echtgeld-Calls oder -Puts, bevor genug Paper-Prüfungen, Strike/Laufzeit/Spread-Review und maximaler Prämienverlust dokumentiert sind.",
+                        "action": "Optionen Paper-only lassen",
+                        "source_label": "Options-Paper-Lernen",
                         "source_url": "",
                         "conviction_score": None,
                     }
@@ -3119,6 +3119,38 @@ class EmailAlertService:
         self._tg_post(config.telegram_bot_token, config.telegram_chat_id, "\n".join(lines))
         return True
 
+    def _paper_label(self, value: Any, fallback: str = "n/a") -> str:
+        key = str(value or "").strip().lower()
+        labels = {
+            "action_required": "Aktion nötig",
+            "ahead": "im Plus",
+            "behind": "im Minus",
+            "close_review": "Schließung prüfen",
+            "exit": "Exit",
+            "flat": "neutral",
+            "hold": "halten",
+            "hold_with_plan": "mit Plan halten",
+            "monitor": "überwachen",
+            "near_stop": "nahe am Stop",
+            "near_target": "nahe am Ziel",
+            "pending_data": "wartet auf Daten",
+            "protect": "schützen",
+            "protect_profit": "Gewinn schützen",
+            "protect_profit_review": "Gewinnschutz prüfen",
+            "reduce_or_close_review": "Reduzieren/Schließen prüfen",
+            "review": "prüfen",
+            "risk_review": "Risiko prüfen",
+            "stop_hit": "Stop getroffen",
+            "take_profit_review": "Gewinnmitnahme prüfen",
+            "target_hit": "Ziel getroffen",
+            "thesis_check": "These prüfen",
+            "wait": "warten",
+            "weak_follow_through": "schwache Anschlussbewegung",
+            "winner": "Gewinner",
+            "working": "funktioniert",
+        }
+        return labels.get(key, key.replace("_", " ") if key else fallback)
+
     def _render_telegram_paper_trade_opened_alert(self, event: Dict[str, Any]) -> str:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
@@ -3131,26 +3163,26 @@ class EmailAlertService:
         invested = self._tg_money(event.get("invested_value"))
         current_value = self._tg_money(event.get("current_value"))
         result_delta = self._tg_signed_money(event.get("result_value_delta"))
-        result_label = self._tg_esc(str(event.get("result_label") or "flat"))
+        result_label = self._tg_esc(self._paper_label(event.get("result_label"), "neutral"))
         max_loss = self._tg_money(event.get("suggested_max_loss_value"))
         confidence = self._tg_esc(
             str(event.get("confidence_score") if event.get("confidence_score") is not None else "n/a")
         )
-        trigger = self._tg_esc(str(event.get("trigger") or "Follow-through must stay confirmed."))[:520]
-        invalidation = self._tg_esc(str(event.get("invalidation") or "Close/review if thesis fails."))[:520]
+        trigger = self._tg_esc(str(event.get("trigger") or "Anschlussbewegung muss bestätigt bleiben."))[:520]
+        invalidation = self._tg_esc(str(event.get("invalidation") or "Schließen/prüfen, wenn die These scheitert."))[:520]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
         return "\n".join(
             [
-                f"<b>[PAPER OPEN] <code>{ticker}</code> {direction}</b>",
+                f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
-                f"<b>Entry:</b> {entry} | <b>Qty:</b> {qty}",
-                f"<b>Demo money:</b> investiert {invested} | aktueller Wert {current_value}",
+                f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",
+                f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
                 f"<b>Offenes Ergebnis:</b> {result_delta} ({result_label})",
-                f"<b>Stop:</b> {stop} | <b>Target:</b> {target} | <b>RR:</b> {rr}",
+                f"<b>Stop:</b> {stop} | <b>Ziel:</b> {target} | <b>CRV:</b> {rr}",
                 f"<b>Max. Demo-Verlust:</b> {max_loss}",
                 f"<b>Trigger:</b> {trigger}",
-                f"<b>Invalidation:</b> {invalidation}",
-                "<b>Mode:</b> 500k demo learning only. No automatic real-money execution.",
+                f"<b>Invalidierung:</b> {invalidation}",
+                "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",
             ]
         )
 
@@ -3162,32 +3194,32 @@ class EmailAlertService:
         exit_price = self._tg_price(event.get("closed_price"))
         invested = self._tg_money(event.get("invested_value"))
         final_value = self._tg_money(event.get("final_value"))
-        result_label = self._tg_esc(str(event.get("result_label") or "flat"))
+        result_label = self._tg_esc(self._paper_label(event.get("result_label"), "neutral"))
         pnl_pct = self._tg_pct(event.get("realized_pnl_pct"))
         pnl_value = self._tg_signed_money(event.get("realized_pnl_value"))
         exit_reason = self._tg_esc(str(event.get("exit_reason") or "paper_exit"))
-        lesson = self._tg_esc(str(event.get("lessons_learned") or "Review journal before reusing this setup."))[:620]
+        lesson = self._tg_esc(str(event.get("lessons_learned") or "Journal prüfen, bevor dieses Setup wieder genutzt wird."))[:620]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
         return "\n".join(
             [
-                f"<b>[PAPER CLOSED] <code>{ticker}</code> {direction}</b>",
+                f"<b>[PAPER GESCHLOSSEN] <code>{ticker}</code> {direction}</b>",
                 f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
-                f"<b>Entry:</b> {entry} | <b>Close:</b> {exit_price} | <b>RR:</b> {rr}",
-                f"<b>Demo money:</b> investiert {invested} | final {final_value}",
-                f"<b>Result:</b> {pnl_value} | {pnl_pct} | {result_label}",
-                f"<b>Lesson:</b> {lesson}",
-                "<b>Mode:</b> Demo learning only. Use the lesson before any real-money review.",
+                f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
+                f"<b>Demo-Geld:</b> investiert {invested} | final {final_value}",
+                f"<b>Ergebnis:</b> {pnl_value} | {pnl_pct} | {result_label}",
+                f"<b>Lektion:</b> {lesson}",
+                "<b>Modus:</b> Nur Demo-Lernen. Lektion nutzen, bevor Echtgeld geprüft wird.",
             ]
         )
 
     def _render_telegram_paper_trade_management_alert(self, event: Dict[str, Any]) -> str:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
-        status = self._tg_esc(str(event.get("management_status") or "monitor").upper())
-        action = self._tg_esc(str(event.get("management_action") or "review"))
-        grade = self._tg_esc(str(event.get("decision_grade") or "review").upper())
-        next_check = self._tg_esc(str(event.get("next_check") or "Re-check trigger, stop and target."))[:520]
-        summary = self._tg_esc(str(event.get("management_summary") or "Review the paper trade."))[:520]
+        status = self._tg_esc(self._paper_label(event.get("management_status"), "überwachen").upper())
+        action = self._tg_esc(self._paper_label(event.get("management_action"), "prüfen"))
+        grade = self._tg_esc(self._paper_label(event.get("decision_grade"), "prüfen").upper())
+        next_check = self._tg_esc(str(event.get("next_check") or "Trigger, Stop und Ziel erneut prüfen."))[:520]
+        summary = self._tg_esc(str(event.get("management_summary") or "Paper-Trade prüfen."))[:520]
         entry = self._tg_price(event.get("entry_price"))
         current = self._tg_price(event.get("current_price"))
         stop = self._tg_price(event.get("stop_price"))
@@ -3197,21 +3229,21 @@ class EmailAlertService:
         target_progress = self._tg_pct(event.get("target_progress_pct"))
         return "\n".join(
             [
-                f"<b>[PAPER MANAGE] <code>{ticker}</code> {direction} | {status}</b>",
-                f"<b>Action:</b> {action} | <b>Grade:</b> {grade}",
-                f"<b>Price:</b> entry {entry} | now {current} | PnL {pnl}",
-                f"<b>Plan:</b> stop {stop} | target {target}",
-                f"<b>Distance:</b> stop {risk_distance} | target progress {target_progress}",
-                f"<b>Why:</b> {summary}",
-                f"<b>Next:</b> {next_check}",
-                "<b>Mode:</b> Demo learning only. Review manually; no automatic real-money execution.",
+                f"<b>[PAPER MANAGEN] <code>{ticker}</code> {direction} | {status}</b>",
+                f"<b>Aktion:</b> {action} | <b>Stufe:</b> {grade}",
+                f"<b>Preis:</b> Einstieg {entry} | jetzt {current} | PnL {pnl}",
+                f"<b>Plan:</b> Stop {stop} | Ziel {target}",
+                f"<b>Abstand:</b> Stop {risk_distance} | Ziel-Fortschritt {target_progress}",
+                f"<b>Warum:</b> {summary}",
+                f"<b>Nächste Prüfung:</b> {next_check}",
+                "<b>Modus:</b> Nur Demo-Lernen. Manuell prüfen; keine automatische Echtgeld-Ausführung.",
             ]
         )
 
     def _render_telegram_paper_account_status_alert(self, event: Dict[str, Any]) -> str:
         status = self._tg_esc(str(event.get("day_status") or "monitor").upper())
-        action = self._tg_esc(str(event.get("day_action") or "Follow the current paper plan."))[:520]
-        capital_status = self._tg_esc(str(event.get("capital_status") or "flat"))
+        action = self._tg_esc(str(event.get("day_action") or "Aktuellen Paper-Plan halten."))[:520]
+        capital_status = self._tg_esc(self._paper_label(event.get("capital_status"), "neutral"))
         starting = self._tg_money(event.get("starting_capital"))
         equity = self._tg_money(event.get("equity"))
         pnl_value = self._tg_signed_money(event.get("net_pnl_value"))
@@ -3221,67 +3253,67 @@ class EmailAlertService:
         open_count = self._tg_esc(str(event.get("open_trade_count") if event.get("open_trade_count") is not None else "0"))
         closed_count = self._tg_esc(str(event.get("closed_trade_count") if event.get("closed_trade_count") is not None else "0"))
         counts = event.get("management_counts") if isinstance(event.get("management_counts"), dict) else {}
-        count_text = ", ".join(f"{self._tg_esc(str(key))}: {self._tg_esc(str(value))}" for key, value in sorted(counts.items())) or "none"
+        count_text = ", ".join(f"{self._tg_esc(str(key))}: {self._tg_esc(str(value))}" for key, value in sorted(counts.items())) or "keine"
 
         lines = [
-            f"<b>[PAPER ACCOUNT] {status}</b>",
-            f"<b>Action today:</b> {action}",
-            f"<b>Capital:</b> start {starting} | equity {equity} | {capital_status}",
-            f"<b>Net result:</b> {pnl_value} ({pnl_pct})",
-            f"<b>Money:</b> invested {invested} | free cash {cash}",
-            f"<b>Trades:</b> open {open_count} | closed {closed_count} | grades {count_text}",
+            f"<b>[PAPER KONTO] {status}</b>",
+            f"<b>Aktion heute:</b> {action}",
+            f"<b>Kapital:</b> Start {starting} | Equity {equity} | {capital_status}",
+            f"<b>Netto-Ergebnis:</b> {pnl_value} ({pnl_pct})",
+            f"<b>Geld:</b> investiert {invested} | freies Cash {cash}",
+            f"<b>Trades:</b> offen {open_count} | geschlossen {closed_count} | Stufen {count_text}",
         ]
         top_trades = event.get("top_trades") if isinstance(event.get("top_trades"), list) else []
         if top_trades:
-            lines.append("<b>Top checks:</b>")
+            lines.append("<b>Top-Prüfungen:</b>")
             for trade in top_trades[:3]:
                 ticker = self._tg_esc(str(trade.get("ticker") or "n/a"))
                 direction = self._tg_esc(str(trade.get("direction") or "n/a").upper())
-                grade = self._tg_esc(str(trade.get("grade") or "hold").upper())
+                grade = self._tg_esc(self._paper_label(trade.get("grade"), "halten").upper())
                 result = self._tg_signed_money(trade.get("result_value_delta"))
-                summary = self._tg_esc(str(trade.get("summary") or "Review plan."))[:260]
-                next_check = self._tg_esc(str(trade.get("next_check") or "Re-check trigger, stop and target."))[:260]
+                summary = self._tg_esc(str(trade.get("summary") or "Plan prüfen."))[:260]
+                next_check = self._tg_esc(str(trade.get("next_check") or "Trigger, Stop und Ziel erneut prüfen."))[:260]
                 lines.append(f"- <code>{ticker}</code> {direction} | {grade} | P/L {result}")
-                lines.append(f"  Why: {summary}")
-                lines.append(f"  Next: {next_check}")
-        lines.append("<b>Mode:</b> 500k demo learning only. No automatic real-money execution.")
+                lines.append(f"  Warum: {summary}")
+                lines.append(f"  Nächste Prüfung: {next_check}")
+        lines.append("<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.")
         return "\n".join(lines)
 
     def _render_telegram_paper_learning_alert(self, event: Dict[str, Any]) -> str:
         severity = str(event.get("severity") or "learning").upper()
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
-        title = self._tg_esc(str(event.get("title") or "Paper learning alert"))
+        title = self._tg_esc(str(event.get("title") or "Paper-Learning-Alert"))
         hit_rate = self._tg_esc(str(event.get("hit_rate") if event.get("hit_rate") is not None else "n/a"))
         decisive = self._tg_esc(str(event.get("decisive") if event.get("decisive") is not None else "n/a"))
         score_delta = event.get("score_delta")
         reason = self._tg_esc(str(event.get("reason") or event.get("line") or ""))[:620]
-        action = self._tg_esc(str(event.get("action") or "Review manually"))
+        action = self._tg_esc(str(event.get("action") or "Manuell prüfen"))
         critical_check = self._tg_esc(
-            str(event.get("critical_check") or "Do not move to real money without documented paper evidence.")
+            str(event.get("critical_check") or "Nicht auf Echtgeld übertragen, bevor Paper-Beweise dokumentiert sind.")
         )[:520]
         review_focus = [self._tg_esc(str(item))[:260] for item in (event.get("review_focus") or [])[:3]]
         checklist = [self._tg_esc(str(item))[:220] for item in (event.get("manual_review_checklist") or [])[:5]]
-        source = self._tg_esc(str(event.get("source_label") or "Paper outcome learning"))
+        source = self._tg_esc(str(event.get("source_label") or "Paper-Outcome-Lernen"))
         lines = [
             f"<b>[LEARNING {severity}] {title}</b>",
             f"<b>Setup:</b> {setup}",
-            f"<b>Evidence:</b> {decisive} decisive checks / {hit_rate}% hit rate",
+            f"<b>Beweise:</b> {decisive} klare Prüfungen / {hit_rate}% Trefferquote",
         ]
         if score_delta is not None:
-            lines.append(f"<b>Score impact:</b> {self._tg_esc(str(score_delta))}")
+            lines.append(f"<b>Score-Effekt:</b> {self._tg_esc(str(score_delta))}")
         if reason:
-            lines.append(f"<b>Why it matters:</b> {reason}")
+            lines.append(f"<b>Warum wichtig:</b> {reason}")
         if review_focus:
-            lines.append("<b>Review focus:</b>")
+            lines.append("<b>Prüf-Fokus:</b>")
             lines.extend(f"- {item}" for item in review_focus)
         if checklist:
-            lines.append("<b>Manual money gate:</b>")
+            lines.append("<b>Manuelles Echtgeld-Gate:</b>")
             lines.extend(f"- {item}" for item in checklist)
         lines.extend(
             [
-                f"<b>Critical check:</b> {critical_check}",
-                f"<b>Action:</b> {action}",
-                f"<b>Source:</b> {source}",
+                f"<b>Kritischer Check:</b> {critical_check}",
+                f"<b>Aktion:</b> {action}",
+                f"<b>Quelle:</b> {source}",
             ]
         )
         return "\n".join(lines)

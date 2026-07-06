@@ -971,7 +971,6 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
                 paper_rows.append(
                     {
                         "ticker": trade.get("ticker"),
-                        "name": trade.get("setup_type") or trade.get("direction") or trade.get("ticker"),
                     }
                 )
         add_category("Paper Trading", paper_rows, limit=6)
@@ -985,7 +984,6 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
                 forecast_rows.append(
                     {
                         "ticker": forecast.get("symbol"),
-                        "name": forecast.get("setup_type") or forecast.get("source_label") or forecast.get("symbol"),
                     }
                 )
         add_category("Lernsignale", forecast_rows, limit=6)

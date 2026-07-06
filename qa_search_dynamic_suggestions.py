@@ -67,6 +67,9 @@ async def main() -> int:
         if not any("(RKLB)" in item for item in learning):
             print("FAIL: RKLB learning forecast missing from dynamic suggestions")
             return 1
+        if any("paper_learning" in item or "learning_forecast" in item for item in [*paper, *learning]):
+            print("FAIL: technical setup labels leaked into user-facing search suggestions")
+            return 1
         if "meta" in cached_suggestions:
             print("FAIL: cache metadata leaked as a search suggestion category")
             return 1

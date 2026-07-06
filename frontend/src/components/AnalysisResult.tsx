@@ -11,7 +11,7 @@ import useRealtimeFeed from "../hooks/useRealtimeFeed";
 interface AnalysisResultProps {
   data: any;
   portfolios: Portfolio[];
-  onAddHolding: (portfolioId: string, holding: Holding) => void;
+  onAddHolding: (portfolioId: string, holding: Holding) => Promise<void> | void;
   onOpenChat: () => void;
   onSelectTicker?: (ticker: string) => void;
 }

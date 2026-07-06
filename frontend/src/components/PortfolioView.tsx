@@ -17,7 +17,7 @@ interface PortfolioViewProps {
   loading?: boolean;
   onCreatePortfolio: (name: string) => Promise<Portfolio>;
   onDeletePortfolio: (id: string) => void;
-  onAddHolding: (portfolioId: string, holding: Holding) => void;
+  onAddHolding: (portfolioId: string, holding: Holding) => Promise<void> | void;
   onUpdateHolding: (portfolioId: string, ticker: string, patch: Partial<Holding>) => void;
   onRemoveHolding: (portfolioId: string, ticker: string) => void;
   onAnalyzeStock: (ticker: string) => void;

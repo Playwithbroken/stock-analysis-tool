@@ -6,7 +6,7 @@ import { useCurrency } from "../context/CurrencyContext";
 interface AddHoldingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (portfolioId: string, holding: Holding) => void;
+  onAdd: (portfolioId: string, holding: Holding) => Promise<void> | void;
   portfolios: Portfolio[];
   initialTicker?: string;
   initialPrice?: number;
@@ -28,6 +28,8 @@ export default function AddHoldingModal({
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(
     portfolios[0]?.id || "",
   );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialTicker) setTicker(initialTicker);
@@ -43,7 +45,11 @@ export default function AddHoldingModal({
     if (portfolios.length > 0 && !selectedPortfolioId) {
       setSelectedPortfolioId(portfolios[0].id);
     }
-  }, [initialTicker, initialPrice, portfolios, selectedPortfolioId, currency, convert]);
+    if (isOpen) {
+      setError(null);
+      setSaving(false);
+    }
+  }, [initialTicker, initialPrice, portfolios, selectedPortfolioId, currency, convert, isOpen]);
 
   if (!isOpen) return null;
 
@@ -71,21 +77,39 @@ export default function AddHoldingModal({
     );
   }
 
-  const handleAdd = () => {
-    if (!ticker || !shares || !selectedPortfolioId) return;
+  const handleAdd = async () => {
+    if (saving) return;
+    const cleanTicker = ticker.trim().toUpperCase();
+    const parsedShares = Number(shares);
+    if (!cleanTicker || !Number.isFinite(parsedShares) || parsedShares <= 0 || !selectedPortfolioId) {
+      setError("Bitte Ticker und eine gueltige Anzahl eintragen.");
+      return;
+    }
 
     let priceInUSD = buyPrice ? parseFloat(buyPrice) : undefined;
+    if (priceInUSD !== undefined && (!Number.isFinite(priceInUSD) || priceInUSD <= 0)) {
+      setError("Der Kaufpreis muss groesser als 0 sein.");
+      return;
+    }
     if (priceInUSD !== undefined && currency === "EUR") {
       priceInUSD = priceInUSD / exchangeRate;
     }
 
-    onAdd(selectedPortfolioId, {
-      ticker: ticker.toUpperCase(),
-      shares: parseFloat(shares),
-      buyPrice: priceInUSD,
-      purchaseDate: purchaseDate || undefined,
-    });
-    onClose();
+    setSaving(true);
+    setError(null);
+    try {
+      await onAdd(selectedPortfolioId, {
+        ticker: cleanTicker,
+        shares: parsedShares,
+        buyPrice: priceInUSD,
+        purchaseDate: purchaseDate || undefined,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Position konnte nicht gespeichert werden.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -110,6 +134,7 @@ export default function AddHoldingModal({
             <select
               value={selectedPortfolioId}
               onChange={(e) => setSelectedPortfolioId(e.target.value)}
+              disabled={saving}
               className="w-full appearance-none rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/20"
             >
               {portfolios.map((p) => (
@@ -125,8 +150,12 @@ export default function AddHoldingModal({
               <input
                 type="text"
                 value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setTicker(e.target.value.toUpperCase());
+                  setError(null);
+                }}
                 placeholder="AAPL"
+                disabled={saving}
                 className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
               />
             </Field>
@@ -134,8 +163,12 @@ export default function AddHoldingModal({
               <input
                 type="number"
                 value={shares}
-                onChange={(e) => setShares(e.target.value)}
+                onChange={(e) => {
+                  setShares(e.target.value);
+                  setError(null);
+                }}
                 placeholder="10"
+                disabled={saving}
                 className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
               />
             </Field>
@@ -145,8 +178,12 @@ export default function AddHoldingModal({
             <input
               type="number"
               value={buyPrice}
-              onChange={(e) => setBuyPrice(e.target.value)}
+              onChange={(e) => {
+                setBuyPrice(e.target.value);
+                setError(null);
+              }}
               placeholder="0.00"
+              disabled={saving}
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
             />
           </Field>
@@ -156,24 +193,32 @@ export default function AddHoldingModal({
               type="date"
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
+              disabled={saving}
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/20"
             />
           </Field>
         </div>
 
+        {error ? (
+          <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            {error}
+          </div>
+        ) : null}
+
         <div className="mt-8 flex justify-end gap-3">
           <button
             onClick={onClose}
+            disabled={saving}
             className="rounded-xl border border-black/8 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-black/[0.03]"
           >
             Abbrechen
           </button>
           <button
             onClick={handleAdd}
-            disabled={!ticker || !shares || !selectedPortfolioId}
+            disabled={saving || !ticker || !shares || !selectedPortfolioId}
             className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
           >
-            Hinzufuegen
+            {saving ? "Speichert..." : "Hinzufuegen"}
           </button>
         </div>
       </div>

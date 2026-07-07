@@ -547,6 +547,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     .
                   </span>
                 ) : null}
+                {nextPaperDecision.learning_block_display_reasons?.length ? (
+                  <span className="block pt-1 text-red-900">
+                    Warum kein Lerntrade: {nextPaperDecision.learning_block_display_reasons.slice(0, 2).join(" / ")}.
+                  </span>
+                ) : null}
                 {nextPaperDecision.next_action ? (
                   <span className="block pt-1 text-red-900">Naechster Schritt: {nextPaperDecision.next_action}</span>
                 ) : null}
@@ -700,6 +705,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       {Number(autoSelection.blocker_summary.next_best_rejected.learning_score_gap || 0) > 0
                         ? ` / ${Number(autoSelection.blocker_summary.next_best_rejected.learning_score_gap).toFixed(1)} Punkte bis Lerntrade`
                         : " / Lernscore erreicht"}
+                    </div>
+                  ) : null}
+                  {autoSelection.blocker_summary.next_best_rejected.learning_block_display_reasons?.length ? (
+                    <div className="mt-2 font-bold text-slate-900">
+                      Warum kein Lerntrade: {autoSelection.blocker_summary.next_best_rejected.learning_block_display_reasons.slice(0, 2).join(" / ")}
                     </div>
                   ) : null}
                   {autoSelection.blocker_summary.next_best_rejected.next_action ? (

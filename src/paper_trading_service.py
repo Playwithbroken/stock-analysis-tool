@@ -1063,8 +1063,13 @@ class PaperTradingService:
                 "trigger": framework.get("entry_trigger"),
                 "invalidation": framework.get("invalidation"),
                 "reasons": self._dedupe_reason_list(reasons),
+                "learning_block_reasons": self._dedupe_reason_list(exploration_reasons),
             }
             row["display_reasons"] = [self._auto_rejection_display_reason(reason) for reason in row["reasons"]]
+            row["learning_block_display_reasons"] = [
+                self._auto_rejection_display_reason(reason)
+                for reason in row["learning_block_reasons"]
+            ]
             row["next_action"] = self._auto_rejection_next_action(row["reasons"])
             if reasons:
                 rejected.append(row)
@@ -1148,6 +1153,11 @@ class PaperTradingService:
                 "display_reasons": (
                     next_best.get("display_reasons")
                     or [self._auto_rejection_display_reason(reason) for reason in (next_best.get("reasons") or [])]
+                )[:3],
+                "learning_block_reasons": (next_best.get("learning_block_reasons") or [])[:3],
+                "learning_block_display_reasons": (
+                    next_best.get("learning_block_display_reasons")
+                    or [self._auto_rejection_display_reason(reason) for reason in (next_best.get("learning_block_reasons") or [])]
                 )[:3],
                 "next_action": next_best.get("next_action"),
                 "blocker_category": next_best_category,

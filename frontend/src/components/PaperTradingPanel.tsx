@@ -136,6 +136,17 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const demoAccount = data?.demo_account || {};
   const learningFeedback = demoAccount.learning_feedback || {};
   const currency = demoAccount.currency || "EUR";
+  const nextStrictCandidate = autoSelection.selected?.[0] || null;
+  const nextLearningCandidate = autoSelection.exploration?.[0] || null;
+  const nextRejectedCandidate = autoSelection.blocker_summary?.next_best_rejected || autoSelection.rejected?.[0] || null;
+  const nextPaperDecision = nextStrictCandidate || nextLearningCandidate || nextRejectedCandidate || null;
+  const nextPaperDecisionMode = nextStrictCandidate
+    ? "strict"
+    : nextLearningCandidate
+      ? "learning"
+      : nextRejectedCandidate
+        ? "blocked"
+        : "waiting";
 
   const openPnLTone = useMemo(() => {
     const value = Number(stats.avg_open_pnl_pct || 0);
@@ -447,6 +458,83 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 {" "}Risikobudget frei
               </div>
             </div>
+          </div>
+          <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-white/90 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Naechste Paper-Entscheidung
+                </div>
+                {nextPaperDecision ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-lg font-black text-slate-900">
+                      {nextPaperDecision.ticker || "Setup"} / {String(nextPaperDecision.direction || "long").toUpperCase()}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                      Score {nextPaperDecision.score ?? "offen"}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                        nextPaperDecisionMode === "strict"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : nextPaperDecisionMode === "learning"
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {nextPaperDecisionMode === "strict"
+                        ? "Paper kaufbar"
+                        : nextPaperDecisionMode === "learning"
+                          ? "nur Lerntrade"
+                          : "noch blockiert"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-sm font-semibold text-slate-700">
+                    Kein valides Setup. Erst auf Signal, Trigger, Invalidierung und freies Risiko warten.
+                  </div>
+                )}
+              </div>
+              {nextPaperDecision?.ticker ? (
+                <button
+                  onClick={() => onAnalyze(nextPaperDecision.ticker)}
+                  className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition hover:border-[var(--accent)]/30 hover:bg-[var(--accent-soft)]/35"
+                >
+                  Analyse oeffnen
+                </button>
+              ) : null}
+            </div>
+            {nextPaperDecision ? (
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Geld / Risiko</div>
+                  <div className="mt-1 font-semibold">
+                    Position {money(nextPaperDecision.suggested_notional_value, currency)} / max. Verlust{" "}
+                    {money(nextPaperDecision.suggested_max_loss_value, currency)}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Trigger</div>
+                  <div className="mt-1 font-semibold">
+                    {nextPaperDecision.trigger || nextPaperDecision.decision_framework?.entry_trigger || "Noch keine saubere Bestaetigung."}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Invalidierung</div>
+                  <div className="mt-1 font-semibold">
+                    {nextPaperDecision.invalidation || nextPaperDecision.decision_framework?.invalidation || "Stop, These oder Newsqualitaet muss vor Einstieg klar sein."}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {nextPaperDecisionMode === "blocked" && nextPaperDecision ? (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-5 text-red-800">
+                Kein Kauf: {(nextPaperDecision.display_reasons || nextPaperDecision.reasons || ["Quality-Gate noch nicht erfuellt"]).slice(0, 3).join(" / ")}.
+                {nextPaperDecision.next_action ? (
+                  <span className="block pt-1 text-red-900">Naechster Schritt: {nextPaperDecision.next_action}</span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 

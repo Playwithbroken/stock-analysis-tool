@@ -48,6 +48,12 @@ const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
   return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
 };
 
+const clampPct = (value: unknown) => {
+  const number = toFiniteNumber(value);
+  if (number == null) return 0;
+  return Math.max(0, Math.min(100, number));
+};
+
 const DEFAULT_DEMO_CAPITAL = 500000;
 
 const germanStatus = (value: unknown, fallback = "Lernen") => {
@@ -400,6 +406,47 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Jetzt investiert" value={money(demoAccount.open_exposure_value, currency)} />
             <StatTile label="Freies Demo-Cash" value={money(demoAccount.cash_available_value, currency)} />
             <StatTile label="Netto-Ergebnis" value={`${money(demoAccount.net_pnl_value, currency)} / ${formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
+          </div>
+          <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-slate-50/80 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Kapitalaufteilung
+                </div>
+                <div className="mt-1 text-sm font-semibold text-slate-700">
+                  {formatPct(demoAccount.open_exposure_pct, 2, "0.00%")} investiert ·{" "}
+                  {formatPct(demoAccount.open_risk_pct, 2, "0.00%")} echtes Risiko offen ·{" "}
+                  {demoAccount.open_trade_count || 0} offene Trades
+                </div>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+                Number(demoAccount.net_pnl_value || 0) >= 0
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-red-50 text-red-700"
+              }`}>
+                {money(demoAccount.net_pnl_value, currency)} seit Start
+              </div>
+            </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white ring-1 ring-black/8">
+              <div
+                className="h-full rounded-full bg-[var(--accent)]"
+                style={{ width: `${clampPct(demoAccount.open_exposure_pct)}%` }}
+              />
+            </div>
+            <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
+              <div>
+                <span className="font-extrabold text-slate-900">{money(demoAccount.open_exposure_value, currency)}</span>
+                {" "}im Markt
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-900">{money(demoAccount.cash_available_value, currency)}</span>
+                {" "}frei
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-900">{money(demoAccount.remaining_risk_value, currency)}</span>
+                {" "}Risikobudget frei
+              </div>
+            </div>
           </div>
         </div>
 

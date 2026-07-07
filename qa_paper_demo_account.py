@@ -460,6 +460,10 @@ def test_strict_score_block_does_not_block_learning_candidate() -> None:
     assert selection["selected"] == []
     assert selection["exploration"][0]["ticker"] == "ETH-USD"
     assert selection["rejected"][0]["learning_block_reasons"] == []
+    capital = service._summarize_candidate_capital(selection["exploration"])
+    assert capital["count"] == 1
+    assert capital["notional_value"] > 0
+    assert capital["max_loss_value"] > 0
 
 
 def test_close_trade_auto_documents_profitable_exit() -> None:

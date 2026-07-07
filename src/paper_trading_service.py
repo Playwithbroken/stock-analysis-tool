@@ -76,14 +76,15 @@ class PaperTradingService:
         mode = "learn" if str(mode or "").lower() == "learn" else "strict"
         source_key = "exploration" if mode == "learn" else "selected"
         selected = selection.get(source_key, [])[: max(1, int(max_trades or 1))]
+        selected_capital = self._summarize_candidate_capital(selected)
         blocker_summary = selection.get("blocker_summary") if isinstance(selection.get("blocker_summary"), dict) else {}
         no_trade_message = self._auto_selection_no_trade_message(mode, blocker_summary)
         preview_message = (
             no_trade_message
             if not selected
-            else f"{len(selected)} Learning-Kandidaten erfüllen die Exploration-Gates."
+            else f"{len(selected)} Learning-Kandidaten erfuellen die Exploration-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
             if mode == "learn"
-            else f"{len(selected)} Demo-Kandidaten erfüllen die Auto-Selection-Gates."
+            else f"{len(selected)} Demo-Kandidaten erfuellen die Auto-Selection-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
         )
         if not execute:
             return {
@@ -91,6 +92,7 @@ class PaperTradingService:
                 "execute": False,
                 "mode": mode,
                 "selected": selected,
+                "selected_capital": selected_capital,
                 "opened": [],
                 "rejected_count": selection.get("rejected_count"),
                 "blocker_summary": blocker_summary,
@@ -125,20 +127,30 @@ class PaperTradingService:
         execution_message = (
             no_trade_message
             if not selected and not opened
-            else f"{len(opened)} Paper-Learning-Trades eröffnet; {len(errors)} im finalen Gate geblockt."
+            else f"{len(opened)} Paper-Learning-Trades eroeffnet; {len(errors)} im finalen Gate geblockt. Geplant: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
             if mode == "learn"
-            else f"{len(opened)} Paper-Trades eröffnet; {len(errors)} im finalen Gate geblockt."
+            else f"{len(opened)} Paper-Trades eroeffnet; {len(errors)} im finalen Gate geblockt. Geplant: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
         )
         return {
             "status": "ok" if not errors else "partial",
             "execute": True,
             "mode": mode,
             "selected": selected,
+            "selected_capital": selected_capital,
             "opened": opened,
             "errors": errors,
             "rejected_count": selection.get("rejected_count"),
             "blocker_summary": blocker_summary,
             "message": execution_message,
+        }
+
+    def _summarize_candidate_capital(self, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+        notional = sum(float(item.get("suggested_notional_value") or 0) for item in candidates)
+        max_loss = sum(float(item.get("suggested_max_loss_value") or 0) for item in candidates)
+        return {
+            "count": len(candidates),
+            "notional_value": round(notional, 2),
+            "max_loss_value": round(max_loss, 2),
         }
 
     def _auto_selection_no_trade_message(self, mode: str, blocker_summary: Dict[str, Any]) -> str:

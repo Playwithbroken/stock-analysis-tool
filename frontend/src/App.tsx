@@ -442,7 +442,7 @@ function LoginScreen({
               {status ? (
                 <div className="mt-4 text-sm text-white/75">
                   {status.includes("500")
-                    ? "Cannot connect to the server â€” check that the backend is running."
+                    ? "Cannot connect to the server - check that the backend is running."
                     : status.includes("401") || status.includes("403")
                       ? "Incorrect code. Please try again."
                       : status}
@@ -848,8 +848,8 @@ function AppContent() {
     };
   }, [auth.authenticated, briefReloadTick]);
 
-  // Trading edge â€” heavy payload, loaded separately with own spinner.
-  // Refresh every 5 min; backend caches per-component (10min â€“ 6h).
+  // Trading edge - heavy payload, loaded separately with own spinner.
+  // Refresh every 5 min; backend caches per-component (10min - 6h).
   useEffect(() => {
     if (!auth.authenticated || activeTab !== "dashboard") return;
     let cancelled = false;
@@ -979,7 +979,7 @@ function AppContent() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {
-      // Network error â€” clear local session anyway
+      // Network error - clear local session anyway
     }
     setAuth((prev) => ({ ...prev, authenticated: false }));
     setAuthStatus("Abgemeldet.");
@@ -1395,7 +1395,7 @@ function AppContent() {
                     EUR
                   </button>
                 </div>
-                {/* Mobile: compact toggle that cycles USD â†” EUR */}
+                {/* Mobile: compact toggle that cycles USD <-> EUR */}
                 <button
                   onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
                   aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
@@ -1422,7 +1422,7 @@ function AppContent() {
                 >
                   {installPrompt.installed ? "Installed" : "Install"}
                 </button>
-                {/* Username â€” visible on all screen sizes */}
+                {/* Username - visible on all screen sizes */}
                 <div className="max-w-[7.5rem] truncate rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)] sm:max-w-none sm:text-xs">
                   {auth.profile?.display_name || "Private"}
                 </div>
@@ -1547,7 +1547,7 @@ function AppContent() {
                   const r = (globalBrief.macro_regime || "").toLowerCase();
                   const isOn = r.includes("risk-on") || r.includes("on");
                   const isOff = r.includes("risk-off") || r.includes("off");
-                  const icon = isOn ? "â†—" : isOff ? "â†˜" : "âš–";
+                  const icon = isOn ? "UP" : isOff ? "DOWN" : "FLAT";
                   const cls = isOn
                     ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
                     : isOff
@@ -1851,10 +1851,10 @@ function AppContent() {
               <div className="mb-4 rounded-[1.4rem] border border-amber-400/30 bg-amber-50 p-5 shadow-sm">
                 <div className="flex flex-wrap items-start gap-4">
                   <div className="flex-1">
-                    <div className="text-sm font-extrabold text-amber-800">ðŸ“¦ Portfolios wiederherstellen</div>
+                    <div className="text-sm font-extrabold text-amber-800">Portfolios wiederherstellen</div>
                     <p className="mt-1 text-sm text-amber-700">
-                      Der Server wurde neu gestartet und die Daten wurden zurÃ¼ckgesetzt.
-                      Es wurden <strong>{cachedPortfolios.length} Portfolio{cachedPortfolios.length > 1 ? "s" : ""}</strong> lokal gespeichert â€”
+                      Der Server wurde neu gestartet und die Daten wurden zurueckgesetzt.
+                      Es wurden <strong>{cachedPortfolios.length} Portfolio{cachedPortfolios.length > 1 ? "s" : ""}</strong> lokal gespeichert -
                       sollen sie wiederhergestellt werden?
                     </p>
                     <div className="mt-1 text-xs text-amber-600">

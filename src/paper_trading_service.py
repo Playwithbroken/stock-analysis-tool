@@ -191,6 +191,10 @@ class PaperTradingService:
             return "Demo-Risiko-Gate blockiert"
         if "trade signal rules blocked" in lower:
             return "Signal-Regeln blockieren dieses Playbook"
+        if "strict-signalregel:" in lower:
+            return text
+        if "signalregel:" in lower:
+            return text
         return text
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -226,7 +230,10 @@ class PaperTradingService:
         hard_demo_reasons = [
             str(item)
             for item in playbook.get("demo_block_reasons", [])
-            if str(item) != "Playbook is blocked by signal rules." or hard_rule_reasons
+            if (
+                (str(item) != "Playbook is blocked by signal rules." and not str(item).startswith("Strict-Signalregel:"))
+                or hard_rule_reasons
+            )
         ]
         if playbook.get("do_not_trade_reasons") and (not learning_mode or hard_rule_reasons):
             raise ValueError("Playbook is blocked by do-not-trade rules.")
@@ -1021,7 +1028,10 @@ class PaperTradingService:
                 hard_demo_reasons = [
                     str(item)
                     for item in playbook.get("demo_block_reasons", [])
-                    if str(item) != "Playbook is blocked by signal rules." or hard_rule_reasons
+                    if (
+                        (str(item) != "Playbook is blocked by signal rules." and not str(item).startswith("Strict-Signalregel:"))
+                        or hard_rule_reasons
+                    )
                 ]
                 exploration_reasons.extend(hard_demo_reasons[:3])
             if key in open_keys:
@@ -1502,7 +1512,16 @@ class PaperTradingService:
         if int(demo_account.get("open_trade_slots") or 0) <= 0:
             block_reasons.append("Maximale Anzahl offener Demo-Trades erreicht.")
         if playbook.get("tradeable") is False:
-            block_reasons.append("Playbook ist durch Signalregeln geblockt.")
+            signal_reasons = [str(reason) for reason in playbook.get("do_not_trade_reasons", []) if str(reason).strip()]
+            hard_signal_reasons = [
+                reason for reason in signal_reasons if not reason.lower().startswith("score below minimum trade score")
+            ]
+            if hard_signal_reasons:
+                block_reasons.extend([f"Signalregel: {reason}" for reason in hard_signal_reasons[:2]])
+            elif signal_reasons:
+                block_reasons.extend([f"Strict-Signalregel: {reason}" for reason in signal_reasons[:2]])
+            else:
+                block_reasons.append("Signalregel: Playbook hat kein freigegebenes Signal.")
 
         quantity_by_risk = risk_budget / risk_per_unit if risk_per_unit > 0 else 0
         quantity_by_position = max_position_value / (price * contract_multiplier) if price > 0 else 0

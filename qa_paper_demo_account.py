@@ -426,6 +426,42 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
     assert "score below auto minimum" not in message
 
 
+def test_strict_score_block_does_not_block_learning_candidate() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    demo_account = {
+        "equity": 500_000.0,
+        "risk_budget_per_trade_value": 1_750.0,
+        "remaining_risk_value": 15_000.0,
+        "max_position_value": 50_000.0,
+        "open_trade_slots": 5,
+        "day_status": "ok",
+        "learning_feedback": {},
+    }
+    playbook = {
+        "id": "equity-ETH-long",
+        "ticker": "ETH-USD",
+        "asset_class": "crypto",
+        "direction": "long",
+        "setup_type": "crypto_flow",
+        "score": 75.4,
+        "reference_price": 4000.0,
+        "risk_buffer_pct": 3.5,
+        "tradeable": False,
+        "do_not_trade_reasons": ["Score below minimum trade score 78."],
+        "thesis": "Crypto flow watch.",
+        "decision_framework": {
+            "entry_trigger": "ETH confirms flow with price and volume.",
+            "invalidation": "ETH loses the trigger zone.",
+        },
+    }
+    sized = {**playbook, **service._suggest_demo_sizing(playbook, demo_account)}
+    assert sized["demo_block_reasons"][0].startswith("Strict-Signalregel:")
+    selection = service._build_auto_selection([sized], [], demo_account)
+    assert selection["selected"] == []
+    assert selection["exploration"][0]["ticker"] == "ETH-USD"
+    assert selection["rejected"][0]["learning_block_reasons"] == []
+
+
 def test_close_trade_auto_documents_profitable_exit() -> None:
     manager = FakePortfolioManager(
         [
@@ -504,6 +540,7 @@ if __name__ == "__main__":
     test_demo_account_blocks_new_trades_during_risk_review()
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()
+    test_strict_score_block_does_not_block_learning_candidate()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

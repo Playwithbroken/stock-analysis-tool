@@ -1105,6 +1105,25 @@ class PaperTradingService:
             {"reason": reason, "display_reason": self._auto_rejection_display_reason(reason), "count": count}
             for reason, count in sorted(reason_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:5]
         ]
+        blocker_groups: Dict[str, Dict[str, Any]] = {}
+        for reason, count in reason_counts.items():
+            category = self._auto_rejection_category(reason)
+            group = blocker_groups.setdefault(
+                category,
+                {
+                    "category": category,
+                    "label": self._auto_rejection_category_label(category),
+                    "count": 0,
+                    "reasons": [],
+                },
+            )
+            group["count"] += count
+            if len(group["reasons"]) < 3:
+                group["reasons"].append(self._auto_rejection_display_reason(reason))
+        blocker_groups_list = sorted(
+            blocker_groups.values(),
+            key=lambda item: (-int(item.get("count") or 0), str(item.get("label") or "")),
+        )[:4]
         next_best = None
         if rejected:
             actionable_rejected = [
@@ -1114,23 +1133,29 @@ class PaperTradingService:
             ]
             next_pool = actionable_rejected or rejected
             next_best = max(next_pool, key=lambda item: float(item.get("score") or 0))
+            next_best_reasons = (next_best.get("reasons") or [])[:3]
+            next_best_category = self._auto_rejection_category(next_best_reasons[0] if next_best_reasons else "")
             next_best = {
                 "ticker": next_best.get("ticker"),
                 "direction": next_best.get("direction"),
                 "setup_type": next_best.get("setup_type"),
                 "score": next_best.get("score"),
-                "reasons": (next_best.get("reasons") or [])[:3],
+                "reasons": next_best_reasons,
                 "display_reasons": (
                     next_best.get("display_reasons")
                     or [self._auto_rejection_display_reason(reason) for reason in (next_best.get("reasons") or [])]
                 )[:3],
                 "next_action": next_best.get("next_action"),
+                "blocker_category": next_best_category,
+                "blocker_label": self._auto_rejection_category_label(next_best_category),
+                "missing_to_trade": self._auto_rejection_missing_to_trade(next_best_reasons),
                 "source": "best_fixable" if actionable_rejected else "best_overall",
             }
 
         return {
             "checked": len(rejected),
             "top_reasons": top_reasons,
+            "blocker_groups": blocker_groups_list,
             "next_best_rejected": next_best,
             "duplicate_blocked_count": sum(
                 1
@@ -1138,6 +1163,67 @@ class PaperTradingService:
                 if "same ticker/setup/direction already open" in {str(reason) for reason in item.get("reasons") or []}
             ),
         }
+
+    def _auto_rejection_category(self, reason: str) -> str:
+        lower = str(reason or "").lower()
+        if "missing paper journal" in lower:
+            return "journal"
+        if "risk review" in lower or "exit actions open" in lower:
+            return "risk_review"
+        if "open risk budget is exhausted" in lower or "open-trade slots exhausted" in lower or "maximum demo open trades" in lower:
+            return "capacity"
+        if "same ticker/setup/direction already open" in lower:
+            return "duplicate"
+        if "score below" in lower:
+            return "score"
+        if "missing ticker or reference price" in lower:
+            return "data"
+        if "missing thesis, trigger or invalidation" in lower:
+            return "setup_quality"
+        if "option" in lower or "optionskette" in lower:
+            return "options_review"
+        if "paper outcome learning blocks" in lower or "paper-ergebnisse" in lower:
+            return "learning_block"
+        return "quality_gate"
+
+    def _auto_rejection_category_label(self, category: str) -> str:
+        labels = {
+            "journal": "Journal zuerst",
+            "risk_review": "Risiko pruefen",
+            "capacity": "Risiko/Slots voll",
+            "duplicate": "Duplikat offen",
+            "score": "Score zu niedrig",
+            "data": "Daten fehlen",
+            "setup_quality": "Setup unvollstaendig",
+            "options_review": "Optionscheck fehlt",
+            "learning_block": "Lernen blockiert",
+            "quality_gate": "Quality-Gate",
+        }
+        return labels.get(str(category or ""), "Quality-Gate")
+
+    def _auto_rejection_missing_to_trade(self, reasons: List[str]) -> str:
+        text = " | ".join(str(reason or "").lower() for reason in reasons)
+        if "score below auto minimum" in text:
+            return "Score 88+ oder staerkere Preis-/Volumenbestaetigung"
+        if "score below minimum trade score" in text:
+            return "Score 78+ und bessere Signalqualitaet"
+        if "missing thesis, trigger or invalidation" in text:
+            return "These, Trigger und Invalidierung voll dokumentieren"
+        if "missing ticker or reference price" in text:
+            return "Kursdaten oder Ticker-Zuordnung reparieren"
+        if "same ticker/setup/direction already open" in text:
+            return "Bestehenden Paper-Trade managen statt doppeln"
+        if "risk review" in text or "exit actions open" in text:
+            return "Offene Trades pruefen und Risk-Review beenden"
+        if "open risk budget is exhausted" in text or "open-trade slots exhausted" in text:
+            return "Risiko oder Slots freimachen"
+        if "missing paper journal" in text:
+            return "Fehlende Journale abschliessen"
+        if "option" in text or "optionskette" in text:
+            return "Strike, Laufzeit, Spread und IV manuell pruefen"
+        if "paper outcome learning blocks" in text or "paper-ergebnisse" in text:
+            return "Erst bessere Paper-Ergebnisse sammeln"
+        return "Trigger, Risiko und Lern-Gates muessen sauber sein"
 
     def _auto_rejection_next_action(self, reasons: List[str]) -> str:
         text = " | ".join(str(reason or "").lower() for reason in reasons)

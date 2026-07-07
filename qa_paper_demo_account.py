@@ -408,6 +408,9 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
     assert summary["next_best_rejected"]["ticker"] == "AAPL"
     assert summary["next_best_rejected"]["source"] == "best_fixable"
     assert summary["next_best_rejected"]["display_reasons"][0] == "Score unter Auto-Minimum 88"
+    assert summary["next_best_rejected"]["blocker_label"] == "Score zu niedrig"
+    assert "Score 88+" in summary["next_best_rejected"]["missing_to_trade"]
+    assert summary["blocker_groups"][0]["count"] >= 1
     assert summary["top_reasons"][0]["display_reason"]
     assert "Score 88+" in summary["next_best_rejected"]["next_action"]
     assert "Duplikat" in service._auto_rejection_next_action(["same ticker/setup/direction already open"])

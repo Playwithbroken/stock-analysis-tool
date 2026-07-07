@@ -488,6 +488,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           ? "nur Lerntrade"
                           : "noch blockiert"}
                     </span>
+                    {nextPaperDecision.blocker_label ? (
+                      <span className="rounded-full border border-red-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+                        {nextPaperDecision.blocker_label}
+                      </span>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mt-2 text-sm font-semibold text-slate-700">
@@ -530,6 +535,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             {nextPaperDecisionMode === "blocked" && nextPaperDecision ? (
               <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-5 text-red-800">
                 Kein Kauf: {(nextPaperDecision.display_reasons || nextPaperDecision.reasons || ["Quality-Gate noch nicht erfuellt"]).slice(0, 3).join(" / ")}.
+                {nextPaperDecision.missing_to_trade ? (
+                  <span className="block pt-1 text-red-900">Fehlt bis Paper-Kauf: {nextPaperDecision.missing_to_trade}.</span>
+                ) : null}
                 {nextPaperDecision.next_action ? (
                   <span className="block pt-1 text-red-900">Naechster Schritt: {nextPaperDecision.next_action}</span>
                 ) : null}
@@ -652,11 +660,31 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   </div>
                 ))}
               </div>
+              {autoSelection.blocker_summary.blocker_groups?.length ? (
+                <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  {autoSelection.blocker_summary.blocker_groups.map((item: any) => (
+                    <div key={item.category} className="rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-slate-700">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-slate-900">{item.label}</span>
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 font-black text-amber-800">{item.count}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] leading-4 text-slate-500">
+                        {(item.reasons || []).slice(0, 2).join(" / ")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {autoSelection.blocker_summary.next_best_rejected?.reasons?.length ? (
                 <div className="mt-3 rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-slate-700">
                   <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Nächster Kandidat:</span>{" "}
                   {autoSelection.blocker_summary.next_best_rejected.ticker} wird geblockt durch{" "}
                   {(autoSelection.blocker_summary.next_best_rejected.display_reasons || autoSelection.blocker_summary.next_best_rejected.reasons).join(" / ")}.
+                  {autoSelection.blocker_summary.next_best_rejected.missing_to_trade ? (
+                    <div className="mt-2 font-bold text-slate-900">
+                      Fehlt bis Paper-Kauf: {autoSelection.blocker_summary.next_best_rejected.missing_to_trade}
+                    </div>
+                  ) : null}
                   {autoSelection.blocker_summary.next_best_rejected.next_action ? (
                     <div className="mt-2 font-bold text-slate-900">
                       Nächster Schritt: {autoSelection.blocker_summary.next_best_rejected.next_action}

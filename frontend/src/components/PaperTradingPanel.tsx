@@ -538,6 +538,15 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 {nextPaperDecision.missing_to_trade ? (
                   <span className="block pt-1 text-red-900">Fehlt bis Paper-Kauf: {nextPaperDecision.missing_to_trade}.</span>
                 ) : null}
+                {Number(nextPaperDecision.auto_score_gap || 0) > 0 ? (
+                  <span className="block pt-1 text-red-900">
+                    Score-Luecke: {Number(nextPaperDecision.auto_score_gap).toFixed(1)} Punkte bis Strict-Trade
+                    {Number(nextPaperDecision.learning_score_gap || 0) > 0
+                      ? ` / ${Number(nextPaperDecision.learning_score_gap).toFixed(1)} Punkte bis Lerntrade`
+                      : " / Lernscore erreicht"}
+                    .
+                  </span>
+                ) : null}
                 {nextPaperDecision.next_action ? (
                   <span className="block pt-1 text-red-900">Naechster Schritt: {nextPaperDecision.next_action}</span>
                 ) : null}
@@ -683,6 +692,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   {autoSelection.blocker_summary.next_best_rejected.missing_to_trade ? (
                     <div className="mt-2 font-bold text-slate-900">
                       Fehlt bis Paper-Kauf: {autoSelection.blocker_summary.next_best_rejected.missing_to_trade}
+                    </div>
+                  ) : null}
+                  {Number(autoSelection.blocker_summary.next_best_rejected.auto_score_gap || 0) > 0 ? (
+                    <div className="mt-2 font-bold text-slate-900">
+                      Score-Luecke: {Number(autoSelection.blocker_summary.next_best_rejected.auto_score_gap).toFixed(1)} Punkte bis Strict-Trade
+                      {Number(autoSelection.blocker_summary.next_best_rejected.learning_score_gap || 0) > 0
+                        ? ` / ${Number(autoSelection.blocker_summary.next_best_rejected.learning_score_gap).toFixed(1)} Punkte bis Lerntrade`
+                        : " / Lernscore erreicht"}
                     </div>
                   ) : null}
                   {autoSelection.blocker_summary.next_best_rejected.next_action ? (

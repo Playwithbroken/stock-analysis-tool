@@ -1052,6 +1052,8 @@ class PaperTradingService:
                 "strategy_id": (playbook.get("strategy") or {}).get("id"),
                 "strategy_label": (playbook.get("strategy") or {}).get("label"),
                 "score": score,
+                "auto_score_gap": round(max(0.0, min_score - score), 1),
+                "learning_score_gap": round(max(0.0, exploration_min_score - score), 1),
                 "title": playbook.get("title"),
                 "headline": playbook.get("headline"),
                 "suggested_quantity": playbook.get("suggested_quantity"),
@@ -1140,6 +1142,8 @@ class PaperTradingService:
                 "direction": next_best.get("direction"),
                 "setup_type": next_best.get("setup_type"),
                 "score": next_best.get("score"),
+                "auto_score_gap": next_best.get("auto_score_gap"),
+                "learning_score_gap": next_best.get("learning_score_gap"),
                 "reasons": next_best_reasons,
                 "display_reasons": (
                     next_best.get("display_reasons")

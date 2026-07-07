@@ -399,6 +399,8 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
                 "direction": "long",
                 "setup_type": "insider_follow",
                 "score": 87,
+                "auto_score_gap": 1.0,
+                "learning_score_gap": 0.0,
                 "reasons": ["score below auto minimum 88"],
                 "next_action": service._auto_rejection_next_action(["score below auto minimum 88"]),
             },
@@ -409,6 +411,8 @@ def test_auto_rejection_summary_prefers_fixable_candidate() -> None:
     assert summary["next_best_rejected"]["source"] == "best_fixable"
     assert summary["next_best_rejected"]["display_reasons"][0] == "Score unter Auto-Minimum 88"
     assert summary["next_best_rejected"]["blocker_label"] == "Score zu niedrig"
+    assert summary["next_best_rejected"]["auto_score_gap"] == 1.0
+    assert summary["next_best_rejected"]["learning_score_gap"] == 0.0
     assert "Score 88+" in summary["next_best_rejected"]["missing_to_trade"]
     assert summary["blocker_groups"][0]["count"] >= 1
     assert summary["top_reasons"][0]["display_reason"]

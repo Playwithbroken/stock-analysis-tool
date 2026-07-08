@@ -438,6 +438,8 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestRef = useRef(0);
   const suggestionAbortRef = useRef<AbortController | null>(null);
+  const defaultSuggestionAbortRef = useRef<AbortController | null>(null);
+  const defaultSuggestionLoadedAtRef = useRef(0);
   const latestQueryRef = useRef("");
 
   const flatSuggestions = useMemo(
@@ -493,9 +495,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     setGhostText("");
   }, [query, flatSuggestions]);
 
-  // Load default suggestions on mount
-  useEffect(() => {
+  const refreshDefaultSuggestions = useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - defaultSuggestionLoadedAtRef.current < 90_000) return;
+    defaultSuggestionAbortRef.current?.abort();
     const controller = new AbortController();
+    defaultSuggestionAbortRef.current = controller;
     fetchJsonWithRetry<unknown>("/api/search/suggestions", { signal: controller.signal }, {
       retries: 2,
       retryDelayMs: 900,
@@ -503,14 +508,22 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     })
       .then((data) => {
         const normalized = normalizeSuggestionGroups(data);
-        if (!controller.signal.aborted && !latestQueryRef.current.trim() && Object.keys(normalized).length > 0) {
+        if (!controller.signal.aborted && Object.keys(normalized).length > 0) {
+          defaultSuggestionLoadedAtRef.current = Date.now();
           setDefaultSuggestionGroups(normalized);
+        }
+        if (!controller.signal.aborted && !latestQueryRef.current.trim() && Object.keys(normalized).length > 0) {
           setSuggestions(normalized);
         }
       })
       .catch(() => undefined);
-    return () => controller.abort();
   }, []);
+
+  // Load default suggestions on mount
+  useEffect(() => {
+    refreshDefaultSuggestions(true);
+    return () => defaultSuggestionAbortRef.current?.abort();
+  }, [refreshDefaultSuggestions]);
 
   // Debounced live search
   useEffect(() => {
@@ -526,7 +539,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       }
       if (trimmedQuery.length === 1) {
         suggestionAbortRef.current?.abort();
-        if (localMatches.length === 0) setSuggestions(buildDefaultSuggestions());
+        if (localMatches.length === 0) setSuggestions(defaultSuggestionGroups);
         return;
       }
       const requestId = searchRequestRef.current + 1;
@@ -752,6 +765,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                     } else if (!query.trim() && Object.keys(suggestions).length === 0) {
                       setSuggestions(defaultSuggestionGroups);
                     }
+                    if (!query.trim()) refreshDefaultSuggestions();
                     setShowDropdown(true);
                   }}
                   onKeyDown={handleKeyDown}

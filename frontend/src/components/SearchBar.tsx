@@ -456,6 +456,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       "Lernsignale",
       "Mein Radar",
       "Market Movers",
+      "Future Stars",
       "Katalysatoren",
       "ETFs & Makro",
       "Crypto",

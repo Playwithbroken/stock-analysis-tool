@@ -953,6 +953,17 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
         add_category("Market Movers", [*(market_movers.get("gainers") or [])[:4], *(market_movers.get("losers") or [])[:4]])
 
     try:
+        # Keep search suggestions fast: the full Future-Star scanner performs many
+        # market-data calls, so the search bar uses the curated radar universe only.
+        future_rows = [
+            {"ticker": ticker, "name": ticker}
+            for ticker in getattr(get_discovery_service(), "future_star_watch", [])[:6]
+        ]
+        add_category("Future Stars", future_rows, limit=6)
+    except Exception:
+        pass
+
+    try:
         radar_rows: List[Dict[str, Any]] = []
         for item in get_portfolio_manager().get_signal_watch_items()[:8]:
             if isinstance(item, dict) and str(item.get("kind", "")).lower() == "ticker":

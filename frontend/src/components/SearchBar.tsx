@@ -426,6 +426,9 @@ function normalizeSuggestionGroups(payload: unknown): Record<string, string[]> {
 
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
+  const [defaultSuggestionGroups, setDefaultSuggestionGroups] = useState<Record<string, string[]>>(() =>
+    buildDefaultSuggestions(),
+  );
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>(() => buildDefaultSuggestions());
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -501,6 +504,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       .then((data) => {
         const normalized = normalizeSuggestionGroups(data);
         if (!controller.signal.aborted && !latestQueryRef.current.trim() && Object.keys(normalized).length > 0) {
+          setDefaultSuggestionGroups(normalized);
           setSuggestions(normalized);
         }
       })
@@ -553,7 +557,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       }, 90);
     } else if (trimmedQuery.length === 0) {
       suggestionAbortRef.current?.abort();
-      setSuggestions(buildDefaultSuggestions());
+      setSuggestions(defaultSuggestionGroups);
       setGhostText("");
     }
 
@@ -561,7 +565,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       suggestionAbortRef.current?.abort();
     };
-  }, [query]);
+  }, [defaultSuggestionGroups, query]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -746,7 +750,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                     } else if (query.trim() && Object.keys(suggestions).length === 0) {
                       setSuggestions(buildDirectSearchSuggestion(query));
                     } else if (!query.trim() && Object.keys(suggestions).length === 0) {
-                      setSuggestions(buildDefaultSuggestions());
+                      setSuggestions(defaultSuggestionGroups);
                     }
                     setShowDropdown(true);
                   }}

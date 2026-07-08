@@ -406,6 +406,20 @@ function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
   return value.length >= 2 ? { "Direkt suchen": [value] } : {};
 }
 
+const SUGGESTION_CATEGORY_ORDER = [
+  "Treffer",
+  "Direkt suchen",
+  "Jetzt interessant",
+  "Market Movers",
+  "Mein Radar",
+  "Paper Trading",
+  "Lernsignale",
+  "Future Stars",
+  "Katalysatoren",
+  "ETFs & Makro",
+  "Crypto",
+];
+
 function normalizeSuggestionGroups(payload: unknown): Record<string, string[]> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
   const hiddenCategories = new Set(["meta"]);
@@ -420,7 +434,12 @@ function normalizeSuggestionGroups(payload: unknown): Record<string, string[]> {
             : [];
         return [category, normalizedValues] as const;
       })
-      .filter(([, values]) => values.length > 0),
+      .filter(([, values]) => values.length > 0)
+      .sort(([a], [b]) => {
+        const aIndex = SUGGESTION_CATEGORY_ORDER.indexOf(a);
+        const bIndex = SUGGESTION_CATEGORY_ORDER.indexOf(b);
+        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+      }),
   );
 }
 
@@ -450,17 +469,9 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     [suggestions],
   );
   const quickSuggestions = useMemo(() => {
-    const preferredCategories = [
-      "Jetzt interessant",
-      "Paper Trading",
-      "Lernsignale",
-      "Mein Radar",
-      "Market Movers",
-      "Future Stars",
-      "Katalysatoren",
-      "ETFs & Makro",
-      "Crypto",
-    ];
+    const preferredCategories = SUGGESTION_CATEGORY_ORDER.filter(
+      (category) => !["Treffer", "Direkt suchen"].includes(category),
+    );
     const ordered = [
       ...preferredCategories.flatMap((category) =>
         (suggestions[category] || []).map((value) => ({ category, value })),

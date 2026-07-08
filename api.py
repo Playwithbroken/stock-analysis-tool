@@ -228,11 +228,20 @@ SEARCH_NAME_CATALOG: List[Dict[str, str]] = [
     {"ticker": "PEP", "name": "PepsiCo"},
     {"ticker": "ABT", "name": "Abbott Laboratories"},
     {"ticker": "RKLB", "name": "Rocket Lab"},
+    {"ticker": "LUNR", "name": "Intuitive Machines lunar space"},
     {"ticker": "ASTS", "name": "AST SpaceMobile"},
     {"ticker": "IONQ", "name": "IonQ Quantum"},
+    {"ticker": "RGTI", "name": "Rigetti Computing quantum"},
     {"ticker": "PATH", "name": "UiPath Automation"},
+    {"ticker": "S", "name": "SentinelOne cybersecurity"},
     {"ticker": "SOUN", "name": "SoundHound AI"},
     {"ticker": "RXRX", "name": "Recursion Pharmaceuticals AI Biotech"},
+    {"ticker": "CELH", "name": "Celsius Holdings energy drinks"},
+    {"ticker": "DUOL", "name": "Duolingo language learning"},
+    {"ticker": "TTD", "name": "The Trade Desk advertising tech"},
+    {"ticker": "CRSP", "name": "CRISPR Therapeutics gene editing"},
+    {"ticker": "BEAM", "name": "Beam Therapeutics gene editing"},
+    {"ticker": "ENVX", "name": "Enovix battery technology"},
     {"ticker": "JOBY", "name": "Joby Aviation eVTOL"},
     {"ticker": "ACHR", "name": "Archer Aviation eVTOL"},
     {"ticker": "OKLO", "name": "Oklo Nuclear Energy"},
@@ -955,10 +964,10 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
     try:
         # Keep search suggestions fast: the full Future-Star scanner performs many
         # market-data calls, so the search bar uses the curated radar universe only.
-        future_rows = [
-            {"ticker": ticker, "name": ticker}
-            for ticker in getattr(get_discovery_service(), "future_star_watch", [])[:6]
-        ]
+        future_rows = []
+        for ticker in getattr(get_discovery_service(), "future_star_watch", [])[:6]:
+            catalog = _catalog_match_for_ticker(ticker) or {}
+            future_rows.append({"ticker": ticker, "name": catalog.get("name") or ticker})
         add_category("Future Stars", future_rows, limit=6)
     except Exception:
         pass

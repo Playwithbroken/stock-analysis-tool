@@ -356,6 +356,17 @@ export function normalizeTickerInput(value: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9.^=-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
+function splitSuggestionLabel(value: string): { ticker: string; name: string } {
+  const ticker = extractTicker(value);
+  const name = value
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+  return {
+    ticker: normalizeTickerInput(ticker),
+    name: name && name !== ticker ? name : "",
+  };
+}
+
 function uniqueValues(values: string[]): string[] {
   return Array.from(new Set(values));
 }
@@ -876,6 +887,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   <div className="flex flex-col gap-2">
                     {Array.isArray(tickers) &&
                       tickers.map((ticker) => {
+                        const parsed = splitSuggestionLabel(ticker);
                         const flatIndex = flatSuggestions.findIndex(
                           (item) => item.category === category && item.value === ticker,
                         );
@@ -894,7 +906,14 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                                 : "border-black/8 bg-white text-slate-700 hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
                             }`}
                           >
-                            {ticker}
+                            <span className="block text-sm font-black uppercase tracking-[0.12em]">
+                              {parsed.ticker || ticker}
+                            </span>
+                            {parsed.name ? (
+                              <span className="mt-0.5 block truncate text-[11px] font-semibold normal-case tracking-normal text-slate-500">
+                                {parsed.name}
+                              </span>
+                            ) : null}
                           </button>
                         );
                       })}

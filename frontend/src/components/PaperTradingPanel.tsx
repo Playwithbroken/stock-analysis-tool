@@ -113,6 +113,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [lastAutopilotResult, setLastAutopilotResult] = useState<any | null>(null);
   const [journalDraft, setJournalDraft] = useState<Record<string, { notes: string; exit_reason: string; lessons_learned: string }>>({});
 
   const stats = data?.stats || {};
@@ -262,6 +263,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Paper-Autopilot fehlgeschlagen.");
       await onRefresh?.();
+      setLastAutopilotResult(payload);
       setStatus(
         execute
           ? payload.message || `${payload.opened?.length || 0} Paper-Trades eröffnet.`
@@ -651,6 +653,37 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             {autoLearnStatus.next_allowed_at ? ` · nächster Lauf ${new Date(autoLearnStatus.next_allowed_at).toLocaleString()}` : ""}
             {autoLearnStatus.message ? ` · ${autoLearnStatus.message}` : ""}
           </div>
+          {lastAutopilotResult ? (
+            <div className="mt-3 rounded-[1.1rem] border border-sky-500/20 bg-sky-50/80 p-3 text-sky-900">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-extrabold uppercase tracking-[0.18em] text-sky-700">
+                    Letzter Autopilot-Check
+                  </div>
+                  <div className="mt-1 font-semibold leading-5">
+                    {lastAutopilotResult.message || "Autopilot-Check abgeschlossen."}
+                  </div>
+                </div>
+                <div className="rounded-full border border-sky-200 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.12em] text-sky-800">
+                  {lastAutopilotResult.mode || "strict"} / {lastAutopilotResult.execute ? "execute" : "preview"}
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl border border-sky-200 bg-white/80 px-3 py-2">
+                  <div className="font-black text-slate-900">{lastAutopilotResult.selected_capital?.count ?? lastAutopilotResult.selected?.length ?? 0}</div>
+                  <div className="text-sky-700">Kandidaten</div>
+                </div>
+                <div className="rounded-xl border border-sky-200 bg-white/80 px-3 py-2">
+                  <div className="font-black text-slate-900">{money(lastAutopilotResult.selected_capital?.notional_value, currency)}</div>
+                  <div className="text-sky-700">Demo-Kapital</div>
+                </div>
+                <div className="rounded-xl border border-sky-200 bg-white/80 px-3 py-2">
+                  <div className="font-black text-slate-900">{money(lastAutopilotResult.selected_capital?.max_loss_value, currency)}</div>
+                  <div className="text-sky-700">max. Paper-Risiko</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {autoSelection.blocker_summary?.top_reasons?.length ? (
             <div className="mt-3 rounded-[1.1rem] border border-amber-500/20 bg-amber-50/80 p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">

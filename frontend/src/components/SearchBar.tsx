@@ -461,19 +461,27 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       "Crypto",
     ];
     const ordered = [
-      ...preferredCategories.flatMap((category) => suggestions[category] || []),
-      ...flatSuggestions.map((item) => item.value),
+      ...preferredCategories.flatMap((category) =>
+        (suggestions[category] || []).map((value) => ({ category, value })),
+      ),
+      ...flatSuggestions,
     ];
     const seen = new Set<string>();
-    const tickers: string[] = [];
-    for (const value of ordered) {
+    const items: Array<{ ticker: string; value: string; category: string }> = [];
+    for (const { category, value } of ordered) {
       const ticker = normalizeTickerInput(value);
       if (!ticker || seen.has(ticker)) continue;
       seen.add(ticker);
-      tickers.push(ticker);
-      if (tickers.length >= 5) break;
+      items.push({ ticker, value, category });
+      if (items.length >= 5) break;
     }
-    return tickers.length > 0 ? tickers : ["NVDA", "MSFT", "BRK-B", "SAP", "BTC-USD"];
+    return items.length > 0
+      ? items
+      : ["NVDA", "MSFT", "BRK-B", "SAP", "BTC-USD"].map((ticker) => ({
+          ticker,
+          value: ticker,
+          category: "Fallback",
+        }));
   }, [flatSuggestions, suggestions]);
   const directSearchActive = Boolean(query.trim()) && flatSuggestions.some((item) => item.category === "Direkt suchen");
 
@@ -815,12 +823,15 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
           {quickSuggestions.map((item) => (
             <button
-              key={item}
+              key={`${item.category}-${item.ticker}`}
               type="button"
-              onClick={() => handleQuickSelect(item)}
-              className="rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
+              onClick={() => handleQuickSelect(item.value)}
+              className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
             >
-              {item}
+              <span className="font-black text-slate-800">{item.ticker}</span>
+              <span className="max-w-28 truncate text-[9px] font-extrabold tracking-[0.12em] text-slate-400 sm:max-w-36">
+                {item.category}
+              </span>
             </button>
           ))}
         </div>

@@ -148,6 +148,16 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       : nextRejectedCandidate
         ? "blocked"
         : "waiting";
+  const lastAutopilotSelected = lastAutopilotResult?.selected?.[0] || null;
+  const lastAutopilotBlocked =
+    lastAutopilotResult?.blocker_summary?.next_best_rejected || lastAutopilotResult?.rejected?.[0] || null;
+  const lastAutopilotFocus = lastAutopilotSelected || lastAutopilotBlocked;
+  const lastAutopilotReasons = (
+    lastAutopilotBlocked?.display_reasons ||
+    lastAutopilotBlocked?.reasons ||
+    lastAutopilotBlocked?.learning_block_display_reasons ||
+    []
+  ).slice(0, 2);
 
   const openPnLTone = useMemo(() => {
     const value = Number(stats.avg_open_pnl_pct || 0);
@@ -682,6 +692,51 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   <div className="text-sky-700">max. Paper-Risiko</div>
                 </div>
               </div>
+              {lastAutopilotFocus ? (
+                <div className="mt-3 rounded-xl border border-sky-200 bg-white/85 px-3 py-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
+                        Nächster Fokus
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-black text-slate-950">
+                        <span>{lastAutopilotFocus.ticker || "Setup"}</span>
+                        {lastAutopilotFocus.score != null ? (
+                          <span className="rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                            Score {Number(lastAutopilotFocus.score).toFixed(0)}
+                          </span>
+                        ) : null}
+                        {lastAutopilotBlocked ? (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-800">
+                            geblockt
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-800">
+                            kaufbar im Paper-Gate
+                          </span>
+                        )}
+                      </div>
+                      {lastAutopilotBlocked ? (
+                        <div className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                          {lastAutopilotReasons.length ? `Blocker: ${lastAutopilotReasons.join(" / ")}.` : "Blocker: Gate noch nicht sauber."}
+                          {Number(lastAutopilotBlocked.auto_score_gap || 0) > 0
+                            ? ` Fehlt: ${Number(lastAutopilotBlocked.auto_score_gap).toFixed(1)} Score-Punkte bis Strict.`
+                            : ""}
+                        </div>
+                      ) : null}
+                    </div>
+                    {lastAutopilotFocus.ticker ? (
+                      <button
+                        type="button"
+                        onClick={() => onAnalyze(lastAutopilotFocus.ticker)}
+                        className="shrink-0 rounded-full bg-sky-900 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white"
+                      >
+                        Analyse öffnen
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {autoSelection.blocker_summary?.top_reasons?.length ? (

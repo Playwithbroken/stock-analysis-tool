@@ -455,8 +455,16 @@ function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
   return value.length >= 2 ? { "Direkt suchen": [value] } : {};
 }
 
+function formatResolvedSuggestion(item: any): string {
+  const ticker = normalizeTickerInput(String(item?.ticker || item?.symbol || ""));
+  if (!ticker) return "";
+  const name = String(item?.name || item?.longName || item?.shortName || ticker).trim();
+  return name && name.toUpperCase() !== ticker ? `${name} (${ticker})` : ticker;
+}
+
 const SUGGESTION_CATEGORY_ORDER = [
   "Treffer",
+  "Bitte auswählen",
   "Direkt suchen",
   "Jetzt interessant",
   "Market Movers",
@@ -736,6 +744,29 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           setQuery(bestTicker);
           setGhostText("");
           onSearch(bestTicker);
+          return;
+        }
+        const alternatives = Array.isArray(resolved?.alternatives) ? resolved.alternatives : [];
+        const candidateItems = bestTicker ? [resolved, ...alternatives] : alternatives;
+        const alternativeMatches = candidateItems
+          .map((item: any) => formatResolvedSuggestion(item))
+          .filter(Boolean);
+        if (alternativeMatches.length > 0) {
+          setSuggestionTypes((prev) => {
+            const next = { ...prev };
+            candidateItems.forEach((item: any) => {
+              const ticker = normalizeTickerInput(String(item?.ticker || item?.symbol || ""));
+              const type = String(item?.type || "").toUpperCase();
+              if (!ticker || next[ticker]) return;
+              if (type === "CRYPTOCURRENCY") next[ticker] = "Crypto";
+              else if (type === "ETF" || type === "MUTUALFUND") next[ticker] = "ETF";
+              else if (type === "INDEX") next[ticker] = "Index";
+              else if (type === "EQUITY") next[ticker] = "Aktie";
+            });
+            return next;
+          });
+          setSuggestions({ "Bitte auswählen": uniqueValues(alternativeMatches).slice(0, 6) });
+          setShowDropdown(true);
           return;
         }
       } catch {

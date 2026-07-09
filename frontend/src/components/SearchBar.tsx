@@ -876,9 +876,9 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             ref={dropdownRef}
             id="search-suggestion-list"
             role="listbox"
-            className="absolute left-3 right-3 top-full z-50 mt-3 overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(255,255,255,0.94)] shadow-[0_24px_80px_rgba(17,24,39,0.12)] backdrop-blur-xl"
+            className="absolute left-3 right-3 top-full z-50 mt-3 max-h-[min(72vh,34rem)] overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(255,255,255,0.94)] shadow-[0_24px_80px_rgba(17,24,39,0.12)] backdrop-blur-xl"
           >
-            <div className="grid gap-1 p-3 md:grid-cols-2">
+            <div className="grid max-h-[calc(min(72vh,34rem)-3.1rem)] gap-1 overflow-y-auto p-3 md:grid-cols-2">
               {Object.entries(suggestions).filter(([, tickers]) => Array.isArray(tickers) && tickers.length > 0).map(([category, tickers]) => (
                 <div key={category} className="rounded-2xl bg-black/[0.02] p-3">
                   <h4 className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">

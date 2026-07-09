@@ -367,41 +367,41 @@ function splitSuggestionLabel(value: string): { ticker: string; name: string } {
   };
 }
 
+const KNOWN_ETF_TICKERS = new Set([
+  "SPY",
+  "QQQ",
+  "QQQM",
+  "VOO",
+  "VTI",
+  "VT",
+  "VXUS",
+  "SCHD",
+  "SOXX",
+  "IBIT",
+  "FBTC",
+  "GBTC",
+  "BITO",
+  "DIA",
+  "IWM",
+  "URTH",
+  "GLD",
+  "TLT",
+  "XLE",
+  "USO",
+  "VUG",
+  "VTV",
+  "VNQ",
+  "VYM",
+  "JEPI",
+  "JEPQ",
+]);
+
 function assetTypeLabel(ticker: string): string {
   const symbol = String(ticker || "").toUpperCase();
   if (!symbol) return "Asset";
   if (symbol.endsWith("-USD")) return "Crypto";
   if (symbol.startsWith("^") || symbol.endsWith("=F")) return "Index";
-  if (
-    [
-      "SPY",
-      "QQQ",
-      "QQQM",
-      "VOO",
-      "VTI",
-      "VT",
-      "VXUS",
-      "SCHD",
-      "SOXX",
-      "IBIT",
-      "FBTC",
-      "DIA",
-      "IWM",
-      "URTH",
-      "GLD",
-      "TLT",
-      "XLE",
-      "USO",
-      "VUG",
-      "VTV",
-      "VNQ",
-      "VYM",
-      "JEPI",
-      "JEPQ",
-    ].includes(symbol)
-  ) {
-    return "ETF";
-  }
+  if (KNOWN_ETF_TICKERS.has(symbol)) return "ETF";
   return "Aktie";
 }
 
@@ -906,19 +906,25 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
-          {quickSuggestions.map((item) => (
-            <button
-              key={`${item.category}-${item.ticker}`}
-              type="button"
-              onClick={() => handleQuickSelect(item.value)}
-              className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
-            >
-              <span className="font-black text-slate-800">{item.ticker}</span>
-              <span className="max-w-28 truncate text-[9px] font-extrabold tracking-[0.12em] text-slate-400 sm:max-w-36">
-                {item.category}
-              </span>
-            </button>
-          ))}
+          {quickSuggestions.map((item) => {
+            const typeLabel = suggestionTypes[item.ticker] || assetTypeLabel(item.ticker);
+            return (
+              <button
+                key={`${item.category}-${item.ticker}`}
+                type="button"
+                onClick={() => handleQuickSelect(item.value)}
+                className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
+              >
+                <span className="font-black text-slate-800">{item.ticker}</span>
+                <span className="rounded-full border border-black/8 bg-white px-1.5 py-0.5 text-[8px] font-extrabold tracking-[0.12em] text-slate-500">
+                  {typeLabel}
+                </span>
+                <span className="max-w-24 truncate text-[9px] font-extrabold tracking-[0.12em] text-slate-400 sm:max-w-36">
+                  {item.category}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-[11px] text-slate-500">

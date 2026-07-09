@@ -387,6 +387,23 @@ export function usePortfolios(enabled: boolean = true) {
   }
 
   const removeHolding = async (portfolioId: string, ticker: string) => {
+    const normalizedTicker = String(ticker || '').trim().toUpperCase()
+    if (portfolioId.startsWith('local-')) {
+      setPortfolios((current) => {
+        const updated = current.map((portfolio) =>
+          portfolio.id === portfolioId
+            ? { ...portfolio, holdings: portfolio.holdings.filter((holding) => holding.ticker !== normalizedTicker) }
+            : portfolio,
+        )
+        saveToCache(updated)
+        pendingRestoreRef.current = localOnlyPortfolios(updated)
+        return updated
+      })
+      setNeedsRestore(true)
+      setDataSource('local-cache')
+      setDataSourceMessage('Position wurde lokal entfernt. Portfolio muss spaeter mit dem Server synchronisiert werden.')
+      return
+    }
     const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
       method: 'DELETE',
       credentials: 'same-origin',
@@ -398,6 +415,35 @@ export function usePortfolios(enabled: boolean = true) {
   }
 
   const updateHolding = async (portfolioId: string, ticker: string, patch: Partial<Holding>) => {
+    const normalizedTicker = String(ticker || '').trim().toUpperCase()
+    if (portfolioId.startsWith('local-')) {
+      setPortfolios((current) => {
+        const updated = current.map((portfolio) =>
+          portfolio.id === portfolioId
+            ? {
+                ...portfolio,
+                holdings: portfolio.holdings.map((holding) =>
+                  holding.ticker === normalizedTicker
+                    ? {
+                        ...holding,
+                        shares: patch.shares ?? holding.shares,
+                        buyPrice: patch.buyPrice ?? holding.buyPrice,
+                        purchaseDate: patch.purchaseDate ?? holding.purchaseDate,
+                      }
+                    : holding,
+                ),
+              }
+            : portfolio,
+        )
+        saveToCache(updated)
+        pendingRestoreRef.current = localOnlyPortfolios(updated)
+        return updated
+      })
+      setNeedsRestore(true)
+      setDataSource('local-cache')
+      setDataSourceMessage('Position wurde lokal aktualisiert. Portfolio muss spaeter mit dem Server synchronisiert werden.')
+      return
+    }
     const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${ticker}`, {
       method: 'PATCH',
       credentials: 'same-origin',

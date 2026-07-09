@@ -454,6 +454,16 @@ function normalizeSuggestionGroups(payload: unknown): Record<string, string[]> {
   );
 }
 
+function buildSearchSuggestionGroups(query: string, matches: string[]): Record<string, string[]> {
+  const uniqueMatches = uniqueValues(matches).slice(0, 8);
+  const direct = buildDirectSearchSuggestion(query)["Direkt suchen"]?.[0];
+  const matchTickers = new Set(uniqueMatches.map((value) => normalizeTickerInput(value)));
+  const groups: Record<string, string[]> = {};
+  if (uniqueMatches.length > 0) groups.Treffer = uniqueMatches;
+  if (direct && !matchTickers.has(normalizeTickerInput(direct))) groups["Direkt suchen"] = [direct];
+  return groups;
+}
+
 export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [defaultSuggestionGroups, setDefaultSuggestionGroups] = useState<Record<string, string[]>>(() =>
@@ -565,7 +575,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     if (trimmedQuery.length > 0) {
       const localMatches = buildLocalMatches(trimmedQuery);
       if (localMatches.length > 0) {
-        setSuggestions({ Treffer: localMatches });
+        setSuggestions(buildSearchSuggestionGroups(trimmedQuery, localMatches));
         setShowDropdown(true);
       }
       if (trimmedQuery.length === 1) {
@@ -588,7 +598,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             if (controller.signal.aborted || searchRequestRef.current !== requestId) return;
             const remoteMatches = Array.isArray(data?.Matches) ? data.Matches : [];
             if (remoteMatches.length > 0) {
-              setSuggestions({ Treffer: uniqueValues([...localMatches, ...remoteMatches]).slice(0, 8) });
+              setSuggestions(buildSearchSuggestionGroups(trimmedQuery, [...localMatches, ...remoteMatches]));
             } else if (localMatches.length === 0) {
               setSuggestions(buildDirectSearchSuggestion(trimmedQuery));
             }
@@ -790,7 +800,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   onFocus={() => {
                     const localMatches = buildLocalMatches(query);
                     if (query.trim() && localMatches.length > 0) {
-                      setSuggestions({ Treffer: localMatches });
+                      setSuggestions(buildSearchSuggestionGroups(query, localMatches));
                     } else if (query.trim() && Object.keys(suggestions).length === 0) {
                       setSuggestions(buildDirectSearchSuggestion(query));
                     } else if (!query.trim() && Object.keys(suggestions).length === 0) {

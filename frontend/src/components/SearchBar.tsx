@@ -367,6 +367,44 @@ function splitSuggestionLabel(value: string): { ticker: string; name: string } {
   };
 }
 
+function assetTypeLabel(ticker: string): string {
+  const symbol = String(ticker || "").toUpperCase();
+  if (!symbol) return "Asset";
+  if (symbol.endsWith("-USD")) return "Crypto";
+  if (symbol.startsWith("^") || symbol.endsWith("=F")) return "Index";
+  if (
+    [
+      "SPY",
+      "QQQ",
+      "QQQM",
+      "VOO",
+      "VTI",
+      "VT",
+      "VXUS",
+      "SCHD",
+      "SOXX",
+      "IBIT",
+      "FBTC",
+      "DIA",
+      "IWM",
+      "URTH",
+      "GLD",
+      "TLT",
+      "XLE",
+      "USO",
+      "VUG",
+      "VTV",
+      "VNQ",
+      "VYM",
+      "JEPI",
+      "JEPQ",
+    ].includes(symbol)
+  ) {
+    return "ETF";
+  }
+  return "Aktie";
+}
+
 function uniqueValues(values: string[]): string[] {
   return Array.from(new Set(values));
 }
@@ -902,6 +940,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                           (item) => item.category === category && item.value === ticker,
                         );
                         const active = flatIndex === activeIndex;
+                        const typeLabel = assetTypeLabel(parsed.ticker);
                         return (
                           <button
                             key={ticker}
@@ -916,8 +955,13 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                                 : "border-black/8 bg-white text-slate-700 hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
                             }`}
                           >
-                            <span className="block text-sm font-black uppercase tracking-[0.12em]">
-                              {parsed.ticker || ticker}
+                            <span className="flex min-w-0 items-center justify-between gap-2">
+                              <span className="truncate text-sm font-black uppercase tracking-[0.12em]">
+                                {parsed.ticker || ticker}
+                              </span>
+                              <span className="shrink-0 rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                                {typeLabel}
+                              </span>
                             </span>
                             {parsed.name ? (
                               <span className="mt-0.5 block truncate text-[11px] font-semibold normal-case tracking-normal text-slate-500">

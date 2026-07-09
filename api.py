@@ -891,6 +891,47 @@ def _search_display_for_ticker(ticker: str, fallback_name: str = "") -> str:
     return f"{name} ({symbol})"
 
 
+def _search_asset_type_label(item: Dict[str, Any]) -> str:
+    symbol = str(item.get("ticker") or item.get("symbol") or "").strip().upper()
+    quote_type = str(item.get("type") or "").strip().upper()
+    if symbol.endswith("-USD") or quote_type == "CRYPTOCURRENCY":
+        return "Crypto"
+    if symbol.startswith("^") or symbol.endswith("=F") or quote_type == "INDEX":
+        return "Index"
+    if quote_type in {"ETF", "MUTUALFUND", "FUND"}:
+        return "ETF"
+    if symbol in {
+        "SPY",
+        "QQQ",
+        "QQQM",
+        "VOO",
+        "VTI",
+        "VT",
+        "VXUS",
+        "SCHD",
+        "SOXX",
+        "IBIT",
+        "FBTC",
+        "GBTC",
+        "BITO",
+        "DIA",
+        "IWM",
+        "URTH",
+        "GLD",
+        "TLT",
+        "XLE",
+        "USO",
+        "VUG",
+        "VTV",
+        "VNQ",
+        "VYM",
+        "JEPI",
+        "JEPQ",
+    }:
+        return "ETF"
+    return "Aktie"
+
+
 def _extract_search_symbol(item: Any) -> str:
     if not isinstance(item, dict):
         return ""
@@ -2566,7 +2607,8 @@ async def get_search_suggestions(q: str = None):
         results = await _resolve_search_results(q, limit=6)
         return {
             "Matches": [f"{r['name']} ({r['ticker']})" for r in results[:5]],
-            "Ticker": [r['ticker'] for r in results[:5]]
+            "Ticker": [r['ticker'] for r in results[:5]],
+            "Types": [_search_asset_type_label(r) for r in results[:5]],
         }
 
     return convert_numpy_types(await _build_dynamic_search_suggestions())

@@ -508,6 +508,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     buildDefaultSuggestions(),
   );
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>(() => buildDefaultSuggestions());
+  const [suggestionTypes, setSuggestionTypes] = useState<Record<string, string>>({});
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   /** Inline ghost-text completion (Google-style) */
@@ -635,6 +636,19 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           .then((data) => {
             if (controller.signal.aborted || searchRequestRef.current !== requestId) return;
             const remoteMatches = Array.isArray(data?.Matches) ? data.Matches : [];
+            const remoteTickers = Array.isArray(data?.Ticker) ? data.Ticker : [];
+            const remoteTypes = Array.isArray(data?.Types) ? data.Types : [];
+            if (remoteTickers.length > 0 && remoteTypes.length > 0) {
+              setSuggestionTypes((prev) => {
+                const next = { ...prev };
+                remoteTickers.forEach((ticker: string, index: number) => {
+                  const normalized = normalizeTickerInput(ticker);
+                  const type = String(remoteTypes[index] || "").trim();
+                  if (normalized && type) next[normalized] = type;
+                });
+                return next;
+              });
+            }
             if (remoteMatches.length > 0) {
               setSuggestions(buildSearchSuggestionGroups(trimmedQuery, [...localMatches, ...remoteMatches]));
             } else if (localMatches.length === 0) {
@@ -940,7 +954,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                           (item) => item.category === category && item.value === ticker,
                         );
                         const active = flatIndex === activeIndex;
-                        const typeLabel = assetTypeLabel(parsed.ticker);
+                        const typeLabel = suggestionTypes[parsed.ticker] || assetTypeLabel(parsed.ticker);
                         return (
                           <button
                             key={ticker}

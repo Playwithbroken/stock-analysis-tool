@@ -45,6 +45,19 @@ function clearCache() {
   try { localStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
 }
 
+function createLocalPortfolio(name: string): Portfolio {
+  return {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    holdings: [],
+    createdAt: new Date().toISOString(),
+  }
+}
+
+function localOnlyPortfolios(portfolios: Portfolio[]): Portfolio[] {
+  return portfolios.filter((portfolio) => portfolio.id.startsWith('local-'))
+}
+
 async function readApiError(response: Response, fallback: string): Promise<string> {
   try {
     const payload = await response.json()
@@ -197,13 +210,41 @@ export function usePortfolios(enabled: boolean = true) {
     if (!cleanName) {
       throw new Error('Portfolio-Name ist erforderlich.')
     }
-    const response = await fetch('/api/portfolios', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: cleanName }),
-    })
+    let response: Response
+    try {
+      response = await fetch('/api/portfolios', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: cleanName }),
+      })
+    } catch {
+      const localPortfolio = createLocalPortfolio(cleanName)
+      setPortfolios((current) => {
+        const updated = [localPortfolio, ...current]
+        saveToCache(updated)
+        pendingRestoreRef.current = localOnlyPortfolios(updated)
+        return updated
+      })
+      setNeedsRestore(true)
+      setDataSource('local-cache')
+      setDataSourceMessage('Server war nicht erreichbar. Portfolio wurde lokal gesichert und kann spaeter synchronisiert werden.')
+      return localPortfolio
+    }
     if (!response.ok) {
+      if (response.status >= 500) {
+        const localPortfolio = createLocalPortfolio(cleanName)
+        setPortfolios((current) => {
+          const updated = [localPortfolio, ...current]
+          saveToCache(updated)
+          pendingRestoreRef.current = localOnlyPortfolios(updated)
+          return updated
+        })
+        setNeedsRestore(true)
+        setDataSource('local-cache')
+        setDataSourceMessage(`Serverfehler ${response.status}. Portfolio wurde lokal gesichert und kann spaeter synchronisiert werden.`)
+        return localPortfolio
+      }
       throw new Error(await readApiError(response, `Portfolio konnte nicht gespeichert werden (${response.status})`))
     }
     const newPortfolio = await response.json()
@@ -267,20 +308,54 @@ export function usePortfolios(enabled: boolean = true) {
       buyPrice: holding.buyPrice,
       purchaseDate: holding.purchaseDate,
     }
-    const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticker: normalizedHolding.ticker,
-        shares: normalizedHolding.shares,
-        buyPrice: normalizedHolding.buyPrice,
-        buy_price: normalizedHolding.buyPrice,
-        purchaseDate: normalizedHolding.purchaseDate,
-        purchase_date: normalizedHolding.purchaseDate,
-      }),
-    })
+    const saveLocalHolding = (message: string) => {
+      setPortfolios((current) => {
+        const updated = current.map((portfolio) => {
+          if (portfolio.id !== portfolioId) return portfolio
+          const existing = portfolio.holdings.find((item) => item.ticker === normalizedHolding.ticker)
+          const holdings = existing
+            ? portfolio.holdings.map((item) => (item.ticker === normalizedHolding.ticker ? normalizedHolding : item))
+            : [...portfolio.holdings, normalizedHolding]
+          return { ...portfolio, holdings }
+        })
+        saveToCache(updated)
+        pendingRestoreRef.current = localOnlyPortfolios(updated)
+        return updated
+      })
+      setNeedsRestore(true)
+      setDataSource('local-cache')
+      setDataSourceMessage(message)
+    }
+
+    if (portfolioId.startsWith('local-')) {
+      saveLocalHolding('Position wurde lokal gesichert. Portfolio muss spaeter mit dem Server synchronisiert werden.')
+      return
+    }
+
+    let response: Response
+    try {
+      response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: normalizedHolding.ticker,
+          shares: normalizedHolding.shares,
+          buyPrice: normalizedHolding.buyPrice,
+          buy_price: normalizedHolding.buyPrice,
+          purchaseDate: normalizedHolding.purchaseDate,
+          purchase_date: normalizedHolding.purchaseDate,
+        }),
+      })
+    } catch {
+      saveLocalHolding('Server war nicht erreichbar. Position wurde lokal gesichert und kann spaeter synchronisiert werden.')
+      return
+    }
     if (!response.ok) {
+      if (response.status >= 500) {
+        saveLocalHolding(`Serverfehler ${response.status}. Position wurde lokal gesichert und kann spaeter synchronisiert werden.`)
+        return
+      }
       throw new Error(await readApiError(response, `Position konnte nicht gespeichert werden (${response.status})`))
     }
     const savedHolding = await response.json().catch(() => null)

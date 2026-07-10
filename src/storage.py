@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import uuid
+import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -80,7 +81,8 @@ def init_db():
         event_key TEXT PRIMARY KEY,
         category TEXT NOT NULL,
         title TEXT NOT NULL,
-        sent_at TEXT NOT NULL
+        sent_at TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}'
     )
     ''')
 
@@ -193,6 +195,10 @@ def init_db():
     ''')
     try:
         cursor.execute('ALTER TABLE holdings ADD COLUMN purchase_date TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE sent_signal_events ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
     except sqlite3.OperationalError:
         pass
     try:
@@ -683,16 +689,35 @@ class PortfolioManager:
     def mark_signal_events_sent(self, events: List[Dict[str, Any]]):
         if not events:
             return
+        import json
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         for event in events:
+            metadata = {
+                key: event.get(key)
+                for key in (
+                    "event_type",
+                    "severity",
+                    "impact_score",
+                    "country",
+                    "region",
+                    "affected_assets",
+                    "source_quality",
+                    "source_label",
+                    "source_url",
+                    "trigger",
+                    "invalidation",
+                )
+                if event.get(key) not in (None, "", [], {})
+            }
             cursor.execute(
-                'INSERT OR IGNORE INTO sent_signal_events (event_key, category, title, sent_at) VALUES (?, ?, ?, ?)',
+                'INSERT OR IGNORE INTO sent_signal_events (event_key, category, title, sent_at, metadata_json) VALUES (?, ?, ?, ?, ?)',
                 (
                     event['event_key'],
                     event['category'],
                     event['title'],
                     datetime.now().isoformat(),
+                    json.dumps(metadata, ensure_ascii=True, default=str),
                 )
             )
         conn.commit()
@@ -703,11 +728,17 @@ class PortfolioManager:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
-            'SELECT event_key, category, title, sent_at FROM sent_signal_events ORDER BY sent_at DESC LIMIT ?',
+            'SELECT event_key, category, title, sent_at, metadata_json FROM sent_signal_events ORDER BY sent_at DESC LIMIT ?',
             (limit,)
         )
         rows = [dict(row) for row in cursor.fetchall()]
         conn.close()
+        for row in rows:
+            try:
+                row["metadata"] = json.loads(row.pop("metadata_json") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                row["metadata"] = {}
+                row.pop("metadata_json", None)
         return rows
 
     def get_app_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:

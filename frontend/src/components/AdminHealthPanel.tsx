@@ -572,8 +572,26 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-4 space-y-2">
                 {deliveries.length ? deliveries.map((item: any) => (
                   <div key={item.event_key} className="rounded-[1rem] border border-black/8 bg-white p-3">
-                    <div className="text-sm font-bold text-slate-900">{item.title}</div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm font-bold text-slate-900">{item.title}</div>
+                      {item.metadata?.impact_score != null ? (
+                        <span className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">
+                          Impact {item.metadata.impact_score}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-1 text-xs text-slate-500">{item.category} / {fmtDate(item.sent_at)}</div>
+                    {item.metadata?.source_label || item.metadata?.source_quality ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        Quelle: {item.metadata.source_label || "offen"}
+                        {item.metadata.source_quality ? ` / ${item.metadata.source_quality}` : ""}
+                      </div>
+                    ) : null}
+                    {item.metadata?.affected_assets?.length ? (
+                      <div className="mt-1 truncate text-xs text-slate-500" title={item.metadata.affected_assets.join(", ")}>
+                        Betroffen: {item.metadata.affected_assets.join(", ")}
+                      </div>
+                    ) : null}
                   </div>
                 )) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white p-3 text-sm text-slate-500">

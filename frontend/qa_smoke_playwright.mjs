@@ -11,6 +11,7 @@ const TICKERS = (process.env.QA_TICKERS || "AAPL,PFE,BTC-USD")
   .filter(Boolean);
 const MARKETS_STRESS_COUNT = Number(process.env.QA_MARKETS_STRESS_COUNT || "20");
 const VIEWPORTS = [
+  { name: "390x844", width: 390, height: 844 },
   { name: "1366x768", width: 1366, height: 768 },
   { name: "1536x960", width: 1536, height: 960 },
   { name: "1920x1080", width: 1920, height: 1080 },
@@ -49,6 +50,7 @@ const summary = {
     headerMoverLayoutIssues: 0,
     analyzerLoadingPanelMissing: 0,
     chartStillLoading: 0,
+    horizontalOverflow: 0,
     tickerRuns: 0,
   },
   perViewport: {},
@@ -262,6 +264,26 @@ async function checkHeaderMoverLayout(page, viewportName) {
   }
 }
 
+async function checkHorizontalOverflow(page, viewportName) {
+  const result = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    bodyWidth: document.body?.scrollWidth || 0,
+  }));
+  const width = Math.max(result.documentWidth, result.bodyWidth);
+  if (width > result.viewportWidth + 2) {
+    summary.metrics.horizontalOverflow += 1;
+    pushIssue({
+      kind: "layout",
+      viewport: viewportName,
+      text: `Horizontal overflow detected (${width}px content in ${result.viewportWidth}px viewport)`,
+      details: result,
+    });
+  } else {
+    pushEvent(`[${viewportName}] Horizontal overflow check ok`);
+  }
+}
+
 async function runTickerChecks(page, viewportName) {
   const analyzerTab = await findTabButton(page, [/^Analyzer$/i, /^Analyze$/i]);
   if (analyzerTab) {
@@ -372,17 +394,34 @@ async function runViewportScenario(browser, viewport) {
   };
 
   try {
-    await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
+    try {
+      await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
+    } catch (error) {
+      pushIssue({ kind: "navigation", viewport: viewportName, text: `Initial page load failed: ${String(error)}` });
+      return;
+    }
     await page.waitForTimeout(1200);
     await page.screenshot({ path: path.join(runDir, `${viewportName}-landing.png`), fullPage: true });
 
-    const hasBlankRoot = await page.evaluate(() => {
-      const root = document.getElementById("root");
-      if (!root) return true;
-      const text = (root.textContent || "").trim();
-      const rect = root.getBoundingClientRect();
-      return text.length === 0 && rect.height < 20;
-    });
+    let hasBlankRoot = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        hasBlankRoot = await page.evaluate(() => {
+          const root = document.getElementById("root");
+          if (!root) return true;
+          const text = (root.textContent || "").trim();
+          const rect = root.getBoundingClientRect();
+          return text.length === 0 && rect.height < 20;
+        });
+        break;
+      } catch (error) {
+        if (attempt === 2) {
+          pushIssue({ kind: "navigation", viewport: viewportName, text: `Initial DOM check interrupted: ${String(error)}` });
+        } else {
+          await page.waitForTimeout(500);
+        }
+      }
+    }
     if (hasBlankRoot) {
       local.blankRoot = true;
       pushIssue({ kind: "ui", viewport: viewportName, text: "Root appears blank on initial load" });
@@ -399,6 +438,7 @@ async function runViewportScenario(browser, viewport) {
     }
 
     await checkHeaderMoverLayout(page, viewportName);
+    await checkHorizontalOverflow(page, viewportName);
 
     const navTargets = [
       { name: "Analyzer", file: `${viewportName}-tab-analyzer.png` },

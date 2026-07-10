@@ -223,6 +223,40 @@ def test_realized_return_uses_account_equity() -> None:
     assert stats["average_trade_pnl_pct"] == 50.0
 
 
+def test_put_learning_inverts_underlying_move() -> None:
+    manager = FakePortfolioManager()
+    service = build_service(manager)
+    result = service._evaluate_outcome_item(
+        {
+            "asset_class": "option",
+            "direction": "put",
+            "ticker": "AAPL",
+            "entry_price": 2.5,
+            "underlying_entry_price": 100.0,
+            "horizon_hours": 24,
+        },
+        "2026-06-19T12:00:00",
+    )
+    assert result["status"] == "evaluated"
+    assert result["performance_pct"] == 0.0
+
+    service._get_last_price = lambda ticker: 95.0  # type: ignore[method-assign]
+    result = service._evaluate_outcome_item(
+        {
+            "asset_class": "option",
+            "direction": "put",
+            "ticker": "AAPL",
+            "entry_price": 2.5,
+            "underlying_entry_price": 100.0,
+            "horizon_hours": 24,
+        },
+        "2026-06-19T12:00:00",
+    )
+    assert result["status"] == "evaluated"
+    assert result["performance_pct"] == 5.0
+    assert result["result"] == "hit"
+
+
 def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
     manager = FakePortfolioManager(
         [
@@ -555,6 +589,7 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
 if __name__ == "__main__":
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
+    test_put_learning_inverts_underlying_move()
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()
     test_learning_feedback_tracks_missing_journals()

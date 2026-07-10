@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from html import escape
+from html import escape, unescape
 import json
 import math
 import os
@@ -2344,7 +2344,7 @@ class EmailAlertService:
     def _tg_post(self, token: str, chat_id: str, text: str, disable_preview: bool = True) -> None:
         """Send a single Telegram message (HTML parse mode)."""
         try:
-            requests.post(
+            response = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={
                     "chat_id": chat_id,
@@ -2353,7 +2353,22 @@ class EmailAlertService:
                     "disable_web_page_preview": disable_preview,
                 },
                 timeout=20,
-            ).raise_for_status()
+            )
+            if response.status_code == 400:
+                # Dynamic headlines can contain malformed or truncated HTML.
+                # Retry once as plain text so a formatting issue never blocks a
+                # valid Telegram alert.
+                plain_text = unescape(re.sub(r"<[^>]*>", "", text))[:4096]
+                response = requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={
+                        "chat_id": chat_id,
+                        "text": plain_text,
+                        "disable_web_page_preview": disable_preview,
+                    },
+                    timeout=20,
+                )
+            response.raise_for_status()
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status == 404:
@@ -2362,9 +2377,14 @@ class EmailAlertService:
                     "use the raw token from BotFather, for example 123456:ABC..., not the API URL."
                 ) from exc
             if status == 400:
+                detail = ""
+                try:
+                    detail = str((exc.response.json() or {}).get("description") or "").strip()
+                except (ValueError, AttributeError):
+                    pass
                 raise RuntimeError(
-                    "Telegram rejected the message with 400. Check TELEGRAM_CHAT_ID and whether the bot "
-                    "has been started in that chat."
+                    "Telegram rejected the message with 400 after HTML/plaintext retry. "
+                    f"{detail or 'Check the message payload and Telegram chat configuration.'}"
                 ) from exc
             if status == 403:
                 raise RuntimeError(

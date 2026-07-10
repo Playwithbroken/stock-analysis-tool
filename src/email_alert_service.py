@@ -919,6 +919,19 @@ class EmailAlertService:
                     continue
                 # Trading edge is decoupled from the cached brief — fetch
                 # fresh here so scheduled briefs always include MSG 5.
+                if not self.morning_brief_service._is_usable_brief(brief):
+                    failure = {
+                        "job": job["job_key"],
+                        "status": "blocked",
+                        "event_key": event_key,
+                        "scheduled_at": job["scheduled_at"].isoformat(),
+                        "minutes_late": job["minutes_late"],
+                        "error": "brief_quality_gate_failed",
+                        "message": "Brief nicht gesendet: Kernmarktdaten oder verwertbare Regionen fehlen. Retry statt leeres Signal.",
+                    }
+                    self._set_brief_job_status(str(job["job_key"]), failure)
+                    results.append(failure)
+                    continue
                 try:
                     brief = dict(brief)
                     brief["trading_edge"] = self._run_with_timeout(

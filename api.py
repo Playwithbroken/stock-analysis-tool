@@ -970,12 +970,15 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
         market_movers = {}
 
     suggestions: Dict[str, List[str]] = {}
-    seen: set[str] = set()
 
     def add_category(name: str, rows: List[Any], limit: int = 6) -> None:
         bucket: List[str] = []
+        # A ticker may be relevant for multiple contexts (for example a
+        # Future Star that is also an open Paper Trade). Deduplicate only
+        # inside one category so those context signals remain visible.
+        category_seen: set[str] = set()
         for row in rows or []:
-            _add_search_suggestion(bucket, seen, row, limit=limit)
+            _add_search_suggestion(bucket, category_seen, row, limit=limit)
         if bucket:
             suggestions[name] = bucket
 

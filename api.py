@@ -1380,11 +1380,35 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
         "brief_scheduler_loop_seen_at",
         datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
     )
+    get_portfolio_manager().set_app_setting("brief_scheduler_last_step_error", "")
+    step_timeout = _safe_int_env("BRIEF_SCHEDULER_STEP_TIMEOUT_SECONDS", 90, minimum=15)
+
+    async def run_step(label: str, callback: Any) -> None:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(callback), timeout=step_timeout)
+        except asyncio.TimeoutError:
+            message = f"{label} timed out after {step_timeout}s; next scheduler step continues."
+            print(f"Scheduler step warning: {message}")
+            get_portfolio_manager().set_app_setting("brief_scheduler_last_step_error", message)
+        except Exception as exc:
+            message = f"{label} failed: {exc}"
+            print(f"Scheduler step warning: {message}")
+            get_portfolio_manager().set_app_setting("brief_scheduler_last_step_error", message)
+
     if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
-        await asyncio.to_thread(get_email_alert_service().check_and_send_alerts, False)
+        await run_step(
+            "Signal alert scan",
+            lambda: get_email_alert_service().check_and_send_alerts(False),
+        )
     if _env_enabled("CRITICAL_MARKET_ALERTS_ENABLED", "true"):
-        await asyncio.to_thread(get_email_alert_service().check_and_send_critical_market_alerts, False)
-    await asyncio.to_thread(get_email_alert_service().send_scheduled_open_briefs, include_missed)
+        await run_step(
+            "Critical market alert scan",
+            lambda: get_email_alert_service().check_and_send_critical_market_alerts(False),
+        )
+    await run_step(
+        "Scheduled brief delivery",
+        lambda: get_email_alert_service().send_scheduled_open_briefs(include_missed),
+    )
 
 
 async def _scheduler_startup_catchup() -> None:
@@ -4593,6 +4617,7 @@ async def admin_health_center():
     scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
     scheduler_loop_seen_at = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
     scheduler_loop_error = get_portfolio_manager().get_app_setting("brief_scheduler_loop_error")
+    scheduler_step_error = get_portfolio_manager().get_app_setting("brief_scheduler_last_step_error")
     loop_age_minutes = None
     if scheduler_loop_seen_at:
         try:
@@ -4695,6 +4720,7 @@ async def admin_health_center():
                 "loop_stale_after_minutes": loop_stale_after_minutes,
                 "loop_stale": scheduler_loop_stale,
                 "loop_error": scheduler_loop_error,
+                "last_step_error": scheduler_step_error,
                 "last_result": scheduler_last_result,
                 "on_time_window_minutes": on_time_window_minutes,
                 "delivery_grace_minutes": grace_minutes,

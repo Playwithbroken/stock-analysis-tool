@@ -123,6 +123,14 @@ class EmailAlertService:
                 "enabled": config.telegram_enabled,
                 "configured": bool(config.telegram_bot_token and config.telegram_chat_id),
             },
+            "browser_push": {
+                "enabled": os.getenv("BROWSER_PUSH_ENABLED", "false").strip().lower()
+                in {"1", "true", "yes", "on"},
+                "channel": "browser"
+                if os.getenv("BROWSER_PUSH_ENABLED", "false").strip().lower()
+                in {"1", "true", "yes", "on"}
+                else "telegram_only",
+            },
             "macro_alerts": {
                 "enabled": os.getenv("CRITICAL_MARKET_ALERTS_ENABLED", "true").strip().lower()
                 not in {"0", "false", "no", "off"},

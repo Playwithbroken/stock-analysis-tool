@@ -1307,6 +1307,10 @@ def get_push_service():
     return _push_service
 
 
+def browser_push_enabled() -> bool:
+    return _env_enabled("BROWSER_PUSH_ENABLED", "false")
+
+
 @app.middleware("http")
 async def require_single_user_auth(request: Request, call_next):
     path = request.url.path
@@ -5157,11 +5161,15 @@ async def get_exchange_rate():
 @app.get("/api/push/vapid-key")
 async def get_vapid_public_key():
     """Return the VAPID public key for push subscription."""
+    if not browser_push_enabled():
+        raise HTTPException(status_code=410, detail="Browser Push ist deaktiviert. Telegram ist der aktive Push-Kanal.")
     return {"publicKey": get_push_service().public_key}
 
 @app.post("/api/push/subscribe")
 async def push_subscribe(request: Request):
     """Register a push subscription."""
+    if not browser_push_enabled():
+        raise HTTPException(status_code=410, detail="Browser Push ist deaktiviert. Telegram ist der aktive Push-Kanal.")
     body = await request.json()
     is_new = get_push_service().subscribe(body)
     return {"ok": True, "new": is_new, "total": get_push_service().subscription_count}
@@ -5169,6 +5177,8 @@ async def push_subscribe(request: Request):
 @app.post("/api/push/unsubscribe")
 async def push_unsubscribe(request: Request):
     """Remove a push subscription."""
+    if not browser_push_enabled():
+        return {"ok": True, "removed": False, "disabled": True}
     body = await request.json()
     endpoint = body.get("endpoint", "")
     removed = get_push_service().unsubscribe(endpoint)
@@ -5177,6 +5187,8 @@ async def push_unsubscribe(request: Request):
 @app.post("/api/push/test")
 async def push_test():
     """Send a test notification to all subscribers."""
+    if not browser_push_enabled():
+        raise HTTPException(status_code=410, detail="Browser Push ist deaktiviert. Telegram ist der aktive Push-Kanal.")
     result = get_push_service().send_notification(
         title="Broker Freund",
         body="Push Notifications sind aktiv! Du bekommst jetzt Briefings, Signale und Alerts direkt im Browser.",

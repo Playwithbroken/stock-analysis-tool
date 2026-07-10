@@ -163,7 +163,9 @@ export function usePortfolios(enabled: boolean = true) {
     if (!toRestore.length) return
     setNeedsRestore(false)
     const restored: Portfolio[] = []
+    const failed: Portfolio[] = []
     for (const cached of toRestore) {
+      let createdId: string | null = null
       try {
         const res = await fetch('/api/portfolios', {
           method: 'POST',
@@ -171,25 +173,43 @@ export function usePortfolios(enabled: boolean = true) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: cached.name }),
         })
+        if (!res.ok) throw new Error(`Portfolio konnte nicht wiederhergestellt werden (${res.status})`)
         const newP: Portfolio = await res.json()
+        if (!newP?.id) throw new Error('Server hat keine Portfolio-ID zurueckgegeben.')
+        createdId = String(newP.id)
         // Re-add all holdings
         for (const h of cached.holdings) {
-          await fetch(`/api/portfolios/${newP.id}/holdings`, {
+          const holdingRes = await fetch(`/api/portfolios/${createdId}/holdings`, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ticker: h.ticker, shares: h.shares, buy_price: h.buyPrice, purchase_date: h.purchaseDate }),
           })
+          if (!holdingRes.ok) throw new Error(`Position ${h.ticker} konnte nicht wiederhergestellt werden (${holdingRes.status})`)
         }
         restored.push({ ...newP, holdings: cached.holdings })
       } catch {
+        if (createdId) {
+          try {
+            await fetch(`/api/portfolios/${createdId}`, { method: 'DELETE', credentials: 'same-origin' })
+          } catch {
+            // Best effort rollback; the cached copy remains the source of truth for retry.
+          }
+        }
         // Keep cached version if restore fails
-        restored.push(cached)
+        failed.push(cached)
       }
     }
-    syncCache(restored)
-    setDataSource('server')
-    setDataSourceMessage('Lokale Sicherung wurde an den Server uebertragen.')
+    const next = [...restored, ...failed]
+    syncCache(next)
+    pendingRestoreRef.current = failed
+    setNeedsRestore(failed.length > 0)
+    setDataSource(failed.length > 0 ? 'local-cache' : 'server')
+    setDataSourceMessage(
+      failed.length > 0
+        ? `${restored.length} Portfolio(s) wiederhergestellt; ${failed.length} bleiben lokal und koennen erneut synchronisiert werden.`
+        : 'Lokale Sicherung wurde an den Server uebertragen.',
+    )
   }
 
   const discardRestore = () => {

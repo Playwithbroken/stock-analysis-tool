@@ -209,6 +209,20 @@ def test_demo_account_sizing() -> None:
     assert any(item.get("status") == "evaluated" for item in manager.outcomes)
 
 
+def test_realized_return_uses_account_equity() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    stats = service._build_stats(
+        [
+            {"status": "closed", "realized_pnl_pct": 10.0, "realized_pnl_value": 100.0, "direction": "long"},
+            {"status": "closed", "realized_pnl_pct": 90.0, "realized_pnl_value": 900.0, "direction": "long"},
+        ],
+        starting_capital=500_000.0,
+    )
+    assert stats["realized_pnl_value"] == 1000.0
+    assert stats["realized_pnl_pct"] == 0.2
+    assert stats["average_trade_pnl_pct"] == 50.0
+
+
 def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
     manager = FakePortfolioManager(
         [
@@ -540,6 +554,7 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
 
 if __name__ == "__main__":
     test_demo_account_sizing()
+    test_realized_return_uses_account_equity()
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()
     test_learning_feedback_tracks_missing_journals()

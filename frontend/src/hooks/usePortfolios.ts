@@ -289,6 +289,17 @@ export function usePortfolios(enabled: boolean = true) {
   }
 
   const deletePortfolio = async (id: string) => {
+    if (id.startsWith('local-')) {
+      const updated = portfolios.filter((portfolio) => portfolio.id !== id)
+      syncCache(updated)
+      const pendingLocal = localOnlyPortfolios(updated)
+      pendingRestoreRef.current = pendingLocal
+      setNeedsRestore(pendingLocal.length > 0)
+      setDataSource('local-cache')
+      setDataSourceMessage('Lokales Portfolio wurde entfernt. Ein Server-Sync ist nicht noetig.')
+      return
+    }
+
     const response = await fetch(`/api/portfolios/${id}`, { method: 'DELETE', credentials: 'same-origin' })
     if (!response.ok) {
       throw new Error(await readApiError(response, `Portfolio konnte nicht geloescht werden (${response.status})`))

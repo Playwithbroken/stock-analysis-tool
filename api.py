@@ -2635,7 +2635,18 @@ async def get_sentiment_heatmap():
 async def get_search_suggestions(q: str = None):
     """Fast search suggestions. Query mode may use live lookup; default mode must not block UI."""
     if q and len(q) > 1:
-        results = await _resolve_search_results(q, limit=6)
+        try:
+            results = await _resolve_search_results(q, limit=6)
+        except Exception as exc:
+            # A provider outage must not turn an Analyzer search into a 5xx.
+            print(f"Search suggestion lookup fallback for {q!r}: {exc}")
+            normalized = _normalize_ticker_input(q)
+            catalog = _catalog_match_for_ticker(normalized) if normalized else None
+            results = ([{
+                "name": (catalog or {}).get("name") or normalized,
+                "ticker": normalized,
+                "type": (catalog or {}).get("type") or "EQUITY",
+            }] if normalized else [])
         return {
             "Matches": [f"{r['name']} ({r['ticker']})" for r in results[:5]],
             "Ticker": [r['ticker'] for r in results[:5]],

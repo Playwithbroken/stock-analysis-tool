@@ -112,6 +112,13 @@ class EmailAlertService:
 
     def get_notification_status(self) -> Dict[str, Any]:
         config = self.get_config()
+        macro_audit: Dict[str, Any] = {}
+        try:
+            macro_audit = json.loads(self.portfolio_manager.get_app_setting("macro_alert_last_audit", "{}") or "{}")
+            if not isinstance(macro_audit, dict):
+                macro_audit = {}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            macro_audit = {}
         return {
             "alerts_enabled": config.enabled,
             "email": {
@@ -138,6 +145,7 @@ class EmailAlertService:
                 "min_score": self._safe_int_env("CRITICAL_MARKET_ALERT_MIN_SCORE", 82, minimum=1),
                 "cooldown_hours": self._safe_int_env("MACRO_ALERT_COOLDOWN_HOURS", 3, minimum=1),
                 "max_items": self._safe_int_env("CRITICAL_MARKET_ALERT_MAX_ITEMS", 5, minimum=1),
+                "last_audit": macro_audit,
             },
             "schedule": {
                 "enabled": config.scheduled_briefs_enabled,
@@ -1586,14 +1594,26 @@ class EmailAlertService:
             *(brief.get("event_pings") or [])[:10],
             *(brief.get("top_news") or [])[:12],
         ]
+        macro_audit = {
+            "scanned_at": datetime.utcnow().isoformat(),
+            "candidates": len(macro_candidates),
+            "quality_passed": 0,
+            "already_sent": 0,
+            "cooldown_blocked": 0,
+            "eligible": 0,
+        }
         for item in macro_candidates:
             macro_event = self._normalize_macro_alert_event(item, min_critical_score)
             if not macro_event:
                 continue
+            macro_audit["quality_passed"] += 1
             if macro_event["event_key"] in sent_keys:
+                macro_audit["already_sent"] += 1
                 continue
             if not self._macro_alert_can_send(macro_event):
+                macro_audit["cooldown_blocked"] += 1
                 continue
+            macro_audit["eligible"] += 1
             events.append(macro_event)
 
         for item in (brief.get("watchlist_impact") or [])[:10]:
@@ -1717,6 +1737,7 @@ class EmailAlertService:
                 }
             )
 
+        self.portfolio_manager.set_app_setting("macro_alert_last_audit", json.dumps(macro_audit))
         return sorted(events, key=lambda event: (int(event.get("priority") or 99), str(event.get("event_key") or "")))
 
     def _normalize_macro_alert_event(self, item: Dict[str, Any], min_score: int) -> Dict[str, Any] | None:

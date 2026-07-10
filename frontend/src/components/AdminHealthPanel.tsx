@@ -168,6 +168,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   if (!isOpen) return null;
 
   const telegram = health?.telegram || {};
+  const macroAlerts = health?.notifications?.macro_alerts || {};
   const feeds = health?.data_feeds || {};
   const appInfo = health?.app || {};
   const database = health?.database || {};
@@ -435,6 +436,19 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Chat: {displayValue(telegram.chat_id, "fehlt")}
               </div>
               {telegram.error ? <div className="mt-2 text-xs text-red-700">{telegram.error}</div> : null}
+            </div>
+
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Macro Alert Audit</div>
+              <div className="mt-3 text-sm font-black text-slate-900">
+                {macroAlerts.last_audit?.eligible ?? 0} freigegeben / {macroAlerts.last_audit?.quality_passed ?? 0} Gate bestanden
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                {macroAlerts.last_audit?.candidates ?? 0} Kandidaten / {macroAlerts.last_audit?.already_sent ?? 0} bereits gesendet / {macroAlerts.last_audit?.cooldown_blocked ?? 0} Cooldown-blockiert
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Letzter Scan {fmtDate(macroAlerts.last_audit?.scanned_at)}
+              </div>
             </div>
 
             {Object.entries(feeds).map(([key, feed]: [string, any]) => (

@@ -39,6 +39,7 @@ function formatBytes(value?: number | null) {
 }
 
 function jobStateLabel(job: any) {
+  if (job.last_status === "blocked") return "Qualitätsblock"
   if (job.sent_today) return "heute gesendet";
   if (job.due_now) return "jetzt faellig";
   if (job.catchup_available) return "nachholbar";
@@ -523,7 +524,9 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-extrabold text-slate-900">{job.label}</div>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                        job.sent_today
+                        job.last_status === "blocked"
+                          ? "bg-red-500/10 text-red-700"
+                          : job.sent_today
                           ? "bg-emerald-500/10 text-emerald-700"
                           : job.due_now
                             ? "bg-amber-500/10 text-amber-700"

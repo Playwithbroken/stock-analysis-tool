@@ -4662,6 +4662,8 @@ async def admin_health_center():
         problems.append("brief_missed_today")
     if any(job.get("catchup_available") for job in schedule_jobs):
         problems.append("brief_catchup_available")
+    if any(job.get("last_status") == "blocked" for job in schedule_jobs):
+        problems.append("brief_quality_blocked")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (

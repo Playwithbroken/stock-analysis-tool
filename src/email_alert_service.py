@@ -1085,7 +1085,7 @@ class EmailAlertService:
         if status == "sent":
             enriched["last_success_at"] = payload.get("sent_at") or enriched["updated_at"]
             enriched["last_error"] = None
-        elif status == "failed":
+        elif status in {"failed", "blocked"}:
             enriched["last_error"] = payload.get("error") or payload.get("message") or "failed"
         elif status == "missed":
             enriched["last_error"] = payload.get("message") or "missed"

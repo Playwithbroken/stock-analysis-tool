@@ -34,7 +34,7 @@ class PaperTradingService:
             "strategy_readiness": StrategyLibrary.build_readiness(trades, self.portfolio_manager.list_paper_trade_outcomes(limit=800)),
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
-            "stats": self._build_stats(trades),
+            "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
             "setup_performance": self._build_setup_performance(closed_trades),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
@@ -1342,12 +1342,16 @@ class PaperTradingService:
             )
         return option_playbooks[:4]
 
-    def _build_stats(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_stats(self, trades: List[Dict[str, Any]], starting_capital: float = 0) -> Dict[str, Any]:
         closed = [trade for trade in trades if trade.get("status") == "closed" and trade.get("realized_pnl_pct") is not None]
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         winners = [trade for trade in closed if float(trade.get("realized_pnl_pct") or 0) > 0]
         losers = [trade for trade in closed if float(trade.get("realized_pnl_pct") or 0) <= 0]
-        total_realized = round(sum(float(trade.get("realized_pnl_pct") or 0) for trade in closed), 2)
+        realized_value = round(sum(float(trade.get("realized_pnl_value") or 0) for trade in closed), 2)
+        account_realized_pct = round((realized_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
+        average_trade_pct = round(
+            sum(float(trade.get("realized_pnl_pct") or 0) for trade in closed) / len(closed), 2
+        ) if closed else 0
         avg_open = round(
             sum(float(trade.get("unrealized_pnl_pct") or 0) for trade in open_trades) / len(open_trades),
             2,
@@ -1358,7 +1362,9 @@ class PaperTradingService:
             "closed_trades": len(closed),
             "win_rate": round((len(winners) / len(closed)) * 100, 1) if closed else 0,
             "avg_open_pnl_pct": avg_open,
-            "realized_pnl_pct": total_realized,
+            "realized_pnl_pct": account_realized_pct,
+            "realized_pnl_value": realized_value,
+            "average_trade_pnl_pct": average_trade_pct,
             "best_trade_pct": round(max((float(trade.get("realized_pnl_pct") or 0) for trade in closed), default=0), 2),
             "worst_trade_pct": round(min((float(trade.get("realized_pnl_pct") or 0) for trade in closed), default=0), 2),
             "long_short_split": {

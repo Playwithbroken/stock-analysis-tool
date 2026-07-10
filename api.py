@@ -4816,6 +4816,7 @@ async def create_paper_trade(req: PaperTradeCreateRequest):
     try:
         payload = req.model_dump()
         trade = get_paper_trading_service().create_trade_from_payload(payload)
+        _cache_forget("search:suggestions")
         return convert_numpy_types(trade)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -4828,6 +4829,7 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         settings = get_portfolio_manager().get_signal_score_settings()
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
         trade = get_paper_trading_service().create_trade_from_playbook(req.model_dump(), scoreboard, settings)
+        _cache_forget("search:suggestions")
         return convert_numpy_types(trade)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -4848,6 +4850,7 @@ async def run_paper_autopilot(req: PaperAutoSelectionRequest):
             mode=req.mode,
         )
         if req.execute and result.get("opened"):
+            _cache_forget("search:suggestions")
             try:
                 result["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
                     result.get("opened") or [],
@@ -4870,6 +4873,7 @@ async def close_paper_trade(trade_id: str, req: PaperTradeCloseRequest):
             exit_reason=req.exit_reason,
             lessons_learned=req.lessons_learned,
         )
+        _cache_forget("search:suggestions")
         try:
             telegram_alerts = get_email_alert_service().send_paper_trade_closed_alerts([trade])
         except Exception as alert_error:

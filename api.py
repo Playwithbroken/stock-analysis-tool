@@ -2642,7 +2642,16 @@ async def get_search_suggestions(q: str = None):
             "Types": [_search_asset_type_label(r) for r in results[:5]],
         }
 
-    return convert_numpy_types(await _build_dynamic_search_suggestions())
+    try:
+        return convert_numpy_types(await _build_dynamic_search_suggestions())
+    except Exception as exc:
+        # Search must stay usable when the brief or a discovery provider is slow.
+        # Keep the response shape stable and let the next request retry dynamic data.
+        print(f"Dynamic search suggestions fallback: {exc}")
+        return convert_numpy_types({
+            **DEFAULT_SEARCH_SUGGESTIONS,
+            "meta": {"source": "curated_fallback", "degraded": True},
+        })
 
 
 @app.post("/api/oracle/chat")

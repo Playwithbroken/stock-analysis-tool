@@ -1141,7 +1141,7 @@ h3,
 }
 
 .interactive-world-map {
-  touch-action: none;
+  touch-action: pan-y pinch-zoom;
   user-select: none;
 }
 
@@ -1302,8 +1302,16 @@ h3,
   .world-map-mobile-card .world-map-canvas {
     width: 100%;
     max-width: 100%;
-    min-height: 236px;
+    min-height: 220px;
     max-height: 46vh;
+  }
+
+  .world-map-mobile-card .world-map-inline-wrap {
+    padding: 0.4rem;
+  }
+
+  .world-map-mobile-card .world-map-interactive-layer {
+    transition: none;
   }
 
   .world-map-mobile-card .world-map-zoom-controls {

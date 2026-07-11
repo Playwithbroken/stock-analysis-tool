@@ -552,8 +552,8 @@ export default function EdgeDashboardPanel({
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
                 <Icon size={16} className="text-slate-500" />
               </div>
-              <div className="mt-3 truncate text-2xl font-black text-slate-950">{item.value}</div>
-              <div className="mt-1 truncate text-xs font-semibold text-slate-500">{item.detail}</div>
+              <div className="mt-3 break-words text-2xl font-black leading-tight text-slate-950">{item.value}</div>
+              <div className="mt-1 break-words text-xs font-semibold leading-5 text-slate-500">{item.detail}</div>
             </div>
           );
         })}
@@ -565,7 +565,7 @@ export default function EdgeDashboardPanel({
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
               Top-News Forecast Learning
             </div>
-            <div className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-slate-700">
+            <div className="mt-1 text-sm font-semibold leading-6 text-slate-700 sm:line-clamp-2">
               {topNewsLesson}
             </div>
           </div>

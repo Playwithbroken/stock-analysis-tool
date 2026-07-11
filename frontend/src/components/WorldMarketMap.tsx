@@ -455,7 +455,10 @@ function buildInlineWorldMapSvg(highlights: Map<string, CountryTone>) {
   let svg = worldMapSvgRaw
     .replace(/<\?xml[^>]*>\s*/i, "")
     .replace(/<!DOCTYPE[^>]*>\s*/i, "")
-    .replace("<svg ", '<svg role="img" aria-label="Macro event world map" class="world-map-inline" ');
+    .replace(
+      "<svg ",
+      '<svg role="img" aria-label="Macro event world map" class="world-map-inline" viewBox="0 0 1404.7773 600.81262" preserveAspectRatio="xMidYMid meet" ',
+    );
 
   highlights.forEach((tone, id) => {
     const className = `macro-country-highlight ${countryHighlightClass(tone)}`;
@@ -1635,7 +1638,7 @@ export default function WorldMarketMap({
           </div>
 
           <div
-            className="world-map-canvas interactive-world-map relative mt-3 h-[246px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8]"
+            className="world-map-canvas interactive-world-map relative mt-3 h-[220px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8] min-[430px]:h-[246px]"
             {...mapCanvasHandlers}
           >
             <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />

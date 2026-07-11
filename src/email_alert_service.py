@@ -1814,6 +1814,11 @@ class EmailAlertService:
         read_through = self._macro_alert_read_through(event_type, country or region, affected_assets, title)
         critical_check = self._macro_alert_critical_check(event_type, source_quality)
         confidence_label = self._macro_confidence_label(source_quality, explicit_trigger, explicit_invalidation, impact_score)
+        horizon = self._macro_alert_horizon(event_type)
+        mechanism = self._macro_alert_mechanism(event_type, affected_assets)
+        base_case = self._macro_alert_base_case(event_type, affected_assets)
+        next_check = self._macro_alert_next_check(event_type)
+        fact_status = "bestaetigt" if source_quality == "strong" else "plausibel - zweite Quelle ausstehend"
         action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
         identity = self._macro_event_identity(event_type, country or region, title)
         return {
@@ -1836,6 +1841,11 @@ class EmailAlertService:
             "invalidation": invalidation,
             "action": action,
             "confidence_label": confidence_label,
+            "fact_status": fact_status,
+            "horizon": horizon,
+            "market_mechanism": mechanism,
+            "base_case": base_case,
+            "next_check": next_check,
             "source_quality": source_quality,
             "source_url": item.get("source_url") or item.get("url") or item.get("link") or "",
             "source_label": source_status,
@@ -1952,6 +1962,58 @@ class EmailAlertService:
             "Disaster": "Schaden quantifizieren: betroffene Anlagen, Lieferketten, Versicherer und Rohstoffpreise pruefen.",
         }
         return f"{source_part} noetig. {checks.get(event_type, 'Quelle, Preisreaktion, Volumen und Gegenargument vor Aktion pruefen.')}"
+
+    def _macro_alert_horizon(self, event_type: str) -> str:
+        return {
+            "Conflict": "sofort bis 3 Handelstage; strukturell nur bei anhaltender Eskalation",
+            "Energy": "intraday bis mehrere Wochen, abhaengig von Angebotsausfall und Lagerdaten",
+            "Central Bank": "erste Reaktion intraday; Bewertungswirkung ueber Wochen bis Monate",
+            "Election": "Tage bis Monate, sobald Ergebnis und umsetzbare Politik feststehen",
+            "Policy": "Tage bis Quartale, je nach Inkrafttreten und Unternehmens-Exposure",
+            "Public Figure": "Minuten bis Tage; laenger nur bei konkreter politischer Umsetzung",
+            "IPO": "Pricing bis 30 Tage; Peer-Read-through meist in den ersten Handelstagen",
+            "Disaster": "Tage bis Wochen, bis Schaden und Lieferketteneffekt quantifiziert sind",
+        }.get(event_type, "intraday zuerst, mittelfristig nur nach fundamentaler Bestaetigung")
+
+    def _macro_alert_mechanism(self, event_type: str, assets: List[str]) -> str:
+        asset_label = ", ".join(assets[:4]) if assets else "betroffene Maerkte"
+        mechanisms = {
+            "Conflict": "Geopolitische Risikopraemie wirkt zuerst ueber Energie, sichere Haefen, Defense und Index-Futures.",
+            "Energy": "Rohstoffpreise veraendern Inflationserwartungen und die Margen von Produzenten und Verbrauchern.",
+            "Central Bank": "Zinsen und Liquiditaet veraendern Diskontsaetze, Waehrungen und damit Bewertungsmultiplikatoren.",
+            "Election": "Erwartete Steuer-, Handels- und Regulierungspolitik verschiebt sektorale Gewinner und Verlierer.",
+            "Policy": "Neue Regeln wirken ueber Umsatz, Kosten, Zugang zu Maerkten und Lieferketten.",
+            "Public Figure": "Die Aussage bewegt Kurse nur nachhaltig, wenn daraus konkrete Politik oder Nachfragewirkung folgt.",
+            "IPO": "Pricing und Nachfrage liefern ein Signal fuer Risikobereitschaft und Vergleichsbewertungen im Sektor.",
+            "Disaster": "Produktionsausfaelle, Transportstoerungen und versicherte Schaeden veraendern Angebot und Kosten.",
+        }
+        return f"{mechanisms.get(event_type, 'Die Meldung muss ueber Preise, Volumen oder Fundamentaldaten in den Markt uebertragen werden.')} Beobachtungskorb: {asset_label}."
+
+    def _macro_alert_base_case(self, event_type: str, assets: List[str]) -> str:
+        asset_label = ", ".join(assets[:3]) if assets else "der betroffene Korb"
+        cases = {
+            "Conflict": "Bedingtes Risk-off-Szenario; keine dauerhafte Bewegung ohne bestaetigte Eskalation und Anschlusskaeufe.",
+            "Energy": "Bedingter Inflations- und Margenimpuls; Richtung haengt von Dauer und Groesse des Angebotseffekts ab.",
+            "Central Bank": "Rates und FX geben die Richtung vor; Aktienreaktion bleibt zweitrangig, bis beide bestaetigen.",
+            "Election": "Zunaechst Volatilitaet statt klarer Richtung; belastbare Sektorrotation erst nach umsetzbarer Politik.",
+            "Policy": "Selektiver Firmen- und Sektoreffekt statt pauschaler Index-These.",
+            "Public Figure": "Kurzfristiger Volatilitaetsimpuls; Basisszenario bleibt neutral ohne offiziellen Folgeschritt.",
+            "IPO": "Sentiment-Signal, keine Aussage ueber die Qualitaet aller Peers; Bewertung und Nachfrage entscheiden.",
+            "Disaster": "Lokaler Risikoimpuls; breiter Markteffekt nur bei messbarer Produktions- oder Lieferstoerung.",
+        }
+        return f"{cases.get(event_type, 'Neutral starten und erst nach Markt- und Quellenbestaetigung einordnen.')} Fokus: {asset_label}."
+
+    def _macro_alert_next_check(self, event_type: str) -> str:
+        return {
+            "Conflict": "Offizielle Updates sowie Oel, Gold, Defense und Index-Futures gemeinsam pruefen.",
+            "Energy": "Brent/WTI, Terminkurve, Energieaktien und betroffene Margensektoren vergleichen.",
+            "Central Bank": "2Y/10Y-Renditen, Dollar, Statement und Pressekonferenz gegen die erste Aktienreaktion halten.",
+            "Election": "Bestaetigtes Ergebnis, Koalition, Umsetzbarkeit und relative Sektorstaerke abwarten.",
+            "Policy": "Originaldokument, Startdatum und konkretes Umsatz-/Kostenexposure der Firmen pruefen.",
+            "Public Figure": "Originalzitat und offiziellen Policy-Folgeschritt suchen; erst dann Preis und Volumen bewerten.",
+            "IPO": "Filing, Preisspanne, Nachfrage, Free Float, Lock-up und Peer-Reaktion vergleichen.",
+            "Disaster": "Schadensumfang, Produktionsstillstand, Transportwege und Versicherungs-Exposure quantifizieren.",
+        }.get(event_type, "Primaerquelle, zweite Bestaetigung, Preisreaktion und Volumen pruefen.")
 
     def _macro_confidence_label(
         self,
@@ -3397,24 +3459,34 @@ class EmailAlertService:
         read_through = self._tg_esc(str(event.get("read_through") or ""))[:520]
         critical_check = self._tg_esc(str(event.get("critical_check") or ""))[:520]
         confidence = self._tg_esc(str(event.get("confidence_label") or "mittel - erst Marktreaktion bestaetigen"))
+        fact_status = self._tg_esc(str(event.get("fact_status") or "Einordnung offen"))
+        horizon = self._tg_esc(str(event.get("horizon") or "intraday bis mittelfristig"))
+        mechanism = self._tg_esc(str(event.get("market_mechanism") or "Marktreaktion muss bestaetigen."))[:520]
+        base_case = self._tg_esc(str(event.get("base_case") or "Neutral bis zur Bestaetigung."))[:520]
+        next_check = self._tg_esc(str(event.get("next_check") or "Quelle, Preis und Volumen pruefen."))[:520]
         link = str(event.get("source_url") or "").strip()
         lines = [
             f"<b>[{marker}] Macro Alert: {country} / {event_type}</b>",
             f"{title}",
             f"<b>Impact:</b> {impact}/100",
+            f"<b>Faktenstatus:</b> {fact_status}",
             f"<b>Sicherheit:</b> {confidence}",
+            f"<b>Zeithorizont:</b> {horizon}",
             f"<b>Betroffen:</b> {assets}",
         ]
         if why:
             lines.append(f"<b>Warum wichtig:</b> {why}")
         if meaning:
             lines.append(f"<b>Was es aussagt:</b> {meaning}")
+        lines.append(f"<b>Marktmechanismus:</b> {mechanism}")
+        lines.append(f"<b>Basisszenario (bedingt):</b> {base_case}")
         if read_through:
             lines.append(f"<b>Read-through:</b> {read_through}")
         lines.extend([
             f"<b>Trigger:</b> {trigger}",
             f"<b>Invalidierung:</b> {invalidation}",
             f"<b>Kritischer Check:</b> {critical_check or 'Nicht handeln, bevor Quelle, Preisreaktion und Volumen zusammenpassen.'}",
+            f"<b>Als Naechstes pruefen:</b> {next_check}",
             f"<b>Aktion:</b> {action}",
             f"<b>Quelle:</b> {source}",
         ])

@@ -56,16 +56,24 @@ def main() -> int:
     rendered = svc._render_telegram_macro_alert(normalized)
     required = [
         "Sicherheit:",
+        "Faktenstatus:",
+        "Zeithorizont:",
         "Warum wichtig:",
         "Was es aussagt:",
+        "Marktmechanismus:",
+        "Basisszenario (bedingt):",
         "Read-through:",
         "Kritischer Check:",
+        "Als Naechstes pruefen:",
         "Trigger:",
         "Invalidierung:",
     ]
     missing = [part for part in required if part not in rendered]
     if missing:
         print(f"FAIL rendered alert missing sections: {missing}")
+        return 1
+    if normalized.get("fact_status") != "bestaetigt" or not normalized.get("horizon"):
+        print(f"FAIL normalized alert missing classification: {normalized}")
         return 1
 
     weak_person = {

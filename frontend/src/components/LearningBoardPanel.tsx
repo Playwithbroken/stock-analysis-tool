@@ -25,8 +25,9 @@ function edgeClass(value: any) {
   return "bg-slate-500/10 text-slate-600";
 }
 
-function qualityTone(hitRate: any) {
+function qualityTone(hitRate: any, decisive: any) {
   const rate = Number(hitRate);
+  if (Number(decisive || 0) < 3) return "text-slate-500";
   if (!Number.isFinite(rate)) return "text-slate-500";
   if (rate >= 60) return "text-emerald-700";
   if (rate <= 35) return "text-red-700";
@@ -59,8 +60,8 @@ function QualityList({ title, rows, empty, showMove = false }: any) {
               className="flex items-center justify-between gap-3 rounded-[1.1rem] bg-black/[0.025] px-3 py-2 text-sm"
             >
               <span className="font-bold text-slate-800">{item.label}</span>
-              <span className={`text-xs font-extrabold ${qualityTone(item.hit_rate)}`}>
-                {item.hit_rate}% - {showMove ? formatPct(item.avg_performance_pct) : item.evaluated}
+              <span className={`text-xs font-extrabold ${qualityTone(item.hit_rate, item.decisive)}`}>
+                {item.hit_rate}% Treffer · {item.decision_rate ?? 0}% klar
               </span>
             </div>
           ))
@@ -106,11 +107,12 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-5">
         {[
           ["Prognosen", summary.forecasts || 0],
           ["Ausgewertet", summary.evaluated || 0],
-          ["Trefferquote", `${Number(summary.hit_rate || 0).toFixed(1)}%`],
+          ["Bestaetigt", `${Number(summary.decision_rate || 0).toFixed(1)}%`],
+          ["Treffer bei klaren Faellen", `${Number(summary.hit_rate || 0).toFixed(1)}%`],
           ["Richtungs-Edge", formatPct(summary.avg_favorable_pct ?? summary.avg_performance_pct)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
@@ -136,11 +138,12 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
             Edge {formatPct(topNewsSummary.avg_favorable_pct)}
           </div>
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid gap-2 sm:grid-cols-5">
           {[
             ["Top-News", topNewsSummary.forecasts || 0],
             ["Geprueft", topNewsSummary.evaluated || 0],
-            ["Treffer", `${Number(topNewsSummary.hit_rate || 0).toFixed(1)}%`],
+            ["Bestaetigt", `${Number(topNewsSummary.decision_rate || 0).toFixed(1)}%`],
+            ["Treffer klar", `${Number(topNewsSummary.hit_rate || 0).toFixed(1)}%`],
             ["Offen", topNewsSummary.pending || 0],
           ].map(([label, value]) => (
             <div key={label} className="rounded-[1.1rem] border border-black/8 bg-white/75 p-3">

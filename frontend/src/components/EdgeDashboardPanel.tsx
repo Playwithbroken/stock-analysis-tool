@@ -379,6 +379,8 @@ export default function EdgeDashboardPanel({
   const snapshot = portfolioSnapshot(portfolios, quotes);
   const hitRate = toNumber(learning?.summary?.hit_rate ?? learning?.summary?.accuracy);
   const evaluated = toNumber(learning?.summary?.evaluated ?? learning?.summary?.evaluated_forecasts);
+  const decisionRate = toNumber(learning?.summary?.decision_rate);
+  const neutralCount = toNumber(learning?.summary?.neutral);
   const topNewsSummary = learning?.top_news?.summary || {};
   const topNewsHitRate = toNumber(topNewsSummary.hit_rate);
   const topNewsPending = toNumber(topNewsSummary.pending);
@@ -438,9 +440,11 @@ export default function EdgeDashboardPanel({
       icon: ShieldAlert,
     },
     {
-      label: "Learning hit rate",
-      value: hitRate != null ? `${formatNumber(hitRate, 0)}%` : "n/a",
-      detail: evaluated != null ? `${formatNumber(evaluated, 0)} forecasts evaluated` : "Need more closed forecasts",
+      label: "Learning evidence",
+      value: decisionRate != null ? `${formatNumber(decisionRate, 0)}%` : "n/a",
+      detail: evaluated != null
+        ? `${formatNumber(evaluated, 0)} geprüft / ${formatNumber(neutralCount || 0, 0)} neutral / ${formatNumber(hitRate || 0, 0)}% Treffer bei klaren Fällen`
+        : "Need more closed forecasts",
       icon: BarChart3,
     },
     {

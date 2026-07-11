@@ -189,6 +189,8 @@ class ForecastLearningService:
                 "misses": len(misses),
                 "neutral": len(neutrals),
                 "hit_rate": round((len(hits) / max(1, len(hits) + len(misses))) * 100, 1),
+                "decision_rate": round(((len(hits) + len(misses)) / max(1, len(evaluated))) * 100, 1),
+                "neutral_rate": round((len(neutrals) / max(1, len(evaluated))) * 100, 1),
                 "avg_performance_pct": self._avg([item.get("performance_pct") for item in evaluated]),
                 "avg_favorable_pct": self._avg([self._directional_performance(item) for item in evaluated]),
                 "avg_adverse_pct": self._avg(
@@ -400,11 +402,14 @@ class ForecastLearningService:
             for item in evaluated
         ]
         hit_rate = round((len(hits) / max(1, len(hits) + len(misses))) * 100, 1)
+        decisive = len(hits) + len(misses)
+        decision_rate = round((decisive / max(1, len(evaluated))) * 100, 1)
+        neutral_rate = round((len(neutrals) / max(1, len(evaluated))) * 100, 1)
 
-        if len(evaluated) < 3:
+        if len(evaluated) < 3 or decisive < 3:
             lesson = (
-                "Noch zu wenig ausgewertete Top-News-Prognosen. Erst nach mehreren Treffern und "
-                "Fehlschlaegen als Ranking-Faktor hoeher gewichten."
+                "Noch zu wenig entscheidende Top-News-Ergebnisse. Neutrale Reaktionen sind keine Treffer; "
+                "erst nach mehreren bestaetigten Treffern oder Fehlschlaegen neu gewichten."
             )
         elif hit_rate >= 60:
             lesson = "Top-News liefern aktuell bestaetigten Edge. Weiter nutzen, aber nur mit Volumen- und Marktbreite-Check."
@@ -423,6 +428,8 @@ class ForecastLearningService:
                 "misses": len(misses),
                 "neutral": len(neutrals),
                 "hit_rate": hit_rate,
+                "decision_rate": decision_rate,
+                "neutral_rate": neutral_rate,
                 "avg_favorable_pct": self._avg(favorable_moves),
                 "avg_adverse_pct": self._avg([value for value in favorable_moves if value is not None and value < 0]),
             },
@@ -471,11 +478,19 @@ class ForecastLearningService:
         for label, items in buckets.items():
             hits = [item for item in items if item.get("result") == "hit"]
             misses = [item for item in items if item.get("result") == "miss"]
+            neutrals = [item for item in items if item.get("result") == "neutral"]
+            decisive = len(hits) + len(misses)
             rows.append(
                 {
                     "label": label,
                     "evaluated": len(items),
+                    "decisive": decisive,
+                    "hits": len(hits),
+                    "misses": len(misses),
+                    "neutral": len(neutrals),
                     "hit_rate": round((len(hits) / max(1, len(hits) + len(misses))) * 100, 1),
+                    "decision_rate": round((decisive / max(1, len(items))) * 100, 1),
+                    "neutral_rate": round((len(neutrals) / max(1, len(items))) * 100, 1),
                     "avg_performance_pct": self._avg([item.get("performance_pct") for item in items]),
                 }
             )
@@ -502,10 +517,10 @@ class ForecastLearningService:
         pending_by_horizon: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         lessons: List[Dict[str, Any]] = []
-        best_source = next((item for item in sources if item.get("evaluated", 0) >= 3), None)
-        weak_source = next((item for item in weak_sources if item.get("evaluated", 0) >= 3), None)
-        best_setup = next((item for item in setup_types if item.get("evaluated", 0) >= 3), None)
-        weak_setup = next((item for item in weak_setup_types if item.get("evaluated", 0) >= 3), None)
+        best_source = next((item for item in sources if item.get("decisive", 0) >= 3), None)
+        weak_source = next((item for item in weak_sources if item.get("decisive", 0) >= 3), None)
+        best_setup = next((item for item in setup_types if item.get("decisive", 0) >= 3), None)
+        weak_setup = next((item for item in weak_setup_types if item.get("decisive", 0) >= 3), None)
 
         if best_source:
             lessons.append(

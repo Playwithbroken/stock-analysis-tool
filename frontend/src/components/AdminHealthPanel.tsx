@@ -396,7 +396,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+            <div className={`rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8" : "border-black/8 bg-white/75"}`}>
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">App Release</div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{displayValue(appInfo.version)}</div>
@@ -413,8 +413,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">SQLite Datenbank</div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{formatBytes(database.size_bytes)}</div>
-                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${database.exists && database.writable && database.quick_check === "ok" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
-                  {database.exists && database.quick_check === "ok" ? "ok" : "pruefen"}
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${database.exists && database.writable && database.quick_check === "ok" && database.persistence_ready !== false ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
+                  {database.persistence_ready === false ? "Volume fehlt" : database.exists && database.quick_check === "ok" ? "ok" : "pruefen"}
                 </span>
               </div>
               <div className="mt-2 truncate text-xs leading-5 text-slate-500" title={database.path || ""}>
@@ -429,6 +429,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-1 text-xs leading-5 text-slate-500">
                 {database.counts?.portfolios ?? 0} Portfolios / {database.counts?.holdings ?? 0} Positionen / {database.counts?.paper_trades ?? 0} Paper-Trades / {database.counts?.forecasts ?? 0} Forecasts
               </div>
+              {database.railway_runtime ? (
+                <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs font-semibold leading-5 ${database.persistence_ready ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800" : "border-red-500/20 bg-red-500/10 text-red-800"}`}>
+                  {database.persistence_ready
+                    ? `Volume ${database.volume_name} aktiv unter ${database.volume_mount_path}.`
+                    : "Kein passendes Railway Volume erkannt. Volume an diesen Service mit Mount Path /app/data anhaengen; sonst gehen Portfolio und Lerndaten beim Deploy verloren."}
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">

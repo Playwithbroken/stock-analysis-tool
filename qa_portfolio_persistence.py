@@ -7,7 +7,7 @@ def main() -> None:
         db_path = os.path.join(tmp, "portfolios.db")
         os.environ["PORTFOLIO_DB_PATH"] = db_path
 
-        from src.storage import PortfolioManager, init_db
+        from src.storage import PortfolioManager, get_database_status, init_db
 
         init_db()
         manager = PortfolioManager()
@@ -68,6 +68,20 @@ def main() -> None:
         assert merged is not None, "merged holding was not returned"
         assert merged["shares"] == 4
         assert round(merged["buyPrice"], 4) == 159.125
+
+        os.environ["RAILWAY_PROJECT_ID"] = "qa-project"
+        os.environ["RAILWAY_VOLUME_NAME"] = "qa-volume"
+        os.environ["RAILWAY_VOLUME_MOUNT_PATH"] = tmp
+        volume_status = get_database_status()
+        assert volume_status["volume_attached"] is True
+        assert volume_status["database_on_volume"] is True
+        assert volume_status["persistence_ready"] is True
+
+        os.environ["RAILWAY_VOLUME_MOUNT_PATH"] = os.path.join(tmp, "wrong-mount")
+        wrong_mount_status = get_database_status()
+        assert wrong_mount_status["volume_attached"] is True
+        assert wrong_mount_status["database_on_volume"] is False
+        assert wrong_mount_status["persistence_ready"] is False
 
     print("portfolio persistence QA ok")
 

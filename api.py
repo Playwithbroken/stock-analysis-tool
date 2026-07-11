@@ -4674,6 +4674,8 @@ async def admin_health_center():
         problems.append("database_integrity")
     if not database_status.get("writable"):
         problems.append("database_not_writable")
+    if database_status.get("railway_runtime") and not database_status.get("persistence_ready"):
+        problems.append("database_volume_missing")
     if notification_status.get("schedule", {}).get("enabled") and not scheduler_loop_seen_at:
         problems.append("scheduler_not_seen")
     if scheduler_loop_stale:

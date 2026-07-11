@@ -1731,19 +1731,24 @@ export default function WorldMarketMap({
             </div>
           ) : null}
 
-          <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             {regions.map((region) => (
               <button
                 key={region.label}
                 type="button"
                 onClick={() => onSelectRegion(region.label)}
-                className={`shrink-0 rounded-full border px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all ${
+                className={`min-w-0 rounded-[0.9rem] border px-1.5 py-2 text-center transition-all ${
                   selectedRegion === region.label
                     ? "border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)]"
                     : "border-black/8 bg-white text-slate-600"
                 }`}
               >
-                {regionFlag(region.label)} {region.label} {formatPct(region.avg_change_1d)}
+                <span className="block truncate text-[9px] font-extrabold uppercase tracking-[0.1em]">
+                  {regionFlag(region.label)} {region.label}
+                </span>
+                <span className="mt-0.5 block text-[10px] font-black">
+                  {formatPct(region.avg_change_1d)}
+                </span>
               </button>
             ))}
           </div>

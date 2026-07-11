@@ -1616,7 +1616,7 @@ function AppContent() {
               <span>Marktbild links, Briefing rechts</span>
             </div>
             <div className="dashboard-intel-grid">
-                {globalBrief && geoRegions.length ? (
+                {geoRegions.length ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
                       <div className="dashboard-map-slot">
@@ -1624,12 +1624,12 @@ function AppContent() {
                           regions={geoRegions}
                           selectedRegion={selectedGeoRegion}
                           onSelectRegion={setSelectedGeoRegion}
-                          news={globalBrief.top_news || []}
-                          eventLayer={globalBrief.event_layer || []}
-                          eventPings={globalBrief.event_pings || []}
-                          watchlistImpact={globalBrief.watchlist_impact || []}
-                          contrarianSignals={globalBrief.contrarian_signals || []}
-                          openingTimeline={globalBrief.opening_timeline || []}
+                          news={globalBrief?.top_news || []}
+                          eventLayer={globalBrief?.event_layer || []}
+                          eventPings={globalBrief?.event_pings || []}
+                          watchlistImpact={globalBrief?.watchlist_impact || []}
+                          contrarianSignals={globalBrief?.contrarian_signals || []}
+                          openingTimeline={globalBrief?.opening_timeline || []}
                           onAnalyze={(t) => {
                             setActiveTab("analyze");
                             handleSearch(t);
@@ -1639,8 +1639,6 @@ function AppContent() {
                       </div>
                     </Suspense>
                   </ErrorBoundary>
-                ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
-                  <LoadingState />
                 ) : (
                   <section className="surface-panel rounded-[2rem] p-6">
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
@@ -1676,8 +1674,27 @@ function AppContent() {
                       </div>
                     </Suspense>
                   </ErrorBoundary>
-                ) : (
+                ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
                   <LoadingState />
+                ) : (
+                  <section className="surface-panel rounded-[2rem] p-5 sm:p-6">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                      Briefing Feed
+                    </div>
+                    <div className="mt-3 text-base font-semibold text-slate-800">
+                      Briefing gerade nicht verfuegbar.
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Die World Map bleibt nutzbar. Lade nur den Briefing-Feed erneut, ohne das Dashboard zu blockieren.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBriefReloadTick((prev) => prev + 1)}
+                      className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
+                    >
+                      Retry Brief
+                    </button>
+                  </section>
                 )}
             </div>
           </div>

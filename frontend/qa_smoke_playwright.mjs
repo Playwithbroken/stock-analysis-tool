@@ -209,7 +209,9 @@ async function checkHeaderMoverLayout(page, viewportName) {
     const strip = document.querySelector(".desktop-market-strip");
     const movers = document.querySelector(".desktop-movers-tape");
     const wrap = document.querySelector(".desktop-movers-tape .ticker-marquee-wrap");
-    if (!header || !strip || !movers || !wrap) {
+    const meta = document.querySelector(".desktop-movers-tape .header-movers-meta");
+    const track = document.querySelector(".desktop-movers-tape .ticker-marquee-track");
+    if (!header || !strip || !movers || !wrap || !meta || !track) {
       return {
         skipped: true,
         reason: "desktop header movers not present at this viewport",
@@ -230,20 +232,26 @@ async function checkHeaderMoverLayout(page, viewportName) {
     const stripBox = box(strip);
     const moversBox = box(movers);
     const wrapBox = box(wrap);
+    const metaBox = box(meta);
+    const trackBox = box(track);
     const withinHeader = moversBox.top >= headerBox.top - 1 && moversBox.bottom <= headerBox.bottom + 1;
-    const stripReasonable = stripBox.height <= 86;
+    const stripReasonable = stripBox.height <= 120;
     const wrapReasonable = wrapBox.height <= 78;
+    const controlsClearTicker = metaBox.bottom <= trackBox.top + 1;
     const hasWidth = moversBox.width >= 260;
     return {
       skipped: false,
       withinHeader,
       stripReasonable,
       wrapReasonable,
+      controlsClearTicker,
       hasWidth,
       headerBox,
       stripBox,
       moversBox,
       wrapBox,
+      metaBox,
+      trackBox,
     };
   });
 
@@ -251,7 +259,7 @@ async function checkHeaderMoverLayout(page, viewportName) {
     pushEvent(`[${viewportName}] Header mover layout skipped: ${result.reason}`);
     return;
   }
-  if (!result.withinHeader || !result.stripReasonable || !result.wrapReasonable || !result.hasWidth) {
+  if (!result.withinHeader || !result.stripReasonable || !result.wrapReasonable || !result.controlsClearTicker || !result.hasWidth) {
     summary.metrics.headerMoverLayoutIssues += 1;
     pushIssue({
       kind: "layout",

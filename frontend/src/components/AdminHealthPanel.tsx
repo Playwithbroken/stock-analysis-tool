@@ -423,6 +423,12 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-1 text-xs leading-5 text-slate-500">
                 Schreibbar: {database.writable ? "ja" : "nein"} / Quick check: {displayValue(database.quick_check)}
               </div>
+              <div className="mt-1 truncate text-xs leading-5 text-slate-500" title={database.identity || ""}>
+                DB-ID: {database.identity ? String(database.identity).slice(0, 12) : "noch nicht gesetzt"} / seit {fmtDate(database.initialized_at)}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                {database.counts?.portfolios ?? 0} Portfolios / {database.counts?.holdings ?? 0} Positionen / {database.counts?.paper_trades ?? 0} Paper-Trades / {database.counts?.forecasts ?? 0} Forecasts
+              </div>
             </div>
 
             <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">

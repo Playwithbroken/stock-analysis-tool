@@ -18,6 +18,9 @@ def get_database_status() -> Dict[str, Any]:
     writable = os.access(db_dir, os.W_OK) if os.path.isdir(db_dir) else False
     quick_check = None
     error = None
+    identity = None
+    initialized_at = None
+    counts: Dict[str, int] = {}
     if exists:
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -25,6 +28,20 @@ def get_database_status() -> Dict[str, Any]:
             cursor.execute('PRAGMA quick_check')
             row = cursor.fetchone()
             quick_check = row[0] if row else None
+            cursor.execute("SELECT key, value FROM app_settings WHERE key IN ('database_identity', 'database_initialized_at')")
+            settings = {key: value for key, value in cursor.fetchall()}
+            identity = settings.get('database_identity')
+            initialized_at = settings.get('database_initialized_at')
+            for label, table in {
+                'portfolios': 'portfolios',
+                'holdings': 'holdings',
+                'paper_trades': 'paper_trades',
+                'forecasts': 'signal_forecasts',
+                'forecast_outcomes': 'signal_forecast_outcomes',
+                'deliveries': 'sent_signal_events',
+            }.items():
+                cursor.execute(f'SELECT COUNT(*) FROM {table}')
+                counts[label] = int((cursor.fetchone() or [0])[0] or 0)
             conn.close()
         except Exception as exc:
             error = exc.__class__.__name__
@@ -37,6 +54,9 @@ def get_database_status() -> Dict[str, Any]:
         "writable": writable,
         "quick_check": quick_check,
         "error": error,
+        "identity": identity,
+        "initialized_at": initialized_at,
+        "counts": counts,
     }
 
 def init_db():
@@ -245,6 +265,16 @@ def init_db():
         cursor.execute('ALTER TABLE price_alerts ADD COLUMN updated_at TEXT')
     except sqlite3.OperationalError:
         pass
+
+    initialized_at = datetime.now().isoformat()
+    cursor.execute(
+        'INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
+        ('database_identity', str(uuid.uuid4()), initialized_at),
+    )
+    cursor.execute(
+        'INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
+        ('database_initialized_at', initialized_at, initialized_at),
+    )
     
     conn.commit()
     conn.close()

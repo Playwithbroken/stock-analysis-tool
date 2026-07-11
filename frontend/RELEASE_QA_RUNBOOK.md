@@ -22,7 +22,7 @@ Optional mit Overrides:
 
 ```powershell
 $env:QA_TARGET_URL="https://web-production-8546b.up.railway.app/"
-$env:QA_ACCESS_CODE="100363"
+$env:QA_ACCESS_CODE="<current-qa-access-code>"
 $env:QA_TICKERS="AAPL,PFE,BTC-USD"
 $env:QA_MARKETS_STRESS_COUNT="20"
 npm run qa:release

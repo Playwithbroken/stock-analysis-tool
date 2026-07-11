@@ -18,8 +18,8 @@ Backend lokal:
 
 ```powershell
 pip install -r requirements.txt
-$env:APP_ACCESS_PASSWORD="100363"
-$env:APP_SESSION_SECRET="change-me-local-secret"
+$env:APP_ACCESS_PASSWORD="<your-6-digit-local-code>"
+$env:APP_SESSION_SECRET="<your-long-random-local-secret>"
 $env:APP_DATA_DIR="$PWD\data"
 uvicorn api:app --reload --host 127.0.0.1 --port 8000
 ```

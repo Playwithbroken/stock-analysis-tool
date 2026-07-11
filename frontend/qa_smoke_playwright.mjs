@@ -3,7 +3,10 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const TARGET_URL = process.env.QA_TARGET_URL || "https://web-production-8546b.up.railway.app/";
-const ACCESS_CODE = process.env.QA_ACCESS_CODE || "100363";
+const ACCESS_CODE = (process.env.QA_ACCESS_CODE || "").trim();
+if (!ACCESS_CODE) {
+  throw new Error("QA_ACCESS_CODE is required. Never store a workspace access code in the repository.");
+}
 const OUT_DIR = path.resolve("qa-artifacts");
 const TICKERS = (process.env.QA_TICKERS || "AAPL,PFE,BTC-USD")
   .split(",")

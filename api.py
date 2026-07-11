@@ -47,7 +47,7 @@ from src.trading_intelligence_service import TradingIntelligenceService
 from src.realtime_market_service import RealtimeMarketService
 from src.public_signal_service import PublicSignalService
 from src.advisory_service import advisory_profile_subset, build_portfolio_advisory_check, build_suitability_check
-from src.storage import DB_PATH, PortfolioManager, get_database_status
+from src.storage import DB_PATH, PortfolioManager, get_database_status, get_persistence_status
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -2020,10 +2020,17 @@ def serialize_analysis_result(result) -> Dict[str, Any]:
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
+    persistence = get_persistence_status()
+    persistence_ready = bool(persistence.get("persistence_ready"))
     return {
-        "status": "ok",
+        "status": "ok" if persistence_ready else "degraded",
         "version": APP_VERSION,
-        "message": "Stock Analysis API is running",
+        "message": "Stock Analysis API is running" if persistence_ready else "API is running, but persistent storage is not configured",
+        "persistence": {
+            "ready": persistence_ready,
+            "volume_attached": bool(persistence.get("volume_attached")),
+            "database_on_volume": bool(persistence.get("database_on_volume")),
+        },
     }
 
 

@@ -36,12 +36,18 @@ Notes:
 Damit Portfolios, Alerts und Watchlists nach Redeploys erhalten bleiben:
 
 1. In Railway beim Service ein Volume anlegen und nach `/app/data` mounten.
-2. Redeploy ausloesen und im Log pruefen, dass die App normal startet.
-3. Healthcheck:
-   - `GET /api/health` -> `status: ok`
+2. Das Volume muss am Web-Service `web-production-8546b` haengen, nicht an einem separaten Worker oder Environment.
+3. Redeploy ausloesen und im Log pruefen, dass die App normal startet.
+4. Healthcheck:
+   - `GET /api/health` -> `status: ok` und `persistence.ready: true`
+   - Im Health Center muessen Volume-Name, Mount `/app/data` und `Volume aktiv` erscheinen.
    - Neues Portfolio anlegen, Redeploy ausfuehren, danach `GET /api/portfolios` pruefen.
    - Im Health Center `DB Backup` klicken und pruefen, dass eine `.db`-Datei heruntergeladen wird.
-4. Recovery-Checkliste:
+5. Redeploy-Beweis:
+   - DB-ID im Health Center notieren.
+   - Testportfolio anlegen und erneut deployen.
+   - Go nur, wenn DB-ID und Testportfolio unveraendert erhalten bleiben.
+6. Recovery-Checkliste:
    - Wenn Daten fehlen: Mount-Pfad `/app/data` kontrollieren.
    - Sicherstellen, dass nur ein Service auf dieselbe DB schreibt.
    - Backup der `data/portfolios.db` regelmaessig exportieren.

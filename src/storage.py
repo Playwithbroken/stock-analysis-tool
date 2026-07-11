@@ -25,17 +25,29 @@ def _connect_db(*, row_factory: bool = False) -> sqlite3.Connection:
     return conn
 
 
-def get_database_status() -> Dict[str, Any]:
-    db_dir = os.path.dirname(DB_PATH)
+def get_persistence_status() -> Dict[str, Any]:
     railway_runtime = bool(os.getenv('RAILWAY_PROJECT_ID') or os.getenv('RAILWAY_ENVIRONMENT_ID'))
     volume_name = (os.getenv('RAILWAY_VOLUME_NAME') or '').strip()
-    volume_mount_path = os.path.abspath((os.getenv('RAILWAY_VOLUME_MOUNT_PATH') or '').strip()) if os.getenv('RAILWAY_VOLUME_MOUNT_PATH') else ''
+    raw_mount_path = (os.getenv('RAILWAY_VOLUME_MOUNT_PATH') or '').strip()
+    volume_mount_path = os.path.abspath(raw_mount_path) if raw_mount_path else ''
     volume_attached = bool(volume_name and volume_mount_path)
     try:
         database_on_volume = bool(volume_mount_path and os.path.commonpath([DB_PATH, volume_mount_path]) == volume_mount_path)
     except ValueError:
         database_on_volume = False
-    persistence_ready = not railway_runtime or (volume_attached and database_on_volume)
+    return {
+        "railway_runtime": railway_runtime,
+        "volume_name": volume_name,
+        "volume_mount_path": volume_mount_path,
+        "volume_attached": volume_attached,
+        "database_on_volume": database_on_volume,
+        "persistence_ready": not railway_runtime or (volume_attached and database_on_volume),
+    }
+
+
+def get_database_status() -> Dict[str, Any]:
+    db_dir = os.path.dirname(DB_PATH)
+    persistence = get_persistence_status()
     exists = os.path.exists(DB_PATH)
     writable = os.access(db_dir, os.W_OK) if os.path.isdir(db_dir) else False
     quick_check = None
@@ -79,12 +91,7 @@ def get_database_status() -> Dict[str, Any]:
         "identity": identity,
         "initialized_at": initialized_at,
         "counts": counts,
-        "railway_runtime": railway_runtime,
-        "volume_name": volume_name,
-        "volume_mount_path": volume_mount_path,
-        "volume_attached": volume_attached,
-        "database_on_volume": database_on_volume,
-        "persistence_ready": persistence_ready,
+        **persistence,
     }
 
 def init_db():

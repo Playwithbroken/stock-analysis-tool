@@ -10,6 +10,19 @@ from src.advisory_service import merge_workspace_profile
 DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 DATA_DIR = os.path.abspath(os.getenv('APP_DATA_DIR', DEFAULT_DATA_DIR))
 DB_PATH = os.path.abspath(os.getenv('PORTFOLIO_DB_PATH', os.path.join(DATA_DIR, 'portfolios.db')))
+try:
+    SQLITE_BUSY_TIMEOUT_MS = max(250, int(os.getenv('SQLITE_BUSY_TIMEOUT_MS', '3000')))
+except ValueError:
+    SQLITE_BUSY_TIMEOUT_MS = 3000
+
+
+def _connect_db(*, row_factory: bool = False) -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
+    conn.execute(f'PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}')
+    conn.execute('PRAGMA foreign_keys = ON')
+    if row_factory:
+        conn.row_factory = sqlite3.Row
+    return conn
 
 
 def get_database_status() -> Dict[str, Any]:
@@ -23,7 +36,7 @@ def get_database_status() -> Dict[str, Any]:
     counts: Dict[str, int] = {}
     if exists:
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = _connect_db()
             cursor = conn.cursor()
             cursor.execute('PRAGMA quick_check')
             row = cursor.fetchone()
@@ -61,7 +74,9 @@ def get_database_status() -> Dict[str, Any]:
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
+    conn.execute('PRAGMA journal_mode = WAL')
+    conn.execute('PRAGMA synchronous = NORMAL')
     cursor = conn.cursor()
     
     # Portfolios table
@@ -772,7 +787,7 @@ class PortfolioManager:
         return rows
 
     def get_app_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect_db()
         cursor = conn.cursor()
         cursor.execute('SELECT value FROM app_settings WHERE key = ?', (key,))
         row = cursor.fetchone()
@@ -780,7 +795,7 @@ class PortfolioManager:
         return row[0] if row else default
 
     def set_app_setting(self, key: str, value: str):
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect_db()
         cursor = conn.cursor()
         cursor.execute(
             '''
@@ -890,6 +905,9 @@ class PortfolioManager:
 
     def reset_login_guard(self):
         import json
+        state = self.get_login_guard_state()
+        if int(state.get("failed_attempts", 0)) == 0 and not state.get("locked_until"):
+            return
         self.set_app_setting(
             "login_guard",
             json.dumps({"failed_attempts": 0, "locked_until": None}),

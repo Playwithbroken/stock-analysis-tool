@@ -298,6 +298,7 @@ class PaperTradingService:
                 "contract_multiplier": playbook.get("contract_multiplier") or (100 if is_option else 1),
                 "max_holding_days": playbook.get("max_holding_days") if is_option else None,
                 "notes": self._build_trade_note_snapshot(note_playbook, demo_account, is_option),
+                "trade_ticket": playbook.get("trade_ticket") or {},
             }
         )
         self._schedule_trade_outcomes(created)
@@ -559,6 +560,7 @@ class PaperTradingService:
 
     def _build_trade_note_snapshot(self, playbook: Dict[str, Any], demo_account: Dict[str, Any], is_option: bool) -> str:
         framework = playbook.get("decision_framework") or {}
+        ticket = playbook.get("trade_ticket") or {}
         checklist = framework.get("review_questions") or []
         lines = [
             "Entscheidungs-Snapshot beim Paper-Einstieg:",
@@ -569,6 +571,7 @@ class PaperTradingService:
             f"Trigger: {framework.get('entry_trigger') or 'Manuelle Trigger-Prüfung erforderlich.'}",
             f"Invalidierung: {framework.get('invalidation') or 'Manuelle Invalidierungsprüfung erforderlich.'}",
             f"Risikoplan: {framework.get('risk_plan') or 'Nur Paper-Risiko.'}",
+            f"Ticket: Schema {ticket.get('schema_version') or 'n/a'} / Status {ticket.get('status') or 'n/a'} / Paper-ready {bool(ticket.get('paper_ready'))} / Echtgeld-ready {bool(ticket.get('real_money_ready'))}.",
         ]
         if playbook.get("learning_mode"):
             lines.append("Lernmodus: reduzierte Demo-Position, kein strenges Top-Setup und nicht Echtgeld-bereit.")
@@ -1084,6 +1087,7 @@ class PaperTradingService:
                 "learning_mode": False,
                 "trigger": framework.get("entry_trigger"),
                 "invalidation": framework.get("invalidation"),
+                "trade_ticket": playbook.get("trade_ticket") or {},
                 "reasons": self._dedupe_reason_list(reasons),
                 "learning_block_reasons": self._dedupe_reason_list(exploration_reasons),
             }
@@ -1484,8 +1488,132 @@ class PaperTradingService:
             row = dict(item)
             sizing = self._suggest_demo_sizing(row, demo_account)
             row.update(sizing)
+            row["trade_ticket"] = self._build_trade_ticket(row, demo_account)
             sized.append(row)
         return sized
+
+    def _build_trade_ticket(self, playbook: Dict[str, Any], demo_account: Dict[str, Any]) -> Dict[str, Any]:
+        framework = playbook.get("decision_framework") or {}
+        strategy = playbook.get("strategy") or {}
+        ticker = str(playbook.get("ticker") or "").upper()
+        asset_class = str(playbook.get("asset_class") or "equity").lower()
+        direction = str(playbook.get("direction") or "long").lower()
+        entry = float(playbook.get("reference_price") or 0)
+        risk_buffer_pct = float(playbook.get("risk_buffer_pct") or 3.5)
+        reward_buffer_pct = float(playbook.get("reward_buffer_pct") or 7.0)
+        is_short = direction in {"short", "put"}
+        is_option = asset_class == "option"
+
+        if is_option:
+            stop = round(entry * 0.5, 2) if entry > 0 else None
+            target_1 = round(entry * 1.5, 2) if entry > 0 else None
+            target_2 = round(entry * 2.0, 2) if entry > 0 else None
+        else:
+            risk_distance = entry * (risk_buffer_pct / 100)
+            reward_distance = entry * (reward_buffer_pct / 100)
+            stop = round(entry + risk_distance if is_short else entry - risk_distance, 4) if entry > 0 else None
+            target_2 = round(entry - reward_distance if is_short else entry + reward_distance, 4) if entry > 0 else None
+            target_1 = round(entry - (reward_distance / 2) if is_short else entry + (reward_distance / 2), 4) if entry > 0 else None
+
+        risk_reward = None
+        if entry > 0 and stop not in (None, entry) and target_2 not in (None, entry):
+            risk_reward = round(abs(float(target_2) - entry) / abs(entry - float(stop)), 2)
+
+        source_label = str(
+            playbook.get("source_label")
+            or playbook.get("publisher")
+            or playbook.get("source")
+            or ""
+        ).strip()
+        data_as_of = str(
+            playbook.get("data_as_of")
+            or playbook.get("updated_at")
+            or playbook.get("generated_at")
+            or ""
+        ).strip()
+        blocked_reasons = self._dedupe_reason_list(
+            [
+                *[str(item) for item in playbook.get("do_not_trade_reasons", [])],
+                *[str(item) for item in playbook.get("demo_block_reasons", [])],
+            ]
+        )
+        errors: List[str] = []
+        warnings: List[str] = []
+        required_text = {
+            "instrument": ticker,
+            "thesis": str(playbook.get("thesis") or "").strip(),
+            "trigger": str(framework.get("entry_trigger") or "").strip(),
+            "invalidation": str(framework.get("invalidation") or "").strip(),
+        }
+        for field, value in required_text.items():
+            if not value:
+                errors.append(f"missing_{field}")
+        if entry <= 0:
+            errors.append("missing_entry_price")
+        if stop is None:
+            errors.append("missing_stop")
+        if target_2 is None:
+            errors.append("missing_target")
+        if float(playbook.get("suggested_quantity") or 0) <= 0:
+            errors.append("missing_position_size")
+        if not source_label:
+            warnings.append("source_label_missing")
+        if not data_as_of:
+            warnings.append("market_data_timestamp_missing")
+        if is_option:
+            warnings.append("option_chain_not_validated")
+        warnings.extend(str(item) for item in framework.get("warnings") or [])
+
+        paper_ready = not errors and not blocked_reasons and bool(playbook.get("demo_tradeable"))
+        if blocked_reasons:
+            status = "blocked"
+        elif errors:
+            status = "incomplete"
+        elif is_option:
+            status = "paper_only"
+        elif paper_ready:
+            status = "paper_ready"
+        else:
+            status = "watch"
+        return {
+            "schema_version": "1.0",
+            "ticket_id": str(playbook.get("id") or f"{ticker}-{direction}"),
+            "instrument": ticker,
+            "asset_class": asset_class,
+            "direction": direction,
+            "status": status,
+            "paper_ready": paper_ready,
+            "real_money_ready": False,
+            "entry_condition": required_text["trigger"],
+            "entry_price": round(entry, 4) if entry > 0 else None,
+            "stop_price": stop,
+            "target_1": target_1,
+            "target_2": target_2,
+            "horizon": framework.get("strategy_horizon") or strategy.get("horizon") or "not classified",
+            "quantity": playbook.get("suggested_quantity"),
+            "notional_value": playbook.get("suggested_notional_value"),
+            "max_loss_value": playbook.get("suggested_max_loss_value"),
+            "account_risk_pct": playbook.get("suggested_risk_pct"),
+            "risk_reward": risk_reward,
+            "thesis": required_text["thesis"],
+            "catalyst": playbook.get("headline") or playbook.get("title") or "",
+            "counterargument": required_text["invalidation"],
+            "invalidation": required_text["invalidation"],
+            "strategy_id": framework.get("strategy_id") or strategy.get("id"),
+            "strategy_label": framework.get("strategy_label") or strategy.get("label"),
+            "confidence_score": playbook.get("score"),
+            "evidence_level": framework.get("evidence_level") or "watch",
+            "source_label": source_label or None,
+            "data_as_of": data_as_of or None,
+            "generated_at": datetime.utcnow().isoformat(),
+            "validation": {
+                "valid": not errors,
+                "errors": errors,
+                "warnings": self._dedupe_reason_list(warnings),
+                "blocked_reasons": blocked_reasons,
+            },
+            "policy": "Paper-only decision framework. Manual review and independent real-world validation required.",
+        }
 
     def _suggest_demo_sizing(self, playbook: Dict[str, Any], demo_account: Dict[str, Any]) -> Dict[str, Any]:
         price = float(playbook.get("reference_price") or 0)

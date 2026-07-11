@@ -162,6 +162,17 @@ def test_demo_account_sizing() -> None:
     assert aapl["decision_framework"]["entry_trigger"]
     assert aapl["decision_framework"]["invalidation"]
     assert aapl["decision_framework"]["real_money_policy"].startswith("Nur Entscheidungsrahmen")
+    ticket = aapl["trade_ticket"]
+    assert ticket["schema_version"] == "1.0"
+    assert ticket["status"] == "paper_ready"
+    assert ticket["paper_ready"] is True
+    assert ticket["real_money_ready"] is False
+    assert ticket["entry_price"] == 100.0
+    assert ticket["stop_price"] == 96.5
+    assert ticket["target_1"] == 103.75
+    assert ticket["target_2"] == 107.5
+    assert ticket["risk_reward"] == 2.14
+    assert ticket["account_risk_pct"] <= 0.35
 
     aapl_call = next(item for item in dashboard["playbooks"] if item["id"] == "option-AAPL-call")
     assert aapl_call["asset_class"] == "option"
@@ -172,6 +183,8 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["suggested_max_loss_value"] == 1_250.0
     assert aapl_call["suggested_risk_pct"] == 0.25
     assert aapl_call["decision_framework"]["evidence_level"] in {"paper_candidate", "high_quality_paper", "watch"}
+    assert aapl_call["trade_ticket"]["status"] == "paper_only"
+    assert "option_chain_not_validated" in aapl_call["trade_ticket"]["validation"]["warnings"]
     assert "prämie" in aapl_call["decision_framework"]["risk_plan"].lower()
 
     created = service.create_trade_from_playbook(
@@ -185,6 +198,8 @@ def test_demo_account_sizing() -> None:
     assert "Entscheidungs-Snapshot beim Paper-Einstieg" in created["notes"]
     assert "Trigger:" in created["notes"]
     assert "Invalidierung:" in created["notes"]
+    assert created["trade_ticket"]["schema_version"] == "1.0"
+    assert created["trade_ticket"]["real_money_ready"] is False
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
 
     created_call = service.create_trade_from_playbook(

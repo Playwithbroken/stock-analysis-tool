@@ -190,7 +190,8 @@ def init_db():
         option_type TEXT,
         contract_multiplier REAL DEFAULT 1,
         max_holding_days INTEGER,
-        error_tag TEXT
+        error_tag TEXT,
+        trade_ticket_json TEXT NOT NULL DEFAULT '{}'
     )
     ''')
 
@@ -284,6 +285,10 @@ def init_db():
         pass
     try:
         cursor.execute('ALTER TABLE paper_trades ADD COLUMN error_tag TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE paper_trades ADD COLUMN trade_ticket_json TEXT NOT NULL DEFAULT '{}'")
     except sqlite3.OperationalError:
         pass
     try:
@@ -962,6 +967,11 @@ class PortfolioManager:
             )
         rows = [dict(row) for row in cursor.fetchall()]
         conn.close()
+        for row in rows:
+            try:
+                row["trade_ticket"] = json.loads(row.pop("trade_ticket_json", "{}") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                row["trade_ticket"] = {}
         return rows
 
     def create_paper_trade(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -992,6 +1002,7 @@ class PortfolioManager:
             "contract_multiplier": float(payload.get("contract_multiplier") or 1),
             "max_holding_days": int(payload["max_holding_days"]) if payload.get("max_holding_days") not in (None, "") else None,
             "error_tag": payload.get("error_tag") or "",
+            "trade_ticket": payload.get("trade_ticket") if isinstance(payload.get("trade_ticket"), dict) else {},
         }
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -1001,8 +1012,9 @@ class PortfolioManager:
                 id, ticker, asset_class, direction, setup_type, thesis, entry_price,
                 stop_price, target_price, quantity, confidence_score, leverage,
                 opened_at, closed_at, closed_price, status, notes, exit_reason, lessons_learned,
-                underlying_entry_price, option_type, contract_multiplier, max_holding_days, error_tag
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                underlying_entry_price, option_type, contract_multiplier, max_holding_days, error_tag,
+                trade_ticket_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 row["id"],
@@ -1029,6 +1041,7 @@ class PortfolioManager:
                 row["contract_multiplier"],
                 row["max_holding_days"],
                 row["error_tag"],
+                json.dumps(row["trade_ticket"], ensure_ascii=True, default=str),
             ),
         )
         conn.commit()

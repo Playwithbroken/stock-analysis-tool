@@ -83,6 +83,28 @@ def main() -> None:
         assert wrong_mount_status["database_on_volume"] is False
         assert wrong_mount_status["persistence_ready"] is False
 
+        paper_trade = manager.create_paper_trade(
+            {
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_ticket",
+                "entry_price": 100,
+                "stop_price": 96,
+                "target_price": 108,
+                "quantity": 10,
+                "trade_ticket": {
+                    "schema_version": "1.0",
+                    "ticket_id": "qa-ticket",
+                    "paper_ready": True,
+                    "real_money_ready": False,
+                },
+            }
+        )
+        persisted_trade = next(item for item in manager.list_paper_trades() if item["id"] == paper_trade["id"])
+        assert persisted_trade["trade_ticket"]["ticket_id"] == "qa-ticket"
+        assert persisted_trade["trade_ticket"]["real_money_ready"] is False
+
     print("portfolio persistence QA ok")
 
 

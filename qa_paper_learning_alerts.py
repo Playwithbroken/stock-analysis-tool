@@ -74,12 +74,23 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "confidence_score": 91,
             "trigger": "Breakout mit Volumen bestätigt.",
             "invalidation": "Schließen, wenn Breakout scheitert.",
+            "trade_ticket": {
+                "status": "paper_ready",
+                "horizon": "days-weeks",
+                "source_label": "official filing",
+                "data_as_of": "2026-07-11T12:00:00",
+                "validation": {"warnings": ["manual_market_check"]},
+            },
         }
     )
     assert "investiert 12.345,67 EUR" in opened
     assert "aktueller Wert 12.390,12 EUR" in opened
     assert "Offenes Ergebnis:</b> +44,45 EUR" in opened
     assert "Max. Demo-Verlust:</b> 450,00 EUR" in opened
+    assert "Ticket:</b> paper_ready" in opened
+    assert "Horizont:</b> days-weeks" in opened
+    assert "official filing" in opened
+    assert "manual_market_check" in opened
 
     closed = service._render_telegram_paper_trade_closed_alert(
         {

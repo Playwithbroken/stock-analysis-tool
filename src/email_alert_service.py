@@ -320,6 +320,7 @@ class EmailAlertService:
                     "trigger": selected_item.get("trigger"),
                     "invalidation": selected_item.get("invalidation"),
                     "suggested_max_loss_value": selected_item.get("suggested_max_loss_value"),
+                    "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
                     "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
                     "source_label": "Paper-Autopilot",
                     "source_url": "",
@@ -3276,6 +3277,7 @@ class EmailAlertService:
         return labels.get(key, key.replace("_", " ") if key else fallback)
 
     def _render_telegram_paper_trade_opened_alert(self, event: Dict[str, Any]) -> str:
+        ticket = event.get("trade_ticket") if isinstance(event.get("trade_ticket"), dict) else {}
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
         asset_class = self._tg_esc(str(event.get("asset_class") or "asset"))
@@ -3295,6 +3297,12 @@ class EmailAlertService:
         trigger = self._tg_esc(str(event.get("trigger") or "Anschlussbewegung muss bestätigt bleiben."))[:520]
         invalidation = self._tg_esc(str(event.get("invalidation") or "Schließen/prüfen, wenn die These scheitert."))[:520]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
+        ticket_status = self._tg_esc(str(ticket.get("status") or "paper_open"))
+        horizon = self._tg_esc(str(ticket.get("horizon") or "nicht klassifiziert"))
+        source = self._tg_esc(str(ticket.get("source_label") or "nicht dokumentiert"))
+        data_as_of = self._tg_esc(str(ticket.get("data_as_of") or "Zeitstempel fehlt"))
+        validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
+        warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         return "\n".join(
             [
                 f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
@@ -3303,9 +3311,12 @@ class EmailAlertService:
                 f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
                 f"<b>Offenes Ergebnis:</b> {result_delta} ({result_label})",
                 f"<b>Stop:</b> {stop} | <b>Ziel:</b> {target} | <b>CRV:</b> {rr}",
+                f"<b>Ticket:</b> {ticket_status} | <b>Horizont:</b> {horizon}",
                 f"<b>Max. Demo-Verlust:</b> {max_loss}",
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidierung:</b> {invalidation}",
+                f"<b>Daten:</b> {source} | {data_as_of}",
+                f"<b>Offene Checks:</b> {warning_text}",
                 "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",
             ]
         )

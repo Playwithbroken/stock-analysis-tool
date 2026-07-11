@@ -1205,6 +1205,47 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       </div>
                     </div>
                   )}
+                  {item.trade_ticket && (
+                    <div className="mt-4 border-t border-black/8 pt-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                          Trade Ticket v{item.trade_ticket.schema_version}
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${
+                          item.trade_ticket.paper_ready
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                            : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                        }`}>
+                          {item.trade_ticket.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-xs sm:grid-cols-4">
+                        {[
+                          ["Entry", item.trade_ticket.entry_price ?? "N/A"],
+                          ["Stop", item.trade_ticket.stop_price ?? "N/A"],
+                          ["Ziel 1", item.trade_ticket.target_1 ?? "N/A"],
+                          ["Ziel 2", item.trade_ticket.target_2 ?? "N/A"],
+                          ["Menge", item.trade_ticket.quantity ?? "N/A"],
+                          ["Risiko", `${item.trade_ticket.account_risk_pct ?? "N/A"}%`],
+                          ["CRV", item.trade_ticket.risk_reward ?? "N/A"],
+                          ["Horizont", item.trade_ticket.horizon || "offen"],
+                        ].map(([label, value]) => (
+                          <div key={String(label)} className="min-w-0">
+                            <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">{label}</div>
+                            <div className="mt-1 break-words font-black text-slate-900">{String(value)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {(item.trade_ticket.validation?.warnings || []).length ? (
+                        <div className="mt-3 text-[11px] font-semibold leading-5 text-amber-700">
+                          Offene Checks: {item.trade_ticket.validation.warnings.join(" · ")}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-red-700">
+                        Echtgeld: gesperrt
+                      </div>
+                    </div>
+                  )}
                   {item.learning_adjustment && (
                     <div className="mt-3 rounded-[1rem] border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
                       <div className="font-extrabold uppercase tracking-[0.14em]">Outcome-Lernen</div>

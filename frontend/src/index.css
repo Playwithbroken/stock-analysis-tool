@@ -194,11 +194,11 @@ h3,
 
 .desktop-market-strip {
   display: grid;
-  grid-template-columns: minmax(18rem, 0.7fr) minmax(32rem, 1.3fr);
-  align-items: center;
-  gap: 0.7rem;
-  min-height: 4.1rem;
-  max-height: 4.35rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.35rem;
+  min-height: 0;
+  max-height: none;
   overflow: hidden;
 }
 
@@ -216,10 +216,10 @@ h3,
 .header-favorites-tape {
   display: flex;
   align-items: center;
-  min-height: 3.55rem;
-  border-radius: 1.15rem;
+  min-height: 2.35rem;
+  border-radius: 0.95rem;
   background: rgba(255, 255, 255, 0.34);
-  padding: 0.45rem 0.55rem;
+  padding: 0.3rem 0.55rem;
 }
 
 .desktop-favorite-tape > div {
@@ -229,8 +229,8 @@ h3,
 
 .desktop-movers-tape .ticker-marquee-wrap {
   height: 100%;
-  min-height: 3.55rem;
-  max-height: 4.1rem;
+  min-height: 3.35rem;
+  max-height: 3.55rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -473,15 +473,8 @@ h3,
 }
 
 @media (min-width: 1024px) and (max-width: 1320px) {
-  .desktop-market-strip {
-    grid-template-columns: 1fr;
-    min-height: 0;
-    max-height: none;
-    gap: 0.5rem;
-  }
-
   .header-favorites-tape {
-    min-height: 3.1rem;
+    min-height: 2.35rem;
   }
 
   .desktop-movers-tape .ticker-marquee-wrap {

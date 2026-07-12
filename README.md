@@ -68,6 +68,7 @@ python qa_auth_lockout.py
 python qa_auth_cookie_security.py
 python qa_backup_endpoint.py
 python qa_health_center_contract.py
+python qa_telegram_only_notifications.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
 cd frontend
@@ -82,6 +83,7 @@ python qa_auth_lockout.py
 python qa_auth_cookie_security.py
 python qa_backup_endpoint.py
 python qa_health_center_contract.py
+python qa_telegram_only_notifications.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
 python qa_live_release_smoke.py

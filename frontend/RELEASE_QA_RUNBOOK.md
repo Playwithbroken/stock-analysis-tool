@@ -35,7 +35,7 @@ Nach Railway-Deploy:
 
 ```powershell
 $env:QA_TARGET_URL="https://web-production-8546b.up.railway.app"
-python ..\qa_security_headers.py
+python ..\qa_live_release_smoke.py
 ```
 
 Artefakte:

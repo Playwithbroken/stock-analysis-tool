@@ -78,6 +78,7 @@ python qa_search_resolution.py
 python qa_backup_endpoint.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
+python qa_live_release_smoke.py
 cd frontend
 npm run qa:release
 ```

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";
 
-const TARGET_URL = process.env.QA_TARGET_URL || "https://web-production-8546b.up.railway.app/";
+const TARGET_URL = process.env.QA_TARGET_URL || process.env.QA_BASE_URL || "https://web-production-8546b.up.railway.app/";
 const ACCESS_CODE = (process.env.QA_ACCESS_CODE || "").trim();
 if (!ACCESS_CODE) {
   throw new Error("QA_ACCESS_CODE is required. Never store a workspace access code in the repository.");
@@ -241,6 +241,8 @@ async function checkHeaderMoverLayout(page, viewportName) {
     const stripReasonable = stripBox.height <= 120;
     const wrapReasonable = wrapBox.height <= 78;
     const controlsClearTicker = metaBox.bottom <= trackBox.top + 1;
+    const controlsPinnedHigh = metaBox.top <= wrapBox.top + 10 && metaBox.bottom < wrapBox.top + 34;
+    const tickerHasReservedLane = trackBox.top >= wrapBox.top + 27;
     const hasWidth = moversBox.width >= 260;
     return {
       skipped: false,
@@ -248,6 +250,8 @@ async function checkHeaderMoverLayout(page, viewportName) {
       stripReasonable,
       wrapReasonable,
       controlsClearTicker,
+      controlsPinnedHigh,
+      tickerHasReservedLane,
       hasWidth,
       headerBox,
       stripBox,
@@ -262,7 +266,15 @@ async function checkHeaderMoverLayout(page, viewportName) {
     pushEvent(`[${viewportName}] Header mover layout skipped: ${result.reason}`);
     return;
   }
-  if (!result.withinHeader || !result.stripReasonable || !result.wrapReasonable || !result.controlsClearTicker || !result.hasWidth) {
+  if (
+    !result.withinHeader ||
+    !result.stripReasonable ||
+    !result.wrapReasonable ||
+    !result.controlsClearTicker ||
+    !result.controlsPinnedHigh ||
+    !result.tickerHasReservedLane ||
+    !result.hasWidth
+  ) {
     summary.metrics.headerMoverLayoutIssues += 1;
     pushIssue({
       kind: "layout",
@@ -492,4 +504,9 @@ try {
 } finally {
   await browser.close();
   fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify(summary, null, 2), "utf-8");
+}
+
+if (summary.issues.length > 0) {
+  console.error(`[qa:release] failed with ${summary.issues.length} issue(s). See ${path.join(runDir, "summary.json")}`);
+  process.exitCode = 1;
 }

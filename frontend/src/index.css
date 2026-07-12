@@ -229,22 +229,29 @@ h3,
 
 .desktop-movers-tape .ticker-marquee-wrap {
   height: 100%;
-  min-height: 4rem;
-  max-height: 4.15rem;
+  min-height: 4.45rem;
+  max-height: 4.6rem;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  padding-top: 1.95rem !important;
+  position: relative;
 }
 
 .header-movers-tape .header-movers-meta {
-  min-height: 1.25rem;
-  margin-bottom: 0.35rem;
-  position: relative;
+  position: absolute;
+  top: 0.38rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  min-height: 1.45rem;
+  margin-bottom: 0;
   z-index: 3;
 }
 
 .header-movers-tape .ticker-marquee-track {
   min-height: 1.75rem;
+  position: relative;
+  z-index: 1;
 }
 
 .desktop-favorite-tape {
@@ -480,8 +487,8 @@ h3,
   }
 
   .desktop-movers-tape .ticker-marquee-wrap {
-    min-height: 4rem;
-    max-height: 4.15rem;
+    min-height: 4.55rem;
+    max-height: 4.7rem;
   }
 }
 

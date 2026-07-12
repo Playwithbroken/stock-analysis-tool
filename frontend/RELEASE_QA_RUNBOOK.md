@@ -15,6 +15,7 @@ Ausführen:
 
 ```powershell
 python ..\qa_backup_endpoint.py
+python ..\qa_static_cache_headers.py
 cd frontend
 npm run qa:release
 ```

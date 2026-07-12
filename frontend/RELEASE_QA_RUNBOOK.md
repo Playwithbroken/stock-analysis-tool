@@ -19,6 +19,8 @@ python ..\qa_auth_lockout.py
 python ..\qa_backup_endpoint.py
 python ..\qa_health_center_contract.py
 python ..\qa_telegram_only_notifications.py
+python ..\qa_macro_alerts.py
+python ..\qa_macro_alert_quality.py
 python ..\qa_static_cache_headers.py
 python ..\qa_security_headers.py
 cd frontend
@@ -76,6 +78,7 @@ Artefakte:
 7. Auth-Gates sind grün: Cookie-Sicherheit und Login-Lockout
 8. Health Center ist geschützt und liefert den Betriebsvertrag für App, DB, Schedule, Telegram und Feeds
 9. Notification-Gate ist grün: Telegram aktiv, E-Mail und Browser-Push für diese Beta aus
+10. Macro-Alert-Gates sind grün: Qualität, Einordnung, Dedupe und Severity-Upgrade
 
 `NO-GO`, wenn eines davon verletzt ist.
 

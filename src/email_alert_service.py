@@ -1822,9 +1822,11 @@ class EmailAlertService:
         fact_status = "bestaetigt" if source_quality == "strong" else "plausibel - zweite Quelle ausstehend"
         action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
         identity = self._macro_event_identity(event_type, country or region, title)
+        bucket_identity = self._macro_event_bucket_identity(event_type, country or region, affected_assets)
         return {
             "event_key": f"macro-alert:{identity}:{severity}",
             "macro_identity": identity,
+            "macro_bucket_identity": bucket_identity,
             "category": "macro_alert",
             "title": title,
             "line": f"{country or region} / {event_type}: {title}",
@@ -2174,42 +2176,77 @@ class EmailAlertService:
         safe = re.sub(r"[^a-z0-9]+", "-", f"{event_type}-{country}-{title}".lower()).strip("-")
         return safe[:96] or "macro-event"
 
+    def _macro_event_bucket_identity(self, event_type: str, country: str, assets: List[str]) -> str:
+        normalized_assets = sorted(
+            {
+                re.sub(r"[^a-z0-9.-]+", "", str(asset or "").lower())
+                for asset in assets[:6]
+                if str(asset or "").strip()
+            }
+        )
+        asset_part = "-".join(normalized_assets[:4]) or "market"
+        safe = re.sub(r"[^a-z0-9.-]+", "-", f"{event_type}-{country}-{asset_part}".lower()).strip("-")
+        return safe[:120] or "macro-bucket"
+
     def _macro_alert_state_key(self, identity: str) -> str:
         safe = re.sub(r"[^a-zA-Z0-9:_-]+", "-", identity)[:120]
         return f"macro_alert_state:{safe}"
 
     def _macro_alert_can_send(self, event: Dict[str, Any]) -> bool:
-        identity = str(event.get("macro_identity") or event.get("event_key") or "")
-        if not identity:
+        identities = self._macro_alert_identities(event)
+        if not identities:
             return False
         cooldown_hours = self._safe_int_env("MACRO_ALERT_COOLDOWN_HOURS", 3, minimum=1)
-        raw = self.portfolio_manager.get_app_setting(self._macro_alert_state_key(identity), "{}")
-        try:
-            previous = json.loads(raw) if raw else {}
-        except Exception:
-            previous = {}
-        previous_score = float(previous.get("impact_score") or 0)
         current_score = float(event.get("impact_score") or 0)
-        if current_score >= previous_score + 8:
-            return True
-        sent_at = previous.get("sent_at")
-        if not sent_at:
-            return True
-        try:
-            sent_dt = datetime.fromisoformat(str(sent_at))
-        except Exception:
-            return True
-        return datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))) >= (
-            sent_dt + timedelta(hours=cooldown_hours)
-        )
+        current_severity_rank = self._macro_alert_severity_rank(str(event.get("severity") or ""))
+        blocked = False
+        for identity in identities:
+            raw = self.portfolio_manager.get_app_setting(self._macro_alert_state_key(identity), "{}")
+            try:
+                previous = json.loads(raw) if raw else {}
+            except Exception:
+                previous = {}
+            previous_score = float(previous.get("impact_score") or 0)
+            previous_severity_rank = self._macro_alert_severity_rank(str(previous.get("severity") or ""))
+            if current_severity_rank > previous_severity_rank:
+                continue
+            if current_score >= previous_score + 8:
+                continue
+            sent_at = previous.get("sent_at")
+            if not sent_at:
+                continue
+            try:
+                sent_dt = datetime.fromisoformat(str(sent_at))
+            except Exception:
+                continue
+            still_in_cooldown = datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))) < (
+                sent_dt + timedelta(hours=cooldown_hours)
+            )
+            if still_in_cooldown:
+                blocked = True
+        return not blocked
+
+    def _macro_alert_identities(self, event: Dict[str, Any]) -> List[str]:
+        identities = [
+            str(event.get("macro_bucket_identity") or "").strip(),
+            str(event.get("macro_identity") or event.get("event_key") or "").strip(),
+        ]
+        deduped: List[str] = []
+        for identity in identities:
+            if identity and identity not in deduped:
+                deduped.append(identity)
+        return deduped
+
+    def _macro_alert_severity_rank(self, severity: str) -> int:
+        return {"low": 0, "medium": 1, "high": 2, "risk": 2, "critical": 3}.get((severity or "").lower(), 0)
 
     def _record_macro_alert_delivery(self, events: List[Dict[str, Any]]) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
         for event in events:
             if event.get("category") != "macro_alert":
                 continue
-            identity = str(event.get("macro_identity") or event.get("event_key") or "")
-            if not identity:
+            identities = self._macro_alert_identities(event)
+            if not identities:
                 continue
             payload = {
                 "sent_at": now,
@@ -2218,7 +2255,8 @@ class EmailAlertService:
                 "severity": event.get("severity"),
                 "title": event.get("title"),
             }
-            self.portfolio_manager.set_app_setting(self._macro_alert_state_key(identity), json.dumps(payload))
+            for identity in identities:
+                self.portfolio_manager.set_app_setting(self._macro_alert_state_key(identity), json.dumps(payload))
 
     def _paper_account_status_state_key(self) -> str:
         return "paper_account_status_alert_state"

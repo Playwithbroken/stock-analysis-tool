@@ -71,6 +71,8 @@ python qa_health_center_contract.py
 python qa_telegram_only_notifications.py
 python qa_macro_alerts.py
 python qa_macro_alert_quality.py
+python qa_paper_demo_account.py
+python qa_paper_learning_alerts.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
 cd frontend
@@ -88,6 +90,8 @@ python qa_health_center_contract.py
 python qa_telegram_only_notifications.py
 python qa_macro_alerts.py
 python qa_macro_alert_quality.py
+python qa_paper_demo_account.py
+python qa_paper_learning_alerts.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
 python qa_live_release_smoke.py

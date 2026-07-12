@@ -21,6 +21,8 @@ python ..\qa_health_center_contract.py
 python ..\qa_telegram_only_notifications.py
 python ..\qa_macro_alerts.py
 python ..\qa_macro_alert_quality.py
+python ..\qa_paper_demo_account.py
+python ..\qa_paper_learning_alerts.py
 python ..\qa_static_cache_headers.py
 python ..\qa_security_headers.py
 cd frontend
@@ -79,6 +81,7 @@ Artefakte:
 8. Health Center ist geschützt und liefert den Betriebsvertrag für App, DB, Schedule, Telegram und Feeds
 9. Notification-Gate ist grün: Telegram aktiv, E-Mail und Browser-Push für diese Beta aus
 10. Macro-Alert-Gates sind grün: Qualität, Einordnung, Dedupe und Severity-Upgrade
+11. Paper-Trading-Gates sind grün: Demo-Kapital, Geldfluss, Learning und Telegram-Status
 
 `NO-GO`, wenn eines davon verletzt ist.
 

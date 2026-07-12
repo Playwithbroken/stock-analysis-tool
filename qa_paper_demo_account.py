@@ -238,6 +238,78 @@ def test_realized_return_uses_account_equity() -> None:
     assert stats["average_trade_pnl_pct"] == 50.0
 
 
+def test_short_trade_money_flow_and_demo_equity() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "open-short-winner",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "short",
+                "setup_type": "qa_short",
+                "status": "open",
+                "opened_at": "2026-06-19T08:00:00",
+                "entry_price": 100.0,
+                "stop_price": 104.0,
+                "target_price": 92.0,
+                "quantity": 50,
+                "confidence_score": 90,
+                "leverage": 1,
+            },
+            {
+                "id": "closed-short-loser",
+                "ticker": "MSFT",
+                "asset_class": "equity",
+                "direction": "short",
+                "setup_type": "qa_short",
+                "status": "closed",
+                "opened_at": "2026-06-18T08:00:00",
+                "closed_at": "2026-06-19T08:00:00",
+                "entry_price": 100.0,
+                "closed_price": 110.0,
+                "stop_price": 104.0,
+                "target_price": 92.0,
+                "quantity": 50,
+                "confidence_score": 90,
+                "leverage": 1,
+                "exit_reason": "stop_hit",
+                "lessons_learned": "Short failed after price reclaimed trigger.",
+            },
+        ]
+    )
+    service = build_service(manager)
+    service._get_last_price = lambda ticker: 90.0 if ticker == "AAPL" else 100.0  # type: ignore[method-assign]
+    enriched = service._enrich_trades(manager.trades)
+
+    open_short = next(item for item in enriched if item["id"] == "open-short-winner")
+    assert open_short["invested_value"] == 5000.0
+    assert open_short["current_price"] == 90.0
+    assert open_short["unrealized_pnl_pct"] == 10.0
+    assert open_short["unrealized_pnl_value"] == 500.0
+    assert open_short["current_value"] == 5500.0
+    assert open_short["result_value_delta"] == 500.0
+    assert open_short["result_label"] == "more"
+
+    closed_short = next(item for item in enriched if item["id"] == "closed-short-loser")
+    assert closed_short["invested_value"] == 5000.0
+    assert closed_short["realized_pnl_pct"] == -10.0
+    assert closed_short["realized_pnl_value"] == -500.0
+    assert closed_short["final_value"] == 4500.0
+    assert closed_short["result_value_delta"] == -500.0
+    assert closed_short["result_label"] == "less"
+
+    demo = service._build_demo_account(enriched, [])
+    assert demo["starting_capital"] == 500_000.0
+    assert demo["realized_pnl_value"] == -500.0
+    assert demo["unrealized_pnl_value"] == 500.0
+    assert demo["net_pnl_value"] == 0.0
+    assert demo["net_pnl_pct"] == 0.0
+    assert demo["equity"] == 500_000.0
+    assert demo["open_exposure_value"] == 5000.0
+    assert demo["cash_available_value"] == 495_000.0
+    assert demo["capital_status"] == "flat"
+
+
 def test_put_learning_inverts_underlying_move() -> None:
     manager = FakePortfolioManager()
     service = build_service(manager)
@@ -604,6 +676,7 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
 if __name__ == "__main__":
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
+    test_short_trade_money_flow_and_demo_equity()
     test_put_learning_inverts_underlying_move()
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()

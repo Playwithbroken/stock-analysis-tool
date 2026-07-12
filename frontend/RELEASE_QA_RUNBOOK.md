@@ -14,6 +14,7 @@ Ziel: deterministische Abnahme vor Montag-Release.
 Ausführen:
 
 ```powershell
+python ..\qa_auth_cookie_security.py
 python ..\qa_backup_endpoint.py
 python ..\qa_static_cache_headers.py
 python ..\qa_security_headers.py

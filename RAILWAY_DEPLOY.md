@@ -5,8 +5,8 @@ Set these environment variables in Railway:
 ```env
 APP_ENV=production
 APP_COOKIE_SECURE=true
-APP_ACCESS_PASSWORD=your-6-digit-code
-APP_SESSION_SECRET=generate-a-long-random-secret
+APP_ACCESS_PASSWORD=<strong-private-access-code>
+APP_SESSION_SECRET=<long-random-session-secret>
 APP_ALLOWED_ORIGINS=https://your-app.up.railway.app
 APP_LOGIN_MAX_ATTEMPTS=5
 APP_LOGIN_LOCKOUT_MINUTES=15
@@ -15,8 +15,8 @@ APP_DATA_DIR=/app/data
 SIGNAL_ALERTS_ENABLED=true
 
 TELEGRAM_ALERTS_ENABLED=true
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
+TELEGRAM_BOT_TOKEN=<telegram-bot-token>
+TELEGRAM_CHAT_ID=<telegram-chat-id>
 
 BRIEF_SCHEDULE_TIMEZONE=Europe/Berlin
 EUROPE_OPEN_BRIEF_TIME=08:40

@@ -1,13 +1,15 @@
 #!/bin/sh
 # Auto-rebuild frontend/dist before push if any frontend source changed.
-# Ensures Railway always gets a fresh prebuilt SPA (no OOM npm build on server).
+# Ensures Railway always gets a fresh prebuilt SPA and blocks committed secrets.
 
 set -e
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# Compare local HEAD with remote tracking branch
+python scripts/check_secrets.py
+
+# Compare local HEAD with remote tracking branch.
 REMOTE_REF="$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo '')"
 if [ -z "$REMOTE_REF" ]; then
   RANGE="HEAD"
@@ -15,23 +17,23 @@ else
   RANGE="$REMOTE_REF..HEAD"
 fi
 
-# Any frontend source changes in outgoing commits? (exclude dist itself)
+# Any frontend source changes in outgoing commits? Exclude dist itself.
 CHANGED=$(git diff --name-only $RANGE -- frontend/ ':(exclude)frontend/dist/' 2>/dev/null | head -1 || true)
 
-# Also trigger if frontend/dist is missing
+# Also trigger if frontend/dist is missing.
 if [ -z "$CHANGED" ] && [ -f "frontend/dist/index.html" ]; then
   exit 0
 fi
 
-echo "[pre-push] Frontend sources changed (or dist missing) — rebuilding…"
+echo "[pre-push] Frontend sources changed (or dist missing) - rebuilding..."
 cd frontend
 if ! npm run build; then
-  echo "[pre-push] npm run build failed — aborting push."
+  echo "[pre-push] npm run build failed - aborting push."
   exit 1
 fi
 cd ..
 
-# Stage + amend build output into last commit if dirty
+# Stage and amend build output into last commit if dirty.
 if ! git diff --quiet frontend/dist || [ -n "$(git ls-files --others --exclude-standard frontend/dist)" ]; then
   git add -f frontend/dist
   git commit --amend --no-edit --no-verify || true

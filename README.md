@@ -64,6 +64,7 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
 
 ```powershell
 python -m py_compile api.py
+python qa_backup_endpoint.py
 cd frontend
 npm run verify
 ```
@@ -72,6 +73,7 @@ Vor dem Live-Go:
 
 ```powershell
 python qa_search_resolution.py
+python qa_backup_endpoint.py
 cd frontend
 npm run qa:release
 ```

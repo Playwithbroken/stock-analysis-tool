@@ -14,6 +14,7 @@ Ziel: deterministische Abnahme vor Montag-Release.
 Ausführen:
 
 ```powershell
+python ..\qa_backup_endpoint.py
 cd frontend
 npm run qa:release
 ```

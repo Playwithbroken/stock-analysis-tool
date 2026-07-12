@@ -15,6 +15,7 @@ Ausführen:
 
 ```powershell
 python ..\qa_auth_cookie_security.py
+python ..\qa_auth_lockout.py
 python ..\qa_backup_endpoint.py
 python ..\qa_static_cache_headers.py
 python ..\qa_security_headers.py
@@ -70,6 +71,7 @@ Artefakte:
 4. `metrics.requestFailedNonAborted === 0`
 5. `metrics.chartStillLoading === 0`
 6. `issues` enthält keine `ui`/`ux`/`pageerror`-Einträge
+7. Auth-Gates sind grün: Cookie-Sicherheit und Login-Lockout
 
 `NO-GO`, wenn eines davon verletzt ist.
 

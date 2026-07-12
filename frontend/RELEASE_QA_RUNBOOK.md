@@ -31,6 +31,13 @@ $env:QA_MARKETS_STRESS_COUNT="20"
 npm run qa:release
 ```
 
+Nach Railway-Deploy:
+
+```powershell
+$env:QA_TARGET_URL="https://web-production-8546b.up.railway.app"
+python ..\qa_security_headers.py
+```
+
 Artefakte:
 
 - `frontend/qa-artifacts/<run-id>/summary.json`

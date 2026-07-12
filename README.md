@@ -66,6 +66,7 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
 python -m py_compile api.py
 python qa_backup_endpoint.py
 python qa_static_cache_headers.py
+python qa_security_headers.py
 cd frontend
 npm run verify
 ```
@@ -76,6 +77,7 @@ Vor dem Live-Go:
 python qa_search_resolution.py
 python qa_backup_endpoint.py
 python qa_static_cache_headers.py
+python qa_security_headers.py
 cd frontend
 npm run qa:release
 ```

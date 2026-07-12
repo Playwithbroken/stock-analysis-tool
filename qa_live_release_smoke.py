@@ -1,12 +1,15 @@
 import os
 import re
 import sys
+from pathlib import Path
 from urllib.parse import urljoin
 
 import requests
 
 
 DEFAULT_TARGET = "https://web-production-8546b.up.railway.app"
+ROOT = Path(__file__).resolve().parent
+LOCAL_DIST_INDEX = ROOT / "frontend" / "dist" / "index.html"
 
 
 def get(url: str) -> requests.Response:
@@ -33,6 +36,20 @@ def main() -> int:
     css_match = re.search(r"/assets/(index-[^\"']+\.css)", body)
     require(bool(js_match), failures, "index JS asset hash missing")
     require(bool(css_match), failures, "index CSS asset hash missing")
+    local_js, local_css = local_dist_assets()
+    if os.getenv("QA_SKIP_LOCAL_ASSET_MATCH", "").strip().lower() not in {"1", "true", "yes"}:
+        if local_js:
+            require(
+                bool(js_match and js_match.group(1) == local_js),
+                failures,
+                f"live JS asset {js_match.group(1) if js_match else 'missing'} does not match local dist {local_js}",
+            )
+        if local_css:
+            require(
+                bool(css_match and css_match.group(1) == local_css),
+                failures,
+                f"live CSS asset {css_match.group(1) if css_match else 'missing'} does not match local dist {local_css}",
+            )
 
     health = get(f"{target}/api/health")
     require(health.status_code == 200, failures, f"/api/health returned {health.status_code}")
@@ -87,8 +104,24 @@ def main() -> int:
         return 1
 
     print(f"live release smoke ok: {target}")
-    print(f"version={health_json.get('version')} js={js_match.group(1) if js_match else 'n/a'} css={css_match.group(1) if css_match else 'n/a'}")
+    print(
+        f"version={health_json.get('version')} "
+        f"js={js_match.group(1) if js_match else 'n/a'} "
+        f"css={css_match.group(1) if css_match else 'n/a'}"
+    )
     return 0
+
+
+def local_dist_assets() -> tuple[str | None, str | None]:
+    if not LOCAL_DIST_INDEX.exists():
+        return None, None
+    text = LOCAL_DIST_INDEX.read_text(encoding="utf-8", errors="ignore")
+    js_match = re.search(r"/assets/(index-[^\"']+\.js)", text)
+    css_match = re.search(r"/assets/(index-[^\"']+\.css)", text)
+    return (
+        js_match.group(1) if js_match else None,
+        css_match.group(1) if css_match else None,
+    )
 
 
 def check_security_headers(path: str, response: requests.Response, expected: dict[str, str], failures: list[str]) -> None:

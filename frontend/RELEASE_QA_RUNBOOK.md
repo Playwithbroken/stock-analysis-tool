@@ -38,6 +38,9 @@ $env:QA_TARGET_URL="https://web-production-8546b.up.railway.app"
 python ..\qa_live_release_smoke.py
 ```
 
+Der Live-Smoke vergleicht standardmaessig die Live-Asset-Hashes mit `frontend/dist/index.html`.
+Nur fuer externe Checks ohne lokales Dist-Artefakt: `QA_SKIP_LOCAL_ASSET_MATCH=1`.
+
 Artefakte:
 
 - `frontend/qa-artifacts/<run-id>/summary.json`

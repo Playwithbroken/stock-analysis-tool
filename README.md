@@ -69,6 +69,7 @@ python qa_auth_cookie_security.py
 python qa_backup_endpoint.py
 python qa_health_center_contract.py
 python qa_global_asset_api.py
+python qa_morning_brief_availability.py
 python qa_portfolio_persistence.py
 python qa_portfolio_api_persistence.py
 python qa_telegram_only_notifications.py
@@ -91,6 +92,7 @@ python qa_auth_cookie_security.py
 python qa_backup_endpoint.py
 python qa_health_center_contract.py
 python qa_global_asset_api.py
+python qa_morning_brief_availability.py
 python qa_portfolio_persistence.py
 python qa_portfolio_api_persistence.py
 python qa_telegram_only_notifications.py

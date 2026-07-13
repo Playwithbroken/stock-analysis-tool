@@ -4160,14 +4160,88 @@ async def evaluate_forecast_learning():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def _emergency_morning_brief(reason: str) -> Dict[str, Any]:
+    """Stable frontend contract when the brief service itself cannot start."""
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "macro_score": 0,
+        "macro_regime": "mixed",
+        "opening_bias": "Daten werden aktualisiert",
+        "headline": "Morning Brief voruebergehend eingeschraenkt",
+        "summary_points": [
+            "Marktdaten sind momentan nicht vollstaendig verfuegbar.",
+            "Keine Entscheidung auf Basis dieses eingeschraenkten Briefings treffen.",
+        ],
+        "regions": {
+            "asia": {"label": "Asia", "tone": "mixed", "avg_change_1d": 0.0, "assets": []},
+            "europe": {"label": "Europe", "tone": "mixed", "avg_change_1d": 0.0, "assets": []},
+            "usa": {"label": "USA", "tone": "mixed", "avg_change_1d": 0.0, "assets": []},
+        },
+        "macro_assets": [],
+        "top_news": [],
+        "event_layer": [],
+        "event_pings": [],
+        "market_movers": {"gainers": [], "losers": []},
+        "trade_setups": [],
+        "trade_setups_status": "insufficient_signal",
+        "setup_board": {"now": [], "next": [], "avoid": []},
+        "action_board": [],
+        "portfolio_brain": [],
+        "watchlist_impact": [],
+        "trading_edge": {},
+        "data_status": {"mode": "fallback", "deferred": [], "sources": {}},
+        "quality": {
+            "status": "partial",
+            "score": 0,
+            "passed": 0,
+            "total": 0,
+            "missing": ["upstream_data"],
+            "checks": [],
+            "fallback": reason,
+        },
+    }
+
+
+def _safe_morning_brief_fallback(
+    service: Any,
+    reason: str,
+    snapshot: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    fallback = None
+    try:
+        fallback = service.get_cached_or_last_brief(snapshot)
+    except Exception:
+        pass
+    if fallback is None:
+        try:
+            fallback = service.build_empty_brief(reason)
+        except Exception:
+            fallback = _emergency_morning_brief(reason)
+    if (
+        not isinstance(fallback, dict)
+        or not str(fallback.get("headline") or "").strip()
+        or not isinstance(fallback.get("regions"), dict)
+    ):
+        fallback = _emergency_morning_brief(reason)
+    quality = fallback.get("quality")
+    if not isinstance(quality, dict):
+        quality = {}
+        fallback["quality"] = quality
+    quality["status"] = "partial"
+    quality["fallback"] = reason
+    return fallback
+
+
 @app.get("/api/market/morning-brief")
 async def get_morning_brief(fast: bool = False):
-    service = get_morning_brief_service()
+    try:
+        service = get_morning_brief_service()
+    except Exception as exc:
+        print(f"Morning brief service initialization fallback: {exc}")
+        return convert_numpy_types(_emergency_morning_brief("service_initialization"))
     try:
         if fast:
-            fallback = service.get_cached_or_last_brief()
-            if fallback is None:
-                fallback = service.build_empty_brief("warming_up")
+            fallback = _safe_morning_brief_fallback(service, "warming_up")
             quality = fallback.setdefault("quality", {})
             quality["cache_mode"] = "fast_cached"
             return convert_numpy_types(fallback)
@@ -4192,31 +4266,15 @@ async def get_morning_brief(fast: bool = False):
                 timeout=float(os.getenv("MORNING_BRIEF_API_TIMEOUT_SECONDS", "20")),
             )
         except asyncio.TimeoutError:
-            fallback = service.get_cached_or_last_brief(snapshot)
-            if fallback is None:
-                fallback = service.build_empty_brief("timeout")
-            quality = fallback.setdefault("quality", {})
-            quality["status"] = "partial"
-            quality["fallback"] = "timeout"
+            fallback = _safe_morning_brief_fallback(service, "timeout", snapshot)
             return convert_numpy_types(fallback)
         except Exception:
-            fallback = service.get_cached_or_last_brief(snapshot)
-            if fallback is None:
-                fallback = service.build_empty_brief("error")
-            quality = fallback.setdefault("quality", {})
-            quality["status"] = "partial"
-            quality["fallback"] = "error"
+            fallback = _safe_morning_brief_fallback(service, "error", snapshot)
             return convert_numpy_types(fallback)
 
         return convert_numpy_types(_cache_set("morning_brief:full", brief))
-    except Exception as e:
-        fallback = service.get_cached_or_last_brief()
-        if fallback is not None:
-            quality = fallback.setdefault("quality", {})
-            quality["status"] = "partial"
-            quality["fallback"] = "server_error"
-            return convert_numpy_types(fallback)
-        return convert_numpy_types(service.build_empty_brief("server_error"))
+    except Exception:
+        return convert_numpy_types(_safe_morning_brief_fallback(service, "server_error"))
 
 
 @app.get("/api/market/trading-edge")

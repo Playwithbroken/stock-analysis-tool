@@ -878,6 +878,31 @@ async def _resolve_asset_query(q: str, limit: int = 6) -> Dict[str, Any]:
     }
 
 
+def _fallback_search_results(q: str) -> List[Dict[str, Any]]:
+    """Keep direct tickers and curated aliases usable when live search fails."""
+    raw = (q or "").strip()
+    normalized = _normalize_ticker_input(raw)
+    if not normalized:
+        return []
+
+    catalog = _catalog_match_for_ticker(normalized)
+    if catalog:
+        return [catalog]
+
+    direct_symbol = re.fullmatch(r"[$#]?[A-Za-z0-9][A-Za-z0-9.\-^=]{0,19}", raw)
+    if not direct_symbol:
+        return []
+
+    quote_type = "CRYPTOCURRENCY" if normalized.endswith("-USD") else "EQUITY"
+    return [{
+        "ticker": normalized,
+        "name": normalized,
+        "exchange": None,
+        "type": quote_type,
+        "source": "normalizer_fallback",
+    }]
+
+
 DEFAULT_SEARCH_SUGGESTIONS = {
     "Jetzt interessant": [
         "NVIDIA Corporation (NVDA)",
@@ -2627,8 +2652,9 @@ async def search_ticker(q: str):
     """Search for tickers."""
     try:
         return await _resolve_search_results(q, limit=6)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        print(f"Search lookup fallback for {q!r}: {exc}")
+        return convert_numpy_types(_fallback_search_results(q))
 
 
 @app.get("/api/search/resolve")
@@ -2636,8 +2662,24 @@ async def resolve_search_query(q: str):
     """Resolve a natural-language asset query to the best stock/ETF/crypto ticker."""
     try:
         return convert_numpy_types(await _resolve_asset_query(q, limit=6))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        print(f"Search resolve fallback for {q!r}: {exc}")
+        fallback = _fallback_search_results(q)
+        best = fallback[0] if fallback else None
+        normalized = _normalize_ticker_input(q)
+        return convert_numpy_types({
+            "query": (q or "").strip(),
+            "normalized": normalized,
+            "ticker": str((best or {}).get("ticker") or normalized).upper(),
+            "name": (best or {}).get("name") or normalized,
+            "exchange": (best or {}).get("exchange"),
+            "type": (best or {}).get("type") or "direct",
+            "source": (best or {}).get("source") or "normalizer_fallback",
+            "confidence": "medium" if best else "low",
+            "score": 82 if best else 0,
+            "alternatives": [],
+            "degraded": True,
+        })
 
 
 @app.get("/api/discovery/moonshots")
@@ -2662,13 +2704,7 @@ async def get_search_suggestions(q: str = None):
         except Exception as exc:
             # A provider outage must not turn an Analyzer search into a 5xx.
             print(f"Search suggestion lookup fallback for {q!r}: {exc}")
-            normalized = _normalize_ticker_input(q)
-            catalog = _catalog_match_for_ticker(normalized) if normalized else None
-            results = ([{
-                "name": (catalog or {}).get("name") or normalized,
-                "ticker": normalized,
-                "type": (catalog or {}).get("type") or "EQUITY",
-            }] if normalized else [])
+            results = _fallback_search_results(q)
         return {
             "Matches": [f"{r['name']} ({r['ticker']})" for r in results[:5]],
             "Ticker": [r['ticker'] for r in results[:5]],

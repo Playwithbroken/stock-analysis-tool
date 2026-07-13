@@ -18,6 +18,7 @@ python ..\qa_auth_cookie_security.py
 python ..\qa_auth_lockout.py
 python ..\qa_backup_endpoint.py
 python ..\qa_health_center_contract.py
+python ..\qa_global_asset_api.py
 python ..\qa_portfolio_persistence.py
 python ..\qa_portfolio_api_persistence.py
 python ..\qa_telegram_only_notifications.py
@@ -81,10 +82,11 @@ Artefakte:
 6. `issues` enthält keine `ui`/`ux`/`pageerror`-Einträge
 7. Auth-Gates sind grün: Cookie-Sicherheit und Login-Lockout
 8. Health Center ist geschützt und liefert den Betriebsvertrag für App, DB, Schedule, Telegram und Feeds
-9. Notification-Gate ist grün: Telegram aktiv, E-Mail und Browser-Push für diese Beta aus
-10. Macro-Alert-Gates sind grün: Qualität, Einordnung, Dedupe und Severity-Upgrade
-11. Paper-Trading-Gates sind grün: Demo-Kapital, Geldfluss, Learning und Telegram-Status
-12. Portfolio-Gates sind grün: API-Speichern, Holdings und SQLite-Restart-Persistenz
+9. Suche und Analyzer lösen Aktien, ETFs und Krypto auch bei Provider-Ausfällen stabil auf
+10. Notification-Gate ist grün: Telegram aktiv, E-Mail und Browser-Push für diese Beta aus
+11. Macro-Alert-Gates sind grün: Qualität, Einordnung, Dedupe und Severity-Upgrade
+12. Paper-Trading-Gates sind grün: Demo-Kapital, Geldfluss, Learning und Telegram-Status
+13. Portfolio-Gates sind grün: API-Speichern, Holdings und SQLite-Restart-Persistenz
 
 `NO-GO`, wenn eines davon verletzt ist.
 

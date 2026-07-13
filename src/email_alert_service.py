@@ -848,25 +848,27 @@ class EmailAlertService:
                     "message": "Brief wird gebaut: Cache wird vorbereitet, Daten werden geladen, Versand wird vorbereitet.",
                 },
             )
-            try:
-                events = job["build_events"]()
-            except Exception as exc:
-                failure = {
-                    "job": job["job_key"],
-                    "status": "failed",
-                    "event_key": event_key,
-                    "scheduled_at": job["scheduled_at"].isoformat(),
-                    "minutes_late": job["minutes_late"],
-                    "error": f"build_failed: {exc}",
-                    "message": "Brief konnte nicht gebaut werden. Logs und Datenquellen pruefen; der Job kann innerhalb der Grace-Zeit erneut laufen.",
-                }
-                self._set_brief_job_status(str(job["job_key"]), failure)
-                results.append(failure)
-                continue
+            events: List[Dict[str, Any]] = []
+            if not job.get("is_brief"):
+                try:
+                    events = job["build_events"]()
+                except Exception as exc:
+                    failure = {
+                        "job": job["job_key"],
+                        "status": "failed",
+                        "event_key": event_key,
+                        "scheduled_at": job["scheduled_at"].isoformat(),
+                        "minutes_late": job["minutes_late"],
+                        "error": f"build_failed: {exc}",
+                        "message": "Alert konnte nicht gebaut werden. Logs und Datenquellen pruefen; der Job kann innerhalb der Grace-Zeit erneut laufen.",
+                    }
+                    self._set_brief_job_status(str(job["job_key"]), failure)
+                    results.append(failure)
+                    continue
             delivered = False
             brief = None
 
-            # For scheduled briefs: send rich multi-part Telegram message + email
+            # Scheduled briefs use the richer multi-part Telegram format.
             if job.get("is_brief"):
                 items = self.portfolio_manager.get_signal_watch_items()
                 snapshot_timeout = self._safe_int_env("SCHEDULED_BRIEF_SNAPSHOT_TIMEOUT_SECONDS", 8, minimum=2)
@@ -958,8 +960,6 @@ class EmailAlertService:
                 except Exception as exc:
                     telegram_error = str(exc)
                     print(f"Scheduled Telegram brief failed for {job['job_key']}: {exc}")
-                # Browser push notification
-                # Still send email via the normal path (events → HTML email)
                 if telegram_required and not telegram_delivered:
                     failure = {
                         "job": job["job_key"],

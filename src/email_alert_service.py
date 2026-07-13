@@ -837,7 +837,21 @@ class EmailAlertService:
                 break
             event_key = str(job["event_key"])
 
-            self._validate_config(config)
+            try:
+                self._validate_config(config)
+            except Exception as exc:
+                failure = {
+                    "job": job["job_key"],
+                    "status": "failed",
+                    "event_key": event_key,
+                    "scheduled_at": job["scheduled_at"].isoformat(),
+                    "minutes_late": job["minutes_late"],
+                    "error": f"config_failed: {exc}",
+                    "message": "Telegram-Konfiguration unvollstaendig. Job bleibt offen und wird nach Korrektur erneut versucht.",
+                }
+                self._set_brief_job_status(str(job["job_key"]), failure)
+                results.append(failure)
+                continue
             self._set_brief_job_status(
                 str(job["job_key"]),
                 {

@@ -42,7 +42,7 @@ def main() -> int:
         os.environ["PORTFOLIO_DB_PATH"] = os.path.join(tmp, "brief-scheduler-delivery.db")
         os.environ["SCHEDULED_BRIEFS_ENABLED"] = "true"
         os.environ["TELEGRAM_ALERTS_ENABLED"] = "true"
-        os.environ["TELEGRAM_BOT_TOKEN"] = "qa-token-placeholder"
+        os.environ["TELEGRAM_BOT_TOKEN"] = ""
         os.environ["TELEGRAM_CHAT_ID"] = "qa-chat-placeholder"
         os.environ["BRIEF_SCHEDULE_TIMEZONE"] = "Europe/Berlin"
         os.environ["BRIEF_SCHEDULE_WEEKDAYS"] = "mon"
@@ -79,11 +79,23 @@ def main() -> int:
 
         failures: list[str] = []
         try:
+            missing_config = service.send_scheduled_open_briefs()
+            missing_status = service.get_brief_job_status("morning-brief")
+            missing_sent_keys = manager.get_sent_signal_event_keys()
+            os.environ["TELEGRAM_BOT_TOKEN"] = "qa-token-placeholder"
             first = service.send_scheduled_open_briefs()
             second = service.send_scheduled_open_briefs()
         finally:
             alert_module.datetime = original_datetime
             service._brief_executor.shutdown(wait=False, cancel_futures=True)
+
+        failed = [row for row in missing_config if row.get("status") == "failed"]
+        if len(failed) != 1 or "config_failed" not in str(failed[0].get("error")):
+            failures.append(f"missing Telegram config was not recorded cleanly: {missing_config}")
+        if missing_status.get("status") != "failed" or not missing_status.get("last_error"):
+            failures.append(f"missing config diagnostics absent: {missing_status}")
+        if "morning-brief:2026-07-13" in missing_sent_keys:
+            failures.append("failed configuration was incorrectly marked as sent")
 
         sent = [row for row in first if row.get("status") == "sent"]
         if len(sent) != 1 or sent[0].get("job") != "morning-brief":

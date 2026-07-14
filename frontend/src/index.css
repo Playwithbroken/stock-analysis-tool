@@ -349,7 +349,7 @@ h3,
 }
 
 .broker-chat-fab {
-  right: max(0.55rem, env(safe-area-inset-right));
+  right: max(-0.35rem, env(safe-area-inset-right));
   bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 0.55rem);
 }
 
@@ -495,6 +495,19 @@ h3,
 @media (min-width: 1024px) {
   .content-shell {
     padding-bottom: 2rem;
+  }
+
+  .broker-chat-fab {
+    right: -0.25rem !important;
+    height: 2.5rem !important;
+    width: 2.5rem !important;
+    border-radius: 0.9rem !important;
+  }
+
+  .broker-chat-fab > div:nth-child(2) {
+    height: 1.8rem !important;
+    width: 1.8rem !important;
+    border-radius: 0.7rem !important;
   }
 }
 
@@ -1281,16 +1294,29 @@ h3,
   }
 
   .mobile-market-tape .ticker-marquee-wrap {
+    display: grid;
+    grid-template-rows: auto auto;
+    gap: 0.45rem;
     border-radius: 1rem;
     padding: 0.45rem;
   }
 
-  .mobile-market-tape .ticker-marquee-wrap > div:first-child {
-    margin-bottom: 0.3rem;
+  .mobile-market-tape .header-movers-meta {
+    position: static;
+    min-height: 1.75rem;
+    padding-inline: 0.2rem;
+    margin: 0;
+    z-index: 1;
   }
 
-  .mobile-market-tape .ticker-marquee-wrap > div:first-child .text-\[10px\]:last-child {
+  .mobile-market-tape .header-movers-meta .text-\[10px\]:last-child {
     display: none;
+  }
+
+  .mobile-market-tape .header-movers-tape .ticker-marquee-track {
+    min-height: 2rem;
+    padding-top: 0.15rem;
+    border-top: 1px solid var(--line-subtle);
   }
 
   .world-map-mobile-card {
@@ -1383,10 +1409,17 @@ h3,
   }
 
   .broker-chat-fab {
-    height: 2.2rem !important;
-    width: 2.2rem !important;
+    right: max(-0.35rem, env(safe-area-inset-right));
+    height: 2rem !important;
+    width: 2rem !important;
     border-radius: 0.78rem !important;
-    opacity: 0.78;
+    opacity: 0.72;
+  }
+
+  .broker-chat-fab > div:nth-child(2) {
+    height: 1.6rem !important;
+    width: 1.6rem !important;
+    border-radius: 0.62rem !important;
   }
 }
 

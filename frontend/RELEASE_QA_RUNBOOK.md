@@ -99,6 +99,9 @@ Artefakte:
 1. In jedem Viewport prüfen:
    - kein dominanter Leerraum im Hauptcontent
    - Map und rechte Panels nutzen Breite sichtbar sinnvoll
+   - kein horizontaler Seiten-Overflow
+   - Market-Movers-Metadaten und Ticker liegen in getrennten Zeilen
+   - Desk-Button verdeckt weder Karteninhalt noch Bottom-Navigation
 2. Dashboard:
    - Morning Brief zeigt entweder Top-Setups oder klar `insufficient signal`
 3. Markets:

@@ -38,6 +38,15 @@ function formatBytes(value?: number | null) {
   return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
+function formatMoney(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "offen";
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 function jobStateLabel(job: any) {
   if (job.last_status === "blocked") return "Qualitätsblock"
   if (job.sent_today) return "heute gesendet";
@@ -54,8 +63,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [runningDue, setRunningDue] = useState(false);
   const [sendingSession, setSendingSession] = useState("");
   const [downloadingBackup, setDownloadingBackup] = useState(false);
+  const [runningPaperPreview, setRunningPaperPreview] = useState(false);
   const [warmupResult, setWarmupResult] = useState<any>(null);
   const [runResult, setRunResult] = useState<any>(null);
+  const [paperPreviewResult, setPaperPreviewResult] = useState<any>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -159,6 +170,27 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
       setError(err instanceof Error ? err.message : "Backup download failed");
     } finally {
       setDownloadingBackup(false);
+    }
+  };
+
+  const runPaperPreview = async () => {
+    setRunningPaperPreview(true);
+    setError("");
+    setPaperPreviewResult(null);
+    try {
+      const res = await fetch("/api/trading/paper-autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ execute: false, max_trades: 3, mode: "strict" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Paper autopilot preview failed");
+      setPaperPreviewResult(data);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Paper autopilot preview failed");
+    } finally {
+      setRunningPaperPreview(false);
     }
   };
 
@@ -486,6 +518,46 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               {paperAutopilot.message ? (
                 <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700">
                   {paperAutopilot.message}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={runPaperPreview}
+                disabled={loading || runningPaperPreview}
+                className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
+              >
+                {runningPaperPreview ? "Prueft" : "Paper-Gates pruefen"}
+              </button>
+              {paperPreviewResult ? (
+                <div className="mt-3 rounded-[1rem] border border-sky-500/15 bg-sky-500/10 p-3 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold text-slate-900">
+                    {paperPreviewResult.selected?.length
+                      ? `${paperPreviewResult.selected.length} Kandidat(en) paper-ready`
+                      : "Kein Kandidat paper-ready"}
+                  </div>
+                  <div className="mt-1">
+                    {paperPreviewResult.message || "Preview abgeschlossen."}
+                  </div>
+                  {paperPreviewResult.selected_capital ? (
+                    <div className="mt-2 rounded-lg border border-black/8 bg-white/70 px-2 py-1">
+                      Kapital: {formatMoney(paperPreviewResult.selected_capital.notional_value)} geplant /
+                      Risiko {formatMoney(paperPreviewResult.selected_capital.max_loss_value)}
+                    </div>
+                  ) : null}
+                  {paperPreviewResult.selected?.[0]?.ticker ? (
+                    <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2 py-1">
+                      Top: <span className="font-extrabold">{paperPreviewResult.selected[0].ticker}</span>
+                      {paperPreviewResult.selected[0].score ? ` / Score ${paperPreviewResult.selected[0].score}` : ""}
+                    </div>
+                  ) : null}
+                  {paperPreviewResult.blocker_summary?.next_best_rejected?.ticker ? (
+                    <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/70 px-2 py-1">
+                      Geblockt: <span className="font-extrabold">{paperPreviewResult.blocker_summary.next_best_rejected.ticker}</span>
+                      {paperPreviewResult.blocker_summary.next_best_rejected.display_reasons?.length
+                        ? ` / ${paperPreviewResult.blocker_summary.next_best_rejected.display_reasons.slice(0, 2).join(" / ")}`
+                        : ""}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {paperAutopilot.next_candidate ? (

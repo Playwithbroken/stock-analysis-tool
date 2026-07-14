@@ -151,6 +151,18 @@ def main() -> int:
         require(FakeDataFetcher.calls == 1, failures, "yfinance health probe was not cached")
         require(FakeRealtimeMarketService.calls == 1, failures, "realtime health probe was not cached")
 
+        paper_preview = client.post(
+            "/api/trading/paper-autopilot",
+            json={"execute": False, "max_trades": 3, "mode": "strict"},
+        )
+        require(paper_preview.status_code == 200, failures, "paper autopilot preview request failed")
+        if paper_preview.status_code == 200:
+            preview_payload = paper_preview.json()
+            require(preview_payload.get("status") == "preview", failures, "paper preview status mismatch")
+            require(preview_payload.get("execute") is False, failures, "paper preview must not execute")
+            require(isinstance(preview_payload.get("opened"), list), failures, "paper preview opened must be a list")
+            require(len(preview_payload.get("opened") or []) == 0, failures, "paper preview must not open trades")
+
         telegram_calls = []
 
         def fake_telegram_post(url, **kwargs):

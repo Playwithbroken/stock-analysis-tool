@@ -47,6 +47,23 @@ function formatMoney(value?: number | null) {
   }).format(value);
 }
 
+function previewBlockReasons(preview: any) {
+  const blocked = preview?.blocker_summary?.next_best_rejected || {};
+  const mode = preview?.mode === "learn" ? "learn" : "strict";
+  const reasons =
+    mode === "learn"
+      ? blocked.learning_block_display_reasons || blocked.display_reasons || blocked.reasons || []
+      : blocked.display_reasons || blocked.reasons || [];
+  return {
+    blocked,
+    reasons: Array.isArray(reasons) ? reasons.filter(Boolean).slice(0, 3) : [],
+    scoreGap:
+      mode === "learn"
+        ? Number(blocked.learning_score_gap || 0)
+        : Number(blocked.auto_score_gap || 0),
+  };
+}
+
 function jobStateLabel(job: any) {
   if (job.last_status === "blocked") return "Qualitätsblock"
   if (job.sent_today) return "heute gesendet";
@@ -210,6 +227,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
+  const paperPreviewBlock = previewBlockReasons(paperPreviewResult);
   const nextBriefJob = [...jobs]
     .filter((job: any) => job?.next_due_at)
     .sort((a: any, b: any) => new Date(a.next_due_at).getTime() - new Date(b.next_due_at).getTime())[0];
@@ -608,11 +626,42 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     </div>
                   ) : null}
                   {paperPreviewResult.blocker_summary?.next_best_rejected?.ticker ? (
-                    <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/70 px-2 py-1">
-                      Geblockt: <span className="font-extrabold">{paperPreviewResult.blocker_summary.next_best_rejected.ticker}</span>
-                      {paperPreviewResult.blocker_summary.next_best_rejected.display_reasons?.length
-                        ? ` / ${paperPreviewResult.blocker_summary.next_best_rejected.display_reasons.slice(0, 2).join(" / ")}`
-                        : ""}
+                    <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/70 px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          Geblockt: <span className="font-extrabold">{paperPreviewBlock.blocked.ticker}</span>
+                        </span>
+                        {paperPreviewBlock.blocked.score ? (
+                          <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                            Score {paperPreviewBlock.blocked.score}
+                          </span>
+                        ) : null}
+                      </div>
+                      {paperPreviewBlock.reasons.length ? (
+                        <div className="mt-2 space-y-1">
+                          {paperPreviewBlock.reasons.map((reason: string) => (
+                            <div key={reason} className="rounded-md border border-amber-500/10 bg-amber-500/8 px-2 py-1 text-amber-900">
+                              {reason}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {paperPreviewBlock.blocked.missing_to_trade ? (
+                        <div className="mt-2 font-semibold text-amber-900">
+                          Fehlt: {paperPreviewBlock.blocked.missing_to_trade}
+                        </div>
+                      ) : null}
+                      {paperPreviewBlock.scoreGap > 0 ? (
+                        <div className="mt-1 text-slate-600">
+                          Score-Luecke: {paperPreviewBlock.scoreGap.toFixed(1)} Punkte bis{" "}
+                          {paperPreviewResult.mode === "learn" ? "Lerntrade" : "Strict-Trade"}.
+                        </div>
+                      ) : null}
+                      {paperPreviewBlock.blocked.next_action ? (
+                        <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800">
+                          Naechster Schritt: {paperPreviewBlock.blocked.next_action}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

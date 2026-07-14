@@ -94,6 +94,7 @@ def main() -> int:
             "schedule",
             "learning",
             "paper_autopilot",
+            "paper_outcomes",
             "data_feeds",
             "recent_deliveries",
             "problems",
@@ -146,6 +147,16 @@ def main() -> int:
             failures,
             "paper_autopilot.demo_account_after must be an object",
         )
+
+        paper_outcomes = payload.get("paper_outcomes") or {}
+        for key in ["summary", "top_errors", "recent", "last_run"]:
+            require(key in paper_outcomes, failures, f"paper_outcomes missing {key!r}")
+        require(isinstance(paper_outcomes.get("summary"), dict), failures, "paper_outcomes.summary must be an object")
+        require(isinstance(paper_outcomes.get("top_errors"), list), failures, "paper_outcomes.top_errors must be a list")
+        require(isinstance(paper_outcomes.get("recent"), list), failures, "paper_outcomes.recent must be a list")
+        require(isinstance(paper_outcomes.get("last_run"), dict), failures, "paper_outcomes.last_run must be an object")
+        for key in ["total", "evaluated", "pending", "hit_rate", "misses"]:
+            require(key in paper_outcomes.get("summary", {}), failures, f"paper_outcomes.summary missing {key!r}")
 
         feeds = payload.get("data_feeds") or {}
         for key in ["morning_brief", "yfinance", "realtime", "forecast_learning"]:

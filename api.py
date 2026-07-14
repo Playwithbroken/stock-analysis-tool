@@ -4886,6 +4886,23 @@ async def admin_health_center():
     paper_autopilot_block_reasons = list(
         dict.fromkeys(str(reason).strip() for reason in raw_block_reasons if str(reason).strip())
     )[:3]
+    try:
+        paper_outcome_dashboard = get_paper_trading_service()._build_outcome_dashboard()
+    except Exception as exc:
+        paper_outcome_dashboard = {
+            "summary": {},
+            "top_errors": [],
+            "recent": [],
+            "error": str(exc),
+        }
+    raw_paper_outcome_last_result = get_portfolio_manager().get_app_setting("paper_trade_outcomes_last_result", "{}")
+    try:
+        paper_outcome_last_result = json.loads(raw_paper_outcome_last_result or "{}")
+        if not isinstance(paper_outcome_last_result, dict):
+            paper_outcome_last_result = {}
+    except Exception:
+        paper_outcome_last_result = {}
+    paper_outcome_summary = paper_outcome_dashboard.get("summary") or {}
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -5034,6 +5051,27 @@ async def admin_health_center():
                 "message": paper_autopilot_last.get("message"),
                 "next_candidate": next_blocked_candidate.get("ticker"),
                 "block_reasons": paper_autopilot_block_reasons,
+            },
+            "paper_outcomes": {
+                "summary": {
+                    "total": paper_outcome_summary.get("total", 0),
+                    "evaluated": paper_outcome_summary.get("evaluated", 0),
+                    "pending": paper_outcome_summary.get("pending", 0),
+                    "hit_rate": paper_outcome_summary.get("hit_rate", 0),
+                    "misses": paper_outcome_summary.get("misses", 0),
+                },
+                "top_errors": (paper_outcome_dashboard.get("top_errors") or [])[:4],
+                "recent": (paper_outcome_dashboard.get("recent") or [])[:5],
+                "last_run": {
+                    "checked_at": paper_outcome_last_result.get("checked_at"),
+                    "status": paper_outcome_last_result.get("status"),
+                    "due": paper_outcome_last_result.get("due"),
+                    "evaluated": paper_outcome_last_result.get("evaluated"),
+                    "pending_data": paper_outcome_last_result.get("pending_data"),
+                    "errors": paper_outcome_last_result.get("errors") or [],
+                    "telegram_status": (paper_outcome_last_result.get("paper_learning_alerts") or {}).get("status"),
+                },
+                "error": paper_outcome_dashboard.get("error"),
             },
             "data_feeds": data_feeds,
             "recent_deliveries": sent_events[:12],

@@ -220,6 +220,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const telegram = health?.telegram || {};
   const macroAlerts = health?.notifications?.macro_alerts || {};
   const paperAutopilot = health?.paper_autopilot || {};
+  const paperOutcomes = health?.paper_outcomes || {};
   const feeds = health?.data_feeds || {};
   const appInfo = health?.app || {};
   const database = health?.database || {};
@@ -670,6 +671,50 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/65 px-2.5 py-2 text-xs leading-5 text-slate-700">
                   Nächster Kandidat: <span className="font-extrabold">{paperAutopilot.next_candidate}</span>
                   {paperAutopilot.block_reasons?.length ? ` / Block: ${paperAutopilot.block_reasons.join("; ")}` : ""}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Paper Outcome Lernen
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Geprueft</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.evaluated ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Offen</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.pending ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Treffer</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.hit_rate ?? 0}%</div>
+                </div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Misses</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.misses ?? 0}</div>
+                </div>
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Letzter Check {fmtDate(paperOutcomes.last_run?.checked_at)} /
+                Status {displayValue(paperOutcomes.last_run?.status)}
+                {paperOutcomes.last_run?.due != null ? ` / faellig ${paperOutcomes.last_run.due}` : ""}
+              </div>
+              {paperOutcomes.last_run?.pending_data ? (
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-800">
+                  {paperOutcomes.last_run.pending_data} Outcome(s) warten auf Kursdaten. Diese Trades noch nicht bewerten.
+                </div>
+              ) : null}
+              {paperOutcomes.top_errors?.length ? (
+                <div className="mt-2 space-y-1">
+                  {paperOutcomes.top_errors.slice(0, 3).map((item: any) => (
+                    <div key={item.error_tag} className="flex items-center justify-between gap-2 rounded-lg border border-red-500/10 bg-red-500/6 px-2.5 py-1 text-xs text-red-800">
+                      <span>{item.error_tag}</span>
+                      <span className="font-extrabold">{item.count}</span>
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>

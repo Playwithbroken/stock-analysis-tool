@@ -297,6 +297,38 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     code,
     ...healthProblemInfo(code),
   }));
+  const criticalHealthProblems = healthProblems.filter((problem: any) => problem.tone === "red");
+  const warningHealthProblems = healthProblems.filter((problem: any) => problem.tone !== "red");
+  const primaryHealthProblem = criticalHealthProblems[0] || warningHealthProblems[0];
+  const systemReadiness = !health
+    ? "loading"
+    : criticalHealthProblems.length
+      ? "critical"
+      : warningHealthProblems.length
+        ? "attention"
+        : "ready";
+  const systemReadinessCopy = {
+    loading: {
+      label: "System wird geprüft",
+      detail: "Health-Daten werden geladen und bewertet.",
+      tone: "border-slate-300 bg-slate-100 text-slate-700",
+    },
+    critical: {
+      label: "Handlung erforderlich",
+      detail: `${criticalHealthProblems.length} kritische ${criticalHealthProblems.length === 1 ? "Störung" : "Störungen"} zuerst beheben.`,
+      tone: "border-red-500/25 bg-red-500/10 text-red-800",
+    },
+    attention: {
+      label: "Betrieb mit Einschränkung",
+      detail: `${warningHealthProblems.length} ${warningHealthProblems.length === 1 ? "Hinweis" : "Hinweise"} prüfen.`,
+      tone: "border-amber-500/25 bg-amber-500/10 text-amber-800",
+    },
+    ready: {
+      label: "System einsatzbereit",
+      detail: "Keine aktiven Health-Probleme erkannt.",
+      tone: "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
+    },
+  }[systemReadiness];
   const nextBriefJob = [...jobs]
     .filter((job: any) => job?.next_due_at)
     .sort((a: any, b: any) => new Date(a.next_due_at).getTime() - new Date(b.next_due_at).getTime())[0];
@@ -423,6 +455,38 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 : "Kein Brief im aktuellen Grace-Zeitfenster fällig."}
             </div>
           ) : null}
+
+          <section className={`mb-5 rounded-[1.5rem] border p-4 ${systemReadinessCopy.tone}`}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] opacity-70">
+                  Systemstatus
+                </div>
+                <div className="mt-1 text-xl font-black text-slate-950">
+                  {systemReadinessCopy.label}
+                </div>
+                <div className="mt-1 text-sm leading-6 text-slate-700">
+                  {systemReadinessCopy.detail}
+                </div>
+              </div>
+              <div className="grid shrink-0 grid-cols-2 gap-2">
+                <div className="min-w-24 rounded-xl border border-red-500/15 bg-white/75 px-3 py-2 text-center">
+                  <div className="text-lg font-black text-red-700">{criticalHealthProblems.length}</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Kritisch</div>
+                </div>
+                <div className="min-w-24 rounded-xl border border-amber-500/15 bg-white/75 px-3 py-2 text-center">
+                  <div className="text-lg font-black text-amber-700">{warningHealthProblems.length}</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Hinweise</div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 rounded-xl border border-black/8 bg-white/75 px-3 py-2 text-sm text-slate-700">
+              <span className="font-extrabold text-slate-900">Jetzt wichtig: </span>
+              {primaryHealthProblem
+                ? `${primaryHealthProblem.label}. ${primaryHealthProblem.action}`
+                : "Keine Maßnahme nötig. Nächsten Brief-Termin und Telegram-Zustellung beobachten."}
+            </div>
+          </section>
 
           <div className={`mb-5 rounded-[1.5rem] border p-4 ${
             schedulerVerdict === "healthy"

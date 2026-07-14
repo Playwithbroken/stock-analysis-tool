@@ -4575,6 +4575,16 @@ def _schedule_time_for_day(now: datetime, raw_time: str) -> datetime | None:
 
 def _telegram_health_check() -> Dict[str, Any]:
     config = get_email_alert_service().get_config()
+    config_fingerprint = hashlib.sha256(
+        f"{config.telegram_enabled}:{config.telegram_bot_token}:{config.telegram_chat_id}".encode("utf-8")
+    ).hexdigest()[:16]
+    cache_key = f"health:telegram:{config_fingerprint}"
+    cached = _cache_get(
+        cache_key,
+        _safe_int_env("HEALTH_TELEGRAM_CACHE_TTL_SECONDS", 60, minimum=15),
+    )
+    if cached is not None:
+        return cached
     payload: Dict[str, Any] = {
         "enabled": config.telegram_enabled,
         "token_configured": bool(config.telegram_bot_token),
@@ -4587,12 +4597,12 @@ def _telegram_health_check() -> Dict[str, Any]:
         "next_step": None,
     }
     if not (config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id):
-        return payload
+        return _cache_set(cache_key, payload)
     try:
         response = requests.post(
             f"https://api.telegram.org/bot{config.telegram_bot_token}/sendChatAction",
             json={"chat_id": config.telegram_chat_id, "action": "typing"},
-            timeout=8,
+            timeout=_safe_int_env("HEALTH_TELEGRAM_TIMEOUT_SECONDS", 3, minimum=1),
         )
         if response.ok:
             payload.update({"sendable": True, "status": "ok", "diagnosis": "sendable", "next_step": None})
@@ -4619,7 +4629,38 @@ def _telegram_health_check() -> Dict[str, Any]:
             "diagnosis": "telegram_network_error",
             "next_step": "Railway outbound network / Telegram API Erreichbarkeit pruefen.",
         })
-    return payload
+    return _cache_set(cache_key, payload)
+
+
+def _market_feed_health_check() -> Dict[str, Any]:
+    cache_key = "health:market-feeds"
+    cached = _cache_get(
+        cache_key,
+        _safe_int_env("HEALTH_MARKET_FEEDS_CACHE_TTL_SECONDS", 60, minimum=15),
+    )
+    if cached is not None:
+        return cached
+
+    feeds: Dict[str, Any] = {}
+    try:
+        aapl = DataFetcher("AAPL").get_price_data()
+        feeds["yfinance"] = {
+            "status": "ok" if aapl.get("current_price") else "degraded",
+            "sample": "AAPL",
+            "price": aapl.get("current_price"),
+        }
+    except Exception as exc:
+        feeds["yfinance"] = {"status": "error", "error": exc.__class__.__name__}
+    try:
+        snapshot = get_realtime_market_service().build_snapshot(["AAPL"])
+        feeds["realtime"] = {
+            "status": snapshot.get("connection_state") or "unknown",
+            "quotes": len(snapshot.get("quotes") or []),
+            "stale_seconds": snapshot.get("stale_seconds") or {},
+        }
+    except Exception as exc:
+        feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
+    return _cache_set(cache_key, feeds)
 
 
 @app.get("/api/admin/health-center")
@@ -4715,24 +4756,11 @@ async def admin_health_center():
             "quality": brief_snapshot.get("quality") if brief_snapshot else None,
         }
     }
-    try:
-        aapl = DataFetcher("AAPL").get_price_data()
-        data_feeds["yfinance"] = {
-            "status": "ok" if aapl.get("current_price") else "degraded",
-            "sample": "AAPL",
-            "price": aapl.get("current_price"),
-        }
-    except Exception as exc:
-        data_feeds["yfinance"] = {"status": "error", "error": exc.__class__.__name__}
-    try:
-        snapshot = get_realtime_market_service().build_snapshot(["AAPL"])
-        data_feeds["realtime"] = {
-            "status": snapshot.get("connection_state") or "unknown",
-            "quotes": len(snapshot.get("quotes") or []),
-            "stale_seconds": snapshot.get("stale_seconds") or {},
-        }
-    except Exception as exc:
-        data_feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
+    telegram, market_feed_status = await asyncio.gather(
+        asyncio.to_thread(_telegram_health_check),
+        asyncio.to_thread(_market_feed_health_check),
+    )
+    data_feeds.update(market_feed_status)
 
     try:
         learning_dashboard = get_forecast_learning_service().build_dashboard()
@@ -4753,7 +4781,6 @@ async def admin_health_center():
         learning_dashboard = {"summary": {}}
         data_feeds["forecast_learning"] = {"status": "error", "error": exc.__class__.__name__}
 
-    telegram = _telegram_health_check()
     scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
     scheduler_loop_seen_at = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
     scheduler_loop_error = get_portfolio_manager().get_app_setting("brief_scheduler_loop_error")

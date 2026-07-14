@@ -83,7 +83,7 @@ Artefakte:
 5. `metrics.chartStillLoading === 0`
 6. `issues` enthält keine `ui`/`ux`/`pageerror`-Einträge
 7. Auth-Gates sind grün: Cookie-Sicherheit und Login-Lockout
-8. Health Center ist geschützt und liefert den Betriebsvertrag für App, DB, Schedule, Telegram und Feeds
+8. Health Center ist geschützt, liefert den Betriebsvertrag für App, DB, Schedule, Telegram und Feeds und cached externe Status-Probes kurzzeitig
 9. Suche und Analyzer lösen Aktien, ETFs und Krypto auch bei Provider-Ausfällen stabil auf
 10. Morning Brief liefert bei Cache-, Provider- und Service-Ausfällen einen lesbaren Partial-Status statt `500`
 11. Scheduler sendet fällige Rich-Briefings genau einmal, retryt Telegram-Preflight-/Sendefehler und speichert Erfolg oder Fehler für das Health Center

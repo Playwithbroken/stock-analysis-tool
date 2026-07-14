@@ -4,20 +4,38 @@ import tempfile
 
 
 class FakeDataFetcher:
+    calls = 0
+
     def __init__(self, ticker: str):
         self.ticker = ticker
 
     def get_price_data(self):
+        type(self).calls += 1
         return {"current_price": 123.45, "ticker": self.ticker}
 
 
 class FakeRealtimeMarketService:
+    calls = 0
+
     def build_snapshot(self, tickers):
+        type(self).calls += 1
         return {
             "connection_state": "ok",
             "quotes": [{"ticker": ticker, "price": 123.45} for ticker in tickers],
             "stale_seconds": {},
         }
+
+
+class FakeTelegramResponse:
+    ok = True
+    status_code = 200
+    reason = "OK"
+    text = ""
+    headers = {"content-type": "application/json"}
+
+    @staticmethod
+    def json():
+        return {"ok": True}
 
 
 def require(condition: bool, failures: list[str], message: str) -> None:
@@ -112,6 +130,32 @@ def main() -> int:
         rendered = json.dumps(payload, sort_keys=True)
         require(access_password not in rendered, failures, "health center leaked access password")
         require(session_secret not in rendered, failures, "health center leaked session secret")
+
+        repeated = client.get("/api/admin/health-center")
+        require(repeated.status_code == 200, failures, "repeated health center request failed")
+        require(FakeDataFetcher.calls == 1, failures, "yfinance health probe was not cached")
+        require(FakeRealtimeMarketService.calls == 1, failures, "realtime health probe was not cached")
+
+        telegram_calls = []
+
+        def fake_telegram_post(url, **kwargs):
+            telegram_calls.append((url, kwargs))
+            return FakeTelegramResponse()
+
+        api.requests.post = fake_telegram_post
+        os.environ["TELEGRAM_ALERTS_ENABLED"] = "true"
+        os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
+        os.environ["TELEGRAM_CHAT_ID"] = "test-chat"
+        telegram_first = client.get("/api/admin/health-center")
+        telegram_second = client.get("/api/admin/health-center")
+        require(telegram_first.status_code == 200, failures, "enabled Telegram health request failed")
+        require(telegram_second.status_code == 200, failures, "cached Telegram health request failed")
+        require(len(telegram_calls) == 1, failures, "Telegram health probe was not cached")
+        require(
+            (telegram_second.json().get("telegram") or {}).get("status") == "ok",
+            failures,
+            "cached Telegram status should remain ok",
+        )
 
         if failures:
             print("Health center contract QA failures:")

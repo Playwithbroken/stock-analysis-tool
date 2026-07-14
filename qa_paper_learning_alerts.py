@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from src.email_alert_service import EmailAlertService
 
 
@@ -61,6 +63,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "direction": "long",
             "asset_class": "equity",
             "setup_type": "breakout",
+            "opened_at": "2026-07-11T12:00:00+00:00",
             "entry_price": 201.125,
             "stop_price": 194.0,
             "target_price": 218.5,
@@ -89,6 +92,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
         }
     )
     assert "investiert 12.345,67 EUR" in opened
+    assert "Eröffnet:</b> 11.07.2026, 14:00 CEST" in opened
     assert "aktueller Wert 12.390,12 EUR" in opened
     assert "Offenes Ergebnis:</b> +44,45 EUR" in opened
     assert "Max. Demo-Verlust:</b> 450,00 EUR" in opened
@@ -106,6 +110,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "ticker": "AAPL",
             "direction": "long",
             "setup_type": "breakout",
+            "opened_at": "2026-07-11T12:00:00+00:00",
+            "closed_at": "2026-07-13T15:30:00+00:00",
             "entry_price": 201.125,
             "closed_price": 218.5,
             "invested_value": 12345.67,
@@ -124,6 +130,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
         }
     )
     assert "investiert 12.345,67 EUR" in closed
+    assert "11.07.2026, 14:00 CEST bis 13.07.2026, 17:30 CEST | gehalten 2T 3Std 30Min" in closed
     assert "final 13.412,33 EUR" in closed
     assert "Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
     assert "target_or_profit_taken" in closed
@@ -142,6 +149,16 @@ def test_paper_trade_telegram_money_formatting() -> None:
         }
     )
     assert "seit Start -2.500,00 EUR (-0.50%)" in behind
+
+    previous_env = os.environ.get("APP_ENV")
+    os.environ["APP_ENV"] = "production"
+    try:
+        assert service._paper_trade_time("2026-01-12T08:15:00") == "12.01.2026, 09:15 CET"
+    finally:
+        if previous_env is None:
+            os.environ.pop("APP_ENV", None)
+        else:
+            os.environ["APP_ENV"] = previous_env
 
     management = service._render_telegram_paper_trade_management_alert(
         {

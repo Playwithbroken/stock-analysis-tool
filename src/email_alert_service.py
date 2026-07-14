@@ -312,6 +312,7 @@ class EmailAlertService:
                     "asset_class": trade.get("asset_class"),
                     "direction": trade.get("direction"),
                     "setup_type": trade.get("setup_type"),
+                    "opened_at": trade.get("opened_at"),
                     "entry_price": trade.get("entry_price"),
                     "stop_price": trade.get("stop_price"),
                     "target_price": trade.get("target_price"),
@@ -367,6 +368,8 @@ class EmailAlertService:
                     "ticker": trade.get("ticker"),
                     "direction": trade.get("direction"),
                     "setup_type": trade.get("setup_type"),
+                    "opened_at": trade.get("opened_at"),
+                    "closed_at": trade.get("closed_at"),
                     "entry_price": trade.get("entry_price"),
                     "current_price": trade.get("current_price"),
                     "stop_price": trade.get("stop_price"),
@@ -3375,9 +3378,11 @@ class EmailAlertService:
         validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
+        opened_at = self._paper_trade_time(event.get("opened_at"))
         return "\n".join(
             [
                 f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
+                *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",
                 f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
@@ -3409,9 +3414,14 @@ class EmailAlertService:
         lesson = self._tg_esc(str(event.get("lessons_learned") or "Journal prüfen, bevor dieses Setup wieder genutzt wird."))[:620]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
         account_after = self._paper_account_after_line(event)
+        opened_at = self._paper_trade_time(event.get("opened_at"))
+        closed_at = self._paper_trade_time(event.get("closed_at"))
+        holding_period = self._paper_trade_holding_period(event.get("opened_at"), event.get("closed_at"))
+        timing_parts = [part for part in [opened_at, closed_at, holding_period] if part]
         return "\n".join(
             [
                 f"<b>[PAPER GESCHLOSSEN] <code>{ticker}</code> {direction}</b>",
+                *([f"<b>Zeitraum:</b> {' bis '.join(timing_parts[:2])} | gehalten {timing_parts[2]}"] if len(timing_parts) == 3 else []),
                 f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
                 f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
                 f"<b>Demo-Geld:</b> investiert {invested} | final {final_value}",
@@ -3434,6 +3444,41 @@ class EmailAlertService:
             f"<b>Demo-Konto danach:</b> Equity {equity} | seit Start {net_pnl} ({net_pnl_pct})"
             f"\n<b>Verfügbar:</b> Cash {cash} | offen investiert {exposure}"
         )
+
+    def _paper_trade_datetime(self, value: Any) -> datetime | None:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        target_timezone = ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))
+        if parsed.tzinfo is None:
+            source_timezone = ZoneInfo("UTC") if os.getenv("APP_ENV", "").lower() == "production" else target_timezone
+            parsed = parsed.replace(tzinfo=source_timezone)
+        return parsed.astimezone(target_timezone)
+
+    def _paper_trade_time(self, value: Any) -> str:
+        parsed = self._paper_trade_datetime(value)
+        return parsed.strftime("%d.%m.%Y, %H:%M %Z") if parsed else ""
+
+    def _paper_trade_holding_period(self, opened_at: Any, closed_at: Any) -> str:
+        opened = self._paper_trade_datetime(opened_at)
+        closed = self._paper_trade_datetime(closed_at)
+        if not opened or not closed or closed < opened:
+            return ""
+        total_minutes = int((closed - opened).total_seconds() // 60)
+        days, remaining_minutes = divmod(total_minutes, 24 * 60)
+        hours, minutes = divmod(remaining_minutes, 60)
+        parts = []
+        if days:
+            parts.append(f"{days}T")
+        if hours:
+            parts.append(f"{hours}Std")
+        if minutes or not parts:
+            parts.append(f"{minutes}Min")
+        return " ".join(parts)
 
     def _render_telegram_paper_trade_management_alert(self, event: Dict[str, Any]) -> str:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))

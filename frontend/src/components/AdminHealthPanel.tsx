@@ -67,7 +67,7 @@ function previewBlockReasons(preview: any) {
 function jobStateLabel(job: any) {
   if (job.last_status === "blocked") return "Qualitätsblock"
   if (job.sent_today) return "heute gesendet";
-  if (job.due_now) return "jetzt faellig";
+  if (job.due_now) return "jetzt fällig";
   if (job.catchup_available) return "nachholbar";
   if (job.missed_today) return "verpasst";
   return "wartet";
@@ -75,28 +75,28 @@ function jobStateLabel(job: any) {
 
 function healthProblemInfo(code: string) {
   const map: Record<string, { label: string; action: string; tone: string }> = {
-    telegram: { label: "Telegram ist nicht sendbar", action: "Bot, Chat-ID und /start pruefen. Ohne Telegram kommen keine Alerts an.", tone: "red" },
-    yfinance: { label: "Marktdatenquelle langsam oder fehlerhaft", action: "Analyzer mit bekanntem Ticker testen und spaeter erneut pruefen.", tone: "amber" },
+    telegram: { label: "Telegram ist nicht sendbar", action: "Bot, Chat-ID und /start prüfen. Ohne Telegram kommen keine Alerts an.", tone: "red" },
+    yfinance: { label: "Marktdatenquelle langsam oder fehlerhaft", action: "Analyzer mit bekanntem Ticker testen und später erneut prüfen.", tone: "amber" },
     schedule_disabled: { label: "Briefing-Scheduler ist deaktiviert", action: "Scheduled Briefs aktivieren, wenn automatische Telegram-Briefings laufen sollen.", tone: "amber" },
-    database_missing: { label: "Datenbank fehlt", action: "Volume/Persistenz pruefen, sonst werden Portfolio und Lernen nicht sauber gespeichert.", tone: "red" },
-    database_integrity: { label: "Datenbank-Integritaet auffaellig", action: "Backup ziehen, Logs pruefen und SQLite quick_check ernst nehmen.", tone: "red" },
-    database_not_writable: { label: "Datenbank ist nicht beschreibbar", action: "Volume-Rechte pruefen. Neue Portfolios, Trades und Learnings koennen sonst verloren gehen.", tone: "red" },
-    database_volume_missing: { label: "Persistentes Volume fehlt", action: "Railway Volume fuer /app/data pruefen, damit Redeploys keine Daten verlieren.", tone: "red" },
-    scheduler_not_seen: { label: "Scheduler wurde noch nicht gesehen", action: "App-Prozess und Background-Loop pruefen; Briefings starten sonst nicht automatisch.", tone: "amber" },
-    scheduler_loop_stale: { label: "Scheduler-Loop ist stale", action: "Railway Logs pruefen und Service neu starten, wenn der Loop haengt.", tone: "red" },
+    database_missing: { label: "Datenbank fehlt", action: "Volume/Persistenz prüfen, sonst werden Portfolio und Lernen nicht sauber gespeichert.", tone: "red" },
+    database_integrity: { label: "Datenbank-Integrität auffällig", action: "Backup ziehen, Logs prüfen und SQLite quick_check ernst nehmen.", tone: "red" },
+    database_not_writable: { label: "Datenbank ist nicht beschreibbar", action: "Volume-Rechte prüfen. Neue Portfolios, Trades und Learnings können sonst verloren gehen.", tone: "red" },
+    database_volume_missing: { label: "Persistentes Volume fehlt", action: "Railway Volume für /app/data prüfen, damit Redeploys keine Daten verlieren.", tone: "red" },
+    scheduler_not_seen: { label: "Scheduler wurde noch nicht gesehen", action: "App-Prozess und Background-Loop prüfen; Briefings starten sonst nicht automatisch.", tone: "amber" },
+    scheduler_loop_stale: { label: "Scheduler-Loop ist stale", action: "Railway Logs prüfen und Service neu starten, wenn der Loop hängt.", tone: "red" },
     brief_missed_today: { label: "Briefing wurde heute verpasst", action: "Run Due/Missed oder den passenden Brief-Job manuell senden.", tone: "amber" },
     brief_catchup_available: { label: "Briefing kann noch nachgeholt werden", action: "Jetzt senden, solange die Grace-Zeit offen ist.", tone: "amber" },
-    brief_quality_blocked: { label: "Briefing wurde vom Qualitaetsgate blockiert", action: "Quellen/News-Qualitaet pruefen; lieber kein Brief als schlechter Brief.", tone: "amber" },
+    brief_quality_blocked: { label: "Briefing wurde vom Qualitätsgate blockiert", action: "Quellen/News-Qualität prüfen; lieber kein Brief als schlechter Brief.", tone: "amber" },
     paper_autopilot_loop_disabled: { label: "Paper-Autopilot-Loop ist deaktiviert", action: "Forecast/Paper-Learning aktivieren, wenn das Demo-Konto automatisch lernen soll.", tone: "amber" },
-    paper_autopilot_not_seen: { label: "Paper-Autopilot wurde noch nicht gesehen", action: "Strict/Lernen pruefen und Background-Loop kontrollieren.", tone: "amber" },
-    paper_autopilot_error: { label: "Paper-Autopilot hatte einen Fehler", action: "Letzte Kandidaten, Blockgruende und Logs pruefen, bevor neue Demo-Trades laufen.", tone: "red" },
-    paper_autopilot_stale: { label: "Paper-Autopilot ist nicht frisch", action: "Preview starten oder Scheduler/Background-Loop pruefen.", tone: "amber" },
-    paper_outcomes_not_seen: { label: "Paper-Outcomes wurden noch nicht ausgewertet", action: "Outcomes pruefen klicken, damit das System aus Treffern und Fehlern lernt.", tone: "amber" },
-    paper_outcomes_error: { label: "Paper-Outcome-Auswertung hatte Fehler", action: "Outcome-Fehler und Kursdaten pruefen, bevor du Learnings ernst gewichtest.", tone: "red" },
-    paper_outcomes_stale: { label: "Paper-Outcome-Lernen ist veraltet", action: "Outcomes jetzt pruefen; alte Learnings koennen falsche Signale verstaerken.", tone: "amber" },
-    paper_outcomes_backlog: { label: "Viele Paper-Outcomes sind offen", action: "Outcomes pruefen und Datenluecken klaeren, damit Hit-Rate und Fehlerliste stimmen.", tone: "amber" },
+    paper_autopilot_not_seen: { label: "Paper-Autopilot wurde noch nicht gesehen", action: "Strict/Lernen prüfen und Background-Loop kontrollieren.", tone: "amber" },
+    paper_autopilot_error: { label: "Paper-Autopilot hatte einen Fehler", action: "Letzte Kandidaten, Blockgründe und Logs prüfen, bevor neue Demo-Trades laufen.", tone: "red" },
+    paper_autopilot_stale: { label: "Paper-Autopilot ist nicht frisch", action: "Preview starten oder Scheduler/Background-Loop prüfen.", tone: "amber" },
+    paper_outcomes_not_seen: { label: "Paper-Outcomes wurden noch nicht ausgewertet", action: "Outcomes prüfen klicken, damit das System aus Treffern und Fehlern lernt.", tone: "amber" },
+    paper_outcomes_error: { label: "Paper-Outcome-Auswertung hatte Fehler", action: "Outcome-Fehler und Kursdaten prüfen, bevor du Learnings ernst gewichtest.", tone: "red" },
+    paper_outcomes_stale: { label: "Paper-Outcome-Lernen ist veraltet", action: "Outcomes jetzt prüfen; alte Learnings können falsche Signale verstärken.", tone: "amber" },
+    paper_outcomes_backlog: { label: "Viele Paper-Outcomes sind offen", action: "Outcomes prüfen und Datenlücken klären, damit Hit-Rate und Fehlerliste stimmen.", tone: "amber" },
   };
-  return map[code] || { label: code, action: "Health Center und Logs pruefen.", tone: "amber" };
+  return map[code] || { label: code, action: "Health Center und Logs prüfen.", tone: "amber" };
 }
 
 export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelProps) {
@@ -321,15 +321,15 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const schedulerCopy =
     schedulerVerdict === "error"
       ? scheduleSummary.loop_state === "stale"
-        ? `Scheduler-Loop ist stale: letzter Tick vor ${schedule.loop_age_minutes ?? "?"}m. Railway Prozess/Logs pruefen.`
+        ? `Scheduler-Loop ist stale: letzter Tick vor ${schedule.loop_age_minutes ?? "?"}m. Railway Prozess/Logs prüfen.`
         : `Letzter Fehler bei ${scheduleSummary.last_error_job || "Scheduler"}: ${scheduleSummary.last_error}`
       : schedulerVerdict === "missed"
-        ? `${scheduleSummary.missed_count} Brief(s) heute verpasst. Pruefe Telegram, Scheduler-Loop und Railway Logs.`
+        ? `${scheduleSummary.missed_count} Brief(s) heute verpasst. Prüfe Telegram, Scheduler-Loop und Railway Logs.`
         : schedulerVerdict === "action"
-          ? `${scheduleSummary.catchup_count || scheduleSummary.due_now_count} Brief(s) koennen jetzt per Run Due/Missed gesendet werden.`
+          ? `${scheduleSummary.catchup_count || scheduleSummary.due_now_count} Brief(s) können jetzt per Run Due/Missed gesendet werden.`
           : schedulerVerdict === "healthy"
             ? `Letzter Versand erfolgreich: ${scheduleSummary.last_success_job || "Brief"} um ${fmtDate(scheduleSummary.last_success_at)}.`
-            : "Noch kein erfolgreicher Versand gespeichert. Scheduler und Telegram pruefen.";
+            : "Noch kein erfolgreicher Versand gespeichert. Scheduler und Telegram prüfen.";
   const nextAction =
     schedulerVerdict === "action"
       ? "Run Due/Missed klicken"
@@ -337,7 +337,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
         ? "Brief direkt nachsenden"
         : schedulerVerdict === "error"
           ? "Fehlertext beheben und Health neu laden"
-          : "Naechsten Termin abwarten";
+          : "Nächsten Termin abwarten";
 
   return (
     <div className="fixed inset-0 z-[210] bg-black/45 p-3 backdrop-blur-sm sm:p-6" onClick={onClose}>
@@ -364,7 +364,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
-              {loading ? "Laedt" : "Neu laden"}
+              {loading ? "Lädt" : "Neu laden"}
             </button>
             <button
               type="button"
@@ -372,7 +372,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue || downloadingBackup}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
             >
-              {runningDue ? "Laeuft" : "Faellige senden"}
+              {runningDue ? "Läuft" : "Fällige senden"}
             </button>
             <button
               type="button"
@@ -380,7 +380,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue || downloadingBackup || !database.exists}
               className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700 disabled:opacity-50"
             >
-              {downloadingBackup ? "Laedt" : "DB Backup"}
+              {downloadingBackup ? "Lädt" : "DB Backup"}
             </button>
             <button
               type="button"
@@ -388,14 +388,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               disabled={loading || warming || runningDue || downloadingBackup}
               className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
-              {warming ? "Waermt" : "Brief vorladen"}
+              {warming ? "Wärmt" : "Brief vorladen"}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-xl bg-[#101114] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
             >
-              Schliessen
+              Schließen
             </button>
           </div>
         </div>
@@ -417,10 +417,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
           {runResult ? (
             <div className="mb-4 rounded-[1.2rem] border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-sky-800">
-              <span className="font-extrabold">Scheduler wurde manuell ausgefuehrt.</span>{" "}
+              <span className="font-extrabold">Scheduler wurde manuell ausgeführt.</span>{" "}
               {Array.isArray(runResult) && runResult.length
                 ? runResult.map((item: any) => `${item.job || "scheduler"}: ${item.status}${item.message ? ` (${item.message})` : ""}`).join(", ")
-                : "Kein Brief im aktuellen Grace-Zeitfenster faellig."}
+                : "Kein Brief im aktuellen Grace-Zeitfenster fällig."}
             </div>
           ) : null}
 
@@ -446,11 +446,11 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
               </div>
               <div className="max-w-full whitespace-normal rounded-full border border-black/8 bg-white/75 px-3 py-1 text-right text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-slate-700">
-                Naechster Schritt: {nextAction}
+                Nächster Schritt: {nextAction}
               </div>
             </div>
             <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
-              <div>Naechster Brief: {displayValue(scheduleSummary.next_label)} / {fmtDate(scheduleSummary.next_due_at)}</div>
+              <div>Nächster Brief: {displayValue(scheduleSummary.next_label)} / {fmtDate(scheduleSummary.next_due_at)}</div>
               <div>Loop: {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}</div>
               <div>
                 Loop-Alter: {typeof schedule.loop_age_minutes === "number" ? `${schedule.loop_age_minutes}m` : "offen"}
@@ -463,7 +463,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           <div className="mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-4">
             <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Naechster Brief
+                Nächster Brief
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
                 {displayValue(scheduleSummary.next_label)}
@@ -484,7 +484,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Warteschlange
               </div>
               <div className="mt-2 text-lg font-black text-slate-900">
-                {scheduleSummary.due_now_count ?? 0} faellig / {scheduleSummary.catchup_count ?? 0} nachholbar / {scheduleSummary.missed_count ?? 0} verpasst
+                {scheduleSummary.due_now_count ?? 0} fällig / {scheduleSummary.catchup_count ?? 0} nachholbar / {scheduleSummary.missed_count ?? 0} verpasst
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 Loop {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}
@@ -492,7 +492,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               {schedule.loop_stale ? (
                 <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-800">
                   Scheduler-Loop ist stale: letzter Tick vor {schedule.loop_age_minutes ?? "?"}m,
-                  Schwelle {schedule.loop_stale_after_minutes ?? "?"}m. Railway Worker/Logs pruefen.
+                  Schwelle {schedule.loop_stale_after_minutes ?? "?"}m. Railway Worker/Logs prüfen.
                 </div>
               ) : null}
               {scheduleSummary.needs_manual_run ? (
@@ -534,7 +534,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{formatBytes(database.size_bytes)}</div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${database.exists && database.writable && database.quick_check === "ok" && database.persistence_ready !== false ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
-                  {database.persistence_ready === false ? "Volume fehlt" : database.exists && database.quick_check === "ok" ? "ok" : "pruefen"}
+                  {database.persistence_ready === false ? "Volume fehlt" : database.exists && database.quick_check === "ok" ? "ok" : "prüfen"}
                 </span>
               </div>
               <div className="mt-2 truncate text-xs leading-5 text-slate-500" title={database.path || ""}>
@@ -553,7 +553,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs font-semibold leading-5 ${database.persistence_ready ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800" : "border-red-500/20 bg-red-500/10 text-red-800"}`}>
                   {database.persistence_ready
                     ? `Volume ${database.volume_name} aktiv unter ${database.volume_mount_path}.`
-                    : "Kein passendes Railway Volume erkannt. Volume an diesen Service mit Mount Path /app/data anhaengen; sonst gehen Portfolio und Lerndaten beim Deploy verloren."}
+                    : "Kein passendes Railway Volume erkannt. Volume an diesen Service mit Mount Path /app/data anhängen; sonst gehen Portfolio und Lerndaten beim Deploy verloren."}
                 </div>
               ) : null}
             </div>
@@ -622,7 +622,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               ) : null}
               {paperAutopilot.last_opened?.length ? (
                 <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold uppercase tracking-[0.12em] text-emerald-700">Zuletzt geoeffnet</div>
+                  <div className="font-extrabold uppercase tracking-[0.12em] text-emerald-700">Zuletzt geöffnet</div>
                   <div className="mt-1 space-y-1">
                     {paperAutopilot.last_opened.slice(0, 3).map((item: any) => (
                       <div key={`${item.ticker}-${item.direction}`} className="flex items-center justify-between gap-2">
@@ -658,7 +658,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   disabled={loading || !!runningPaperPreview || sendingPaperAccount}
                   className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
                 >
-                  {runningPaperPreview === "strict" ? "Prueft" : "Strict pruefen"}
+                  {runningPaperPreview === "strict" ? "Prüft" : "Strict prüfen"}
                 </button>
                 <button
                   type="button"
@@ -666,7 +666,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   disabled={loading || !!runningPaperPreview || sendingPaperAccount}
                   className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-800 disabled:opacity-50"
                 >
-                  {runningPaperPreview === "learn" ? "Prueft" : "Lernen pruefen"}
+                  {runningPaperPreview === "learn" ? "Prüft" : "Lernen prüfen"}
                 </button>
                 <button
                   type="button"
@@ -697,7 +697,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               {paperPreviewResult ? (
                 <div className="mt-3 rounded-[1rem] border border-sky-500/15 bg-sky-500/10 p-3 text-xs leading-5 text-slate-700">
                   <div className="mb-2 inline-flex rounded-full border border-black/8 bg-white/75 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                    {paperPreviewResult.mode === "learn" ? "Learning Preview" : "Strict Preview"} / keine Ausfuehrung
+                    {paperPreviewResult.mode === "learn" ? "Learning Preview" : "Strict Preview"} / keine Ausführung
                   </div>
                   <div className="font-extrabold text-slate-900">
                     {paperPreviewResult.selected?.length
@@ -747,13 +747,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                       ) : null}
                       {paperPreviewBlock.scoreGap > 0 ? (
                         <div className="mt-1 text-slate-600">
-                          Score-Luecke: {paperPreviewBlock.scoreGap.toFixed(1)} Punkte bis{" "}
+                          Score-Lücke: {paperPreviewBlock.scoreGap.toFixed(1)} Punkte bis{" "}
                           {paperPreviewResult.mode === "learn" ? "Lerntrade" : "Strict-Trade"}.
                         </div>
                       ) : null}
                       {paperPreviewBlock.blocked.next_action ? (
                         <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800">
-                          Naechster Schritt: {paperPreviewBlock.blocked.next_action}
+                          Nächster Schritt: {paperPreviewBlock.blocked.next_action}
                         </div>
                       ) : null}
                     </div>
@@ -774,7 +774,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Geprueft</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Geprüft</div>
                   <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.evaluated ?? 0}</div>
                 </div>
                 <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
@@ -793,7 +793,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-2 text-xs leading-5 text-slate-500">
                 Letzter Check {fmtDate(paperOutcomes.last_run?.checked_at)} /
                 Status {displayValue(paperOutcomes.last_run?.status)}
-                {paperOutcomes.last_run?.due != null ? ` / faellig ${paperOutcomes.last_run.due}` : ""}
+                {paperOutcomes.last_run?.due != null ? ` / fällig ${paperOutcomes.last_run.due}` : ""}
               </div>
               {paperOutcomes.status && paperOutcomes.status !== "ok" ? (
                 <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs leading-5 text-amber-900">
@@ -816,7 +816,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 disabled={loading || evaluatingPaperOutcomes}
                 className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
               >
-                {evaluatingPaperOutcomes ? "Prueft" : "Outcomes pruefen"}
+                {evaluatingPaperOutcomes ? "Prüft" : "Outcomes prüfen"}
               </button>
               {paperOutcomeResult ? (
                 <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2.5 py-2 text-xs leading-5 text-slate-700">
@@ -824,7 +824,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     Outcome-Check: {paperOutcomeResult.status || "ok"}
                   </div>
                   <div>
-                    Faellig {paperOutcomeResult.due ?? 0} / ausgewertet {paperOutcomeResult.evaluated ?? 0} /
+                    Fällig {paperOutcomeResult.due ?? 0} / ausgewertet {paperOutcomeResult.evaluated ?? 0} /
                     Daten offen {paperOutcomeResult.pending_data ?? 0}
                   </div>
                   {paperOutcomeResult.paper_learning_alerts?.status ? (
@@ -915,13 +915,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
                 <div className="rounded-[1.1rem] border border-sky-500/15 bg-sky-500/10 p-3">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
-                    Naechster geplanter Brief
+                    Nächster geplanter Brief
                   </div>
                   <div className="mt-1 text-sm font-black text-slate-900">
                     {nextBriefJob?.label || "offen"}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {nextBriefJob ? `${fmtDate(nextBriefJob.next_due_at)} / Plan ${nextBriefJob.time}` : "Keine naechste Ausfuehrung berechnet"}
+                    {nextBriefJob ? `${fmtDate(nextBriefJob.next_due_at)} / Plan ${nextBriefJob.time}` : "Keine nächste Ausführung berechnet"}
                   </div>
                 </div>
               </div>
@@ -946,10 +946,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                         {jobStateLabel(job)}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} / naechster Termin {fmtDate(job.next_due_at)}</div>
-                    <div className="mt-1 text-xs text-slate-500">Heute faellig {fmtDate(job.scheduled_at_today)} / Grace bis {fmtDate(job.grace_until)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} / nächster Termin {fmtDate(job.next_due_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500">Heute fällig {fmtDate(job.scheduled_at_today)} / Grace bis {fmtDate(job.grace_until)}</div>
                     {job.minutes_late != null ? (
-                      <div className="mt-1 text-xs text-slate-500">{job.minutes_late} Minuten verspaetet</div>
+                      <div className="mt-1 text-xs text-slate-500">{job.minutes_late} Minuten verspätet</div>
                     ) : null}
                     {job.catchup_available ? (
                       <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-700">

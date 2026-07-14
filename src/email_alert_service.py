@@ -328,6 +328,8 @@ class EmailAlertService:
                     "account_equity": (demo_account or {}).get("equity"),
                     "account_cash_available": (demo_account or {}).get("cash_available_value"),
                     "account_open_exposure": (demo_account or {}).get("open_exposure_value"),
+                    "account_net_pnl_value": (demo_account or {}).get("net_pnl_value"),
+                    "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
                     "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
                     "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
                     "source_label": "Paper-Autopilot",
@@ -501,6 +503,8 @@ class EmailAlertService:
                     "account_equity": (demo_account or {}).get("equity"),
                     "account_cash_available": (demo_account or {}).get("cash_available_value"),
                     "account_open_exposure": (demo_account or {}).get("open_exposure_value"),
+                    "account_net_pnl_value": (demo_account or {}).get("net_pnl_value"),
+                    "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
                     "line": f"{trade.get('ticker')} Paper-Trade geschlossen.",
                     "source_label": "Paper-Trade-Exit",
                     "source_url": "",
@@ -3424,7 +3428,12 @@ class EmailAlertService:
         equity = self._tg_money(event.get("account_equity"))
         cash = self._tg_money(event.get("account_cash_available"))
         exposure = self._tg_money(event.get("account_open_exposure"))
-        return f"<b>Demo-Konto danach:</b> Equity {equity} | Cash frei {cash} | offen investiert {exposure}"
+        net_pnl = self._tg_signed_money(event.get("account_net_pnl_value"))
+        net_pnl_pct = self._tg_pct(event.get("account_net_pnl_pct"))
+        return (
+            f"<b>Demo-Konto danach:</b> Equity {equity} | seit Start {net_pnl} ({net_pnl_pct})"
+            f"\n<b>Verfügbar:</b> Cash {cash} | offen investiert {exposure}"
+        )
 
     def _render_telegram_paper_trade_management_alert(self, event: Dict[str, Any]) -> str:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))

@@ -149,8 +149,21 @@ def main() -> int:
         )
 
         paper_outcomes = payload.get("paper_outcomes") or {}
-        for key in ["summary", "top_errors", "recent", "last_run"]:
+        for key in [
+            "status",
+            "age_minutes",
+            "stale",
+            "stale_after_minutes",
+            "pending_warn_count",
+            "summary",
+            "top_errors",
+            "recent",
+            "last_run",
+        ]:
             require(key in paper_outcomes, failures, f"paper_outcomes missing {key!r}")
+        require(isinstance(paper_outcomes.get("stale"), bool), failures, "paper_outcomes.stale must be a bool")
+        require(isinstance(paper_outcomes.get("stale_after_minutes"), int), failures, "paper_outcomes.stale_after_minutes must be an int")
+        require(isinstance(paper_outcomes.get("pending_warn_count"), int), failures, "paper_outcomes.pending_warn_count must be an int")
         require(isinstance(paper_outcomes.get("summary"), dict), failures, "paper_outcomes.summary must be an object")
         require(isinstance(paper_outcomes.get("top_errors"), list), failures, "paper_outcomes.top_errors must be a list")
         require(isinstance(paper_outcomes.get("recent"), list), failures, "paper_outcomes.recent must be a list")

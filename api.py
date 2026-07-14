@@ -4903,6 +4903,34 @@ async def admin_health_center():
     except Exception:
         paper_outcome_last_result = {}
     paper_outcome_summary = paper_outcome_dashboard.get("summary") or {}
+    paper_outcome_last_checked_at = paper_outcome_last_result.get("checked_at")
+    paper_outcome_age_minutes = None
+    paper_outcome_checked_dt = None
+    if paper_outcome_last_checked_at:
+        try:
+            paper_outcome_checked_dt = datetime.fromisoformat(str(paper_outcome_last_checked_at).replace("Z", "+00:00"))
+            if paper_outcome_checked_dt.tzinfo is not None:
+                paper_outcome_checked_dt = paper_outcome_checked_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            paper_outcome_age_minutes = max(
+                0,
+                int((now_utc - paper_outcome_checked_dt).total_seconds() // 60),
+            )
+        except Exception:
+            paper_outcome_checked_dt = None
+    try:
+        paper_outcome_pending = int(paper_outcome_summary.get("pending") or 0)
+    except (TypeError, ValueError):
+        paper_outcome_pending = 0
+    paper_outcome_stale_after = _safe_int_env("PAPER_OUTCOME_STALE_AFTER_MINUTES", 360, minimum=30)
+    paper_outcome_pending_warn = _safe_int_env("PAPER_OUTCOME_PENDING_WARN_COUNT", 10, minimum=1)
+    paper_outcome_last_errors = paper_outcome_last_result.get("errors") or []
+    paper_outcome_last_status = str(paper_outcome_last_result.get("status") or "not_started")
+    paper_outcome_stale = bool(
+        paper_autopilot_enabled
+        and forecast_loop_enabled
+        and paper_outcome_age_minutes is not None
+        and paper_outcome_age_minutes > paper_outcome_stale_after
+    )
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -4936,6 +4964,14 @@ async def admin_health_center():
         problems.append("paper_autopilot_error")
     if paper_autopilot_stale:
         problems.append("paper_autopilot_stale")
+    if paper_autopilot_enabled and not paper_outcome_last_checked_at:
+        problems.append("paper_outcomes_not_seen")
+    if paper_outcome_last_status == "error" or paper_outcome_last_errors:
+        problems.append("paper_outcomes_error")
+    if paper_outcome_stale:
+        problems.append("paper_outcomes_stale")
+    if paper_outcome_pending >= paper_outcome_pending_warn:
+        problems.append("paper_outcomes_backlog")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (
@@ -5053,10 +5089,25 @@ async def admin_health_center():
                 "block_reasons": paper_autopilot_block_reasons,
             },
             "paper_outcomes": {
+                "status": (
+                    "error"
+                    if paper_outcome_last_status == "error" or paper_outcome_last_errors
+                    else "stale"
+                    if paper_outcome_stale
+                    else "backlog"
+                    if paper_outcome_pending >= paper_outcome_pending_warn
+                    else "not_seen"
+                    if paper_autopilot_enabled and not paper_outcome_last_checked_at
+                    else "ok"
+                ),
+                "age_minutes": paper_outcome_age_minutes,
+                "stale": paper_outcome_stale,
+                "stale_after_minutes": paper_outcome_stale_after,
+                "pending_warn_count": paper_outcome_pending_warn,
                 "summary": {
                     "total": paper_outcome_summary.get("total", 0),
                     "evaluated": paper_outcome_summary.get("evaluated", 0),
-                    "pending": paper_outcome_summary.get("pending", 0),
+                    "pending": paper_outcome_pending,
                     "hit_rate": paper_outcome_summary.get("hit_rate", 0),
                     "misses": paper_outcome_summary.get("misses", 0),
                 },

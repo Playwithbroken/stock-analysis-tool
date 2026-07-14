@@ -721,6 +721,16 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Status {displayValue(paperOutcomes.last_run?.status)}
                 {paperOutcomes.last_run?.due != null ? ` / faellig ${paperOutcomes.last_run.due}` : ""}
               </div>
+              {paperOutcomes.status && paperOutcomes.status !== "ok" ? (
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs leading-5 text-amber-900">
+                  <div className="font-extrabold">Outcome-Lernen braucht Aufmerksamkeit: {paperOutcomes.status}</div>
+                  <div>
+                    Offen {paperOutcomes.summary?.pending ?? 0}
+                    {paperOutcomes.age_minutes != null ? ` / letzter Check vor ${paperOutcomes.age_minutes} Min.` : " / noch kein Check"}
+                    {paperOutcomes.stale_after_minutes ? ` / Limit ${paperOutcomes.stale_after_minutes} Min.` : ""}
+                  </div>
+                </div>
+              ) : null}
               {paperOutcomes.last_run?.pending_data ? (
                 <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-800">
                   {paperOutcomes.last_run.pending_data} Outcome(s) warten auf Kursdaten. Diese Trades noch nicht bewerten.

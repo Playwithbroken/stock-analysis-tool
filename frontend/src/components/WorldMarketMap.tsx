@@ -718,11 +718,32 @@ function tradeImpactActionClass(action?: string) {
 }
 
 function tradeImpactActionLabel(action?: string) {
-  if (action === "long") return "Long bias";
-  if (action === "short" || action === "watch-short") return "Short / risk bias";
-  if (action === "hedge") return "Protect first";
-  if (action === "rebound_or_avoid") return "Avoid weak rebounds";
-  return "Wait for confirmation";
+  if (action === "long") return "Long nur nach Bestätigung";
+  if (action === "short" || action === "watch-short") return "Short-Risiko prüfen";
+  if (action === "hedge") return "Risiko zuerst absichern";
+  if (action === "rebound_or_avoid") return "Schwache Erholung meiden";
+  return "Bestätigung abwarten";
+}
+
+function macroConfidenceLabel(score?: number, decisionQuality?: string) {
+  const value = Number(score || 0);
+  const quality = String(decisionQuality || "").toLowerCase();
+  if (value >= 82 && !quality.includes("low") && !quality.includes("weak")) {
+    return "Hoch · trotzdem bestätigen";
+  }
+  if (value >= 62 && !quality.includes("weak")) return "Mittel · zweite Bestätigung";
+  return "Niedrig · nur beobachten";
+}
+
+function macroHorizonLabel(event: GeoEvent | null) {
+  if (!event) return "Zeitraum offen";
+  const explicitWindow = String(event.event_intelligence?.execution_window || "").trim();
+  if (explicitWindow) return explicitWindow;
+  const decay = String(event.event_intelligence?.decay || "").toLowerCase();
+  const eventType = String(event.event_type || "").toLowerCase();
+  if (decay.includes("fast") || eventType === "central_bank") return "Sofort bis 1 Handelstag";
+  if (["conflict", "energy", "election", "policy"].includes(eventType)) return "Heute bis 3 Handelstage";
+  return "Mehrere Handelstage prüfen";
 }
 
 function exposureToneClass(value?: string) {
@@ -1342,18 +1363,18 @@ export default function WorldMarketMap({
     const intelligence = activeGeoEvent.event_intelligence;
     return [
       {
-        label: "Action",
+        label: "Handlung",
         value: tradeImpactActionLabel(intelligence.action),
         tone: tradeImpactActionClass(intelligence.action),
       },
       {
-        label: "Window",
-        value: intelligence.execution_window || "open+60m",
+        label: "Zeithorizont",
+        value: macroHorizonLabel(activeGeoEvent),
         tone: "bg-sky-500/10 text-sky-700",
       },
       {
-        label: "Risk",
-        value: intelligence.invalidation || "Headline reversal invalidates the move.",
+        label: "Belastbarkeit",
+        value: macroConfidenceLabel(intelligence.confidence_score, intelligence.decision_quality),
         tone: "bg-slate-500/10 text-slate-600",
       },
     ];
@@ -1410,9 +1431,9 @@ export default function WorldMarketMap({
       );
     if (relevantEvent?.title) lines.push(`${relevantEvent.markerLabel}: ${relevantEvent.title}`);
     if (relevantEvent?.event_intelligence?.why_now) {
-      lines.push(`Why now: ${relevantEvent.event_intelligence.why_now}`);
+      lines.push(`Warum jetzt: ${relevantEvent.event_intelligence.why_now}`);
     }
-    if (activeRegionNews[0]?.title) lines.push(`Regional driver: ${activeRegionNews[0].title}`);
+    if (activeRegionNews[0]?.title) lines.push(`Regionaler Treiber: ${activeRegionNews[0].title}`);
     if (focusTicker) {
       const impacted = watchlistImpact.find((item) => (item.ticker || "").toUpperCase() === focusTicker.toUpperCase());
       if (impacted?.summary) {
@@ -1422,7 +1443,7 @@ export default function WorldMarketMap({
       }
     }
     if (regionalContrarian[0]?.ticker && regionalContrarian[0]?.reason) {
-      lines.push(`Contrarian setup: ${regionalContrarian[0].ticker} | ${regionalContrarian[0].reason}`);
+      lines.push(`Gegenläufiges Setup: ${regionalContrarian[0].ticker} | ${regionalContrarian[0].reason}`);
     }
     return lines.slice(0, 4);
   }, [activeGeoEvent, positionedGeoSignals, activeRegion, activeRegionNews, focusTicker, watchlistImpact, regionalContrarian]);
@@ -2450,10 +2471,10 @@ export default function WorldMarketMap({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      Trade Impact
+                      Markt-Auswirkung
                     </div>
                     <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
-                      Decision panel
+                      Entscheidungsrahmen
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2532,22 +2553,27 @@ export default function WorldMarketMap({
                   ) : null}
                 </div>
                 {activeGeoEvent.event_intelligence ? (
-                  <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                      Impact <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.impact_score}</span>
+                  <div className="mt-3">
+                    <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
+                      <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                        Marktwirkung <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.impact_score}/100</span>
+                      </div>
+                      <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                        Belastbarkeit <span className="font-bold text-slate-900">{macroConfidenceLabel(activeGeoEvent.event_intelligence.confidence_score, activeGeoEvent.event_intelligence.decision_quality)}</span>
+                      </div>
+                      <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
+                        Zeithorizont <span className="font-bold text-slate-900">{macroHorizonLabel(activeGeoEvent)}</span>
+                      </div>
                     </div>
-                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                      Confidence <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.confidence_score}</span>
-                    </div>
-                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                      Decay <span className="font-bold uppercase text-slate-900">{activeGeoEvent.event_intelligence.decay}</span>
+                    <div className="mt-2 rounded-[0.9rem] border border-amber-500/15 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                      Belastbarkeit bewertet Quellen- und Signalstruktur. Sie garantiert nicht, dass die Meldung wahr ist oder der Markt wie erwartet reagiert.
                     </div>
                   </div>
                 ) : null}
                 {compactList(activeGeoEvent.event_intelligence?.affected_sectors).length ? (
                   <div className="mt-3">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                      Sector Impact
+                      Betroffene Sektoren
                     </div>
                     <div className="mt-2 grid gap-2">
                       {compactList(activeGeoEvent.event_intelligence?.affected_sectors).map((sector) => {
@@ -2580,7 +2606,7 @@ export default function WorldMarketMap({
                 {compactList(activeGeoEvent.event_intelligence?.affected_assets, 4).length ? (
                   <div className="mt-3">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                      Affected Assets
+                      Betroffene Assets
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {compactList(activeGeoEvent.event_intelligence?.affected_assets, 4).map((asset) => (
@@ -2605,7 +2631,7 @@ export default function WorldMarketMap({
                             activeGeoEvent.portfolio_exposure.exposure_strength,
                           )}`}
                         >
-                          {activeGeoEvent.portfolio_exposure.exposure_strength} exposure
+                          Portfolio-Exposure {activeGeoEvent.portfolio_exposure.exposure_strength}
                         </span>
                       ) : null}
                     </div>
@@ -2639,7 +2665,7 @@ export default function WorldMarketMap({
                 {hedgeIdeas.length ? (
                   <div className="mt-3">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                      Hedge Ideas
+                      Absicherungs-Ideen
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {hedgeIdeas.map((idea) => (
@@ -2657,7 +2683,7 @@ export default function WorldMarketMap({
                 <div className="mt-3 space-y-2">
                   {activeGeoEvent.event_intelligence?.execution_bias ? (
                     <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
-                      Bias: {activeGeoEvent.event_intelligence.execution_bias} | Size: {activeGeoEvent.event_intelligence.size_guidance}
+                      Handelsrichtung: {activeGeoEvent.event_intelligence.execution_bias} | Positionsgröße: {activeGeoEvent.event_intelligence.size_guidance}
                     </div>
                   ) : null}
                   {activeGeoEvent.event_intelligence?.trigger ? (
@@ -2667,13 +2693,13 @@ export default function WorldMarketMap({
                   ) : null}
                   {activeGeoEvent.event_intelligence?.invalidation ? (
                     <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
-                      Invalidation: {activeGeoEvent.event_intelligence.invalidation}
+                      These ungültig wenn: {activeGeoEvent.event_intelligence.invalidation}
                     </div>
                   ) : null}
                 </div>
                 {activeGeoEvent.event_intelligence?.execution_window ? (
                   <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    Window: {activeGeoEvent.event_intelligence.execution_window}
+                    Zeithorizont: {activeGeoEvent.event_intelligence.execution_window}
                   </div>
                 ) : null}
               </div>
@@ -2682,7 +2708,7 @@ export default function WorldMarketMap({
             <div className="rounded-[1.5rem] border border-black/8 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.88))] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Why it matters
+                  Warum das wichtig ist
                 </div>
                 {focusTicker ? (
                   <button
@@ -3025,7 +3051,7 @@ export default function WorldMarketMap({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Trade Impact
+                  Markt-Auswirkung
                 </div>
                 <div className="mt-1 text-base font-black text-slate-900">
                   {activeVariantLabel || activeGeoEvent.markerLabel}
@@ -3036,7 +3062,7 @@ export default function WorldMarketMap({
                 onClick={() => setImpactDrawerOpen(false)}
                 className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
               >
-                Close
+                Schließen
               </button>
             </div>
 
@@ -3045,24 +3071,29 @@ export default function WorldMarketMap({
             </div>
 
             {tradeImpactCards.length ? (
-              <div className="mt-4 grid gap-2">
-                {tradeImpactCards.map((card) => (
-                  <div key={card.label} className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3">
-                    <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                      {card.label}
+              <div className="mt-4">
+                <div className="grid gap-2">
+                  {tradeImpactCards.map((card) => (
+                    <div key={card.label} className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                        {card.label}
+                      </div>
+                      <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
+                        {card.value}
+                      </div>
                     </div>
-                    <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
-                      {card.value}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <div className="mt-2 rounded-[1rem] border border-amber-500/15 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                  Hohe Belastbarkeit ist keine Garantie. Quelle, zweite Bestätigung und echte Preisreaktion bleiben Pflicht.
+                </div>
               </div>
             ) : null}
 
             {activeGeoEvent.event_intelligence?.why_now ? (
               <div className="mt-4 rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
                 <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                  Baseline scenario
+                  Warum jetzt
                 </div>
                 <div className="mt-2">{activeGeoEvent.event_intelligence.why_now}</div>
               </div>
@@ -3077,13 +3108,13 @@ export default function WorldMarketMap({
               ) : null}
               {activeGeoEvent.event_intelligence?.invalidation ? (
                 <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
-                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Invalidation</span>
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">These ungültig wenn</span>
                   <div className="mt-2">{activeGeoEvent.event_intelligence.invalidation}</div>
                 </div>
               ) : null}
               {activeGeoEvent.event_intelligence?.execution_bias ? (
                 <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
-                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Execution</span>
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Umsetzung</span>
                   <div className="mt-2">
                     {activeGeoEvent.event_intelligence.execution_bias}
                     {activeGeoEvent.event_intelligence.size_guidance ? ` | ${activeGeoEvent.event_intelligence.size_guidance}` : ""}
@@ -3095,7 +3126,7 @@ export default function WorldMarketMap({
             {tradeImpactAssets.length ? (
               <div className="mt-4">
                 <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                  Affected assets
+                  Betroffene Assets
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {tradeImpactAssets.map((asset) => (
@@ -3114,7 +3145,7 @@ export default function WorldMarketMap({
             {hedgeIdeas.length ? (
               <div className="mt-4">
                 <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                  Hedge ideas
+                  Absicherungs-Ideen
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {hedgeIdeas.map((idea) => (

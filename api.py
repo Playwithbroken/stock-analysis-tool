@@ -4831,6 +4831,36 @@ async def admin_health_center():
             paper_autopilot_checked_dt = None
     paper_autopilot_opened = paper_autopilot_last.get("opened") or []
     paper_autopilot_selected = paper_autopilot_last.get("selected") or []
+
+    def _paper_autopilot_item_summary(item: Any) -> Dict[str, Any]:
+        if not isinstance(item, dict):
+            return {}
+        return {
+            "ticker": item.get("ticker"),
+            "asset_class": item.get("asset_class"),
+            "direction": item.get("direction"),
+            "setup_type": item.get("setup_type"),
+            "score": item.get("score") or item.get("confidence_score"),
+            "entry_price": item.get("entry_price") or item.get("reference_price"),
+            "notional_value": item.get("suggested_notional_value") or item.get("notional_value"),
+            "max_loss_value": item.get("suggested_max_loss_value") or item.get("max_loss_value"),
+            "thesis": item.get("thesis"),
+        }
+
+    paper_autopilot_last_selected = [
+        summary
+        for summary in (_paper_autopilot_item_summary(item) for item in paper_autopilot_selected[:3])
+        if summary.get("ticker")
+    ]
+    paper_autopilot_last_opened = [
+        summary
+        for summary in (_paper_autopilot_item_summary(item) for item in paper_autopilot_opened[:3])
+        if summary.get("ticker")
+    ]
+    paper_autopilot_demo_account = paper_autopilot_last.get("demo_account_after") or {}
+    if not isinstance(paper_autopilot_demo_account, dict):
+        paper_autopilot_demo_account = {}
+
     paper_autopilot_cooldown = (
         _safe_int_env("PAPER_TRADING_AUTO_LEARN_COOLDOWN_MINUTES", 360, minimum=30)
         if paper_autopilot_opened
@@ -4990,6 +5020,16 @@ async def admin_health_center():
                 "cooldown_minutes": paper_autopilot_cooldown,
                 "opened_count": len(paper_autopilot_opened),
                 "selected_count": len(paper_autopilot_selected),
+                "last_selected": paper_autopilot_last_selected,
+                "last_opened": paper_autopilot_last_opened,
+                "demo_account_after": {
+                    "starting_capital": paper_autopilot_demo_account.get("starting_capital"),
+                    "equity_value": paper_autopilot_demo_account.get("equity_value"),
+                    "cash_available_value": paper_autopilot_demo_account.get("cash_available_value"),
+                    "open_exposure_value": paper_autopilot_demo_account.get("open_exposure_value"),
+                    "net_pnl_value": paper_autopilot_demo_account.get("net_pnl_value"),
+                    "net_pnl_pct": paper_autopilot_demo_account.get("net_pnl_pct"),
+                },
                 "mode": paper_autopilot_last.get("mode"),
                 "message": paper_autopilot_last.get("message"),
                 "next_candidate": next_blocked_candidate.get("ticker"),

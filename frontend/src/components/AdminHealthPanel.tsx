@@ -515,6 +515,50 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               <div className="mt-1 text-xs leading-5 text-slate-500">
                 Zuletzt {paperAutopilot.opened_count ?? 0} eröffnet / {paperAutopilot.selected_count ?? 0} ausgewählt
               </div>
+              {paperAutopilot.demo_account_after?.equity_value ? (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
+                    Equity <span className="font-extrabold text-slate-900">{formatMoney(paperAutopilot.demo_account_after.equity_value)}</span>
+                  </div>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
+                    Frei <span className="font-extrabold text-slate-900">{formatMoney(paperAutopilot.demo_account_after.cash_available_value)}</span>
+                  </div>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
+                    Investiert <span className="font-extrabold text-slate-900">{formatMoney(paperAutopilot.demo_account_after.open_exposure_value)}</span>
+                  </div>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
+                    P/L <span className={`font-extrabold ${Number(paperAutopilot.demo_account_after.net_pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {formatMoney(paperAutopilot.demo_account_after.net_pnl_value)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+              {paperAutopilot.last_opened?.length ? (
+                <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold uppercase tracking-[0.12em] text-emerald-700">Zuletzt geoeffnet</div>
+                  <div className="mt-1 space-y-1">
+                    {paperAutopilot.last_opened.slice(0, 3).map((item: any) => (
+                      <div key={`${item.ticker}-${item.direction}`} className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900">{item.ticker} / {item.direction || "long"}</span>
+                        <span>{formatMoney(item.notional_value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {paperAutopilot.last_selected?.length && !paperAutopilot.last_opened?.length ? (
+                <div className="mt-2 rounded-lg border border-sky-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold uppercase tracking-[0.12em] text-sky-700">Letzte Kandidaten</div>
+                  <div className="mt-1 space-y-1">
+                    {paperAutopilot.last_selected.slice(0, 3).map((item: any) => (
+                      <div key={`${item.ticker}-${item.direction}`} className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900">{item.ticker} / {item.direction || "long"}</span>
+                        <span>{item.score ? `Score ${item.score}` : formatMoney(item.notional_value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {paperAutopilot.message ? (
                 <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700">
                   {paperAutopilot.message}

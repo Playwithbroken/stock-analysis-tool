@@ -132,10 +132,20 @@ def main() -> int:
             "next_check_at",
             "opened_count",
             "selected_count",
+            "last_selected",
+            "last_opened",
+            "demo_account_after",
             "block_reasons",
         ]:
             require(key in paper_autopilot, failures, f"paper_autopilot missing {key!r}")
         require(isinstance(paper_autopilot.get("block_reasons"), list), failures, "paper_autopilot.block_reasons must be a list")
+        require(isinstance(paper_autopilot.get("last_selected"), list), failures, "paper_autopilot.last_selected must be a list")
+        require(isinstance(paper_autopilot.get("last_opened"), list), failures, "paper_autopilot.last_opened must be a list")
+        require(
+            isinstance(paper_autopilot.get("demo_account_after"), dict),
+            failures,
+            "paper_autopilot.demo_account_after must be an object",
+        )
 
         feeds = payload.get("data_feeds") or {}
         for key in ["morning_brief", "yfinance", "realtime", "forecast_learning"]:

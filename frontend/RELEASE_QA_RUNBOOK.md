@@ -102,6 +102,7 @@ Artefakte:
    - kein horizontaler Seiten-Overflow
    - Market-Movers-Metadaten und Ticker liegen in getrennten Zeilen
    - Desk-Button verdeckt weder Karteninhalt noch Bottom-Navigation
+   - Mobile World Map zeigt keine zusaetzliche Desktop-Sidebar, Timeline oder Replay-Doppelung
 2. Dashboard:
    - Morning Brief zeigt entweder Top-Setups oder klar `insufficient signal`
 3. Markets:

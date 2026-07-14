@@ -1796,7 +1796,7 @@ export default function WorldMarketMap({
           ) : null}
         </div>
 
-        <div className="grid items-start gap-5 xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
+        <div className="hidden items-start gap-5 sm:grid xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
           <div className="world-map-shell relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
             <div
               className="world-map-canvas interactive-world-map relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] overflow-hidden rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]"
@@ -2922,7 +2922,7 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="hidden gap-4 sm:grid md:grid-cols-3">
           {timeline.slice(0, 3).map((item: any) => (
             <div
               key={item.stage}
@@ -2945,7 +2945,7 @@ export default function WorldMarketMap({
           ))}
         </div>
 
-        <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-4">
+        <div className="hidden rounded-[1.6rem] border border-black/8 bg-white/80 p-4 sm:block">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Event Replay

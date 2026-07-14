@@ -73,6 +73,32 @@ function jobStateLabel(job: any) {
   return "wartet";
 }
 
+function healthProblemInfo(code: string) {
+  const map: Record<string, { label: string; action: string; tone: string }> = {
+    telegram: { label: "Telegram ist nicht sendbar", action: "Bot, Chat-ID und /start pruefen. Ohne Telegram kommen keine Alerts an.", tone: "red" },
+    yfinance: { label: "Marktdatenquelle langsam oder fehlerhaft", action: "Analyzer mit bekanntem Ticker testen und spaeter erneut pruefen.", tone: "amber" },
+    schedule_disabled: { label: "Briefing-Scheduler ist deaktiviert", action: "Scheduled Briefs aktivieren, wenn automatische Telegram-Briefings laufen sollen.", tone: "amber" },
+    database_missing: { label: "Datenbank fehlt", action: "Volume/Persistenz pruefen, sonst werden Portfolio und Lernen nicht sauber gespeichert.", tone: "red" },
+    database_integrity: { label: "Datenbank-Integritaet auffaellig", action: "Backup ziehen, Logs pruefen und SQLite quick_check ernst nehmen.", tone: "red" },
+    database_not_writable: { label: "Datenbank ist nicht beschreibbar", action: "Volume-Rechte pruefen. Neue Portfolios, Trades und Learnings koennen sonst verloren gehen.", tone: "red" },
+    database_volume_missing: { label: "Persistentes Volume fehlt", action: "Railway Volume fuer /app/data pruefen, damit Redeploys keine Daten verlieren.", tone: "red" },
+    scheduler_not_seen: { label: "Scheduler wurde noch nicht gesehen", action: "App-Prozess und Background-Loop pruefen; Briefings starten sonst nicht automatisch.", tone: "amber" },
+    scheduler_loop_stale: { label: "Scheduler-Loop ist stale", action: "Railway Logs pruefen und Service neu starten, wenn der Loop haengt.", tone: "red" },
+    brief_missed_today: { label: "Briefing wurde heute verpasst", action: "Run Due/Missed oder den passenden Brief-Job manuell senden.", tone: "amber" },
+    brief_catchup_available: { label: "Briefing kann noch nachgeholt werden", action: "Jetzt senden, solange die Grace-Zeit offen ist.", tone: "amber" },
+    brief_quality_blocked: { label: "Briefing wurde vom Qualitaetsgate blockiert", action: "Quellen/News-Qualitaet pruefen; lieber kein Brief als schlechter Brief.", tone: "amber" },
+    paper_autopilot_loop_disabled: { label: "Paper-Autopilot-Loop ist deaktiviert", action: "Forecast/Paper-Learning aktivieren, wenn das Demo-Konto automatisch lernen soll.", tone: "amber" },
+    paper_autopilot_not_seen: { label: "Paper-Autopilot wurde noch nicht gesehen", action: "Strict/Lernen pruefen und Background-Loop kontrollieren.", tone: "amber" },
+    paper_autopilot_error: { label: "Paper-Autopilot hatte einen Fehler", action: "Letzte Kandidaten, Blockgruende und Logs pruefen, bevor neue Demo-Trades laufen.", tone: "red" },
+    paper_autopilot_stale: { label: "Paper-Autopilot ist nicht frisch", action: "Preview starten oder Scheduler/Background-Loop pruefen.", tone: "amber" },
+    paper_outcomes_not_seen: { label: "Paper-Outcomes wurden noch nicht ausgewertet", action: "Outcomes pruefen klicken, damit das System aus Treffern und Fehlern lernt.", tone: "amber" },
+    paper_outcomes_error: { label: "Paper-Outcome-Auswertung hatte Fehler", action: "Outcome-Fehler und Kursdaten pruefen, bevor du Learnings ernst gewichtest.", tone: "red" },
+    paper_outcomes_stale: { label: "Paper-Outcome-Lernen ist veraltet", action: "Outcomes jetzt pruefen; alte Learnings koennen falsche Signale verstaerken.", tone: "amber" },
+    paper_outcomes_backlog: { label: "Viele Paper-Outcomes sind offen", action: "Outcomes pruefen und Datenluecken klaeren, damit Hit-Rate und Fehlerliste stimmen.", tone: "amber" },
+  };
+  return map[code] || { label: code, action: "Health Center und Logs pruefen.", tone: "amber" };
+}
+
 export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelProps) {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -267,6 +293,10 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
   const paperPreviewBlock = previewBlockReasons(paperPreviewResult);
+  const healthProblems = (health?.problems || []).map((code: string) => ({
+    code,
+    ...healthProblemInfo(code),
+  }));
   const nextBriefJob = [...jobs]
     .filter((job: any) => job?.next_due_at)
     .sort((a: any, b: any) => new Date(a.next_due_at).getTime() - new Date(b.next_due_at).getTime())[0];
@@ -996,9 +1026,29 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </section>
           </div>
 
-          {health?.problems?.length ? (
-            <div className="mt-5 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-800">
-              Probleme: {health.problems.join(", ")}
+          {healthProblems.length ? (
+            <div className="mt-5 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-800">
+                Health Aufmerksamkeit
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {healthProblems.map((problem: any) => (
+                  <div
+                    key={problem.code}
+                    className={`rounded-[1rem] border bg-white/80 p-3 text-sm ${
+                      problem.tone === "red"
+                        ? "border-red-500/15 text-red-800"
+                        : "border-amber-500/15 text-amber-800"
+                    }`}
+                  >
+                    <div className="font-extrabold">{problem.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-600">{problem.action}</div>
+                    <div className="mt-2 inline-flex rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                      {problem.code}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>

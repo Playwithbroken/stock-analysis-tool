@@ -2067,6 +2067,37 @@ class EmailAlertService:
             return "mittel - erst Marktreaktion bestaetigen"
         return "niedrig - nur beobachten"
 
+    def _macro_event_type_label(self, event_type: str) -> str:
+        return {
+            "Conflict": "Krieg / Konflikt",
+            "Energy": "Energie / Rohstoffe",
+            "Central Bank": "Zentralbank / Zinsen",
+            "Election": "Wahl / Politik",
+            "Policy": "Regulierung / Handelspolitik",
+            "Public Figure": "Aussage einer Schluesselperson",
+            "IPO": "Boersengang / IPO",
+            "Disaster": "Naturereignis / Lieferkette",
+        }.get(event_type, event_type or "Makro")
+
+    def _macro_action_label(self, action: str) -> str:
+        return {
+            "watch": "beobachten und bestaetigen",
+            "hedge": "Absicherung pruefen",
+            "reduce": "Risiko reduzieren",
+            "add": "Aufbau erst nach Bestaetigung pruefen",
+            "long": "Long erst nach Bestaetigung pruefen",
+            "short": "Short-Risiko pruefen",
+            "watch-short": "Short-Risiko beobachten",
+            "rebound_or_avoid": "schwache Erholung meiden",
+        }.get((action or "watch").lower(), "beobachten und bestaetigen")
+
+    def _macro_source_quality_label(self, source_quality: str) -> str:
+        return {
+            "strong": "hoch - belastbare Primaer- oder Nachrichtenquelle",
+            "medium": "mittel - zweite unabhaengige Quelle suchen",
+            "weak": "niedrig - nicht als Push-Signal verwenden",
+        }.get((source_quality or "").lower(), "offen - Quelle manuell pruefen")
+
     def _macro_event_type(self, item: Dict[str, Any], title: str) -> str | None:
         raw = str(item.get("event_type") or item.get("type") or "").lower()
         haystack = f"{title} {raw} {item.get('impact') or ''} {item.get('severity') or ''}".lower()
@@ -3588,16 +3619,17 @@ class EmailAlertService:
 
     def _render_telegram_macro_alert(self, event: Dict[str, Any]) -> str:
         severity = str(event.get("severity") or "high").lower()
-        marker = "CRITICAL" if severity == "critical" else "HIGH"
+        marker = "KRITISCH" if severity == "critical" else "HOCH"
         country = self._tg_esc(str(event.get("country") or event.get("region") or "Global"))
-        event_type = self._tg_esc(str(event.get("event_type") or "Macro"))
+        event_type = self._tg_esc(self._macro_event_type_label(str(event.get("event_type") or "Macro")))
         title = self._tg_esc(str(event.get("title") or "Macro alert"))
         impact = self._tg_esc(str(event.get("impact_score") or "n/a"))
         assets = ", ".join(self._tg_esc(str(asset)) for asset in (event.get("affected_assets") or [])[:8]) or "n/a"
         trigger = self._tg_esc(str(event.get("trigger") or "Confirmation abwarten."))
         invalidation = self._tg_esc(str(event.get("invalidation") or "Invalid wenn keine Preisreaktion folgt."))
-        action = self._tg_esc(str(event.get("action") or "watch"))
+        action = self._tg_esc(self._macro_action_label(str(event.get("action") or "watch")))
         source = self._tg_esc(str(event.get("source_label") or "Market radar"))
+        source_quality = self._tg_esc(self._macro_source_quality_label(str(event.get("source_quality") or "")))
         why = self._tg_esc(str(event.get("why_it_matters") or ""))[:520]
         meaning = self._tg_esc(str(event.get("meaning") or ""))[:520]
         read_through = self._tg_esc(str(event.get("read_through") or ""))[:520]
@@ -3614,6 +3646,7 @@ class EmailAlertService:
             f"{title}",
             f"<b>Impact:</b> {impact}/100",
             f"<b>Faktenstatus:</b> {fact_status}",
+            f"<b>Quellenqualitaet:</b> {source_quality}",
             f"<b>Sicherheit:</b> {confidence}",
             f"<b>Zeithorizont:</b> {horizon}",
             f"<b>Betroffen:</b> {assets}",

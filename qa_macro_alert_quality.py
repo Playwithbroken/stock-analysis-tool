@@ -57,6 +57,7 @@ def main() -> int:
     required = [
         "Sicherheit:",
         "Faktenstatus:",
+        "Quellenqualitaet:",
         "Zeithorizont:",
         "Warum wichtig:",
         "Was es aussagt:",
@@ -74,6 +75,9 @@ def main() -> int:
         return 1
     if normalized.get("fact_status") != "bestaetigt" or not normalized.get("horizon"):
         print(f"FAIL normalized alert missing classification: {normalized}")
+        return 1
+    if "Krieg / Konflikt" not in rendered or "beobachten und bestaetigen" not in rendered:
+        print(f"FAIL rendered alert still exposes raw event/action labels: {rendered}")
         return 1
 
     weak_person = {

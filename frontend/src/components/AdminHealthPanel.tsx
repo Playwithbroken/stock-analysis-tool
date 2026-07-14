@@ -82,10 +82,12 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [runningPaperPreview, setRunningPaperPreview] = useState("");
   const [evaluatingPaperOutcomes, setEvaluatingPaperOutcomes] = useState(false);
+  const [sendingPaperAccount, setSendingPaperAccount] = useState(false);
   const [warmupResult, setWarmupResult] = useState<any>(null);
   const [runResult, setRunResult] = useState<any>(null);
   const [paperPreviewResult, setPaperPreviewResult] = useState<any>(null);
   const [paperOutcomeResult, setPaperOutcomeResult] = useState<any>(null);
+  const [paperAccountResult, setPaperAccountResult] = useState<any>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -227,6 +229,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
       setError(err instanceof Error ? err.message : "Paper outcome evaluation failed");
     } finally {
       setEvaluatingPaperOutcomes(false);
+    }
+  };
+
+  const sendPaperAccountStatus = async () => {
+    setSendingPaperAccount(true);
+    setError("");
+    setPaperAccountResult(null);
+    try {
+      const res = await fetch("/api/admin/send-paper-account-status", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Paper account Telegram status failed");
+      setPaperAccountResult(data);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Paper account Telegram status failed");
+    } finally {
+      setSendingPaperAccount(false);
     }
   };
 
@@ -606,7 +625,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <button
                   type="button"
                   onClick={() => runPaperPreview("strict")}
-                  disabled={loading || !!runningPaperPreview}
+                  disabled={loading || !!runningPaperPreview || sendingPaperAccount}
                   className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
                 >
                   {runningPaperPreview === "strict" ? "Prueft" : "Strict pruefen"}
@@ -614,12 +633,37 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <button
                   type="button"
                   onClick={() => runPaperPreview("learn")}
-                  disabled={loading || !!runningPaperPreview}
+                  disabled={loading || !!runningPaperPreview || sendingPaperAccount}
                   className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-800 disabled:opacity-50"
                 >
                   {runningPaperPreview === "learn" ? "Prueft" : "Lernen pruefen"}
                 </button>
+                <button
+                  type="button"
+                  onClick={sendPaperAccountStatus}
+                  disabled={loading || !!runningPaperPreview || sendingPaperAccount}
+                  className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-800 disabled:opacity-50 sm:col-span-2"
+                >
+                  {sendingPaperAccount ? "Sendet" : "Kontostand per Telegram"}
+                </button>
               </div>
+              {paperAccountResult ? (
+                <div className="mt-3 rounded-[1rem] border border-emerald-500/15 bg-emerald-500/10 p-3 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold text-slate-900">
+                    Telegram-Kontostand: {paperAccountResult.status || "ok"}
+                  </div>
+                  <div>
+                    Equity {formatMoney(paperAccountResult.demo_account?.equity)} /
+                    P/L {formatMoney(paperAccountResult.demo_account?.net_pnl_value)} /
+                    offen {paperAccountResult.demo_account?.open_trade_count ?? 0}
+                  </div>
+                  {paperAccountResult.demo_account?.day_action ? (
+                    <div className="mt-1 font-semibold text-emerald-800">
+                      Tagesaktion: {paperAccountResult.demo_account.day_action}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {paperPreviewResult ? (
                 <div className="mt-3 rounded-[1rem] border border-sky-500/15 bg-sky-500/10 p-3 text-xs leading-5 text-slate-700">
                   <div className="mb-2 inline-flex rounded-full border border-black/8 bg-white/75 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">

@@ -34,6 +34,10 @@ class FakeTelegramResponse:
     headers = {"content-type": "application/json"}
 
     @staticmethod
+    def raise_for_status():
+        return None
+
+    @staticmethod
     def json():
         return {"ok": True}
 
@@ -220,7 +224,7 @@ def main() -> int:
 
         api.requests.post = fake_telegram_post
         os.environ["TELEGRAM_ALERTS_ENABLED"] = "true"
-        os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
+        os.environ["TELEGRAM_BOT_TOKEN"] = "123456789" + ":" + "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
         os.environ["TELEGRAM_CHAT_ID"] = "test-chat"
         telegram_first = client.get("/api/admin/health-center")
         telegram_second = client.get("/api/admin/health-center")
@@ -232,6 +236,18 @@ def main() -> int:
             failures,
             "cached Telegram status should remain ok",
         )
+
+        paper_account_status = client.post("/api/admin/send-paper-account-status")
+        require(paper_account_status.status_code == 200, failures, "paper account status Telegram request failed")
+        if paper_account_status.status_code == 200:
+            account_payload = paper_account_status.json()
+            for key in ["status", "sent", "message", "demo_account"]:
+                require(key in account_payload, failures, f"paper account status missing {key!r}")
+            require(account_payload.get("status") == "ok", failures, "paper account status should return ok")
+            require(isinstance(account_payload.get("demo_account"), dict), failures, "paper account demo_account must be an object")
+            for key in ["equity", "day_status", "day_action", "net_pnl_value", "net_pnl_pct", "open_trade_count"]:
+                require(key in account_payload.get("demo_account", {}), failures, f"paper account demo_account missing {key!r}")
+        require(len(telegram_calls) >= 2, failures, "paper account status should send a Telegram request")
 
         if failures:
             print("Health center contract QA failures:")

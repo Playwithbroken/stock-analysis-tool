@@ -4806,6 +4806,56 @@ async def admin_health_center():
         scheduler_last_result = json.loads(raw_scheduler_result or "[]")
     except Exception:
         scheduler_last_result = []
+    paper_autopilot_enabled = _env_enabled("PAPER_TRADING_AUTO_LEARN_ENABLED", "true")
+    forecast_loop_enabled = _env_enabled("FORECAST_LEARNING_ENABLED", "true")
+    paper_autopilot_raw = get_portfolio_manager().get_app_setting("paper_learning_autopilot_last_run", "{}")
+    try:
+        paper_autopilot_last = json.loads(paper_autopilot_raw or "{}")
+        if not isinstance(paper_autopilot_last, dict):
+            paper_autopilot_last = {}
+    except Exception:
+        paper_autopilot_last = {}
+    paper_autopilot_checked_at = paper_autopilot_last.get("checked_at")
+    paper_autopilot_age_minutes = None
+    paper_autopilot_checked_dt = None
+    if paper_autopilot_checked_at:
+        try:
+            paper_autopilot_checked_dt = datetime.fromisoformat(str(paper_autopilot_checked_at).replace("Z", "+00:00"))
+            if paper_autopilot_checked_dt.tzinfo is not None:
+                paper_autopilot_checked_dt = paper_autopilot_checked_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            paper_autopilot_age_minutes = max(
+                0,
+                int((now_utc - paper_autopilot_checked_dt).total_seconds() // 60),
+            )
+        except Exception:
+            paper_autopilot_checked_dt = None
+    paper_autopilot_opened = paper_autopilot_last.get("opened") or []
+    paper_autopilot_selected = paper_autopilot_last.get("selected") or []
+    paper_autopilot_cooldown = (
+        _safe_int_env("PAPER_TRADING_AUTO_LEARN_COOLDOWN_MINUTES", 360, minimum=30)
+        if paper_autopilot_opened
+        else _safe_int_env("PAPER_TRADING_AUTO_LEARN_EMPTY_COOLDOWN_MINUTES", 30, minimum=5)
+    )
+    forecast_interval = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", 30, minimum=5)
+    paper_autopilot_stale_after = paper_autopilot_cooldown + (forecast_interval * 2)
+    paper_autopilot_stale = bool(
+        paper_autopilot_enabled
+        and forecast_loop_enabled
+        and paper_autopilot_age_minutes is not None
+        and paper_autopilot_age_minutes > paper_autopilot_stale_after
+    )
+    paper_autopilot_next_check_at = (
+        (paper_autopilot_checked_dt + timedelta(minutes=paper_autopilot_cooldown)).isoformat()
+        if paper_autopilot_checked_dt
+        else None
+    )
+    paper_autopilot_status = str(paper_autopilot_last.get("status") or "not_started")
+    paper_autopilot_blocker = paper_autopilot_last.get("blocker_summary") or {}
+    next_blocked_candidate = paper_autopilot_blocker.get("next_best_rejected") or {}
+    raw_block_reasons = next_blocked_candidate.get("display_reasons") or next_blocked_candidate.get("reasons") or []
+    paper_autopilot_block_reasons = list(
+        dict.fromkeys(str(reason).strip() for reason in raw_block_reasons if str(reason).strip())
+    )[:3]
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -4831,6 +4881,14 @@ async def admin_health_center():
         problems.append("brief_catchup_available")
     if any(job.get("last_status") == "blocked" for job in schedule_jobs):
         problems.append("brief_quality_blocked")
+    if paper_autopilot_enabled and not forecast_loop_enabled:
+        problems.append("paper_autopilot_loop_disabled")
+    if paper_autopilot_enabled and not paper_autopilot_checked_at:
+        problems.append("paper_autopilot_not_seen")
+    if paper_autopilot_status == "error":
+        problems.append("paper_autopilot_error")
+    if paper_autopilot_stale:
+        problems.append("paper_autopilot_stale")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (
@@ -4916,6 +4974,27 @@ async def admin_health_center():
                 "jobs": schedule_jobs,
             },
             "learning": learning_dashboard,
+            "paper_autopilot": {
+                "enabled": paper_autopilot_enabled,
+                "loop_enabled": forecast_loop_enabled,
+                "status": paper_autopilot_status if paper_autopilot_enabled else "disabled",
+                "checked_at": (
+                    paper_autopilot_checked_dt.replace(tzinfo=timezone.utc).isoformat()
+                    if paper_autopilot_checked_dt
+                    else None
+                ),
+                "age_minutes": paper_autopilot_age_minutes,
+                "stale_after_minutes": paper_autopilot_stale_after,
+                "stale": paper_autopilot_stale,
+                "next_check_at": paper_autopilot_next_check_at,
+                "cooldown_minutes": paper_autopilot_cooldown,
+                "opened_count": len(paper_autopilot_opened),
+                "selected_count": len(paper_autopilot_selected),
+                "mode": paper_autopilot_last.get("mode"),
+                "message": paper_autopilot_last.get("message"),
+                "next_candidate": next_blocked_candidate.get("ticker"),
+                "block_reasons": paper_autopilot_block_reasons,
+            },
             "data_feeds": data_feeds,
             "recent_deliveries": sent_events[:12],
             "problems": problems,

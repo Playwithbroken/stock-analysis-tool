@@ -93,6 +93,7 @@ def main() -> int:
             "database",
             "schedule",
             "learning",
+            "paper_autopilot",
             "data_feeds",
             "recent_deliveries",
             "problems",
@@ -121,6 +122,20 @@ def main() -> int:
             job = schedule["jobs"][0]
             for key in ["job_key", "label", "time", "next_due_at", "sent_today"]:
                 require(key in job, failures, f"schedule job missing {key!r}")
+
+        paper_autopilot = payload.get("paper_autopilot") or {}
+        for key in [
+            "enabled",
+            "loop_enabled",
+            "status",
+            "checked_at",
+            "next_check_at",
+            "opened_count",
+            "selected_count",
+            "block_reasons",
+        ]:
+            require(key in paper_autopilot, failures, f"paper_autopilot missing {key!r}")
+        require(isinstance(paper_autopilot.get("block_reasons"), list), failures, "paper_autopilot.block_reasons must be a list")
 
         feeds = payload.get("data_feeds") or {}
         for key in ["morning_brief", "yfinance", "realtime", "forecast_learning"]:

@@ -170,6 +170,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
   const telegram = health?.telegram || {};
   const macroAlerts = health?.notifications?.macro_alerts || {};
+  const paperAutopilot = health?.paper_autopilot || {};
   const feeds = health?.data_feeds || {};
   const appInfo = health?.app || {};
   const database = health?.database || {};
@@ -232,7 +233,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
             <h2 className="mt-1 text-3xl text-slate-900">Briefings, Scheduler und Datenfeeds</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 max-w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
             {health?.status ? (
               <span className={`rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${statusTone(health.status)}`}>
                 {health.status}
@@ -280,7 +281,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </div>
         </div>
 
-        <div className="overflow-y-auto p-5">
+        <div className="min-w-0 overflow-x-hidden overflow-y-auto p-4 sm:p-5">
           {error ? (
             <div className="mb-4 rounded-[1.2rem] border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-700">
               {error}
@@ -325,7 +326,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   {schedulerCopy}
                 </div>
               </div>
-              <div className="rounded-full border border-black/8 bg-white/75 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+              <div className="max-w-full whitespace-normal rounded-full border border-black/8 bg-white/75 px-3 py-1 text-right text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-slate-700">
                 Naechster Schritt: {nextAction}
               </div>
             </div>
@@ -340,7 +341,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
           </div>
 
-          <div className="mb-5 grid gap-3 lg:grid-cols-4">
+          <div className="mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-4">
             <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                 Naechster Brief
@@ -395,8 +396,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className={`rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8" : "border-black/8 bg-white/75"}`}>
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-3">
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8" : "border-black/8 bg-white/75"}`}>
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">App Release</div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{displayValue(appInfo.version)}</div>
@@ -409,7 +410,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
             </div>
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">SQLite Datenbank</div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{formatBytes(database.size_bytes)}</div>
@@ -438,7 +439,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               ) : null}
             </div>
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Telegram</div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-lg font-black text-slate-900">{displayValue(telegram.status)}</div>
@@ -452,7 +453,50 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               {telegram.error ? <div className="mt-2 text-xs text-red-700">{telegram.error}</div> : null}
             </div>
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${
+              paperAutopilot.enabled && paperAutopilot.loop_enabled && !paperAutopilot.stale && paperAutopilot.status !== "error"
+                ? "border-emerald-500/15 bg-emerald-500/6"
+                : "border-amber-500/20 bg-amber-500/8"
+            }`}>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                Paper Autopilot
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="text-lg font-black text-slate-900">
+                  {paperAutopilot.enabled ? displayValue(paperAutopilot.status) : "deaktiviert"}
+                </div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                  paperAutopilot.enabled && paperAutopilot.loop_enabled && !paperAutopilot.stale && paperAutopilot.status !== "error"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                    : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                }`}>
+                  {paperAutopilot.stale ? "überfällig" : paperAutopilot.loop_enabled ? "Loop aktiv" : "Loop aus"}
+                </span>
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Letzter Lauf {fmtDate(paperAutopilot.checked_at)}
+                {typeof paperAutopilot.age_minutes === "number" ? ` / vor ${paperAutopilot.age_minutes}m` : ""}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Nächste Prüfung {fmtDate(paperAutopilot.next_check_at)} / Cooldown {paperAutopilot.cooldown_minutes ?? "?"}m
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Zuletzt {paperAutopilot.opened_count ?? 0} eröffnet / {paperAutopilot.selected_count ?? 0} ausgewählt
+              </div>
+              {paperAutopilot.message ? (
+                <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700">
+                  {paperAutopilot.message}
+                </div>
+              ) : null}
+              {paperAutopilot.next_candidate ? (
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/65 px-2.5 py-2 text-xs leading-5 text-slate-700">
+                  Nächster Kandidat: <span className="font-extrabold">{paperAutopilot.next_candidate}</span>
+                  {paperAutopilot.block_reasons?.length ? ` / Block: ${paperAutopilot.block_reasons.join("; ")}` : ""}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Macro Alert Audit</div>
               <div className="mt-3 text-sm font-black text-slate-900">
                 {macroAlerts.last_audit?.eligible ?? 0} freigegeben / {macroAlerts.last_audit?.quality_passed ?? 0} Gate bestanden
@@ -466,7 +510,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
 
             {Object.entries(feeds).map(([key, feed]: [string, any]) => (
-              <div key={key} className="rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
+              <div key={key} className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                   {key.replace("_", " ")}
                 </div>
@@ -486,8 +530,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             ))}
           </div>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-            <section className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
+          <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+            <section className="min-w-0 rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Scheduled Briefs</div>
@@ -595,7 +639,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
             </section>
 
-            <section className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
+            <section className="min-w-0 rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                 Letzte Zustellungen
               </div>

@@ -81,9 +81,11 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [sendingSession, setSendingSession] = useState("");
   const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [runningPaperPreview, setRunningPaperPreview] = useState("");
+  const [evaluatingPaperOutcomes, setEvaluatingPaperOutcomes] = useState(false);
   const [warmupResult, setWarmupResult] = useState<any>(null);
   const [runResult, setRunResult] = useState<any>(null);
   const [paperPreviewResult, setPaperPreviewResult] = useState<any>(null);
+  const [paperOutcomeResult, setPaperOutcomeResult] = useState<any>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -208,6 +210,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
       setError(err instanceof Error ? err.message : "Paper autopilot preview failed");
     } finally {
       setRunningPaperPreview("");
+    }
+  };
+
+  const evaluatePaperOutcomes = async () => {
+    setEvaluatingPaperOutcomes(true);
+    setError("");
+    setPaperOutcomeResult(null);
+    try {
+      const res = await fetch("/api/trading/paper-outcomes/evaluate", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Paper outcome evaluation failed");
+      setPaperOutcomeResult(data);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Paper outcome evaluation failed");
+    } finally {
+      setEvaluatingPaperOutcomes(false);
     }
   };
 
@@ -705,6 +724,30 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               {paperOutcomes.last_run?.pending_data ? (
                 <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-800">
                   {paperOutcomes.last_run.pending_data} Outcome(s) warten auf Kursdaten. Diese Trades noch nicht bewerten.
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={evaluatePaperOutcomes}
+                disabled={loading || evaluatingPaperOutcomes}
+                className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
+              >
+                {evaluatingPaperOutcomes ? "Prueft" : "Outcomes pruefen"}
+              </button>
+              {paperOutcomeResult ? (
+                <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2.5 py-2 text-xs leading-5 text-slate-700">
+                  <div className="font-extrabold text-slate-900">
+                    Outcome-Check: {paperOutcomeResult.status || "ok"}
+                  </div>
+                  <div>
+                    Faellig {paperOutcomeResult.due ?? 0} / ausgewertet {paperOutcomeResult.evaluated ?? 0} /
+                    Daten offen {paperOutcomeResult.pending_data ?? 0}
+                  </div>
+                  {paperOutcomeResult.paper_learning_alerts?.status ? (
+                    <div className="mt-1 text-slate-500">
+                      Telegram Learning: {paperOutcomeResult.paper_learning_alerts.status}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {paperOutcomes.top_errors?.length ? (

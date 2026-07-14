@@ -186,6 +186,19 @@ def main() -> int:
                 require(isinstance(preview_payload.get("opened"), list), failures, f"paper {preview_mode} preview opened must be a list")
                 require(len(preview_payload.get("opened") or []) == 0, failures, f"paper {preview_mode} preview must not open trades")
 
+        paper_outcome_eval = client.post("/api/trading/paper-outcomes/evaluate")
+        require(paper_outcome_eval.status_code == 200, failures, "paper outcome evaluation request failed")
+        if paper_outcome_eval.status_code == 200:
+            outcome_payload = paper_outcome_eval.json()
+            for key in ["status", "due", "evaluated", "pending_data", "errors", "paper_learning_alerts"]:
+                require(key in outcome_payload, failures, f"paper outcome evaluation missing {key!r}")
+            require(isinstance(outcome_payload.get("errors"), list), failures, "paper outcome evaluation errors must be a list")
+            require(
+                isinstance(outcome_payload.get("paper_learning_alerts"), dict),
+                failures,
+                "paper outcome evaluation paper_learning_alerts must be an object",
+            )
+
         telegram_calls = []
 
         def fake_telegram_post(url, **kwargs):

@@ -496,6 +496,9 @@ def test_learning_feedback_tracks_missing_journals() -> None:
     assert ".." not in preview["message"]
     execute = service.run_auto_selection(sample_scoreboard(), sample_settings(), execute=True)
     assert execute["opened"] == []
+    assert execute["demo_account_after"]["starting_capital"] == 500_000.0
+    assert execute["demo_account_after"]["closed_trade_count"] == 2
+    assert execute["demo_account_after"]["open_exposure_value"] == 0.0
     assert "Nächster Kandidat" in execute["message"]
     assert "candidate(s)" not in execute["message"]
     assert "Kandidat(en)" not in execute["message"]

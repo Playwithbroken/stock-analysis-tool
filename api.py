@@ -1576,7 +1576,8 @@ def _run_paper_managed_exits() -> Dict[str, Any]:
         if result.get("closed"):
             try:
                 result["telegram_alerts"] = get_email_alert_service().send_paper_trade_closed_alerts(
-                    result.get("closed") or []
+                    result.get("closed") or [],
+                    get_paper_trading_service().build_demo_account_snapshot(),
                 )
             except Exception as alert_error:
                 result["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
@@ -1631,6 +1632,7 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
                 result["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
                     result.get("opened") or [],
                     result.get("selected") or [],
+                    result.get("demo_account_after") or {},
                 )
             except Exception as alert_error:
                 result["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
@@ -5052,6 +5054,7 @@ async def run_paper_autopilot(req: PaperAutoSelectionRequest):
                 result["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
                     result.get("opened") or [],
                     result.get("selected") or [],
+                    result.get("demo_account_after") or {},
                 )
             except Exception as alert_error:
                 result["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
@@ -5072,7 +5075,10 @@ async def close_paper_trade(trade_id: str, req: PaperTradeCloseRequest):
         )
         _cache_forget("search:suggestions")
         try:
-            telegram_alerts = get_email_alert_service().send_paper_trade_closed_alerts([trade])
+            telegram_alerts = get_email_alert_service().send_paper_trade_closed_alerts(
+                [trade],
+                get_paper_trading_service().build_demo_account_snapshot(),
+            )
         except Exception as alert_error:
             telegram_alerts = {"status": "error", "message": str(alert_error)}
         return convert_numpy_types({**trade, "telegram_alerts": telegram_alerts})

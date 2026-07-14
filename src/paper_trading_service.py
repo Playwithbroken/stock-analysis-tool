@@ -45,6 +45,10 @@ class PaperTradingService:
             "auto_learn_status": self._build_auto_learn_status(),
         }
 
+    def build_demo_account_snapshot(self) -> Dict[str, Any]:
+        trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=300))
+        return self._build_demo_account(trades, [])
+
     def _build_auto_learn_status(self) -> Dict[str, Any]:
         raw = self.portfolio_manager.get_app_setting("paper_learning_autopilot_last_run")
         if not raw:
@@ -141,6 +145,7 @@ class PaperTradingService:
             "errors": errors,
             "rejected_count": selection.get("rejected_count"),
             "blocker_summary": blocker_summary,
+            "demo_account_after": self.build_demo_account_snapshot() if opened else dashboard.get("demo_account", {}),
             "message": execution_message,
         }
 

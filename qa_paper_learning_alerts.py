@@ -70,6 +70,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "result_value_delta": 44.45,
             "result_label": "winner",
             "suggested_max_loss_value": 450.0,
+            "account_equity": 501250.5,
+            "account_cash_available": 488904.83,
+            "account_open_exposure": 12345.67,
             "risk_reward": 2.4,
             "confidence_score": 91,
             "trigger": "Breakout mit Volumen bestätigt.",
@@ -91,6 +94,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Horizont:</b> days-weeks" in opened
     assert "official filing" in opened
     assert "manual_market_check" in opened
+    assert "Demo-Konto danach:</b> Equity 501.250,50 EUR" in opened
+    assert "Cash frei 488.904,83 EUR" in opened
+    assert "offen investiert 12.345,67 EUR" in opened
 
     closed = service._render_telegram_paper_trade_closed_alert(
         {
@@ -102,6 +108,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "invested_value": 12345.67,
             "final_value": 13412.33,
             "realized_pnl_value": 1066.66,
+            "account_equity": 502317.16,
+            "account_cash_available": 502317.16,
+            "account_open_exposure": 0,
             "realized_pnl_pct": 8.64,
             "result_label": "winner",
             "exit_reason": "target_or_profit_taken",
@@ -113,6 +122,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "final 13.412,33 EUR" in closed
     assert "Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
     assert "target_or_profit_taken" in closed
+    assert "Demo-Konto danach:</b> Equity 502.317,16 EUR" in closed
+    assert "Cash frei 502.317,16 EUR" in closed
+    assert "offen investiert 0,00 EUR" in closed
 
     management = service._render_telegram_paper_trade_management_alert(
         {

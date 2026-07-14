@@ -86,7 +86,7 @@ Artefakte:
 8. Health Center ist geschützt und liefert den Betriebsvertrag für App, DB, Schedule, Telegram und Feeds
 9. Suche und Analyzer lösen Aktien, ETFs und Krypto auch bei Provider-Ausfällen stabil auf
 10. Morning Brief liefert bei Cache-, Provider- und Service-Ausfällen einen lesbaren Partial-Status statt `500`
-11. Scheduler sendet fällige Rich-Briefings genau einmal und speichert Erfolg oder Fehler für das Health Center
+11. Scheduler sendet fällige Rich-Briefings genau einmal, retryt Telegram-Preflight-/Sendefehler und speichert Erfolg oder Fehler für das Health Center
 12. Notification-Gate ist grün: Telegram aktiv, E-Mail und Browser-Push für diese Beta aus
 13. Macro-Alert-Gates sind grün: Qualität, Einordnung, Dedupe und Severity-Upgrade
 14. Paper-Trading-Gates sind grün: Demo-Kapital, Geldfluss, Learning und Telegram-Status

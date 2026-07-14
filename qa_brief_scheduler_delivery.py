@@ -67,15 +67,26 @@ def main() -> int:
             morning_brief_service=FakeMorningBriefService(),
         )
         telegram_deliveries: list[str] = []
+        preflight_attempts = {"count": 0}
+        send_attempts = {"count": 0}
 
         def legacy_builder_must_not_run(*args, **kwargs):
             raise RuntimeError("legacy event builder must not block rich briefs")
 
         service._build_open_brief_events = legacy_builder_must_not_run
-        service._telegram_preflight = lambda config: None
-        service._send_telegram_rich_brief = (
-            lambda config, brief, session: telegram_deliveries.append(session)
-        )
+        def flaky_preflight(config):
+            preflight_attempts["count"] += 1
+            if preflight_attempts["count"] == 1:
+                raise RuntimeError("qa telegram preflight outage")
+
+        def flaky_rich_brief(config, brief, session):
+            send_attempts["count"] += 1
+            if send_attempts["count"] == 1:
+                raise RuntimeError("qa telegram send outage")
+            telegram_deliveries.append(session)
+
+        service._telegram_preflight = flaky_preflight
+        service._send_telegram_rich_brief = flaky_rich_brief
 
         failures: list[str] = []
         try:
@@ -83,6 +94,12 @@ def main() -> int:
             missing_status = service.get_brief_job_status("morning-brief")
             missing_sent_keys = manager.get_sent_signal_event_keys()
             os.environ["TELEGRAM_BOT_TOKEN"] = "qa-token-placeholder"
+            preflight_failure = service.send_scheduled_open_briefs()
+            preflight_status = service.get_brief_job_status("morning-brief")
+            preflight_sent_keys = manager.get_sent_signal_event_keys()
+            send_failure = service.send_scheduled_open_briefs()
+            send_failure_status = service.get_brief_job_status("morning-brief")
+            send_failure_sent_keys = manager.get_sent_signal_event_keys()
             first = service.send_scheduled_open_briefs()
             second = service.send_scheduled_open_briefs()
         finally:
@@ -97,11 +114,31 @@ def main() -> int:
         if "morning-brief:2026-07-13" in missing_sent_keys:
             failures.append("failed configuration was incorrectly marked as sent")
 
+        preflight_failed = [row for row in preflight_failure if row.get("status") == "failed"]
+        if len(preflight_failed) != 1 or "qa telegram preflight outage" not in str(preflight_failed[0].get("error")):
+            failures.append(f"preflight failure was not recorded cleanly: {preflight_failure}")
+        if preflight_status.get("status") != "failed" or "qa telegram preflight outage" not in str(preflight_status.get("last_error")):
+            failures.append(f"preflight diagnostics absent: {preflight_status}")
+        if "morning-brief:2026-07-13" in preflight_sent_keys:
+            failures.append("preflight failure was incorrectly marked as sent")
+
+        send_failed = [row for row in send_failure if row.get("status") == "failed"]
+        if len(send_failed) != 1 or "qa telegram send outage" not in str(send_failed[0].get("error")):
+            failures.append(f"send failure was not recorded cleanly: {send_failure}")
+        if send_failure_status.get("status") != "failed" or "qa telegram send outage" not in str(send_failure_status.get("last_error")):
+            failures.append(f"send failure diagnostics absent: {send_failure_status}")
+        if "morning-brief:2026-07-13" in send_failure_sent_keys:
+            failures.append("send failure was incorrectly marked as sent")
+
         sent = [row for row in first if row.get("status") == "sent"]
         if len(sent) != 1 or sent[0].get("job") != "morning-brief":
             failures.append(f"expected one sent morning brief, got {first}")
         if telegram_deliveries != ["global"]:
             failures.append(f"expected one Telegram rich brief, got {telegram_deliveries}")
+        if preflight_attempts["count"] != 3:
+            failures.append(f"expected three preflight attempts before success, got {preflight_attempts['count']}")
+        if send_attempts["count"] != 2:
+            failures.append(f"expected two send attempts before success, got {send_attempts['count']}")
         if not second or second[0].get("status") != "idle":
             failures.append(f"second scheduler run was not deduped: {second}")
 

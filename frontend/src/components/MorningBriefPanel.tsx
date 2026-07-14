@@ -175,16 +175,47 @@ function pingSeverityTone(severity?: string) {
   return "bg-slate-500/10 text-slate-600";
 }
 
+function pingSeverityLabel(severity?: string) {
+  const value = String(severity || "normal").toLowerCase();
+  if (value === "critical") return "Kritisch";
+  if (value === "elevated" || value === "high") return "Erhöht";
+  return "Beobachten";
+}
+
+function pingConfidenceLabel(confidence?: number) {
+  const value = Number(confidence || 0);
+  if (value >= 82) return "Hoch · trotzdem bestätigen";
+  if (value >= 62) return "Mittel · zweite Bestätigung";
+  return "Niedrig · nur beobachten";
+}
+
+function pingActionLabel(action?: string) {
+  const value = String(action || "watch").toLowerCase();
+  if (value === "hedge") return "Absicherung prüfen";
+  if (value === "reduce") return "Risiko reduzieren";
+  if (value === "add" || value === "long") return "Aufbau nach Bestätigung";
+  if (value === "short" || value === "watch-short") return "Short-Risiko prüfen";
+  return "Beobachten und bestätigen";
+}
+
+function pingWindowLabel(window?: string) {
+  const value = String(window || "").trim();
+  if (!value) return "Heute bis 1 Handelstag";
+  if (/open\s*\+?\s*60m/i.test(value)) return "Eröffnung bis +60 Minuten";
+  if (/intraday/i.test(value)) return "Im Tagesverlauf";
+  return value;
+}
+
 function pingTypeLabel(type?: string) {
   const t = String(type || "macro").toLowerCase();
   const labels: Record<string, string> = {
-    conflict: "War/Conflict",
-    central_bank: "Central Bank",
-    energy: "Energy",
-    election: "Vote/Election",
-    policy: "Policy",
-    disaster: "Natural Event",
-    macro: "Macro",
+    conflict: "Krieg / Konflikt",
+    central_bank: "Zentralbank",
+    energy: "Energie / Öl",
+    election: "Wahl",
+    policy: "Politik / Regulierung",
+    disaster: "Naturereignis",
+    macro: "Makro",
   };
   return labels[t] || t.replace("_", " ");
 }
@@ -1415,21 +1446,24 @@ export default function MorningBriefPanel({
       <section className="surface-panel rounded-[2rem] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-            Event Ping Inbox
+            Wichtige Marktereignisse
           </div>
           <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-            Priority queue
+            Nach Relevanz sortiert
           </div>
+        </div>
+        <div className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+          Priorität ordnet den Prüfbedarf. Sie bestätigt weder die Nachricht noch eine bestimmte Kursrichtung.
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {(
             [
-              { key: "all", label: "All" },
-              { key: "conflict", label: "War" },
-              { key: "central_bank", label: "CB" },
-              { key: "energy", label: "Oil" },
-              { key: "election", label: "Vote" },
-              { key: "policy", label: "Policy" },
+              { key: "all", label: "Alle" },
+              { key: "conflict", label: "Konflikt" },
+              { key: "central_bank", label: "Zentralbank" },
+              { key: "energy", label: "Energie" },
+              { key: "election", label: "Wahl" },
+              { key: "policy", label: "Politik" },
             ] as Array<{ key: PingFilter; label: string }>
           ).map((item) => (
             <button
@@ -1459,18 +1493,18 @@ export default function MorningBriefPanel({
                       #{idx + 1}
                     </span>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${pingSeverityTone(ping.severity)}`}>
-                      {ping.severity}
+                      {pingSeverityLabel(ping.severity)}
                     </span>
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       {pingTypeLabel(ping.type)}
                     </span>
                   </div>
                   <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    score {ping.priorityScore}
+                    Priorität {ping.priorityScore}
                   </span>
                 </div>
                 <div className="mt-2 text-sm font-bold text-slate-900">
-                  {ping.title || "Event signal"}
+                  {ping.title || "Marktereignis"}
                 </div>
                 {pingStatusCopy(ping.source_status) ? (
                   <div className="mt-2 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-semibold text-amber-800">
@@ -1478,10 +1512,10 @@ export default function MorningBriefPanel({
                   </div>
                 ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                  <div>Region: {ping.region || "global"}</div>
-                  <div>Confidence: {ping.confidence}</div>
-                  <div>Age: {ping.ageMinutes}m</div>
-                  <div>Window: {ping?.trade_impact?.window || "open+60m"}</div>
+                  <div>Region: {ping.region || "Global"}</div>
+                  <div>Belastbarkeit: {pingConfidenceLabel(ping.confidence)}</div>
+                  <div>Alter: {ping.ageMinutes} Min.</div>
+                  <div>Zeithorizont: {pingWindowLabel(ping?.trade_impact?.window)}</div>
                 </div>
                 {ping?.trade_impact?.baseline_scenario ? (
                   <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white px-3 py-2 text-xs leading-6 text-slate-700">
@@ -1491,7 +1525,7 @@ export default function MorningBriefPanel({
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {ping?.trade_impact?.action ? (
                     <span className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${actionTone(ping.trade_impact.action)}`}>
-                      {ping.trade_impact.action}
+                      {pingActionLabel(ping.trade_impact.action)}
                     </span>
                   ) : null}
                   {ping.symbols?.slice(0, 3).map((symbol: string) => (
@@ -1500,7 +1534,7 @@ export default function MorningBriefPanel({
                       onClick={() => onAnalyze(symbol)}
                       className="rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
                     >
-                      Analyze {symbol}
+                      {symbol} analysieren
                     </button>
                   ))}
                   {ping.hedgeCandidates?.[0] ? (
@@ -1508,7 +1542,7 @@ export default function MorningBriefPanel({
                       onClick={() => onAnalyze(ping.hedgeCandidates[0])}
                       className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                     >
-                      Hedge {ping.hedgeCandidates[0]}
+                      Absicherung {ping.hedgeCandidates[0]}
                     </button>
                   ) : null}
                 </div>
@@ -1521,7 +1555,7 @@ export default function MorningBriefPanel({
                     ) : null}
                     {ping.trade_impact?.invalidation ? (
                       <div className="rounded-[0.9rem] border border-black/8 bg-white px-3 py-2">
-                        Invalidation: {ping.trade_impact.invalidation}
+                        These ungültig wenn: {ping.trade_impact.invalidation}
                       </div>
                     ) : null}
                   </div>

@@ -63,7 +63,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [runningDue, setRunningDue] = useState(false);
   const [sendingSession, setSendingSession] = useState("");
   const [downloadingBackup, setDownloadingBackup] = useState(false);
-  const [runningPaperPreview, setRunningPaperPreview] = useState(false);
+  const [runningPaperPreview, setRunningPaperPreview] = useState("");
   const [warmupResult, setWarmupResult] = useState<any>(null);
   const [runResult, setRunResult] = useState<any>(null);
   const [paperPreviewResult, setPaperPreviewResult] = useState<any>(null);
@@ -173,15 +173,15 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     }
   };
 
-  const runPaperPreview = async () => {
-    setRunningPaperPreview(true);
+  const runPaperPreview = async (mode: "strict" | "learn" = "strict") => {
+    setRunningPaperPreview(mode);
     setError("");
     setPaperPreviewResult(null);
     try {
       const res = await fetch("/api/trading/paper-autopilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ execute: false, max_trades: 3, mode: "strict" }),
+        body: JSON.stringify({ execute: false, max_trades: 3, mode }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Paper autopilot preview failed");
@@ -190,7 +190,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     } catch (err) {
       setError(err instanceof Error ? err.message : "Paper autopilot preview failed");
     } finally {
-      setRunningPaperPreview(false);
+      setRunningPaperPreview("");
     }
   };
 
@@ -564,16 +564,29 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   {paperAutopilot.message}
                 </div>
               ) : null}
-              <button
-                type="button"
-                onClick={runPaperPreview}
-                disabled={loading || runningPaperPreview}
-                className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
-              >
-                {runningPaperPreview ? "Prueft" : "Paper-Gates pruefen"}
-              </button>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => runPaperPreview("strict")}
+                  disabled={loading || !!runningPaperPreview}
+                  className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
+                >
+                  {runningPaperPreview === "strict" ? "Prueft" : "Strict pruefen"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runPaperPreview("learn")}
+                  disabled={loading || !!runningPaperPreview}
+                  className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-800 disabled:opacity-50"
+                >
+                  {runningPaperPreview === "learn" ? "Prueft" : "Lernen pruefen"}
+                </button>
+              </div>
               {paperPreviewResult ? (
                 <div className="mt-3 rounded-[1rem] border border-sky-500/15 bg-sky-500/10 p-3 text-xs leading-5 text-slate-700">
+                  <div className="mb-2 inline-flex rounded-full border border-black/8 bg-white/75 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    {paperPreviewResult.mode === "learn" ? "Learning Preview" : "Strict Preview"} / keine Ausfuehrung
+                  </div>
                   <div className="font-extrabold text-slate-900">
                     {paperPreviewResult.selected?.length
                       ? `${paperPreviewResult.selected.length} Kandidat(en) paper-ready`

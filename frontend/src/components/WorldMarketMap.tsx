@@ -1516,12 +1516,12 @@ export default function WorldMarketMap({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
-              Market Map
+              Weltmarktkarte
             </div>
-            <h3 className="mt-2 text-3xl text-slate-900 sm:text-4xl">Overnight world flow</h3>
+            <h3 className="mt-2 text-3xl text-slate-900 sm:text-4xl">Globale Marktbewegungen über Nacht</h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-              Regionen, Makro-Ton, geopolitische Events und der Hand-off bis zur US-Eroeffnung
-              in einer kompakten Macro-Ansicht.
+              Regionen, Makro-Ton, geopolitische Ereignisse und der Übergang bis zur US-Eröffnung
+              in einer kompakten Makro-Ansicht.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1543,13 +1543,13 @@ export default function WorldMarketMap({
 
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { key: "all", label: "All" },
-            { key: "WAR", label: "War" },
-            { key: "VOTE", label: "Election" },
-            { key: "OIL", label: "Oil" },
-            { key: "CB", label: "CB" },
-            { key: "NAT", label: "Disaster" },
-            { key: "POL", label: "Policy" },
+            { key: "all", label: "Alle" },
+            { key: "WAR", label: "Krieg" },
+            { key: "VOTE", label: "Wahlen" },
+            { key: "OIL", label: "Öl" },
+            { key: "CB", label: "Zentralbank" },
+            { key: "NAT", label: "Katastrophe" },
+            { key: "POL", label: "Politik" },
           ].map((item) => (
             <button
               key={item.key}
@@ -1568,12 +1568,12 @@ export default function WorldMarketMap({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-black/8 bg-white/70 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-              Sort
+              Sortierung
             </div>
             {[ 
-              { key: "impact", label: "Impact" },
+              { key: "impact", label: "Wirkung" },
               { key: "region", label: "Region" },
-              { key: "latest", label: "Latest" },
+              { key: "latest", label: "Neueste" },
             ].map((item) => (
               <button
                 key={item.key}
@@ -1588,18 +1588,18 @@ export default function WorldMarketMap({
               </button>
             ))}
             <span className="ml-1 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-              {mapSignalSummary.total} events
+              {mapSignalSummary.total} Ereignisse
             </span>
             <span className="rounded-full border border-red-500/12 bg-red-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-red-700">
-              {mapSignalSummary.highImpact} high
+              {mapSignalSummary.highImpact} hoch
             </span>
             <span className="rounded-full border border-emerald-500/12 bg-emerald-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">
-              {mapSignalSummary.actionable} active setups
+              {mapSignalSummary.actionable} aktive Setups
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-              Lens
+              Zeitraum
             </div>
             {[
               { key: "live", label: "Live" },
@@ -1619,10 +1619,10 @@ export default function WorldMarketMap({
               </button>
             ))}
             {[
-              { key: "legend", label: "Legend", value: showLegend, set: setShowLegend },
-              { key: "regions", label: "Regions", value: showRegionCards, set: setShowRegionCards },
-              { key: "alert", label: "Live alert", value: showLiveAlert, set: setShowLiveAlert },
-              { key: "layer", label: "Event layer", value: showEventLayer, set: setShowEventLayer },
+              { key: "legend", label: "Legende", value: showLegend, set: setShowLegend },
+              { key: "regions", label: "Regionen", value: showRegionCards, set: setShowRegionCards },
+              { key: "alert", label: "Live-Alarm", value: showLiveAlert, set: setShowLiveAlert },
+              { key: "layer", label: "Ereignisebene", value: showEventLayer, set: setShowEventLayer },
             ].map((item) => (
               <button
                 key={item.key}
@@ -1643,10 +1643,10 @@ export default function WorldMarketMap({
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
-                World Map
+                Weltkarte
               </div>
               <div className="mt-1 text-base font-black text-slate-900">
-                Event pings & trade impact
+                Ereignisse und Marktwirkung
               </div>
             </div>
             <button
@@ -1654,7 +1654,7 @@ export default function WorldMarketMap({
               onClick={() => setImpactDrawerOpen(true)}
               className="shrink-0 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
             >
-              {mapSignalSummary.total} pings
+              {mapSignalSummary.total} Hinweise
             </button>
           </div>
 
@@ -1740,7 +1740,7 @@ export default function WorldMarketMap({
                       {item.markerIcon}
                     </span>
                     <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                      Impact {item.event_intelligence?.impact_score || item.impact || "watch"}
+                      Wirkung {item.event_intelligence?.impact_score || item.impact || "beobachten"}
                     </span>
                   </div>
                   <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900">{item.title}</div>
@@ -2072,7 +2072,7 @@ export default function WorldMarketMap({
                 <div className="flex items-center justify-between gap-2">
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
                     <span className={`h-2 w-2 rounded-full ${markerAccentClass(activePulseEvent.markerTone)}`} />
-                    Live alert
+                    Live-Alarm
                   </span>
                   <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
                     {activePulseEvent.region || "Global"}
@@ -2167,7 +2167,7 @@ export default function WorldMarketMap({
                   <div className="flex items-center justify-between gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
                       <span className={`h-2 w-2 rounded-full ${markerAccentClass(activePulseEvent.markerTone)}`} />
-                      Live alert
+                      Live-Alarm
                     </span>
                     <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
                       {activePulseEvent.region || "Global"}
@@ -2184,17 +2184,17 @@ export default function WorldMarketMap({
           <div className="space-y-3 xl:max-h-[720px] xl:overflow-y-auto xl:pr-1">
             <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                Map Status
+                Kartenstatus
               </div>
               <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                  Events <span className="font-bold text-slate-900">{mapSignalSummary.total}</span>
+                  Ereignisse <span className="font-bold text-slate-900">{mapSignalSummary.total}</span>
                 </div>
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                  High impact <span className="font-bold text-slate-900">{mapSignalSummary.highImpact}</span>
+                  Hohe Wirkung <span className="font-bold text-slate-900">{mapSignalSummary.highImpact}</span>
                 </div>
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                  Actionable <span className="font-bold text-slate-900">{mapSignalSummary.actionable}</span>
+                  Handlungsrelevant <span className="font-bold text-slate-900">{mapSignalSummary.actionable}</span>
                 </div>
               </div>
             </div>
@@ -2204,7 +2204,7 @@ export default function WorldMarketMap({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      Region Focus
+                      Regionsfokus
                     </div>
                     <div className="mt-2 text-xl font-black text-slate-900">
                       {displayRegion.label}
@@ -2261,7 +2261,7 @@ export default function WorldMarketMap({
                         onClick={() => setSelectedGeoPlace(null)}
                         className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
                       >
-                        Clear
+                        Auswahl löschen
                       </button>
                     ) : null}
                   </div>
@@ -2269,7 +2269,7 @@ export default function WorldMarketMap({
                 {regionDrilldown.placeHeat.length ? (
                   <div className="mt-4 space-y-2">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                      Country Heat
+                      Länderaktivität
                     </div>
                     {regionDrilldown.placeHeat.map((item) => (
                       <button
@@ -2289,9 +2289,9 @@ export default function WorldMarketMap({
                             {item.place}
                           </div>
                           <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                            <span>{item.events} events</span>
+                            <span>{item.events} Ereignisse</span>
                             <span>|</span>
-                            <span>{item.actionable} actionable</span>
+                            <span>{item.actionable} handlungsrelevant</span>
                           </div>
                         </div>
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
@@ -2331,7 +2331,7 @@ export default function WorldMarketMap({
               <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Region Drilldown
+                    Regionsdetails
                   </div>
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
                     {displayRegion.label}
@@ -2339,19 +2339,19 @@ export default function WorldMarketMap({
                 </div>
                 <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
                   <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                    Events <span className="font-bold text-slate-900">{regionDrilldown.total}</span>
+                    Ereignisse <span className="font-bold text-slate-900">{regionDrilldown.total}</span>
                   </div>
                   <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                    High impact <span className="font-bold text-slate-900">{regionDrilldown.highImpact}</span>
+                    Hohe Wirkung <span className="font-bold text-slate-900">{regionDrilldown.highImpact}</span>
                   </div>
                   <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                    Actionable <span className="font-bold text-slate-900">{regionDrilldown.actionable}</span>
+                    Handlungsrelevant <span className="font-bold text-slate-900">{regionDrilldown.actionable}</span>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
                   {selectedGeoPlace ? (
                     <div className="rounded-[0.9rem] border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
-                      Place focus: {selectedGeoPlace}
+                      Ortsfokus: {selectedGeoPlace}
                     </div>
                   ) : null}
                   {selectedGeoPlace && regionDrilldown.eventMix.length ? (
@@ -2459,7 +2459,7 @@ export default function WorldMarketMap({
                     ))
                   ) : (
                     <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                      Kein dominanter Drilldown fuer {displayRegion.label} im aktuellen Filter.
+                      Keine dominanten Regionsdetails für {displayRegion.label} im aktuellen Filter.
                     </div>
                   )}
                 </div>
@@ -2731,7 +2731,7 @@ export default function WorldMarketMap({
                   ))
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/78 p-3 text-sm leading-6 text-slate-500">
-                    Der aktive Welt- und Makroblock wird geladen. Sobald neue Events klassifiziert sind, erscheint hier die direkte Relevanz fuer Region, Risiko und moegliche Marktreaktion.
+                    Der aktive Welt- und Makroblock wird geladen. Sobald neue Ereignisse klassifiziert sind, erscheint hier die direkte Relevanz für Region, Risiko und mögliche Marktreaktion.
                   </div>
                 )}
               </div>
@@ -2739,7 +2739,7 @@ export default function WorldMarketMap({
 
             <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                Event Layer
+                Ereignisebene
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
@@ -2816,8 +2816,8 @@ export default function WorldMarketMap({
                       {item.event_intelligence ? (
                         <div className="mt-3 space-y-2 text-xs text-slate-500">
                           <div className="flex flex-wrap gap-2">
-                            <span>Impact {item.event_intelligence.impact_score}</span>
-                            <span>Confidence {item.event_intelligence.confidence_score}</span>
+                            <span>Wirkung {item.event_intelligence.impact_score}</span>
+                            <span>Belastbarkeit {item.event_intelligence.confidence_score}</span>
                             <span>{item.event_intelligence.decay}</span>
                           </div>
                           <div className="line-clamp-2">
@@ -2895,8 +2895,8 @@ export default function WorldMarketMap({
                 ) : (
                   <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
                     {showEventLayer
-                      ? `Keine dominanten Events im aktuellen Filter${selectedGeoPlace ? ` fuer ${selectedGeoPlace}` : ""} fuer ${timeLens}.`
-                      : "Event Layer ist ausgeblendet."}
+                      ? `Keine dominanten Ereignisse im aktuellen Filter${selectedGeoPlace ? ` für ${selectedGeoPlace}` : ""} für ${timeLens}.`
+                      : "Die Ereignisebene ist ausgeblendet."}
                   </div>
                 )}
               </div>
@@ -3043,7 +3043,7 @@ export default function WorldMarketMap({
         <>
           <button
             type="button"
-            aria-label="Close trade impact drawer"
+            aria-label="Marktwirkungsbereich schließen"
             onClick={() => setImpactDrawerOpen(false)}
             className="fixed inset-0 z-[70] bg-black/18 backdrop-blur-[1px] lg:hidden"
           />

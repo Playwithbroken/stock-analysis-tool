@@ -86,9 +86,9 @@ function toneClasses(tone: EdgeTone) {
 }
 
 function toneLabel(tone: EdgeTone) {
-  if (tone === "action") return "Action";
-  if (tone === "avoid") return "Avoid";
-  return "Watch";
+  if (tone === "action") return "Handeln";
+  if (tone === "avoid") return "Meiden";
+  return "Beobachten";
 }
 
 function inferAssetClass(ticker: string) {
@@ -116,7 +116,7 @@ function advisoryRiskLevel(row: DecisionRow) {
 function suitabilityBadge(summary?: SuitabilitySummary | null) {
   if (!summary) {
     return {
-      label: "Profil prueft",
+      label: "Profil wird geprüft",
       classes: "border-slate-300 bg-white/70 text-slate-500",
     };
   }
@@ -128,7 +128,7 @@ function suitabilityBadge(summary?: SuitabilitySummary | null) {
   }
   if (summary.decision === "action_requires_review") {
     return {
-      label: "Profil: pruefen",
+      label: "Profil: prüfen",
       classes: "border-amber-500/25 bg-amber-500/10 text-amber-800",
     };
   }
@@ -179,7 +179,7 @@ function buildScoreRows(signalScore: any): DecisionRow[] {
     const score = toNumber(item?.conviction_score ?? item?.total_score ?? item?.score);
     const label = String(item?.label || item?.headline || ticker || "Signal").trim();
     const headline = String(item?.headline || item?.detail || item?.next_action || "High-conviction signal").trim();
-    const nextAction = String(item?.next_action || "Analyse oeffnen und Trigger pruefen").trim();
+    const nextAction = String(item?.next_action || "Analyse öffnen und Trigger prüfen").trim();
     const source = String(item?.source_label || item?.bucket || "Scoreboard").trim();
     const text = `${label} ${headline} ${nextAction}`;
     return {
@@ -205,7 +205,7 @@ function buildBriefRows(globalBrief: any): DecisionRow[] {
     const score = toNumber(item?.confidence ?? item?.score ?? item?.total_score ?? item?.conviction);
     const label = String(item?.label || item?.setup || item?.title || ticker || "Brief setup").trim();
     const headline = String(item?.thesis || item?.summary || item?.reason || item?.trigger || "Morning Brief setup").trim();
-    const nextAction = String(item?.next_action || item?.trigger || "Trigger und Risiko pruefen").trim();
+    const nextAction = String(item?.next_action || item?.trigger || "Trigger und Risiko prüfen").trim();
     const source = String(item?.source || item?.category || "Morning Brief").trim();
     const text = `${label} ${headline} ${nextAction}`;
     return {
@@ -396,17 +396,17 @@ export default function EdgeDashboardPanel({
   const vixLevel = toNumber(vix?.value ?? vix?.level);
   const regime = String(globalBrief?.macro_regime || tradingEdge?.regime?.label || vix?.regime || "Neutral").trim();
   const eventCount = Array.isArray(globalBrief?.event_pings) ? globalBrief.event_pings.length : 0;
-  const briefQuality = globalBrief?.quality?.fallback ? "Fallback" : globalBrief ? "Live" : "Loading";
+  const briefQuality = globalBrief?.quality?.fallback ? "Ersatzdaten" : globalBrief ? "Live" : "Lädt";
   const portfolioRisk =
     snapshot.holdings.length === 0
-      ? "No portfolio"
+      ? "Kein Portfolio"
       : snapshot.concentration != null && snapshot.concentration > 35
-        ? "Concentration"
+        ? "Konzentration"
         : snapshot.uniqueTickers < 5
-          ? "Diversification"
+          ? "Diversifikation"
           : snapshot.missingQuotes > 0
-            ? "Quote gaps"
-            : "Balanced";
+            ? "Kurslücken"
+            : "Ausgewogen";
   const blockers = [
     snapshot.concentration != null && snapshot.concentration > 35
       ? `Top position ${snapshot.top?.ticker || ""} is ${formatNumber(snapshot.concentration, 0)}% of tracked value.`
@@ -421,36 +421,36 @@ export default function EdgeDashboardPanel({
 
   const kpis = [
     {
-      label: "Action candidates",
+      label: "Handlungskandidaten",
       value: String(profileActionCount || actionRows.length),
       detail: suitabilityLoading
-        ? "Advisory checks loading"
+        ? "Profilprüfung läuft"
         : rows.length
-          ? `${profileReviewCount} profile review / ${rows.length} ranked`
-          : loading ? "Signals loading" : "No ranked signal yet",
+          ? `${profileReviewCount} zu prüfen / ${rows.length} bewertet`
+          : loading ? "Signale werden geladen" : "Noch kein bewertetes Signal",
       icon: Target,
     },
     {
-      label: "Portfolio risk",
+      label: "Portfoliorisiko",
       value: portfolioRisk,
       detail:
         snapshot.concentration != null
-          ? `${formatNumber(snapshot.concentration, 0)}% top position`
-          : `${snapshot.holdings.length} holdings tracked`,
+          ? `${formatNumber(snapshot.concentration, 0)}% größte Position`
+          : `${snapshot.holdings.length} Positionen erfasst`,
       icon: ShieldAlert,
     },
     {
-      label: "Learning evidence",
+      label: "Lernnachweis",
       value: decisionRate != null ? `${formatNumber(decisionRate, 0)}%` : "n/a",
       detail: evaluated != null
         ? `${formatNumber(evaluated, 0)} geprüft / ${formatNumber(neutralCount || 0, 0)} neutral / ${formatNumber(hitRate || 0, 0)}% Treffer bei klaren Fällen`
-        : "Need more closed forecasts",
+        : "Mehr abgeschlossene Prognosen nötig",
       icon: BarChart3,
     },
     {
-      label: "Market regime",
+      label: "Marktregime",
       value: regime,
-      detail: vixLevel != null ? `VIX ${formatNumber(vixLevel, 1)} / ${eventCount} events` : `${briefQuality} brief / ${eventCount} events`,
+      detail: vixLevel != null ? `VIX ${formatNumber(vixLevel, 1)} / ${eventCount} Ereignisse` : `${briefQuality}-Briefing / ${eventCount} Ereignisse`,
       icon: Activity,
     },
   ];
@@ -478,20 +478,20 @@ export default function EdgeDashboardPanel({
             ) : null}
             <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{row.source}</span>
             <span className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] ${badge.classes}`}>
-              {suitabilityLoading && !advisory ? "Profil prueft" : badge.label}
+              {suitabilityLoading && !advisory ? "Profil wird geprüft" : badge.label}
             </span>
           </div>
           <div className="mt-2 line-clamp-1 text-sm font-bold text-slate-900">{row.label}</div>
           <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{row.headline}</div>
           {reason ? (
             <div className="mt-2 line-clamp-1 text-[11px] font-semibold leading-5 text-slate-500">
-              Advisory: {reason}
+              Profilprüfung: {reason}
             </div>
           ) : null}
         </div>
         <div className="text-right">
           <div className="text-xl font-black text-slate-950">{row.score != null ? formatNumber(row.score, 0) : "n/a"}</div>
-          <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">score</div>
+          <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">Punkte</div>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-black/6 pt-3">
@@ -502,7 +502,7 @@ export default function EdgeDashboardPanel({
             onClick={() => onAnalyzeTicker(row.ticker)}
             className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-800"
           >
-            Analyze <ArrowRight size={12} />
+            Analysieren <ArrowRight size={12} />
           </button>
         ) : null}
       </div>
@@ -563,7 +563,7 @@ export default function EdgeDashboardPanel({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
-              Top-News Forecast Learning
+              Lernkontrolle für Top-Nachrichten
             </div>
             <div className="mt-1 text-sm font-semibold leading-6 text-slate-700 sm:line-clamp-2">
               {topNewsLesson}
@@ -571,17 +571,17 @@ export default function EdgeDashboardPanel({
           </div>
           <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
             <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Hit</div>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Treffer</div>
               <div className="mt-1 text-base font-black text-slate-950">
                 {topNewsHitRate != null ? `${formatNumber(topNewsHitRate, 0)}%` : "n/a"}
               </div>
             </div>
             <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Check</div>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Geprüft</div>
               <div className="mt-1 text-base font-black text-slate-950">{formatNumber(topNewsEvaluated, 0)}</div>
             </div>
             <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Open</div>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Offen</div>
               <div className="mt-1 text-base font-black text-slate-950">{formatNumber(topNewsPending, 0)}</div>
             </div>
           </div>
@@ -592,10 +592,10 @@ export default function EdgeDashboardPanel({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              Macro Playbook
+              Makro-Entscheidungsrahmen
             </div>
             <div className="mt-1 text-base font-black text-slate-950 dark:text-white">
-              Was bedeutet das fuer den Markt?
+              Was bedeutet das für den Markt?
             </div>
           </div>
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -627,7 +627,7 @@ export default function EdgeDashboardPanel({
                   {item.whyNow}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(item.assets.length ? item.assets : ["Market basket"]).slice(0, 4).map((asset) => (
+                  {(item.assets.length ? item.assets : ["Marktkorb"]).slice(0, 4).map((asset) => (
                     <span key={asset} className="rounded-full border border-black/8 bg-slate-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-600 dark:border-white/10 dark:bg-white/8 dark:text-slate-200">
                       {asset}
                     </span>
@@ -666,7 +666,7 @@ export default function EdgeDashboardPanel({
             <EmptyDecision
               icon={<Target size={18} />}
               title="Kein sofortiger A-Setup"
-              body={loading ? "Signalquellen laden noch." : "Kein Score ist aktuell stark genug fuer eine harte Action."}
+              body={loading ? "Signalquellen laden noch." : "Kein Score ist aktuell stark genug für eine direkte Handlung."}
             />
           )}
         </div>

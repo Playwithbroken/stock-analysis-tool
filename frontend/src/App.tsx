@@ -268,7 +268,7 @@ function AnalyzerLoadingPanel({ ticker }: { ticker?: string }) {
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
           <Activity size={14} className="animate-pulse" />
-          Loading
+            Wird geladen
         </div>
       </div>
 
@@ -287,10 +287,10 @@ function AnalyzerLoadingPanel({ ticker }: { ticker?: string }) {
         </div>
         <div className="rounded-[1.5rem] border border-black/8 bg-white/72 p-4">
           <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-            Loading Steps
+            Ladeschritte
           </div>
           <div className="mt-4 space-y-3">
-            {["Symbol aufloesen", "Provider pruefen", "Dossier berechnen", "UI stabilisieren"].map((step, index) => (
+            {["Symbol auflösen", "Datenquelle prüfen", "Dossier berechnen", "Ansicht stabilisieren"].map((step, index) => (
               <div key={step} className="flex items-center gap-3 text-sm font-semibold text-slate-700">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-black text-[var(--accent)]">
                   {index + 1}
@@ -545,7 +545,7 @@ function AppContent() {
   ).slice(0, 10);
   const headerFallbackSymbols = ["SPY", "QQQ", "AAPL", "NVDA", "BTC-USD", "GLD"];
   const favoriteSymbols = userTrackedSymbols.length ? userTrackedSymbols : headerFallbackSymbols;
-  const favoriteTapeLabel = userTrackedSymbols.length ? "Watchlist / Portfolio" : "Market Snapshot";
+  const favoriteTapeLabel = userTrackedSymbols.length ? "Watchlist / Portfolio" : "Marktüberblick";
   const {
     quotes: headerQuotes,
     connected: headerRealtimeConnected,
@@ -1062,9 +1062,9 @@ function AppContent() {
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
       const message = err instanceof Error ? err.message : "An error occurred";
       if (message.toLowerCase().includes("timeout")) {
-        setError(`Analyse fuer ${searchTicker} dauert zu lange. Bitte noch einmal starten oder den Ticker direkt eingeben.`);
+        setError(`Die Analyse für ${searchTicker} dauert zu lange. Bitte erneut starten oder den Ticker direkt eingeben.`);
       } else {
-        setError(`Analyse fuer ${searchTicker} konnte nicht geladen werden. ${message}`);
+        setError(`Die Analyse für ${searchTicker} konnte nicht geladen werden. ${message}`);
       }
     } finally {
       if (!controller.signal.aborted && searchRequestIdRef.current === requestId) {
@@ -1124,10 +1124,10 @@ function AppContent() {
   const headerStatusLabel = headerRealtimeConnected ? headerConnectionState : headerTransportMode;
   const briefCommandStats = [
     ["Setups", globalBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
-    ["Events", globalBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
-    ["Congress", globalBrief?.congress_watch?.length || 0, "border-sky-500/20 bg-sky-500/10 text-sky-700"],
-    ["Earnings", globalBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
-    ["Products", globalBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
+    ["Ereignisse", globalBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
+    ["Kongress", globalBrief?.congress_watch?.length || 0, "border-sky-500/20 bg-sky-500/10 text-sky-700"],
+    ["Quartalszahlen", globalBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
+    ["Produkte", globalBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
   ];
   const dashboardPriorityCards = [
     {
@@ -1139,11 +1139,11 @@ function AppContent() {
       detail:
         globalBrief?.macro_regime
           ? `Regime: ${globalBrief.macro_regime}`
-          : "Feed laedt Setups, Events und Portfolio-Bezug.",
+          : "Die Datenquelle lädt Setups, Ereignisse und Portfolio-Bezug.",
       tone: "border-emerald-500/18 bg-emerald-500/8 text-emerald-800",
     },
     {
-      label: "Naechster Check",
+      label: "Nächste Prüfung",
       title:
         globalBrief?.trade_setups?.[0]?.ticker ||
         globalBrief?.watchlist_impact?.[0]?.ticker ||
@@ -1461,7 +1461,7 @@ function AppContent() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
-                      Optional Setup
+                      Optionale Einrichtung
                     </div>
                     <div className="mt-1 text-sm font-semibold text-slate-800">
                       Die Ersteinrichtung ist optional und blockiert den Start nicht.
@@ -1566,7 +1566,7 @@ function AppContent() {
                         Kurzstatus
                       </div>
                       <div className="mt-1 text-sm font-bold text-slate-900">
-                        Decision / Market / Brief
+                        Entscheidung / Markt / Briefing
                       </div>
                     </div>
                     <button
@@ -1574,7 +1574,7 @@ function AppContent() {
                       onClick={() => setIsChatOpen(true)}
                       className="rounded-full bg-[#101114] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                     >
-                      Ask Buddy
+                      Buddy fragen
                     </button>
                   </div>
                   <div className="mt-3 grid grid-cols-5 gap-2">
@@ -1593,7 +1593,7 @@ function AppContent() {
 
             <div className="dashboard-section-label">
               <span>Heute wichtig</span>
-              <span>3 Prioritaeten, danach Details</span>
+              <span>3 Prioritäten, danach Details</span>
             </div>
             <div className="dashboard-priority-strip">
               {dashboardPriorityCards.map((item) => (
@@ -1612,7 +1612,7 @@ function AppContent() {
             </div>
 
             <div className="dashboard-section-label">
-              <span>Deep Dive</span>
+              <span>Detailanalyse</span>
               <span>Marktbild links, Briefing rechts</span>
             </div>
             <div className="dashboard-intel-grid">
@@ -1642,7 +1642,7 @@ function AppContent() {
                 ) : (
                   <section className="surface-panel rounded-[2rem] p-6">
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      World Map Feed
+                      Weltkarten-Daten
                     </div>
                     <div className="mt-3 text-base font-semibold text-slate-800">
                       Live-Morning-Briefing aktuell nicht verfügbar.
@@ -1679,7 +1679,7 @@ function AppContent() {
                 ) : (
                   <section className="surface-panel rounded-[2rem] p-5 sm:p-6">
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      Briefing Feed
+                      Briefing-Daten
                     </div>
                     <div className="mt-3 text-base font-semibold text-slate-800">
                       Briefing gerade nicht verfügbar.
@@ -1692,7 +1692,7 @@ function AppContent() {
                       onClick={() => setBriefReloadTick((prev) => prev + 1)}
                       className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
                     >
-                      Retry Brief
+                      Briefing neu laden
                     </button>
                   </section>
                 )}

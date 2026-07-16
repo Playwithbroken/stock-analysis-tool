@@ -163,7 +163,22 @@ function actionTone(value: unknown, impactScore: number | null): EdgeTone {
 }
 
 function titleCase(value: unknown) {
-  return String(value || "Macro")
+  const raw = String(value || "macro").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const labels: Record<string, string> = {
+    macro: "Makro",
+    conflict: "Konflikt",
+    central_bank: "Zentralbank",
+    energy: "Energie",
+    election: "Wahlen",
+    disaster: "Katastrophe",
+    policy: "Politik",
+    public_figure: "Wichtige Person",
+    ipo: "IPO",
+    product_catalyst: "Produkt-Katalysator",
+    congress_trade: "Kongress-Transaktion",
+  };
+  if (labels[raw]) return labels[raw];
+  return String(value || "Makro")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }

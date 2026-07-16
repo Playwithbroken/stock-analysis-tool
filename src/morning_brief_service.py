@@ -3279,91 +3279,91 @@ class MorningBriefService:
             return {
                 "action": "hedge",
                 "leverage": "avoid",
-                "why_now": "Conflict risk favors defense, oil and gold over aggressive longs.",
-                "trigger": "Only act if oil, gold or defense holds its first reaction after the open.",
-                "invalidation": "If crude and gold fade back below the first impulse, reduce the hedge thesis.",
-                "execution_window": "Open to first 90 minutes",
+                "why_now": "Konfliktrisiken begünstigen Verteidigung, Öl und Gold gegenüber aggressiven Long-Positionen.",
+                "trigger": "Nur handeln, wenn Öl, Gold oder Verteidigungswerte ihre erste Reaktion nach der Eröffnung halten.",
+                "invalidation": "Die Absicherungsthese reduzieren, wenn Öl und Gold unter den ersten Impuls zurückfallen.",
+                "execution_window": "Eröffnung bis zu den ersten 90 Minuten",
             }
         if event_type == "central_bank":
             return {
                 "action": "watch",
                 "leverage": "conditional" if impact == "medium" else "avoid",
-                "why_now": "Rates, dollar and futures need confirmation before directional trades.",
-                "trigger": "Wait for yields, dollar and index futures to confirm in the same direction.",
-                "invalidation": "No trade if bonds, dollar and futures disagree after the release.",
-                "execution_window": "Macro release to first hour",
+                "why_now": "Renditen, Dollar und Futures müssen sich bestätigen, bevor eine Richtung gehandelt wird.",
+                "trigger": "Abwarten, bis Renditen, Dollar und Index-Futures dieselbe Richtung bestätigen.",
+                "invalidation": "Kein Trade, wenn Anleihen, Dollar und Futures nach der Veröffentlichung auseinanderlaufen.",
+                "execution_window": "Makro-Veröffentlichung bis zur ersten Stunde",
             }
         if event_type == "energy":
             return {
                 "action": "long",
                 "leverage": "conditional",
-                "why_now": "Energy follow-through matters if oil strength survives the open.",
-                "trigger": "Take only if oil and energy equities keep relative strength after Europe or US open.",
-                "invalidation": "Skip if oil spikes but XLE and cyclicals do not confirm.",
-                "execution_window": "Europe handoff to US open",
+                "why_now": "Die Anschlussdynamik im Energiesektor zählt, wenn die Öl-Stärke die Eröffnung übersteht.",
+                "trigger": "Nur handeln, wenn Öl und Energieaktien nach der Europa- oder US-Eröffnung relative Stärke halten.",
+                "invalidation": "Auslassen, wenn Öl steigt, aber XLE und zyklische Werte die Bewegung nicht bestätigen.",
+                "execution_window": "Europa-Übergang bis zur US-Eröffnung",
             }
         if event_type == "election":
             return {
                 "action": "watch",
                 "leverage": "avoid",
-                "why_now": "Election outcomes rotate sectors before a clean trend appears.",
-                "trigger": "Let sector rotation show up first in banks, utilities, defense or domestic indices.",
-                "invalidation": "Avoid if the first reaction reverses into the next headline cycle.",
-                "execution_window": "Headline release to session close",
+                "why_now": "Wahlergebnisse verschieben Sektoren oft, bevor ein klarer Trend entsteht.",
+                "trigger": "Zuerst eine Sektorrotation bei Banken, Versorgern, Verteidigung oder heimischen Indizes abwarten.",
+                "invalidation": "Meiden, wenn sich die erste Reaktion im nächsten Nachrichtenzyklus umkehrt.",
+                "execution_window": "Veröffentlichung bis zum Sitzungsschluss",
             }
         if event_type == "disaster":
             return {
                 "action": "hedge",
                 "leverage": "avoid",
-                "why_now": "Supply-chain and insurer stress often matter before stock-specific narratives.",
-                "trigger": "Watch transport, insurers and commodity routes before acting on single names.",
-                "invalidation": "Stand down if the event gets contained quickly and transport normalizes.",
-                "execution_window": "First session after event shock",
+                "why_now": "Belastungen für Lieferketten und Versicherer zählen oft vor einzelnen Aktiengeschichten.",
+                "trigger": "Transport, Versicherer und Rohstoffrouten beobachten, bevor Einzelwerte gehandelt werden.",
+                "invalidation": "Nicht handeln, wenn das Ereignis schnell eingedämmt wird und sich der Transport normalisiert.",
+                "execution_window": "Erste Sitzung nach dem Ereignisschock",
             }
         if event_type == "policy":
             return {
                 "action": "short",
                 "leverage": "avoid" if impact == "high" else "conditional",
-                "why_now": "Policy shocks can fade, so risk control matters more than speed.",
-                "trigger": "Use only if affected sectors lose support and broad tape confirms the policy shock.",
-                "invalidation": "No short if the market absorbs the headline within the first impulse.",
-                "execution_window": "Headline to first trend confirmation",
+                "why_now": "Politische Schocks können schnell verblassen; Risikokontrolle zählt mehr als Geschwindigkeit.",
+                "trigger": "Nur nutzen, wenn betroffene Sektoren Unterstützung verlieren und der breite Markt den Schock bestätigt.",
+                "invalidation": "Kein Short, wenn der Markt die Meldung bereits im ersten Impuls absorbiert.",
+                "execution_window": "Meldung bis zur ersten Trendbestätigung",
             }
         if event_type == "public_figure":
             return {
                 "action": "watch",
                 "leverage": "avoid",
-                "why_now": "Public statements can move risk fast, but many reverse once context, official follow-up or market depth appears.",
-                "trigger": "Only upgrade if the quote is from a trusted source and affected futures, rates, dollar or sector ETFs confirm together.",
-                "invalidation": "Stand down if the statement is walked back, lacks policy detail or the affected basket ignores it.",
-                "execution_window": "Headline to first 60 minutes",
+                "why_now": "Aussagen wichtiger Personen können Märkte schnell bewegen, drehen aber oft nach Kontext oder offizieller Einordnung.",
+                "trigger": "Nur hochstufen, wenn das Zitat aus einer vertrauenswürdigen Quelle stammt und Futures, Renditen, Dollar oder Sektor-ETFs gemeinsam bestätigen.",
+                "invalidation": "Nicht handeln, wenn die Aussage zurückgenommen wird, politische Details fehlen oder der betroffene Marktkorb nicht reagiert.",
+                "execution_window": "Meldung bis zu den ersten 60 Minuten",
             }
         if event_type == "ipo":
             return {
                 "action": "watch",
                 "leverage": "conditional",
-                "why_now": "IPO filings and debuts can reveal capital-market appetite and reset peer valuations, especially in hot sectors.",
-                "trigger": "Only promote if filing/pricing/debut details are confirmed and peers or the IPO basket react with volume.",
-                "invalidation": "Ignore if valuation, float, lock-up or first trading reaction does not support sector read-through.",
-                "execution_window": "Filing/pricing to first two sessions",
+                "why_now": "IPO-Anmeldungen und Börsendebüts zeigen die Risikobereitschaft am Kapitalmarkt und können Vergleichswerte neu bewerten.",
+                "trigger": "Nur hochstufen, wenn Anmeldung, Preis oder Debüt bestätigt sind und Vergleichswerte oder der IPO-Korb mit Volumen reagieren.",
+                "invalidation": "Ignorieren, wenn Bewertung, Streubesitz, Haltefrist oder erste Kursreaktion keine Sektorwirkung stützen.",
+                "execution_window": "Anmeldung oder Preisfestsetzung bis zu den ersten zwei Sitzungen",
             }
         if event_type == "product_catalyst":
             return {
                 "action": "watch",
                 "leverage": "conditional",
-                "why_now": "Product news can change demand expectations, but the first headline is often incomplete.",
-                "trigger": "Act only if official confirmation, volume and analyst/channel checks support the move.",
-                "invalidation": "Skip if the company, reliable press or price action does not confirm the headline.",
-                "execution_window": "Headline to next session",
+                "why_now": "Produktmeldungen können Nachfrageerwartungen verändern, doch die erste Überschrift ist oft unvollständig.",
+                "trigger": "Nur handeln, wenn offizielle Bestätigung, Volumen und Analysten- oder Vertriebskanalprüfungen die Bewegung stützen.",
+                "invalidation": "Auslassen, wenn Unternehmen, verlässliche Presse oder Kursbewegung die Meldung nicht bestätigen.",
+                "execution_window": "Meldung bis zur nächsten Sitzung",
             }
         if event_type == "congress_trade":
             return {
                 "action": "watch",
                 "leverage": "avoid",
-                "why_now": "Official delayed PTR filing can confirm a theme, but price confirmation matters more than the disclosure alone.",
-                "trigger": "Compare current price to trade date and require trend, volume and sector confirmation.",
-                "invalidation": "Ignore if the move already played out or the stock fails relative strength after the filing.",
-                "execution_window": "Today to next 3 sessions",
+                "why_now": "Eine verspätete offizielle PTR-Meldung kann ein Thema bestätigen, aber die Kursbestätigung zählt mehr als die Meldung allein.",
+                "trigger": "Aktuellen Kurs mit dem Handelstag vergleichen und Trend, Volumen sowie Sektorbestätigung verlangen.",
+                "invalidation": "Ignorieren, wenn die Bewegung bereits gelaufen ist oder die Aktie nach der Meldung keine relative Stärke zeigt.",
+                "execution_window": "Heute bis zu den nächsten drei Sitzungen",
             }
         return {
             "action": "watch",

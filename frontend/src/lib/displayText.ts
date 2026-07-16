@@ -47,6 +47,8 @@ export function normalizeGermanDisplayText(value: unknown) {
   let text = String(value ?? "").trim();
   if (!text) return "";
 
+  text = text.replace(/preisbestaetigung/gi, (word) => preserveInitialCase(word, "preisbestätigung"));
+
   text = text.replace(
     /\b(fuer|ueber|pruefen|prueft|geprueft|bestaetigen|bestaetigt|bestaetigung|naechste|naechster|moeglich|moegliche|faellt|oeffnen|eroeffnung|laedt)\b/gi,
     (word) => preserveInitialCase(word, GERMAN_ASCII_WORDS[word.toLowerCase()] || word),

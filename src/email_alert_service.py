@@ -2215,29 +2215,29 @@ class EmailAlertService:
 
     def _default_macro_trigger(self, event_type: str) -> str:
         defaults = {
-            "Conflict": "Trusted headline confirmation, volume expansion and first market reaction after the next liquid open.",
-            "Energy": "Oil/energy futures hold the move for 30-60 minutes and linked sectors confirm.",
-            "Central Bank": "Rates, dollar and growth indices confirm the policy repricing after the statement.",
-            "Election": "Confirmed result/poll shift plus sector rotation in the first liquid session.",
-            "Policy": "Official confirmation and affected sector/index reaction, not rumour-only flow.",
-            "Public Figure": "Official quote/source plus first cross-asset reaction in affected sectors, rates, dollar or index futures.",
-            "IPO": "Confirmed filing/pricing/debut details plus peer group or sector reaction after the first liquid print.",
-            "Disaster": "Confirmed operational/economic damage and commodity or insurance-sector reaction.",
+            "Conflict": "Vertrauenswürdige Bestätigung, steigendes Volumen und erste Marktreaktion nach der nächsten liquiden Eröffnung.",
+            "Energy": "Öl- und Energie-Futures halten die Bewegung 30 bis 60 Minuten und verbundene Sektoren bestätigen.",
+            "Central Bank": "Renditen, Dollar und Wachstumsindizes bestätigen die Neubewertung nach der Erklärung.",
+            "Election": "Bestätigtes Ergebnis oder Umfrageverschiebung plus Sektorrotation in der ersten liquiden Sitzung.",
+            "Policy": "Offizielle Bestätigung und Reaktion betroffener Sektoren oder Indizes, nicht nur Gerüchtefluss.",
+            "Public Figure": "Offizielles Zitat und erste sektorübergreifende Reaktion bei Sektoren, Renditen, Dollar oder Index-Futures.",
+            "IPO": "Bestätigte Anmeldung, Preisfestsetzung oder Debütdaten plus Reaktion der Vergleichsgruppe nach dem ersten liquiden Kurs.",
+            "Disaster": "Bestätigter operativer oder wirtschaftlicher Schaden und Reaktion bei Rohstoffen oder Versicherern.",
         }
-        return defaults.get(event_type, "Confirmed source plus price/volume follow-through.")
+        return defaults.get(event_type, "Bestätigte Quelle plus Anschlussbewegung bei Kurs und Volumen.")
 
     def _default_macro_invalidation(self, event_type: str) -> str:
         defaults = {
-            "Conflict": "Ignore if official sources deny escalation or risk assets fully reverse the first move.",
-            "Energy": "Invalid if crude reverses below the pre-headline level or supply impact is denied.",
-            "Central Bank": "Invalid if rates/dollar reaction fades and equities reclaim the prior regime.",
-            "Election": "Invalid if result is unconfirmed or affected sectors do not react.",
-            "Policy": "Invalid if the story remains proposal-only or no affected asset reacts.",
-            "Public Figure": "Invalid if the statement is walked back, lacks official context or markets ignore the affected basket.",
-            "IPO": "Invalid if valuation, float, lock-up or first trading reaction does not support sector read-through.",
-            "Disaster": "Invalid if economic damage is contained and cross-asset reaction fades.",
+            "Conflict": "Ungültig, wenn offizielle Quellen die Eskalation verneinen oder Risikoanlagen die erste Bewegung vollständig umkehren.",
+            "Energy": "Ungültig, wenn Öl unter das Niveau vor der Meldung fällt oder der Angebotseffekt verneint wird.",
+            "Central Bank": "Ungültig, wenn die Rendite- und Dollarreaktion nachlässt und Aktien in das vorherige Regime zurückkehren.",
+            "Election": "Ungültig, wenn das Ergebnis unbestätigt bleibt oder betroffene Sektoren nicht reagieren.",
+            "Policy": "Ungültig, wenn es nur bei einem Vorschlag bleibt oder keine betroffene Anlage reagiert.",
+            "Public Figure": "Ungültig, wenn die Aussage zurückgenommen wird, offizieller Kontext fehlt oder der Marktkorb nicht reagiert.",
+            "IPO": "Ungültig, wenn Bewertung, Streubesitz, Haltefrist oder erste Kursreaktion keine Sektorwirkung stützen.",
+            "Disaster": "Ungültig, wenn der wirtschaftliche Schaden begrenzt bleibt und die sektorübergreifende Reaktion nachlässt.",
         }
-        return defaults.get(event_type, "Invalid if the story remains unconfirmed or price does not react.")
+        return defaults.get(event_type, "Ungültig, wenn die Meldung unbestätigt bleibt oder der Kurs nicht reagiert.")
 
     def _macro_event_identity(self, event_type: str, country: str, title: str) -> str:
         safe = re.sub(r"[^a-z0-9]+", "-", f"{event_type}-{country}-{title}".lower()).strip("-")

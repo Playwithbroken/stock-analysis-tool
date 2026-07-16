@@ -34,6 +34,10 @@ try {
     normalizeGermanDisplayText("Signalrisiko liegt ueber der Toleranz. Trigger pruefen."),
     "Signalrisiko liegt über der Toleranz. Trigger prüfen.",
   );
+  assert.equal(
+    normalizeGermanDisplayText("Nur mit Folgequelle und Preisbestaetigung pushen."),
+    "Nur mit Folgequelle und Preisbestätigung pushen.",
+  );
 
   console.log("displayText tests passed");
 } finally {

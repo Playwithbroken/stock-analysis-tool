@@ -1,6 +1,7 @@
 import sys
 
 from src.email_alert_service import EmailAlertService
+from src.morning_brief_service import MorningBriefService
 
 
 def service() -> EmailAlertService:
@@ -11,6 +12,34 @@ def service() -> EmailAlertService:
 
 def main() -> int:
     svc = service()
+
+    brief_service = MorningBriefService.__new__(MorningBriefService)
+    for event_type in (
+        "conflict",
+        "central_bank",
+        "energy",
+        "election",
+        "disaster",
+        "policy",
+        "public_figure",
+        "ipo",
+        "product_catalyst",
+        "congress_trade",
+    ):
+        guidance = brief_service._event_action_hint(event_type, "high")
+        for field in ("why_now", "trigger", "invalidation", "execution_window"):
+            if not str(guidance.get(field) or "").strip():
+                print(f"FAIL {event_type} has no {field}")
+                return 1
+        combined = " ".join(str(guidance[field]) for field in ("why_now", "trigger", "invalidation"))
+        if any(raw in combined for raw in ("Only ", "Invalid ", "Stand down", "Wait for ", "Ignore if ")):
+            print(f"FAIL {event_type} still exposes English decision guidance: {combined}")
+            return 1
+
+    for event_type in ("Conflict", "Energy", "Central Bank", "Election", "Policy", "Public Figure", "IPO", "Disaster"):
+        if not svc._default_macro_trigger(event_type) or not svc._default_macro_invalidation(event_type):
+            print(f"FAIL {event_type} has incomplete Telegram defaults")
+            return 1
 
     weak_event = {
         "title": "Oil rumour hits tape",

@@ -1001,14 +1001,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Demo-Kapital" value={money(demoAccount.equity || demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)} />
-          <StatTile label="Risiko / Trade" value={money(demoAccount.risk_budget_per_trade_value, currency)} />
-          <StatTile label="Offenes Risiko" value={`${money(demoAccount.open_risk_value, currency)} · ${demoAccount.open_risk_pct || 0}%`} />
-          <StatTile label="Offene Exposure" value={`${money(demoAccount.open_exposure_value, currency)} · ${demoAccount.open_exposure_pct || 0}%`} />
-        </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-[1.6rem] border border-emerald-500/20 bg-emerald-50/80 p-4 text-xs text-emerald-900">
             <div className="font-extrabold uppercase tracking-[0.18em] text-emerald-700">Demo-Konto Leitplanken</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">

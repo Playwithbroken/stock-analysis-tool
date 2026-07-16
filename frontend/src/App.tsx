@@ -344,21 +344,21 @@ function LoginScreen({
               </div>
               <div>
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-slate-500">
-                  Private Workspace
+                  Privater Arbeitsbereich
                 </div>
                 <h1 className="mt-3 max-w-3xl text-3xl leading-none text-slate-900 sm:text-5xl lg:text-6xl">
-                  Market Intelligence, locked to your local workspace.
+                  Marktinformationen, geschützt in deinem privaten Arbeitsbereich.
                 </h1>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-                  Die App ist jetzt auf Single-User-Betrieb gehaertet: lokales Passwort, geschuetzte API,
-                  localhost-only und keine offenen Alert-Endpunkte mehr.
+                  Die App ist für den privaten Einzelbetrieb abgesichert: Zugangscode, geschützte API,
+                  kontrollierte Herkunftsfreigaben und keine offenen Alarm-Endpunkte.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
                   "API hinter Session-Cookie",
-                  "CORS auf lokale Origins begrenzt",
-                  "Alerts und Settings nicht mehr offen",
+                  "Zugriffe auf erlaubte Domains begrenzt",
+                  "Alarme und Einstellungen geschützt",
                 ].map((item) => (
                   <div key={item} className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-sm font-semibold text-slate-700">
                     {item}
@@ -367,9 +367,9 @@ function LoginScreen({
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
-                  ["Signal-first", "Morning Brief, Watchlist und Realtime direkt im Startpfad."],
-                  ["Private", "Nur dein Workspace, keine offene Multi-User-Flaeche."],
-                  ["Execution-ready", "Score, Paper Trading und Session-Listen in einem Flow."],
+                  ["Signale zuerst", "Morning Briefing, Watchlist und Echtzeitdaten direkt im Startpfad."],
+                  ["Privat", "Nur dein Arbeitsbereich, keine offene Mehrbenutzerfläche."],
+                  ["Handlungsbereit", "Score, Paper-Trading und Sitzungslisten in einem Ablauf."],
                 ].map(([title, body]) => (
                   <div
                     key={title}
@@ -386,10 +386,10 @@ function LoginScreen({
 
             <div className="order-first surface-strong rounded-[2.4rem] p-6 sm:p-8 lg:order-last">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-white/50">
-                Access
+                Zugang
               </div>
               <div className="mt-4 text-3xl font-black text-white">
-                Enter workspace code
+                Zugangscode eingeben
               </div>
               <p className="mt-3 text-sm leading-7 text-white/70">
                 {configured
@@ -404,9 +404,9 @@ function LoginScreen({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") submit();
                   }}
-                  aria-label="6-digit workspace access code"
+                  aria-label="6-stelliger Zugangscode"
                   className="login-password-input w-full rounded-[1.2rem] border px-4 py-3 text-sm font-semibold"
-                  placeholder="6-digit access code"
+                  placeholder="6-stelliger Zugangscode"
                 />
                 <label className="flex items-center gap-2 rounded-[1rem] border border-white/12 bg-white/8 px-3 py-2 text-xs text-white/80">
                   <input
@@ -415,36 +415,36 @@ function LoginScreen({
                     onChange={(e) => setRememberDevice(e.target.checked)}
                     className="h-4 w-4 rounded border-white/30 bg-transparent"
                   />
-                  Auf diesem Geraet angemeldet bleiben (7 Tage)
+                  Auf diesem Gerät angemeldet bleiben (7 Tage)
                 </label>
                 <button
                   onClick={submit}
                   disabled={submitting || !configured}
                   className="w-full rounded-[1.2rem] bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-900 disabled:opacity-50"
                 >
-                  Unlock
+                  Entsperren
                 </button>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-3">
                 <div className="rounded-[1.2rem] border border-white/10 bg-white/8 p-4">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/45">
-                    Access Model
+                    Zugangsmodell
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-white">Single workspace code</div>
+                  <div className="mt-2 text-sm font-semibold text-white">Ein privater Zugangscode</div>
                 </div>
                 <div className="rounded-[1.2rem] border border-white/10 bg-white/8 p-4">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/45">
-                    Runtime
+                    Plattform
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-white">Web and phone ready</div>
+                  <div className="mt-2 text-sm font-semibold text-white">Für Web und Smartphone</div>
                 </div>
               </div>
               {status ? (
                 <div className="mt-4 text-sm text-white/75">
                   {status.includes("500")
-                    ? "Cannot connect to the server - check that the backend is running."
+                    ? "Keine Verbindung zum Server. Bitte den Backend-Status prüfen."
                     : status.includes("401") || status.includes("403")
-                      ? "Incorrect code. Please try again."
+                      ? "Der Zugangscode ist falsch. Bitte erneut versuchen."
                       : status}
                 </div>
               ) : null}
@@ -1292,25 +1292,25 @@ function AppContent() {
                 className={`flex h-2.5 w-2.5 rounded-full ${
                   headerRealtimeConnected ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" : "bg-amber-500"
                 }`}
-                title={`Market data: ${headerStatusLabel}`}
+                title={`Marktdaten: ${headerStatusLabel}`}
               />
               <button
                 onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
-                aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
+                aria-label={`Währung auf ${currency === "USD" ? "EUR" : "USD"} wechseln`}
                 className="mobile-topbar-button px-2.5 py-1.5 text-[10px]"
               >
                 {currency}
               </button>
               <button
                 onClick={toggleTheme}
-                aria-label="Toggle dark mode"
+                aria-label="Darstellung wechseln"
                 className="mobile-topbar-icon"
               >
                 {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
               </button>
               <button
                 onClick={handleInstallApp}
-                aria-label="Install app"
+                aria-label="App installieren"
                 className={`mobile-topbar-icon ${
                   installPrompt.installed ? "text-emerald-700" : "text-slate-700"
                 }`}
@@ -1320,17 +1320,17 @@ function AppContent() {
               </button>
               <button
                 onClick={() => setIsHealthOpen(true)}
-                aria-label="Open health center"
+                aria-label="Statuszentrum öffnen"
                 className="mobile-topbar-icon"
-                title="Health center"
+                title="Statuszentrum"
               >
                 <Activity size={14} />
               </button>
               <button
                 onClick={handleLogout}
-                aria-label="Lock workspace"
+                aria-label="Arbeitsbereich sperren"
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-[#101114] text-white"
-                title="Lock workspace"
+                title="Arbeitsbereich sperren"
               >
                 <LockKeyhole size={14} />
               </button>
@@ -1352,7 +1352,7 @@ function AppContent() {
                     Broker Freund
                   </div>
                   <div className="truncate text-base font-semibold text-slate-900">
-                    Market Intelligence Terminal
+                    Marktintelligenz-Terminal
                   </div>
                 </div>
               </div>
@@ -1378,7 +1378,7 @@ function AppContent() {
                 <div className="hidden rounded-[1.1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] sm:flex">
                   <button
                     onClick={() => setCurrency("USD")}
-                    aria-label="Switch to USD"
+                    aria-label="Währung auf USD wechseln"
                     className={`rounded-[0.9rem] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] transition-all ${
                       currency === "USD" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-800"
                     }`}
@@ -1387,7 +1387,7 @@ function AppContent() {
                   </button>
                   <button
                     onClick={() => setCurrency("EUR")}
-                    aria-label="Switch to EUR"
+                    aria-label="Währung auf EUR wechseln"
                     className={`rounded-[0.9rem] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] transition-all ${
                       currency === "EUR" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-800"
                     }`}
@@ -1398,7 +1398,7 @@ function AppContent() {
                 {/* Mobile: compact toggle that cycles USD <-> EUR */}
                 <button
                   onClick={() => setCurrency(currency === "USD" ? "EUR" : "USD")}
-                  aria-label={`Switch to ${currency === "USD" ? "EUR" : "USD"}`}
+                  aria-label={`Währung auf ${currency === "USD" ? "EUR" : "USD"} wechseln`}
                   className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--text-primary)] transition-colors sm:hidden"
                 >
                   {currency}
@@ -1406,7 +1406,7 @@ function AppContent() {
                 {/* Theme toggle */}
                 <button
                   onClick={toggleTheme}
-                  aria-label="Toggle dark mode"
+                  aria-label="Darstellung wechseln"
                   className="rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] p-2.5 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
                 >
                   {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
@@ -1420,7 +1420,7 @@ function AppContent() {
                   }`}
                   title={installPrompt.installed ? "App ist installiert" : "Als App installieren"}
                 >
-                  {installPrompt.installed ? "Installed" : "Install"}
+                  {installPrompt.installed ? "Installiert" : "Installieren"}
                 </button>
                 {/* Username - visible on all screen sizes */}
                 <div className="max-w-[7.5rem] truncate rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-secondary)] sm:max-w-none sm:text-xs">
@@ -1430,13 +1430,13 @@ function AppContent() {
                   onClick={() => setIsHealthOpen(true)}
                   className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
                 >
-                  Health
+                  Status
                 </button>
                 <button
                   onClick={handleLogout}
                   className="whitespace-nowrap rounded-[1rem] border border-[var(--line-subtle)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-panel)] sm:px-4 sm:py-2.5 sm:text-xs sm:tracking-[0.18em]"
                 >
-                  Lock
+                  Sperren
                 </button>
               </div>
             </div>
@@ -1464,7 +1464,7 @@ function AppContent() {
                       Optional Setup
                     </div>
                     <div className="mt-1 text-sm font-semibold text-slate-800">
-                      First Run ist jetzt optional und blockiert den Start nicht mehr.
+                      Die Ersteinrichtung ist optional und blockiert den Start nicht.
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1645,10 +1645,10 @@ function AppContent() {
                       World Map Feed
                     </div>
                     <div className="mt-3 text-base font-semibold text-slate-800">
-                      Live-Morning-Brief aktuell nicht verfuegbar.
+                      Live-Morning-Briefing aktuell nicht verfügbar.
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Datenquelle antwortet gerade langsam oder unvollstaendig. Du kannst sofort neu laden.
+                      Die Datenquelle antwortet gerade langsam oder unvollständig. Du kannst sofort neu laden.
                     </p>
                     <button
                       type="button"
@@ -1682,7 +1682,7 @@ function AppContent() {
                       Briefing Feed
                     </div>
                     <div className="mt-3 text-base font-semibold text-slate-800">
-                      Briefing gerade nicht verfuegbar.
+                      Briefing gerade nicht verfügbar.
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       Die World Map bleibt nutzbar. Lade nur den Briefing-Feed erneut, ohne das Dashboard zu blockieren.
@@ -1759,31 +1759,31 @@ function AppContent() {
               <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="surface-panel rounded-[2rem] p-6">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Ready Desk
+                    Analyse-Start
                   </div>
                   <h3 className="mt-3 text-2xl text-slate-900">
-                    Search first, then move straight into analysis, signals and execution context.
+                    Erst suchen, dann Analyse, Signale und Handlungsrahmen gemeinsam prüfen.
                   </h3>
                   <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     {[
                       {
-                        title: "Public Signals",
-                        body: "Berkshire, Congress und weitere oeffentliche Filings mit sichtbarem Delay.",
-                        cta: "Open Markets",
+                        title: "Öffentliche Signale",
+                        body: "Berkshire, Kongress und weitere öffentliche Meldungen mit sichtbarer Verzögerung.",
+                        cta: "Markets öffnen",
                         action: () => setActiveTab("discovery" as Tab),
                       },
                       {
-                        title: "Decision Clarity",
-                        body: "Ruhigere Scores und bessere Priorisierung von Risiko, Bewertung und Momentum.",
-                        cta: "Run Analysis",
+                        title: "Klare Einordnung",
+                        body: "Ruhigere Scores und klare Priorisierung von Risiko, Bewertung und Momentum.",
+                        cta: "Analyse starten",
                         action: () => {
                           searchInputRef.current?.focus();
                         },
                       },
                       {
-                        title: "Private Access",
-                        body: "Single-User-Hardening mit Login, lokaler Session und gesperrten Triggern.",
-                        cta: "Open Portfolio",
+                        title: "Privater Zugang",
+                        body: "Geschützter Einzelzugang mit Sitzung und abgesicherten Triggern.",
+                        cta: "Portfolio öffnen",
                         action: () => setActiveTab("portfolio" as Tab),
                       },
                     ].map((item) => (
@@ -1806,26 +1806,26 @@ function AppContent() {
                 </div>
                 <div className="rounded-[2rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.88))] p-6">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Workflow
+                    Arbeitsablauf
                   </div>
                   <div className="mt-4 space-y-3">
                     {[
                       {
-                        copy: "1. Search a ticker, ETF or crypto pair.",
-                        cta: "Focus Search",
+                        copy: "1. Aktie, ETF oder Kryptowährung suchen.",
+                        cta: "Suche fokussieren",
                         action: () => {
                           const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="AAPL, NVDA, ASML, BTC-USD"]');
                           searchInput?.focus();
                         },
                       },
                       {
-                        copy: "2. Read the live quote, score context and risk profile.",
-                        cta: "Open Markets",
+                        copy: "2. Live-Kurs, Score-Kontext und Risikoprofil prüfen.",
+                        cta: "Markets öffnen",
                         action: () => setActiveTab("discovery" as Tab),
                       },
                       {
-                        copy: "3. Move into paper trading or signals only if the setup holds.",
-                        cta: "Open Portfolio",
+                        copy: "3. Nur bei bestätigtem Setup zu Paper-Trading oder Signalen wechseln.",
+                        cta: "Portfolio öffnen",
                         action: () => setActiveTab("portfolio" as Tab),
                       },
                     ].map((item) => (
@@ -1860,7 +1860,7 @@ function AppContent() {
                   Portfolio-Datenquelle: {portfolioDataSource === "local-cache" ? "lokale Browser-Sicherung" : portfolioDataSource}
                 </div>
                 <p className="mt-1 text-sm leading-6 text-amber-700">
-                  {portfolioDataSourceMessage || "Serverdaten sind gerade nicht verfuegbar."}
+                  {portfolioDataSourceMessage || "Serverdaten sind gerade nicht verfügbar."}
                 </p>
               </div>
             ) : null}
@@ -1870,7 +1870,7 @@ function AppContent() {
                   <div className="flex-1">
                     <div className="text-sm font-extrabold text-amber-800">Portfolios wiederherstellen</div>
                     <p className="mt-1 text-sm text-amber-700">
-                      Der Server wurde neu gestartet und die Daten wurden zurueckgesetzt.
+                      Der Server wurde neu gestartet und die Daten wurden zurückgesetzt.
                       Es wurden <strong>{cachedPortfolios.length} Portfolio{cachedPortfolios.length > 1 ? "s" : ""}</strong> lokal gespeichert -
                       sollen sie wiederhergestellt werden?
                     </p>
@@ -1935,7 +1935,7 @@ function AppContent() {
 
       <footer className="border-t border-black/6 bg-white/50">
         <div className="layout-shell px-4 py-6 text-center text-sm text-slate-500 sm:px-6 xl:px-8 2xl:px-10">
-          Broker Freund {__APP_VERSION__} beta. Local single-user workspace. Data is informational only.
+          Broker Freund {__APP_VERSION__} Beta. Privater Einzelarbeitsbereich. Informationen sind ein Entscheidungsrahmen, keine Gewinnzusage.
         </div>
       </footer>
 
@@ -1996,17 +1996,17 @@ function AppContent() {
               <div>
                 <div className="text-lg font-black text-[var(--text-primary)]">App installieren</div>
                 <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-                  Wenn kein Install-Dialog erscheint, nutze im Browser-Menue den Punkt
-                  "App installieren" oder "Zum Startbildschirm hinzufuegen".
+              Wenn kein Installationsdialog erscheint, nutze im Browser-Menü den Punkt
+              "App installieren" oder "Zum Startbildschirm hinzufügen".
                 </p>
               </div>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-700">
-                Desktop: Chrome oder Edge Menue oeffnen und "App installieren" waehlen.
+                Desktop: Menü in Chrome oder Edge öffnen und "App installieren" wählen.
               </div>
               <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-700">
-                iPhone: Teilen-Dialog oeffnen und "Zum Home-Bildschirm" waehlen.
+                iPhone: Teilen-Dialog öffnen und "Zum Home-Bildschirm" wählen.
               </div>
             </div>
             <button

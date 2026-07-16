@@ -326,6 +326,8 @@ function LoginScreen({
     try {
       await onLogin(password, rememberDevice);
       setPassword("");
+    } catch {
+      // The parent exposes the concrete login error below the form.
     } finally {
       setSubmitting(false);
     }
@@ -396,6 +398,8 @@ function LoginScreen({
               <p className="mt-3 text-sm leading-7 text-white/70">
                 {configured
                   ? "Nur mit lokaler Session wird die App geladen."
+                  : status.includes("automatisch erneut geprüft")
+                    ? "Der Server startet noch. Die Verbindung wird im Hintergrund erneut geprüft."
                   : "Der Server braucht noch APP_ACCESS_PASSWORD und APP_SESSION_SECRET."}
               </p>
               <div className="mt-6 space-y-3">
@@ -424,7 +428,7 @@ function LoginScreen({
                   disabled={submitting || !configured}
                   className="w-full rounded-[1.2rem] bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-900 disabled:opacity-50"
                 >
-                  Entsperren
+                  {submitting ? "Zugang wird geprüft..." : "Entsperren"}
                 </button>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-3">
@@ -900,10 +904,10 @@ function AppContent() {
     };
   }, [auth.authenticated, activeTab]);
 
-  const refreshAuth = async () => {
+  const refreshAuth = async (timeoutMs = 6000) => {
     const payload = await fetchJsonWithRetry<any>("/api/auth/status", undefined, {
-      retries: 1,
-      retryDelayMs: 700,
+      retries: 0,
+      timeoutMs,
     });
     setAuth({
       loading: false,
@@ -914,15 +918,33 @@ function AppContent() {
   };
 
   useEffect(() => {
-    refreshAuth().catch(() => {
-      setAuth({
-        loading: false,
-        authenticated: false,
-        configured: false,
-        profile: null,
-      });
-      setAuthStatus("Server-Status konnte nicht geladen werden.");
-    });
+    let cancelled = false;
+    let retryTimeout: number | undefined;
+    let checkAttempt = 0;
+
+    const checkAuth = async () => {
+      try {
+        await refreshAuth(checkAttempt === 0 ? 6000 : 20000);
+        if (!cancelled) setAuthStatus("");
+      } catch {
+        if (cancelled) return;
+        checkAttempt += 1;
+        setAuth({
+          loading: false,
+          authenticated: false,
+          configured: false,
+          profile: null,
+        });
+        setAuthStatus("Server wird noch verbunden. Der Zugang wird automatisch erneut geprüft.");
+        retryTimeout = window.setTimeout(checkAuth, 12000);
+      }
+    };
+
+    void checkAuth();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimeout);
+    };
   }, []);
 
   useEffect(() => {
@@ -980,7 +1002,7 @@ function AppContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, remember_device: rememberDevice }),
       },
-      { retries: 1, retryDelayMs: 700 },
+      { retries: 0, timeoutMs: 12000 },
     );
     setAuth({
       loading: false,
@@ -994,7 +1016,17 @@ function AppContent() {
     try {
       await handleLogin(password, rememberDevice);
     } catch (err) {
-      setAuthStatus(err instanceof Error ? err.message : "Login failed.");
+      const statusCode = (err as Error & { status?: number } | null)?.status;
+      setAuthStatus(
+        statusCode === 401
+          ? "Der Zugangscode ist nicht korrekt."
+          : statusCode === 429
+            ? "Zu viele Versuche. Bitte warte bis die Zugangssperre abgelaufen ist."
+            : err instanceof Error
+              ? err.message
+              : "Der Zugang konnte nicht geprüft werden.",
+      );
+      throw err;
     }
   };
 
@@ -1119,7 +1151,7 @@ function AppContent() {
   };
 
   if (auth.loading) {
-    return <div className="min-h-screen"><LoadingState /></div>;
+    return <div className="min-h-screen"><LoadingState label="Arbeitsbereich wird verbunden..." /></div>;
   }
 
   if (!auth.authenticated) {

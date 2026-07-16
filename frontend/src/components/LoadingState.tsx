@@ -1,4 +1,8 @@
-export default function LoadingState() {
+interface LoadingStateProps {
+  label?: string;
+}
+
+export default function LoadingState({ label = "Analysiere Marktdaten..." }: LoadingStateProps) {
   return (
     <div className="space-y-6">
       <div className="surface-panel rounded-[2rem] p-6">
@@ -46,7 +50,7 @@ export default function LoadingState() {
             />
           </svg>
           <span className="text-sm font-medium text-slate-600">
-            Analysiere Marktdaten...
+            {label}
           </span>
         </div>
       </div>

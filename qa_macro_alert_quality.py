@@ -41,6 +41,43 @@ def main() -> int:
             print(f"FAIL {event_type} has incomplete Telegram defaults")
             return 1
 
+    cached_brief = {
+        "event_layer": [
+            {
+                "event_type": "public_figure",
+                "impact": "high",
+                "event_intelligence": {
+                    "why_now": "Old English context.",
+                    "trigger": "Old English trigger.",
+                    "invalidation": "Old English invalidation.",
+                },
+            }
+        ],
+        "event_pings": [
+            {
+                "type": "public_figure",
+                "severity": "critical",
+                "trade_impact": {
+                    "baseline_scenario": "Old English context.",
+                    "trigger": "Old English trigger.",
+                    "invalidation": "Old English invalidation.",
+                },
+            }
+        ],
+    }
+    refreshed_brief = brief_service._refresh_cached_event_guidance(cached_brief)
+    refreshed_intelligence = refreshed_brief["event_layer"][0]["event_intelligence"]
+    refreshed_impact = refreshed_brief["event_pings"][0]["trade_impact"]
+    if "Aussagen wichtiger Personen" not in refreshed_intelligence.get("why_now", ""):
+        print(f"FAIL cached event guidance was not refreshed: {refreshed_intelligence}")
+        return 1
+    if "vertrauenswürdigen Quelle" not in refreshed_impact.get("trigger", ""):
+        print(f"FAIL cached ping guidance was not refreshed: {refreshed_impact}")
+        return 1
+    if cached_brief["event_layer"][0]["event_intelligence"]["why_now"] != "Old English context.":
+        print("FAIL cache refresh mutated the stored source payload")
+        return 1
+
     weak_event = {
         "title": "Oil rumour hits tape",
         "summary": "Unconfirmed social flow mentions possible supply disruption.",

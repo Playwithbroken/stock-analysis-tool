@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
+from copy import deepcopy
 import json
 import os
 import re
@@ -267,11 +268,55 @@ class MorningBriefService:
         watchlist_snapshot: Dict[str, Any] | None = None,
     ) -> Dict[str, Any] | None:
         if self._cache is not None and self._is_usable_brief(self._cache):
-            return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
+            return self._prepare_brief_for_delivery(self._cache, watchlist_snapshot)
         persisted = self._load_persisted_snapshot()
         if persisted is not None and self._is_usable_brief(persisted):
-            return self._merge_watchlist_impact(dict(persisted), watchlist_snapshot)
+            return self._prepare_brief_for_delivery(persisted, watchlist_snapshot)
         return None
+
+    def _prepare_brief_for_delivery(
+        self,
+        brief: Dict[str, Any],
+        watchlist_snapshot: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        refreshed = self._refresh_cached_event_guidance(brief)
+        return self._merge_watchlist_impact(refreshed, watchlist_snapshot)
+
+    def _refresh_cached_event_guidance(self, brief: Dict[str, Any]) -> Dict[str, Any]:
+        refreshed = deepcopy(brief)
+
+        for event in refreshed.get("event_layer") or []:
+            if not isinstance(event, dict):
+                continue
+            event_type = str(event.get("event_type") or "macro").lower()
+            impact = str(event.get("impact") or "medium").lower()
+            guidance = self._event_action_hint(event_type, impact)
+            intelligence = event.get("event_intelligence") if isinstance(event.get("event_intelligence"), dict) else {}
+            intelligence.update({
+                key: guidance[key]
+                for key in ("action", "leverage", "why_now", "trigger", "invalidation", "execution_window")
+                if guidance.get(key)
+            })
+            event["event_intelligence"] = intelligence
+
+        for ping in refreshed.get("event_pings") or []:
+            if not isinstance(ping, dict):
+                continue
+            event_type = str(ping.get("type") or "macro").lower()
+            severity = str(ping.get("severity") or "normal").lower()
+            impact = "high" if severity in {"critical", "elevated", "high"} else "medium"
+            guidance = self._event_action_hint(event_type, impact)
+            trade_impact = ping.get("trade_impact") if isinstance(ping.get("trade_impact"), dict) else {}
+            trade_impact.update({
+                "action": guidance.get("action") or trade_impact.get("action") or "watch",
+                "baseline_scenario": guidance.get("why_now") or trade_impact.get("baseline_scenario"),
+                "trigger": guidance.get("trigger") or trade_impact.get("trigger"),
+                "invalidation": guidance.get("invalidation") or trade_impact.get("invalidation"),
+                "window": guidance.get("execution_window") or trade_impact.get("window"),
+            })
+            ping["trade_impact"] = trade_impact
+
+        return refreshed
 
     def _is_usable_brief(self, brief: Dict[str, Any] | None) -> bool:
         if not isinstance(brief, dict):
@@ -382,7 +427,7 @@ class MorningBriefService:
             and self._cache_time is not None
             and (now - self._cache_time).total_seconds() < self._ttl_seconds
         ):
-            return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
+            return self._prepare_brief_for_delivery(self._cache, watchlist_snapshot)
 
         # Include user watchlist tickers in news fetch
         watchlist_tickers = [
@@ -538,7 +583,7 @@ class MorningBriefService:
         self._cache = brief
         self._cache_time = now
         self._persist_snapshot(brief)
-        return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
+        return self._prepare_brief_for_delivery(brief, watchlist_snapshot)
 
     def get_brief_fast(
         self,
@@ -555,7 +600,7 @@ class MorningBriefService:
             and self._is_usable_brief(self._cache)
             and (now - self._cache_time).total_seconds() < self._ttl_seconds
         ):
-            return self._merge_watchlist_impact(dict(self._cache), watchlist_snapshot)
+            return self._prepare_brief_for_delivery(self._cache, watchlist_snapshot)
 
         watchlist_tickers = [
             (item.get("value") or "").upper()
@@ -702,7 +747,7 @@ class MorningBriefService:
         self._cache = brief
         self._cache_time = now
         self._persist_snapshot(brief)
-        return self._merge_watchlist_impact(dict(brief), watchlist_snapshot)
+        return self._prepare_brief_for_delivery(brief, watchlist_snapshot)
 
     def _attach_playbook_context(self, brief: Dict[str, Any]) -> None:
         setup_board = brief.get("setup_board") or {}
@@ -1263,7 +1308,7 @@ class MorningBriefService:
                 event_intelligence.get("why_now")
                 or event.get("thesis")
                 or event.get("title")
-                or "Macro catalyst active."
+                or "Der Makro-Katalysator ist aktiv."
             )
             hedge_idea = (
                 (event.get("portfolio_exposure") or {}).get("hedge_candidates", [{}])[0].get("ticker")
@@ -1274,9 +1319,9 @@ class MorningBriefService:
                 if event_type in {"conflict", "energy"}:
                     hedge_idea = "GLD / XLE"
                 elif event_type in {"central_bank", "policy"}:
-                    hedge_idea = "TLT / cash buffer"
+                    hedge_idea = "TLT / Liquiditätspuffer"
                 else:
-                    hedge_idea = "Reduce gross exposure"
+                    hedge_idea = "Gesamtrisiko reduzieren"
             pings.append(
                 {
                     "id": f"{cooldown_key}:{int(now.timestamp())}",
@@ -1306,10 +1351,10 @@ class MorningBriefService:
         rows: List[Dict[str, Any]] = []
         macro = macro or []
         candidates = [
-            ("CL=F", "energy", "Oil impulse watch", "Oil and energy equities confirm together.", "Oil fades or XLE fails to confirm.", ["XLE", "CVX", "OXY"]),
-            ("GC=F", "conflict", "Gold hedge watch", "Gold holds bid while indexes/rates show stress.", "Gold reverses and VIX remains contained.", ["GLD", "NEM"]),
-            ("^TNX", "central_bank", "Rates watch", "Yields, dollar and Nasdaq futures align.", "Rates move without equity confirmation.", ["TLT", "QQQ"]),
-            ("DX-Y.NYB", "policy", "Dollar pressure watch", "Dollar strength pressures risk assets and multinationals.", "Dollar move fades before US open.", ["UUP", "SPY"]),
+            ("CL=F", "energy", "Öl-Impuls beobachten", "Öl und Energieaktien bestätigen gemeinsam.", "Öl verliert den Impuls oder XLE bestätigt nicht.", ["XLE", "CVX", "OXY"]),
+            ("GC=F", "conflict", "Gold-Absicherung beobachten", "Gold bleibt gefragt, während Indizes oder Renditen Stress zeigen.", "Gold dreht und der VIX bleibt begrenzt.", ["GLD", "NEM"]),
+            ("^TNX", "central_bank", "Renditen beobachten", "Renditen, Dollar und Nasdaq-Futures bewegen sich gemeinsam.", "Renditen bewegen sich ohne Bestätigung durch Aktien.", ["TLT", "QQQ"]),
+            ("DX-Y.NYB", "policy", "Dollar-Druck beobachten", "Dollar-Stärke belastet Risikoanlagen und internationale Konzerne.", "Die Dollar-Bewegung lässt vor der US-Eröffnung nach.", ["UUP", "SPY"]),
         ]
         lookup = {str(item.get("symbol") or "").upper(): item for item in macro}
         for symbol, event_type, title, trigger, invalidation, symbols in candidates:
@@ -1330,12 +1375,12 @@ class MorningBriefService:
                     "source_status": "watch_fallback",
                     "trade_impact": {
                         "action": "watch",
-                        "baseline_scenario": "No high-confidence headline ping is active, but this macro proxy is worth monitoring.",
+                        "baseline_scenario": "Kein belastbarer Schlagzeilen-Alarm ist aktiv, dieser Makro-Indikator bleibt aber beobachtenswert.",
                         "symbols": symbols,
                         "trigger": trigger,
                         "invalidation": invalidation,
-                        "window": "today",
-                        "hedge_idea": "Keep gross exposure smaller until confirmation.",
+                        "window": "Heute",
+                        "hedge_idea": "Gesamtrisiko bis zur Bestätigung kleiner halten.",
                     },
                 }
             )
@@ -1368,8 +1413,8 @@ class MorningBriefService:
                     "link": item.get("link"),
                     "impact": item.get("impact") or "medium",
                     "confidence": 78 if item.get("source_quality") == "tier_1" else 64,
-                    "trigger": "Official confirmation plus price/volume follow-through.",
-                    "invalidation": "Rumour fades, company denies it, or first impulse fully reverses.",
+                    "trigger": "Offizielle Bestätigung plus Anschlussbewegung bei Kurs und Volumen.",
+                    "invalidation": "Das Gerücht verliert Wirkung, das Unternehmen widerspricht oder der erste Impuls dreht vollständig.",
                 }
             )
         return catalysts[:6]
@@ -3368,10 +3413,10 @@ class MorningBriefService:
         return {
             "action": "watch",
             "leverage": "avoid",
-            "why_now": "Wait for market structure to confirm the headline.",
-            "trigger": "Stand by until price, rates and sector leadership align.",
-            "invalidation": "No trade if the first reaction fades immediately.",
-            "execution_window": "Event dependent",
+            "why_now": "Die Marktstruktur muss die Meldung zuerst bestätigen.",
+            "trigger": "Abwarten, bis Kurs, Renditen und Sektorführung übereinstimmen.",
+            "invalidation": "Kein Trade, wenn die erste Reaktion sofort nachlässt.",
+            "execution_window": "Vom Ereignis abhängig",
         }
 
     def _decision_profile(

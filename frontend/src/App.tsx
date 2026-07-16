@@ -11,6 +11,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
 import { normalizeGeoRegions } from "./lib/geoRegions";
+import { localizeMarketRegime, normalizeGermanDisplayText } from "./lib/displayText";
 import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
 
@@ -1122,6 +1123,7 @@ function AppContent() {
   const shouldShowOnboardingNudge = ONBOARDING_NUDGE_ENABLED && showOnboardingNudge;
   const activeNavItem = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
   const headerStatusLabel = headerRealtimeConnected ? headerConnectionState : headerTransportMode;
+  const macroRegimeLabel = localizeMarketRegime(globalBrief?.macro_regime);
   const briefCommandStats = [
     ["Setups", globalBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
     ["Ereignisse", globalBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
@@ -1133,12 +1135,12 @@ function AppContent() {
     {
       label: "Jetzt wichtig",
       title:
-        globalBrief?.opening_bias ||
-        globalBrief?.headline ||
+        normalizeGermanDisplayText(globalBrief?.opening_bias) ||
+        normalizeGermanDisplayText(globalBrief?.headline) ||
         "Noch kein klares Marktsignal",
       detail:
         globalBrief?.macro_regime
-          ? `Regime: ${globalBrief.macro_regime}`
+          ? `Regime: ${macroRegimeLabel}`
           : "Die Datenquelle lädt Setups, Ereignisse und Portfolio-Bezug.",
       tone: "border-emerald-500/18 bg-emerald-500/8 text-emerald-800",
     },
@@ -1150,21 +1152,21 @@ function AppContent() {
         globalBrief?.product_catalysts?.[0]?.ticker ||
         "Watchlist",
       detail:
-        globalBrief?.trade_setups?.[0]?.thesis ||
-        globalBrief?.watchlist_impact?.[0]?.reason ||
-        globalBrief?.product_catalysts?.[0]?.title ||
+        normalizeGermanDisplayText(globalBrief?.trade_setups?.[0]?.thesis) ||
+        normalizeGermanDisplayText(globalBrief?.watchlist_impact?.[0]?.reason) ||
+        normalizeGermanDisplayText(globalBrief?.product_catalysts?.[0]?.title) ||
         "Nur starke Signale werden in Analyzer/Markets vertieft.",
       tone: "border-sky-500/18 bg-sky-500/8 text-sky-800",
     },
     {
       label: "Risiko",
       title:
-        globalBrief?.risk_note ||
-        globalBrief?.event_pings?.[0]?.title ||
+        normalizeGermanDisplayText(globalBrief?.risk_note) ||
+        normalizeGermanDisplayText(globalBrief?.event_pings?.[0]?.title) ||
         "Keine harte Bremse",
       detail:
-        globalBrief?.event_pings?.[0]?.summary ||
-        globalBrief?.opening_read?.summary ||
+        normalizeGermanDisplayText(globalBrief?.event_pings?.[0]?.summary) ||
+        normalizeGermanDisplayText(globalBrief?.opening_read?.summary) ||
         "Bei unklaren Daten erst beobachten, dann handeln.",
       tone: "border-amber-500/18 bg-amber-500/8 text-amber-800",
     },
@@ -1534,11 +1536,11 @@ function AppContent() {
                         ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
                         : "border-amber-500/20 bg-amber-500/10 text-amber-700"
                     }`}>
-                      feed {headerStatusLabel}
+                      Daten {headerStatusLabel}
                     </div>
                     {globalBrief?.macro_regime ? (
                       <div className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-700">
-                        regime {globalBrief.macro_regime}
+                        Regime {macroRegimeLabel}
                       </div>
                     ) : null}
                   </div>
@@ -1555,7 +1557,7 @@ function AppContent() {
                       : "border-amber-500/20 bg-amber-500/10 text-amber-700";
                   return (
                     <div className={`hidden rounded-full border ${cls} px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em]`}>
-                      {icon} {globalBrief.macro_regime}
+                      {icon} {macroRegimeLabel}
                     </div>
                   );
                 })() : null}

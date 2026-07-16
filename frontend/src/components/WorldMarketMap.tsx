@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import worldMapSvgRaw from "../assets/world-map-wikimedia.svg?raw";
+import { localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
 
 // Lazy-load world map SVG — keeps initial bundle ~280KB smaller
 type CountryTone = "red" | "amber" | "blue" | "green" | "slate";
@@ -768,11 +769,28 @@ function freshnessClass(label: string) {
   return "bg-amber-500/10 text-amber-700";
 }
 
+function freshnessDisplayLabel(label: string) {
+  if (label === "live") return "Live";
+  if (label === "new") return "Neu";
+  if (label === "active") return "Aktiv";
+  if (label === "fading") return "Abklingend";
+  return "Beobachten";
+}
+
 function decisionToneClass(value?: string) {
   if (value === "high conviction") return "bg-emerald-500/10 text-emerald-700";
   if (value === "selective") return "bg-sky-500/10 text-sky-700";
   if (value === "tactical only") return "bg-amber-500/10 text-amber-700";
   return "bg-slate-500/10 text-slate-600";
+}
+
+function decisionQualityLabel(value?: string) {
+  const quality = String(value || "").toLowerCase();
+  if (quality === "high conviction") return "Hohe Überzeugung";
+  if (quality === "selective") return "Selektiv";
+  if (quality === "tactical only") return "Nur taktisch";
+  if (quality === "low" || quality === "weak") return "Schwach";
+  return normalizeGermanDisplayText(value || "Beobachten");
 }
 
 function sectorHeatProfile(sector: string, action?: string) {
@@ -1146,15 +1164,15 @@ export default function WorldMarketMap({
             affected_assets: Array.isArray(tradeImpact.symbols) && tradeImpact.symbols.length ? tradeImpact.symbols : symbols,
             action: tradeImpact.action || "watch",
             leverage: "avoid",
-            trigger: tradeImpact.trigger || "Monitor first reaction after open.",
-            invalidation: tradeImpact.invalidation || "Signal invalid if first move fully reverses.",
+            trigger: tradeImpact.trigger || "Erste Marktreaktion nach der Eröffnung beobachten.",
+            invalidation: tradeImpact.invalidation || "Das Signal ist ungültig, wenn sich die erste Bewegung vollständig umkehrt.",
             execution_window: tradeImpact.window || "open+60m",
-            why_now: tradeImpact.baseline_scenario || "Macro catalyst active.",
+            why_now: tradeImpact.baseline_scenario || "Der Makro-Katalysator ist aktiv.",
           },
           portfolio_exposure: tradeImpact.hedge_idea
             ? {
                 status: "watch",
-                note: `Hedge idea: ${tradeImpact.hedge_idea}`,
+                note: `Absicherungsidee: ${tradeImpact.hedge_idea}`,
                 action: "hedge",
                 exposure_strength: "medium",
               }
@@ -1391,27 +1409,27 @@ export default function WorldMarketMap({
     return [
       {
         label: "Was",
-        value: activeVariantLabel || activeGeoEvent.markerLabel || activeGeoEvent.event_type || "Macro event",
+        value: activeVariantLabel || activeGeoEvent.markerLabel || activeGeoEvent.event_type || "Makro-Ereignis",
       },
       {
         label: "Wo",
         value: activeGeoEvent.geoPlace || activeGeoEvent.geoZone || activeGeoEvent.region || "Global",
       },
       {
-        label: "Impact",
-        value: intelligence.impact_score ? `${intelligence.impact_score}/100` : activeGeoEvent.impact || "watch",
+        label: "Wirkung",
+        value: intelligence.impact_score ? `${intelligence.impact_score}/100` : activeGeoEvent.impact || "beobachten",
       },
       {
         label: "Assets",
-        value: compactList(intelligence.affected_assets, 3).join(" | ") || activeGeoEvent.ticker || "Market basket",
+        value: compactList(intelligence.affected_assets, 3).join(" | ") || activeGeoEvent.ticker || "Marktkorb",
       },
       {
         label: "Trigger",
-        value: intelligence.trigger || "Bestaetigung und Preisreaktion abwarten.",
+        value: normalizeGermanDisplayText(intelligence.trigger || "Bestätigung und Preisreaktion abwarten."),
       },
       {
         label: "Invalidierung",
-        value: intelligence.invalidation || "These faellt, wenn Story oder Preisreaktion nicht bestaetigt.",
+        value: normalizeGermanDisplayText(intelligence.invalidation || "Die These fällt, wenn Meldung oder Preisreaktion nicht bestätigt werden."),
       },
     ];
   }, [activeGeoEvent, activeVariantLabel]);
@@ -2213,7 +2231,7 @@ export default function WorldMarketMap({
                   <div
                     className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(displayRegion.tone)}`}
                   >
-                    {displayRegion.tone}
+                    {localizeMarketRegime(displayRegion.tone)}
                   </div>
                 </div>
                 <div className={`mt-3 text-2xl font-black ${textToneClass(displayRegion.tone)}`}>
@@ -2436,7 +2454,7 @@ export default function WorldMarketMap({
                             {describeEventVariant(item) || item.markerLabel}
                           </div>
                           <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(freshnessLabel(item.event_intelligence?.decay, item.pulse))}`}>
-                            {freshnessLabel(item.event_intelligence?.decay, item.pulse)}
+                            {freshnessDisplayLabel(freshnessLabel(item.event_intelligence?.decay, item.pulse))}
                           </div>
                         </div>
                         <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
@@ -2539,7 +2557,7 @@ export default function WorldMarketMap({
                       freshnessLabel(activeGeoEvent.event_intelligence?.decay, activeGeoEvent.pulse),
                     )}`}
                   >
-                    {freshnessLabel(activeGeoEvent.event_intelligence?.decay, activeGeoEvent.pulse)}
+                    {freshnessDisplayLabel(freshnessLabel(activeGeoEvent.event_intelligence?.decay, activeGeoEvent.pulse))}
                   </span>
                   {activeGeoEvent.event_intelligence?.leverage ? (
                     <span className="rounded-full border border-black/8 bg-white px-2 py-1">
@@ -2548,7 +2566,7 @@ export default function WorldMarketMap({
                   ) : null}
                   {activeGeoEvent.event_intelligence?.decision_quality ? (
                     <span className={`rounded-full px-2 py-1 ${decisionToneClass(activeGeoEvent.event_intelligence.decision_quality)}`}>
-                      {activeGeoEvent.event_intelligence.decision_quality}
+                      {decisionQualityLabel(activeGeoEvent.event_intelligence.decision_quality)}
                     </span>
                   ) : null}
                 </div>
@@ -2808,7 +2826,7 @@ export default function WorldMarketMap({
                               freshnessLabel(item.event_intelligence?.decay, item.pulse),
                             )}`}
                           >
-                            {freshnessLabel(item.event_intelligence?.decay, item.pulse)}
+                            {freshnessDisplayLabel(freshnessLabel(item.event_intelligence?.decay, item.pulse))}
                           </span>
                         </div>
                       </div>
@@ -2826,7 +2844,7 @@ export default function WorldMarketMap({
                           {item.event_intelligence.decision_quality ? (
                             <div className="flex flex-wrap gap-2">
                               <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${decisionToneClass(item.event_intelligence.decision_quality)}`}>
-                                {item.event_intelligence.decision_quality}
+                                {decisionQualityLabel(item.event_intelligence.decision_quality)}
                               </span>
                               {item.event_intelligence.size_guidance ? (
                                 <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -2960,7 +2978,7 @@ export default function WorldMarketMap({
               <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="text-lg font-black text-slate-900">{item.label}</div>
                 <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(item.tone)}`}>
-                  {item.tone}
+                  {localizeMarketRegime(item.tone)}
                 </div>
               </div>
               <div className={`mt-3 text-2xl font-black ${textToneClass(item.tone)}`}>

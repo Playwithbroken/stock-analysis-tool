@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import ts from "typescript";
+
+const sourcePath = path.resolve("src/lib/displayText.ts");
+const source = await readFile(sourcePath, "utf8");
+const transpiled = ts.transpileModule(source, {
+  compilerOptions: {
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2022,
+  },
+});
+
+const tempDir = await mkdtemp(path.join(tmpdir(), "broker-display-text-"));
+const modulePath = path.join(tempDir, "displayText.mjs");
+
+try {
+  await writeFile(modulePath, transpiled.outputText, "utf8");
+  const {
+    localizeLearningMessage,
+    localizeMarketRegime,
+    normalizeGermanDisplayText,
+  } = await import(`file://${modulePath.replace(/\\/g, "/")}`);
+
+  assert.equal(localizeMarketRegime("mixed"), "Gemischt");
+  assert.equal(localizeMarketRegime("risk-off"), "Risikoscheu");
+  assert.equal(
+    localizeLearningMessage("Promote morning_brief: 61.5% hit rate across 76 evaluated outcomes."),
+    "Morning Briefing ausbauen: 61,5% Trefferquote aus 76 ausgewerteten Ergebnissen.",
+  );
+  assert.equal(
+    normalizeGermanDisplayText("Signalrisiko liegt ueber der Toleranz. Trigger pruefen."),
+    "Signalrisiko liegt über der Toleranz. Trigger prüfen.",
+  );
+
+  console.log("displayText tests passed");
+} finally {
+  await rm(tempDir, { recursive: true, force: true });
+}

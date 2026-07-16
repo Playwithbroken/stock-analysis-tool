@@ -1,6 +1,7 @@
 import { Activity, AlertTriangle, ArrowRight, Ban, BarChart3, CheckCircle2, Eye, ShieldAlert, Target, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Portfolio } from "../hooks/usePortfolios";
+import { localizeLearningMessage, localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
 
 type EdgeTone = "action" | "watch" | "avoid";
 
@@ -385,7 +386,7 @@ export default function EdgeDashboardPanel({
   const topNewsHitRate = toNumber(topNewsSummary.hit_rate);
   const topNewsPending = toNumber(topNewsSummary.pending);
   const topNewsEvaluated = toNumber(topNewsSummary.evaluated);
-  const topNewsLesson = String(
+  const topNewsLesson = localizeLearningMessage(
     learning?.top_news?.lesson ||
       "Top-News-Lernen startet, sobald tickerbezogene Telegram-News als Forecasts gespeichert werden.",
   );
@@ -394,7 +395,7 @@ export default function EdgeDashboardPanel({
   const lessons = Array.isArray(learning?.lessons) ? learning.lessons : [];
   const vix = tradingEdge?.regime?.vix || tradingEdge?.vix || null;
   const vixLevel = toNumber(vix?.value ?? vix?.level);
-  const regime = String(globalBrief?.macro_regime || tradingEdge?.regime?.label || vix?.regime || "Neutral").trim();
+  const regime = localizeMarketRegime(globalBrief?.macro_regime || tradingEdge?.regime?.label || vix?.regime || "Neutral");
   const eventCount = Array.isArray(globalBrief?.event_pings) ? globalBrief.event_pings.length : 0;
   const briefQuality = globalBrief?.quality?.fallback ? "Ersatzdaten" : globalBrief ? "Live" : "Lädt";
   const portfolioRisk =
@@ -409,14 +410,14 @@ export default function EdgeDashboardPanel({
             : "Ausgewogen";
   const blockers = [
     snapshot.concentration != null && snapshot.concentration > 35
-      ? `Top position ${snapshot.top?.ticker || ""} is ${formatNumber(snapshot.concentration, 0)}% of tracked value.`
+      ? `Die größte Position ${snapshot.top?.ticker || ""} umfasst ${formatNumber(snapshot.concentration, 0)}% des erfassten Werts.`
       : null,
     snapshot.uniqueTickers > 0 && snapshot.uniqueTickers < 5
-      ? `Only ${snapshot.uniqueTickers} unique tickers are tracked.`
+      ? `Es sind nur ${snapshot.uniqueTickers} unterschiedliche Werte erfasst.`
       : null,
-    snapshot.missingQuotes > 0 ? `${snapshot.missingQuotes} holdings use buy price fallback instead of live quotes.` : null,
-    weakSetups[0]?.setup_type ? `Weak setup type: ${weakSetups[0].setup_type}.` : null,
-    weakSources[0]?.source ? `Weak source: ${weakSources[0].source}.` : null,
+    snapshot.missingQuotes > 0 ? `${snapshot.missingQuotes} Positionen nutzen den Kaufpreis statt eines Live-Kurses.` : null,
+    weakSetups[0]?.setup_type ? `Schwacher Setup-Typ: ${weakSetups[0].setup_type}.` : null,
+    weakSources[0]?.source ? `Schwache Quelle: ${weakSources[0].source}.` : null,
   ].filter(Boolean) as string[];
 
   const kpis = [
@@ -485,7 +486,7 @@ export default function EdgeDashboardPanel({
           <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{row.headline}</div>
           {reason ? (
             <div className="mt-2 line-clamp-1 text-[11px] font-semibold leading-5 text-slate-500">
-              Profilprüfung: {reason}
+              Profilprüfung: {normalizeGermanDisplayText(reason)}
             </div>
           ) : null}
         </div>
@@ -635,10 +636,10 @@ export default function EdgeDashboardPanel({
                 </div>
                 <div className="mt-3 grid gap-2 border-t border-black/6 pt-3 text-[11px] font-semibold leading-5 text-slate-600 dark:border-white/10 dark:text-slate-300">
                   <div>
-                    <span className="font-black text-slate-900 dark:text-white">Trigger:</span> {item.trigger}
+                    <span className="font-black text-slate-900 dark:text-white">Trigger:</span> {normalizeGermanDisplayText(item.trigger)}
                   </div>
                   <div>
-                    <span className="font-black text-slate-900 dark:text-white">Stop:</span> {item.invalidation}
+                    <span className="font-black text-slate-900 dark:text-white">Stop:</span> {normalizeGermanDisplayText(item.invalidation)}
                   </div>
                 </div>
               </div>
@@ -658,7 +659,7 @@ export default function EdgeDashboardPanel({
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700">
-            <CheckCircle2 size={15} /> Action
+            <CheckCircle2 size={15} /> Handeln
           </div>
           {actionRows.length ? (
             actionRows.map(renderRow)
@@ -673,7 +674,7 @@ export default function EdgeDashboardPanel({
 
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-amber-700">
-            <Eye size={15} /> Watch
+            <Eye size={15} /> Beobachten
           </div>
           {watchRows.length ? (
             watchRows.map(renderRow)
@@ -688,13 +689,13 @@ export default function EdgeDashboardPanel({
 
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700">
-            <Ban size={15} /> Avoid / Risk
+            <Ban size={15} /> Meiden / Risiko
           </div>
           {avoidRows.length ? avoidRows.map(renderRow) : null}
           {blockers.length ? (
             <div className="rounded-[1.1rem] border border-red-500/15 bg-red-500/8 p-3">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-red-800">
-                <AlertTriangle size={15} /> Blockers
+                <AlertTriangle size={15} /> Risikobremsen
               </div>
               <div className="mt-3 space-y-2">
                 {blockers.slice(0, 4).map((item) => (
@@ -708,7 +709,7 @@ export default function EdgeDashboardPanel({
             <EmptyDecision
               icon={<Ban size={18} />}
               title="Keine harte Bremse"
-              body="Keine klare Avoid-Liste aus Scoreboard, Portfolio oder Lernkurve."
+              body="Keine klare Meiden-Liste aus Scoreboard, Portfolio oder Lernkurve."
             />
           ) : null}
           {lessons[0] ? (
@@ -717,7 +718,7 @@ export default function EdgeDashboardPanel({
                 Lernsignal
               </div>
               <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700">
-                {String(lessons[0]?.message || lessons[0]?.lesson || lessons[0]?.text || lessons[0])}
+                {localizeLearningMessage(lessons[0]?.message || lessons[0]?.lesson || lessons[0]?.text || lessons[0])}
               </div>
             </div>
           ) : null}

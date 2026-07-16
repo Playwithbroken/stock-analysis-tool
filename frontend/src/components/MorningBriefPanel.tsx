@@ -372,6 +372,22 @@ export default function MorningBriefPanel({
   if (!brief) return null;
   const quality = brief.quality || null;
   const qualityReady = quality?.status === "ready";
+  const freshness = String(quality?.freshness || "unknown");
+  const deliveryMode = String(quality?.delivery_mode || "generated");
+  const freshnessLabel =
+    freshness === "fresh"
+      ? deliveryMode === "cached" ? "Frischer gespeicherter Stand" : "Frisch aufgebaut"
+      : freshness === "recent"
+        ? "Gespeicherter Stand"
+        : freshness === "stale"
+          ? "Veralteter Stand - vor Nutzung aktualisieren"
+          : "Aktualität wird geprüft";
+  const freshnessTone =
+    freshness === "fresh"
+      ? "bg-emerald-500/10 text-emerald-700"
+      : freshness === "recent"
+        ? "bg-amber-500/10 text-amber-800"
+        : "bg-red-500/10 text-red-700";
   const deferredLayers = Array.isArray(quality?.deferred) ? quality.deferred : [];
   const sourceStates = quality?.sources && typeof quality.sources === "object" ? quality.sources : {};
 
@@ -515,7 +531,12 @@ export default function MorningBriefPanel({
             </div>
             {quality ? (
               <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${qualityReady ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
-                {qualityReady ? "Brief Ready" : "Brief Partial"} / {quality.score}/100
+                {qualityReady ? "Briefing bereit" : "Briefing teilweise"} / {quality.score}/100
+              </div>
+            ) : null}
+            {quality ? (
+              <div className={`mt-2 inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${freshnessTone}`}>
+                {freshnessLabel}
               </div>
             ) : null}
             <div className="mt-3 text-sm leading-7 text-slate-700">
@@ -563,18 +584,18 @@ export default function MorningBriefPanel({
           </div>
           <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Generated
+              Aktualität
             </div>
             <div className="mt-2 text-lg font-black text-slate-900">
               {formatBriefGenerated(brief.generated_at)}
             </div>
             {quality?.age_minutes != null ? (
               <div className="mt-1 text-[11px] font-semibold text-slate-500">
-                aktualisiert vor {quality.age_minutes}m
+                aktualisiert vor {quality.age_minutes} Min.
               </div>
             ) : null}
             <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
-              {realtimeConnected ? "Live stream on" : "Snapshot mode"}
+              {realtimeConnected ? "Kursstream live" : "Kurs-Snapshot"}
             </div>
           </div>
         </div>

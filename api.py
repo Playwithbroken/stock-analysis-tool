@@ -4206,6 +4206,34 @@ def _emergency_morning_brief(reason: str) -> Dict[str, Any]:
     }
 
 
+def _stamp_brief_freshness(brief: Dict[str, Any]) -> Dict[str, Any]:
+    quality = brief.get("quality")
+    if not isinstance(quality, dict):
+        quality = {}
+        brief["quality"] = quality
+    generated_at = None
+    try:
+        generated_at = datetime.fromisoformat(str(brief.get("generated_at") or "").replace("Z", "+00:00"))
+        if generated_at.tzinfo is None:
+            generated_at = generated_at.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        generated_at = None
+    age_minutes = (
+        max(0, int((datetime.now(timezone.utc) - generated_at.astimezone(timezone.utc)).total_seconds() // 60))
+        if generated_at is not None
+        else None
+    )
+    quality["age_minutes"] = age_minutes
+    quality["freshness"] = (
+        "fresh"
+        if age_minutes is not None and age_minutes <= 20
+        else "recent"
+        if age_minutes is not None and age_minutes <= 90
+        else "stale"
+    )
+    return brief
+
+
 def _safe_morning_brief_fallback(
     service: Any,
     reason: str,
@@ -4227,7 +4255,7 @@ def _safe_morning_brief_fallback(
         or not isinstance(fallback.get("regions"), dict)
     ):
         fallback = _emergency_morning_brief(reason)
-    fallback = copy.deepcopy(fallback)
+    fallback = _stamp_brief_freshness(copy.deepcopy(fallback))
     quality = fallback.get("quality")
     if not isinstance(quality, dict):
         quality = {}
@@ -4293,6 +4321,10 @@ async def get_morning_brief(fast: bool = False):
             fallback = _safe_morning_brief_fallback(service, "error", snapshot)
             return convert_numpy_types(fallback)
 
+        brief = _stamp_brief_freshness(brief)
+        quality = brief.setdefault("quality", {})
+        quality["delivery_mode"] = "generated"
+        quality["refresh_state"] = "ready"
         return convert_numpy_types(_cache_set("morning_brief:full", brief))
     except Exception:
         return convert_numpy_types(_safe_morning_brief_fallback(service, "server_error"))

@@ -47,7 +47,7 @@ class MalformedCacheService(BrokenBriefService):
 class ValidCachedBriefService(BrokenBriefService):
     def get_cached_or_last_brief(self, snapshot=None):
         return {
-            "generated_at": "2026-07-16T08:00:00+00:00",
+            "generated_at": "2020-01-01T08:00:00+00:00",
             "headline": "Verifiziertes Briefing aus dem letzten erfolgreichen Lauf",
             "opening_bias": "Neutral beobachten",
             "regions": {
@@ -113,6 +113,10 @@ def main() -> int:
                 failures.append(f"valid cache delivery metadata missing: {cached_quality}")
             elif cached_quality.get("refresh_state") != "warming_up":
                 failures.append(f"valid cache refresh state missing: {cached_quality}")
+            elif cached_quality.get("freshness") != "stale":
+                failures.append(f"persisted cache freshness was not recalculated: {cached_quality}")
+            elif int(cached_quality.get("age_minutes") or 0) <= 90:
+                failures.append(f"persisted cache age was not recalculated: {cached_quality}")
 
             api.get_morning_brief_service = lambda: MalformedCacheService()
             malformed = client.get("/api/market/morning-brief", params={"fast": "true"})

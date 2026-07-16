@@ -280,6 +280,7 @@ class MorningBriefService:
         watchlist_snapshot: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         refreshed = self._refresh_cached_event_guidance(brief)
+        refreshed["quality"] = self._build_quality_report(refreshed)
         return self._merge_watchlist_impact(refreshed, watchlist_snapshot)
 
     def _refresh_cached_event_guidance(self, brief: Dict[str, Any]) -> Dict[str, Any]:
@@ -911,9 +912,16 @@ class MorningBriefService:
             except Exception:
                 generated_at = None
         age_minutes = (
-            int((now_utc - generated_at).total_seconds() // 60)
+            max(0, int((now_utc - generated_at).total_seconds() // 60))
             if generated_at is not None
             else None
+        )
+        freshness = (
+            "fresh"
+            if age_minutes is not None and age_minutes <= 20
+            else "recent"
+            if age_minutes is not None and age_minutes <= 90
+            else "stale"
         )
 
         checks = [
@@ -968,6 +976,7 @@ class MorningBriefService:
             "passed": passed,
             "total": total,
             "age_minutes": age_minutes,
+            "freshness": freshness,
             "missing": missing,
             "checks": checks,
             "mode": data_status.get("mode") or "full",

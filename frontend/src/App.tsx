@@ -1186,8 +1186,8 @@ function AppContent() {
   const moversTape = tapeMovers.length ? (
     <div className="ticker-marquee-wrap header-movers-tape rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-1.5 sm:px-3">
       <div className="header-movers-meta flex items-center justify-between gap-3 px-1">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-          Market movers
+        <div className="text-[10px] font-extrabold uppercase leading-none tracking-[0.18em] text-slate-500">
+          Marktbewegungen
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2">
           <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
@@ -1196,7 +1196,7 @@ function AppContent() {
                 key={window}
                 type="button"
                 onClick={() => setMarketMoversWindow(window)}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
+                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] transition-colors ${
                   marketMoversWindow === window
                     ? "bg-[#101114] text-white"
                     : "text-slate-500 hover:text-slate-800"
@@ -1206,8 +1206,8 @@ function AppContent() {
               </button>
             ))}
           </div>
-          <div className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 xl:block">
-            Winners, losers ({marketMoversWindow.toUpperCase()})
+          <div className="hidden text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-slate-400 xl:block">
+            Gewinner, Verlierer ({marketMoversWindow.toUpperCase()})
           </div>
         </div>
       </div>
@@ -1227,7 +1227,7 @@ function AppContent() {
                     : "bg-red-500/10 text-red-700"
                 }`}
               >
-                {isWinner ? "Winner" : "Loser"}
+                {isWinner ? "Gewinner" : "Verlierer"}
               </span>
               <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700">
                 {item.symbol}

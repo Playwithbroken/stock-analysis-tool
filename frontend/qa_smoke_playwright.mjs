@@ -147,10 +147,10 @@ function attachPageObservers(page, viewportName) {
 }
 
 async function ensureLoggedIn(page, viewportName) {
-  const passwordInput = page.getByLabel("6-digit workspace access code");
+  const passwordInput = page.getByLabel(/6-(?:digit|stelliger).*zugangscode|6-digit workspace access code/i);
   if (await passwordInput.count()) {
     await passwordInput.fill(ACCESS_CODE);
-    await page.getByRole("button", { name: /unlock/i }).click();
+    await page.getByRole("button", { name: /unlock|entsperren/i }).click();
     await page.waitForTimeout(2200);
     pushEvent(`[${viewportName}] Login submitted`);
   }

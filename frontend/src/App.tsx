@@ -12,6 +12,7 @@ import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
 import { normalizeGeoRegions } from "./lib/geoRegions";
 import { localizeMarketRegime, normalizeGermanDisplayText } from "./lib/displayText";
+import { guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
 import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
 
@@ -595,30 +596,33 @@ function AppContent() {
       holdings: holdings.slice(0, 50),
     };
   }, [headerQuotes, safePortfolios]);
+  const decisionBrief = useMemo(() => guardBriefForDecisions(globalBrief), [globalBrief]);
   const briefSummaryForChat = useMemo(
     () =>
-      globalBrief
+      decisionBrief
         ? {
-            headline: globalBrief.headline,
-            opening_bias: globalBrief.opening_bias,
-            macro_regime: globalBrief.macro_regime,
-            trade_setups: (globalBrief.trade_setups || []).slice(0, 5),
-            setup_board: globalBrief.setup_board || null,
-            learning_adjustments: globalBrief.learning_adjustments || [],
-            congress_watch: (globalBrief.congress_watch || []).slice(0, 5),
-            event_pings: (globalBrief.event_pings || []).slice(0, 5),
-            earnings_calendar: (globalBrief.earnings_calendar || []).slice(0, 8),
-            earnings_results: (globalBrief.earnings_results || []).slice(0, 6),
+            headline: decisionBrief.headline,
+            opening_bias: decisionBrief.opening_bias,
+            macro_regime: decisionBrief.macro_regime,
+            quality: decisionBrief.quality || null,
+            decision_gate: decisionBrief.decision_gate || { allowed: true },
+            trade_setups: (decisionBrief.trade_setups || []).slice(0, 5),
+            setup_board: decisionBrief.setup_board || null,
+            learning_adjustments: decisionBrief.learning_adjustments || [],
+            congress_watch: (decisionBrief.congress_watch || []).slice(0, 5),
+            event_pings: (decisionBrief.event_pings || []).slice(0, 5),
+            earnings_calendar: (decisionBrief.earnings_calendar || []).slice(0, 8),
+            earnings_results: (decisionBrief.earnings_results || []).slice(0, 6),
             market_movers: {
-              gainers: (globalBrief.market_movers?.gainers || []).slice(0, 6),
-              losers: (globalBrief.market_movers?.losers || []).slice(0, 6),
+              gainers: (decisionBrief.market_movers?.gainers || []).slice(0, 6),
+              losers: (decisionBrief.market_movers?.losers || []).slice(0, 6),
             },
-            product_catalysts: (globalBrief.product_catalysts || []).slice(0, 6),
-            watchlist_impact: (globalBrief.watchlist_impact || []).slice(0, 8),
-            prediction_signals: (globalBrief.prediction_signals || []).slice(0, 6),
+            product_catalysts: (decisionBrief.product_catalysts || []).slice(0, 6),
+            watchlist_impact: (decisionBrief.watchlist_impact || []).slice(0, 8),
+            prediction_signals: (decisionBrief.prediction_signals || []).slice(0, 6),
           }
         : null,
-    [globalBrief],
+    [decisionBrief],
   );
 
   useEffect(() => {
@@ -1123,7 +1127,7 @@ function AppContent() {
   }
 
   const showHero = activeTab === "analyze" && !analysis && !loading;
-  const geoRegions = normalizeGeoRegions(globalBrief?.regions);
+  const geoRegions = normalizeGeoRegions(decisionBrief?.regions);
   const onboardingDone = Boolean(auth.profile?.onboarding_done);
   const onboardingDismissedAtRaw = localStorage.getItem(ONBOARDING_DISMISSED_AT_KEY);
   const onboardingDismissedAt = onboardingDismissedAtRaw ? Number(onboardingDismissedAtRaw) : 0;
@@ -1135,23 +1139,27 @@ function AppContent() {
   const shouldShowOnboardingNudge = ONBOARDING_NUDGE_ENABLED && showOnboardingNudge;
   const activeNavItem = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
   const headerStatusLabel = headerRealtimeConnected ? headerConnectionState : headerTransportMode;
-  const macroRegimeLabel = localizeMarketRegime(globalBrief?.macro_regime);
+  const briefDecisionCurrent = isBriefDecisionCurrent(globalBrief);
+  const macroRegimeLabel = localizeMarketRegime(decisionBrief?.macro_regime);
   const briefCommandStats = [
-    ["Setups", globalBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
-    ["Ereignisse", globalBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
-    ["Kongress", globalBrief?.congress_watch?.length || 0, "border-sky-500/20 bg-sky-500/10 text-sky-700"],
-    ["Quartalszahlen", globalBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
-    ["Produkte", globalBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
+    ["Setups", decisionBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
+    ["Ereignisse", decisionBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
+    ["Kongress", decisionBrief?.congress_watch?.length || 0, "border-sky-500/20 bg-sky-500/10 text-sky-700"],
+    ["Quartalszahlen", decisionBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
+    ["Produkte", decisionBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
   ];
   const dashboardPriorityCards = [
     {
       label: "Jetzt wichtig",
       title:
-        normalizeGermanDisplayText(globalBrief?.opening_bias) ||
-        normalizeGermanDisplayText(globalBrief?.headline) ||
+        (globalBrief && !briefDecisionCurrent ? "Briefing aktualisieren, bevor du handelst" : "") ||
+        normalizeGermanDisplayText(decisionBrief?.opening_bias) ||
+        normalizeGermanDisplayText(decisionBrief?.headline) ||
         "Noch kein klares Marktsignal",
       detail:
-        globalBrief?.macro_regime
+        globalBrief && !briefDecisionCurrent
+          ? "Setups und Ereignisse sind bis zu einem frischen Datenstand gesperrt."
+          : decisionBrief?.macro_regime
           ? `Regime: ${macroRegimeLabel}`
           : "Die Datenquelle lädt Setups, Ereignisse und Portfolio-Bezug.",
       tone: "border-emerald-500/18 bg-emerald-500/8 text-emerald-800",
@@ -1159,26 +1167,26 @@ function AppContent() {
     {
       label: "Nächste Prüfung",
       title:
-        globalBrief?.trade_setups?.[0]?.ticker ||
-        globalBrief?.watchlist_impact?.[0]?.ticker ||
-        globalBrief?.product_catalysts?.[0]?.ticker ||
+        decisionBrief?.trade_setups?.[0]?.ticker ||
+        decisionBrief?.watchlist_impact?.[0]?.ticker ||
+        decisionBrief?.product_catalysts?.[0]?.ticker ||
         "Watchlist",
       detail:
-        normalizeGermanDisplayText(globalBrief?.trade_setups?.[0]?.thesis) ||
-        normalizeGermanDisplayText(globalBrief?.watchlist_impact?.[0]?.reason) ||
-        normalizeGermanDisplayText(globalBrief?.product_catalysts?.[0]?.title) ||
+        normalizeGermanDisplayText(decisionBrief?.trade_setups?.[0]?.thesis) ||
+        normalizeGermanDisplayText(decisionBrief?.watchlist_impact?.[0]?.reason) ||
+        normalizeGermanDisplayText(decisionBrief?.product_catalysts?.[0]?.title) ||
         "Nur starke Signale werden in Analyzer/Markets vertieft.",
       tone: "border-sky-500/18 bg-sky-500/8 text-sky-800",
     },
     {
       label: "Risiko",
       title:
-        normalizeGermanDisplayText(globalBrief?.risk_note) ||
-        normalizeGermanDisplayText(globalBrief?.event_pings?.[0]?.title) ||
+        normalizeGermanDisplayText(decisionBrief?.risk_note) ||
+        normalizeGermanDisplayText(decisionBrief?.event_pings?.[0]?.title) ||
         "Keine harte Bremse",
       detail:
-        normalizeGermanDisplayText(globalBrief?.event_pings?.[0]?.summary) ||
-        normalizeGermanDisplayText(globalBrief?.opening_read?.summary) ||
+        normalizeGermanDisplayText(decisionBrief?.event_pings?.[0]?.summary) ||
+        normalizeGermanDisplayText(decisionBrief?.opening_read?.summary) ||
         "Bei unklaren Daten erst beobachten, dann handeln.",
       tone: "border-amber-500/18 bg-amber-500/8 text-amber-800",
     },
@@ -1510,7 +1518,7 @@ function AppContent() {
                   signalScore={signalScoreContext}
                   learning={learningContext}
                   tradingEdge={tradingEdge}
-                  globalBrief={globalBrief}
+                  globalBrief={decisionBrief}
                   portfolios={portfolios}
                   quotes={headerQuotes}
                   loading={
@@ -1638,12 +1646,12 @@ function AppContent() {
                           regions={geoRegions}
                           selectedRegion={selectedGeoRegion}
                           onSelectRegion={setSelectedGeoRegion}
-                          news={globalBrief?.top_news || []}
-                          eventLayer={globalBrief?.event_layer || []}
-                          eventPings={globalBrief?.event_pings || []}
-                          watchlistImpact={globalBrief?.watchlist_impact || []}
-                          contrarianSignals={globalBrief?.contrarian_signals || []}
-                          openingTimeline={globalBrief?.opening_timeline || []}
+                          news={decisionBrief?.top_news || []}
+                          eventLayer={decisionBrief?.event_layer || []}
+                          eventPings={decisionBrief?.event_pings || []}
+                          watchlistImpact={decisionBrief?.watchlist_impact || []}
+                          contrarianSignals={decisionBrief?.contrarian_signals || []}
+                          openingTimeline={decisionBrief?.opening_timeline || []}
                           onAnalyze={(t) => {
                             setActiveTab("analyze");
                             handleSearch(t);
@@ -1673,12 +1681,12 @@ function AppContent() {
                     </button>
                   </section>
                 )}
-                {globalBrief ? (
+                {decisionBrief ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
                       <div className="dashboard-brief-slot">
                         <MorningBriefPanel
-                          brief={globalBrief}
+                          brief={decisionBrief}
                           onAnalyze={(t) => {
                             setActiveTab("analyze");
                             handleSearch(t);

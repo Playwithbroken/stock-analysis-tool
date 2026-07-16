@@ -2803,9 +2803,14 @@ async def oracle_chat(req: OracleRequest):
     ][:6]
 
     brief = req.morning_brief_summary or {}
-    macro_regime = brief.get("macro_regime") if isinstance(brief, dict) else None
-    headline = brief.get("headline") if isinstance(brief, dict) else None
-    opening_bias = brief.get("opening_bias") if isinstance(brief, dict) else None
+    brief_decision_gate = brief.get("decision_gate") if isinstance(brief, dict) else {}
+    brief_decision_allowed = not (
+        isinstance(brief_decision_gate, dict)
+        and brief_decision_gate.get("allowed") is False
+    )
+    macro_regime = brief.get("macro_regime") if isinstance(brief, dict) and brief_decision_allowed else None
+    headline = brief.get("headline") if isinstance(brief, dict) and brief_decision_allowed else None
+    opening_bias = brief.get("opening_bias") if isinstance(brief, dict) and brief_decision_allowed else None
 
     primary = ticker_context[0] if ticker_context else None
     score = float(primary.get("score", 0)) if primary else 0.0
@@ -2953,6 +2958,8 @@ async def oracle_chat(req: OracleRequest):
     )
 
     risk_line_parts: List[str] = []
+    if not brief_decision_allowed:
+        risk_line_parts.append("Morning Brief gesperrt: veraltete oder eingeschraenkte Daten nicht fuer Entscheidungen verwenden")
     if macro_regime:
         risk_line_parts.append(f"Regime: {macro_regime}")
     if req.active_tab:

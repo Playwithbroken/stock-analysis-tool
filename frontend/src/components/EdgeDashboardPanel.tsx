@@ -412,7 +412,10 @@ export default function EdgeDashboardPanel({
   const vixLevel = toNumber(vix?.value ?? vix?.level);
   const regime = localizeMarketRegime(globalBrief?.macro_regime || tradingEdge?.regime?.label || vix?.regime || "Neutral");
   const eventCount = Array.isArray(globalBrief?.event_pings) ? globalBrief.event_pings.length : 0;
-  const briefQuality = globalBrief?.quality?.fallback ? "Ersatzdaten" : globalBrief ? "Live" : "Lädt";
+  const briefDecisionBlocked = globalBrief?.decision_gate?.allowed === false;
+  const briefQuality = briefDecisionBlocked
+    ? "Gesperrt"
+    : globalBrief?.quality?.fallback ? "Ersatzdaten" : globalBrief ? "Live" : "Lädt";
   const portfolioRisk =
     snapshot.holdings.length === 0
       ? "Kein Portfolio"
@@ -558,6 +561,18 @@ export default function EdgeDashboardPanel({
           </button>
         </div>
       </div>
+
+      {briefDecisionBlocked ? (
+        <div className="mt-5 flex items-start gap-3 rounded-[1.15rem] border border-red-500/20 bg-red-500/8 p-4 text-red-900">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="text-xs font-extrabold uppercase tracking-[0.15em]">Briefing für Entscheidungen gesperrt</div>
+            <div className="mt-1 text-sm leading-6">
+              Der Datenstand ist veraltet oder eingeschränkt. Alte Setups und Ereignisse wurden entfernt; aktuelle Scoreboard- und Portfoliodaten bleiben nutzbar.
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((item) => {

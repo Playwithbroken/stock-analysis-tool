@@ -374,6 +374,7 @@ export default function MorningBriefPanel({
   const qualityReady = quality?.status === "ready";
   const freshness = String(quality?.freshness || "unknown");
   const deliveryMode = String(quality?.delivery_mode || "generated");
+  const decisionAllowed = brief.decision_gate?.allowed !== false;
   const freshnessLabel =
     freshness === "fresh"
       ? deliveryMode === "cached" ? "Frischer gespeicherter Stand" : "Frisch aufgebaut"
@@ -600,6 +601,15 @@ export default function MorningBriefPanel({
           </div>
         </div>
       </section>
+
+      {!decisionAllowed ? (
+        <section className="rounded-[1.4rem] border border-red-500/20 bg-red-500/8 p-4 text-red-900">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">Keine Umsetzung mit diesem Datenstand</div>
+          <p className="mt-2 text-sm leading-6">
+            Setups, Ereignisse und Katalysatoren sind gesperrt, bis ein frisches Briefing vorliegt. Der sichtbare Text dient nur als gespeicherter Kontext.
+          </p>
+        </section>
+      ) : null}
 
       <section className="surface-panel rounded-[1.6rem] p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -1092,7 +1102,9 @@ export default function MorningBriefPanel({
             ))}
             {!(brief.trade_setups || []).length ? (
               <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                {brief.trade_setups_status === "insufficient_signal"
+                {brief.trade_setups_status === "stale_data"
+                  ? "Keine Setups: Der Briefing-Stand muss zuerst aktualisiert werden."
+                  : brief.trade_setups_status === "insufficient_signal"
                   ? "Keine belastbaren Setups: aktuell fehlt ein klarer Trigger mit genuegend Datenvertrauen."
                   : "Keine belastbaren Setups im aktuellen Feed."}
               </div>

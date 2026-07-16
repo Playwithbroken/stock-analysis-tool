@@ -21,6 +21,13 @@ export function isBriefDecisionCurrent(brief: any): boolean {
   return !quality.fallback && quality.freshness !== "stale";
 }
 
+export function getBriefLoadState(brief: any): { displayable: boolean; current: boolean } {
+  return {
+    displayable: Boolean(brief && !brief?.quality?.fallback),
+    current: isBriefDecisionCurrent(brief),
+  };
+}
+
 export function guardBriefForDecisions(brief: any): any {
   if (!brief || typeof brief !== "object" || isBriefDecisionCurrent(brief)) return brief;
 

@@ -12,7 +12,7 @@ import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
 import { normalizeGeoRegions } from "./lib/geoRegions";
 import { localizeMarketRegime, normalizeGermanDisplayText } from "./lib/displayText";
-import { guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
+import { getBriefLoadState, guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
 import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
 
@@ -806,12 +806,13 @@ function AppContent() {
     let retryTimeout: number | undefined;
 
     const loadGlobalBrief = async () => {
-      let usableBriefLoaded = false;
+      let displayableBriefLoaded = false;
+      let currentBriefLoaded = false;
       const requestId = briefRequestIdRef.current + 1;
       briefRequestIdRef.current = requestId;
       if (!cancelled) setGlobalBriefStatus("loading");
       const timeoutGuard = window.setTimeout(() => {
-        if (!cancelled && briefRequestIdRef.current === requestId && !usableBriefLoaded) {
+        if (!cancelled && briefRequestIdRef.current === requestId && !displayableBriefLoaded) {
           setGlobalBriefStatus("error");
         }
       }, 10000);
@@ -824,8 +825,10 @@ function AppContent() {
         if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBrief(fastPayload);
           setSelectedGeoRegion(fastPayload?.regions?.europe?.label || fastPayload?.regions?.usa?.label || "Europe");
-          usableBriefLoaded = !fastPayload?.quality?.fallback;
-          setGlobalBriefStatus(usableBriefLoaded ? "ready" : "loading");
+          const fastState = getBriefLoadState(fastPayload);
+          displayableBriefLoaded = fastState.displayable;
+          currentBriefLoaded = fastState.current;
+          setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "loading");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, 300));
@@ -835,21 +838,24 @@ function AppContent() {
           timeoutMs: 8500,
         });
         if (!cancelled && briefRequestIdRef.current === requestId) {
-          const fullBriefUsable = !payload?.quality?.fallback;
-          if (fullBriefUsable || !usableBriefLoaded) {
+          const fullState = getBriefLoadState(payload);
+          const fullBriefDisplayable = fullState.displayable;
+          const fullBriefCurrent = fullState.current;
+          if (fullBriefCurrent || !displayableBriefLoaded) {
             setGlobalBrief(payload);
             setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
           }
-          usableBriefLoaded = usableBriefLoaded || fullBriefUsable;
-          setGlobalBriefStatus(usableBriefLoaded ? "ready" : "error");
+          displayableBriefLoaded = displayableBriefLoaded || fullBriefDisplayable;
+          currentBriefLoaded = currentBriefLoaded || fullBriefCurrent;
+          setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "error");
         }
       } catch {
-        if (!cancelled && briefRequestIdRef.current === requestId && !usableBriefLoaded) {
+        if (!cancelled && briefRequestIdRef.current === requestId && !displayableBriefLoaded) {
           setGlobalBriefStatus("error");
         }
       } finally {
         window.clearTimeout(timeoutGuard);
-        if (!cancelled && !usableBriefLoaded) {
+        if (!cancelled && briefRequestIdRef.current === requestId && !currentBriefLoaded) {
           window.clearTimeout(retryTimeout);
           retryTimeout = window.setTimeout(loadGlobalBrief, 12000);
         }

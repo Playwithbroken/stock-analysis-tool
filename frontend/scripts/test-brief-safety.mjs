@@ -13,7 +13,7 @@ const modulePath = path.join(tempDir, "briefSafety.mjs");
 
 try {
   await writeFile(modulePath, transpiled.outputText, "utf8");
-  const { guardBriefForDecisions, isBriefDecisionCurrent } = await import(
+  const { getBriefLoadState, guardBriefForDecisions, isBriefDecisionCurrent } = await import(
     `file://${modulePath.replace(/\\/g, "/")}`
   );
   const active = {
@@ -22,6 +22,7 @@ try {
     event_pings: [{ title: "Fed" }],
   };
   assert.equal(isBriefDecisionCurrent(active), true);
+  assert.deepEqual(getBriefLoadState(active), { displayable: true, current: true });
   assert.equal(guardBriefForDecisions(active), active);
 
   const stale = {
@@ -36,6 +37,7 @@ try {
   };
   const guardedStale = guardBriefForDecisions(stale);
   assert.equal(isBriefDecisionCurrent(stale), false);
+  assert.deepEqual(getBriefLoadState(stale), { displayable: true, current: false });
   assert.deepEqual(guardedStale.trade_setups, []);
   assert.deepEqual(guardedStale.event_pings, []);
   assert.deepEqual(guardedStale.top_news, []);
@@ -52,6 +54,10 @@ try {
   });
   assert.deepEqual(fallback.action_board, []);
   assert.equal(fallback.decision_gate.reason, "fallback_data");
+  assert.deepEqual(getBriefLoadState({ quality: { fallback: "timeout" } }), {
+    displayable: false,
+    current: false,
+  });
   console.log("briefSafety tests passed");
 } finally {
   await rm(tempDir, { recursive: true, force: true });

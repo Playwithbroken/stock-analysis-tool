@@ -176,8 +176,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
 
   const activePaperDecisions = useMemo(() => {
     return [...openTrades]
-      .sort((a: any, b: any) => Math.abs(Number(b.result_value_delta || 0)) - Math.abs(Number(a.result_value_delta || 0)))
-      .slice(0, 4);
+      .sort((a: any, b: any) => Math.abs(Number(b.result_value_delta || 0)) - Math.abs(Number(a.result_value_delta || 0)));
   }, [openTrades]);
 
   if (!data) return null;
@@ -576,7 +575,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Active Paper Decisions
+                Offene Paper-Positionen
               </div>
               <div className="mt-1 text-sm text-slate-600">
                 Was gerade im Demo-Konto läuft, wie viel gebunden ist und was als Nächstes zu tun ist.
@@ -587,15 +586,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           </div>
           {activePaperDecisions.length ? (
-            <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
               {activePaperDecisions.map((trade: any) => {
                 const management = trade.management_plan || {};
                 const pnlValue = Number(trade.result_value_delta || 0);
                 return (
-                  <button
+                  <div
                     key={`decision-${trade.id}`}
-                    onClick={() => trade.ticker && onAnalyze(trade.ticker)}
-                    className="rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-left transition hover:border-[var(--accent)]/30 hover:bg-[var(--accent-soft)]/35"
+                    className="rounded-[1.2rem] border border-black/8 bg-white px-4 py-3"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -615,15 +613,39 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600 sm:grid-cols-3">
                       <div>
                         <div className="font-extrabold uppercase tracking-[0.12em] text-slate-400">Investiert</div>
                         <div className="mt-1 font-bold text-slate-900">{moneyOrNA(trade.invested_value, currency)}</div>
                       </div>
                       <div>
-                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-400">Plan</div>
-                        <div className="mt-1 font-bold text-slate-900">{germanStatus(management.action, "halten")}</div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-400">Aktueller Wert</div>
+                        <div className="mt-1 font-bold text-slate-900">{moneyOrNA(trade.current_value, currency)}</div>
                       </div>
+                      <div>
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-400">Offene P/L</div>
+                        <div className={`mt-1 font-bold ${pnlValue >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {formatPct(trade.unrealized_pnl_pct, 2, "0.00%")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
+                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Einstieg {trade.entry_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Kurs {trade.current_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700">Stop {trade.stop_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">Ziel {trade.target_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Hebel {trade.leverage ?? 1}x</span>
+                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">CRV {trade.risk_reward || "N/A"}</span>
+                      {management.risk_distance_pct != null ? (
+                        <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">
+                          Stop-Abstand {formatPct(management.risk_distance_pct, 2, "0.00%")}
+                        </span>
+                      ) : null}
+                      {management.target_progress_pct != null ? (
+                        <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">
+                          Ziel-Fortschritt {Number(management.target_progress_pct).toFixed(1)}%
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
                       {germanText(management.summary, "Paper-Position halten, solange der Trigger gültig bleibt.")}
@@ -631,7 +653,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div className="mt-2 text-xs font-bold leading-5 text-slate-700">
                       Nächste Prüfung: {germanText(management.next_check, "Trigger, Stop und Ziel erneut prüfen, bevor der Plan geändert wird.")}
                     </div>
-                  </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => trade.ticker && onAnalyze(trade.ticker)}
+                        className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700"
+                      >
+                        Analysieren
+                      </button>
+                      <button
+                        onClick={() => closeTrade(trade.id)}
+                        disabled={busyId === trade.id}
+                        className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+                      >
+                        Trade schließen
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -1323,94 +1360,6 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         </div>
 
         <div className="space-y-4">
-          <div className="surface-panel rounded-[2rem] p-5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Offene Trades</div>
-            <div className="mt-4 space-y-3">
-              {openTrades.length ? (
-                openTrades.map((trade: any) => (
-                  <div key={trade.id} className="rounded-[1.3rem] border border-black/8 bg-white/75 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-black text-slate-900">{trade.ticker} · {trade.direction}</div>
-                        <div className="mt-1 text-xs text-slate-500">{trade.setup_type}</div>
-                      </div>
-                      <div className={`text-sm font-black ${(trade.unrealized_pnl_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                        {formatPct(trade.unrealized_pnl_pct, 2, "+0.00%")}
-                      </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                      <div>Einstieg {trade.entry_price}</div>
-                      <div>Jetzt {trade.current_price ?? "N/A"}</div>
-                      <div>Stop {trade.stop_price ?? "N/A"}</div>
-                      <div>Ziel {trade.target_price ?? "N/A"}</div>
-                      <div>Hebel {trade.leverage}x</div>
-                      <div>RR {trade.risk_reward || "N/A"}</div>
-                    </div>
-                    <div className="mt-3 grid gap-2 rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs text-slate-700 sm:grid-cols-3">
-                      <div>
-                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Investiert</div>
-                        <div className="mt-1 font-black text-slate-900">{moneyOrNA(trade.invested_value, currency)}</div>
-                      </div>
-                      <div>
-                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Jetzt</div>
-                        <div className="mt-1 font-black text-slate-900">{moneyOrNA(trade.current_value, currency)}</div>
-                      </div>
-                      <div>
-                        <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500">Offene P/L</div>
-                        <div className={`mt-1 font-black ${(trade.result_value_delta || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                          {moneyOrNA(trade.result_value_delta, currency)} / {germanStatus(trade.result_label, "neutral")}
-                        </div>
-                      </div>
-                    </div>
-                    {trade.management_plan && (
-                      <div className="mt-3 rounded-[1rem] border border-black/8 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                            {germanStatus(trade.management_plan.status, "überwachen")}
-                          </span>
-                          <span className="font-bold text-slate-900">{germanStatus(trade.management_plan.action, "halten")}</span>
-                        </div>
-                        <div className="mt-1 leading-5">
-                          {germanText(trade.management_plan.summary, "Paper-Position halten, solange der Plan gültig bleibt.")}
-                        </div>
-                        <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 font-semibold leading-5 text-slate-700">
-                          Nächste Prüfung: {germanText(trade.management_plan.next_check, "Trigger, Stop und Ziel erneut prüfen, bevor der Plan geändert wird.")}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2 text-slate-500">
-                          {trade.management_plan.decision_grade ? (
-                            <span>Stufe {germanStatus(trade.management_plan.decision_grade)}</span>
-                          ) : null}
-                          {trade.management_plan.risk_distance_pct != null ? (
-                            <span>Stop-Abstand {formatPct(trade.management_plan.risk_distance_pct, 2, "0.00%")}</span>
-                          ) : null}
-                          {trade.management_plan.target_progress_pct != null ? (
-                            <span>Ziel-Fortschritt {Number(trade.management_plan.target_progress_pct).toFixed(1)}%</span>
-                          ) : null}
-                        </div>
-                      </div>
-                    )}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button onClick={() => onAnalyze(trade.ticker)} className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700">
-                        Analysieren
-                      </button>
-                      <button
-                        onClick={() => closeTrade(trade.id)}
-                        disabled={busyId === trade.id}
-                        className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
-                      >
-                        Trade schließen
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4 text-sm text-slate-500">
-                  Noch keine offenen Paper-Trades.
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="surface-panel rounded-[2rem] p-5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Geschlossene Trades</div>
             <div className="mt-4 space-y-3">

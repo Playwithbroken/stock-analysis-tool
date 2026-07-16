@@ -127,6 +127,47 @@ const formatHoldingPeriod = (days?: number | null): string => {
   return restMonths > 0 ? `${years}y ${restMonths}m` : `${years}y`;
 };
 
+const recommendationLabel = (value?: string | null): string => {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized.includes("AVOID")) return "Meiden";
+  if (normalized.includes("SELL")) return "Verkaufen";
+  if (normalized.includes("BUY")) return "Kaufen";
+  if (normalized.includes("ACCUMULATE")) return "Halten / Aufbauen";
+  if (normalized.includes("HOLD")) return "Halten";
+  if (normalized.includes("WATCH")) return "Beobachten";
+  return value || "Beobachten";
+};
+
+const alertDirectionLabel = (value?: string | null): string =>
+  String(value || "").toLowerCase() === "below" ? "Unterschreitet" : "Überschreitet";
+
+const profileValueLabel = (value?: string | null): string => {
+  const labels: Record<string, string> = {
+    aggressive: "offensiv",
+    conservative: "konservativ",
+    high: "hoch",
+    intermediate: "fortgeschritten",
+    long_term: "langfristig",
+    low: "niedrig",
+    medium: "mittel",
+    mixed: "gemischt",
+    moderate: "moderat",
+    short_term: "kurzfristig",
+  };
+  const normalized = String(value || "").trim().toLowerCase();
+  return labels[normalized] || value || "offen";
+};
+
+const advisoryLevelLabel = (value?: string | null): string => {
+  const labels: Record<string, string> = {
+    blocker: "Sperre",
+    opportunity: "Chance",
+    review: "Prüfen",
+  };
+  const normalized = String(value || "").trim().toLowerCase();
+  return labels[normalized] || value || "Prüfen";
+};
+
 export default function PortfolioView({
   portfolios,
   dataSource,
@@ -418,11 +459,11 @@ export default function PortfolioView({
     if (name) {
       setCreatingPortfolio(true);
       setCreatePortfolioError(null);
-      setCreatePortfolioNotice("Portfolio wird gespeichert und danach serverseitig geprueft...");
+      setCreatePortfolioNotice("Portfolio wird gespeichert und danach serverseitig geprüft...");
       try {
         const created = await onCreatePortfolio(name);
         setSelectedPortfolio(created.id);
-        setCreatePortfolioNotice(`Gespeichert und geprueft: ${created.name}`);
+        setCreatePortfolioNotice(`Gespeichert und geprüft: ${created.name}`);
         setNewPortfolioName("");
         window.setTimeout(() => {
           setShowCreateModal(false);
@@ -510,13 +551,13 @@ export default function PortfolioView({
       : null;
   const localAdvisoryIssues = [
     advisoryProfile && !advisoryProfile.advisory_profile_complete
-      ? "Beratungsprofil ist noch nicht bestaetigt."
+      ? "Beratungsprofil ist noch nicht bestätigt."
       : null,
     topHoldingPct != null && topHoldingPct > maxSinglePositionPct
-      ? `${topHolding?.ticker} liegt bei ${formatNumber(topHoldingPct)}% und damit ueber dem Limit von ${formatNumber(maxSinglePositionPct)}%.`
+      ? `${topHolding?.ticker} liegt bei ${formatNumber(topHoldingPct)}% und damit über dem Limit von ${formatNumber(maxSinglePositionPct)}%.`
       : null,
     analysis?.summary.num_holdings != null && analysis.summary.num_holdings > 0 && analysis.summary.num_holdings < 5
-      ? "Weniger als 5 Positionen: Diversifikation ist noch duenn."
+      ? "Weniger als 5 Positionen: Diversifikation ist noch dünn."
       : null,
     analysis?.summary.avg_score != null && analysis.summary.avg_score < 0
       ? "Durchschnittlicher Portfolio-Score ist negativ."
@@ -539,8 +580,8 @@ export default function PortfolioView({
     advisoryStatus === "ok"
       ? "Portfolio passt zum aktuellen Beratungsrahmen."
       : advisoryStatus === "review"
-        ? "Portfolio braucht Pruefung vor neuer Aktion."
-        : "Portfolio wird geprueft.";
+        ? "Portfolio braucht Prüfung vor einer neuen Aktion."
+        : "Portfolio wird geprüft.";
   const advisoryTone =
     advisoryStatus === "ok"
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800"
@@ -554,17 +595,17 @@ export default function PortfolioView({
   const advisoryHeadline =
     portfolioAdvisory?.advisory_headline ||
     (advisoryStatus === "ok"
-      ? "Portfolio im Rahmen, neue Setups diszipliniert pruefen."
-      : "Vor neuen Risiken diese Punkte pruefen.");
+      ? "Portfolio im Rahmen, neue Setups diszipliniert prüfen."
+      : "Vor neuen Risiken diese Punkte prüfen.");
   const advisoryReviewActions =
     portfolioAdvisory?.review_actions?.length
       ? portfolioAdvisory.review_actions.slice(0, 3)
       : advisoryIssues.slice(0, 3).map((issue, index) => ({
           priority: 50 + index,
           level: "review",
-          title: "Pruefpunkt",
+        title: "Prüfpunkt",
           detail: issue,
-          next_step: "These, Positionsgroesse und Invalidierung dokumentieren.",
+          next_step: "These, Positionsgröße und Invalidierung dokumentieren.",
           flag: `local_${index}`,
         }));
   const advisoryActionTone = (level?: string) =>
@@ -585,7 +626,7 @@ export default function PortfolioView({
     if (dataSource === "local-cache") {
       return {
         label: "Lokale Sicherung",
-        detail: dataSourceMessage || "Serverdaten sind gerade nicht erreichbar. Aenderungen bleiben im Browser-Fallback.",
+        detail: dataSourceMessage || "Serverdaten sind gerade nicht erreichbar. Änderungen bleiben im Browser-Fallback.",
         tone: "border-amber-400/40 bg-amber-50 text-amber-800",
         dot: "bg-amber-500",
       };
@@ -600,7 +641,7 @@ export default function PortfolioView({
     }
     return {
       label: "Bereit",
-      detail: "Noch kein Portfolio gespeichert. Das naechste neue Portfolio wird serverseitig angelegt.",
+      detail: "Noch kein Portfolio gespeichert. Das nächste neue Portfolio wird serverseitig angelegt.",
       tone: "border-slate-300 bg-white text-slate-700",
       dot: "bg-slate-400",
     };
@@ -620,14 +661,14 @@ export default function PortfolioView({
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
-              Portfolio Desk
+              Portfolio-Zentrale
             </div>
             <h1 className="mt-2 text-4xl text-slate-900 sm:text-5xl">
-              Built for conviction, not clutter.
+              Klare Entscheidungen statt Datenchaos.
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-              Saubere Uebersicht ueber Holdings, Risiko, Dividenden und Korrelationen in derselben
-              visuellen Sprache wie dein Radar und Morning Brief.
+              Klare Übersicht über Positionen, Risiko, Dividenden und Korrelationen in derselben
+              visuellen Sprache wie dein Radar und Morning Briefing.
             </p>
           </div>
 
@@ -645,7 +686,7 @@ export default function PortfolioView({
               className="inline-flex items-center gap-2 rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${portfoliosLoading || refreshingPortfolios ? "animate-spin" : ""}`} />
-              Refresh
+              Aktualisieren
             </button>
             <button
               onClick={() => {
@@ -655,14 +696,14 @@ export default function PortfolioView({
               }}
               className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700"
             >
-              New portfolio
+              Neues Portfolio
             </button>
             {currentPortfolio && (
               <button
                 onClick={() => setShowAddHoldingModal(true)}
                 className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
               >
-                Add holding
+                Position hinzufügen
               </button>
             )}
           </div>
@@ -671,21 +712,21 @@ export default function PortfolioView({
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-              Portfolio count
+              Portfolios
             </div>
             <div className="mt-2 text-3xl font-black text-slate-900">{portfolios.length}</div>
           </div>
           <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-              Selected
+              Ausgewählt
             </div>
             <div className="mt-2 text-xl font-black text-slate-900">
-              {currentPortfolio?.name || "No portfolio"}
+              {currentPortfolio?.name || "Kein Portfolio"}
             </div>
           </div>
           <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-              Active holdings
+              Aktive Positionen
             </div>
             <div className="mt-2 text-3xl font-black text-slate-900">
               {currentPortfolio?.holdings.length || 0}
@@ -716,11 +757,11 @@ export default function PortfolioView({
             <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Active Portfolio
+                  Aktives Portfolio
                 </div>
                 <h2 className="mt-2 text-4xl text-slate-900">{currentPortfolio.name}</h2>
                 <p className="mt-2 text-sm text-slate-500">
-                  {currentPortfolio.holdings.length} holdings in the current workspace.
+                  {currentPortfolio.holdings.length} Positionen im aktuellen Portfolio.
                 </p>
               </div>
 
@@ -732,7 +773,7 @@ export default function PortfolioView({
                 >
                   <span className="inline-flex items-center gap-2">
                     <RefreshCw size={14} />
-                    {loading ? "Refreshing" : "Refresh"}
+                    {loading ? "Wird aktualisiert" : "Aktualisieren"}
                   </span>
                 </button>
                 <button
@@ -741,12 +782,12 @@ export default function PortfolioView({
                 >
                   <span className="inline-flex items-center gap-2">
                     <Download size={14} />
-                    Export csv
+                    CSV exportieren
                   </span>
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm("Delete this portfolio?")) {
+                    if (confirm("Dieses Portfolio wirklich löschen?")) {
                       onDeletePortfolio(currentPortfolio.id);
                       setSelectedPortfolio(null);
                     }
@@ -755,7 +796,7 @@ export default function PortfolioView({
                 >
                   <span className="inline-flex items-center gap-2">
                     <Trash2 size={14} />
-                    Delete
+                    Löschen
                   </span>
                 </button>
               </div>
@@ -765,7 +806,7 @@ export default function PortfolioView({
               <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    Total value
+                    Gesamtwert
                   </div>
                   <div className="mt-2 text-3xl font-black text-slate-900">
                     {formatPrice(analysis.summary.total_value)}
@@ -792,7 +833,7 @@ export default function PortfolioView({
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    Portfolio score
+                    Portfolio-Score
                   </div>
                   <div className={`mt-2 text-3xl font-black ${scoreTone(analysis.summary.avg_score)}`}>
                     {formatNumber(analysis.summary.avg_score)}
@@ -800,7 +841,7 @@ export default function PortfolioView({
                 </div>
                 <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                    Holdings
+                    Positionen
                   </div>
                   <div className="mt-2 text-3xl font-black text-slate-900">
                     {analysis.summary.num_holdings}
@@ -812,7 +853,7 @@ export default function PortfolioView({
                   )}
                   {avgHoldingDays != null && (
                     <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-                      Avg Haltedauer {formatHoldingPeriod(avgHoldingDays)}
+                      Ø Haltedauer {formatHoldingPeriod(avgHoldingDays)}
                     </div>
                   )}
                 </div>
@@ -824,18 +865,18 @@ export default function PortfolioView({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      Advisory Portfolio Check
+                      Portfolio-Beratungscheck
                     </div>
                     <h3 className="mt-2 text-2xl text-slate-900">
                       {advisoryHeadline}
                     </h3>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                      Prueft Konzentration, Positionslimit, Diversifikation und Score gegen dein Advisory-Profil.
+                      Prüft Konzentration, Positionslimit, Diversifikation und Score gegen dein Beratungsprofil.
                     </p>
                   </div>
                   <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${advisoryTone}`}>
                     {advisoryStatus === "ok" ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
-                    {portfolioAdvisoryLoading ? "Prueft" : advisoryStatus === "ok" ? "Passt" : "Pruefen"}
+                    {portfolioAdvisoryLoading ? "Prüft" : advisoryStatus === "ok" ? "Passt" : "Prüfen"}
                   </div>
                 </div>
 
@@ -865,7 +906,7 @@ export default function PortfolioView({
                       {formatNumber(maxSinglePositionPct)}%
                     </div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
-                      aus deinem Advisory-Profil
+                      aus deinem Beratungsprofil
                     </div>
                   </div>
                   <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
@@ -873,10 +914,10 @@ export default function PortfolioView({
                       Profil
                     </div>
                     <div className="mt-2 text-sm font-black leading-6 text-slate-900">
-                      {advisoryProfileLimits?.preferred_strategy || advisoryProfile?.preferred_strategy || "mixed"} / {advisoryProfileLimits?.risk_tolerance || advisoryProfile?.risk_tolerance || "medium"}
+                      {profileValueLabel(advisoryProfileLimits?.preferred_strategy || advisoryProfile?.preferred_strategy || "mixed")} / {profileValueLabel(advisoryProfileLimits?.risk_tolerance || advisoryProfile?.risk_tolerance || "medium")}
                     </div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
-                      Verlust {advisoryProfileLimits?.loss_capacity || advisoryProfile?.loss_capacity || "medium"}
+                      Verlusttragfähigkeit {profileValueLabel(advisoryProfileLimits?.loss_capacity || advisoryProfile?.loss_capacity || "medium")}
                     </div>
                   </div>
                 </div>
@@ -884,7 +925,7 @@ export default function PortfolioView({
                 <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                      Priorisierte Review-Liste
+                      Priorisierte Prüfliste
                     </div>
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
                       Score {portfolioAdvisoryLoading ? "--" : portfolioAdvisory?.advisory_score ?? "--"}/100
@@ -897,10 +938,10 @@ export default function PortfolioView({
                         className={`rounded-2xl border p-4 ${advisoryActionTone(item.level)}`}
                       >
                         <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
-                          {item.level || "review"} #{index + 1}
+                          {advisoryLevelLabel(item.level)} #{index + 1}
                         </div>
                         <div className="mt-2 text-sm font-black leading-5">
-                          {item.title || "Pruefpunkt"}
+                          {item.title || "Prüfpunkt"}
                         </div>
                         <div className="mt-2 text-xs font-semibold leading-5 opacity-90">
                           {item.detail || "Keine harte Bremse erkannt."}
@@ -931,10 +972,10 @@ export default function PortfolioView({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Price Alerts
+                    Preisalarme
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
-                    Touch-Trigger mit 5 Minuten Cooldown. Fuer diese Beta werden Alerts nur per Telegram versendet.
+                    Auslösung bei Kursberührung mit fünf Minuten Sperrzeit. Alarme werden in dieser Beta nur per Telegram versendet.
                   </p>
                 </div>
                 <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
@@ -954,22 +995,22 @@ export default function PortfolioView({
                   onChange={(e) => setNewAlertDirection(e.target.value as "above" | "below")}
                   className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
                 >
-                  <option value="above">Above</option>
-                  <option value="below">Below</option>
+                  <option value="above">Überschreitet</option>
+                  <option value="below">Unterschreitet</option>
                 </select>
                 <input
                   value={newAlertTarget}
                   onChange={(e) => setNewAlertTarget(e.target.value)}
                   type="number"
                   step="0.01"
-                  placeholder="Target"
+                  placeholder="Zielkurs"
                   className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
                 />
                 <button
                   onClick={createPriceAlert}
                   className="rounded-xl bg-[var(--accent)] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
                 >
-                  Add Alert
+                  Alarm hinzufügen
                 </button>
               </div>
 
@@ -978,11 +1019,11 @@ export default function PortfolioView({
                   <thead>
                     <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                       <th className="px-4 py-3">Ticker</th>
-                      <th className="px-4 py-3">Rule</th>
-                      <th className="px-4 py-3 text-right">Target</th>
-                      <th className="px-4 py-3">Last Trigger</th>
+                      <th className="px-4 py-3">Regel</th>
+                      <th className="px-4 py-3 text-right">Zielkurs</th>
+                      <th className="px-4 py-3">Letzte Auslösung</th>
                       <th className="px-4 py-3 text-right">Status</th>
-                      <th className="px-4 py-3 text-right">Manage</th>
+                      <th className="px-4 py-3 text-right">Verwalten</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1002,14 +1043,14 @@ export default function PortfolioView({
                       alerts.map((alert) => (
                         <tr key={alert.id} className="border-b border-black/6 last:border-b-0">
                           <td className="px-4 py-4 text-sm font-extrabold text-slate-900">{alert.symbol}</td>
-                          <td className="px-4 py-4 text-sm font-semibold text-slate-700">{alert.direction}</td>
+                          <td className="px-4 py-4 text-sm font-semibold text-slate-700">{alertDirectionLabel(alert.direction)}</td>
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
                             {formatPrice(alert.target_price)}
                           </td>
                           <td className="px-4 py-4 text-xs text-slate-500">
                             {alert.last_triggered_at
                               ? new Date(alert.last_triggered_at).toLocaleString()
-                              : "Never"}
+                              : "Noch nie"}
                           </td>
                           <td className="px-4 py-4 text-right">
                             <span
@@ -1019,7 +1060,7 @@ export default function PortfolioView({
                                   : "bg-slate-200 text-slate-500"
                               }`}
                             >
-                              {alert.enabled ? "Active" : "Paused"}
+                              {alert.enabled ? "Aktiv" : "Pausiert"}
                             </span>
                           </td>
                           <td className="px-4 py-4">
@@ -1028,13 +1069,13 @@ export default function PortfolioView({
                                 onClick={() => toggleAlert(alert)}
                                 className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                               >
-                                {alert.enabled ? "Pause" : "Enable"}
+                                {alert.enabled ? "Pausieren" : "Aktivieren"}
                               </button>
                               <button
                                 onClick={() => deleteAlert(alert)}
                                 className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
                               >
-                                Remove
+                                Entfernen
                               </button>
                             </div>
                           </td>
@@ -1053,7 +1094,7 @@ export default function PortfolioView({
                 </div>
                 <div>
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Portfolio Verdict
+                    Portfolio-Einordnung
                   </div>
                   <p className="mt-3 text-base leading-7 text-slate-700">{portfolioVerdict}</p>
                 </div>
@@ -1112,7 +1153,7 @@ export default function PortfolioView({
               <section className="surface-panel overflow-hidden rounded-[2rem] p-0">
                 <div className="border-b border-black/6 px-6 py-5">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Holdings
+                    Positionen
                   </div>
                 </div>
                 <div className="space-y-3 p-4 md:hidden">
@@ -1138,17 +1179,17 @@ export default function PortfolioView({
                                 ? "bg-red-500/10 text-red-700"
                                 : "bg-amber-500/10 text-amber-700"
                           }`}>
-                            {holding.recommendation}
+                            {recommendationLabel(holding.recommendation)}
                           </span>
                         </div>
 
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                           <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Shares</div>
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Anteile</div>
                             <div className="mt-1 font-bold text-slate-900">{holding.shares}</div>
                           </div>
                           <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Value</div>
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Wert</div>
                             <div className="mt-1 font-bold text-slate-900">{formatPrice(holding.position_value || 0)}</div>
                           </div>
                           <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
@@ -1203,7 +1244,7 @@ export default function PortfolioView({
                               onClick={() => onAnalyzeStock(holding.ticker)}
                               className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                             >
-                              Analyze
+                              Analysieren
                             </button>
                             <button
                               onClick={() => openEditHolding({
@@ -1218,13 +1259,13 @@ export default function PortfolioView({
                                   : "border-black/8 bg-white text-slate-700"
                               }`}
                             >
-                              {isEditing ? "Editing" : "Edit"}
+                              {isEditing ? "Bearbeitung" : "Bearbeiten"}
                             </button>
                             <button
                               onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
                               className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
                             >
-                              Remove
+                              Entfernen
                             </button>
                           </div>
                         </div>
@@ -1234,7 +1275,7 @@ export default function PortfolioView({
                             <div className="grid gap-3">
                               <label className="block">
                                 <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                                  Shares
+                                  Anteile
                                 </div>
                                 <input
                                   type="number"
@@ -1278,7 +1319,7 @@ export default function PortfolioView({
                               >
                                 <span className="inline-flex items-center gap-1">
                                   <X size={12} />
-                                  Cancel
+                                  Abbrechen
                                 </span>
                               </button>
                               <button
@@ -1288,7 +1329,7 @@ export default function PortfolioView({
                               >
                                 <span className="inline-flex items-center gap-1">
                                   <Check size={12} />
-                                  {savingHoldingEdit ? "Saving" : "Save"}
+                                  {savingHoldingEdit ? "Speichert" : "Speichern"}
                                 </span>
                               </button>
                             </div>
@@ -1302,17 +1343,17 @@ export default function PortfolioView({
                   <table className="min-w-full">
                     <thead>
                       <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                        <th className="px-6 py-4">Stock</th>
-                        <th className="px-4 py-4 text-right">Shares</th>
+                        <th className="px-6 py-4">Aktie</th>
+                        <th className="px-4 py-4 text-right">Anteile</th>
                         <th className="px-4 py-4 text-right">Kaufdatum</th>
                         <th className="px-4 py-4 text-right">Haltedauer</th>
                         <th className="px-4 py-4 text-right">Kaufkurs</th>
-                        <th className="px-4 py-4 text-right">Price</th>
-                        <th className="px-4 py-4 text-right">Value</th>
+                        <th className="px-4 py-4 text-right">Kurs</th>
+                        <th className="px-4 py-4 text-right">Wert</th>
                         <th className="px-4 py-4 text-right">Seit Kauf</th>
                         <th className="px-4 py-4 text-right">Score</th>
-                        <th className="px-4 py-4 text-center">Action</th>
-                        <th className="px-6 py-4 text-right">Manage</th>
+                        <th className="px-4 py-4 text-center">Signal</th>
+                        <th className="px-6 py-4 text-right">Verwalten</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1355,7 +1396,7 @@ export default function PortfolioView({
                               </div>
                               {!hasEntry && (
                                 <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
-                                  Editieren fuer echte Rendite
+                                  Bearbeiten für eine korrekte Rendite
                                 </div>
                               )}
                             </td>
@@ -1374,7 +1415,7 @@ export default function PortfolioView({
                                       : "bg-amber-500/10 text-amber-700"
                                 }`}
                               >
-                                {holding.recommendation}
+                                {recommendationLabel(holding.recommendation)}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -1383,7 +1424,7 @@ export default function PortfolioView({
                                   onClick={() => onAnalyzeStock(holding.ticker)}
                                   className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
                                 >
-                                  Analyze
+                                  Analysieren
                                 </button>
                                 <button
                                   onClick={() => openEditHolding({
@@ -1398,13 +1439,13 @@ export default function PortfolioView({
                                       : "border-black/8 bg-white text-slate-700"
                                   }`}
                                 >
-                                  {isEditing ? "Editing" : "Edit"}
+                                  {isEditing ? "Bearbeitung" : "Bearbeiten"}
                                 </button>
                                 <button
                                   onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
                                   className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
                                 >
-                                  Remove
+                                  Entfernen
                                 </button>
                               </div>
                             </td>
@@ -1415,7 +1456,7 @@ export default function PortfolioView({
                                 <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
                                   <label className="block">
                                     <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                                      Shares
+                                      Anteile
                                     </div>
                                     <input
                                       type="number"
@@ -1458,7 +1499,7 @@ export default function PortfolioView({
                                     >
                                       <span className="inline-flex items-center gap-1">
                                         <X size={12} />
-                                        Cancel
+                                        Abbrechen
                                       </span>
                                     </button>
                                     <button
@@ -1468,7 +1509,7 @@ export default function PortfolioView({
                                     >
                                       <span className="inline-flex items-center gap-1">
                                         <Check size={12} />
-                                        {savingHoldingEdit ? "Saving" : "Save"}
+                                        {savingHoldingEdit ? "Speichert" : "Speichern"}
                                       </span>
                                     </button>
                                   </div>
@@ -1488,22 +1529,22 @@ export default function PortfolioView({
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[2rem] bg-black/[0.04]">
                 <Plus size={32} className="text-slate-400" />
               </div>
-              <h3 className="mt-6 text-2xl text-slate-900">No holdings yet</h3>
+              <h3 className="mt-6 text-2xl text-slate-900">Noch keine Positionen</h3>
               <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-slate-500">
-                Add your first position to unlock performance, income, risk and diversification views.
+                Füge deine erste Position hinzu, um Rendite, Erträge, Risiko und Diversifikation auszuwerten.
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <button
                   onClick={() => window.open(`/api/portfolio/${selectedPortfolio}/export/csv`)}
                   className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
                 >
-                  Export csv
+                  CSV exportieren
                 </button>
                 <button
                   onClick={() => setShowAddHoldingModal(true)}
                   className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
                 >
-                  Add stock
+                  Aktie hinzufügen
                 </button>
               </div>
             </section>
@@ -1515,12 +1556,12 @@ export default function PortfolioView({
             <LayoutGrid size={34} className="text-slate-400" />
           </div>
           <h3 className="mt-6 text-3xl text-slate-900">
-            {portfolios.length === 0 ? "Start your first portfolio" : "Select a portfolio"}
+            {portfolios.length === 0 ? "Erstelle dein erstes Portfolio" : "Portfolio auswählen"}
           </h3>
           <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-slate-500">
             {portfolios.length === 0
-              ? "Create a portfolio to track positions, watch allocation and keep your decision flow in one place."
-              : "Choose one of your portfolios above to open the full workstation."}
+              ? "Bündele Positionen, Allokation, Risiko und Entscheidungen an einem Ort."
+              : "Wähle oben ein Portfolio aus, um die vollständige Arbeitsansicht zu öffnen."}
           </p>
           {portfolios.length === 0 && (
             <button
@@ -1531,7 +1572,7 @@ export default function PortfolioView({
               }}
               className="mt-6 rounded-[1.3rem] bg-[var(--accent)] px-6 py-4 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
             >
-              Create first portfolio
+              Erstes Portfolio erstellen
             </button>
           )}
         </section>
@@ -1546,12 +1587,12 @@ export default function PortfolioView({
       ) : (
         <section className="surface-panel rounded-[2rem] p-6">
           <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-            Paper Learning Account
+            Paper-Lernkonto
           </div>
           <div className="mt-3 text-sm leading-6 text-slate-600">
             {paperDashboardLoading
               ? "Demo-Trades und Geldfluss werden geladen."
-              : "Noch keine Paper-Trading-Daten verfuegbar. Sobald der Lernmodus einen Trade oeffnet, siehst du hier Einsatz, aktuellen Wert und Abschluss-Ergebnis."}
+              : "Noch keine Paper-Trading-Daten verfügbar. Sobald der Lernmodus einen Trade öffnet, siehst du hier Einsatz, aktuellen Wert und Abschluss-Ergebnis."}
           </div>
         </section>
       )}
@@ -1560,9 +1601,9 @@ export default function PortfolioView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="surface-panel w-full max-w-md rounded-[2rem] p-6">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              New Portfolio
+              Neues Portfolio
             </div>
-            <h3 className="mt-2 text-2xl text-slate-900">Create workspace bucket</h3>
+            <h3 className="mt-2 text-2xl text-slate-900">Portfolio anlegen</h3>
             <input
               type="text"
               value={newPortfolioName}
@@ -1570,7 +1611,7 @@ export default function PortfolioView({
                 setNewPortfolioName(e.target.value);
                 setCreatePortfolioError(null);
               }}
-              placeholder="Portfolio name"
+              placeholder="Name des Portfolios"
               className="mt-5 w-full rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
               autoFocus
             />
@@ -1594,14 +1635,14 @@ export default function PortfolioView({
                 disabled={creatingPortfolio}
                 className="rounded-[1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
               >
-                Cancel
+                Abbrechen
               </button>
               <button
                 onClick={handleCreatePortfolio}
                 disabled={!newPortfolioName.trim() || creatingPortfolio}
                 className="rounded-[1rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
               >
-                {creatingPortfolio ? "Saving..." : "Create"}
+                {creatingPortfolio ? "Wird gespeichert..." : "Erstellen"}
               </button>
             </div>
           </div>

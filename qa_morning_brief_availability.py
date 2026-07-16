@@ -44,6 +44,25 @@ class MalformedCacheService(BrokenBriefService):
         return {"quality": "corrupt-cache-value"}
 
 
+class ValidCachedBriefService(BrokenBriefService):
+    def get_cached_or_last_brief(self, snapshot=None):
+        return {
+            "generated_at": "2026-07-16T08:00:00+00:00",
+            "headline": "Verifiziertes Briefing aus dem letzten erfolgreichen Lauf",
+            "opening_bias": "Neutral beobachten",
+            "regions": {
+                "europe": {
+                    "label": "Europe",
+                    "assets": [{"symbol": "^GDAXI", "change_1d": 0.3}],
+                }
+            },
+            "top_news": [],
+            "trade_setups": [],
+            "trade_setups_status": "ready",
+            "quality": {"status": "ok", "score": 86, "checks": []},
+        }
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["APP_DATA_DIR"] = tmp
@@ -82,6 +101,18 @@ def main() -> int:
                 failures.append(f"full endpoint returned HTTP {full.status_code}")
             else:
                 failures.extend(f"full: {item}" for item in _validate_contract(full.json(), "error"))
+
+            api.get_morning_brief_service = lambda: ValidCachedBriefService()
+            valid_cached = client.get("/api/market/morning-brief", params={"fast": "true"})
+            cached_quality = valid_cached.json().get("quality", {})
+            if valid_cached.status_code != 200:
+                failures.append(f"valid cache returned HTTP {valid_cached.status_code}")
+            elif cached_quality.get("fallback"):
+                failures.append(f"valid cache was incorrectly degraded: {cached_quality}")
+            elif cached_quality.get("delivery_mode") != "cached":
+                failures.append(f"valid cache delivery metadata missing: {cached_quality}")
+            elif cached_quality.get("refresh_state") != "warming_up":
+                failures.append(f"valid cache refresh state missing: {cached_quality}")
 
             api.get_morning_brief_service = lambda: MalformedCacheService()
             malformed = client.get("/api/market/morning-brief", params={"fast": "true"})

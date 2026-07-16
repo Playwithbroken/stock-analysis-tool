@@ -799,13 +799,15 @@ function AppContent() {
     if (!auth.authenticated) return;
 
     let cancelled = false;
+    let retryTimeout: number | undefined;
 
     const loadGlobalBrief = async () => {
+      let usableBriefLoaded = false;
       const requestId = briefRequestIdRef.current + 1;
       briefRequestIdRef.current = requestId;
       if (!cancelled) setGlobalBriefStatus("loading");
       const timeoutGuard = window.setTimeout(() => {
-        if (!cancelled && briefRequestIdRef.current === requestId) {
+        if (!cancelled && briefRequestIdRef.current === requestId && !usableBriefLoaded) {
           setGlobalBriefStatus("error");
         }
       }, 10000);
@@ -818,7 +820,8 @@ function AppContent() {
         if (!cancelled && briefRequestIdRef.current === requestId) {
           setGlobalBrief(fastPayload);
           setSelectedGeoRegion(fastPayload?.regions?.europe?.label || fastPayload?.regions?.usa?.label || "Europe");
-          setGlobalBriefStatus(fastPayload?.quality?.fallback ? "error" : "ready");
+          usableBriefLoaded = !fastPayload?.quality?.fallback;
+          setGlobalBriefStatus(usableBriefLoaded ? "ready" : "loading");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, 300));
@@ -828,16 +831,24 @@ function AppContent() {
           timeoutMs: 8500,
         });
         if (!cancelled && briefRequestIdRef.current === requestId) {
-          setGlobalBrief(payload);
-          setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
-          setGlobalBriefStatus("ready");
+          const fullBriefUsable = !payload?.quality?.fallback;
+          if (fullBriefUsable || !usableBriefLoaded) {
+            setGlobalBrief(payload);
+            setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
+          }
+          usableBriefLoaded = usableBriefLoaded || fullBriefUsable;
+          setGlobalBriefStatus(usableBriefLoaded ? "ready" : "error");
         }
       } catch {
-        if (!cancelled && briefRequestIdRef.current === requestId) {
+        if (!cancelled && briefRequestIdRef.current === requestId && !usableBriefLoaded) {
           setGlobalBriefStatus("error");
         }
       } finally {
         window.clearTimeout(timeoutGuard);
+        if (!cancelled && !usableBriefLoaded) {
+          window.clearTimeout(retryTimeout);
+          retryTimeout = window.setTimeout(loadGlobalBrief, 12000);
+        }
       }
     };
 
@@ -845,6 +856,7 @@ function AppContent() {
     const interval = window.setInterval(loadGlobalBrief, 300000);
     return () => {
       cancelled = true;
+      window.clearTimeout(retryTimeout);
       window.clearInterval(interval);
     };
   }, [auth.authenticated, briefReloadTick]);

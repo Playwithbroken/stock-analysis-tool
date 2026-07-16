@@ -1487,7 +1487,9 @@ def _safe_int_env(name: str, default: int, minimum: int | None = None) -> int:
 async def _brief_warmup_loop():
     if not _env_enabled("BRIEF_WARMUP_ENABLED", "true"):
         return
-    await asyncio.sleep(12)
+    await asyncio.sleep(
+        max(0, _safe_int_env("BRIEF_WARMUP_INITIAL_DELAY_SECONDS", 1, minimum=0))
+    )
     while True:
         try:
             await _warm_brief_once()
@@ -4225,12 +4227,29 @@ def _safe_morning_brief_fallback(
         or not isinstance(fallback.get("regions"), dict)
     ):
         fallback = _emergency_morning_brief(reason)
+    fallback = copy.deepcopy(fallback)
     quality = fallback.get("quality")
     if not isinstance(quality, dict):
         quality = {}
         fallback["quality"] = quality
-    quality["status"] = "partial"
-    quality["fallback"] = reason
+    regions = fallback.get("regions") if isinstance(fallback.get("regions"), dict) else {}
+    has_region_assets = any((region or {}).get("assets") for region in regions.values())
+    try:
+        quality_score = int(quality.get("score") or 0)
+    except (TypeError, ValueError):
+        quality_score = 0
+    is_usable = (
+        not quality.get("fallback")
+        and quality_score > 0
+        and (has_region_assets or bool(fallback.get("top_news")) or bool(fallback.get("trade_setups")))
+    )
+    if is_usable:
+        quality["delivery_mode"] = "cached"
+        quality["refresh_state"] = reason
+    else:
+        quality["status"] = "partial"
+        quality["fallback"] = reason
+        quality["delivery_mode"] = "degraded"
     return fallback
 
 

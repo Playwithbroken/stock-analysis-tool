@@ -13,6 +13,10 @@ export default defineConfig({
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: false,
       workbox: {
+        // HTML must come from NetworkFirst below. Precaching index.html lets an
+        // old worker serve an old app shell before it can activate its update.
+        globIgnores: ['**/index.html'],
+        navigateFallback: null,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,

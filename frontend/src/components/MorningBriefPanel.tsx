@@ -138,6 +138,56 @@ function decisionTone(value?: string) {
   return "bg-slate-500/10 text-slate-600";
 }
 
+function setupQualityLabel(value?: string) {
+  const quality = String(value || "").toLowerCase();
+  if (quality === "high conviction") return "Qualitätsgate hoch";
+  if (quality === "selective") return "Selektiv";
+  if (quality === "tactical only") return "Nur taktisch";
+  if (quality === "watch only") return "Nur beobachten";
+  return "Einordnung offen";
+}
+
+function setupSizeLabel(value?: string) {
+  const size = String(value || "").toLowerCase();
+  if (size === "reduced risk") return "Reduzierte Positionsgröße";
+  if (size === "small risk") return "Kleine Positionsgröße";
+  if (size === "no position until confirmation") return "Keine Position vor Bestätigung";
+  return value || "Positionsgröße offen";
+}
+
+function setupReadinessMeta(setup: any) {
+  const quality = String(setup?.decision_quality || "").toLowerCase();
+  const direction = String(setup?.direction || "").toLowerCase();
+  const confidence = Number(setup?.confidence || 0);
+  const hasFramework = Boolean(setup?.trigger && setup?.invalidation && setup?.window);
+  if (["short", "watch-short", "hedge", "rebound_or_avoid"].includes(direction)) {
+    return {
+      label: "Risiko / Gegenposition prüfen",
+      detail: "Kein automatischer Trade. Erst Marktreaktion und Risikorahmen bestätigen.",
+      tone: "border-red-500/18 bg-red-500/8 text-red-700",
+    };
+  }
+  if (hasFramework && quality === "high conviction" && confidence >= 80) {
+    return {
+      label: "Prüfbares Setup",
+      detail: "Trigger, Invalidierung und Zeitfenster vorhanden. Manuelle Bestätigung bleibt Pflicht.",
+      tone: "border-emerald-500/18 bg-emerald-500/8 text-emerald-700",
+    };
+  }
+  if (hasFramework && confidence >= 65) {
+    return {
+      label: "Bestätigung fehlt",
+      detail: "Entscheidungsrahmen vorhanden, aber Qualität oder Signalstärke reicht noch nicht.",
+      tone: "border-amber-500/18 bg-amber-500/8 text-amber-700",
+    };
+  }
+  return {
+    label: "Nur Beobachtung",
+    detail: "Noch kein belastbares Ausführungssignal.",
+    tone: "border-slate-300 bg-slate-100 text-slate-600",
+  };
+}
+
 function setupBucketTone(bucket: "now" | "next" | "avoid" | "data_missing") {
   if (bucket === "now") return "border-emerald-500/16 bg-emerald-500/5 text-emerald-700";
   if (bucket === "avoid") return "brief-avoid-soft border-red-500/14 text-red-700";
@@ -953,8 +1003,8 @@ export default function MorningBriefPanel({
                 key={`${setup.symbol}-${idx}`}
                 className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
                       #{setup.rank ?? idx + 1}
                     </span>
@@ -965,15 +1015,24 @@ export default function MorningBriefPanel({
                       {setup.symbol}
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       Score {openValue(setup.rank_score)}
                     </span>
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      Konfidenz {setup.confidence}
+                      Belastbarkeit {pingConfidenceLabel(setup.confidence)}
                     </span>
                   </div>
                 </div>
+                {(() => {
+                  const readiness = setupReadinessMeta(setup);
+                  return (
+                    <div className={`mt-3 rounded-[0.9rem] border px-3 py-2 ${readiness.tone}`}>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.14em]">{readiness.label}</div>
+                      <div className="mt-1 text-xs leading-5 text-slate-600">{readiness.detail}</div>
+                    </div>
+                  );
+                })()}
                 <div className="mt-2 text-sm font-bold text-slate-900">{setup.thesis}</div>
                 {Number(setup.learning_adjustment?.score_delta || 0) !== 0 ? (
                   <div className={`mt-2 rounded-[0.9rem] border px-3 py-2 text-[11px] font-bold ${
@@ -988,8 +1047,16 @@ export default function MorningBriefPanel({
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>Einstieg: {setup.trigger}</div>
                   <div>Zeitfenster: {setup.window}</div>
-                  <div>Ungueltig wenn: {setup.invalidation}</div>
-                  <div>Erwartete Bewegung: {setup.expected_move}</div>
+                  <div>These ungültig wenn: {setup.invalidation}</div>
+                  <div>Bewegungsrahmen: {setup.expected_move}</div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <span className={`rounded-full px-2 py-1 ${decisionTone(setup.decision_quality)}`}>
+                    {setupQualityLabel(setup.decision_quality)}
+                  </span>
+                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    {setupSizeLabel(setup.size_guidance)}
+                  </span>
                 </div>
                 {setup.catalysts?.length ? (
                   <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">

@@ -168,7 +168,12 @@ def test_demo_account_sizing() -> None:
     assert demo["risk_budget_per_trade_value"] == 1_750.0
     assert demo["risk_budget_per_option_trade_value"] == 1_250.0
     assert demo["max_position_value"] == 50_000.0
+    assert demo["max_gross_exposure_value"] == 300_000.0
+    assert demo["remaining_gross_exposure_value"] == 300_000.0
+    assert demo["max_ticker_exposure_value"] == 60_000.0
     assert demo["max_option_premium_value"] == 3_750.0
+    assert demo["max_open_option_premium_value"] == 10_000.0
+    assert demo["remaining_option_premium_value"] == 10_000.0
 
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert aapl["demo_tradeable"] is True
@@ -703,6 +708,70 @@ def test_execution_fill_is_adverse_for_long_and_short() -> None:
     assert service._calc_return_pct(short_entry["fill_price"], short_exit["fill_price"], -1, 1) < 0
 
 
+def test_demo_exposure_capacity_gates() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    playbook = {
+        "ticker": "AAPL",
+        "asset_class": "equity",
+        "reference_price": 100.0,
+        "risk_buffer_pct": 3.5,
+        "tradeable": True,
+    }
+    base_account = {
+        "equity": 500_000.0,
+        "cash_available_value": 200_000.0,
+        "risk_budget_per_trade_value": 1_750.0,
+        "risk_budget_per_option_trade_value": 1_250.0,
+        "remaining_risk_value": 10_000.0,
+        "max_position_value": 50_000.0,
+        "max_option_premium_value": 3_750.0,
+        "max_ticker_exposure_value": 60_000.0,
+        "remaining_gross_exposure_value": 100_000.0,
+        "remaining_option_premium_value": 10_000.0,
+        "exposure_by_ticker": {},
+        "open_trade_slots": 5,
+        "day_status": "monitor",
+        "learning_feedback": {},
+    }
+
+    ticker_limited = service._suggest_demo_sizing(
+        playbook,
+        {**base_account, "exposure_by_ticker": {"AAPL": 55_000.0}},
+    )
+    assert ticker_limited["suggested_notional_value"] == 5_000.0
+    assert ticker_limited["remaining_ticker_capacity_value"] == 5_000.0
+
+    gross_blocked = service._suggest_demo_sizing(
+        playbook,
+        {**base_account, "remaining_gross_exposure_value": 0.0},
+    )
+    assert gross_blocked["demo_tradeable"] is False
+    assert "Gross exposure budget is exhausted." in gross_blocked["demo_block_reasons"]
+
+    cash_blocked = service._suggest_demo_sizing(
+        playbook,
+        {**base_account, "cash_available_value": 0.0},
+    )
+    assert cash_blocked["demo_tradeable"] is False
+    assert "Demo cash capacity is exhausted." in cash_blocked["demo_block_reasons"]
+
+    ticker_blocked = service._suggest_demo_sizing(
+        playbook,
+        {**base_account, "exposure_by_ticker": {"AAPL": 60_000.0}},
+    )
+    assert ticker_blocked["demo_tradeable"] is False
+    assert "Ticker exposure budget is exhausted." in ticker_blocked["demo_block_reasons"]
+
+    option_blocked = service._suggest_demo_sizing(
+        {**playbook, "asset_class": "option", "direction": "call", "reference_price": 2.5, "contract_multiplier": 100},
+        {**base_account, "remaining_option_premium_value": 0.0},
+    )
+    assert option_blocked["demo_tradeable"] is False
+    assert "Option premium budget is exhausted." in option_blocked["demo_block_reasons"]
+    assert service._auto_rejection_category("Gross exposure budget is exhausted.") == "capacity"
+    assert "Gesamt-Exposure" in service._auto_rejection_display_reason("Gross exposure budget is exhausted.")
+
+
 def test_close_trade_auto_documents_profitable_exit() -> None:
     manager = FakePortfolioManager(
         [
@@ -787,6 +856,7 @@ if __name__ == "__main__":
     test_strict_score_block_does_not_block_learning_candidate()
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_execution_fill_is_adverse_for_long_and_short()
+    test_demo_exposure_capacity_gates()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

@@ -112,7 +112,8 @@ class PaperTradingService:
                         {
                             "playbook_id": candidate.get("id"),
                             "direction": candidate.get("direction") or "long",
-                            "quantity": candidate.get("suggested_quantity") or 0,
+                            # Recalculate size against the account after every prior auto entry.
+                            "quantity": 0,
                             "leverage": 1,
                             "learning_mode": mode == "learn" or bool(candidate.get("learning_mode")),
                         },
@@ -194,6 +195,14 @@ class PaperTradingService:
             return "offene Exit-Aktionen zuerst prüfen"
         if "open risk budget is exhausted" in lower:
             return "offenes Risikobudget ausgeschöpft"
+        if "gross exposure budget is exhausted" in lower:
+            return "maximale Gesamt-Exposure erreicht"
+        if "demo cash capacity is exhausted" in lower:
+            return "kein freies Demo-Cash"
+        if "ticker exposure budget is exhausted" in lower:
+            return "maximale Ticker-Exposure erreicht"
+        if "option premium budget is exhausted" in lower:
+            return "maximale offene Optionspraemie erreicht"
         if "open-trade slots exhausted" in lower or "maximum demo open trades reached" in lower:
             return "maximale Anzahl offener Demo-Trades erreicht"
         if "missing ticker or reference price" in lower:
@@ -1344,7 +1353,18 @@ class PaperTradingService:
             return "journal"
         if "risk review" in lower or "exit actions open" in lower:
             return "risk_review"
-        if "open risk budget is exhausted" in lower or "open-trade slots exhausted" in lower or "maximum demo open trades" in lower:
+        if any(
+            marker in lower
+            for marker in (
+                "open risk budget is exhausted",
+                "gross exposure budget is exhausted",
+                "demo cash capacity is exhausted",
+                "ticker exposure budget is exhausted",
+                "option premium budget is exhausted",
+                "open-trade slots exhausted",
+                "maximum demo open trades",
+            )
+        ):
             return "capacity"
         if "same ticker/setup/direction already open" in lower:
             return "duplicate"
@@ -1364,7 +1384,7 @@ class PaperTradingService:
         labels = {
             "journal": "Journal zuerst",
             "risk_review": "Risiko pruefen",
-            "capacity": "Risiko/Slots voll",
+            "capacity": "Kapazitaet voll",
             "duplicate": "Duplikat offen",
             "score": "Score zu niedrig",
             "data": "Daten fehlen",
@@ -1389,6 +1409,14 @@ class PaperTradingService:
             return "Bestehenden Paper-Trade managen statt doppeln"
         if "risk review" in text or "exit actions open" in text:
             return "Offene Trades pruefen und Risk-Review beenden"
+        if "gross exposure budget is exhausted" in text:
+            return "Gesamt-Exposure durch Schliessen oder Verkleinern bestehender Trades reduzieren"
+        if "demo cash capacity is exhausted" in text:
+            return "Demo-Cash durch Schliessen bestehender Positionen freigeben"
+        if "ticker exposure budget is exhausted" in text:
+            return "Ticker-Konzentration reduzieren, bevor derselbe Ticker erneut gewichtet wird"
+        if "option premium budget is exhausted" in text:
+            return "Offene Optionspraemie reduzieren, bevor ein weiterer Options-Trade startet"
         if "open risk budget is exhausted" in text or "open-trade slots exhausted" in text:
             return "Risiko oder Slots freimachen"
         if "missing paper journal" in text:
@@ -1405,6 +1433,14 @@ class PaperTradingService:
             return "Erst fehlende Paper-Journale abschließen; danach darf der Lernloop wieder neue Trades öffnen."
         if "risk review" in text or "exit actions open" in text:
             return "Erst offene Paper-Trades prüfen, Stop/Target bestätigen und Risk-Review abschließen."
+        if "gross exposure budget is exhausted" in text:
+            return "Kein neuer Entry: Gesamt-Exposure am Limit; erst Kapital freigeben."
+        if "demo cash capacity is exhausted" in text:
+            return "Kein neuer Entry: es ist kein freies Demo-Cash verfuegbar."
+        if "ticker exposure budget is exhausted" in text:
+            return "Kein neuer Entry in diesem Ticker: bestehende Konzentration zuerst reduzieren."
+        if "option premium budget is exhausted" in text:
+            return "Keine weitere Option: das aggregierte Praemienbudget ist ausgeschoepft."
         if "open risk budget is exhausted" in text or "open-trade slots exhausted" in text:
             return "Kein neuer Entry: Risiko oder Slots freimachen, bevor neue Exposure aufgebaut wird."
         if "same ticker/setup/direction already open" in text:
@@ -1536,7 +1572,10 @@ class PaperTradingService:
             "risk_per_trade_pct": env_float("PAPER_TRADING_RISK_PER_TRADE_PCT", 0.35, minimum=0.01),
             "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", 3.0, minimum=0.1),
             "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", 10.0, minimum=0.1),
+            "max_gross_exposure_pct": env_float("PAPER_TRADING_MAX_GROSS_EXPOSURE_PCT", 60.0, minimum=1.0),
+            "max_ticker_exposure_pct": env_float("PAPER_TRADING_MAX_TICKER_EXPOSURE_PCT", 12.0, minimum=0.1),
             "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 0.75, minimum=0.01),
+            "max_open_option_premium_pct": env_float("PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
             "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.25, minimum=0.01),
             "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", 12, minimum=1),
             "mode": "paper_learning_only",
@@ -1553,6 +1592,17 @@ class PaperTradingService:
         open_risk_value = round(sum(self._trade_open_risk_value(trade) for trade in open_trades), 2)
         open_exposure_value = round(
             sum(float(trade.get("invested_value") or 0) for trade in open_trades),
+            2,
+        )
+        exposure_by_ticker: Dict[str, float] = {}
+        for trade in open_trades:
+            ticker = str(trade.get("ticker") or "UNKNOWN").upper()
+            exposure_by_ticker[ticker] = round(
+                exposure_by_ticker.get(ticker, 0.0) + float(trade.get("invested_value") or 0),
+                2,
+            )
+        option_premium_exposure_value = round(
+            sum(float(trade.get("invested_value") or 0) for trade in open_trades if trade.get("asset_class") == "option"),
             2,
         )
         net_pnl_value = round(realized_value + unrealized_value, 2)
@@ -1581,9 +1631,15 @@ class PaperTradingService:
         risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
         max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
         max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
+        max_gross_exposure_value = round(equity * (float(config["max_gross_exposure_pct"]) / 100), 2)
+        max_ticker_exposure_value = round(equity * (float(config["max_ticker_exposure_pct"]) / 100), 2)
         max_option_premium_value = round(equity * (float(config["max_option_premium_pct"]) / 100), 2)
+        max_open_option_premium_value = round(equity * (float(config["max_open_option_premium_pct"]) / 100), 2)
         option_risk_budget = round(equity * (float(config["risk_per_option_trade_pct"]) / 100), 2)
         remaining_risk = round(max(0.0, max_open_risk_value - open_risk_value), 2)
+        remaining_gross_exposure = round(max(0.0, max_gross_exposure_value - open_exposure_value), 2)
+        remaining_option_premium = round(max(0.0, max_open_option_premium_value - option_premium_exposure_value), 2)
+        top_ticker = max(exposure_by_ticker, key=exposure_by_ticker.get) if exposure_by_ticker else None
         return {
             **config,
             "equity": equity,
@@ -1597,6 +1653,13 @@ class PaperTradingService:
             "open_risk_pct": round((open_risk_value / equity) * 100, 2) if equity > 0 else 0,
             "open_exposure_value": open_exposure_value,
             "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
+            "exposure_by_ticker": exposure_by_ticker,
+            "top_ticker_exposure": {
+                "ticker": top_ticker,
+                "value": exposure_by_ticker.get(top_ticker, 0.0) if top_ticker else 0.0,
+                "pct": round((exposure_by_ticker.get(top_ticker, 0.0) / equity) * 100, 2) if top_ticker and equity > 0 else 0.0,
+            },
+            "option_premium_exposure_value": option_premium_exposure_value,
             "open_trade_count": len(open_trades),
             "closed_trade_count": len(closed_trades),
             "management_counts": management_counts,
@@ -1607,12 +1670,18 @@ class PaperTradingService:
             "max_open_risk_value": max_open_risk_value,
             "remaining_risk_value": remaining_risk,
             "max_position_value": max_position_value,
+            "max_gross_exposure_value": max_gross_exposure_value,
+            "remaining_gross_exposure_value": remaining_gross_exposure,
+            "max_ticker_exposure_value": max_ticker_exposure_value,
             "max_option_premium_value": max_option_premium_value,
+            "max_open_option_premium_value": max_open_option_premium_value,
+            "remaining_option_premium_value": remaining_option_premium,
             "open_trade_slots": max(0, int(config["max_open_trades"]) - len(open_trades)),
             "candidate_count": len(playbooks),
             "guardrails": [
                 "Nur Demo-Lernkonto; keine automatische Echtgeld-Ausführung.",
                 "Jede Idee braucht These, Trigger, Stop, Ziel und Nachtrade-Journal.",
+                "Gesamt-, Ticker- und Options-Exposure werden vor jedem Auto-Entry neu berechnet.",
                 "Calls und Puts bleiben Paper-only, bis Optionskette, IV, Strike, Laufzeit und Spread geprüft sind.",
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],
@@ -1780,6 +1849,36 @@ class PaperTradingService:
             else demo_account.get("max_position_value")
             or 0
         )
+        equity = max(1.0, float(demo_account.get("equity") or 1))
+        cash_available = float(
+            demo_account.get("cash_available_value")
+            if demo_account.get("cash_available_value") is not None
+            else equity
+        )
+        remaining_gross = float(
+            demo_account.get("remaining_gross_exposure_value")
+            if demo_account.get("remaining_gross_exposure_value") is not None
+            else cash_available
+        )
+        ticker = str(playbook.get("ticker") or "").upper()
+        exposure_by_ticker = (
+            demo_account.get("exposure_by_ticker")
+            if isinstance(demo_account.get("exposure_by_ticker"), dict)
+            else {}
+        )
+        current_ticker_exposure = float(exposure_by_ticker.get(ticker) or 0)
+        ticker_limit = float(demo_account.get("max_ticker_exposure_value") or max_position_value)
+        remaining_ticker_exposure = max(0.0, ticker_limit - current_ticker_exposure)
+        capacity_limits = [max_position_value, remaining_gross, cash_available, remaining_ticker_exposure]
+        remaining_option_premium = max_position_value
+        if is_option:
+            remaining_option_premium = float(
+                demo_account.get("remaining_option_premium_value")
+                if demo_account.get("remaining_option_premium_value") is not None
+                else max_position_value
+            )
+            capacity_limits.append(remaining_option_premium)
+        max_position_value = max(0.0, min(capacity_limits))
         block_reasons: List[str] = []
         day_status = str(demo_account.get("day_status") or "")
         learning_feedback = demo_account.get("learning_feedback")
@@ -1799,6 +1898,14 @@ class PaperTradingService:
             )
         if risk_budget <= 0:
             block_reasons.append("Offenes Risikobudget ist ausgeschöpft.")
+        if demo_account.get("remaining_gross_exposure_value") is not None and remaining_gross <= 0:
+            block_reasons.append("Gross exposure budget is exhausted.")
+        if demo_account.get("cash_available_value") is not None and cash_available <= 0:
+            block_reasons.append("Demo cash capacity is exhausted.")
+        if demo_account.get("max_ticker_exposure_value") is not None and remaining_ticker_exposure <= 0:
+            block_reasons.append("Ticker exposure budget is exhausted.")
+        if is_option and demo_account.get("remaining_option_premium_value") is not None and remaining_option_premium <= 0:
+            block_reasons.append("Option premium budget is exhausted.")
         if int(demo_account.get("open_trade_slots") or 0) <= 0:
             block_reasons.append("Maximale Anzahl offener Demo-Trades erreicht.")
         if playbook.get("tradeable") is False:
@@ -1829,6 +1936,8 @@ class PaperTradingService:
             "suggested_max_loss_value": round(max_loss, 2),
             "suggested_account_pct": round((notional / float(demo_account.get("equity") or 1)) * 100, 2),
             "suggested_risk_pct": round((max_loss / float(demo_account.get("equity") or 1)) * 100, 2),
+            "remaining_gross_capacity_value": round(remaining_gross, 2),
+            "remaining_ticker_capacity_value": round(remaining_ticker_exposure, 2),
             "contract_multiplier": contract_multiplier,
             "demo_block_reasons": block_reasons,
             "demo_tradeable": not block_reasons,

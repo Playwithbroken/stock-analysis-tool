@@ -42,6 +42,13 @@ const moneyOrNA = (value: any, currency = "EUR") => {
   return number == null ? "N/A" : money(number, currency);
 };
 
+const priceOrNA = (value: unknown) => {
+  const number = toFiniteNumber(value);
+  return number == null
+    ? "N/A"
+    : new Intl.NumberFormat("de-DE", { maximumFractionDigits: 4 }).format(number);
+};
+
 const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
   const number = toFiniteNumber(value);
   if (number == null) return fallback;
@@ -173,6 +180,10 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     const value = Number(demoAccount.net_pnl_value || 0);
     return value > 0 ? "good" : value < 0 ? "bad" : "default";
   }, [demoAccount.net_pnl_value]);
+  const grossExposureUsagePct =
+    Number(demoAccount.max_gross_exposure_value || 0) > 0
+      ? (Number(demoAccount.open_exposure_value || 0) / Number(demoAccount.max_gross_exposure_value)) * 100
+      : 0;
 
   const activePaperDecisions = useMemo(() => {
     return [...openTrades]
@@ -436,7 +447,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   Kapitalaufteilung
                 </div>
                 <div className="mt-1 text-sm font-semibold text-slate-700">
-                  {formatPct(demoAccount.open_exposure_pct, 2, "0.00%")} investiert ·{" "}
+                  {formatPct(demoAccount.open_exposure_pct, 2, "0.00%")} vom Konto investiert ·{" "}
+                  {formatPct(grossExposureUsagePct, 1, "0.0%")} des Exposure-Limits genutzt ·{" "}
                   {formatPct(demoAccount.open_risk_pct, 2, "0.00%")} echtes Risiko offen ·{" "}
                   {demoAccount.open_trade_count || 0} offene Trades
                 </div>
@@ -452,13 +464,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div className="mt-4 h-3 overflow-hidden rounded-full bg-white ring-1 ring-black/8">
               <div
                 className="h-full rounded-full bg-[var(--accent)]"
-                style={{ width: `${clampPct(demoAccount.open_exposure_pct)}%` }}
+                style={{ width: `${clampPct(grossExposureUsagePct)}%` }}
               />
             </div>
-            <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
               <div>
                 <span className="font-extrabold text-slate-900">{money(demoAccount.open_exposure_value, currency)}</span>
-                {" "}im Markt
+                {" "}von {money(demoAccount.max_gross_exposure_value, currency)} Exposure
               </div>
               <div>
                 <span className="font-extrabold text-slate-900">{money(demoAccount.cash_available_value, currency)}</span>
@@ -467,6 +479,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div>
                 <span className="font-extrabold text-slate-900">{money(demoAccount.remaining_risk_value, currency)}</span>
                 {" "}Risikobudget frei
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-900">
+                  {demoAccount.top_ticker_exposure?.ticker || "Kein Ticker"}
+                </span>
+                {" "}{money(demoAccount.top_ticker_exposure?.value, currency)} / Optionen {money(demoAccount.option_premium_exposure_value, currency)}
               </div>
             </div>
           </div>
@@ -590,6 +608,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               {activePaperDecisions.map((trade: any) => {
                 const management = trade.management_plan || {};
                 const pnlValue = Number(trade.result_value_delta || 0);
+                const entryExecution = trade.trade_ticket?.execution_model?.entry || null;
+                const exitExecution = trade.estimated_exit_execution || null;
                 return (
                   <div
                     key={`decision-${trade.id}`}
@@ -629,6 +649,18 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         </div>
                       </div>
                     </div>
+                    {entryExecution ? (
+                      <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2 text-[11px] font-semibold leading-5 text-sky-900">
+                        <span className="font-extrabold">Ausführung:</span>{" "}
+                        Referenz {priceOrNA(entryExecution.reference_price)} → Fill {priceOrNA(entryExecution.fill_price)} ·{" "}
+                        {entryExecution.cost_bps ?? "?"} bps · Einstiegskosten {moneyOrNA(entryExecution.estimated_cost_value, currency)}
+                        {exitExecution ? (
+                          <span className="block text-sky-800">
+                            Verkauf jetzt geschätzt: Referenz {priceOrNA(exitExecution.reference_price)} → Fill {priceOrNA(exitExecution.fill_price)}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
                       <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Einstieg {trade.entry_price ?? "N/A"}</span>
                       <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Kurs {trade.current_price ?? "N/A"}</span>
@@ -1044,10 +1076,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div>Startkapital: {money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)}</div>
               <div>Max. Position: {money(demoAccount.max_position_value, currency)} / Idee</div>
+              <div>Max. Gesamt-Exposure: {money(demoAccount.max_gross_exposure_value, currency)}</div>
+              <div>Freie Gesamt-Exposure: {money(demoAccount.remaining_gross_exposure_value, currency)}</div>
+              <div>Max. pro Ticker: {money(demoAccount.max_ticker_exposure_value, currency)}</div>
               <div>Max. offenes Risiko: {money(demoAccount.max_open_risk_value, currency)}</div>
               <div>Freies Risiko: {money(demoAccount.remaining_risk_value, currency)}</div>
               <div>Optionsrisiko/Trade: {money(demoAccount.risk_budget_per_option_trade_value, currency)}</div>
               <div>Max. Optionsprämie: {money(demoAccount.max_option_premium_value, currency)}</div>
+              <div>Offene Optionsprämie: {money(demoAccount.option_premium_exposure_value, currency)} / {money(demoAccount.max_open_option_premium_value, currency)}</div>
               <div>Freie Slots: {demoAccount.open_trade_slots ?? 0}</div>
               <div>Modus: nur Paper-Lernen</div>
             </div>

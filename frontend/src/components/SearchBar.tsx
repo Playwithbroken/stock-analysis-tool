@@ -639,7 +639,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         fetchJsonWithRetry<any>(`/api/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, { signal: controller.signal }, {
           retries: 0,
           retryDelayMs: 150,
-          timeoutMs: 1200,
+          timeoutMs: 3200,
         })
           .then((data) => {
             if (controller.signal.aborted || searchRequestRef.current !== requestId) return;

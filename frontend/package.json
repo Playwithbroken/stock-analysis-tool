@@ -12,7 +12,8 @@
     "test:geo": "node scripts/test-geo-regions.mjs",
     "test:display-text": "node scripts/test-display-text.mjs",
     "test:brief-safety": "node scripts/test-brief-safety.mjs",
-    "verify": "npm run secrets && npm run test && npm run build && npm run verify:pwa",
+    "test:search-resolver": "python ../scripts/test_search_resolver.py",
+    "verify": "npm run secrets && npm run test:search-resolver && npm run test && npm run build && npm run verify:pwa",
     "verify:pwa": "node scripts/test-pwa-build.mjs",
     "qa:release": "node qa_smoke_playwright.mjs"
   },

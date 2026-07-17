@@ -784,6 +784,10 @@ async def _search_yahoo_finance(query: str, limit: int = 8) -> List[Dict[str, An
     return await asyncio.to_thread(_yahoo_search_sync, query, limit)
 
 
+SEARCH_DISCOVERY_TIMEOUT_SECONDS = 1.25
+SEARCH_QUOTE_PROVIDER_TIMEOUT_SECONDS = 2.6
+
+
 async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]]:
     normalized_query = _normalize_search_query(q)
     if not normalized_query:
@@ -811,21 +815,16 @@ async def _resolve_search_results(q: str, limit: int = 6) -> List[Dict[str, Any]
             for variant in (query_variants or [q])[:3]
         ]
     )
-    try:
-        live_results, yahoo_batches = await asyncio.gather(
-            asyncio.wait_for(live_task, timeout=2.0),
-            asyncio.wait_for(yahoo_task, timeout=3.8),
-        )
-        yahoo_results = [item for batch in yahoo_batches for item in (batch or [])]
-    except Exception:
-        live_task.cancel()
-        yahoo_task.cancel()
-        yahoo_results = []
-        for variant in (query_variants or [q])[:3]:
-            try:
-                yahoo_results.extend(await _search_yahoo_finance(variant, limit=max(limit, 8)))
-            except Exception:
-                continue
+    provider_results = await asyncio.gather(
+        asyncio.wait_for(live_task, timeout=SEARCH_DISCOVERY_TIMEOUT_SECONDS),
+        asyncio.wait_for(yahoo_task, timeout=SEARCH_QUOTE_PROVIDER_TIMEOUT_SECONDS),
+        return_exceptions=True,
+    )
+    live_result, yahoo_result = provider_results
+    if not isinstance(live_result, BaseException):
+        live_results = live_result or []
+    if not isinstance(yahoo_result, BaseException):
+        yahoo_results = [item for batch in yahoo_result for item in (batch or [])]
 
     merged: List[Dict[str, Any]] = []
     seen = set()

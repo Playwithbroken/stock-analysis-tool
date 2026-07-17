@@ -15,7 +15,8 @@
     "test:search-resolver": "python ../scripts/test_search_resolver.py",
     "test:portfolio-persistence": "cd .. && python qa_portfolio_persistence.py && python qa_portfolio_api_persistence.py && python qa_backup_endpoint.py",
     "test:telegram-quality": "cd .. && python qa_macro_alert_quality.py && python qa_macro_alerts.py && python qa_telegram_only_notifications.py && python qa_brief_scheduler_delivery.py && python qa_morning_brief_availability.py",
-    "verify": "npm run secrets && npm run test:search-resolver && npm run test:portfolio-persistence && npm run test:telegram-quality && npm run test && npm run build && npm run verify:pwa",
+    "test:release-contracts": "python ../scripts/run_release_contracts.py",
+    "verify": "npm run secrets && npm run test:search-resolver && npm run test:portfolio-persistence && npm run test:telegram-quality && npm run test:release-contracts && npm run test && npm run build && npm run verify:pwa",
     "verify:pwa": "node scripts/test-pwa-build.mjs",
     "qa:release": "node qa_smoke_playwright.mjs"
   },

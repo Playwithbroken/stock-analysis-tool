@@ -1,0 +1,41 @@
+import subprocess
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CONTRACT_TESTS = [
+    "qa_analyzer_resolution.py",
+    "qa_global_asset_api.py",
+    "qa_search_resolution.py",
+    "qa_search_dynamic_suggestions.py",
+    "qa_discovery_resilience.py",
+    "qa_auth_cookie_security.py",
+    "qa_auth_lockout.py",
+    "qa_health_center_contract.py",
+    "qa_security_headers.py",
+    "qa_static_cache_headers.py",
+    "qa_advisory_profile.py",
+    "qa_paper_demo_account.py",
+    "qa_paper_learning_alerts.py",
+    "qa_morning_brief_classification.py",
+]
+
+
+def main() -> int:
+    for relative_path in CONTRACT_TESTS:
+        print(f"[release-contract] {relative_path}", flush=True)
+        result = subprocess.run(
+            [sys.executable, str(PROJECT_ROOT / relative_path)],
+            cwd=PROJECT_ROOT,
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"[release-contract] FAILED: {relative_path}", file=sys.stderr)
+            return result.returncode
+    print(f"release contract QA passed ({len(CONTRACT_TESTS)} contracts)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

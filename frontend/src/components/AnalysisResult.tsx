@@ -2,11 +2,12 @@
 import PriceChart from "./PriceChart";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
-import { Plus, Download, FileText, ShieldCheck, ShieldAlert, Ban } from "lucide-react";
+import { Plus, Download, FileText, ShieldCheck, ShieldAlert, Ban, AlertTriangle } from "lucide-react";
 // jsPDF and autoTable are dynamically imported inside exportToPDF to keep the initial bundle small
 import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
+import { formatAnalysisFetchTime, getAnalysisQualityState } from "../lib/analysisQuality";
 
 interface AnalysisResultProps {
   data: any;
@@ -198,6 +199,8 @@ export default function AnalysisResult({
     business_quality,
   } = data;
   const liveQuote = realtimeQuotes[data.ticker];
+  const dataQuality = getAnalysisQualityState(data.data_quality);
+  const fetchedAt = formatAnalysisFetchTime(data.fetch_time);
   const scoreValue = clampScore(total_score);
   const assetClass = inferAssetClass(data.ticker, data);
   const inferredRiskLevel = inferRiskLevel(scoreValue, chartStats?.changePct ?? price_data?.change_1y, assetClass);
@@ -250,6 +253,12 @@ export default function AnalysisResult({
     let cancelled = false;
     const runSuitabilityCheck = async () => {
       if (!data?.ticker) return;
+      if (dataQuality.blocksDecision) {
+        setSuitability(null);
+        setSuitabilityLoading(false);
+        setSuitabilityError(null);
+        return;
+      }
       setSuitabilityLoading(true);
       setSuitabilityError(null);
       try {
@@ -293,6 +302,7 @@ export default function AnalysisResult({
     assetClass,
     data?.ticker,
     data.company_name,
+    dataQuality.blocksDecision,
     inferredRiskLevel,
     recommendation,
     scoreValue,
@@ -423,7 +433,9 @@ export default function AnalysisResult({
   };
 
   const suitabilityView = suitabilityTone(suitability?.decision);
-  const suitabilityReasons = suitability?.reasons?.length
+  const suitabilityReasons = dataQuality.blocksDecision
+    ? ["Suitability bleibt gesperrt, bis ein vollstaendiger Datensatz vorliegt."]
+    : suitability?.reasons?.length
     ? suitability.reasons.slice(0, 2)
     : suitabilityLoading
       ? ["Beratungsrahmen wird gegen dieses Dossier geprueft."]
@@ -580,15 +592,33 @@ export default function AnalysisResult({
               <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
                 Analysis Desk
               </span>
-              <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "border border-black/8 bg-white/70 text-slate-500"}`}>
-                {realtimeConnected ? "Live quote" : "Snapshot"}
+              <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${dataQuality.badgeClasses}`}>
+                {realtimeConnected && !dataQuality.blocksDecision ? "Live quote" : dataQuality.label}
               </span>
               {fundamentals?.sector ? (
                 <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                   {fundamentals.sector}
                 </span>
               ) : null}
+              {!dataQuality.blocksDecision && fetchedAt ? (
+                <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  Stand {fetchedAt}
+                </span>
+              ) : null}
             </div>
+            {dataQuality.blocksDecision ? (
+              <div className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 ${dataQuality.classes}`} role="alert">
+                <div className="mt-0.5 shrink-0"><AlertTriangle size={18} /></div>
+                <div className="min-w-0">
+                  <div className="text-sm font-extrabold">{dataQuality.title}</div>
+                  <p className="mt-1 text-xs font-semibold leading-5 opacity-80">{dataQuality.detail}</p>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-extrabold uppercase tracking-[0.14em] opacity-70">
+                    <span>Quelle: {data.data_quality?.price_source || "unbekannt"}</span>
+                    {fetchedAt ? <span>Stand: {fetchedAt}</span> : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,20rem)] lg:items-center">
               <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.2rem] bg-[var(--accent)] text-xl font-bold text-white sm:h-16 sm:w-16 sm:rounded-[1.4rem] sm:text-2xl">
@@ -624,13 +654,15 @@ export default function AnalysisResult({
                     {formatPercent(chartStats?.changePct ?? price_data?.change_1y)} ({chartStats?.label ?? "1Y"})
                   </div>
                   <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                    {realtimeConnected ? "Live quote" : "Snapshot"}
+                    {realtimeConnected && !dataQuality.blocksDecision ? "Live quote" : dataQuality.label}
                   </div>
                 </div>
                 <div className="grid gap-2">
                   <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)]"
+                    disabled={dataQuality.blocksDecision}
+                    title={dataQuality.blocksDecision ? "Erst vollstaendige Daten laden" : undefined}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <Plus size={16} /> Portfolio hinzufügen
                   </button>
@@ -648,7 +680,9 @@ export default function AnalysisResult({
                   </button>
                   <button
                     onClick={openAlertModal}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
+                    disabled={dataQuality.blocksDecision}
+                    title={dataQuality.blocksDecision ? "Erst vollstaendige Daten laden" : undefined}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     Alert setzen
                   </button>
@@ -703,7 +737,7 @@ export default function AnalysisResult({
                   Suitability score
                 </div>
                 <div className="mt-2 text-4xl font-black text-slate-950">
-                  {suitabilityLoading ? "..." : suitability?.suitability_score ?? "--"}
+                  {dataQuality.blocksDecision ? "--" : suitabilityLoading ? "..." : suitability?.suitability_score ?? "--"}
                 </div>
                 <div className="mt-1 text-xs font-semibold text-slate-500">
                   {assetClass.toUpperCase()} / Risiko {inferredRiskLevel}
@@ -1341,13 +1375,13 @@ export default function AnalysisResult({
             <div className="relative overflow-hidden rounded-[2rem] border border-black/8 bg-white/80 p-6 text-center">
               <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-emerald-600 to-transparent opacity-40"></div>
               <div className="mb-2 text-6xl font-black tracking-tighter text-slate-900">
-                {scoreValue.toFixed(0)}
+                {dataQuality.blocksDecision ? "--" : scoreValue.toFixed(0)}
               </div>
               <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Pro Score
               </div>
               <div className={`inline-block rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest ${verdictTone}`}>
-                {recommendation?.action || recommendation}
+                {dataQuality.blocksDecision ? "Nicht freigegeben" : recommendation?.action || recommendation}
               </div>
             </div>
 
@@ -1357,7 +1391,7 @@ export default function AnalysisResult({
                 Meine Einschaetzung
               </h4>
               <div className="mt-4 text-sm font-medium leading-7 text-slate-700">
-                "{data.verdict}"
+                "{dataQuality.blocksDecision ? dataQuality.detail : data.verdict}"
               </div>
             </div>
 
@@ -1367,7 +1401,7 @@ export default function AnalysisResult({
                   Technisch
                 </span>
                 <span className="text-sm font-mono font-bold text-sky-700">
-                  {technicalScore.toFixed(0)}%
+                  {dataQuality.blocksDecision ? "--" : `${technicalScore.toFixed(0)}%`}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
@@ -1375,7 +1409,7 @@ export default function AnalysisResult({
                   Fundament
                 </span>
                 <span className="text-sm font-mono font-bold text-emerald-700">
-                  {fundamentalScore.toFixed(0)}%
+                  {dataQuality.blocksDecision ? "--" : `${fundamentalScore.toFixed(0)}%`}
                 </span>
               </div>
             </div>

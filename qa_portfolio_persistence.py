@@ -117,6 +117,25 @@ def main() -> None:
         persisted_trade = next(item for item in manager.list_paper_trades() if item["id"] == paper_trade["id"])
         assert persisted_trade["trade_ticket"]["ticket_id"] == "qa-ticket"
         assert persisted_trade["trade_ticket"]["real_money_ready"] is False
+        closed_ticket = {
+            **persisted_trade["trade_ticket"],
+            "execution_model": {
+                "entry": {"reference_price": 100, "fill_price": 100.08, "cost_bps": 8},
+                "exit": {"reference_price": 105, "fill_price": 104.916, "cost_bps": 8},
+            },
+        }
+        closed_trade = manager.close_paper_trade(
+            paper_trade["id"],
+            104.916,
+            exit_reason="qa_exit",
+            lessons_learned="Execution costs persisted.",
+            trade_ticket=closed_ticket,
+        )
+        assert closed_trade is not None
+        assert closed_trade["trade_ticket"]["execution_model"]["exit"]["fill_price"] == 104.916
+        restarted_trade = next(item for item in PortfolioManager().list_paper_trades() if item["id"] == paper_trade["id"])
+        assert restarted_trade["trade_ticket"]["execution_model"]["entry"]["cost_bps"] == 8
+        assert restarted_trade["trade_ticket"]["execution_model"]["exit"]["reference_price"] == 105
 
     print("portfolio persistence QA ok")
 

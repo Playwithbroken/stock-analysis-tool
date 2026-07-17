@@ -93,11 +93,22 @@ def test_paper_trade_telegram_money_formatting() -> None:
                     "liquidity_status": "strong",
                     "average_dollar_volume_5d": 125_000_000,
                 },
+                "execution_model": {
+                    "entry": {
+                        "reference_price": 201.0,
+                        "fill_price": 201.125,
+                        "cost_bps": 6.2,
+                        "estimated_cost_value": 7.67,
+                    }
+                },
                 "validation": {"warnings": ["manual_market_check"]},
             },
         }
     )
     assert "investiert 12.345,67 EUR" in opened
+    assert "Referenz 201.00 → Fill 201.12" in opened
+    assert "6.2 bps" in opened
+    assert "Kosten 7,67 EUR" in opened
     assert "Eröffnet:</b> 11.07.2026, 14:00 CEST" in opened
     assert "aktueller Wert 12.390,12 EUR" in opened
     assert "Offenes Ergebnis:</b> +44,45 EUR" in opened
@@ -136,6 +147,16 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "exit_reason": "target_or_profit_taken",
             "lessons_learned": "Volume confirmation mattered.",
             "risk_reward": 2.4,
+            "trade_ticket": {
+                "execution_model": {
+                    "exit": {
+                        "reference_price": 218.7,
+                        "fill_price": 218.5,
+                        "cost_bps": 9.1,
+                        "estimated_cost_value": 12.28,
+                    }
+                }
+            },
         }
     )
     assert "investiert 12.345,67 EUR" in closed
@@ -143,6 +164,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "final 13.412,33 EUR" in closed
     assert "Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
     assert "target_or_profit_taken" in closed
+    assert "Referenz 218.70 → Fill 218.50" in closed
+    assert "9.1 bps" in closed
     assert "Demo-Konto danach:</b> Equity 502.317,16 EUR" in closed
     assert "seit Start +2.317,16 EUR (+0.46%)" in closed
     assert "Verfügbar:</b> Cash 502.317,16 EUR" in closed

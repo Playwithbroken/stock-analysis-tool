@@ -56,8 +56,13 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
   - `PAPER_TRADING_EXPLORATION_MIN_SCORE=60`
   - `PAPER_MARKET_DATA_MAX_AGE_HOURS=96`
   - `PAPER_MIN_AVG_DOLLAR_VOLUME=2000000`
+  - `PAPER_EXECUTION_EQUITY_BPS=8`
+  - `PAPER_EXECUTION_ETF_BPS=6`
+  - `PAPER_EXECUTION_CRYPTO_BPS=18`
+  - `PAPER_EXECUTION_OPTION_BPS=125`
 - Vor jedem Paper-Einstieg werden Kurszeitpunkt, Datenalter und durchschnittliches Handelsnotional erneut geprueft. Veraltete oder sehr duenne Daten blockieren den Entry.
 - Angeforderte Mengen werden am aktuellen Demo-Risikolimit hart begrenzt; Calls und Puts bleiben Paper-only und pruefen beim Einstieg erneut das Underlying.
+- Entry, laufende Bewertung und Exit verwenden konservative Fill-Kosten. Referenzkurs, simulierter Ausfuehrungskurs und Kosten bleiben im Trade-Ticket und in Telegram sichtbar.
 
 ## Daten und Backups
 

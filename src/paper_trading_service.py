@@ -295,6 +295,22 @@ class PaperTradingService:
             }
         if last_price <= 0:
             raise ValueError("No valid market price available for this playbook.")
+        entry_reference_price = last_price
+        entry_execution = self._simulate_execution_fill(
+            reference_price=entry_reference_price,
+            direction=direction,
+            phase="entry",
+            asset_class=str(playbook.get("asset_class") or "equity"),
+            market_data=playbook.get("market_data") or {},
+            quantity=0,
+            contract_multiplier=float(playbook.get("contract_multiplier") or (100 if is_option else 1)),
+        )
+        last_price = float(entry_execution["fill_price"])
+        playbook = {
+            **playbook,
+            "reference_price": last_price,
+            "execution_model": {"entry": entry_execution},
+        }
         final_sizing = self._suggest_demo_sizing(playbook, demo_account)
         if final_sizing.get("demo_tradeable") is False:
             raise ValueError("Demo account risk gate blocks the refreshed market snapshot.")
@@ -304,6 +320,16 @@ class PaperTradingService:
         quantity = requested_quantity if requested_quantity > 0 else max_quantity
         if quantity <= 0:
             raise ValueError("No valid demo quantity available for this playbook.")
+        entry_execution = self._simulate_execution_fill(
+            reference_price=entry_reference_price,
+            direction=direction,
+            phase="entry",
+            asset_class=str(playbook.get("asset_class") or "equity"),
+            market_data=playbook.get("market_data") or {},
+            quantity=quantity,
+            contract_multiplier=float(playbook.get("contract_multiplier") or (100 if is_option else 1)),
+        )
+        playbook["execution_model"] = {"entry": entry_execution}
 
         if is_option:
             stop_price = round(last_price * 0.5, 2)
@@ -340,7 +366,7 @@ class PaperTradingService:
                 "contract_multiplier": playbook.get("contract_multiplier") or (100 if is_option else 1),
                 "max_holding_days": playbook.get("max_holding_days") if is_option else None,
                 "notes": self._build_trade_note_snapshot(note_playbook, demo_account, is_option),
-                "trade_ticket": playbook.get("trade_ticket") or {},
+                "trade_ticket": note_playbook.get("trade_ticket") or {},
             }
         )
         self._schedule_trade_outcomes(created)
@@ -386,18 +412,50 @@ class PaperTradingService:
         existing = next((item for item in self.portfolio_manager.list_paper_trades(limit=300) if item.get("id") == trade_id), None)
         if not existing:
             raise ValueError("Trade not found.")
+        ticket = existing.get("trade_ticket") if isinstance(existing.get("trade_ticket"), dict) else {}
+        entry_execution = (ticket.get("execution_model") or {}).get("entry") if isinstance(ticket.get("execution_model"), dict) else None
+        exit_market: Dict[str, Any] = {}
         if existing.get("asset_class") == "option":
-            exit_price = float(closed_price or 0) or float(existing.get("entry_price") or 0)
+            exit_reference = float(closed_price or 0) or float(existing.get("entry_price") or 0)
+            exit_market = ticket.get("market_data") if isinstance(ticket.get("market_data"), dict) else {}
         else:
-            exit_price = float(closed_price or 0) or self._get_last_price(existing.get("ticker")) or float(existing.get("entry_price") or 0)
-        if exit_price <= 0:
+            exit_market = self._get_market_snapshot(existing.get("ticker"))
+            exit_reference = float(closed_price or 0) or float(exit_market.get("price") or 0) or float(existing.get("entry_price") or 0)
+        if exit_reference <= 0:
             raise ValueError("No valid close price available.")
+        exit_execution = None
+        exit_price = exit_reference
+        if isinstance(entry_execution, dict):
+            exit_execution = self._simulate_execution_fill(
+                reference_price=exit_reference,
+                direction=str(existing.get("direction") or "long"),
+                phase="exit",
+                asset_class=str(existing.get("asset_class") or "equity"),
+                market_data=exit_market,
+                quantity=float(existing.get("quantity") or 0),
+                contract_multiplier=float(existing.get("contract_multiplier") or (100 if existing.get("asset_class") == "option" else 1)),
+            )
+            exit_price = float(exit_execution["fill_price"])
+            ticket = {
+                **ticket,
+                "execution_model": {
+                    **(ticket.get("execution_model") or {}),
+                    "exit": exit_execution,
+                },
+            }
         auto_outcome = self._classify_closed_trade_outcome(existing, exit_price)
         if not exit_reason and auto_outcome.get("exit_reason"):
             exit_reason = auto_outcome["exit_reason"]
         if not lessons_learned and auto_outcome.get("lesson"):
             lessons_learned = auto_outcome["lesson"]
-        closed = self.portfolio_manager.close_paper_trade(trade_id, exit_price, notes, exit_reason, lessons_learned)
+        closed = self.portfolio_manager.close_paper_trade(
+            trade_id,
+            exit_price,
+            notes,
+            exit_reason,
+            lessons_learned,
+            ticket,
+        )
         if not closed:
             raise ValueError("Trade not found.")
         return self._enrich_trade(closed)
@@ -767,13 +825,30 @@ class PaperTradingService:
                 "error_tag": error_tag,
             }
 
-        current_price = self._get_last_price(ticker)
-        if current_price is None:
+        current_market = self._get_market_snapshot(ticker)
+        current_reference = current_market.get("price")
+        if current_reference is None:
             return {
                 "status": "pending_data",
                 "checked_at": checked_at,
                 "notes": "Price data unavailable; outcome not scored.",
             }
+        ticket = item.get("trade_ticket") if isinstance(item.get("trade_ticket"), dict) else {}
+        execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
+        current_price = float(current_reference)
+        execution_note = ""
+        if isinstance(execution_model.get("entry"), dict):
+            exit_execution = self._simulate_execution_fill(
+                reference_price=current_price,
+                direction=direction,
+                phase="exit",
+                asset_class=asset_class,
+                market_data=current_market,
+                quantity=float(item.get("quantity") or 0),
+                contract_multiplier=float(item.get("contract_multiplier") or 1),
+            )
+            current_price = float(exit_execution["fill_price"])
+            execution_note = f" Conservative exit fill includes {exit_execution['cost_bps']} bps execution cost."
         raw_move = ((current_price / entry) - 1) * 100
         favorable = -raw_move if direction == "short" else raw_move
         result, error_tag, notes = self._score_paper_outcome(favorable, item)
@@ -783,7 +858,7 @@ class PaperTradingService:
             "checked_at": checked_at,
             "check_price": current_price,
             "performance_pct": round(favorable, 2),
-            "notes": notes,
+            "notes": f"{notes}{execution_note}",
             "error_tag": error_tag,
         }
 
@@ -1594,6 +1669,7 @@ class PaperTradingService:
             or ""
         ).strip()
         market_data = playbook.get("market_data") if isinstance(playbook.get("market_data"), dict) else {}
+        execution_model = playbook.get("execution_model") if isinstance(playbook.get("execution_model"), dict) else {}
         blocked_reasons = self._dedupe_reason_list(
             [
                 *[str(item) for item in playbook.get("do_not_trade_reasons", [])],
@@ -1672,6 +1748,7 @@ class PaperTradingService:
             "source_label": source_label or None,
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
+            "execution_model": execution_model or None,
             "generated_at": datetime.utcnow().isoformat(),
             "validation": {
                 "valid": not errors,
@@ -1926,7 +2003,24 @@ class PaperTradingService:
         quantity = float(row.get("quantity") or 0)
         leverage = float(row.get("leverage") or 1)
         is_option = row.get("asset_class") == "option"
-        current_price = None if is_option else self._get_last_price(row.get("ticker"))
+        ticket = row.get("trade_ticket") if isinstance(row.get("trade_ticket"), dict) else {}
+        execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
+        current_market = {} if is_option else self._get_market_snapshot(row.get("ticker"))
+        current_reference = None if is_option else current_market.get("price")
+        current_price = current_reference
+        if current_reference not in (None, 0) and isinstance(execution_model.get("entry"), dict):
+            current_execution = self._simulate_execution_fill(
+                reference_price=float(current_reference),
+                direction=str(row.get("direction") or "long"),
+                phase="exit",
+                asset_class=str(row.get("asset_class") or "equity"),
+                market_data=current_market,
+                quantity=quantity,
+                contract_multiplier=float(row.get("contract_multiplier") or (100 if is_option else 1)),
+            )
+            current_price = current_execution["fill_price"]
+            row["estimated_exit_execution"] = current_execution
+        row["current_reference_price"] = current_reference
         row["current_price"] = current_price
         direction_multiplier = -1 if row.get("direction") == "short" else 1
         contract_multiplier = 100 if is_option else 1
@@ -2127,6 +2221,73 @@ class PaperTradingService:
             "reference_price": snapshot.get("price"),
             "data_as_of": snapshot.get("data_as_of"),
             "market_data": snapshot,
+        }
+
+    def _execution_cost_bps(self, asset_class: str, market_data: Dict[str, Any] | None = None) -> float:
+        asset = str(asset_class or "equity").lower()
+        market_data = market_data if isinstance(market_data, dict) else {}
+        defaults = {
+            "equity": 8.0,
+            "etf": 6.0,
+            "crypto": 18.0,
+            "option": 125.0,
+        }
+        env_names = {
+            "equity": "PAPER_EXECUTION_EQUITY_BPS",
+            "etf": "PAPER_EXECUTION_ETF_BPS",
+            "crypto": "PAPER_EXECUTION_CRYPTO_BPS",
+            "option": "PAPER_EXECUTION_OPTION_BPS",
+        }
+        try:
+            base_bps = float(os.getenv(env_names.get(asset, "PAPER_EXECUTION_EQUITY_BPS"), str(defaults.get(asset, 12.0))))
+        except (TypeError, ValueError):
+            base_bps = defaults.get(asset, 12.0)
+        liquidity_multiplier = {
+            "strong": 1.0,
+            "adequate": 1.75,
+            "unknown": 2.5,
+            "thin": 4.0,
+        }.get(str(market_data.get("liquidity_status") or "unknown").lower(), 2.5)
+        age_hours = float(market_data.get("age_hours") or 0)
+        stale_surcharge = 5.0 if age_hours > 24 else 0.0
+        return round(min(500.0, max(0.0, base_bps * liquidity_multiplier + stale_surcharge)), 2)
+
+    def _simulate_execution_fill(
+        self,
+        reference_price: float,
+        direction: str,
+        phase: str,
+        asset_class: str,
+        market_data: Dict[str, Any] | None = None,
+        quantity: float = 0,
+        contract_multiplier: float = 1,
+    ) -> Dict[str, Any]:
+        reference = float(reference_price or 0)
+        if reference <= 0:
+            raise ValueError("Execution model requires a positive reference price.")
+        normalized_direction = str(direction or "long").lower()
+        normalized_phase = "exit" if str(phase or "entry").lower() == "exit" else "entry"
+        # Calls and puts in this paper model are long-premium positions.
+        opens_with_buy = normalized_direction in {"long", "call", "put"}
+        is_buy = opens_with_buy if normalized_phase == "entry" else not opens_with_buy
+        cost_bps = self._execution_cost_bps(asset_class, market_data)
+        adjustment = cost_bps / 10_000
+        fill_price = reference * (1 + adjustment if is_buy else 1 - adjustment)
+        fill_price = round(max(0.0001, fill_price), 4)
+        cost_per_unit = abs(fill_price - reference)
+        estimated_cost_value = cost_per_unit * max(0.0, float(quantity or 0)) * max(1.0, float(contract_multiplier or 1))
+        return {
+            "phase": normalized_phase,
+            "side": "buy" if is_buy else "sell",
+            "pricing_mode": "conservative_reference_plus_cost",
+            "reference_price": round(reference, 4),
+            "fill_price": fill_price,
+            "cost_bps": cost_bps,
+            "cost_per_unit": round(cost_per_unit, 6),
+            "estimated_cost_value": round(estimated_cost_value, 2),
+            "liquidity_status": (market_data or {}).get("liquidity_status") or "unknown",
+            "data_as_of": (market_data or {}).get("data_as_of"),
+            "policy": "Paper estimate only; no broker fill or live order-book guarantee.",
         }
 
     def _market_snapshot_blockers(self, snapshot: Dict[str, Any] | None) -> List[str]:

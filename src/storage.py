@@ -1100,7 +1100,8 @@ class PortfolioManager:
                 t.underlying_entry_price,
                 t.option_type,
                 t.contract_multiplier,
-                t.max_holding_days
+                t.max_holding_days,
+                t.trade_ticket_json
             FROM paper_trade_outcomes o
             JOIN paper_trades t ON t.id = o.trade_id
             WHERE o.status IN ('pending', 'pending_data')
@@ -1112,6 +1113,11 @@ class PortfolioManager:
         )
         rows = [dict(row) for row in cursor.fetchall()]
         conn.close()
+        for row in rows:
+            try:
+                row["trade_ticket"] = json.loads(row.pop("trade_ticket_json", "{}") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                row["trade_ticket"] = {}
         return rows
 
     def update_paper_trade_outcome(self, outcome_id: str, updates: Dict[str, Any]) -> None:
@@ -1158,6 +1164,7 @@ class PortfolioManager:
         notes: Optional[str] = None,
         exit_reason: Optional[str] = None,
         lessons_learned: Optional[str] = None,
+        trade_ticket: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -1171,6 +1178,13 @@ class PortfolioManager:
         merged_notes = notes if notes is not None else existing["notes"]
         merged_exit_reason = exit_reason if exit_reason is not None else existing["exit_reason"]
         merged_lessons = lessons_learned if lessons_learned is not None else existing["lessons_learned"]
+        if isinstance(trade_ticket, dict):
+            merged_ticket = trade_ticket
+        else:
+            try:
+                merged_ticket = json.loads(existing["trade_ticket_json"] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                merged_ticket = {}
         cursor.execute(
             '''
             UPDATE paper_trades
@@ -1179,15 +1193,28 @@ class PortfolioManager:
                 closed_price = ?,
                 notes = ?,
                 exit_reason = ?,
-                lessons_learned = ?
+                lessons_learned = ?,
+                trade_ticket_json = ?
             WHERE id = ?
             ''',
-            (closed_at, closed_price, merged_notes, merged_exit_reason, merged_lessons, trade_id),
+            (
+                closed_at,
+                closed_price,
+                merged_notes,
+                merged_exit_reason,
+                merged_lessons,
+                json.dumps(merged_ticket, ensure_ascii=True, default=str),
+                trade_id,
+            ),
         )
         conn.commit()
         cursor.execute('SELECT * FROM paper_trades WHERE id = ?', (trade_id,))
         updated = dict(cursor.fetchone())
         conn.close()
+        try:
+            updated["trade_ticket"] = json.loads(updated.pop("trade_ticket_json", "{}") or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            updated["trade_ticket"] = {}
         return updated
 
     def list_price_alerts(self, enabled_only: bool = False) -> List[Dict[str, Any]]:

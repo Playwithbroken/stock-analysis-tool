@@ -63,6 +63,7 @@ class FakePortfolioManager:
         notes: str | None = None,
         exit_reason: str | None = None,
         lessons_learned: str | None = None,
+        trade_ticket: Dict[str, Any] | None = None,
     ) -> Dict[str, Any] | None:
         for item in self.trades:
             if item.get("id") != trade_id:
@@ -75,6 +76,7 @@ class FakePortfolioManager:
                     "notes": item.get("notes") if notes is None else notes,
                     "exit_reason": item.get("exit_reason") if exit_reason is None else exit_reason,
                     "lessons_learned": item.get("lessons_learned") if lessons_learned is None else lessons_learned,
+                    "trade_ticket": item.get("trade_ticket") if trade_ticket is None else trade_ticket,
                 }
             )
             return dict(item)
@@ -212,13 +214,20 @@ def test_demo_account_sizing() -> None:
         sample_settings(),
     )
     assert created["ticker"] == "AAPL"
-    assert created["quantity"] == 500
+    assert created["quantity"] == 499.60032
+    assert created["entry_price"] == 100.08
+    assert created["invested_value"] == 50_000.0
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
     assert "Entscheidungs-Snapshot beim Paper-Einstieg" in created["notes"]
     assert "Trigger:" in created["notes"]
     assert "Invalidierung:" in created["notes"]
     assert created["trade_ticket"]["schema_version"] == "1.0"
     assert created["trade_ticket"]["real_money_ready"] is False
+    entry_execution = created["trade_ticket"]["execution_model"]["entry"]
+    assert entry_execution["reference_price"] == 100.0
+    assert entry_execution["fill_price"] == 100.08
+    assert entry_execution["cost_bps"] == 8.0
+    assert entry_execution["estimated_cost_value"] == 39.97
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
 
     try:
@@ -240,10 +249,11 @@ def test_demo_account_sizing() -> None:
     assert created_call["ticker"] == "AAPL"
     assert created_call["asset_class"] == "option"
     assert created_call["direction"] == "call"
-    assert created_call["quantity"] == 5
-    assert created_call["entry_price"] == 2.5
-    assert created_call["stop_price"] == 1.25
-    assert created_call["target_price"] == 5.0
+    assert created_call["quantity"] == 4
+    assert created_call["entry_price"] == 2.5312
+    assert created_call["stop_price"] == 1.27
+    assert created_call["target_price"] == 5.06
+    assert created_call["trade_ticket"]["execution_model"]["entry"]["cost_bps"] == 125.0
     assert "Options-Gate:" in created_call["notes"]
     assert "nur Paper-Premienmodell" in created_call["notes"]
     call_outcomes = [item for item in manager.outcomes if item["trade_id"] == created_call["id"]]
@@ -252,6 +262,12 @@ def test_demo_account_sizing() -> None:
     result = service.evaluate_due_outcomes()
     assert result["evaluated"] >= 1
     assert any(item.get("status") == "evaluated" for item in manager.outcomes)
+
+    closed_created = service.close_trade(created["id"], closed_price=105.0)
+    assert closed_created["closed_price"] == 104.916
+    assert closed_created["trade_ticket"]["execution_model"]["exit"]["reference_price"] == 105.0
+    assert closed_created["trade_ticket"]["execution_model"]["exit"]["cost_bps"] == 8.0
+    assert closed_created["realized_pnl_value"] < (105.0 - 100.0) * 500
 
 
 def test_realized_return_uses_account_equity() -> None:
@@ -308,7 +324,13 @@ def test_short_trade_money_flow_and_demo_equity() -> None:
         ]
     )
     service = build_service(manager)
-    service._get_last_price = lambda ticker: 90.0 if ticker == "AAPL" else 100.0  # type: ignore[method-assign]
+    service._get_market_snapshot = lambda ticker: {  # type: ignore[method-assign]
+        "price": 90.0 if ticker == "AAPL" else 100.0,
+        "data_as_of": "2026-06-19T08:00:00+00:00",
+        "freshness": "fresh",
+        "liquidity_status": "strong",
+        "age_hours": 1.0,
+    }
     enriched = service._enrich_trades(manager.trades)
 
     open_short = next(item for item in enriched if item["id"] == "open-short-winner")
@@ -661,6 +683,26 @@ def test_market_quality_gate_blocks_stale_and_thin_snapshots() -> None:
     assert service._market_snapshot_blockers({}) == ["market_snapshot_missing"]
 
 
+def test_execution_fill_is_adverse_for_long_and_short() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    market = {"liquidity_status": "strong", "age_hours": 1, "data_as_of": "2026-07-17T09:00:00Z"}
+    long_entry = service._simulate_execution_fill(100, "long", "entry", "equity", market, 10, 1)
+    long_exit = service._simulate_execution_fill(100, "long", "exit", "equity", market, 10, 1)
+    short_entry = service._simulate_execution_fill(100, "short", "entry", "equity", market, 10, 1)
+    short_exit = service._simulate_execution_fill(100, "short", "exit", "equity", market, 10, 1)
+    put_entry = service._simulate_execution_fill(2.5, "put", "entry", "option", market, 1, 100)
+    put_exit = service._simulate_execution_fill(2.5, "put", "exit", "option", market, 1, 100)
+
+    assert long_entry["fill_price"] > 100 > long_exit["fill_price"]
+    assert short_entry["fill_price"] < 100 < short_exit["fill_price"]
+    assert put_entry["side"] == "buy" and put_entry["fill_price"] > 2.5
+    assert put_exit["side"] == "sell" and put_exit["fill_price"] < 2.5
+    assert long_entry["estimated_cost_value"] > 0
+    assert short_exit["estimated_cost_value"] > 0
+    assert service._calc_return_pct(long_entry["fill_price"], long_exit["fill_price"], 1, 1) < 0
+    assert service._calc_return_pct(short_entry["fill_price"], short_exit["fill_price"], -1, 1) < 0
+
+
 def test_close_trade_auto_documents_profitable_exit() -> None:
     manager = FakePortfolioManager(
         [
@@ -744,6 +786,7 @@ if __name__ == "__main__":
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
+    test_execution_fill_is_adverse_for_long_and_short()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

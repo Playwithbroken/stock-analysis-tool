@@ -503,6 +503,7 @@ class EmailAlertService:
                     "exit_reason": trade.get("exit_reason"),
                     "lessons_learned": trade.get("lessons_learned"),
                     "risk_reward": trade.get("risk_reward"),
+                    "trade_ticket": trade.get("trade_ticket") or {},
                     "account_equity": (demo_account or {}).get("equity"),
                     "account_cash_available": (demo_account or {}).get("cash_available_value"),
                     "account_open_exposure": (demo_account or {}).get("open_exposure_value"),
@@ -3425,6 +3426,15 @@ class EmailAlertService:
         )
         notional_text = self._tg_esc(notional_text)
         validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
+        execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
+        entry_execution = execution_model.get("entry") if isinstance(execution_model.get("entry"), dict) else {}
+        execution_line = (
+            f"<b>Fill-Modell:</b> Referenz {self._tg_price(entry_execution.get('reference_price'))} → "
+            f"Fill {self._tg_price(entry_execution.get('fill_price'))} | "
+            f"{self._tg_esc(str(entry_execution.get('cost_bps')))} bps | Kosten {self._tg_money(entry_execution.get('estimated_cost_value'))}"
+            if entry_execution
+            else ""
+        )
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
         opened_at = self._paper_trade_time(event.get("opened_at"))
@@ -3434,6 +3444,7 @@ class EmailAlertService:
                 *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",
+                *([execution_line] if execution_line else []),
                 f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
                 f"<b>Offenes Ergebnis:</b> {result_delta} ({result_label})",
                 f"<b>Stop:</b> {stop} | <b>Ziel:</b> {target} | <b>CRV:</b> {rr}",
@@ -3450,6 +3461,9 @@ class EmailAlertService:
         )
 
     def _render_telegram_paper_trade_closed_alert(self, event: Dict[str, Any]) -> str:
+        ticket = event.get("trade_ticket") if isinstance(event.get("trade_ticket"), dict) else {}
+        execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
+        exit_execution = execution_model.get("exit") if isinstance(execution_model.get("exit"), dict) else {}
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
@@ -3468,12 +3482,20 @@ class EmailAlertService:
         closed_at = self._paper_trade_time(event.get("closed_at"))
         holding_period = self._paper_trade_holding_period(event.get("opened_at"), event.get("closed_at"))
         timing_parts = [part for part in [opened_at, closed_at, holding_period] if part]
+        execution_line = (
+            f"<b>Exit-Fill:</b> Referenz {self._tg_price(exit_execution.get('reference_price'))} → "
+            f"Fill {self._tg_price(exit_execution.get('fill_price'))} | "
+            f"{self._tg_esc(str(exit_execution.get('cost_bps')))} bps | Kosten {self._tg_money(exit_execution.get('estimated_cost_value'))}"
+            if exit_execution
+            else ""
+        )
         return "\n".join(
             [
                 f"<b>[PAPER GESCHLOSSEN] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Zeitraum:</b> {' bis '.join(timing_parts[:2])} | gehalten {timing_parts[2]}"] if len(timing_parts) == 3 else []),
                 f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
                 f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
+                *([execution_line] if execution_line else []),
                 f"<b>Demo-Geld:</b> investiert {invested} | final {final_value}",
                 f"<b>Ergebnis:</b> {pnl_value} | {pnl_pct} | {result_label}",
                 f"<b>Lektion:</b> {lesson}",

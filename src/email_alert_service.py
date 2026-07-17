@@ -1671,10 +1671,9 @@ class EmailAlertService:
             if not summary:
                 continue
             severity = str(item.get("severity") or item.get("impact") or "").lower()
-            actionable = bool(item.get("actionable") or item.get("ticker"))
-            if severity not in {"high", "critical", "risk"} and not actionable:
+            ticker = str(item.get("ticker") or item.get("symbol") or "").strip().upper()
+            if severity not in {"high", "critical", "risk"} or not ticker:
                 continue
-            ticker = item.get("ticker") or item.get("symbol") or "Watchlist"
             event_key = f"critical-watchlist:{today}:{ticker}:{re.sub(r'[^a-zA-Z0-9]+', '-', summary.lower())[:70]}"
             if event_key in sent_keys:
                 continue
@@ -1760,7 +1759,7 @@ class EmailAlertService:
             except Exception:
                 numeric_score = 0.0
             quality_gate = str(item.get("quality_gate") or "").lower()
-            if quality_gate != "passed" and numeric_score < min_future_star_score:
+            if quality_gate != "passed" or numeric_score < min_future_star_score:
                 continue
             event_key = f"future-star:{today}:{ticker}"
             if event_key in sent_keys:

@@ -120,8 +120,39 @@ def test_incomplete_macro_alert_is_blocked():
     assert service._normalize_macro_alert_event(event, 82) is None
 
 
+def test_immediate_non_macro_alerts_require_combined_quality():
+    service = build_service()
+    brief = {
+        "watchlist_impact": [
+            {
+                "ticker": "AAPL",
+                "summary": "Routine watchlist movement without a high-impact catalyst.",
+                "severity": "medium",
+                "actionable": True,
+            },
+            {
+                "ticker": "NVDA",
+                "summary": "Confirmed guidance cut creates immediate portfolio risk.",
+                "severity": "high",
+            },
+        ],
+        "future_stars": [
+            {"ticker": "RISK", "score": 95, "quality_gate": "watch"},
+            {"ticker": "LOW", "score": 60, "quality_gate": "passed"},
+            {"ticker": "GOOD", "score": 80, "quality_gate": "passed"},
+        ],
+    }
+    events = service._extract_critical_market_events(brief, set())
+    keys = {event["event_key"] for event in events}
+    assert any(key.startswith("critical-watchlist:") and ":NVDA:" in key for key in keys)
+    assert not any(":AAPL:" in key for key in keys)
+    assert any(key.endswith(":GOOD") for key in keys)
+    assert not any(key.endswith(":RISK") or key.endswith(":LOW") for key in keys)
+
+
 if __name__ == "__main__":
     test_macro_alert_gate()
     test_macro_alert_bucket_dedupe_blocks_reworded_headline()
     test_incomplete_macro_alert_is_blocked()
+    test_immediate_non_macro_alerts_require_combined_quality()
     print("macro alert QA ok")

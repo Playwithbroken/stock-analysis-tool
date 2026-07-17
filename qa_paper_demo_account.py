@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from src.paper_trading_service import PaperTradingService
@@ -772,6 +772,85 @@ def test_demo_exposure_capacity_gates() -> None:
     assert "Gesamt-Exposure" in service._auto_rejection_display_reason("Gross exposure budget is exhausted.")
 
 
+def test_paper_risk_circuit_breaker() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    config = {
+        "daily_loss_limit_pct": 1.0,
+        "max_drawdown_pct": 8.0,
+        "max_consecutive_losses": 3,
+        "loss_streak_cooldown_hours": 24.0,
+    }
+    recent_losses = [
+        {
+            "status": "closed",
+            "closed_at": (datetime.now() - timedelta(minutes=index + 1)).isoformat(),
+            "realized_pnl_value": -1_000.0,
+        }
+        for index in range(3)
+    ]
+    streak = service._build_paper_risk_circuit(recent_losses, 497_000.0, 500_000.0, config)
+    assert streak["active"] is True
+    assert streak["status"] == "paused"
+    assert streak["consecutive_losses"] == 3
+    assert streak["cooldown_until"]
+    assert "Paper loss streak cooldown is active." in streak["reasons"]
+
+    daily = service._build_paper_risk_circuit(
+        [{"status": "closed", "closed_at": datetime.now().isoformat(), "realized_pnl_value": -6_000.0}],
+        494_000.0,
+        500_000.0,
+        config,
+    )
+    assert daily["active"] is True
+    assert "Daily paper loss limit reached." in daily["reasons"]
+
+    drawdown = service._build_paper_risk_circuit(
+        [
+            {
+                "status": "closed",
+                "closed_at": (datetime.now() - timedelta(hours=48)).isoformat(),
+                "realized_pnl_value": -40_000.0,
+            }
+        ],
+        460_000.0,
+        500_000.0,
+        config,
+    )
+    assert drawdown["active"] is False
+    assert drawdown["status"] == "reduced_risk"
+    assert drawdown["current_drawdown_pct"] == 8.0
+    assert drawdown["risk_multiplier"] == 0.25
+
+    account = {
+        "equity": 500_000.0,
+        "cash_available_value": 500_000.0,
+        "risk_budget_per_trade_value": 1_750.0,
+        "remaining_risk_value": 15_000.0,
+        "max_position_value": 50_000.0,
+        "remaining_gross_exposure_value": 300_000.0,
+        "max_ticker_exposure_value": 60_000.0,
+        "exposure_by_ticker": {},
+        "open_trade_slots": 5,
+        "day_status": "monitor",
+        "learning_feedback": {},
+    }
+    playbook = {
+        "ticker": "AAPL",
+        "asset_class": "equity",
+        "reference_price": 100.0,
+        "risk_buffer_pct": 3.5,
+        "tradeable": True,
+    }
+    paused = service._suggest_demo_sizing(playbook, {**account, "risk_circuit": streak})
+    assert paused["demo_tradeable"] is False
+    assert any(reason.startswith("Paper risk circuit:") for reason in paused["demo_block_reasons"])
+
+    reduced = service._suggest_demo_sizing(playbook, {**account, "risk_circuit": drawdown})
+    assert reduced["demo_tradeable"] is True
+    assert reduced["risk_multiplier"] == 0.25
+    assert reduced["suggested_max_loss_value"] == 437.5
+
+
 def test_close_trade_auto_documents_profitable_exit() -> None:
     manager = FakePortfolioManager(
         [
@@ -857,6 +936,7 @@ if __name__ == "__main__":
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_execution_fill_is_adverse_for_long_and_short()
     test_demo_exposure_capacity_gates()
+    test_paper_risk_circuit_breaker()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

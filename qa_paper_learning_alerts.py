@@ -216,8 +216,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
 
     account = service._render_telegram_paper_account_status_alert(
         {
-            "day_status": "monitor",
-            "day_action": "Aktuellen Paper-Plan halten.",
+            "day_status": "risk_halt",
+            "day_action": "Keine neuen Paper-Entries.",
             "capital_status": "ahead",
             "starting_capital": 500000,
             "equity": 501250.5,
@@ -228,6 +228,15 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "open_trade_count": 2,
             "closed_trade_count": 4,
             "management_counts": {"hold": 2},
+            "risk_circuit": {
+                "status": "paused",
+                "display_reasons": ["Drei Verluste in Folge; der Paper-Cooldown ist aktiv."],
+                "daily_realized_pnl_value": -3000,
+                "current_drawdown_pct": 1.2,
+                "drawdown_limit_pct": 8.0,
+                "consecutive_losses": 3,
+                "cooldown_until": "2026-07-11T18:00:00+00:00",
+            },
             "top_trades": [
                 {
                     "ticker": "AAPL",
@@ -244,6 +253,11 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Netto-Ergebnis:</b> +1.250,50 EUR (+0.25%)" in account
     assert "investiert 42.000,00 EUR" in account
     assert "P/L +650,25 EUR" in account
+    assert "Risk Circuit:</b> PAUSED" in account
+    assert "Drawdown 1.20% / Limit 8.00%" in account
+    assert "Heute:</b> -3.000,00 EUR | Verlustserie 3" in account
+    assert "Drei Verluste in Folge" in account
+    assert "Cooldown bis:" in account
 
 
 if __name__ == "__main__":

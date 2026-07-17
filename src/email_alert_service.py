@@ -404,7 +404,7 @@ class EmailAlertService:
             return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
 
         status = str(demo_account.get("day_status") or "monitor")
-        actionable_statuses = {"action_required", "risk_review", "protect_profit"}
+        actionable_statuses = {"action_required", "risk_review", "risk_halt", "protect_profit"}
         monitor_enabled = os.getenv("PAPER_ACCOUNT_STATUS_ALERT_MONITOR_ENABLED", "false").strip().lower() in {
             "1",
             "true",
@@ -457,6 +457,7 @@ class EmailAlertService:
             "open_trade_count": demo_account.get("open_trade_count"),
             "closed_trade_count": demo_account.get("closed_trade_count"),
             "management_counts": demo_account.get("management_counts") or {},
+            "risk_circuit": demo_account.get("risk_circuit") or {},
             "top_trades": top_trades,
             "line": f"Paper-Konto-Status: {status}",
             "source_label": "Paper-Konto-Monitor",
@@ -2351,6 +2352,12 @@ class EmailAlertService:
         previous_counts = previous.get("management_counts") if isinstance(previous.get("management_counts"), dict) else {}
         if current_counts != previous_counts:
             return True
+        current_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
+        previous_circuit = previous.get("risk_circuit") if isinstance(previous.get("risk_circuit"), dict) else {}
+        if current_circuit.get("status") != previous_circuit.get("status"):
+            return True
+        if current_circuit.get("reasons") != previous_circuit.get("reasons"):
+            return True
 
         sent_at = previous.get("sent_at")
         if not sent_at:
@@ -2365,11 +2372,16 @@ class EmailAlertService:
 
     def _record_paper_account_status_delivery(self, demo_account: Dict[str, Any]) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
+        risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
         payload = {
             "sent_at": now,
             "day_status": demo_account.get("day_status"),
             "day_action": demo_account.get("day_action"),
             "management_counts": demo_account.get("management_counts") or {},
+            "risk_circuit": {
+                "status": risk_circuit.get("status"),
+                "reasons": risk_circuit.get("reasons") or [],
+            },
             "equity": demo_account.get("equity"),
             "net_pnl_value": demo_account.get("net_pnl_value"),
         }
@@ -3594,6 +3606,10 @@ class EmailAlertService:
         closed_count = self._tg_esc(str(event.get("closed_trade_count") if event.get("closed_trade_count") is not None else "0"))
         counts = event.get("management_counts") if isinstance(event.get("management_counts"), dict) else {}
         count_text = ", ".join(f"{self._tg_esc(str(key))}: {self._tg_esc(str(value))}" for key, value in sorted(counts.items())) or "keine"
+        circuit = event.get("risk_circuit") if isinstance(event.get("risk_circuit"), dict) else {}
+        circuit_status = self._tg_esc(str(circuit.get("status") or "ready").upper())
+        circuit_reasons = [self._tg_esc(str(item)) for item in (circuit.get("display_reasons") or circuit.get("reasons") or [])[:2]]
+        cooldown_until = self._paper_trade_time(circuit.get("cooldown_until"))
 
         lines = [
             f"<b>[PAPER KONTO] {status}</b>",
@@ -3602,7 +3618,13 @@ class EmailAlertService:
             f"<b>Netto-Ergebnis:</b> {pnl_value} ({pnl_pct})",
             f"<b>Geld:</b> investiert {invested} | freies Cash {cash}",
             f"<b>Trades:</b> offen {open_count} | geschlossen {closed_count} | Stufen {count_text}",
+            f"<b>Risk Circuit:</b> {circuit_status} | Drawdown {self._tg_pct(circuit.get('current_drawdown_pct')).lstrip('+')} / Limit {self._tg_pct(circuit.get('drawdown_limit_pct')).lstrip('+')}",
+            f"<b>Heute:</b> {self._tg_signed_money(circuit.get('daily_realized_pnl_value'))} | Verlustserie {self._tg_esc(str(circuit.get('consecutive_losses') or 0))}",
         ]
+        if circuit_reasons:
+            lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
+        if cooldown_until:
+            lines.append(f"<b>Cooldown bis:</b> {cooldown_until}")
         top_trades = event.get("top_trades") if isinstance(event.get("top_trades"), list) else []
         if top_trades:
             lines.append("<b>Top-Prüfungen:</b>")

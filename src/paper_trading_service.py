@@ -193,6 +193,12 @@ class PaperTradingService:
             return "Paper-Konto im Risiko-Review"
         if "exit actions open" in lower:
             return "offene Exit-Aktionen zuerst prüfen"
+        if "daily paper loss limit reached" in lower:
+            return "Tagesverlust-Limit erreicht"
+        if "paper loss streak cooldown is active" in lower:
+            return "Cooldown nach Verlustserie aktiv"
+        if "paper risk circuit" in lower:
+            return "Paper-Risk-Circuit aktiv"
         if "open risk budget is exhausted" in lower:
             return "offenes Risikobudget ausgeschöpft"
         if "gross exposure budget is exhausted" in lower:
@@ -1351,7 +1357,7 @@ class PaperTradingService:
         lower = str(reason or "").lower()
         if "missing paper journal" in lower:
             return "journal"
-        if "risk review" in lower or "exit actions open" in lower:
+        if "risk review" in lower or "exit actions open" in lower or "paper risk circuit" in lower:
             return "risk_review"
         if any(
             marker in lower
@@ -1407,6 +1413,8 @@ class PaperTradingService:
             return "Kursdaten oder Ticker-Zuordnung reparieren"
         if "same ticker/setup/direction already open" in text:
             return "Bestehenden Paper-Trade managen statt doppeln"
+        if "paper risk circuit" in text:
+            return "Cooldown abwarten und Verlustserie pruefen, bevor ein neuer Entry startet"
         if "risk review" in text or "exit actions open" in text:
             return "Offene Trades pruefen und Risk-Review beenden"
         if "gross exposure budget is exhausted" in text:
@@ -1431,6 +1439,8 @@ class PaperTradingService:
         text = " | ".join(str(reason or "").lower() for reason in reasons)
         if "missing paper journal" in text:
             return "Erst fehlende Paper-Journale abschließen; danach darf der Lernloop wieder neue Trades öffnen."
+        if "paper risk circuit" in text:
+            return "Keine neuen Entries: Circuit-Breaker abwarten und die letzten Verlusttrades journalisieren."
         if "risk review" in text or "exit actions open" in text:
             return "Erst offene Paper-Trades prüfen, Stop/Target bestätigen und Risk-Review abschließen."
         if "gross exposure budget is exhausted" in text:
@@ -1578,7 +1588,106 @@ class PaperTradingService:
             "max_open_option_premium_pct": env_float("PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
             "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.25, minimum=0.01),
             "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", 12, minimum=1),
+            "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", 1.0, minimum=0.1),
+            "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", 8.0, minimum=0.5),
+            "max_consecutive_losses": env_int("PAPER_TRADING_MAX_CONSECUTIVE_LOSSES", 3, minimum=1),
+            "loss_streak_cooldown_hours": env_float("PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS", 24.0, minimum=1.0),
             "mode": "paper_learning_only",
+        }
+
+    def _build_paper_risk_circuit(
+        self,
+        closed_trades: List[Dict[str, Any]],
+        current_equity: float,
+        starting_capital: float,
+        config: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        def closed_sort_value(trade: Dict[str, Any]) -> float:
+            value = self._parse_datetime(trade.get("closed_at"))
+            return value.timestamp() if value else 0.0
+
+        ordered = sorted(
+            closed_trades,
+            key=closed_sort_value,
+        )
+        running_equity = float(starting_capital)
+        peak_equity = float(starting_capital)
+        max_drawdown_pct = 0.0
+        for trade in ordered:
+            running_equity += float(trade.get("realized_pnl_value") or 0)
+            peak_equity = max(peak_equity, running_equity)
+            drawdown_pct = ((peak_equity - running_equity) / peak_equity) * 100 if peak_equity > 0 else 0.0
+            max_drawdown_pct = max(max_drawdown_pct, drawdown_pct)
+        peak_equity = max(peak_equity, running_equity)
+        current_drawdown_pct = (
+            ((peak_equity - float(current_equity)) / peak_equity) * 100
+            if peak_equity > 0
+            else 0.0
+        )
+        max_drawdown_pct = max(max_drawdown_pct, current_drawdown_pct)
+
+        now = datetime.now()
+        daily_realized_pnl = 0.0
+        recent_closed = sorted(
+            closed_trades,
+            key=closed_sort_value,
+            reverse=True,
+        )
+        for trade in recent_closed:
+            closed_at = self._parse_datetime(trade.get("closed_at"))
+            closed_day = closed_at.astimezone().date() if closed_at and closed_at.tzinfo else closed_at.date() if closed_at else None
+            if closed_day == now.date():
+                daily_realized_pnl += float(trade.get("realized_pnl_value") or 0)
+
+        consecutive_losses = 0
+        for trade in recent_closed:
+            pnl = float(trade.get("realized_pnl_value") or 0)
+            if pnl < 0:
+                consecutive_losses += 1
+            else:
+                break
+        latest_closed_at = self._parse_datetime(recent_closed[0].get("closed_at")) if recent_closed else None
+        cooldown_until = (
+            latest_closed_at + timedelta(hours=float(config["loss_streak_cooldown_hours"]))
+            if latest_closed_at
+            else None
+        )
+        compare_now = datetime.now(cooldown_until.tzinfo) if cooldown_until and cooldown_until.tzinfo else now
+        streak_cooldown_active = bool(
+            consecutive_losses >= int(config["max_consecutive_losses"])
+            and cooldown_until
+            and cooldown_until > compare_now
+        )
+        daily_loss_limit_value = float(starting_capital) * (float(config["daily_loss_limit_pct"]) / 100)
+        daily_loss_blocked = daily_realized_pnl <= -daily_loss_limit_value
+        reasons: List[str] = []
+        if daily_loss_blocked:
+            reasons.append("Daily paper loss limit reached.")
+        if streak_cooldown_active:
+            reasons.append("Paper loss streak cooldown is active.")
+        drawdown_reduced = current_drawdown_pct >= float(config["max_drawdown_pct"])
+        display_reasons = [
+            "Tagesverlust-Limit erreicht; heute keine neuen Paper-Entries."
+            if reason == "Daily paper loss limit reached."
+            else "Drei Verluste in Folge; der Paper-Cooldown ist aktiv."
+            if reason == "Paper loss streak cooldown is active."
+            else reason
+            for reason in reasons
+        ]
+        return {
+            "active": bool(reasons),
+            "status": "paused" if reasons else "reduced_risk" if drawdown_reduced else "ready",
+            "reasons": reasons,
+            "display_reasons": display_reasons,
+            "daily_realized_pnl_value": round(daily_realized_pnl, 2),
+            "daily_loss_limit_value": round(daily_loss_limit_value, 2),
+            "current_drawdown_pct": round(max(0.0, current_drawdown_pct), 2),
+            "max_drawdown_pct_seen": round(max(0.0, max_drawdown_pct), 2),
+            "drawdown_limit_pct": float(config["max_drawdown_pct"]),
+            "consecutive_losses": consecutive_losses,
+            "max_consecutive_losses": int(config["max_consecutive_losses"]),
+            "cooldown_until": cooldown_until.isoformat() if streak_cooldown_active and cooldown_until else None,
+            "risk_multiplier": 0.25 if drawdown_reduced else 1.0,
         }
 
     def _build_demo_account(self, trades: List[Dict[str, Any]], playbooks: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1609,11 +1718,20 @@ class PaperTradingService:
         net_pnl_pct = round((net_pnl_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
         cash_available_value = round(max(0.0, equity - open_exposure_value), 2)
         capital_status = "ahead" if net_pnl_value > 0 else "behind" if net_pnl_value < 0 else "flat"
+        risk_circuit = self._build_paper_risk_circuit(
+            closed_trades,
+            equity,
+            starting_capital,
+            config,
+        )
         management_counts: Dict[str, int] = {}
         for trade in open_trades:
             grade = str((trade.get("management_plan") or {}).get("decision_grade") or "hold")
             management_counts[grade] = management_counts.get(grade, 0) + 1
-        if management_counts.get("exit"):
+        if risk_circuit.get("active"):
+            day_status = "risk_halt"
+            day_action = "Keine neuen Paper-Entries: Verlustlimit oder Verlustserien-Cooldown zuerst auslaufen lassen."
+        elif management_counts.get("exit"):
             day_status = "action_required"
             day_action = "Exits prüfen, bevor ein neuer Paper-Trade geöffnet wird."
         elif management_counts.get("review"):
@@ -1649,6 +1767,7 @@ class PaperTradingService:
             "net_pnl_pct": net_pnl_pct,
             "cash_available_value": cash_available_value,
             "capital_status": capital_status,
+            "risk_circuit": risk_circuit,
             "open_risk_value": open_risk_value,
             "open_risk_pct": round((open_risk_value / equity) * 100, 2) if equity > 0 else 0,
             "open_exposure_value": open_exposure_value,
@@ -1879,6 +1998,9 @@ class PaperTradingService:
             )
             capacity_limits.append(remaining_option_premium)
         max_position_value = max(0.0, min(capacity_limits))
+        risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
+        risk_multiplier = min(1.0, max(0.0, float(risk_circuit.get("risk_multiplier") or 1.0)))
+        risk_budget *= risk_multiplier
         block_reasons: List[str] = []
         day_status = str(demo_account.get("day_status") or "")
         learning_feedback = demo_account.get("learning_feedback")
@@ -1888,7 +2010,10 @@ class PaperTradingService:
 
         if price <= 0:
             block_reasons.append("Keine Preisreferenz für Demo-Größe.")
-        if day_status == "action_required":
+        if risk_circuit.get("active"):
+            for reason in risk_circuit.get("reasons") or ["Paper risk circuit is active."]:
+                block_reasons.append(f"Paper risk circuit: {reason}")
+        elif day_status == "action_required":
             block_reasons.append("Paper-Konto hat offene Exit-Aktionen; bestehende Trades vor neuer Exposure prüfen.")
         elif day_status == "risk_review":
             block_reasons.append("Paper-Konto ist im Risiko-Review; schwache oder stop-nahe Trades zuerst prüfen.")
@@ -1938,6 +2063,7 @@ class PaperTradingService:
             "suggested_risk_pct": round((max_loss / float(demo_account.get("equity") or 1)) * 100, 2),
             "remaining_gross_capacity_value": round(remaining_gross, 2),
             "remaining_ticker_capacity_value": round(remaining_ticker_exposure, 2),
+            "risk_multiplier": risk_multiplier,
             "contract_multiplier": contract_multiplier,
             "demo_block_reasons": block_reasons,
             "demo_tradeable": not block_reasons,

@@ -55,6 +55,10 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
   - `PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT=2.0`
   - `PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT=0.25`
   - `PAPER_TRADING_MAX_OPEN_TRADES=12`
+  - `PAPER_TRADING_DAILY_LOSS_LIMIT_PCT=1.0`
+  - `PAPER_TRADING_MAX_DRAWDOWN_PCT=8.0`
+  - `PAPER_TRADING_MAX_CONSECUTIVE_LOSSES=3`
+  - `PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS=24`
   - `PAPER_TRADING_AUTO_MIN_SCORE=88`
   - `PAPER_TRADING_EXPLORATION_MIN_SCORE=60`
   - `PAPER_MARKET_DATA_MAX_AGE_HOURS=96`
@@ -67,6 +71,7 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
 - Angeforderte Mengen werden am aktuellen Demo-Risikolimit hart begrenzt; Calls und Puts bleiben Paper-only und pruefen beim Einstieg erneut das Underlying.
 - Entry, laufende Bewertung und Exit verwenden konservative Fill-Kosten. Referenzkurs, simulierter Ausfuehrungskurs und Kosten bleiben im Trade-Ticket und in Telegram sichtbar.
 - Vor jedem Auto-Entry werden freies Cash, Gesamt-Exposure, kumulierte Ticker-Exposure und die gesamte offene Optionspraemie neu geprueft.
+- Tagesverlust und Verlustserien koennen neue Paper-Entries temporaer pausieren. Ab dem Drawdown-Limit reduziert das System neue Demo-Risiken auf 25 Prozent.
 
 ## Daten und Backups
 

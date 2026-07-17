@@ -55,6 +55,11 @@ const formatPct = (value: unknown, digits = 2, fallback = "offen") => {
   return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
 };
 
+const unsignedPct = (value: unknown, digits = 2, fallback = "offen") => {
+  const number = toFiniteNumber(value);
+  return number == null ? fallback : `${Math.max(0, number).toFixed(digits)}%`;
+};
+
 const clampPct = (value: unknown) => {
   const number = toFiniteNumber(value);
   if (number == null) return 0;
@@ -89,11 +94,15 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     open: "offen",
     paper_only: "nur Paper",
     partial: "teilweise",
+    paused: "pausiert",
     pending: "wartet",
     promising: "vielversprechend",
     protect_profit: "Gewinn schützen",
     reduce_risk: "Risiko senken",
     review: "prüfen",
+    ready: "bereit",
+    reduced_risk: "reduziertes Risiko",
+    risk_halt: "Trading pausiert",
     risk_review: "Risiko prüfen",
     watch: "beobachten",
   };
@@ -142,6 +151,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const topLearningErrors = outcomeLearning.top_error_tags || [];
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
+  const riskCircuit = demoAccount.risk_circuit || {};
   const learningFeedback = demoAccount.learning_feedback || {};
   const currency = demoAccount.currency || "EUR";
   const nextStrictCandidate = autoSelection.selected?.[0] || null;
@@ -422,7 +432,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 {germanStatus(demoAccount.capital_status, "neutral")}
               </div>
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
-                demoAccount.day_status === "action_required"
+                demoAccount.day_status === "action_required" || demoAccount.day_status === "risk_halt"
                   ? "bg-red-50 text-red-700"
                   : demoAccount.day_status === "risk_review"
                     ? "bg-amber-50 text-amber-700"
@@ -439,6 +449,42 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Jetzt investiert" value={money(demoAccount.open_exposure_value, currency)} />
             <StatTile label="Freies Demo-Cash" value={money(demoAccount.cash_available_value, currency)} />
             <StatTile label="Netto-Ergebnis" value={`${money(demoAccount.net_pnl_value, currency)} / ${formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
+          </div>
+          <div className={`mt-4 rounded-[1.4rem] border p-4 ${
+            riskCircuit.active
+              ? "border-red-200 bg-red-50/90 text-red-900"
+              : riskCircuit.status === "reduced_risk"
+                ? "border-amber-200 bg-amber-50/90 text-amber-900"
+                : "border-emerald-200 bg-emerald-50/70 text-emerald-900"
+          }`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] opacity-70">Risk Circuit</div>
+                <div className="mt-1 text-base font-black">
+                  {riskCircuit.active
+                    ? "Neue Paper-Entries pausiert"
+                    : riskCircuit.status === "reduced_risk"
+                      ? "Drawdown-Modus: nur 25 % Risiko"
+                      : "Risikobudget freigegeben"}
+                </div>
+                {(riskCircuit.display_reasons || riskCircuit.reasons)?.length ? (
+                  <div className="mt-2 text-sm font-semibold leading-6">{(riskCircuit.display_reasons || riskCircuit.reasons).join(" / ")}</div>
+                ) : null}
+              </div>
+              <div className="rounded-full border border-current/15 bg-white/60 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]">
+                {germanStatus(riskCircuit.status, "bereit")}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 text-xs font-semibold sm:grid-cols-2 xl:grid-cols-4">
+              <div>Heute {money(riskCircuit.daily_realized_pnl_value, currency)} / Limit -{money(riskCircuit.daily_loss_limit_value, currency)}</div>
+              <div>Drawdown {unsignedPct(riskCircuit.current_drawdown_pct, 2, "0.00%")} / Limit {unsignedPct(riskCircuit.drawdown_limit_pct, 2, "0.00%")}</div>
+              <div>Verlustserie {riskCircuit.consecutive_losses || 0} / {riskCircuit.max_consecutive_losses || 0}</div>
+              <div>
+                {riskCircuit.cooldown_until
+                  ? `Pause bis ${new Date(riskCircuit.cooldown_until).toLocaleString("de-DE")}`
+                  : `Risiko-Faktor ${Math.round(Number(riskCircuit.risk_multiplier || 1) * 100)}%`}
+              </div>
+            </div>
           </div>
           <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-slate-50/80 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">

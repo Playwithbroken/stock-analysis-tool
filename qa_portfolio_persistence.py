@@ -1,5 +1,6 @@
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 
 def main() -> None:
@@ -45,6 +46,18 @@ def main() -> None:
         )
         assert restarted is not None, "portfolio did not survive manager restart"
         assert restarted["holdings"][0]["ticker"] == "AAPL"
+
+        def create_concurrent_portfolio(index: int):
+            created = manager.create_portfolio(f"Concurrent {index}")
+            holding = manager.add_holding(created["id"], "HOOD", index + 1, buy_price=95 + index)
+            return created, holding
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            concurrent_results = list(executor.map(create_concurrent_portfolio, range(12)))
+        assert len(concurrent_results) == 12
+        assert all(holding and holding["ticker"] == "HOOD" for _, holding in concurrent_results)
+        persisted_ids = {item["id"] for item in manager.get_portfolios()}
+        assert all(created["id"] in persisted_ids for created, _ in concurrent_results)
 
         updated = manager.update_holding(
             portfolio["id"],

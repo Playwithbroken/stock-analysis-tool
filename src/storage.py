@@ -376,7 +376,7 @@ class PortfolioManager:
         portfolio_id = str(uuid.uuid4())
         created_at = datetime.now().isoformat()
         
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect_db()
         cursor = conn.cursor()
         cursor.execute('INSERT INTO portfolios (id, name, created_at) VALUES (?, ?, ?)',
                        (portfolio_id, clean_name, created_at))
@@ -390,8 +390,7 @@ class PortfolioManager:
         return {"id": portfolio_id, "name": clean_name, "createdAt": created_at, "holdings": []}
 
     def get_portfolios(self) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _connect_db(row_factory=True)
         cursor = conn.cursor()
         
         cursor.execute('SELECT * FROM portfolios ORDER BY datetime(created_at) DESC')
@@ -410,7 +409,7 @@ class PortfolioManager:
         return portfolios
 
     def delete_portfolio(self, portfolio_id: str):
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect_db()
         cursor = conn.cursor()
         cursor.execute('DELETE FROM portfolios WHERE id = ?', (portfolio_id,))
         cursor.execute('DELETE FROM holdings WHERE portfolio_id = ?', (portfolio_id,))
@@ -432,7 +431,7 @@ class PortfolioManager:
             raise ValueError("Shares must be greater than zero")
 
         holding_id = str(uuid.uuid4())
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect_db()
         cursor = conn.cursor()
         normalized_purchase_date = self._normalize_purchase_date(purchase_date)
 
@@ -494,7 +493,7 @@ class PortfolioManager:
         }
 
     def remove_holding(self, portfolio_id: str, ticker: str):
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect_db()
         cursor = conn.cursor()
         cursor.execute('DELETE FROM holdings WHERE portfolio_id = ? AND ticker = ?', (portfolio_id, self._normalize_ticker(ticker)))
         conn.commit()
@@ -563,8 +562,7 @@ class PortfolioManager:
         return inserted
 
     def list_due_signal_forecast_outcomes(self, limit: int = 50) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _connect_db(row_factory=True)
         cursor = conn.cursor()
         cursor.execute(
             '''
@@ -667,8 +665,7 @@ class PortfolioManager:
         buy_price: Optional[float] = None,
         purchase_date: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _connect_db(row_factory=True)
         cursor = conn.cursor()
         clean_ticker = self._normalize_ticker(ticker)
         cursor.execute(

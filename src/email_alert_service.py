@@ -3405,6 +3405,25 @@ class EmailAlertService:
         horizon = self._tg_esc(str(ticket.get("horizon") or "nicht klassifiziert"))
         source = self._tg_esc(str(ticket.get("source_label") or "nicht dokumentiert"))
         data_as_of = self._tg_esc(str(ticket.get("data_as_of") or "Zeitstempel fehlt"))
+        market_data = ticket.get("market_data") if isinstance(ticket.get("market_data"), dict) else {}
+        freshness = self._tg_esc(str(market_data.get("freshness") or "unbekannt"))
+        liquidity = self._tg_esc(str(market_data.get("liquidity_status") or "unbekannt"))
+        age_hours = market_data.get("age_hours")
+        age_text = self._tg_esc(f"{float(age_hours):.1f}h" if age_hours is not None else "Alter unbekannt")
+        try:
+            notional_value = float(market_data.get("average_dollar_volume_5d") or 0)
+        except (TypeError, ValueError):
+            notional_value = 0
+        notional_text = (
+            f"{notional_value / 1_000_000_000:.1f} Mrd."
+            if notional_value >= 1_000_000_000
+            else f"{notional_value / 1_000_000:.1f} Mio."
+            if notional_value >= 1_000_000
+            else f"{notional_value:,.0f}".replace(",", ".")
+            if notional_value > 0
+            else "unbekannt"
+        )
+        notional_text = self._tg_esc(notional_text)
         validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
@@ -3423,6 +3442,7 @@ class EmailAlertService:
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidierung:</b> {invalidation}",
                 f"<b>Daten:</b> {source} | {data_as_of}",
+                f"<b>Marktcheck:</b> {freshness} ({age_text}) | LiquiditÃ¤t {liquidity} | 5T-Notional {notional_text}",
                 f"<b>Offene Checks:</b> {warning_text}",
                 *([account_after] if account_after else []),
                 "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",

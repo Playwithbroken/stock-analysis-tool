@@ -87,6 +87,12 @@ def test_paper_trade_telegram_money_formatting() -> None:
                 "horizon": "days-weeks",
                 "source_label": "official filing",
                 "data_as_of": "2026-07-11T12:00:00",
+                "market_data": {
+                    "freshness": "fresh",
+                    "age_hours": 1.5,
+                    "liquidity_status": "strong",
+                    "average_dollar_volume_5d": 125_000_000,
+                },
                 "validation": {"warnings": ["manual_market_check"]},
             },
         }
@@ -99,6 +105,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Ticket:</b> paper_ready" in opened
     assert "Horizont:</b> days-weeks" in opened
     assert "official filing" in opened
+    assert "fresh (1.5h)" in opened
+    assert "LiquiditÃ¤t strong" in opened
+    assert "5T-Notional 125.0 Mio." in opened
     assert "manual_market_check" in opened
     assert "Demo-Konto danach:</b> Equity 501.250,50 EUR" in opened
     assert "seit Start +1.250,50 EUR (+0.25%)" in opened

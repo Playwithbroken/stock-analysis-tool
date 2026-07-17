@@ -95,7 +95,23 @@ def build_service(manager: FakePortfolioManager) -> PaperTradingService:
         "JEPI": 50.0,
         "BTC-USD": 50_000.0,
     }
-    service._get_last_price = lambda ticker: prices.get(ticker or "")  # type: ignore[method-assign]
+    service._get_market_snapshot = lambda ticker: (  # type: ignore[method-assign]
+        {
+            "price": prices[ticker or ""],
+            "data_as_of": "2026-06-19T08:00:00+00:00",
+            "source": "qa_snapshot",
+            "interval": "1d",
+            "age_hours": 1.0,
+            "freshness": "fresh",
+            "average_volume_5d": 1_000_000,
+            "average_dollar_volume_5d": prices[ticker or ""] * 1_000_000,
+            "volume_basis": "qa_notional",
+            "liquidity_status": "strong",
+            "minimum_dollar_volume": 2_000_000,
+        }
+        if (ticker or "") in prices
+        else {}
+    )
     return service
 
 
@@ -173,6 +189,9 @@ def test_demo_account_sizing() -> None:
     assert ticket["target_2"] == 107.5
     assert ticket["risk_reward"] == 2.14
     assert ticket["account_risk_pct"] <= 0.35
+    assert ticket["market_data"]["freshness"] == "fresh"
+    assert ticket["market_data"]["liquidity_status"] == "strong"
+    assert "market_data_timestamp_missing" not in ticket["validation"]["errors"]
 
     aapl_call = next(item for item in dashboard["playbooks"] if item["id"] == "option-AAPL-call")
     assert aapl_call["asset_class"] == "option"
@@ -201,6 +220,17 @@ def test_demo_account_sizing() -> None:
     assert created["trade_ticket"]["schema_version"] == "1.0"
     assert created["trade_ticket"]["real_money_ready"] is False
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
+
+    try:
+        service.create_trade_from_playbook(
+            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 501, "leverage": 1},
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "risk cap" in str(exc)
+    else:
+        raise AssertionError("Requested quantity above the demo risk cap must be blocked.")
 
     created_call = service.create_trade_from_playbook(
         {"playbook_id": "option-AAPL-call", "direction": "call", "quantity": 0, "leverage": 1},
@@ -591,8 +621,16 @@ def test_strict_score_block_does_not_block_learning_candidate() -> None:
             "entry_trigger": "ETH confirms flow with price and volume.",
             "invalidation": "ETH loses the trigger zone.",
         },
+        "market_data": {
+            "price": 4000.0,
+            "data_as_of": "2026-06-19T08:00:00+00:00",
+            "freshness": "fresh",
+            "liquidity_status": "strong",
+        },
+        "data_as_of": "2026-06-19T08:00:00+00:00",
     }
     sized = {**playbook, **service._suggest_demo_sizing(playbook, demo_account)}
+    sized["trade_ticket"] = service._build_trade_ticket(sized, demo_account)
     assert sized["demo_block_reasons"][0].startswith("Strict-Signalregel:")
     selection = service._build_auto_selection([sized], [], demo_account)
     assert selection["selected"] == []
@@ -602,6 +640,25 @@ def test_strict_score_block_does_not_block_learning_candidate() -> None:
     assert capital["count"] == 1
     assert capital["notional_value"] > 0
     assert capital["max_loss_value"] > 0
+
+
+def test_market_quality_gate_blocks_stale_and_thin_snapshots() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    stale = {
+        "price": 10.0,
+        "data_as_of": "2026-01-01T00:00:00+00:00",
+        "freshness": "stale",
+        "liquidity_status": "adequate",
+    }
+    thin = {
+        "price": 10.0,
+        "data_as_of": "2026-06-19T08:00:00+00:00",
+        "freshness": "fresh",
+        "liquidity_status": "thin",
+    }
+    assert "market_data_stale" in service._market_snapshot_blockers(stale)
+    assert "market_liquidity_too_thin" in service._market_snapshot_blockers(thin)
+    assert service._market_snapshot_blockers({}) == ["market_snapshot_missing"]
 
 
 def test_close_trade_auto_documents_profitable_exit() -> None:
@@ -686,6 +743,7 @@ if __name__ == "__main__":
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()
+    test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
     print("qa_paper_demo_account: ok")

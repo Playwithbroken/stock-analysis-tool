@@ -52,6 +52,12 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
   - `PAPER_TRADING_MAX_OPTION_PREMIUM_PCT=0.75`
   - `PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT=0.25`
   - `PAPER_TRADING_MAX_OPEN_TRADES=12`
+  - `PAPER_TRADING_AUTO_MIN_SCORE=88`
+  - `PAPER_TRADING_EXPLORATION_MIN_SCORE=60`
+  - `PAPER_MARKET_DATA_MAX_AGE_HOURS=96`
+  - `PAPER_MIN_AVG_DOLLAR_VOLUME=2000000`
+- Vor jedem Paper-Einstieg werden Kurszeitpunkt, Datenalter und durchschnittliches Handelsnotional erneut geprueft. Veraltete oder sehr duenne Daten blockieren den Entry.
+- Angeforderte Mengen werden am aktuellen Demo-Risikolimit hart begrenzt; Calls und Puts bleiben Paper-only und pruefen beim Einstieg erneut das Underlying.
 
 ## Daten und Backups
 

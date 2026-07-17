@@ -198,6 +198,14 @@ class PaperTradingService:
             return "maximale Anzahl offener Demo-Trades erreicht"
         if "missing ticker or reference price" in lower:
             return "Ticker oder Referenzkurs fehlt"
+        if "market_data_timestamp_missing" in lower or "market_snapshot_missing" in lower:
+            return "Marktzeitpunkt oder Snapshot fehlt"
+        if "market_data_stale" in lower:
+            return "Marktdaten sind zu alt"
+        if "market_liquidity_too_thin" in lower:
+            return "Liquiditaet liegt unter dem Paper-Mindestwert"
+        if "trade ticket is not paper ready" in lower:
+            return "Trade-Ticket ist noch nicht Paper-ready"
         if "missing thesis, trigger or invalidation" in lower:
             return "These, Trigger oder Invalidierung fehlt"
         if "option remains paper-only" in lower or "option chain" in lower or "option bleibt paper-only" in lower or "optionskette" in lower:
@@ -259,13 +267,41 @@ class PaperTradingService:
 
         is_option = playbook.get("asset_class") == "option"
         if is_option:
+            execution_market = self._get_market_snapshot(playbook.get("ticker"))
+            execution_blockers = self._market_snapshot_blockers(execution_market)
+            if execution_blockers:
+                raise ValueError(f"Underlying market data gate blocks this option playbook: {', '.join(execution_blockers)}")
             direction = playbook.get("direction") or direction
-            last_price = float(playbook.get("reference_price") or 0)
+            underlying_price = float(execution_market.get("price") or 0)
+            last_price = round(max(0.35, underlying_price * 0.025), 2)
+            playbook = {
+                **playbook,
+                "reference_price": last_price,
+                "underlying_reference_price": underlying_price,
+                "data_as_of": execution_market.get("data_as_of"),
+                "market_data": execution_market,
+            }
         else:
-            last_price = self._get_last_price(playbook.get("ticker")) or float(playbook.get("reference_price") or 0)
+            execution_market = self._get_market_snapshot(playbook.get("ticker"))
+            execution_blockers = self._market_snapshot_blockers(execution_market)
+            if execution_blockers:
+                raise ValueError(f"Market data gate blocks this playbook: {', '.join(execution_blockers)}")
+            last_price = float(execution_market.get("price") or 0)
+            playbook = {
+                **playbook,
+                "reference_price": last_price,
+                "data_as_of": execution_market.get("data_as_of"),
+                "market_data": execution_market,
+            }
         if last_price <= 0:
             raise ValueError("No valid market price available for this playbook.")
-        quantity = requested_quantity if requested_quantity > 0 else float(playbook.get("suggested_quantity") or 1)
+        final_sizing = self._suggest_demo_sizing(playbook, demo_account)
+        if final_sizing.get("demo_tradeable") is False:
+            raise ValueError("Demo account risk gate blocks the refreshed market snapshot.")
+        max_quantity = float(final_sizing.get("suggested_quantity") or 0)
+        if requested_quantity > max_quantity + 1e-9:
+            raise ValueError("Requested quantity exceeds the current demo risk cap.")
+        quantity = requested_quantity if requested_quantity > 0 else max_quantity
         if quantity <= 0:
             raise ValueError("No valid demo quantity available for this playbook.")
 
@@ -277,7 +313,8 @@ class PaperTradingService:
             reward_buffer = float(playbook.get("reward_buffer_pct") or 7.0) / 100
             stop_price = last_price * (1 - risk_buffer) if direction == "long" else last_price * (1 + risk_buffer)
             target_price = last_price * (1 + reward_buffer) if direction == "long" else last_price * (1 - reward_buffer)
-        note_playbook = dict(playbook)
+        note_playbook = {**playbook, **final_sizing}
+        note_playbook["trade_ticket"] = self._build_trade_ticket(note_playbook, demo_account)
         if learning_mode:
             contract_multiplier = float(playbook.get("contract_multiplier") or (100 if is_option else 1))
             risk_per_unit = last_price * (float(playbook.get("risk_buffer_pct") or 0) / 100) * contract_multiplier
@@ -462,6 +499,7 @@ class PaperTradingService:
                 continue
             direction = "long" if item.get("action") == "buy" else "short"
             score = float(item.get("total_score") or 0)
+            market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
                     "id": f"equity-{item.get('ticker')}-{direction}",
@@ -471,6 +509,7 @@ class PaperTradingService:
                     "setup_type": "insider_follow",
                     "title": "Insider follow-through",
                     "headline": item.get("headline"),
+                    "source_label": item.get("source_label"),
                     "score": score,
                     "risk_buffer_pct": 3.5 if direction == "long" else 4.0,
                     "reward_buffer_pct": 7.5,
@@ -479,7 +518,7 @@ class PaperTradingService:
                         f"Use only if price holds after filing delay of {item.get('delay_days') if item.get('delay_days') is not None else 'offen'} days."
                     ),
                     "tags": ["long" if direction == "long" else "short", "official filing", "equity"],
-                    "reference_price": self._get_last_price(item.get("ticker")),
+                    **market_fields,
                 }
             )
 
@@ -487,6 +526,7 @@ class PaperTradingService:
             if not item.get("ticker"):
                 continue
             direction = "long" if item.get("action") == "buy" else "short"
+            market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
                     "id": f"politics-{item.get('ticker') or item.get('label')}-{direction}",
@@ -496,6 +536,7 @@ class PaperTradingService:
                     "setup_type": "political_copy_delay",
                     "title": "Political delay setup",
                     "headline": item.get("headline"),
+                    "source_label": item.get("source_label") or "official PTR disclosure",
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 4.5,
                     "reward_buffer_pct": 8.5,
@@ -504,13 +545,14 @@ class PaperTradingService:
                         "Only valid when the tape confirms after the delayed filing."
                     ),
                     "tags": ["delayed signal", "politics", direction],
-                    "reference_price": self._get_last_price(item.get("ticker")),
+                    **market_fields,
                 }
             )
 
         for item in scoreboard.get("etfs", [])[:2]:
             if not item.get("ticker"):
                 continue
+            market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
                     "id": f"etf-{item.get('ticker')}-long",
@@ -520,18 +562,20 @@ class PaperTradingService:
                     "setup_type": "etf_momentum",
                     "title": "ETF momentum continuation",
                     "headline": item.get("headline"),
+                    "source_label": item.get("source_label"),
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 2.8,
                     "reward_buffer_pct": 6.0,
                     "thesis": "Liquid ETF with decent quality and momentum profile. Favor clean continuation over narrative chasing.",
                     "tags": ["etf", "momentum", "long"],
-                    "reference_price": self._get_last_price(item.get("ticker")),
+                    **market_fields,
                 }
             )
 
         for item in scoreboard.get("crypto", [])[:2]:
             if not item.get("ticker"):
                 continue
+            market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
                     "id": f"crypto-{item.get('ticker')}-long",
@@ -541,12 +585,13 @@ class PaperTradingService:
                     "setup_type": "crypto_flow",
                     "title": "Crypto flow momentum",
                     "headline": item.get("headline"),
+                    "source_label": item.get("source_label"),
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 5.5,
                     "reward_buffer_pct": 11.0,
                     "thesis": "Flow-driven crypto setup. Keep leverage conservative and size by volatility, not conviction alone.",
                     "tags": ["crypto", "momentum", "long"],
-                    "reference_price": self._get_last_price(item.get("ticker")),
+                    **market_fields,
                 }
             )
 
@@ -1022,6 +1067,9 @@ class PaperTradingService:
                 str(playbook.get("asset_class") or ""),
             )
             framework = playbook.get("decision_framework") or {}
+            ticket = playbook.get("trade_ticket") if isinstance(playbook.get("trade_ticket"), dict) else {}
+            ticket_validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
+            ticket_errors = [str(item) for item in ticket_validation.get("errors") or []]
             hard_rule_reasons = [
                 str(item)
                 for item in playbook.get("do_not_trade_reasons", [])
@@ -1063,6 +1111,12 @@ class PaperTradingService:
             if not framework.get("entry_trigger") or not framework.get("invalidation") or not playbook.get("thesis"):
                 reasons.append("missing thesis, trigger or invalidation")
                 exploration_reasons.append("missing thesis, trigger or invalidation")
+            ticket_reasons = [f"trade ticket invalid: {item}" for item in ticket_errors]
+            if ticket_reasons:
+                reasons.extend(ticket_reasons)
+                exploration_reasons.extend(ticket_reasons)
+            elif ticket.get("paper_ready") is not True:
+                reasons.append("trade ticket is not paper ready")
             if playbook.get("asset_class") == "option":
                 readiness = (demo_account.get("learning_feedback") or {}).get("option_win_rate")
                 if readiness is None:
@@ -1221,7 +1275,7 @@ class PaperTradingService:
             return "duplicate"
         if "score below" in lower:
             return "score"
-        if "missing ticker or reference price" in lower:
+        if "missing ticker or reference price" in lower or "trade ticket invalid" in lower:
             return "data"
         if "missing thesis, trigger or invalidation" in lower:
             return "setup_quality"
@@ -1347,6 +1401,9 @@ class PaperTradingService:
                         "Price reference exists",
                         "Use only as demo option idea until IV, strike and expiry are verified",
                     ],
+                    "source_label": item.get("source_label"),
+                    "data_as_of": item.get("data_as_of"),
+                    "market_data": item.get("market_data") or {},
                 }
             )
         return option_playbooks[:4]
@@ -1536,6 +1593,7 @@ class PaperTradingService:
             or playbook.get("generated_at")
             or ""
         ).strip()
+        market_data = playbook.get("market_data") if isinstance(playbook.get("market_data"), dict) else {}
         blocked_reasons = self._dedupe_reason_list(
             [
                 *[str(item) for item in playbook.get("do_not_trade_reasons", [])],
@@ -1564,7 +1622,10 @@ class PaperTradingService:
         if not source_label:
             warnings.append("source_label_missing")
         if not data_as_of:
-            warnings.append("market_data_timestamp_missing")
+            errors.append("market_data_timestamp_missing")
+        errors.extend(self._market_snapshot_blockers(market_data))
+        if market_data.get("liquidity_status") == "unknown":
+            warnings.append("liquidity_unverified")
         if is_option:
             warnings.append("option_chain_not_validated")
         warnings.extend(str(item) for item in framework.get("warnings") or [])
@@ -1610,6 +1671,7 @@ class PaperTradingService:
             "evidence_level": framework.get("evidence_level") or "watch",
             "source_label": source_label or None,
             "data_as_of": data_as_of or None,
+            "market_data": market_data or None,
             "generated_at": datetime.utcnow().isoformat(),
             "validation": {
                 "valid": not errors,
@@ -2059,16 +2121,90 @@ class PaperTradingService:
             return None
         return f"1:{round(reward / risk, 2)}"
 
-    def _get_last_price(self, ticker: Optional[str]) -> Optional[float]:
+    def _market_reference_fields(self, ticker: Optional[str]) -> Dict[str, Any]:
+        snapshot = self._get_market_snapshot(ticker)
+        return {
+            "reference_price": snapshot.get("price"),
+            "data_as_of": snapshot.get("data_as_of"),
+            "market_data": snapshot,
+        }
+
+    def _market_snapshot_blockers(self, snapshot: Dict[str, Any] | None) -> List[str]:
+        snapshot = snapshot if isinstance(snapshot, dict) else {}
+        if not snapshot:
+            return ["market_snapshot_missing"]
+        blockers: List[str] = []
+        if float(snapshot.get("price") or 0) <= 0:
+            blockers.append("market_price_missing")
+        if not snapshot.get("data_as_of"):
+            blockers.append("market_data_timestamp_missing")
+        if snapshot.get("freshness") == "stale":
+            blockers.append("market_data_stale")
+        if snapshot.get("liquidity_status") == "thin":
+            blockers.append("market_liquidity_too_thin")
+        return self._dedupe_reason_list(blockers)
+
+    def _get_market_snapshot(self, ticker: Optional[str]) -> Dict[str, Any]:
         if not ticker:
-            return None
+            return {}
         try:
             hist = yf.Ticker(ticker).history(period="5d", interval="1d")
             if hist.empty:
-                return None
-            return round(float(hist["Close"].dropna().iloc[-1]), 2)
+                return {}
+            close = hist["Close"].dropna()
+            if close.empty:
+                return {}
+            price = round(float(close.iloc[-1]), 4)
+            timestamp = close.index[-1]
+            if hasattr(timestamp, "to_pydatetime"):
+                timestamp = timestamp.to_pydatetime()
+            if not isinstance(timestamp, datetime):
+                return {}
+            now = datetime.now(timestamp.tzinfo) if timestamp.tzinfo else datetime.now()
+            age_hours = max(0.0, (now - timestamp).total_seconds() / 3600)
+            max_age_hours = max(24.0, float(os.getenv("PAPER_MARKET_DATA_MAX_AGE_HOURS", "96")))
+
+            volume_values = hist["Volume"].dropna() if "Volume" in hist else []
+            average_volume = float(volume_values.tail(5).mean()) if len(volume_values) else None
+            is_crypto_pair = str(ticker).upper().endswith("-USD")
+            dollar_volume = (
+                average_volume
+                if is_crypto_pair and average_volume is not None
+                else average_volume * price
+                if average_volume is not None
+                else None
+            )
+            min_dollar_volume = max(
+                100_000.0,
+                float(os.getenv("PAPER_MIN_AVG_DOLLAR_VOLUME", "2000000")),
+            )
+            liquidity_status = (
+                "unknown"
+                if dollar_volume is None or dollar_volume <= 0
+                else "thin"
+                if dollar_volume < min_dollar_volume
+                else "strong"
+                if dollar_volume >= min_dollar_volume * 5
+                else "adequate"
+            )
+            return {
+                "price": price,
+                "data_as_of": timestamp.isoformat(),
+                "source": "yfinance_daily",
+                "interval": "1d",
+                "age_hours": round(age_hours, 2),
+                "freshness": "fresh" if age_hours <= max_age_hours else "stale",
+                "average_volume_5d": round(average_volume, 2) if average_volume is not None else None,
+                "average_dollar_volume_5d": round(dollar_volume, 2) if dollar_volume is not None else None,
+                "volume_basis": "reported_quote_volume" if is_crypto_pair else "shares_times_price",
+                "liquidity_status": liquidity_status,
+                "minimum_dollar_volume": min_dollar_volume,
+            }
         except Exception:
-            return None
+            return {}
+
+    def _get_last_price(self, ticker: Optional[str]) -> Optional[float]:
+        return self._get_market_snapshot(ticker).get("price")
 
     def _parse_datetime(self, value: Any) -> Optional[datetime]:
         if not value:

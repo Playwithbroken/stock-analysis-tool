@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from src.paper_trading_service import PaperTradingService
+from src.strategy_library import StrategyLibrary
 
 
 class FakePortfolioManager:
@@ -287,6 +288,91 @@ def test_realized_return_uses_account_equity() -> None:
     assert stats["realized_pnl_value"] == 1000.0
     assert stats["realized_pnl_pct"] == 0.2
     assert stats["average_trade_pnl_pct"] == 50.0
+    assert stats["loss_count"] == 0
+    assert stats["performance"]["profit_factor"] is None
+    assert stats["performance"]["expectancy_value"] == 500.0
+    assert stats["performance"]["evidence_status"] == "insufficient_sample"
+
+
+def test_performance_metrics_expose_bad_payoff_despite_high_win_rate() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    trades = []
+    for index in range(8):
+        trades.append(
+            {
+                "id": f"win-{index}",
+                "status": "closed",
+                "setup_type": "qa_payoff",
+                "realized_pnl_pct": 1.0,
+                "realized_pnl_value": 100.0,
+                "exit_reason": "target_review",
+                "lessons_learned": "Good follow-through with controlled risk.",
+            }
+        )
+    for index in range(2):
+        trades.append(
+            {
+                "id": f"loss-{index}",
+                "status": "closed",
+                "setup_type": "qa_payoff",
+                "realized_pnl_pct": -10.0,
+                "realized_pnl_value": -1000.0,
+                "exit_reason": "stop_loss",
+                "lessons_learned": "Loss was too large versus average winner.",
+            }
+        )
+
+    stats = service._build_stats(trades, starting_capital=500_000.0)
+    performance = stats["performance"]
+    assert stats["win_rate"] == 80.0
+    assert performance["profit_factor"] == 0.4
+    assert performance["payoff_ratio"] == 0.1
+    assert performance["expectancy_value"] == -120.0
+    assert performance["evidence_status"] == "building_sample"
+
+    setup = service._build_setup_performance(trades)[0]
+    assert setup["quality_status"] == "downgrade"
+    assert "stärkere Bestätigung" in setup["next_action"]
+
+
+def test_strategy_readiness_requires_positive_money_expectancy() -> None:
+    setup_type = "insider_follow"
+    trades: List[Dict[str, Any]] = []
+    outcomes: List[Dict[str, Any]] = []
+    for index in range(18):
+        trades.append(
+            {
+                "id": f"hit-{index}",
+                "status": "closed",
+                "ticker": "AAPL",
+                "setup_type": setup_type,
+                "direction": "long",
+                "realized_pnl_pct": 1.0,
+                "realized_pnl_value": 100.0,
+            }
+        )
+        outcomes.append({"setup_type": setup_type, "result": "hit"})
+    for index in range(2):
+        trades.append(
+            {
+                "id": f"miss-{index}",
+                "status": "closed",
+                "ticker": "AAPL",
+                "setup_type": setup_type,
+                "direction": "long",
+                "realized_pnl_pct": -10.0,
+                "realized_pnl_value": -1000.0,
+            }
+        )
+        outcomes.append({"setup_type": setup_type, "result": "hit"})
+
+    rows = StrategyLibrary.build_readiness(trades, outcomes)
+    momentum = next(item for item in rows if item["id"] == "momentum_follow_through")
+    assert momentum["hit_rate"] == 100.0
+    assert momentum["performance"]["expectancy_value"] == -10.0
+    assert momentum["performance"]["profit_factor"] == 0.9
+    assert momentum["real_world_ready"] is False
+    assert momentum["recommendation"] == "continue_learning"
 
 
 def test_short_trade_money_flow_and_demo_equity() -> None:
@@ -926,6 +1012,8 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
 if __name__ == "__main__":
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
+    test_performance_metrics_expose_bad_payoff_despite_high_win_rate()
+    test_strategy_readiness_requires_positive_money_expectancy()
     test_short_trade_money_flow_and_demo_equity()
     test_put_learning_inverts_underlying_move()
     test_demo_account_blocks_when_open_risk_is_exhausted()

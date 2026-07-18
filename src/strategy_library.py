@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from src.performance_metrics import build_trade_performance
+
 
 @dataclass(frozen=True)
 class StrategyDefinition:
@@ -224,7 +226,18 @@ class StrategyLibrary:
             )
             last_closed = closed[0] if closed else None
             hit_rate = round((len(hits) / max(1, len(decisive))) * 100, 1) if decisive else 0
-            ready = len(decisive) >= strategy.min_paper_trades and hit_rate >= strategy.min_hit_rate and avg_pnl >= strategy.max_avg_loss_pct
+            performance = build_trade_performance(closed)
+            profit_factor = performance.get("profit_factor")
+            profitable_evidence = performance["expectancy_value"] > 0 and (
+                profit_factor is None or profit_factor >= 1.2
+            )
+            ready = (
+                len(decisive) >= strategy.min_paper_trades
+                and len(closed) >= strategy.min_paper_trades
+                and hit_rate >= strategy.min_hit_rate
+                and avg_pnl >= strategy.max_avg_loss_pct
+                and profitable_evidence
+            )
             if ready:
                 status = "manual_review_ready"
                 next_step = "Eligible for manual real-world review, not automatic execution."
@@ -255,6 +268,7 @@ class StrategyLibrary:
                     "hit_rate": hit_rate,
                     "avg_closed_pnl_pct": avg_pnl,
                     "avg_open_pnl_pct": open_avg_pnl,
+                    "performance": performance,
                     "status": status,
                     "real_world_ready": ready,
                     "recommendation": recommendation,

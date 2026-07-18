@@ -9,6 +9,7 @@ import yfinance as yf
 
 from src.storage import PortfolioManager
 from src.strategy_library import StrategyLibrary
+from src.performance_metrics import build_trade_performance
 
 DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
@@ -1533,7 +1534,8 @@ class PaperTradingService:
         closed = [trade for trade in trades if trade.get("status") == "closed" and trade.get("realized_pnl_pct") is not None]
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         winners = [trade for trade in closed if float(trade.get("realized_pnl_pct") or 0) > 0]
-        losers = [trade for trade in closed if float(trade.get("realized_pnl_pct") or 0) <= 0]
+        losers = [trade for trade in closed if float(trade.get("realized_pnl_pct") or 0) < 0]
+        performance = build_trade_performance(closed)
         realized_value = round(sum(float(trade.get("realized_pnl_value") or 0) for trade in closed), 2)
         account_realized_pct = round((realized_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
         average_trade_pct = round(
@@ -1559,6 +1561,7 @@ class PaperTradingService:
                 "short": sum(1 for trade in trades if trade.get("direction") == "short"),
             },
             "loss_count": len(losers),
+            "performance": performance,
         }
 
     def _demo_account_config(self) -> Dict[str, Any]:
@@ -2143,6 +2146,7 @@ class PaperTradingService:
                     "best_pnl_pct": None,
                     "worst_pnl_pct": None,
                     "missing_journal": 0,
+                    "closed_trades": [],
                 },
             )
             pnl = float(trade.get("realized_pnl_pct") or 0)
@@ -2151,11 +2155,13 @@ class PaperTradingService:
             bucket["avg_pnl_pct"] += pnl
             bucket["best_pnl_pct"] = pnl if bucket["best_pnl_pct"] is None else max(bucket["best_pnl_pct"], pnl)
             bucket["worst_pnl_pct"] = pnl if bucket["worst_pnl_pct"] is None else min(bucket["worst_pnl_pct"], pnl)
+            bucket["closed_trades"].append(trade)
             if not str(trade.get("exit_reason") or "").strip() or not str(trade.get("lessons_learned") or "").strip():
                 bucket["missing_journal"] += 1
 
         rows = []
         for bucket in buckets.values():
+            performance = build_trade_performance(bucket.pop("closed_trades"))
             trades = max(1, int(bucket["trades"]))
             avg_pnl = round(float(bucket["avg_pnl_pct"]) / trades, 2)
             win_rate = round((int(bucket["wins"]) / trades) * 100, 1)
@@ -2164,13 +2170,13 @@ class PaperTradingService:
             if missing_journal:
                 quality_status = "needs_journal"
                 next_action = "Exit-Grund und Lektion vervollständigen, bevor diesem Setup vertraut wird."
-            elif trades < 5:
+            elif trades < 10:
                 quality_status = "building_evidence"
-                next_action = "Mindestens 5 geschlossene Paper-Trades sammeln, bevor Risiko verändert wird."
-            elif win_rate >= 55 and avg_pnl > 0:
+                next_action = "Mindestens 10 geschlossene Paper-Trades sammeln; ab 30 wird die Stichprobe belastbarer."
+            elif performance["expectancy_value"] > 0 and (performance["profit_factor"] or 0) >= 1.2:
                 quality_status = "promising"
-                next_action = "Weiter per Paper testen; höhere Demo-Priorität erst nach wiederholt sauberen Journalen prüfen."
-            elif win_rate < 45 or avg_pnl < 0:
+                next_action = "Positive Erwartung weiter per Paper testen; manuelle Prüfung frühestens ab belastbarer Stichprobe."
+            elif performance["expectancy_value"] < 0 or (performance["profit_factor"] is not None and performance["profit_factor"] < 1):
                 quality_status = "downgrade"
                 next_action = "Score-Gewichtung senken und vor dem nächsten Einstieg stärkere Bestätigung verlangen."
             else:
@@ -2182,6 +2188,7 @@ class PaperTradingService:
                     "avg_pnl_pct": avg_pnl,
                     "win_rate": win_rate,
                     "journal_completion_rate": journal_completion_rate,
+                    "performance": performance,
                     "quality_status": quality_status,
                     "next_action": next_action,
                 }

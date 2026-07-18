@@ -176,15 +176,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     []
   ).slice(0, 2);
 
-  const openPnLTone = useMemo(() => {
-    const value = Number(stats.avg_open_pnl_pct || 0);
-    return value > 0 ? "good" : value < 0 ? "bad" : "default";
-  }, [stats.avg_open_pnl_pct]);
-
-  const realizedTone = useMemo(() => {
-    const value = Number(stats.realized_pnl_pct || 0);
-    return value > 0 ? "good" : value < 0 ? "bad" : "default";
-  }, [stats.realized_pnl_pct]);
+  const performance = stats.performance || {};
+  const profitFactor = toFiniteNumber(performance.profit_factor);
 
   const accountTone = useMemo(() => {
     const value = Number(demoAccount.net_pnl_value || 0);
@@ -1242,11 +1235,18 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Trefferquote" value={formatPct(stats.win_rate, 0, "0%").replace("+", "")} tone={Number(stats.win_rate || 0) >= 50 ? "good" : "default"} />
-          <StatTile label="Offene PnL" value={formatPct(stats.avg_open_pnl_pct, 2, "+0.00%")} tone={openPnLTone as any} />
-          <StatTile label="Realisiert" value={formatPct(stats.realized_pnl_pct, 2, "+0.00%")} tone={realizedTone as any} />
-          <StatTile label="Long / Short" value={`${stats.long_short_split?.long || 0} / ${stats.long_short_split?.short || 0}`} />
+          <StatTile label="Profit Factor" value={profitFactor == null ? "offen" : profitFactor.toFixed(2)} tone={profitFactor != null && profitFactor >= 1.2 ? "good" : profitFactor != null && profitFactor < 1 ? "bad" : "default"} />
+          <StatTile label="Erwartung / Trade" value={money(performance.expectancy_value, currency)} tone={Number(performance.expectancy_value || 0) > 0 ? "good" : Number(performance.expectancy_value || 0) < 0 ? "bad" : "default"} />
+          <StatTile label="Beweislage" value={`${performance.sample_size || 0} / ${performance.minimum_usable_sample || 30}`} />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 px-1 text-xs text-slate-500">
+          <span>Realisiert {formatPct(stats.realized_pnl_pct, 2, "+0.00%")} ({money(stats.realized_pnl_value, currency)})</span>
+          <span>Offene PnL {formatPct(stats.avg_open_pnl_pct, 2, "+0.00%")}</span>
+          <span>Gewinn {money(performance.avg_win_value, currency)} / Verlust {money(performance.avg_loss_value, currency)} im Durchschnitt</span>
+          <span>{performance.evidence_label || "zu wenig Daten"}</span>
         </div>
 
         <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
@@ -1518,10 +1518,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div className="mt-1 text-xs text-slate-500">Trefferquote</div>
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-500">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500 sm:grid-cols-3">
                     <div>Ø {item.avg_pnl_pct >= 0 ? "+" : ""}{item.avg_pnl_pct}%</div>
+                    <div>PF {item.performance?.profit_factor == null ? "offen" : Number(item.performance.profit_factor).toFixed(2)}</div>
+                    <div>{money(item.performance?.expectancy_value, currency)} / Trade</div>
                     <div>Bestwert {item.best_pnl_pct >= 0 ? "+" : ""}{item.best_pnl_pct}%</div>
                     <div>Schlecht {item.worst_pnl_pct >= 0 ? "+" : ""}{item.worst_pnl_pct}%</div>
+                    <div>{germanText(item.performance?.evidence_label, "zu wenig Daten")}</div>
                   </div>
                   <div className="mt-3 rounded-xl border border-black/8 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700">
                     {germanText(item.next_action, "Mehr Paper-Beweise sammeln, bevor Risiko verändert wird.")}

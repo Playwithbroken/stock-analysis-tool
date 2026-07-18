@@ -331,6 +331,7 @@ class EmailAlertService:
                     "account_open_exposure": (demo_account or {}).get("open_exposure_value"),
                     "account_net_pnl_value": (demo_account or {}).get("net_pnl_value"),
                     "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
+                    "account_performance": (demo_account or {}).get("performance") or {},
                     "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
                     "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
                     "source_label": "Paper-Autopilot",
@@ -458,6 +459,7 @@ class EmailAlertService:
             "closed_trade_count": demo_account.get("closed_trade_count"),
             "management_counts": demo_account.get("management_counts") or {},
             "risk_circuit": demo_account.get("risk_circuit") or {},
+            "performance": demo_account.get("performance") or {},
             "top_trades": top_trades,
             "line": f"Paper-Konto-Status: {status}",
             "source_label": "Paper-Konto-Monitor",
@@ -510,6 +512,7 @@ class EmailAlertService:
                     "account_open_exposure": (demo_account or {}).get("open_exposure_value"),
                     "account_net_pnl_value": (demo_account or {}).get("net_pnl_value"),
                     "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
+                    "account_performance": (demo_account or {}).get("performance") or {},
                     "line": f"{trade.get('ticker')} Paper-Trade geschlossen.",
                     "source_label": "Paper-Trade-Exit",
                     "source_url": "",
@@ -3465,7 +3468,7 @@ class EmailAlertService:
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidierung:</b> {invalidation}",
                 f"<b>Daten:</b> {source} | {data_as_of}",
-                f"<b>Marktcheck:</b> {freshness} ({age_text}) | LiquiditÃ¤t {liquidity} | 5T-Notional {notional_text}",
+                f"<b>Marktcheck:</b> {freshness} ({age_text}) | Liquidität {liquidity} | 5T-Notional {notional_text}",
                 f"<b>Offene Checks:</b> {warning_text}",
                 *([account_after] if account_after else []),
                 "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",
@@ -3524,9 +3527,26 @@ class EmailAlertService:
         exposure = self._tg_money(event.get("account_open_exposure"))
         net_pnl = self._tg_signed_money(event.get("account_net_pnl_value"))
         net_pnl_pct = self._tg_pct(event.get("account_net_pnl_pct"))
+        performance_line = self._paper_performance_line(event.get("account_performance"))
         return (
             f"<b>Demo-Konto danach:</b> Equity {equity} | seit Start {net_pnl} ({net_pnl_pct})"
             f"\n<b>Verfügbar:</b> Cash {cash} | offen investiert {exposure}"
+            f"{performance_line}"
+        )
+
+    def _paper_performance_line(self, performance: Any) -> str:
+        if not isinstance(performance, dict) or not performance:
+            return ""
+        sample_size = performance.get("sample_size")
+        minimum = performance.get("minimum_usable_sample") or 30
+        expectancy = self._tg_signed_money(performance.get("expectancy_value"))
+        profit_factor = performance.get("profit_factor")
+        pf_text = "offen" if profit_factor is None else self._tg_esc(f"{float(profit_factor):.2f}")
+        win_rate = self._tg_pct(performance.get("win_rate")).lstrip("+")
+        evidence = self._tg_esc(str(performance.get("evidence_label") or "zu wenig Daten"))
+        return (
+            f"\n<b>Lernqualität:</b> {self._tg_esc(str(sample_size or 0))}/{self._tg_esc(str(minimum))} Trades | "
+            f"PF {pf_text} | Erwartung {expectancy}/Trade | Treffer {win_rate} | {evidence}"
         )
 
     def _paper_trade_datetime(self, value: Any) -> datetime | None:
@@ -3610,6 +3630,7 @@ class EmailAlertService:
         circuit_status = self._tg_esc(str(circuit.get("status") or "ready").upper())
         circuit_reasons = [self._tg_esc(str(item)) for item in (circuit.get("display_reasons") or circuit.get("reasons") or [])[:2]]
         cooldown_until = self._paper_trade_time(circuit.get("cooldown_until"))
+        performance_line = self._paper_performance_line(event.get("performance"))
 
         lines = [
             f"<b>[PAPER KONTO] {status}</b>",
@@ -3621,6 +3642,8 @@ class EmailAlertService:
             f"<b>Risk Circuit:</b> {circuit_status} | Drawdown {self._tg_pct(circuit.get('current_drawdown_pct')).lstrip('+')} / Limit {self._tg_pct(circuit.get('drawdown_limit_pct')).lstrip('+')}",
             f"<b>Heute:</b> {self._tg_signed_money(circuit.get('daily_realized_pnl_value'))} | Verlustserie {self._tg_esc(str(circuit.get('consecutive_losses') or 0))}",
         ]
+        if performance_line:
+            lines.append(performance_line.lstrip())
         if circuit_reasons:
             lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
         if cooldown_until:

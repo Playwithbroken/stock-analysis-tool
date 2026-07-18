@@ -151,6 +151,11 @@ def main() -> int:
             failures,
             "paper_autopilot.demo_account_after must be an object",
         )
+        require(
+            isinstance((paper_autopilot.get("demo_account_after") or {}).get("performance"), dict),
+            failures,
+            "paper_autopilot.demo_account_after.performance must be an object",
+        )
 
         paper_outcomes = payload.get("paper_outcomes") or {}
         for key in [
@@ -245,8 +250,13 @@ def main() -> int:
                 require(key in account_payload, failures, f"paper account status missing {key!r}")
             require(account_payload.get("status") == "ok", failures, "paper account status should return ok")
             require(isinstance(account_payload.get("demo_account"), dict), failures, "paper account demo_account must be an object")
-            for key in ["equity", "day_status", "day_action", "net_pnl_value", "net_pnl_pct", "open_trade_count"]:
+            for key in ["equity", "day_status", "day_action", "net_pnl_value", "net_pnl_pct", "open_trade_count", "performance"]:
                 require(key in account_payload.get("demo_account", {}), failures, f"paper account demo_account missing {key!r}")
+            require(
+                isinstance(account_payload.get("demo_account", {}).get("performance"), dict),
+                failures,
+                "paper account demo_account.performance must be an object",
+            )
         require(len(telegram_calls) >= 2, failures, "paper account status should send a Telegram request")
 
         if failures:

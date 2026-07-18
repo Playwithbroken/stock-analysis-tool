@@ -47,6 +47,25 @@ function formatMoney(value?: number | null) {
   }).format(value);
 }
 
+function formatPct(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "offen";
+  return `${value.toFixed(2)}%`;
+}
+
+function paperPerformanceSummary(performance?: any) {
+  if (!performance || typeof performance !== "object") return null;
+  const sample = Number(performance.sample_size || 0);
+  const minimum = Number(performance.minimum_usable_sample || 30);
+  const profitFactor = performance.profit_factor == null ? "offen" : Number(performance.profit_factor).toFixed(2);
+  return {
+    sample: `${sample}/${minimum}`,
+    profitFactor,
+    expectancy: formatMoney(Number(performance.expectancy_value || 0)),
+    winRate: formatPct(Number(performance.win_rate || 0)),
+    evidence: String(performance.evidence_label || "zu wenig Daten"),
+  };
+}
+
 function previewBlockReasons(preview: any) {
   const blocked = preview?.blocker_summary?.next_best_rejected || {};
   const mode = preview?.mode === "learn" ? "learn" : "strict";
@@ -292,6 +311,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
   const deliveries = health?.recent_deliveries || [];
+  const autopilotPerformance = paperPerformanceSummary(paperAutopilot.demo_account_after?.performance);
+  const accountResultPerformance = paperPerformanceSummary(paperAccountResult?.demo_account?.performance);
   const paperPreviewBlock = previewBlockReasons(paperPreviewResult);
   const healthProblems = (health?.problems || []).map((code: string) => ({
     code,
@@ -682,6 +703,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                       {formatMoney(paperAutopilot.demo_account_after.net_pnl_value)}
                     </span>
                   </div>
+                  {autopilotPerformance ? (
+                    <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 sm:col-span-2">
+                      Lernqualität <span className="font-extrabold text-slate-900">{autopilotPerformance.sample}</span>
+                      {" / "}PF <span className="font-extrabold text-slate-900">{autopilotPerformance.profitFactor}</span>
+                      {" / "}Erwartung <span className="font-extrabold text-slate-900">{autopilotPerformance.expectancy}</span>
+                      {" / "}{autopilotPerformance.evidence}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {paperAutopilot.last_opened?.length ? (
@@ -751,6 +780,12 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     P/L {formatMoney(paperAccountResult.demo_account?.net_pnl_value)} /
                     offen {paperAccountResult.demo_account?.open_trade_count ?? 0}
                   </div>
+                  {accountResultPerformance ? (
+                    <div className="mt-1 font-semibold text-slate-700">
+                      Lernqualität: {accountResultPerformance.sample} / PF {accountResultPerformance.profitFactor} /
+                      Erwartung {accountResultPerformance.expectancy} / Treffer {accountResultPerformance.winRate}
+                    </div>
+                  ) : null}
                   {paperAccountResult.demo_account?.day_action ? (
                     <div className="mt-1 font-semibold text-emerald-800">
                       Tagesaktion: {paperAccountResult.demo_account.day_action}

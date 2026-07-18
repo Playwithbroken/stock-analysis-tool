@@ -4397,6 +4397,7 @@ async def send_paper_account_status_now():
                     "net_pnl_pct": demo_account.get("net_pnl_pct"),
                     "open_trade_count": demo_account.get("open_trade_count"),
                     "management_counts": demo_account.get("management_counts") or {},
+                    "performance": demo_account.get("performance") or {},
                 },
             }
         )
@@ -5134,11 +5135,12 @@ async def admin_health_center():
                 "last_opened": paper_autopilot_last_opened,
                 "demo_account_after": {
                     "starting_capital": paper_autopilot_demo_account.get("starting_capital"),
-                    "equity_value": paper_autopilot_demo_account.get("equity_value"),
+                    "equity_value": paper_autopilot_demo_account.get("equity_value") or paper_autopilot_demo_account.get("equity"),
                     "cash_available_value": paper_autopilot_demo_account.get("cash_available_value"),
                     "open_exposure_value": paper_autopilot_demo_account.get("open_exposure_value"),
                     "net_pnl_value": paper_autopilot_demo_account.get("net_pnl_value"),
                     "net_pnl_pct": paper_autopilot_demo_account.get("net_pnl_pct"),
+                    "performance": paper_autopilot_demo_account.get("performance") or {},
                 },
                 "mode": paper_autopilot_last.get("mode"),
                 "message": paper_autopilot_last.get("message"),

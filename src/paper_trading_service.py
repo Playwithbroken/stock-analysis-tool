@@ -1721,6 +1721,7 @@ class PaperTradingService:
         net_pnl_pct = round((net_pnl_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
         cash_available_value = round(max(0.0, equity - open_exposure_value), 2)
         capital_status = "ahead" if net_pnl_value > 0 else "behind" if net_pnl_value < 0 else "flat"
+        performance = build_trade_performance(closed_trades)
         risk_circuit = self._build_paper_risk_circuit(
             closed_trades,
             equity,
@@ -1770,6 +1771,7 @@ class PaperTradingService:
             "net_pnl_pct": net_pnl_pct,
             "cash_available_value": cash_available_value,
             "capital_status": capital_status,
+            "performance": performance,
             "risk_circuit": risk_circuit,
             "open_risk_value": open_risk_value,
             "open_risk_pct": round((open_risk_value / equity) * 100, 2) if equity > 0 else 0,

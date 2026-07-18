@@ -78,6 +78,14 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "account_open_exposure": 12345.67,
             "account_net_pnl_value": 1250.5,
             "account_net_pnl_pct": 0.25,
+            "account_performance": {
+                "sample_size": 12,
+                "minimum_usable_sample": 30,
+                "profit_factor": 1.42,
+                "expectancy_value": 85.25,
+                "win_rate": 58.3,
+                "evidence_label": "Stichprobe im Aufbau",
+            },
             "risk_reward": 2.4,
             "confidence_score": 91,
             "trigger": "Breakout mit Volumen bestätigt.",
@@ -117,13 +125,15 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Horizont:</b> days-weeks" in opened
     assert "official filing" in opened
     assert "fresh (1.5h)" in opened
-    assert "LiquiditÃ¤t strong" in opened
+    assert "Liquidität strong" in opened
     assert "5T-Notional 125.0 Mio." in opened
     assert "manual_market_check" in opened
     assert "Demo-Konto danach:</b> Equity 501.250,50 EUR" in opened
     assert "seit Start +1.250,50 EUR (+0.25%)" in opened
     assert "Verfügbar:</b> Cash 488.904,83 EUR" in opened
     assert "offen investiert 12.345,67 EUR" in opened
+    assert "Lernqualität:</b> 12/30 Trades | PF 1.42 | Erwartung +85,25 EUR/Trade" in opened
+    assert "Treffer 58.30% | Stichprobe im Aufbau" in opened
 
     closed = service._render_telegram_paper_trade_closed_alert(
         {
@@ -142,6 +152,14 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "account_open_exposure": 0,
             "account_net_pnl_value": 2317.16,
             "account_net_pnl_pct": 0.46,
+            "account_performance": {
+                "sample_size": 30,
+                "minimum_usable_sample": 30,
+                "profit_factor": 1.81,
+                "expectancy_value": 77.24,
+                "win_rate": 60.0,
+                "evidence_label": "belastbare Stichprobe",
+            },
             "realized_pnl_pct": 8.64,
             "result_label": "winner",
             "exit_reason": "target_or_profit_taken",
@@ -170,6 +188,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "seit Start +2.317,16 EUR (+0.46%)" in closed
     assert "Verfügbar:</b> Cash 502.317,16 EUR" in closed
     assert "offen investiert 0,00 EUR" in closed
+    assert "Lernqualität:</b> 30/30 Trades | PF 1.81 | Erwartung +77,24 EUR/Trade" in closed
+    assert "belastbare Stichprobe" in closed
 
     behind = service._paper_account_after_line(
         {
@@ -228,6 +248,14 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "open_trade_count": 2,
             "closed_trade_count": 4,
             "management_counts": {"hold": 2},
+            "performance": {
+                "sample_size": 9,
+                "minimum_usable_sample": 30,
+                "profit_factor": None,
+                "expectancy_value": 138.94,
+                "win_rate": 66.7,
+                "evidence_label": "zu wenig Daten",
+            },
             "risk_circuit": {
                 "status": "paused",
                 "display_reasons": ["Drei Verluste in Folge; der Paper-Cooldown ist aktiv."],
@@ -256,6 +284,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Risk Circuit:</b> PAUSED" in account
     assert "Drawdown 1.20% / Limit 8.00%" in account
     assert "Heute:</b> -3.000,00 EUR | Verlustserie 3" in account
+    assert "Lernqualität:</b> 9/30 Trades | PF offen | Erwartung +138,94 EUR/Trade" in account
+    assert "Treffer 66.70% | zu wenig Daten" in account
     assert "Drei Verluste in Folge" in account
     assert "Cooldown bis:" in account
 

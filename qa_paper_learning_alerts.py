@@ -86,6 +86,20 @@ def test_paper_trade_telegram_money_formatting() -> None:
                 "win_rate": 58.3,
                 "evidence_label": "Stichprobe im Aufbau",
             },
+            "strategy_context": {
+                "id": "momentum_follow_through",
+                "label": "Momentum Follow-Through",
+                "status": "learning",
+                "recommendation": "continue_learning",
+                "real_world_ready": False,
+                "sample_size": 12,
+                "minimum_usable_sample": 30,
+                "hit_rate": 58.3,
+                "profit_factor": 1.42,
+                "expectancy_value": 85.25,
+                "readiness_gaps": ["8 weitere klare Paper-Prüfungen nötig."],
+                "next_step": "8 weitere klare Paper-Prüfungen nötig.",
+            },
             "risk_reward": 2.4,
             "confidence_score": 91,
             "trigger": "Breakout mit Volumen bestätigt.",
@@ -134,6 +148,10 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "offen investiert 12.345,67 EUR" in opened
     assert "Lernqualität:</b> 12/30 Trades | PF 1.42 | Erwartung +85,25 EUR/Trade" in opened
     assert "Treffer 58.30% | Stichprobe im Aufbau" in opened
+    assert "Strategie:</b> Momentum Follow-Through | lernen / weiter lernen | nur Paper-Lernen" in opened
+    assert "Strategie-Beweise:</b> 12/30 Trades | Treffer 58.30% | PF 1.42 | Erwartung +85,25 EUR/Trade" in opened
+    assert "Nächster Strategie-Check:</b> 8 weitere klare Paper-Prüfungen nötig." in opened
+    assert "Blocker:</b> 8 weitere klare Paper-Prüfungen nötig." in opened
 
     closed = service._render_telegram_paper_trade_closed_alert(
         {

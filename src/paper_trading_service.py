@@ -28,11 +28,15 @@ class PaperTradingService:
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
         demo_account = self._build_demo_account(trades, playbooks)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account)
+        strategy_readiness = StrategyLibrary.build_readiness(
+            trades,
+            self.portfolio_manager.list_paper_trade_outcomes(limit=800),
+        )
         return {
             "generated_at": datetime.utcnow().isoformat(),
             "playbooks": sized_playbooks,
             "strategy_library": StrategyLibrary.all(),
-            "strategy_readiness": StrategyLibrary.build_readiness(trades, self.portfolio_manager.list_paper_trade_outcomes(limit=800)),
+            "strategy_readiness": strategy_readiness,
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
             "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
@@ -42,7 +46,7 @@ class PaperTradingService:
             "outcome_learning": outcome_learning,
             "rules": rules,
             "demo_account": demo_account,
-            "auto_selection": self._build_auto_selection(sized_playbooks, trades, demo_account),
+            "auto_selection": self._build_auto_selection(sized_playbooks, trades, demo_account, strategy_readiness),
             "auto_learn_status": self._build_auto_learn_status(),
         }
 
@@ -1120,11 +1124,42 @@ class PaperTradingService:
             if blocked:
                 item["learning_blocked"] = True
 
+    def _strategy_context_for_playbook(
+        self,
+        playbook: Dict[str, Any],
+        readiness_rows: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        strategy = playbook.get("strategy") or StrategyLibrary.find_for_playbook(playbook)
+        strategy_id = str(strategy.get("id") or "")
+        readiness = next(
+            (item for item in readiness_rows if str(item.get("id") or "") == strategy_id),
+            {},
+        )
+        performance = readiness.get("performance") if isinstance(readiness.get("performance"), dict) else {}
+        return {
+            "id": strategy_id,
+            "label": strategy.get("label"),
+            "status": readiness.get("status") or "not_started",
+            "recommendation": readiness.get("recommendation") or "collect_first_trade",
+            "real_world_ready": bool(readiness.get("real_world_ready")),
+            "paper_trades": readiness.get("paper_trades") or 0,
+            "decisive_checks": readiness.get("decisive_checks") or 0,
+            "hit_rate": readiness.get("hit_rate") or 0,
+            "profit_factor": performance.get("profit_factor"),
+            "expectancy_value": performance.get("expectancy_value"),
+            "evidence_label": performance.get("evidence_label"),
+            "sample_size": performance.get("sample_size") or 0,
+            "minimum_usable_sample": performance.get("minimum_usable_sample") or 30,
+            "readiness_gaps": (readiness.get("readiness_gaps") or [])[:3],
+            "next_step": readiness.get("next_step") or "Paper-Beweise sammeln.",
+        }
+
     def _build_auto_selection(
         self,
         playbooks: List[Dict[str, Any]],
         trades: List[Dict[str, Any]],
         demo_account: Dict[str, Any],
+        strategy_readiness: List[Dict[str, Any]] | None = None,
         max_candidates: int = 5,
     ) -> Dict[str, Any]:
         open_keys = {
@@ -1161,6 +1196,7 @@ class PaperTradingService:
             ticket = playbook.get("trade_ticket") if isinstance(playbook.get("trade_ticket"), dict) else {}
             ticket_validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
             ticket_errors = [str(item) for item in ticket_validation.get("errors") or []]
+            strategy_context = self._strategy_context_for_playbook(playbook, strategy_readiness or [])
             hard_rule_reasons = [
                 str(item)
                 for item in playbook.get("do_not_trade_reasons", [])
@@ -1226,6 +1262,7 @@ class PaperTradingService:
                 "setup_type": playbook.get("setup_type"),
                 "strategy_id": (playbook.get("strategy") or {}).get("id"),
                 "strategy_label": (playbook.get("strategy") or {}).get("label"),
+                "strategy_context": strategy_context,
                 "score": score,
                 "auto_score_gap": round(max(0.0, min_score - score), 1),
                 "learning_score_gap": round(max(0.0, exploration_min_score - score), 1),

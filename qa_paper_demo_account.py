@@ -200,6 +200,12 @@ def test_demo_account_sizing() -> None:
     assert ticket["market_data"]["freshness"] == "fresh"
     assert ticket["market_data"]["liquidity_status"] == "strong"
     assert "market_data_timestamp_missing" not in ticket["validation"]["errors"]
+    selected = dashboard["auto_selection"]["selected"]
+    assert selected
+    selected_aapl = next(item for item in selected if item["ticker"] == "AAPL")
+    assert selected_aapl["strategy_context"]["label"] == "Momentum Follow-Through"
+    assert selected_aapl["strategy_context"]["real_world_ready"] is False
+    assert selected_aapl["strategy_context"]["readiness_gaps"]
 
     aapl_call = next(item for item in dashboard["playbooks"] if item["id"] == "option-AAPL-call")
     assert aapl_call["asset_class"] == "option"

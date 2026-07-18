@@ -325,6 +325,7 @@ class EmailAlertService:
                     "confidence_score": trade.get("confidence_score"),
                     "trigger": selected_item.get("trigger"),
                     "invalidation": selected_item.get("invalidation"),
+                    "strategy_context": selected_item.get("strategy_context") or {},
                     "suggested_max_loss_value": selected_item.get("suggested_max_loss_value"),
                     "account_equity": (demo_account or {}).get("equity"),
                     "account_cash_available": (demo_account or {}).get("cash_available_value"),
@@ -3371,14 +3372,22 @@ class EmailAlertService:
             "ahead": "im Plus",
             "behind": "im Minus",
             "close_review": "Schließung prüfen",
+            "collect_first_trade": "erste Paper-Trades sammeln",
+            "continue_learning": "weiter lernen",
             "exit": "Exit",
             "flat": "neutral",
             "hold": "halten",
             "hold_with_plan": "mit Plan halten",
+            "learning": "lernen",
+            "manual_review": "manuelle Prüfung",
+            "manual_review_ready": "manuelle Prüfung bereit",
             "monitor": "überwachen",
+            "monitor_open_trade": "offenen Trade beobachten",
             "near_stop": "nahe am Stop",
             "near_target": "nahe am Ziel",
+            "not_started": "noch nicht gestartet",
             "pending_data": "wartet auf Daten",
+            "pause_and_review": "pausieren und prüfen",
             "protect": "schützen",
             "protect_profit": "Gewinn schützen",
             "protect_profit_review": "Gewinnschutz prüfen",
@@ -3452,12 +3461,14 @@ class EmailAlertService:
         )
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
+        strategy_line = self._paper_strategy_context_line(event.get("strategy_context"))
         opened_at = self._paper_trade_time(event.get("opened_at"))
         return "\n".join(
             [
                 f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
+                *([strategy_line] if strategy_line else []),
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",
                 *([execution_line] if execution_line else []),
                 f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
@@ -3474,6 +3485,29 @@ class EmailAlertService:
                 "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",
             ]
         )
+
+    def _paper_strategy_context_line(self, context: Any) -> str:
+        if not isinstance(context, dict) or not context:
+            return ""
+        label = self._tg_esc(str(context.get("label") or context.get("id") or "Strategie"))
+        status = self._tg_esc(self._paper_label(context.get("status"), "lernen"))
+        recommendation = self._tg_esc(self._paper_label(context.get("recommendation"), "weiter lernen"))
+        ready = "bereit zur manuellen Prüfung" if context.get("real_world_ready") else "nur Paper-Lernen"
+        sample = f"{self._tg_esc(str(context.get('sample_size') or 0))}/{self._tg_esc(str(context.get('minimum_usable_sample') or 30))}"
+        profit_factor = context.get("profit_factor")
+        pf_text = "offen" if profit_factor is None else self._tg_esc(f"{float(profit_factor):.2f}")
+        expectancy = self._tg_signed_money(context.get("expectancy_value"))
+        hit_rate = self._tg_pct(context.get("hit_rate")).lstrip("+")
+        gaps = [self._tg_esc(str(item)) for item in (context.get("readiness_gaps") or [])[:2]]
+        next_step = self._tg_esc(str(context.get("next_step") or "Paper-Beweise sammeln."))[:260]
+        line = (
+            f"<b>Strategie:</b> {label} | {status} / {recommendation} | {ready}"
+            f"\n<b>Strategie-Beweise:</b> {sample} Trades | Treffer {hit_rate} | PF {pf_text} | Erwartung {expectancy}/Trade"
+            f"\n<b>Nächster Strategie-Check:</b> {next_step}"
+        )
+        if gaps:
+            line += f"\n<b>Blocker:</b> {' / '.join(gaps)}"
+        return line
 
     def _render_telegram_paper_trade_closed_alert(self, event: Dict[str, Any]) -> str:
         ticket = event.get("trade_ticket") if isinstance(event.get("trade_ticket"), dict) else {}

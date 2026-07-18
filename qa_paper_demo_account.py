@@ -235,6 +235,11 @@ def test_demo_account_sizing() -> None:
     assert "Invalidierung:" in created["notes"]
     assert created["trade_ticket"]["schema_version"] == "1.0"
     assert created["trade_ticket"]["real_money_ready"] is False
+    assert created["playbook_id"] == "equity-AAPL-long"
+    assert created["source_playbook"]["strategy_context"]["label"] == "Momentum Follow-Through"
+    assert created["source_playbook"]["strategy_context"]["real_world_ready"] is False
+    assert created["source_playbook"]["trigger"]
+    assert created["source_playbook"]["invalidation"]
     entry_execution = created["trade_ticket"]["execution_model"]["entry"]
     assert entry_execution["reference_price"] == 100.0
     assert entry_execution["fill_price"] == 100.08

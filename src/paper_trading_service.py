@@ -390,7 +390,29 @@ class PaperTradingService:
             }
         )
         self._schedule_trade_outcomes(created)
-        return self._enrich_trade(created)
+        enriched = self._enrich_trade(created)
+        enriched["playbook_id"] = playbook_id
+        enriched["source_playbook"] = {
+            "id": playbook.get("id"),
+            "ticker": playbook.get("ticker"),
+            "asset_class": playbook.get("asset_class"),
+            "direction": direction,
+            "setup_type": playbook.get("setup_type"),
+            "strategy_id": (playbook.get("strategy") or {}).get("id"),
+            "strategy_label": (playbook.get("strategy") or {}).get("label"),
+            "strategy_context": self._strategy_context_for_playbook(
+                playbook,
+                StrategyLibrary.build_readiness(
+                    trades,
+                    self.portfolio_manager.list_paper_trade_outcomes(limit=800),
+                ),
+            ),
+            "trigger": (playbook.get("decision_framework") or {}).get("entry_trigger"),
+            "invalidation": (playbook.get("decision_framework") or {}).get("invalidation"),
+            "suggested_max_loss_value": note_playbook.get("suggested_max_loss_value"),
+            "trade_ticket": note_playbook.get("trade_ticket") or {},
+        }
+        return enriched
 
     def evaluate_due_outcomes(self, limit: int = 80) -> Dict[str, Any]:
         due_items = self.portfolio_manager.list_due_paper_trade_outcomes(limit=limit)

@@ -5296,6 +5296,14 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
         trade = get_paper_trading_service().create_trade_from_playbook(req.model_dump(), scoreboard, settings)
         _cache_forget("search:suggestions")
+        try:
+            trade["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
+                [trade],
+                [trade.get("source_playbook") or {}],
+                get_paper_trading_service().build_demo_account_snapshot(),
+            )
+        except Exception as alert_error:
+            trade["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
         return convert_numpy_types(trade)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

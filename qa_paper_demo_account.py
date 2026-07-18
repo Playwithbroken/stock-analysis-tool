@@ -373,6 +373,9 @@ def test_strategy_readiness_requires_positive_money_expectancy() -> None:
     assert momentum["performance"]["profit_factor"] == 0.9
     assert momentum["real_world_ready"] is False
     assert momentum["recommendation"] == "continue_learning"
+    assert any("Erwartung pro Trade" in gap for gap in momentum["readiness_gaps"])
+    assert any("Profit Factor" in gap for gap in momentum["readiness_gaps"])
+    assert "Erwartung pro Trade" in momentum["next_step"]
 
 
 def test_short_trade_money_flow_and_demo_equity() -> None:

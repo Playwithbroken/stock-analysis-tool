@@ -228,30 +228,46 @@ class StrategyLibrary:
             hit_rate = round((len(hits) / max(1, len(decisive))) * 100, 1) if decisive else 0
             performance = build_trade_performance(closed)
             profit_factor = performance.get("profit_factor")
-            profitable_evidence = performance["expectancy_value"] > 0 and (
-                profit_factor is None or profit_factor >= 1.2
-            )
-            ready = (
-                len(decisive) >= strategy.min_paper_trades
-                and len(closed) >= strategy.min_paper_trades
-                and hit_rate >= strategy.min_hit_rate
-                and avg_pnl >= strategy.max_avg_loss_pct
-                and profitable_evidence
-            )
+            readiness_gaps: List[str] = []
+            if len(decisive) < strategy.min_paper_trades:
+                readiness_gaps.append(
+                    f"{strategy.min_paper_trades - len(decisive)} weitere klare Paper-Prüfungen nötig."
+                )
+            if len(closed) < strategy.min_paper_trades:
+                readiness_gaps.append(
+                    f"{strategy.min_paper_trades - len(closed)} weitere geschlossene Paper-Trades nötig."
+                )
+            if hit_rate < strategy.min_hit_rate:
+                readiness_gaps.append(
+                    f"Trefferquote braucht {strategy.min_hit_rate:.0f}%+, aktuell {hit_rate:.1f}%."
+                )
+            if avg_pnl < strategy.max_avg_loss_pct:
+                readiness_gaps.append(
+                    f"Durchschnittlicher Trade ist zu schwach: {avg_pnl:.2f}%."
+                )
+            if performance["expectancy_value"] <= 0:
+                readiness_gaps.append(
+                    f"Erwartung pro Trade ist nicht positiv: {performance['expectancy_value']:.2f}."
+                )
+            if profit_factor is not None and profit_factor < 1.2:
+                readiness_gaps.append(
+                    f"Profit Factor braucht 1.20+, aktuell {profit_factor:.2f}."
+                )
+            ready = not readiness_gaps
             if ready:
                 status = "manual_review_ready"
-                next_step = "Eligible for manual real-world review, not automatic execution."
+                next_step = "Manuelle Echtgeld-Prüfung möglich; keine automatische Ausführung."
                 recommendation = "manual_review"
             elif decisive:
                 status = "learning"
-                next_step = f"Need {max(0, strategy.min_paper_trades - len(decisive))} more decisive checks or better hit rate."
+                next_step = readiness_gaps[0] if readiness_gaps else "Weitere Paper-Beweise sammeln."
                 recommendation = "continue_learning"
                 if len(misses) >= 3 and hit_rate < 35:
                     recommendation = "pause_and_review"
-                    next_step = "Pause this strategy until miss reasons are reviewed and gates are tightened."
+                    next_step = "Strategie pausieren, Miss-Gründe prüfen und Gates verschärfen."
             elif open_rows:
                 status = "active_learning"
-                next_step = "Open paper trade is collecting live evidence; wait for stop, target or outcome check."
+                next_step = "Offener Paper-Trade sammelt Live-Beweise; Stop, Ziel oder Outcome-Check abwarten."
                 recommendation = "monitor_open_trade"
             else:
                 status = "not_started"
@@ -269,6 +285,7 @@ class StrategyLibrary:
                     "avg_closed_pnl_pct": avg_pnl,
                     "avg_open_pnl_pct": open_avg_pnl,
                     "performance": performance,
+                    "readiness_gaps": readiness_gaps[:5],
                     "status": status,
                     "real_world_ready": ready,
                     "recommendation": recommendation,

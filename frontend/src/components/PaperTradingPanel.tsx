@@ -1042,6 +1042,34 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div>Ø offen</div>
                   </div>
                 </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-slate-500">
+                  <div>
+                    <div className={`font-black ${(item.performance?.profit_factor ?? 1.2) >= 1.2 ? "text-emerald-700" : "text-red-700"}`}>
+                      {item.performance?.profit_factor == null ? "offen" : Number(item.performance.profit_factor).toFixed(2)}
+                    </div>
+                    <div>Profit Factor</div>
+                  </div>
+                  <div>
+                    <div className={`font-black ${Number(item.performance?.expectancy_value || 0) > 0 ? "text-emerald-700" : Number(item.performance?.expectancy_value || 0) < 0 ? "text-red-700" : "text-slate-900"}`}>
+                      {money(item.performance?.expectancy_value, currency)}
+                    </div>
+                    <div>Erwartung / Trade</div>
+                  </div>
+                </div>
+                <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 text-slate-600">
+                  Beweislage: <span className="font-bold text-slate-900">{item.performance?.sample_size || 0}/{item.performance?.minimum_usable_sample || 30}</span>{" "}
+                  · {germanText(item.performance?.evidence_label, "zu wenig Daten")}
+                </div>
+                {!!item.readiness_gaps?.length && (
+                  <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-50 px-3 py-2 text-amber-800">
+                    <div className="font-extrabold uppercase tracking-[0.12em]">Noch nicht reif</div>
+                    <div className="mt-1 space-y-1">
+                      {item.readiness_gaps.slice(0, 3).map((gap: string) => (
+                        <div key={gap}>{gap}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
                   {item.next_step}
                 </div>

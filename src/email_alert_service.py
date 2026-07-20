@@ -3691,15 +3691,18 @@ class EmailAlertService:
     def _render_telegram_paper_account_status_alert(self, event: Dict[str, Any]) -> str:
         status = self._tg_esc(str(event.get("day_status") or "monitor").upper())
         action = self._tg_esc(str(event.get("day_action") or "Aktuellen Paper-Plan halten."))[:520]
-        capital_status = self._tg_esc(self._paper_label(event.get("capital_status"), "neutral"))
-        starting = self._tg_money(event.get("starting_capital"))
-        equity = self._tg_money(event.get("equity"))
-        pnl_value = self._tg_signed_money(event.get("net_pnl_value"))
-        pnl_pct = self._tg_pct(event.get("net_pnl_pct"))
-        invested = self._tg_money(event.get("open_exposure_value"))
-        cash = self._tg_money(event.get("cash_available_value"))
-        open_count = self._tg_esc(str(event.get("open_trade_count") if event.get("open_trade_count") is not None else "0"))
-        closed_count = self._tg_esc(str(event.get("closed_trade_count") if event.get("closed_trade_count") is not None else "0"))
+        capital_flow = event.get("capital_flow") if isinstance(event.get("capital_flow"), dict) else {}
+        capital_status = self._tg_esc(self._paper_label(capital_flow.get("capital_status", event.get("capital_status")), "neutral"))
+        starting = self._tg_money(capital_flow.get("starting_capital_value", event.get("starting_capital")))
+        equity = self._tg_money(capital_flow.get("equity_value", event.get("equity")))
+        pnl_value = self._tg_signed_money(capital_flow.get("net_pnl_value", event.get("net_pnl_value")))
+        pnl_pct = self._tg_pct(capital_flow.get("net_pnl_pct", event.get("net_pnl_pct")))
+        realized = self._tg_signed_money(capital_flow.get("realized_pnl_value"))
+        unrealized = self._tg_signed_money(capital_flow.get("unrealized_pnl_value"))
+        invested = self._tg_money(capital_flow.get("open_exposure_value", event.get("open_exposure_value")))
+        cash = self._tg_money(capital_flow.get("cash_available_value", event.get("cash_available_value")))
+        open_count = self._tg_esc(str(capital_flow.get("open_trade_count", event.get("open_trade_count") if event.get("open_trade_count") is not None else "0")))
+        closed_count = self._tg_esc(str(capital_flow.get("closed_trade_count", event.get("closed_trade_count") if event.get("closed_trade_count") is not None else "0")))
         counts = event.get("management_counts") if isinstance(event.get("management_counts"), dict) else {}
         count_text = ", ".join(f"{self._tg_esc(str(key))}: {self._tg_esc(str(value))}" for key, value in sorted(counts.items())) or "keine"
         circuit = event.get("risk_circuit") if isinstance(event.get("risk_circuit"), dict) else {}
@@ -3713,6 +3716,7 @@ class EmailAlertService:
             f"<b>Aktion heute:</b> {action}",
             f"<b>Kapital:</b> Start {starting} | Equity {equity} | {capital_status}",
             f"<b>Netto-Ergebnis:</b> {pnl_value} ({pnl_pct})",
+            f"<b>Geldfluss:</b> realisiert {realized} | offen {unrealized}",
             f"<b>Geld:</b> investiert {invested} | freies Cash {cash}",
             f"<b>Trades:</b> offen {open_count} | geschlossen {closed_count} | Stufen {count_text}",
             f"<b>Risk Circuit:</b> {circuit_status} | Drawdown {self._tg_pct(circuit.get('current_drawdown_pct')).lstrip('+')} / Limit {self._tg_pct(circuit.get('drawdown_limit_pct')).lstrip('+')}",

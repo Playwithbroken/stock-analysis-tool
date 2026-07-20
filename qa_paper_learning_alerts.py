@@ -299,6 +299,19 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "cash_available_value": 459250.5,
             "open_trade_count": 2,
             "closed_trade_count": 4,
+            "capital_flow": {
+                "starting_capital_value": 500000,
+                "equity_value": 501250.5,
+                "cash_available_value": 459250.5,
+                "open_exposure_value": 42000,
+                "realized_pnl_value": 900.25,
+                "unrealized_pnl_value": 350.25,
+                "net_pnl_value": 1250.5,
+                "net_pnl_pct": 0.25,
+                "capital_status": "ahead",
+                "open_trade_count": 2,
+                "closed_trade_count": 4,
+            },
             "management_counts": {"hold": 2},
             "performance": {
                 "sample_size": 9,
@@ -331,6 +344,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     )
     assert "Equity 501.250,50 EUR" in account
     assert "Netto-Ergebnis:</b> +1.250,50 EUR (+0.25%)" in account
+    assert "Geldfluss:</b> realisiert +900,25 EUR | offen +350,25 EUR" in account
     assert "investiert 42.000,00 EUR" in account
     assert "P/L +650,25 EUR" in account
     assert "Risk Circuit:</b> PAUSED" in account

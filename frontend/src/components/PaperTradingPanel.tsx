@@ -137,6 +137,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const openTrades = data?.open_trades || [];
   const closedTrades = data?.closed_trades || [];
   const setupPerformance = data?.setup_performance || [];
+  const entrySourcePerformance = data?.entry_source_performance || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
@@ -1276,6 +1277,59 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           <span>Gewinn {money(performance.avg_win_value, currency)} / Verlust {money(performance.avg_loss_value, currency)} im Durchschnitt</span>
           <span>{performance.evidence_label || "zu wenig Daten"}</span>
         </div>
+
+        {!!entrySourcePerformance.length && (
+          <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Entry-Quelle lernen</div>
+                <div className="mt-1 text-slate-500">Autopilot und manuelle Playbook-Entries getrennt bewerten.</div>
+              </div>
+              <div className="text-right font-semibold text-slate-500">
+                {entrySourcePerformance.reduce((sum: number, item: any) => sum + Number(item.trades || 0), 0)} geschlossene Trades
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {entrySourcePerformance.slice(0, 4).map((item: any) => {
+                const sourcePerformance = item.performance || {};
+                const sourceExpectancy = Number(sourcePerformance.expectancy_value || 0);
+                const sourceProfitFactor = toFiniteNumber(sourcePerformance.profit_factor);
+                return (
+                  <div key={item.entry_source_label} className="rounded-[1.15rem] border border-black/8 bg-white px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="font-black text-slate-900">{item.entry_source_label}</div>
+                        <div className="mt-1 text-slate-500">{item.trades || 0} geschlossene Paper-Trades</div>
+                      </div>
+                      <div className={`font-black ${sourceExpectancy > 0 ? "text-emerald-700" : sourceExpectancy < 0 ? "text-red-700" : "text-slate-900"}`}>
+                        {money(sourcePerformance.expectancy_value, currency)}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-slate-500">
+                      <div>
+                        <div className="font-black text-slate-900">{formatPct(sourcePerformance.win_rate, 1, "0.0%").replace("+", "")}</div>
+                        <div>Treffer</div>
+                      </div>
+                      <div>
+                        <div className={`font-black ${sourceProfitFactor != null && sourceProfitFactor >= 1.2 ? "text-emerald-700" : sourceProfitFactor != null && sourceProfitFactor < 1 ? "text-red-700" : "text-slate-900"}`}>
+                          {sourceProfitFactor == null ? "offen" : sourceProfitFactor.toFixed(2)}
+                        </div>
+                        <div>PF</div>
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900">{sourcePerformance.sample_size || 0}/{sourcePerformance.minimum_usable_sample || 30}</div>
+                        <div>Beweise</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-slate-600">
+                      {item.summary}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
           <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Nicht-handeln-Regeln</div>

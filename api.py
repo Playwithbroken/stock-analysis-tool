@@ -5297,6 +5297,7 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         trade = get_paper_trading_service().create_trade_from_playbook(req.model_dump(), scoreboard, settings)
         _cache_forget("search:suggestions")
         try:
+            trade["alert_source_label"] = "Paper-Playbook manuell"
             trade["telegram_alerts"] = get_email_alert_service().send_paper_trade_opened_alerts(
                 [trade],
                 [trade.get("source_playbook") or {}],

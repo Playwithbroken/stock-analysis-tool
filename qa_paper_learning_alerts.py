@@ -125,6 +125,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
                 },
                 "validation": {"warnings": ["manual_market_check"]},
             },
+            "source_label": "Paper-Playbook manuell",
         }
     )
     assert "investiert 12.345,67 EUR" in opened
@@ -138,6 +139,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Ticket:</b> paper_ready" in opened
     assert "Horizont:</b> days-weeks" in opened
     assert "official filing" in opened
+    assert "Paper-Playbook manuell" in opened
     assert "fresh (1.5h)" in opened
     assert "Liquidität strong" in opened
     assert "5T-Notional 125.0 Mio." in opened

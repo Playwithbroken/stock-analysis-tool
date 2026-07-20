@@ -291,6 +291,7 @@ class EmailAlertService:
         by_id = {str(item.get("id") or ""): item for item in selected or []}
         events: List[Dict[str, Any]] = []
         for trade in opened[:5]:
+            source_label = str(trade.get("alert_source_label") or "Paper-Autopilot")
             playbook_id = str(trade.get("playbook_id") or "")
             selected_item = by_id.get(playbook_id) or next(
                 (
@@ -335,7 +336,7 @@ class EmailAlertService:
                     "account_performance": (demo_account or {}).get("performance") or {},
                     "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
                     "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
-                    "source_label": "Paper-Autopilot",
+                    "source_label": source_label,
                     "source_url": "",
                 }
             )
@@ -3428,6 +3429,7 @@ class EmailAlertService:
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
         ticket_status = self._tg_esc(str(ticket.get("status") or "paper_open"))
         horizon = self._tg_esc(str(ticket.get("horizon") or "nicht klassifiziert"))
+        source_label = self._tg_esc(str(event.get("source_label") or "Paper-Autopilot"))
         source = self._tg_esc(str(ticket.get("source_label") or "nicht dokumentiert"))
         data_as_of = self._tg_esc(str(ticket.get("data_as_of") or "Zeitstempel fehlt"))
         market_data = ticket.get("market_data") if isinstance(ticket.get("market_data"), dict) else {}
@@ -3467,6 +3469,7 @@ class EmailAlertService:
             [
                 f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
+                f"<b>Ausloeser:</b> {source_label}",
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 *([strategy_line] if strategy_line else []),
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",

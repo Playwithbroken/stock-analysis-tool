@@ -222,6 +222,15 @@ def test_paper_trade_telegram_money_formatting() -> None:
     )
     assert "seit Start -2.500,00 EUR (-0.50%)" in behind
 
+    assert service._paper_trade_open_subject([{"source_label": "Paper-Autopilot"}]) == "Paper Autopilot: Demo-Trade geöffnet"
+    assert service._paper_trade_open_subject([{"source_label": "Paper-Playbook manuell"}]) == "Paper Playbook: Demo-Trade geöffnet"
+    assert (
+        service._paper_trade_open_subject(
+            [{"source_label": "Paper-Autopilot"}, {"source_label": "Paper-Playbook manuell"}]
+        )
+        == "Paper Trading: Demo-Trade geöffnet"
+    )
+
     previous_env = os.environ.get("APP_ENV")
     os.environ["APP_ENV"] = "production"
     try:

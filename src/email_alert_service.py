@@ -340,9 +340,19 @@ class EmailAlertService:
                     "source_url": "",
                 }
             )
-        self._send_notifications(config, events, subject="Paper Autopilot: Demo-Trade geöffnet")
+        self._send_notifications(config, events, subject=self._paper_trade_open_subject(events))
         self.portfolio_manager.mark_signal_events_sent(events)
         return {"status": "ok", "sent": len(events), "message": "Paper-Trade-Telegram-Alerts gesendet."}
+
+    def _paper_trade_open_subject(self, events: List[Dict[str, Any]]) -> str:
+        labels = {str(event.get("source_label") or "") for event in events}
+        if labels == {"Paper-Autopilot"}:
+            source = "Paper Autopilot"
+        elif labels == {"Paper-Playbook manuell"}:
+            source = "Paper Playbook"
+        else:
+            source = "Paper Trading"
+        return f"{source}: Demo-Trade geöffnet"
 
     def send_paper_trade_management_alerts(self, open_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         if os.getenv("PAPER_TRADE_MANAGEMENT_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:

@@ -736,6 +736,32 @@ function macroConfidenceLabel(score?: number, decisionQuality?: string) {
   return "Niedrig · nur beobachten";
 }
 
+function macroSignalStatus(event: GeoEvent | null) {
+  const intelligence = event?.event_intelligence;
+  const confidence = Number(intelligence?.confidence_score || 0);
+  const quality = String(intelligence?.decision_quality || "").toLowerCase();
+  const hasDecisionFrame = Boolean(intelligence?.trigger && intelligence?.invalidation);
+  if (confidence >= 82 && hasDecisionFrame && !quality.includes("low") && !quality.includes("weak")) {
+    return {
+      label: "Setup prüfen",
+      detail: "Noch kein Trade · Preis und Volumen müssen bestätigen",
+      tone: "bg-emerald-500/10 text-emerald-700",
+    };
+  }
+  if (confidence >= 62 && !quality.includes("weak")) {
+    return {
+      label: "Nur beobachten",
+      detail: "Quelle und Marktreaktion weiter bestätigen",
+      tone: "bg-amber-500/10 text-amber-700",
+    };
+  }
+  return {
+    label: "Blockiert",
+    detail: "Quellenlage reicht nicht für eine Entscheidung",
+    tone: "bg-red-500/10 text-red-700",
+  };
+}
+
 function macroHorizonLabel(event: GeoEvent | null) {
   if (!event) return "Zeitraum offen";
   const explicitWindow = String(event.event_intelligence?.execution_window || "").trim();
@@ -1379,7 +1405,13 @@ export default function WorldMarketMap({
   const tradeImpactCards = useMemo(() => {
     if (!activeGeoEvent?.event_intelligence) return [];
     const intelligence = activeGeoEvent.event_intelligence;
+    const signalStatus = macroSignalStatus(activeGeoEvent);
     return [
+      {
+        label: "Signalstatus",
+        value: `${signalStatus.label} · ${signalStatus.detail}`,
+        tone: signalStatus.tone,
+      },
       {
         label: "Handlung",
         value: tradeImpactActionLabel(intelligence.action),
@@ -1406,18 +1438,21 @@ export default function WorldMarketMap({
   const macroDecisionFacts = useMemo(() => {
     if (!activeGeoEvent) return [];
     const intelligence = activeGeoEvent.event_intelligence || {};
+    const signalStatus = macroSignalStatus(activeGeoEvent);
     return [
       {
-        label: "Was",
+        label: "Status",
+        value: `${signalStatus.label} · ${signalStatus.detail}`,
+      },
+      {
+        label: "Ereignis",
         value: activeVariantLabel || activeGeoEvent.markerLabel || activeGeoEvent.event_type || "Makro-Ereignis",
       },
       {
-        label: "Wo",
-        value: activeGeoEvent.geoPlace || activeGeoEvent.geoZone || activeGeoEvent.region || "Global",
-      },
-      {
-        label: "Wirkung",
-        value: intelligence.impact_score ? `${intelligence.impact_score}/100` : activeGeoEvent.impact || "beobachten",
+        label: "Region / Wirkung",
+        value: `${activeGeoEvent.geoPlace || activeGeoEvent.geoZone || activeGeoEvent.region || "Global"} · ${
+          intelligence.impact_score ? `${intelligence.impact_score}/100` : activeGeoEvent.impact || "beobachten"
+        }`,
       },
       {
         label: "Assets",

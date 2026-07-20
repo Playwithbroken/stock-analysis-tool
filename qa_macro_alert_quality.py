@@ -130,6 +130,7 @@ def main() -> int:
         "Marktmechanismus:",
         "Basisszenario (bedingt):",
         "Read-through:",
+        "Edge-Frage:",
         "Kritischer Check:",
         "Als Naechstes pruefen:",
         "Trigger:",
@@ -141,6 +142,9 @@ def main() -> int:
         return 1
     if normalized.get("fact_status") != "bestaetigt" or not normalized.get("horizon"):
         print(f"FAIL normalized alert missing classification: {normalized}")
+        return 1
+    if "Risk-off-These" not in normalized.get("edge_question", ""):
+        print(f"FAIL normalized alert missing useful edge question: {normalized}")
         return 1
     if "Krieg / Konflikt" not in rendered or "beobachten und bestaetigen" not in rendered:
         print(f"FAIL rendered alert still exposes raw event/action labels: {rendered}")

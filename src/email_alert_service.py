@@ -1872,6 +1872,7 @@ class EmailAlertService:
         mechanism = self._macro_alert_mechanism(event_type, affected_assets)
         base_case = self._macro_alert_base_case(event_type, affected_assets)
         next_check = self._macro_alert_next_check(event_type)
+        edge_question = self._macro_alert_edge_question(event_type, affected_assets)
         fact_status = "bestaetigt" if source_quality == "strong" else "plausibel - zweite Quelle ausstehend"
         action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
         identity = self._macro_event_identity(event_type, country or region, title)
@@ -1902,6 +1903,7 @@ class EmailAlertService:
             "market_mechanism": mechanism,
             "base_case": base_case,
             "next_check": next_check,
+            "edge_question": edge_question,
             "source_quality": source_quality,
             "source_url": item.get("source_url") or item.get("url") or item.get("link") or "",
             "source_label": source_status,
@@ -2070,6 +2072,20 @@ class EmailAlertService:
             "IPO": "Filing, Preisspanne, Nachfrage, Free Float, Lock-up und Peer-Reaktion vergleichen.",
             "Disaster": "Schadensumfang, Produktionsstillstand, Transportwege und Versicherungs-Exposure quantifizieren.",
         }.get(event_type, "Primaerquelle, zweite Bestaetigung, Preisreaktion und Volumen pruefen.")
+
+    def _macro_alert_edge_question(self, event_type: str, assets: List[str]) -> str:
+        asset_label = ", ".join(assets[:3]) if assets else "betroffene Maerkte"
+        questions = {
+            "Conflict": f"Bestaetigen Oel, Gold, Defense und Futures dieselbe Risk-off-These fuer {asset_label}?",
+            "Energy": f"Ist das ein echter Angebots-/Inflationsimpuls oder nur ein kurzer Oel-Headline-Spike fuer {asset_label}?",
+            "Central Bank": f"Stimmen Renditen, Dollar und Growth/Value-Reaktion ueberein, oder widerspricht der Markt der ersten Schlagzeile?",
+            "Election": f"Entsteht daraus eine umsetzbare Policy-These fuer {asset_label}, oder nur kurzfristige Wahl-Volatilitaet?",
+            "Policy": f"Ist das Umsatz-/Margen-Exposure fuer {asset_label} konkret genug, um eine These zu rechtfertigen?",
+            "Public Figure": f"Hat die Aussage offiziellen Policy-Folgeeffekt, oder ist es nur lautes Schlagzeilenrisiko fuer {asset_label}?",
+            "IPO": f"Zeigen Nachfrage, Bewertung und Peer-Reaktion echte Kapitalmarktstaerke fuer {asset_label}?",
+            "Disaster": f"Ist der Schaden fuer Produktion, Transport oder Versicherung messbar genug, um {asset_label} zu bewegen?",
+        }
+        return questions.get(event_type, f"Welche Preisreaktion wuerde die These fuer {asset_label} bestaetigen oder widerlegen?")
 
     def _macro_confidence_label(
         self,
@@ -3776,6 +3792,7 @@ class EmailAlertService:
         mechanism = self._tg_esc(str(event.get("market_mechanism") or "Marktreaktion muss bestaetigen."))[:520]
         base_case = self._tg_esc(str(event.get("base_case") or "Neutral bis zur Bestaetigung."))[:520]
         next_check = self._tg_esc(str(event.get("next_check") or "Quelle, Preis und Volumen pruefen."))[:520]
+        edge_question = self._tg_esc(str(event.get("edge_question") or ""))[:520]
         link = str(event.get("source_url") or "").strip()
         lines = [
             f"<b>[{marker}] Macro Alert: {country} / {event_type}</b>",
@@ -3795,6 +3812,8 @@ class EmailAlertService:
         lines.append(f"<b>Basisszenario (bedingt):</b> {base_case}")
         if read_through:
             lines.append(f"<b>Read-through:</b> {read_through}")
+        if edge_question:
+            lines.append(f"<b>Edge-Frage:</b> {edge_question}")
         lines.extend([
             f"<b>Trigger:</b> {trigger}",
             f"<b>Invalidierung:</b> {invalidation}",

@@ -41,6 +41,13 @@ def main() -> int:
             print(f"FAIL {event_type} has incomplete Telegram defaults")
             return 1
 
+    if not svc._macro_signal_status("medium", "trigger", "").startswith("NUR BEOBACHTEN"):
+        print("FAIL medium source quality overstates trade readiness")
+        return 1
+    if not svc._macro_signal_status("weak", "trigger", "invalidation").startswith("BLOCKIERT"):
+        print("FAIL weak source quality is not blocked")
+        return 1
+
     cached_brief = {
         "event_layer": [
             {
@@ -121,6 +128,8 @@ def main() -> int:
         return 1
     rendered = svc._render_telegram_macro_alert(normalized)
     required = [
+        "Signalstatus:",
+        "Meldung:",
         "Sicherheit:",
         "Faktenstatus:",
         "Quellenqualitaet:",
@@ -142,6 +151,15 @@ def main() -> int:
         return 1
     if normalized.get("fact_status") != "bestaetigt" or not normalized.get("horizon"):
         print(f"FAIL normalized alert missing classification: {normalized}")
+        return 1
+    if "kein Trade" not in normalized.get("signal_status", ""):
+        print(f"FAIL normalized alert overstates trade readiness: {normalized}")
+        return 1
+    if rendered.index("Signalstatus:") > rendered.index("Warum wichtig:"):
+        print(f"FAIL signal status is buried below interpretation: {rendered}")
+        return 1
+    if rendered.index("Trigger:") > rendered.index("Marktmechanismus:"):
+        print(f"FAIL trigger is buried below deep context: {rendered}")
         return 1
     if "Risk-off-These" not in normalized.get("edge_question", ""):
         print(f"FAIL normalized alert missing useful edge question: {normalized}")

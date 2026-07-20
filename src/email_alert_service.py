@@ -1882,6 +1882,7 @@ class EmailAlertService:
         read_through = self._macro_alert_read_through(event_type, country or region, affected_assets, title)
         critical_check = self._macro_alert_critical_check(event_type, source_quality)
         confidence_label = self._macro_confidence_label(source_quality, explicit_trigger, explicit_invalidation, impact_score)
+        signal_status = self._macro_signal_status(source_quality, explicit_trigger, explicit_invalidation)
         horizon = self._macro_alert_horizon(event_type)
         mechanism = self._macro_alert_mechanism(event_type, affected_assets)
         base_case = self._macro_alert_base_case(event_type, affected_assets)
@@ -1912,6 +1913,7 @@ class EmailAlertService:
             "invalidation": invalidation,
             "action": action,
             "confidence_label": confidence_label,
+            "signal_status": signal_status,
             "fact_status": fact_status,
             "horizon": horizon,
             "market_mechanism": mechanism,
@@ -2113,6 +2115,18 @@ class EmailAlertService:
         if source_quality in {"strong", "medium"} and (explicit_trigger or explicit_invalidation):
             return "mittel - erst Marktreaktion bestaetigen"
         return "niedrig - nur beobachten"
+
+    def _macro_signal_status(
+        self,
+        source_quality: str,
+        explicit_trigger: str,
+        explicit_invalidation: str,
+    ) -> str:
+        if source_quality == "strong" and explicit_trigger and explicit_invalidation:
+            return "SETUP PRUEFEN - kein Trade ohne Preis- und Volumenbestaetigung"
+        if source_quality in {"strong", "medium"}:
+            return "NUR BEOBACHTEN - Quelle und Marktreaktion weiter bestaetigen"
+        return "BLOCKIERT - Quellenlage reicht nicht fuer eine Entscheidung"
 
     def _macro_event_type_label(self, event_type: str) -> str:
         return {
@@ -3890,6 +3904,9 @@ class EmailAlertService:
         read_through = self._tg_esc(str(event.get("read_through") or ""))[:520]
         critical_check = self._tg_esc(str(event.get("critical_check") or ""))[:520]
         confidence = self._tg_esc(str(event.get("confidence_label") or "mittel - erst Marktreaktion bestaetigen"))
+        signal_status = self._tg_esc(
+            str(event.get("signal_status") or "NUR BEOBACHTEN - noch kein belastbares Trade-Setup")
+        )
         fact_status = self._tg_esc(str(event.get("fact_status") or "Einordnung offen"))
         horizon = self._tg_esc(str(event.get("horizon") or "intraday bis mittelfristig"))
         mechanism = self._tg_esc(str(event.get("market_mechanism") or "Marktreaktion muss bestaetigen."))[:520]
@@ -3899,13 +3916,16 @@ class EmailAlertService:
         link = str(event.get("source_url") or "").strip()
         lines = [
             f"<b>[{marker}] Macro Alert: {country} / {event_type}</b>",
-            f"{title}",
+            f"<b>Signalstatus:</b> {signal_status}",
+            f"<b>Meldung:</b> {title}",
             f"<b>Impact:</b> {impact}/100",
             f"<b>Faktenstatus:</b> {fact_status}",
             f"<b>Quellenqualitaet:</b> {source_quality}",
             f"<b>Sicherheit:</b> {confidence}",
             f"<b>Zeithorizont:</b> {horizon}",
             f"<b>Betroffen:</b> {assets}",
+            f"<b>Trigger:</b> {trigger}",
+            f"<b>Invalidierung:</b> {invalidation}",
         ]
         if why:
             lines.append(f"<b>Warum wichtig:</b> {why}")
@@ -3918,8 +3938,6 @@ class EmailAlertService:
         if edge_question:
             lines.append(f"<b>Edge-Frage:</b> {edge_question}")
         lines.extend([
-            f"<b>Trigger:</b> {trigger}",
-            f"<b>Invalidierung:</b> {invalidation}",
             f"<b>Kritischer Check:</b> {critical_check or 'Nicht handeln, bevor Quelle, Preisreaktion und Volumen zusammenpassen.'}",
             f"<b>Als Naechstes pruefen:</b> {next_check}",
             f"<b>Aktion:</b> {action}",

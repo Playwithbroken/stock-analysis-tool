@@ -41,6 +41,7 @@ class PaperTradingService:
             "closed_trades": closed_trades[:12],
             "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
             "setup_performance": self._build_setup_performance(closed_trades),
+            "entry_source_performance": self._build_entry_source_performance(closed_trades),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
             "outcome_learning": outcome_learning,
@@ -2260,6 +2261,37 @@ class PaperTradingService:
             )
         status_rank = {"promising": 0, "neutral": 1, "building_evidence": 2, "needs_journal": 3, "downgrade": 4}
         rows.sort(key=lambda item: (status_rank.get(item.get("quality_status"), 5), -item.get("win_rate", 0), -item.get("avg_pnl_pct", 0)))
+        return rows
+
+    def _build_entry_source_performance(self, closed_trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        buckets: Dict[str, List[Dict[str, Any]]] = {}
+        for trade in closed_trades:
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            source = str(ticket.get("entry_source_label") or "Paper-Autopilot").strip() or "Paper-Autopilot"
+            buckets.setdefault(source, []).append(trade)
+
+        rows = []
+        for source, trades in buckets.items():
+            performance = build_trade_performance(trades)
+            rows.append(
+                {
+                    "entry_source_label": source,
+                    "trades": len(trades),
+                    "performance": performance,
+                    "summary": (
+                        f"{source}: {performance.get('sample_size', 0)} geschlossene Paper-Trades, "
+                        f"Treffer {performance.get('win_rate', 0)}%, "
+                        f"Erwartung {performance.get('expectancy_value', 0)} pro Trade."
+                    ),
+                }
+            )
+        rows.sort(
+            key=lambda item: (
+                -float((item.get("performance") or {}).get("expectancy_value") or 0),
+                -int(item.get("trades") or 0),
+                str(item.get("entry_source_label") or ""),
+            )
+        )
         return rows
 
     def _build_journal(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

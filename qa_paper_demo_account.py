@@ -347,6 +347,33 @@ def test_performance_metrics_expose_bad_payoff_despite_high_win_rate() -> None:
     assert "stärkere Bestätigung" in setup["next_action"]
 
 
+def test_entry_source_performance_separates_manual_and_autopilot() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    rows = service._build_entry_source_performance(
+        [
+            {
+                "id": "auto-win",
+                "status": "closed",
+                "realized_pnl_pct": 4.0,
+                "realized_pnl_value": 400.0,
+                "trade_ticket": {"entry_source_label": "Paper-Autopilot"},
+            },
+            {
+                "id": "manual-loss",
+                "status": "closed",
+                "realized_pnl_pct": -3.0,
+                "realized_pnl_value": -300.0,
+                "trade_ticket": {"entry_source_label": "Paper-Playbook manuell"},
+            },
+        ]
+    )
+    by_source = {item["entry_source_label"]: item for item in rows}
+    assert by_source["Paper-Autopilot"]["performance"]["expectancy_value"] == 400.0
+    assert by_source["Paper-Playbook manuell"]["performance"]["expectancy_value"] == -300.0
+    assert "Paper-Autopilot: 1 geschlossene Paper-Trades" in by_source["Paper-Autopilot"]["summary"]
+    assert rows[0]["entry_source_label"] == "Paper-Autopilot"
+
+
 def test_strategy_readiness_requires_positive_money_expectancy() -> None:
     setup_type = "insider_follow"
     trades: List[Dict[str, Any]] = []
@@ -1028,6 +1055,7 @@ if __name__ == "__main__":
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
     test_performance_metrics_expose_bad_payoff_despite_high_win_rate()
+    test_entry_source_performance_separates_manual_and_autopilot()
     test_strategy_readiness_requires_positive_money_expectancy()
     test_short_trade_money_flow_and_demo_equity()
     test_put_learning_inverts_underlying_move()

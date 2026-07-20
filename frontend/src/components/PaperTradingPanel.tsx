@@ -125,6 +125,11 @@ const germanText = (value: unknown, fallback = "") => {
   return labels[text] || text;
 };
 
+const entrySourceLabel = (item: any) => {
+  const ticket = item?.trade_ticket && typeof item.trade_ticket === "object" ? item.trade_ticket : {};
+  return String(ticket.entry_source_label || item?.entry_source_label || "Paper-Autopilot");
+};
+
 export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperTradingPanelProps) {
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -660,8 +665,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div className="text-sm font-black text-slate-900">
                           {trade.ticker} / {String(trade.direction || "").toUpperCase()}
                         </div>
-                        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                          {trade.setup_type || "paper setup"}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          <span>{trade.setup_type || "paper setup"}</span>
+                          <span className="rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[9px] tracking-[0.12em]">
+                            {entrySourceLabel(trade)}
+                          </span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -1533,7 +1541,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-black text-slate-900">{trade.ticker} · {trade.direction}</div>
-                        <div className="mt-1 text-xs text-slate-500">{trade.setup_type}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{trade.setup_type}</span>
+                          <span className="rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                            {entrySourceLabel(trade)}
+                          </span>
+                        </div>
                       </div>
                       <div className={`text-sm font-black ${(trade.realized_pnl_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                         {formatPct(trade.realized_pnl_pct, 2, "+0.00%")}
@@ -1633,7 +1646,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-black text-slate-900">{entry.ticker} · {entry.direction} · {germanStatus(entry.status, "offen")}</div>
-                        <div className="mt-1 text-xs text-slate-500">{entry.setup_type}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{entry.setup_type}</span>
+                          <span className="rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                            {entrySourceLabel(entry)}
+                          </span>
+                        </div>
                       </div>
                       <div className={`text-sm font-black ${(entry.pnl_pct || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                         {formatPct(entry.pnl_pct, 2, "+0.00%")}

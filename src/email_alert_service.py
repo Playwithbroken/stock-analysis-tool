@@ -3530,6 +3530,7 @@ class EmailAlertService:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
+        entry_source = self._tg_esc(str(ticket.get("entry_source_label") or "Paper-Autopilot"))
         entry = self._tg_price(event.get("entry_price"))
         exit_price = self._tg_price(event.get("closed_price"))
         invested = self._tg_money(event.get("invested_value"))
@@ -3556,6 +3557,7 @@ class EmailAlertService:
             [
                 f"<b>[PAPER GESCHLOSSEN] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Zeitraum:</b> {' bis '.join(timing_parts[:2])} | gehalten {timing_parts[2]}"] if len(timing_parts) == 3 else []),
+                f"<b>Entry-Quelle:</b> {entry_source}",
                 f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
                 f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
                 *([execution_line] if execution_line else []),

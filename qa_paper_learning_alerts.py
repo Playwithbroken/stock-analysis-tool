@@ -186,6 +186,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "lessons_learned": "Volume confirmation mattered.",
             "risk_reward": 2.4,
             "trade_ticket": {
+                "entry_source_label": "Paper-Playbook manuell",
                 "execution_model": {
                     "exit": {
                         "reference_price": 218.7,
@@ -202,6 +203,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "final 13.412,33 EUR" in closed
     assert "Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
     assert "target_or_profit_taken" in closed
+    assert "Entry-Quelle:</b> Paper-Playbook manuell" in closed
     assert "Referenz 218.70 → Fill 218.50" in closed
     assert "9.1 bps" in closed
     assert "Demo-Konto danach:</b> Equity 502.317,16 EUR" in closed

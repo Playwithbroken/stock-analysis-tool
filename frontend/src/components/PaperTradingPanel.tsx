@@ -157,6 +157,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const topLearningErrors = outcomeLearning.top_error_tags || [];
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
+  const capitalFlow = demoAccount.capital_flow || {};
   const riskCircuit = demoAccount.risk_circuit || {};
   const learningFeedback = demoAccount.learning_feedback || {};
   const currency = demoAccount.currency || "EUR";
@@ -186,9 +187,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const profitFactor = toFiniteNumber(performance.profit_factor);
 
   const accountTone = useMemo(() => {
-    const value = Number(demoAccount.net_pnl_value || 0);
+    const value = Number(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value ?? 0);
     return value > 0 ? "good" : value < 0 ? "bad" : "default";
-  }, [demoAccount.net_pnl_value]);
+  }, [capitalFlow.net_pnl_value, demoAccount.net_pnl_value]);
   const grossExposureUsagePct =
     Number(demoAccount.max_gross_exposure_value || 0) > 0
       ? (Number(demoAccount.open_exposure_value || 0) / Number(demoAccount.max_gross_exposure_value)) * 100
@@ -408,13 +409,17 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 Paper-Konto Geldfluss
               </div>
               <div className="mt-2 text-sm leading-6 text-slate-600">
-                Demo-Konto startet mit {money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)}.
-                Aktuell sind {money(demoAccount.open_exposure_value, currency)} investiert und{" "}
-                {money(demoAccount.cash_available_value, currency)} frei. Ergebnis seit Start:{" "}
-                <span className={`font-black ${Number(demoAccount.net_pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {money(demoAccount.net_pnl_value, currency)} / {formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}
+                Demo-Konto startet mit {money(capitalFlow.starting_capital_value ?? demoAccount.starting_capital ?? DEFAULT_DEMO_CAPITAL, currency)}.
+                Aktuell sind {money(capitalFlow.open_exposure_value ?? demoAccount.open_exposure_value, currency)} investiert und{" "}
+                {money(capitalFlow.cash_available_value ?? demoAccount.cash_available_value, currency)} frei. Ergebnis seit Start:{" "}
+                <span className={`font-black ${Number(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  {money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / {formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}
                 </span>
                 .
+              </div>
+              <div className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                Realisiert: {money(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value, currency)} · Offen:
+                {" "}{money(capitalFlow.unrealized_pnl_value ?? demoAccount.unrealized_pnl_value, currency)}
               </div>
               <div className="mt-3 rounded-[1rem] border border-black/8 bg-slate-50 px-3 py-2 text-sm font-semibold leading-6 text-slate-700">
                 Heute: {demoAccount.day_action || "Auf ein klares Setup mit Trigger warten."}
@@ -422,13 +427,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
             <div className="flex flex-wrap gap-2">
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
-                demoAccount.capital_status === "ahead"
+                (capitalFlow.capital_status || demoAccount.capital_status) === "ahead"
                   ? "bg-emerald-50 text-emerald-700"
-                  : demoAccount.capital_status === "behind"
+                  : (capitalFlow.capital_status || demoAccount.capital_status) === "behind"
                     ? "bg-red-50 text-red-700"
                     : "border border-black/8 bg-white text-slate-500"
               }`}>
-                {germanStatus(demoAccount.capital_status, "neutral")}
+                {germanStatus(capitalFlow.capital_status || demoAccount.capital_status, "neutral")}
               </div>
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
                 demoAccount.day_status === "action_required" || demoAccount.day_status === "risk_halt"
@@ -444,10 +449,10 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <StatTile label="Startkapital" value={money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)} />
-            <StatTile label="Jetzt investiert" value={money(demoAccount.open_exposure_value, currency)} />
-            <StatTile label="Freies Demo-Cash" value={money(demoAccount.cash_available_value, currency)} />
-            <StatTile label="Netto-Ergebnis" value={`${money(demoAccount.net_pnl_value, currency)} / ${formatPct(demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
+            <StatTile label="Startkapital" value={money(capitalFlow.starting_capital_value ?? demoAccount.starting_capital ?? DEFAULT_DEMO_CAPITAL, currency)} />
+            <StatTile label="Jetzt investiert" value={money(capitalFlow.open_exposure_value ?? demoAccount.open_exposure_value, currency)} />
+            <StatTile label="Realisiert" value={money(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value, currency)} tone={(Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) > 0 ? "good" : Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) < 0 ? "bad" : "default") as any} />
+            <StatTile label="Netto-Ergebnis" value={`${money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / ${formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
           </div>
           <div className={`mt-4 rounded-[1.4rem] border p-4 ${
             riskCircuit.active

@@ -166,6 +166,13 @@ def test_demo_account_sizing() -> None:
     demo = dashboard["demo_account"]
     assert demo["starting_capital"] == 500_000.0
     assert demo["equity"] == 500_000.0
+    assert demo["capital_flow"]["starting_capital_value"] == 500_000.0
+    assert demo["capital_flow"]["equity_value"] == 500_000.0
+    assert demo["capital_flow"]["open_exposure_value"] == 0.0
+    assert demo["capital_flow"]["realized_pnl_value"] == 0
+    assert demo["capital_flow"]["unrealized_pnl_value"] == 0
+    assert demo["capital_flow"]["net_pnl_value"] == 0
+    assert demo["capital_flow"]["capital_status"] == "flat"
     assert demo["risk_budget_per_trade_value"] == 1_750.0
     assert demo["risk_budget_per_option_trade_value"] == 1_250.0
     assert demo["max_position_value"] == 50_000.0

@@ -292,6 +292,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
         {
             "ticker": "AAPL",
             "direction": "long",
+            "asset_class": "equity",
+            "setup_type": "breakout",
+            "opened_at": "2026-07-11T12:00:00+00:00",
             "management_status": "near_target",
             "management_action": "protect_profit",
             "decision_grade": "protect",
@@ -299,16 +302,46 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "current_price": 214.4,
             "stop_price": 194.0,
             "target_price": 218.5,
+            "quantity": 61.38,
+            "invested_value": 12345.67,
+            "current_value": 13160.72,
             "unrealized_pnl_pct": 6.6,
+            "unrealized_pnl_value": 815.05,
             "risk_distance_pct": 9.95,
             "target_progress_pct": 76.4,
             "management_summary": "Trade ist nahe am Ziel.",
             "next_check": "Gewinnschutz prüfen.",
         }
     )
-    assert "PnL +6.60%" in management
+    assert "<code>AAPL</code> LONG" in management
+    assert "Position:</b> equity | breakout | Menge 61.38" in management
+    assert "Kapital:</b> Einsatz 12.345,67 EUR | aktueller Wert 13.160,72 EUR" in management
+    assert "Offenes Ergebnis:</b> +815,05 EUR | +6.60%" in management
     assert "Stop +9.95%" in management
     assert "Ziel-Fortschritt +76.40%" in management
+
+    management_loss = service._render_telegram_paper_trade_management_alert(
+        {
+            "ticker": "TSLA",
+            "direction": "short",
+            "asset_class": "equity",
+            "setup_type": "failed_breakout",
+            "management_status": "near_stop",
+            "management_action": "reduce_or_close_review",
+            "decision_grade": "review",
+            "entry_price": 320.0,
+            "current_price": 326.4,
+            "stop_price": 328.0,
+            "target_price": 295.0,
+            "quantity": 10,
+            "invested_value": 3200.0,
+            "current_value": 3136.0,
+            "unrealized_pnl_pct": -2.0,
+            "unrealized_pnl_value": -64.0,
+        }
+    )
+    assert "<code>TSLA</code> SHORT" in management_loss
+    assert "Offenes Ergebnis:</b> -64,00 EUR | -2.00%" in management_loss
 
     account = service._render_telegram_paper_account_status_alert(
         {

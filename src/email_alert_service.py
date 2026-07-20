@@ -382,6 +382,7 @@ class EmailAlertService:
                     "title": f"Paper-Management: {trade.get('ticker')} {status}",
                     "ticker": trade.get("ticker"),
                     "direction": trade.get("direction"),
+                    "asset_class": trade.get("asset_class"),
                     "setup_type": trade.get("setup_type"),
                     "opened_at": trade.get("opened_at"),
                     "closed_at": trade.get("closed_at"),
@@ -389,7 +390,11 @@ class EmailAlertService:
                     "current_price": trade.get("current_price"),
                     "stop_price": trade.get("stop_price"),
                     "target_price": trade.get("target_price"),
+                    "quantity": trade.get("quantity"),
+                    "invested_value": trade.get("invested_value"),
+                    "current_value": trade.get("current_value"),
                     "unrealized_pnl_pct": trade.get("unrealized_pnl_pct"),
+                    "unrealized_pnl_value": trade.get("unrealized_pnl_value"),
                     "risk_distance_pct": management.get("risk_distance_pct"),
                     "target_progress_pct": management.get("target_progress_pct"),
                     "management_status": status,
@@ -3676,6 +3681,8 @@ class EmailAlertService:
     def _render_telegram_paper_trade_management_alert(self, event: Dict[str, Any]) -> str:
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
+        asset_class = self._tg_esc(str(event.get("asset_class") or "asset"))
+        setup = self._tg_esc(str(event.get("setup_type") or "setup"))
         status = self._tg_esc(self._paper_label(event.get("management_status"), "überwachen").upper())
         action = self._tg_esc(self._paper_label(event.get("management_action"), "prüfen"))
         grade = self._tg_esc(self._paper_label(event.get("decision_grade"), "prüfen").upper())
@@ -3686,13 +3693,22 @@ class EmailAlertService:
         stop = self._tg_price(event.get("stop_price"))
         target = self._tg_price(event.get("target_price"))
         pnl = self._tg_pct(event.get("unrealized_pnl_pct"))
+        pnl_value = self._tg_signed_money(event.get("unrealized_pnl_value"))
+        quantity = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
+        invested = self._tg_money(event.get("invested_value"))
+        current_value = self._tg_money(event.get("current_value"))
+        opened_at = self._paper_trade_time(event.get("opened_at"))
         risk_distance = self._tg_pct(event.get("risk_distance_pct"))
         target_progress = self._tg_pct(event.get("target_progress_pct"))
         return "\n".join(
             [
                 f"<b>[PAPER MANAGEN] <code>{ticker}</code> {direction} | {status}</b>",
+                *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Aktion:</b> {action} | <b>Stufe:</b> {grade}",
-                f"<b>Preis:</b> Einstieg {entry} | jetzt {current} | PnL {pnl}",
+                f"<b>Position:</b> {asset_class} | {setup} | Menge {quantity}",
+                f"<b>Preis:</b> Einstieg {entry} | jetzt {current}",
+                f"<b>Kapital:</b> Einsatz {invested} | aktueller Wert {current_value}",
+                f"<b>Offenes Ergebnis:</b> {pnl_value} | {pnl}",
                 f"<b>Plan:</b> Stop {stop} | Ziel {target}",
                 f"<b>Abstand:</b> Stop {risk_distance} | Ziel-Fortschritt {target_progress}",
                 f"<b>Warum:</b> {summary}",

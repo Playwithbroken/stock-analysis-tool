@@ -235,6 +235,7 @@ def test_demo_account_sizing() -> None:
     assert "Invalidierung:" in created["notes"]
     assert created["trade_ticket"]["schema_version"] == "1.0"
     assert created["trade_ticket"]["real_money_ready"] is False
+    assert created["trade_ticket"]["entry_source_label"] == "Paper-Autopilot"
     assert created["playbook_id"] == "equity-AAPL-long"
     assert created["source_playbook"]["strategy_context"]["label"] == "Momentum Follow-Through"
     assert created["source_playbook"]["strategy_context"]["real_world_ready"] is False

@@ -5294,7 +5294,9 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         settings = get_portfolio_manager().get_signal_score_settings()
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
-        trade = get_paper_trading_service().create_trade_from_playbook(req.model_dump(), scoreboard, settings)
+        payload = req.model_dump()
+        payload["alert_source_label"] = "Paper-Playbook manuell"
+        trade = get_paper_trading_service().create_trade_from_playbook(payload, scoreboard, settings)
         _cache_forget("search:suggestions")
         try:
             trade["alert_source_label"] = "Paper-Playbook manuell"

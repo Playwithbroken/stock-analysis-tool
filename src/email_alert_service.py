@@ -291,7 +291,8 @@ class EmailAlertService:
         by_id = {str(item.get("id") or ""): item for item in selected or []}
         events: List[Dict[str, Any]] = []
         for trade in opened[:5]:
-            source_label = str(trade.get("alert_source_label") or "Paper-Autopilot")
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            source_label = str(trade.get("alert_source_label") or ticket.get("entry_source_label") or "Paper-Autopilot")
             playbook_id = str(trade.get("playbook_id") or "")
             selected_item = by_id.get(playbook_id) or next(
                 (

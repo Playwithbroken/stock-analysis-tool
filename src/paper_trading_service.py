@@ -121,6 +121,7 @@ class PaperTradingService:
                             "quantity": 0,
                             "leverage": 1,
                             "learning_mode": mode == "learn" or bool(candidate.get("learning_mode")),
+                            "alert_source_label": "Paper-Autopilot",
                         },
                         scoreboard,
                         settings,
@@ -266,6 +267,8 @@ class PaperTradingService:
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
+        entry_source_label = str(payload.get("alert_source_label") or "Paper-Autopilot")
+        playbook = {**playbook, "entry_source_label": entry_source_label}
         learning_mode = bool(payload.get("learning_mode"))
         hard_rule_reasons = [
             str(item)
@@ -1998,6 +2001,7 @@ class PaperTradingService:
             "confidence_score": playbook.get("score"),
             "evidence_level": framework.get("evidence_level") or "watch",
             "source_label": source_label or None,
+            "entry_source_label": playbook.get("entry_source_label") or "Paper-Autopilot",
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
             "execution_model": execution_model or None,

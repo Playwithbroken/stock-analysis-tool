@@ -14,6 +14,19 @@ async def main() -> int:
         import api
 
         api._cache_forget("search:suggestions")
+
+        class FakeDiscoveryService:
+            future_star_watch = ["RKLB", "LUNR", "HOOD"]
+
+            async def get_market_movers(self, type: str = "gainers", window: str = "1d"):
+                if type == "losers":
+                    return [{"ticker": "PFE", "name": "Pfizer Inc."}]
+                return [
+                    {"ticker": "LUNR", "name": "Intuitive Machines"},
+                    {"ticker": "RGTI", "name": "Rigetti Computing"},
+                ]
+
+        api.get_discovery_service = lambda: FakeDiscoveryService()
         manager = api.get_portfolio_manager()
 
         manager.create_paper_trade(
@@ -55,12 +68,22 @@ async def main() -> int:
 
         suggestions = await api._build_dynamic_search_suggestions()
         cached_suggestions = await api._build_dynamic_search_suggestions()
+        interesting = suggestions.get("Jetzt interessant") or []
+        movers = suggestions.get("Market Movers") or []
         paper = suggestions.get("Paper Trading") or []
         learning = suggestions.get("Lernsignale") or []
 
+        print(f"Jetzt interessant: {interesting}")
+        print(f"Market Movers: {movers}")
         print(f"Paper Trading: {paper}")
         print(f"Lernsignale: {learning}")
 
+        if not any("(LUNR)" in item for item in [*interesting, *movers]):
+            print("FAIL: live mover LUNR missing from dynamic suggestions")
+            return 1
+        if not any("(PFE)" in item for item in movers):
+            print("FAIL: live loser PFE missing from market mover suggestions")
+            return 1
         if not any("(HOOD)" in item for item in paper):
             print("FAIL: HOOD paper trade missing from dynamic suggestions")
             return 1

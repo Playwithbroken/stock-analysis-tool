@@ -1009,6 +1009,22 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
         market_movers = {}
 
     suggestions: Dict[str, List[str]] = {}
+    live_movers: Dict[str, List[Dict[str, Any]]] = {"gainers": [], "losers": []}
+
+    try:
+        discovery = get_discovery_service()
+        gainers_task = asyncio.create_task(discovery.get_market_movers("gainers", "1d"))
+        losers_task = asyncio.create_task(discovery.get_market_movers("losers", "1d"))
+        gainers_result, losers_result = await asyncio.wait_for(
+            asyncio.gather(gainers_task, losers_task, return_exceptions=True),
+            timeout=1.15,
+        )
+        if isinstance(gainers_result, list):
+            live_movers["gainers"] = [item for item in gainers_result if isinstance(item, dict)]
+        if isinstance(losers_result, list):
+            live_movers["losers"] = [item for item in losers_result if isinstance(item, dict)]
+    except Exception:
+        live_movers = {"gainers": [], "losers": []}
 
     def add_category(name: str, rows: List[Any], limit: int = 6) -> None:
         bucket: List[str] = []
@@ -1029,6 +1045,7 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
                 *(brief.get("trade_setups") or [])[:3],
                 *(brief.get("watchlist_impact") or [])[:3],
                 *(brief.get("product_catalysts") or [])[:3],
+                *live_movers["gainers"][:3],
                 *mover_gainers,
             ],
         )
@@ -1042,7 +1059,15 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
         )
 
     if isinstance(market_movers, dict):
-        add_category("Market Movers", [*(market_movers.get("gainers") or [])[:4], *(market_movers.get("losers") or [])[:4]])
+        add_category(
+            "Market Movers",
+            [
+                *live_movers["gainers"][:4],
+                *live_movers["losers"][:4],
+                *(market_movers.get("gainers") or [])[:4],
+                *(market_movers.get("losers") or [])[:4],
+            ],
+        )
 
     try:
         # Keep search suggestions fast: the full Future-Star scanner performs many

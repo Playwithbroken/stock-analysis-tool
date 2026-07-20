@@ -509,9 +509,11 @@ class EmailAlertService:
                     "title": f"Paper-Trade geschlossen: {trade.get('ticker')} {trade.get('direction')}",
                     "ticker": trade.get("ticker"),
                     "direction": trade.get("direction"),
+                    "asset_class": trade.get("asset_class"),
                     "setup_type": trade.get("setup_type"),
                     "entry_price": trade.get("entry_price"),
                     "closed_price": trade.get("closed_price"),
+                    "quantity": trade.get("quantity"),
                     "invested_value": trade.get("invested_value"),
                     "final_value": trade.get("final_value"),
                     "result_value_delta": trade.get("result_value_delta"),
@@ -3410,6 +3412,7 @@ class EmailAlertService:
             "hold": "halten",
             "hold_with_plan": "mit Plan halten",
             "learning": "lernen",
+            "loser": "Verlierer",
             "manual_review": "manuelle Prüfung",
             "manual_review_ready": "manuelle Prüfung bereit",
             "monitor": "überwachen",
@@ -3418,6 +3421,7 @@ class EmailAlertService:
             "near_target": "nahe am Ziel",
             "not_started": "noch nicht gestartet",
             "pending_data": "wartet auf Daten",
+            "paper_exit": "Paper-Exit",
             "pause_and_review": "pausieren und prüfen",
             "protect": "schützen",
             "protect_profit": "Gewinn schützen",
@@ -3428,6 +3432,7 @@ class EmailAlertService:
             "stop_hit": "Stop getroffen",
             "take_profit_review": "Gewinnmitnahme prüfen",
             "target_hit": "Ziel getroffen",
+            "target_or_profit_taken": "Ziel/Gewinnmitnahme",
             "thesis_check": "These prüfen",
             "wait": "warten",
             "weak_follow_through": "schwache Anschlussbewegung",
@@ -3548,16 +3553,23 @@ class EmailAlertService:
         exit_execution = execution_model.get("exit") if isinstance(execution_model.get("exit"), dict) else {}
         ticker = self._tg_esc(str(event.get("ticker") or "n/a"))
         direction = self._tg_esc(str(event.get("direction") or "n/a").upper())
+        asset_class = self._tg_esc(str(event.get("asset_class") or "asset"))
         setup = self._tg_esc(str(event.get("setup_type") or "setup"))
         entry_source = self._tg_esc(str(ticket.get("entry_source_label") or "Paper-Autopilot"))
         entry = self._tg_price(event.get("entry_price"))
         exit_price = self._tg_price(event.get("closed_price"))
         invested = self._tg_money(event.get("invested_value"))
         final_value = self._tg_money(event.get("final_value"))
+        quantity = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
         result_label = self._tg_esc(self._paper_label(event.get("result_label"), "neutral"))
         pnl_pct = self._tg_pct(event.get("realized_pnl_pct"))
         pnl_value = self._tg_signed_money(event.get("realized_pnl_value"))
-        exit_reason = self._tg_esc(str(event.get("exit_reason") or "paper_exit"))
+        try:
+            realized_value = float(event.get("realized_pnl_value") or 0)
+        except (TypeError, ValueError):
+            realized_value = 0
+        outcome = "GEWINN" if realized_value > 0 else "VERLUST" if realized_value < 0 else "NEUTRAL"
+        exit_reason = self._tg_esc(self._paper_label(event.get("exit_reason"), "Paper-Exit"))
         lesson = self._tg_esc(str(event.get("lessons_learned") or "Journal prüfen, bevor dieses Setup wieder genutzt wird."))[:620]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
         account_after = self._paper_account_after_line(event)
@@ -3574,14 +3586,15 @@ class EmailAlertService:
         )
         return "\n".join(
             [
-                f"<b>[PAPER GESCHLOSSEN] <code>{ticker}</code> {direction}</b>",
+                f"<b>[PAPER GESCHLOSSEN - {outcome}] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Zeitraum:</b> {' bis '.join(timing_parts[:2])} | gehalten {timing_parts[2]}"] if len(timing_parts) == 3 else []),
                 f"<b>Entry-Quelle:</b> {entry_source}",
-                f"<b>Setup:</b> {setup} | <b>Exit:</b> {exit_reason}",
+                f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Menge:</b> {quantity}",
+                f"<b>Exit-Grund:</b> {exit_reason}",
                 f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
                 *([execution_line] if execution_line else []),
-                f"<b>Demo-Geld:</b> investiert {invested} | final {final_value}",
-                f"<b>Ergebnis:</b> {pnl_value} | {pnl_pct} | {result_label}",
+                f"<b>Kapitalfluss Trade:</b> Einsatz {invested} | R\u00fcckfluss {final_value}",
+                f"<b>Realisiertes Ergebnis:</b> {pnl_value} | {pnl_pct} | {result_label}",
                 f"<b>Lektion:</b> {lesson}",
                 *([account_after] if account_after else []),
                 "<b>Modus:</b> Nur Demo-Lernen. Lektion nutzen, bevor Echtgeld geprüft wird.",

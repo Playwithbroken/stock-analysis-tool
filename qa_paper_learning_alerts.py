@@ -169,11 +169,13 @@ def test_paper_trade_telegram_money_formatting() -> None:
         {
             "ticker": "AAPL",
             "direction": "long",
+            "asset_class": "equity",
             "setup_type": "breakout",
             "opened_at": "2026-07-11T12:00:00+00:00",
             "closed_at": "2026-07-13T15:30:00+00:00",
             "entry_price": 201.125,
             "closed_price": 218.5,
+            "quantity": 61.38,
             "invested_value": 12345.67,
             "final_value": 13412.33,
             "realized_pnl_value": 1066.66,
@@ -217,11 +219,12 @@ def test_paper_trade_telegram_money_formatting() -> None:
             },
         }
     )
-    assert "investiert 12.345,67 EUR" in closed
+    assert "[PAPER GESCHLOSSEN - GEWINN]" in closed
+    assert "Asset:</b> equity | <b>Setup:</b> breakout | <b>Menge:</b> 61.38" in closed
     assert "11.07.2026, 14:00 CEST bis 13.07.2026, 17:30 CEST | gehalten 2T 3Std 30Min" in closed
-    assert "final 13.412,33 EUR" in closed
-    assert "Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
-    assert "target_or_profit_taken" in closed
+    assert "Kapitalfluss Trade:</b> Einsatz 12.345,67 EUR | R\u00fcckfluss 13.412,33 EUR" in closed
+    assert "Realisiertes Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed
+    assert "Exit-Grund:</b> Ziel/Gewinnmitnahme" in closed
     assert "Entry-Quelle:</b> Paper-Playbook manuell" in closed
     assert "Referenz 218.70 → Fill 218.50" in closed
     assert "9.1 bps" in closed
@@ -232,6 +235,27 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Geldfluss:</b> realisiert +2.317,16 EUR | offen 0,00 EUR" in closed
     assert "Lernqualität:</b> 30/30 Trades | PF 1.81 | Erwartung +77,24 EUR/Trade" in closed
     assert "belastbare Stichprobe" in closed
+
+    loss = service._render_telegram_paper_trade_closed_alert(
+        {
+            "ticker": "TSLA",
+            "direction": "short",
+            "asset_class": "equity",
+            "setup_type": "failed_breakout",
+            "entry_price": 320.0,
+            "closed_price": 326.4,
+            "quantity": 10,
+            "invested_value": 3200.0,
+            "final_value": 3136.0,
+            "realized_pnl_value": -64.0,
+            "realized_pnl_pct": -2.0,
+            "result_label": "loser",
+            "exit_reason": "stop_hit",
+        }
+    )
+    assert "[PAPER GESCHLOSSEN - VERLUST]" in loss
+    assert "<code>TSLA</code> SHORT" in loss
+    assert "Realisiertes Ergebnis:</b> -64,00 EUR | -2.00% | Verlierer" in loss
 
     behind = service._paper_account_after_line(
         {

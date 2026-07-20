@@ -27,6 +27,27 @@ async def main() -> int:
                 ]
 
         api.get_discovery_service = lambda: FakeDiscoveryService()
+
+        class FakeMorningBriefService:
+            def get_cached_or_last_brief(self):
+                return {
+                    "event_pings": [
+                        {
+                            "symbols": ["XLE", "GLD"],
+                            "trade_impact": {"symbols": ["TLT"]},
+                        }
+                    ],
+                    "event_layer": [
+                        {
+                            "ticker": "SPY",
+                            "event_intelligence": {"affected_assets": ["QQQ"]},
+                        }
+                    ],
+                    "top_news": [{"ticker": "HOOD"}],
+                    "market_movers": {},
+                }
+
+        api.get_morning_brief_service = lambda: FakeMorningBriefService()
         manager = api.get_portfolio_manager()
 
         manager.create_paper_trade(
@@ -69,15 +90,26 @@ async def main() -> int:
         suggestions = await api._build_dynamic_search_suggestions()
         cached_suggestions = await api._build_dynamic_search_suggestions()
         interesting = suggestions.get("Jetzt interessant") or []
+        macro_alerts = suggestions.get("Macro Alerts") or []
         movers = suggestions.get("Market Movers") or []
         paper = suggestions.get("Paper Trading") or []
         learning = suggestions.get("Lernsignale") or []
 
         print(f"Jetzt interessant: {interesting}")
+        print(f"Macro Alerts: {macro_alerts}")
         print(f"Market Movers: {movers}")
         print(f"Paper Trading: {paper}")
         print(f"Lernsignale: {learning}")
 
+        if not any("(XLE)" in item for item in macro_alerts):
+            print("FAIL: macro alert XLE missing from search suggestions")
+            return 1
+        if not any("(GLD)" in item for item in macro_alerts):
+            print("FAIL: macro alert GLD missing from search suggestions")
+            return 1
+        if not any("(TLT)" in item for item in macro_alerts):
+            print("FAIL: macro trade-impact TLT missing from search suggestions")
+            return 1
         if not any("(LUNR)" in item for item in [*interesting, *movers]):
             print("FAIL: live mover LUNR missing from dynamic suggestions")
             return 1

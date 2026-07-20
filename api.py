@@ -995,6 +995,38 @@ def _add_search_suggestion(bucket: List[str], seen: set[str], item: Any, limit: 
         bucket.append(display)
 
 
+def _macro_search_rows_from_brief(brief: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    def add_symbol(value: Any) -> None:
+        symbol = _normalize_ticker_input(str(value or "").strip())
+        if symbol:
+            rows.append({"ticker": symbol})
+
+    for ping in (brief.get("event_pings") or [])[:6]:
+        if not isinstance(ping, dict):
+            continue
+        for symbol in ping.get("symbols") or []:
+            add_symbol(symbol)
+        trade_impact = ping.get("trade_impact") if isinstance(ping.get("trade_impact"), dict) else {}
+        for symbol in trade_impact.get("symbols") or []:
+            add_symbol(symbol)
+
+    for event in (brief.get("event_layer") or [])[:6]:
+        if not isinstance(event, dict):
+            continue
+        add_symbol(event.get("ticker"))
+        intelligence = event.get("event_intelligence") if isinstance(event.get("event_intelligence"), dict) else {}
+        for symbol in intelligence.get("affected_assets") or []:
+            add_symbol(symbol)
+
+    for news in (brief.get("top_news") or [])[:6]:
+        if isinstance(news, dict):
+            add_symbol(news.get("ticker") or news.get("symbol"))
+
+    return rows
+
+
 async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
     cache_key = "search:suggestions:dynamic"
     cached = _cache_get(cache_key, _safe_int_env("SEARCH_SUGGESTIONS_CACHE_TTL_SECONDS", 120, minimum=20))
@@ -1049,6 +1081,7 @@ async def _build_dynamic_search_suggestions() -> Dict[str, List[str]]:
                 *mover_gainers,
             ],
         )
+        add_category("Macro Alerts", _macro_search_rows_from_brief(brief), limit=6)
         add_category(
             "Katalysatoren",
             [

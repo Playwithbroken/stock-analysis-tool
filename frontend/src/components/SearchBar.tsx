@@ -467,6 +467,7 @@ const SUGGESTION_CATEGORY_ORDER = [
   "Bitte auswählen",
   "Direkt suchen",
   "Jetzt interessant",
+  "Macro Alerts",
   "Market Movers",
   "Mein Radar",
   "Paper Trading",

@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 import os
+import json
+from datetime import datetime, timedelta
 
 from src.email_alert_service import EmailAlertService
+
+
+class _SettingsStore:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    def get_app_setting(self, key: str, default: str = "") -> str:
+        return self.values.get(key, default)
+
+    def set_app_setting(self, key: str, value: str) -> None:
+        self.values[key] = value
 
 
 def test_paper_learning_alert_extraction() -> None:
@@ -413,7 +426,37 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Cooldown bis:" in account
 
 
+def test_paper_trade_management_alert_cooldown() -> None:
+    service = EmailAlertService.__new__(EmailAlertService)
+    service.portfolio_manager = _SettingsStore()
+    trade = {"id": 42, "unrealized_pnl_pct": -1.0}
+    management = {"status": "near_stop", "decision_grade": "review"}
+
+    assert service._paper_trade_management_can_send(trade, management) is True
+    service._record_paper_trade_management_deliveries(
+        [
+            {
+                "trade_id": 42,
+                "management_status": "near_stop",
+                "decision_grade": "review",
+                "unrealized_pnl_pct": -1.0,
+            }
+        ]
+    )
+    assert service._paper_trade_management_can_send(trade, management) is False
+    assert service._paper_trade_management_can_send(trade, {**management, "status": "stop_hit"}) is True
+    assert service._paper_trade_management_can_send(trade, {**management, "decision_grade": "exit"}) is True
+    assert service._paper_trade_management_can_send({**trade, "unrealized_pnl_pct": -4.0}, management) is True
+
+    state_key = service._paper_trade_management_state_key(42)
+    previous = json.loads(service.portfolio_manager.values[state_key])
+    previous["sent_at"] = (datetime.now().astimezone() - timedelta(hours=5)).isoformat()
+    service.portfolio_manager.values[state_key] = json.dumps(previous)
+    assert service._paper_trade_management_can_send(trade, management) is True
+
+
 if __name__ == "__main__":
     test_paper_learning_alert_extraction()
     test_paper_trade_telegram_money_formatting()
+    test_paper_trade_management_alert_cooldown()
     print("qa_paper_learning_alerts: ok")

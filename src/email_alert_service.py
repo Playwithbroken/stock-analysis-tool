@@ -364,7 +364,6 @@ class EmailAlertService:
 
         config = self.get_config()
         self._validate_telegram_config(config)
-        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
         alert_statuses = {"stop_hit", "target_hit", "near_stop", "near_target", "weak_follow_through"}
         events: List[Dict[str, Any]] = []
         for trade in open_trades:
@@ -372,13 +371,17 @@ class EmailAlertService:
             status = str(management.get("status") or "")
             if status not in alert_statuses:
                 continue
-            event_key = f"paper-manage:{trade.get('id')}:{status}"
-            if event_key in sent_keys:
+            if not self._paper_trade_management_can_send(trade, management):
                 continue
+            sent_bucket = datetime.now(
+                ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))
+            ).strftime("%Y%m%d%H%M")
+            event_key = f"paper-manage:{trade.get('id')}:{status}:{sent_bucket}"
             events.append(
                 {
                     "event_key": event_key,
                     "category": "paper_trade_management",
+                    "trade_id": trade.get("id"),
                     "title": f"Paper-Management: {trade.get('ticker')} {status}",
                     "ticker": trade.get("ticker"),
                     "direction": trade.get("direction"),
@@ -412,6 +415,7 @@ class EmailAlertService:
 
         self._send_notifications(config, events[:5], subject="Paper Trade Management")
         self.portfolio_manager.mark_signal_events_sent(events[:5])
+        self._record_paper_trade_management_deliveries(events[:5])
         return {"status": "ok", "sent": len(events[:5]), "message": "Paper-Management-Telegram-Alerts gesendet."}
 
     def send_paper_account_status_alert(
@@ -2370,6 +2374,62 @@ class EmailAlertService:
 
     def _paper_account_status_state_key(self) -> str:
         return "paper_account_status_alert_state"
+
+    def _paper_trade_management_state_key(self, trade_id: Any) -> str:
+        return f"paper_trade_management_alert_state:{trade_id}"
+
+    def _paper_trade_management_can_send(self, trade: Dict[str, Any], management: Dict[str, Any]) -> bool:
+        trade_id = trade.get("id")
+        if trade_id in (None, ""):
+            return True
+        raw = self.portfolio_manager.get_app_setting(self._paper_trade_management_state_key(trade_id), "{}")
+        try:
+            previous = json.loads(raw) if raw else {}
+        except Exception:
+            previous = {}
+
+        status = str(management.get("status") or "")
+        grade = str(management.get("decision_grade") or "")
+        if status != str(previous.get("status") or "") or grade != str(previous.get("decision_grade") or ""):
+            return True
+
+        try:
+            current_pnl = float(trade.get("unrealized_pnl_pct") or 0)
+            previous_pnl = float(previous.get("unrealized_pnl_pct") or 0)
+            pnl_delta = abs(current_pnl - previous_pnl)
+        except (TypeError, ValueError):
+            pnl_delta = 0
+        material_pnl_delta = self._safe_int_env("PAPER_TRADE_MANAGEMENT_PNL_DELTA_PCT", 3, minimum=1)
+        if pnl_delta >= material_pnl_delta:
+            return True
+
+        sent_at = previous.get("sent_at")
+        if not sent_at:
+            return True
+        try:
+            sent_dt = datetime.fromisoformat(str(sent_at))
+        except Exception:
+            return True
+        cooldown_hours = self._safe_int_env("PAPER_TRADE_MANAGEMENT_ALERT_COOLDOWN_HOURS", 4, minimum=1)
+        now = datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
+        return now >= sent_dt + timedelta(hours=cooldown_hours)
+
+    def _record_paper_trade_management_deliveries(self, events: List[Dict[str, Any]]) -> None:
+        now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
+        for event in events:
+            trade_id = event.get("trade_id")
+            if trade_id in (None, ""):
+                continue
+            payload = {
+                "sent_at": now,
+                "status": event.get("management_status"),
+                "decision_grade": event.get("decision_grade"),
+                "unrealized_pnl_pct": event.get("unrealized_pnl_pct"),
+            }
+            self.portfolio_manager.set_app_setting(
+                self._paper_trade_management_state_key(trade_id),
+                json.dumps(payload, ensure_ascii=True, default=str),
+            )
 
     def _paper_trade_status_rank(self, grade: str) -> int:
         return {

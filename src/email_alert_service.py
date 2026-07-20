@@ -335,6 +335,7 @@ class EmailAlertService:
                     "account_net_pnl_value": (demo_account or {}).get("net_pnl_value"),
                     "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
                     "account_performance": (demo_account or {}).get("performance") or {},
+                    "account_capital_flow": (demo_account or {}).get("capital_flow") or {},
                     "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
                     "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
                     "source_label": source_label,
@@ -473,6 +474,7 @@ class EmailAlertService:
             "management_counts": demo_account.get("management_counts") or {},
             "risk_circuit": demo_account.get("risk_circuit") or {},
             "performance": demo_account.get("performance") or {},
+            "capital_flow": demo_account.get("capital_flow") or {},
             "top_trades": top_trades,
             "line": f"Paper-Konto-Status: {status}",
             "source_label": "Paper-Konto-Monitor",
@@ -526,6 +528,7 @@ class EmailAlertService:
                     "account_net_pnl_value": (demo_account or {}).get("net_pnl_value"),
                     "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
                     "account_performance": (demo_account or {}).get("performance") or {},
+                    "account_capital_flow": (demo_account or {}).get("capital_flow") or {},
                     "line": f"{trade.get('ticker')} Paper-Trade geschlossen.",
                     "source_label": "Paper-Trade-Exit",
                     "source_url": "",
@@ -3586,17 +3589,24 @@ class EmailAlertService:
         )
 
     def _paper_account_after_line(self, event: Dict[str, Any]) -> str:
-        if event.get("account_equity") is None:
+        capital_flow = event.get("account_capital_flow") if isinstance(event.get("account_capital_flow"), dict) else {}
+        if not capital_flow and isinstance(event.get("capital_flow"), dict):
+            capital_flow = event.get("capital_flow") or {}
+        account_equity = capital_flow.get("equity_value", event.get("account_equity"))
+        if account_equity is None:
             return ""
-        equity = self._tg_money(event.get("account_equity"))
-        cash = self._tg_money(event.get("account_cash_available"))
-        exposure = self._tg_money(event.get("account_open_exposure"))
-        net_pnl = self._tg_signed_money(event.get("account_net_pnl_value"))
-        net_pnl_pct = self._tg_pct(event.get("account_net_pnl_pct"))
+        equity = self._tg_money(account_equity)
+        cash = self._tg_money(capital_flow.get("cash_available_value", event.get("account_cash_available")))
+        exposure = self._tg_money(capital_flow.get("open_exposure_value", event.get("account_open_exposure")))
+        realized = self._tg_signed_money(capital_flow.get("realized_pnl_value", event.get("account_realized_pnl_value")))
+        unrealized = self._tg_signed_money(capital_flow.get("unrealized_pnl_value", event.get("account_unrealized_pnl_value")))
+        net_pnl = self._tg_signed_money(capital_flow.get("net_pnl_value", event.get("account_net_pnl_value")))
+        net_pnl_pct = self._tg_pct(capital_flow.get("net_pnl_pct", event.get("account_net_pnl_pct")))
         performance_line = self._paper_performance_line(event.get("account_performance"))
         return (
             f"<b>Demo-Konto danach:</b> Equity {equity} | seit Start {net_pnl} ({net_pnl_pct})"
             f"\n<b>Verfügbar:</b> Cash {cash} | offen investiert {exposure}"
+            f"\n<b>Geldfluss:</b> realisiert {realized} | offen {unrealized}"
             f"{performance_line}"
         )
 

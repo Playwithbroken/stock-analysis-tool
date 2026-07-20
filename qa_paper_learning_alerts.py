@@ -78,6 +78,15 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "account_open_exposure": 12345.67,
             "account_net_pnl_value": 1250.5,
             "account_net_pnl_pct": 0.25,
+            "account_capital_flow": {
+                "equity_value": 501250.5,
+                "cash_available_value": 488904.83,
+                "open_exposure_value": 12345.67,
+                "realized_pnl_value": 1206.05,
+                "unrealized_pnl_value": 44.45,
+                "net_pnl_value": 1250.5,
+                "net_pnl_pct": 0.25,
+            },
             "account_performance": {
                 "sample_size": 12,
                 "minimum_usable_sample": 30,
@@ -148,6 +157,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "seit Start +1.250,50 EUR (+0.25%)" in opened
     assert "Verfügbar:</b> Cash 488.904,83 EUR" in opened
     assert "offen investiert 12.345,67 EUR" in opened
+    assert "Geldfluss:</b> realisiert +1.206,05 EUR | offen +44,45 EUR" in opened
     assert "Lernqualität:</b> 12/30 Trades | PF 1.42 | Erwartung +85,25 EUR/Trade" in opened
     assert "Treffer 58.30% | Stichprobe im Aufbau" in opened
     assert "Strategie:</b> Momentum Follow-Through | lernen / weiter lernen | nur Paper-Lernen" in opened
@@ -172,6 +182,15 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "account_open_exposure": 0,
             "account_net_pnl_value": 2317.16,
             "account_net_pnl_pct": 0.46,
+            "account_capital_flow": {
+                "equity_value": 502317.16,
+                "cash_available_value": 502317.16,
+                "open_exposure_value": 0,
+                "realized_pnl_value": 2317.16,
+                "unrealized_pnl_value": 0,
+                "net_pnl_value": 2317.16,
+                "net_pnl_pct": 0.46,
+            },
             "account_performance": {
                 "sample_size": 30,
                 "minimum_usable_sample": 30,
@@ -210,6 +229,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "seit Start +2.317,16 EUR (+0.46%)" in closed
     assert "Verfügbar:</b> Cash 502.317,16 EUR" in closed
     assert "offen investiert 0,00 EUR" in closed
+    assert "Geldfluss:</b> realisiert +2.317,16 EUR | offen 0,00 EUR" in closed
     assert "Lernqualität:</b> 30/30 Trades | PF 1.81 | Erwartung +77,24 EUR/Trade" in closed
     assert "belastbare Stichprobe" in closed
 
@@ -223,6 +243,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
         }
     )
     assert "seit Start -2.500,00 EUR (-0.50%)" in behind
+    assert "Geldfluss:</b> realisiert n/a | offen n/a" in behind
 
     assert service._paper_trade_open_subject([{"source_label": "Paper-Autopilot"}]) == "Paper Autopilot: Demo-Trade geöffnet"
     assert service._paper_trade_open_subject([{"source_label": "Paper-Playbook manuell"}]) == "Paper Playbook: Demo-Trade geöffnet"

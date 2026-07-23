@@ -2055,6 +2055,7 @@ class PaperTradeFromPlaybookRequest(BaseModel):
     direction: Optional[str] = "long"
     quantity: float = 1
     leverage: float = 1
+    product_data: Dict[str, Any] = Field(default_factory=dict)
 
 
 class PaperAutoSelectionRequest(BaseModel):

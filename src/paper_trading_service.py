@@ -310,6 +310,19 @@ class PaperTradingService:
         playbook = {**playbook, "entry_source_label": entry_source_label}
         learning_mode = bool(payload.get("learning_mode"))
         risk_multiplier_override = payload.get("risk_multiplier_override")
+        product_data_validation = {"valid": True, "errors": [], "warnings": [], "data": {}}
+        if playbook.get("leverage_product_type"):
+            product_data_validation = self._validate_leverage_product_data(payload.get("product_data") or {})
+            if not product_data_validation["valid"]:
+                raise ValueError(
+                    "Leveraged product data gate blocks this paper trade: "
+                    + ", ".join(product_data_validation["errors"])
+                )
+            playbook = {
+                **playbook,
+                "leveraged_product": product_data_validation["data"],
+                "product_data_warnings": product_data_validation["warnings"],
+            }
         hard_rule_reasons = [
             str(item)
             for item in playbook.get("do_not_trade_reasons", [])
@@ -336,7 +349,10 @@ class PaperTradingService:
                 raise ValueError(f"Underlying market data gate blocks this option playbook: {', '.join(execution_blockers)}")
             direction = playbook.get("direction") or direction
             underlying_price = float(execution_market.get("price") or 0)
-            last_price = round(max(0.35, underlying_price * 0.025), 2)
+            last_price = round(
+                float((playbook.get("leveraged_product") or {}).get("ask") or max(0.35, underlying_price * 0.025)),
+                4,
+            )
             playbook = {
                 **playbook,
                 "reference_price": last_price,
@@ -773,10 +789,98 @@ class PaperTradingService:
             lines.append("Options-Gate: nur Paper-Premienmodell; Strike, Laufzeit, Spread, IV und maximalen Prämienverlust manuell prüfen.")
         if playbook.get("product_data_required"):
             lines.append("Hebelprodukt-Daten vor Echtgeld: " + " | ".join(str(item) for item in playbook.get("product_data_required", [])[:5]))
+        if playbook.get("leveraged_product"):
+            product = playbook.get("leveraged_product") or {}
+            lines.append(
+                "Geprueftes Hebelprodukt: "
+                f"{product.get('product_type') or 'product'} | Emittent {product.get('issuer') or 'n/a'} | "
+                f"Strike/KO {product.get('strike_or_knockout_level') or 'n/a'} | "
+                f"Bid/Ask {product.get('bid')}/{product.get('ask')} | Spread {product.get('spread_pct')}%."
+            )
         for question in checklist[:3]:
             lines.append(f"Prüffrage: {question}")
         lines.append(framework.get("real_money_policy") or "Nur Entscheidungsrahmen; keine automatische Echtgeld-Ausführung.")
         return "\n".join(str(line) for line in lines if line)
+
+    def _validate_leverage_product_data(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        payload = payload if isinstance(payload, dict) else {}
+        errors: List[str] = []
+        warnings: List[str] = []
+
+        product_type = str(payload.get("product_type") or "option_certificate").strip().lower()
+        issuer = str(payload.get("issuer") or "").strip()
+        expiry = str(payload.get("expiry") or "").strip()
+        acknowledged = bool(payload.get("overnight_risk_ack"))
+
+        def number_field(name: str) -> Optional[float]:
+            value = payload.get(name)
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                errors.append(f"{name}_missing_or_invalid")
+                return None
+            if number <= 0:
+                errors.append(f"{name}_must_be_positive")
+                return None
+            return number
+
+        strike_or_ko = number_field("strike_or_knockout_level")
+        bid = number_field("bid")
+        ask = number_field("ask")
+        distance_to_ko = None
+        if payload.get("distance_to_knockout_pct") not in (None, ""):
+            try:
+                distance_to_ko = float(payload.get("distance_to_knockout_pct"))
+            except (TypeError, ValueError):
+                errors.append("distance_to_knockout_pct_invalid")
+
+        if not issuer:
+            errors.append("issuer_required")
+        if not expiry:
+            errors.append("expiry_required")
+        else:
+            parsed_expiry = self._parse_datetime(expiry)
+            if not parsed_expiry:
+                errors.append("expiry_invalid")
+            elif parsed_expiry.date() <= datetime.utcnow().date():
+                errors.append("expiry_must_be_future")
+
+        spread_pct = None
+        if bid is not None and ask is not None:
+            if ask < bid:
+                errors.append("ask_must_be_greater_or_equal_bid")
+            mid = (bid + ask) / 2 if bid + ask > 0 else 0
+            spread_pct = round(((ask - bid) / mid) * 100, 2) if mid > 0 else None
+            if spread_pct is not None and spread_pct > 12:
+                errors.append("spread_too_wide_over_12_pct")
+            elif spread_pct is not None and spread_pct > 6:
+                warnings.append("spread_wide_over_6_pct")
+
+        if product_type in {"knockout", "ko", "turbo"}:
+            if distance_to_ko is None:
+                errors.append("distance_to_knockout_pct_required")
+            elif distance_to_ko < 5:
+                errors.append("knockout_distance_below_5_pct")
+        if not acknowledged:
+            errors.append("overnight_risk_ack_required")
+
+        return {
+            "valid": not errors,
+            "errors": self._dedupe_reason_list(errors),
+            "warnings": self._dedupe_reason_list(warnings),
+            "data": {
+                "product_type": product_type,
+                "issuer": issuer,
+                "expiry": expiry,
+                "strike_or_knockout_level": strike_or_ko,
+                "bid": bid,
+                "ask": ask,
+                "spread_pct": spread_pct,
+                "distance_to_knockout_pct": distance_to_ko,
+                "overnight_risk_ack": acknowledged,
+                "validated_at": datetime.utcnow().isoformat(),
+            },
+        }
 
     def _build_decision_framework(self, playbook: Dict[str, Any]) -> Dict[str, Any]:
         ticker = str(playbook.get("ticker") or "asset").upper()
@@ -2211,6 +2315,9 @@ class PaperTradingService:
             warnings.append("leverage_product_data_required")
         if playbook.get("product_data_required"):
             warnings.append("issuer_strike_expiry_spread_required")
+        if playbook.get("leveraged_product"):
+            warnings = [item for item in warnings if item not in {"leverage_product_data_required", "issuer_strike_expiry_spread_required"}]
+            warnings.extend(str(item) for item in playbook.get("product_data_warnings") or [])
         warnings.extend(str(item) for item in framework.get("warnings") or [])
 
         paper_ready = not errors and not blocked_reasons and bool(playbook.get("demo_tradeable"))
@@ -2261,6 +2368,7 @@ class PaperTradingService:
             "underlying_asset": playbook.get("underlying_asset") or None,
             "underlying_proxy": playbook.get("underlying_proxy") or None,
             "product_data_required": playbook.get("product_data_required") or [],
+            "leveraged_product": playbook.get("leveraged_product") or None,
             "generated_at": datetime.utcnow().isoformat(),
             "validation": {
                 "valid": not errors,

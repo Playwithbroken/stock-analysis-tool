@@ -253,6 +253,44 @@ def test_demo_account_sizing() -> None:
     assert "Strike or knockout level" in gold_call["decision_framework"]["product_data_required"]
     assert "Knockout" in gold_call["decision_framework"]["risk_plan"]
 
+    try:
+        service.create_trade_from_playbook(
+            {"playbook_id": "commodity-option-GLD-call", "direction": "call", "quantity": 0, "leverage": 1},
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "Leveraged product data gate" in str(exc)
+        assert "issuer_required" in str(exc)
+    else:
+        raise AssertionError("Commodity leverage proxy must require concrete product data.")
+
+    created_gold_call = service.create_trade_from_playbook(
+        {
+            "playbook_id": "commodity-option-GLD-call",
+            "direction": "call",
+            "quantity": 0,
+            "leverage": 1,
+            "product_data": {
+                "product_type": "knockout",
+                "issuer": "QA Bank",
+                "strike_or_knockout_level": 205.0,
+                "expiry": "2030-01-17",
+                "bid": 4.80,
+                "ask": 4.95,
+                "distance_to_knockout_pct": 8.0,
+                "overnight_risk_ack": True,
+            },
+        },
+        sample_scoreboard(),
+        sample_settings(),
+    )
+    assert created_gold_call["asset_class"] == "option"
+    assert created_gold_call["entry_price"] > 4.95
+    assert created_gold_call["trade_ticket"]["leveraged_product"]["issuer"] == "QA Bank"
+    assert created_gold_call["trade_ticket"]["leveraged_product"]["spread_pct"] < 6
+    assert "Geprueftes Hebelprodukt" in created_gold_call["notes"]
+
     created = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
         sample_scoreboard(),

@@ -137,6 +137,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const [lastAutopilotResult, setLastAutopilotResult] = useState<any | null>(null);
   const [autopilotSettings, setAutopilotSettings] = useState<any>(data?.paper_autopilot_settings || data?.auto_selection?.settings || {});
   const [journalDraft, setJournalDraft] = useState<Record<string, { notes: string; exit_reason: string; lessons_learned: string }>>({});
+  const [productDrafts, setProductDrafts] = useState<Record<string, any>>({});
 
   const stats = data?.stats || {};
   const playbooks = data?.playbooks || [];
@@ -239,7 +240,17 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
 
   if (!data) return null;
 
-  const openFromPlaybook = async (playbookId: string, direction: string) => {
+  const updateProductDraft = (playbookId: string, key: string, value: any) => {
+    setProductDrafts((prev) => ({
+      ...prev,
+      [playbookId]: {
+        ...(prev[playbookId] || {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const openFromPlaybook = async (playbookId: string, direction: string, productData: any = undefined) => {
     setBusyId(playbookId);
     setStatus("");
     try {
@@ -251,6 +262,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           direction,
           quantity: 0,
           leverage: 1,
+          product_data: productData || {},
         }),
       });
       const payload = await response.json();
@@ -1711,6 +1723,51 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div className="mt-1 leading-5">{item.product_data_required.slice(0, 5).join(" · ")}</div>
                     </div>
                   )}
+                  {item.leverage_product_type && (
+                    <div className="mt-3 rounded-[1rem] border border-black/8 bg-white/80 p-3 text-xs text-slate-700">
+                      <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Produktdaten-Gate</div>
+                      <label className="mt-2 block">
+                        <span className="font-bold text-slate-500">Typ</span>
+                        <select
+                          value={productDrafts[item.id]?.product_type || "option_certificate"}
+                          onChange={(event) => updateProductDraft(item.id, "product_type", event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-black/8 bg-white px-2 py-1.5 text-xs font-bold text-slate-900"
+                        >
+                          <option value="option_certificate">Optionsschein</option>
+                          <option value="knockout">Knockout/Turbo</option>
+                        </select>
+                      </label>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                        {[
+                          ["issuer", "Emittent"],
+                          ["strike_or_knockout_level", "Strike/KO"],
+                          ["expiry", "Laufzeit"],
+                          ["bid", "Bid"],
+                          ["ask", "Ask"],
+                          ["distance_to_knockout_pct", "KO-Abstand %"],
+                        ].map(([key, label]) => (
+                          <label key={key} className="block">
+                            <span className="font-bold text-slate-500">{label}</span>
+                            <input
+                              type={key === "expiry" ? "date" : key === "issuer" ? "text" : "number"}
+                              step="0.01"
+                              value={productDrafts[item.id]?.[key] || ""}
+                              onChange={(event) => updateProductDraft(item.id, key, event.target.value)}
+                              className="mt-1 w-full rounded-lg border border-black/8 bg-white px-2 py-1.5 text-xs font-bold text-slate-900"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <label className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(productDrafts[item.id]?.overnight_risk_ack)}
+                          onChange={(event) => updateProductDraft(item.id, "overnight_risk_ack", event.target.checked)}
+                        />
+                        Overnight-, Spread- und Emittentenrisiko verstanden
+                      </label>
+                    </div>
+                  )}
                   {!!item.do_not_trade_reasons?.length && (
                     <div className="mt-3 rounded-[1rem] border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                       {item.do_not_trade_reasons.map((reason: string) => <div key={reason}>{reason}</div>)}
@@ -1734,7 +1791,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     )}
                     {item.asset_class === "option" ? (
                       <button
-                        onClick={() => openFromPlaybook(item.id, item.direction)}
+                        onClick={() => openFromPlaybook(item.id, item.direction, productDrafts[item.id])}
                         disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
                         className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
                       >

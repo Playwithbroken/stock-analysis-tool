@@ -138,6 +138,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const [autopilotSettings, setAutopilotSettings] = useState<any>(data?.paper_autopilot_settings || data?.auto_selection?.settings || {});
   const [journalDraft, setJournalDraft] = useState<Record<string, { notes: string; exit_reason: string; lessons_learned: string }>>({});
   const [productDrafts, setProductDrafts] = useState<Record<string, any>>({});
+  const [productChecks, setProductChecks] = useState<Record<string, any>>({});
 
   const stats = data?.stats || {};
   const playbooks = data?.playbooks || [];
@@ -248,6 +249,31 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         [key]: value,
       },
     }));
+    setProductChecks((prev) => {
+      const next = { ...prev };
+      delete next[playbookId];
+      return next;
+    });
+  };
+
+  const validateProductDraft = async (playbookId: string) => {
+    setBusyId(`${playbookId}-product-check`);
+    setStatus("");
+    try {
+      const response = await fetch("/api/trading/leverage-product/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_data: productDrafts[playbookId] || {} }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Produktpruefung fehlgeschlagen.");
+      setProductChecks((prev) => ({ ...prev, [playbookId]: payload }));
+      setStatus(payload.message || "Produktdaten geprueft.");
+    } catch (error: any) {
+      setStatus(error?.message || "Produktpruefung fehlgeschlagen.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const openFromPlaybook = async (playbookId: string, direction: string, productData: any = undefined) => {
@@ -1766,6 +1792,37 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         />
                         Overnight-, Spread- und Emittentenrisiko verstanden
                       </label>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => validateProductDraft(item.id)}
+                          disabled={busyId === `${item.id}-product-check`}
+                          className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+                        >
+                          Produkt pruefen
+                        </button>
+                        {productChecks[item.id] ? (
+                          <span
+                            className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                              productChecks[item.id].valid
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {productChecks[item.id].valid ? "bereit" : "blockiert"}
+                          </span>
+                        ) : null}
+                      </div>
+                      {productChecks[item.id]?.errors?.length ? (
+                        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+                          {productChecks[item.id].errors.slice(0, 4).join(" · ")}
+                        </div>
+                      ) : null}
+                      {productChecks[item.id]?.warnings?.length ? (
+                        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                          {productChecks[item.id].warnings.slice(0, 3).join(" · ")}
+                        </div>
+                      ) : null}
                     </div>
                   )}
                   {!!item.do_not_trade_reasons?.length && (

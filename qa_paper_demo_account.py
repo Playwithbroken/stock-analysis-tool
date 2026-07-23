@@ -978,6 +978,44 @@ def test_aggressive_learning_respects_saved_autopilot_settings() -> None:
     assert allowed["interesting_now"][0]["ticker"] == "HOOD"
 
 
+def test_leverage_product_validation_contract() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    blocked = service.validate_leverage_product_data({})
+    assert blocked["valid"] is False
+    assert "issuer_required" in blocked["errors"]
+    assert "overnight_risk_ack_required" in blocked["errors"]
+
+    valid = service.validate_leverage_product_data(
+        {
+            "product_type": "knockout",
+            "issuer": "QA Bank",
+            "strike_or_knockout_level": 205.0,
+            "expiry": "2030-01-17",
+            "bid": 4.80,
+            "ask": 4.95,
+            "distance_to_knockout_pct": 8.0,
+            "overnight_risk_ack": True,
+        }
+    )
+    assert valid["valid"] is True
+    assert valid["errors"] == []
+    assert valid["data"]["spread_pct"] < 6
+
+    too_wide = service.validate_leverage_product_data(
+        {
+            "product_type": "option_certificate",
+            "issuer": "QA Bank",
+            "strike_or_knockout_level": 205.0,
+            "expiry": "2030-01-17",
+            "bid": 4.00,
+            "ask": 4.60,
+            "overnight_risk_ack": True,
+        }
+    )
+    assert too_wide["valid"] is False
+    assert "spread_too_wide_over_12_pct" in too_wide["errors"]
+
+
 def test_market_quality_gate_blocks_stale_and_thin_snapshots() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     stale = {
@@ -1247,6 +1285,7 @@ if __name__ == "__main__":
     test_strict_score_block_does_not_block_learning_candidate()
     test_aggressive_learning_uses_wider_pool_with_capped_risk()
     test_aggressive_learning_respects_saved_autopilot_settings()
+    test_leverage_product_validation_contract()
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_execution_fill_is_adverse_for_long_and_short()
     test_demo_exposure_capacity_gates()

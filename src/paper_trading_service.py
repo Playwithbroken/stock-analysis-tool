@@ -287,6 +287,9 @@ class PaperTradingService:
         self._schedule_trade_outcomes(trade)
         return self._enrich_trade(trade)
 
+    def validate_leverage_product_data(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._validate_leverage_product_data(payload)
+
     def create_trade_from_playbook(
         self,
         payload: Dict[str, Any],

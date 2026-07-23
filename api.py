@@ -2058,6 +2058,10 @@ class PaperTradeFromPlaybookRequest(BaseModel):
     product_data: Dict[str, Any] = Field(default_factory=dict)
 
 
+class LeverageProductValidationRequest(BaseModel):
+    product_data: Dict[str, Any] = Field(default_factory=dict)
+
+
 class PaperAutoSelectionRequest(BaseModel):
     execute: bool = False
     max_trades: int = Field(default=3, ge=1, le=8)
@@ -5418,6 +5422,25 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         except Exception as alert_error:
             trade["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
         return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/leverage-product/validate")
+async def validate_leverage_product(req: LeverageProductValidationRequest):
+    try:
+        result = get_paper_trading_service().validate_leverage_product_data(req.product_data)
+        return convert_numpy_types(
+            {
+                **result,
+                "status": "valid" if result.get("valid") else "blocked",
+                "message": (
+                    "Produktdaten sind fuer einen Paper-Test ausreichend."
+                    if result.get("valid")
+                    else "Produktdaten reichen noch nicht fuer einen Paper-Test."
+                ),
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

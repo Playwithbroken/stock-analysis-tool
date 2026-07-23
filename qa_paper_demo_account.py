@@ -804,6 +804,57 @@ def test_strict_score_block_does_not_block_learning_candidate() -> None:
     assert capital["max_loss_value"] > 0
 
 
+def test_aggressive_learning_uses_wider_pool_with_capped_risk() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    demo_account = {
+        "equity": 500_000.0,
+        "risk_budget_per_trade_value": 1_750.0,
+        "remaining_risk_value": 15_000.0,
+        "max_position_value": 50_000.0,
+        "open_trade_slots": 5,
+        "day_status": "ok",
+        "learning_feedback": {},
+    }
+    playbook = {
+        "id": "equity-AAPL-long-aggressive",
+        "ticker": "AAPL",
+        "asset_class": "equity",
+        "direction": "long",
+        "setup_type": "news_momentum",
+        "score": 55.0,
+        "reference_price": 100.0,
+        "risk_buffer_pct": 3.5,
+        "tradeable": False,
+        "do_not_trade_reasons": ["Score below minimum trade score 78."],
+        "thesis": "Early paper-only news momentum test.",
+        "decision_framework": {
+            "entry_trigger": "AAPL confirms the headline with price and volume.",
+            "invalidation": "AAPL loses the trigger zone.",
+        },
+        "market_data": {
+            "price": 100.0,
+            "data_as_of": "2026-06-19T08:00:00+00:00",
+            "freshness": "fresh",
+            "liquidity_status": "strong",
+        },
+        "data_as_of": "2026-06-19T08:00:00+00:00",
+    }
+    sized = {**playbook, **service._suggest_demo_sizing(playbook, demo_account)}
+    sized["trade_ticket"] = service._build_trade_ticket(sized, demo_account)
+    selection = service._build_auto_selection([sized], [], demo_account)
+
+    assert selection["selected"] == []
+    assert selection["exploration"] == []
+    assert selection["aggressive_learning_min_score"] == 52.0
+    assert selection["aggressive_learning_risk_multiplier"] == 0.25
+    aggressive = selection["aggressive_exploration"][0]
+    assert aggressive["ticker"] == "AAPL"
+    assert aggressive["aggressive_learning_mode"] is True
+    assert aggressive["risk_multiplier"] == 0.25
+    assert aggressive["suggested_notional_value"] == round(float(sized["suggested_notional_value"]) * 0.25, 2)
+    assert aggressive["suggested_max_loss_value"] == round(float(sized["suggested_max_loss_value"]) * 0.25, 2)
+
+
 def test_market_quality_gate_blocks_stale_and_thin_snapshots() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     stale = {
@@ -1071,6 +1122,7 @@ if __name__ == "__main__":
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()
+    test_aggressive_learning_uses_wider_pool_with_capped_risk()
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_execution_fill_is_adverse_for_long_and_short()
     test_demo_exposure_capacity_gates()

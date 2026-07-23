@@ -1683,9 +1683,9 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
         result = get_paper_trading_service().run_auto_selection(
             scoreboard,
             settings,
-            max_trades=_safe_int_env("PAPER_TRADING_AUTO_LEARN_MAX_TRADES", 1, minimum=1),
+            max_trades=_safe_int_env("PAPER_TRADING_AUTO_LEARN_MAX_TRADES", 3, minimum=1),
             execute=True,
-            mode="learn",
+            mode=os.getenv("PAPER_TRADING_AUTO_LEARN_MODE", "aggressive_learning"),
         )
         if result.get("opened"):
             try:
@@ -2054,8 +2054,8 @@ class PaperTradeFromPlaybookRequest(BaseModel):
 
 class PaperAutoSelectionRequest(BaseModel):
     execute: bool = False
-    max_trades: int = Field(default=3, ge=1, le=5)
-    mode: str = Field(default="strict", pattern="^(strict|learn)$")
+    max_trades: int = Field(default=3, ge=1, le=8)
+    mode: str = Field(default="strict", pattern="^(strict|learn|aggressive_learning)$")
 
 
 class PaperTradeCloseRequest(BaseModel):

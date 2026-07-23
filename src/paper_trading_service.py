@@ -83,8 +83,9 @@ class PaperTradingService:
     ) -> Dict[str, Any]:
         dashboard = self.build_dashboard(scoreboard, settings)
         selection = dashboard.get("auto_selection", {})
-        mode = "learn" if str(mode or "").lower() == "learn" else "strict"
-        source_key = "exploration" if mode == "learn" else "selected"
+        raw_mode = str(mode or "").lower()
+        mode = raw_mode if raw_mode in {"strict", "learn", "aggressive_learning"} else "strict"
+        source_key = "aggressive_exploration" if mode == "aggressive_learning" else "exploration" if mode == "learn" else "selected"
         selected = selection.get(source_key, [])[: max(1, int(max_trades or 1))]
         selected_capital = self._summarize_candidate_capital(selected)
         blocker_summary = selection.get("blocker_summary") if isinstance(selection.get("blocker_summary"), dict) else {}
@@ -92,6 +93,8 @@ class PaperTradingService:
         preview_message = (
             no_trade_message
             if not selected
+            else f"{len(selected)} aggressive Learning-Kandidaten erfuellen die erweiterten Paper-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
+            if mode == "aggressive_learning"
             else f"{len(selected)} Learning-Kandidaten erfuellen die Exploration-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
             if mode == "learn"
             else f"{len(selected)} Demo-Kandidaten erfuellen die Auto-Selection-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
@@ -121,7 +124,8 @@ class PaperTradingService:
                             # Recalculate size against the account after every prior auto entry.
                             "quantity": 0,
                             "leverage": 1,
-                            "learning_mode": mode == "learn" or bool(candidate.get("learning_mode")),
+                            "learning_mode": mode in {"learn", "aggressive_learning"} or bool(candidate.get("learning_mode")),
+                            "risk_multiplier_override": candidate.get("risk_multiplier"),
                             "alert_source_label": "Paper-Autopilot",
                         },
                         scoreboard,
@@ -139,6 +143,8 @@ class PaperTradingService:
         execution_message = (
             no_trade_message
             if not selected and not opened
+            else f"{len(opened)} aggressive Paper-Learning-Trades eroeffnet; {len(errors)} im finalen Gate geblockt. Geplant: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
+            if mode == "aggressive_learning"
             else f"{len(opened)} Paper-Learning-Trades eroeffnet; {len(errors)} im finalen Gate geblockt. Geplant: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
             if mode == "learn"
             else f"{len(opened)} Paper-Trades eroeffnet; {len(errors)} im finalen Gate geblockt. Geplant: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
@@ -167,7 +173,7 @@ class PaperTradingService:
         }
 
     def _auto_selection_no_trade_message(self, mode: str, blocker_summary: Dict[str, Any]) -> str:
-        label = "Learning" if mode == "learn" else "Strict"
+        label = "Aggressive Learning" if mode == "aggressive_learning" else "Learning" if mode == "learn" else "Strict"
         next_best = blocker_summary.get("next_best_rejected") if isinstance(blocker_summary, dict) else None
         if isinstance(next_best, dict) and next_best.get("ticker"):
             reason_values = next_best.get("display_reasons") or next_best.get("reasons") or []
@@ -271,6 +277,7 @@ class PaperTradingService:
         entry_source_label = str(payload.get("alert_source_label") or "Paper-Autopilot")
         playbook = {**playbook, "entry_source_label": entry_source_label}
         learning_mode = bool(payload.get("learning_mode"))
+        risk_multiplier_override = payload.get("risk_multiplier_override")
         hard_rule_reasons = [
             str(item)
             for item in playbook.get("do_not_trade_reasons", [])
@@ -335,7 +342,7 @@ class PaperTradingService:
             "reference_price": last_price,
             "execution_model": {"entry": entry_execution},
         }
-        final_sizing = self._suggest_demo_sizing(playbook, demo_account)
+        final_sizing = self._suggest_demo_sizing(playbook, demo_account, risk_multiplier_override if learning_mode else None)
         if final_sizing.get("demo_tradeable") is False:
             raise ValueError("Demo account risk gate blocks the refreshed market snapshot.")
         max_quantity = float(final_sizing.get("suggested_quantity") or 0)
@@ -1200,17 +1207,24 @@ class PaperTradingService:
         }
         min_score = float(os.getenv("PAPER_TRADING_AUTO_MIN_SCORE", "88"))
         exploration_min_score = float(os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "60"))
+        aggressive_min_score = float(os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_MIN_SCORE", "52"))
         exploration_risk_multiplier = min(
             0.35,
             max(0.03, float(os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.10"))),
         )
+        aggressive_risk_multiplier = min(
+            0.65,
+            max(exploration_risk_multiplier, float(os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.25"))),
+        )
         selected: List[Dict[str, Any]] = []
         exploration: List[Dict[str, Any]] = []
+        aggressive_exploration: List[Dict[str, Any]] = []
         rejected: List[Dict[str, Any]] = []
 
         for playbook in playbooks:
             reasons: List[str] = []
             exploration_reasons: List[str] = []
+            aggressive_reasons: List[str] = []
             score = float(playbook.get("score") or 0)
             key = (
                 str(playbook.get("ticker") or "").upper(),
@@ -1222,6 +1236,11 @@ class PaperTradingService:
             ticket = playbook.get("trade_ticket") if isinstance(playbook.get("trade_ticket"), dict) else {}
             ticket_validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
             ticket_errors = [str(item) for item in ticket_validation.get("errors") or []]
+            ticket_blockers = [str(item) for item in ticket_validation.get("blocked_reasons") or []]
+            ticket_only_score_blocked = bool(ticket_blockers) and all(
+                "score below minimum trade score" in item.lower() or item.startswith("Strict-Signalregel:")
+                for item in ticket_blockers
+            )
             strategy_context = self._strategy_context_for_playbook(playbook, strategy_readiness or [])
             hard_rule_reasons = [
                 str(item)
@@ -1233,12 +1252,15 @@ class PaperTradingService:
                 reasons.append(f"score below auto minimum {min_score:.0f}")
             if score < exploration_min_score:
                 exploration_reasons.append(f"score below learning minimum {exploration_min_score:.0f}")
+            if score < aggressive_min_score:
+                aggressive_reasons.append(f"score below aggressive learning minimum {aggressive_min_score:.0f}")
             if playbook.get("tradeable") is False:
                 reasons.extend(rule_reasons[:3] or ["trade signal rules blocked this playbook"])
             if playbook.get("demo_tradeable") is False and not playbook.get("demo_block_reasons"):
                 reasons.append("demo risk gate blocked")
             if hard_rule_reasons:
                 exploration_reasons.extend(hard_rule_reasons[:3])
+                aggressive_reasons.extend(hard_rule_reasons[:3])
             if playbook.get("demo_block_reasons"):
                 demo_reasons = [
                     str(item)
@@ -1255,21 +1277,28 @@ class PaperTradingService:
                     )
                 ]
                 exploration_reasons.extend(hard_demo_reasons[:3])
+                aggressive_reasons.extend(hard_demo_reasons[:3])
             if key in open_keys:
                 reasons.append("same ticker/setup/direction already open")
                 exploration_reasons.append("same ticker/setup/direction already open")
+                aggressive_reasons.append("same ticker/setup/direction already open")
             if not playbook.get("ticker") or not playbook.get("reference_price"):
                 reasons.append("missing ticker or reference price")
                 exploration_reasons.append("missing ticker or reference price")
+                aggressive_reasons.append("missing ticker or reference price")
             if not framework.get("entry_trigger") or not framework.get("invalidation") or not playbook.get("thesis"):
                 reasons.append("missing thesis, trigger or invalidation")
                 exploration_reasons.append("missing thesis, trigger or invalidation")
+                aggressive_reasons.append("missing thesis, trigger or invalidation")
             ticket_reasons = [f"trade ticket invalid: {item}" for item in ticket_errors]
             if ticket_reasons:
                 reasons.extend(ticket_reasons)
                 exploration_reasons.extend(ticket_reasons)
+                aggressive_reasons.extend(ticket_reasons)
             elif ticket.get("paper_ready") is not True:
                 reasons.append("trade ticket is not paper ready")
+                if not ticket_only_score_blocked:
+                    aggressive_reasons.append("trade ticket is not paper ready")
             if playbook.get("asset_class") == "option":
                 readiness = (demo_account.get("learning_feedback") or {}).get("option_win_rate")
                 if readiness is None:
@@ -1279,6 +1308,10 @@ class PaperTradingService:
                 reasons.append("demo account open-trade slots exhausted")
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration):
                 exploration_reasons.append("demo account open-trade slots exhausted")
+            if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration) + len(aggressive_exploration):
+                aggressive_reasons.append("demo account open-trade slots exhausted")
+            if playbook.get("asset_class") == "option" and not aggressive_reasons:
+                aggressive_reasons.append("Optionskette muss vor aggressive Learning manuell geprueft werden")
 
             row = {
                 "id": playbook.get("id"),
@@ -1292,6 +1325,7 @@ class PaperTradingService:
                 "score": score,
                 "auto_score_gap": round(max(0.0, min_score - score), 1),
                 "learning_score_gap": round(max(0.0, exploration_min_score - score), 1),
+                "aggressive_learning_score_gap": round(max(0.0, aggressive_min_score - score), 1),
                 "title": playbook.get("title"),
                 "headline": playbook.get("headline"),
                 "suggested_quantity": playbook.get("suggested_quantity"),
@@ -1303,11 +1337,16 @@ class PaperTradingService:
                 "trade_ticket": playbook.get("trade_ticket") or {},
                 "reasons": self._dedupe_reason_list(reasons),
                 "learning_block_reasons": self._dedupe_reason_list(exploration_reasons),
+                "aggressive_learning_block_reasons": self._dedupe_reason_list(aggressive_reasons),
             }
             row["display_reasons"] = [self._auto_rejection_display_reason(reason) for reason in row["reasons"]]
             row["learning_block_display_reasons"] = [
                 self._auto_rejection_display_reason(reason)
                 for reason in row["learning_block_reasons"]
+            ]
+            row["aggressive_learning_block_display_reasons"] = [
+                self._auto_rejection_display_reason(reason)
+                for reason in row["aggressive_learning_block_reasons"]
             ]
             row["next_action"] = self._auto_rejection_next_action(row["reasons"])
             if reasons:
@@ -1320,8 +1359,19 @@ class PaperTradingService:
                 learning_row["suggested_quantity"] = round(float(playbook.get("suggested_quantity") or 0) * exploration_risk_multiplier, 6)
                 learning_row["suggested_notional_value"] = round(float(playbook.get("suggested_notional_value") or 0) * exploration_risk_multiplier, 2)
                 learning_row["suggested_max_loss_value"] = round(float(playbook.get("suggested_max_loss_value") or 0) * exploration_risk_multiplier, 2)
+                learning_row["risk_multiplier"] = exploration_risk_multiplier
                 learning_row["reasons"] = [f"learning mode: reduced risk x{exploration_risk_multiplier:g}"]
                 exploration.append(learning_row)
+            if not aggressive_reasons and reasons and playbook.get("asset_class") != "option":
+                aggressive_row = dict(row)
+                aggressive_row["learning_mode"] = True
+                aggressive_row["aggressive_learning_mode"] = True
+                aggressive_row["suggested_quantity"] = round(float(playbook.get("suggested_quantity") or 0) * aggressive_risk_multiplier, 6)
+                aggressive_row["suggested_notional_value"] = round(float(playbook.get("suggested_notional_value") or 0) * aggressive_risk_multiplier, 2)
+                aggressive_row["suggested_max_loss_value"] = round(float(playbook.get("suggested_max_loss_value") or 0) * aggressive_risk_multiplier, 2)
+                aggressive_row["risk_multiplier"] = aggressive_risk_multiplier
+                aggressive_row["reasons"] = [f"aggressive learning mode: reduced risk x{aggressive_risk_multiplier:g}"]
+                aggressive_exploration.append(aggressive_row)
             if len(selected) >= max_candidates:
                 break
 
@@ -1329,9 +1379,12 @@ class PaperTradingService:
             "mode": "paper_autopilot_preview",
             "min_score": min_score,
             "exploration_min_score": exploration_min_score,
+            "aggressive_learning_min_score": aggressive_min_score,
             "exploration_risk_multiplier": exploration_risk_multiplier,
+            "aggressive_learning_risk_multiplier": aggressive_risk_multiplier,
             "selected": selected,
             "exploration": exploration[:max_candidates],
+            "aggressive_exploration": aggressive_exploration[: max(8, max_candidates)],
             "rejected": rejected[:8],
             "rejected_count": len(rejected),
             "blocker_summary": self._summarize_auto_rejections(rejected),
@@ -2032,7 +2085,12 @@ class PaperTradingService:
             "policy": "Paper-only decision framework. Manual review and independent real-world validation required.",
         }
 
-    def _suggest_demo_sizing(self, playbook: Dict[str, Any], demo_account: Dict[str, Any]) -> Dict[str, Any]:
+    def _suggest_demo_sizing(
+        self,
+        playbook: Dict[str, Any],
+        demo_account: Dict[str, Any],
+        risk_multiplier_override: Any = None,
+    ) -> Dict[str, Any]:
         price = float(playbook.get("reference_price") or 0)
         risk_buffer_pct = float(playbook.get("risk_buffer_pct") or 3.5)
         contract_multiplier = float(playbook.get("contract_multiplier") or 1)
@@ -2085,6 +2143,11 @@ class PaperTradingService:
         max_position_value = max(0.0, min(capacity_limits))
         risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
         risk_multiplier = min(1.0, max(0.0, float(risk_circuit.get("risk_multiplier") or 1.0)))
+        if risk_multiplier_override is not None:
+            try:
+                risk_multiplier *= min(1.0, max(0.01, float(risk_multiplier_override)))
+            except (TypeError, ValueError):
+                pass
         risk_budget *= risk_multiplier
         block_reasons: List[str] = []
         day_status = str(demo_account.get("day_status") or "")

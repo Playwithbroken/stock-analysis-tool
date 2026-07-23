@@ -281,14 +281,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
-  const runAutopilot = async (execute: boolean, mode: "strict" | "learn" = "strict") => {
+  const runAutopilot = async (execute: boolean, mode: "strict" | "learn" | "aggressive_learning" = "strict") => {
     setBusyId(`${mode}-${execute ? "autopilot-execute" : "autopilot-preview"}`);
     setStatus("");
     try {
       const response = await fetch("/api/trading/paper-autopilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ execute, max_trades: 3, mode }),
+        body: JSON.stringify({ execute, max_trades: mode === "aggressive_learning" ? 5 : 3, mode }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Paper-Autopilot fehlgeschlagen.");
@@ -395,6 +395,20 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               className="rounded-xl bg-amber-600 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
               Lerntrade öffnen
+            </button>
+            <button
+              onClick={() => runAutopilot(false, "aggressive_learning")}
+              disabled={busyId === "aggressive_learning-autopilot-preview"}
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-red-800 disabled:opacity-50"
+            >
+              Aggro pruefen
+            </button>
+            <button
+              onClick={() => runAutopilot(true, "aggressive_learning")}
+              disabled={busyId === "aggressive_learning-autopilot-execute"}
+              className="rounded-xl bg-red-600 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+            >
+              Aggro Paper oeffnen
             </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} getrackte Trades
@@ -775,7 +789,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               </div>
             </div>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
-              {autoSelection.selected?.length || 0} streng / {autoSelection.exploration?.length || 0} lernen
+              {autoSelection.selected?.length || 0} streng / {autoSelection.exploration?.length || 0} lernen / {autoSelection.aggressive_exploration?.length || 0} aggro
             </div>
           </div>
           <div className="mt-3 rounded-[1rem] border border-black/8 bg-white/70 px-3 py-2 text-slate-600">

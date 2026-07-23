@@ -400,6 +400,28 @@ def test_paper_trade_telegram_money_formatting() -> None:
                 "consecutive_losses": 3,
                 "cooldown_until": "2026-07-11T18:00:00+00:00",
             },
+            "trade_action_queue": {
+                "status": "exit",
+                "message": "Zuerst AAPL LONG pruefen: jetzt pruefen.",
+                "top_priority": {
+                    "ticker": "AAPL",
+                    "direction": "long",
+                    "decision_grade": "exit",
+                    "management_status": "target_hit",
+                },
+                "items": [
+                    {
+                        "ticker": "AAPL",
+                        "direction": "long",
+                        "decision_grade": "exit",
+                        "management_status": "target_hit",
+                        "priority_label": "jetzt pruefen",
+                        "unrealized_pnl_value": 650.25,
+                        "summary": "Zielzone erreicht.",
+                        "next_check": "Schliessen oder Trailing-Plan festhalten.",
+                    }
+                ],
+            },
             "top_trades": [
                 {
                     "ticker": "AAPL",
@@ -416,6 +438,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Netto-Ergebnis:</b> +1.250,50 EUR (+0.25%)" in account
     assert "Geldfluss:</b> realisiert +900,25 EUR | offen +350,25 EUR" in account
     assert "investiert 42.000,00 EUR" in account
+    assert "Jetzt zuerst:</b> Zuerst AAPL LONG pruefen" in account
+    assert "jetzt pruefen | EXIT" in account
     assert "P/L +650,25 EUR" in account
     assert "Risk Circuit:</b> PAUSED" in account
     assert "Drawdown 1.20% / Limit 8.00%" in account
@@ -455,8 +479,45 @@ def test_paper_trade_management_alert_cooldown() -> None:
     assert service._paper_trade_management_can_send(trade, management) is True
 
 
+def test_paper_account_status_alert_tracks_action_queue_change() -> None:
+    service = EmailAlertService.__new__(EmailAlertService)
+    service.portfolio_manager = _SettingsStore()
+    base_account = {
+        "day_status": "risk_review",
+        "management_counts": {"review": 1},
+        "risk_circuit": {"status": "ready", "reasons": []},
+        "trade_action_queue": {
+            "status": "review",
+            "top_priority": {
+                "ticker": "AAPL",
+                "direction": "long",
+                "decision_grade": "review",
+                "management_status": "near_stop",
+            },
+        },
+    }
+
+    assert service._paper_account_status_can_send(base_account) is True
+    service._record_paper_account_status_delivery(base_account)
+    assert service._paper_account_status_can_send(base_account) is False
+    changed_top = {
+        **base_account,
+        "trade_action_queue": {
+            "status": "review",
+            "top_priority": {
+                "ticker": "MSFT",
+                "direction": "short",
+                "decision_grade": "review",
+                "management_status": "near_stop",
+            },
+        },
+    }
+    assert service._paper_account_status_can_send(changed_top) is True
+
+
 if __name__ == "__main__":
     test_paper_learning_alert_extraction()
     test_paper_trade_telegram_money_formatting()
     test_paper_trade_management_alert_cooldown()
+    test_paper_account_status_alert_tracks_action_queue_change()
     print("qa_paper_learning_alerts: ok")

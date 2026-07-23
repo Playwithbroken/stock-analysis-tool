@@ -481,6 +481,7 @@ class EmailAlertService:
             "open_trade_count": demo_account.get("open_trade_count"),
             "closed_trade_count": demo_account.get("closed_trade_count"),
             "management_counts": demo_account.get("management_counts") or {},
+            "trade_action_queue": demo_account.get("trade_action_queue") or {},
             "risk_circuit": demo_account.get("risk_circuit") or {},
             "performance": demo_account.get("performance") or {},
             "capital_flow": demo_account.get("capital_flow") or {},
@@ -2468,6 +2469,26 @@ class EmailAlertService:
         previous_counts = previous.get("management_counts") if isinstance(previous.get("management_counts"), dict) else {}
         if current_counts != previous_counts:
             return True
+        current_queue = demo_account.get("trade_action_queue") if isinstance(demo_account.get("trade_action_queue"), dict) else {}
+        previous_queue = previous.get("trade_action_queue") if isinstance(previous.get("trade_action_queue"), dict) else {}
+        current_top = current_queue.get("top_priority") if isinstance(current_queue.get("top_priority"), dict) else {}
+        previous_top = previous_queue.get("top_priority") if isinstance(previous_queue.get("top_priority"), dict) else {}
+        current_identity = (
+            current_queue.get("status"),
+            current_top.get("ticker"),
+            current_top.get("direction"),
+            current_top.get("decision_grade"),
+            current_top.get("management_status"),
+        )
+        previous_identity = (
+            previous_queue.get("status"),
+            previous_top.get("ticker"),
+            previous_top.get("direction"),
+            previous_top.get("decision_grade"),
+            previous_top.get("management_status"),
+        )
+        if current_identity != previous_identity:
+            return True
         current_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
         previous_circuit = previous.get("risk_circuit") if isinstance(previous.get("risk_circuit"), dict) else {}
         if current_circuit.get("status") != previous_circuit.get("status"):
@@ -2494,6 +2515,7 @@ class EmailAlertService:
             "day_status": demo_account.get("day_status"),
             "day_action": demo_account.get("day_action"),
             "management_counts": demo_account.get("management_counts") or {},
+            "trade_action_queue": demo_account.get("trade_action_queue") or {},
             "risk_circuit": {
                 "status": risk_circuit.get("status"),
                 "reasons": risk_circuit.get("reasons") or [],
@@ -3831,8 +3853,25 @@ class EmailAlertService:
             lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
         if cooldown_until:
             lines.append(f"<b>Cooldown bis:</b> {cooldown_until}")
+        action_queue = event.get("trade_action_queue") if isinstance(event.get("trade_action_queue"), dict) else {}
+        queue_items = action_queue.get("items") if isinstance(action_queue.get("items"), list) else []
+        if queue_items:
+            queue_message = self._tg_esc(str(action_queue.get("message") or "Top-Paper-Pruefung offen."))[:360]
+            lines.append(f"<b>Jetzt zuerst:</b> {queue_message}")
+            lines.append("<b>Top-Pruefungen:</b>")
+            for trade in queue_items[:3]:
+                ticker = self._tg_esc(str(trade.get("ticker") or "n/a"))
+                direction = self._tg_esc(str(trade.get("direction") or "n/a").upper())
+                grade = self._tg_esc(self._paper_label(trade.get("decision_grade"), "halten").upper())
+                priority = self._tg_esc(str(trade.get("priority_label") or "Plan pruefen"))
+                result = self._tg_signed_money(trade.get("unrealized_pnl_value"))
+                summary = self._tg_esc(str(trade.get("summary") or "Plan pruefen."))[:260]
+                next_check = self._tg_esc(str(trade.get("next_check") or "Trigger, Stop und Ziel erneut pruefen."))[:260]
+                lines.append(f"- <code>{ticker}</code> {direction} | {priority} | {grade} | P/L {result}")
+                lines.append(f"  Warum: {summary}")
+                lines.append(f"  Naechste Pruefung: {next_check}")
         top_trades = event.get("top_trades") if isinstance(event.get("top_trades"), list) else []
-        if top_trades:
+        if top_trades and not queue_items:
             lines.append("<b>Top-Prüfungen:</b>")
             for trade in top_trades[:3]:
                 ticker = self._tg_esc(str(trade.get("ticker") or "n/a"))

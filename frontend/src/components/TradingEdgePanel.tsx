@@ -56,6 +56,14 @@ interface YieldCurve {
   spread_10y_5y?: number;
   inverted?: boolean;
 }
+interface TradingEdgeMeta {
+  delivery_mode?: string;
+  refresh_state?: string;
+  fallback_reason?: string;
+  message?: string;
+  cached?: boolean;
+  cache_age_seconds?: number;
+}
 interface TradingEdge {
   squeeze?: SqueezeItem[];
   insider?: InsiderItem[];
@@ -65,6 +73,7 @@ interface TradingEdge {
   premarket?: PreMover[];
   sectors?: SectorItem[];
   yield_curve?: YieldCurve;
+  meta?: TradingEdgeMeta;
 }
 
 interface Props {
@@ -129,6 +138,7 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
     sectors = [],
     yield_curve = {},
   } = edge;
+  const meta = edge.meta || {};
 
   const empty =
     !squeeze.length &&
@@ -140,7 +150,35 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
     !regime.vix &&
     !yield_curve.us10y;
 
-  if (empty) return null;
+  if (empty) {
+    const isDegraded = meta.delivery_mode === "degraded" || Boolean(meta.fallback_reason);
+    if (!isDegraded) return null;
+
+    return (
+      <section
+        aria-label="Trading Edge status"
+        className="surface-panel rounded-[2rem] border border-amber-200/80 bg-amber-50/70 p-6"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-amber-700">
+              Trading Edge
+            </div>
+            <h2 className="mt-1 text-xl font-bold text-slate-950">
+              Live-Signale laden im Hintergrund.
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              {meta.message ||
+                "Der Bereich ist kurz verzoegert. Dashboard, Briefing und Portfolio bleiben nutzbar; Trading Edge wird automatisch nachgeladen."}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-amber-700">
+            {meta.refresh_state || "refreshing"}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

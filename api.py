@@ -128,6 +128,7 @@ _forecast_learning_task = None
 _push_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 _RESPONSE_CACHE: Dict[str, tuple[datetime, Any]] = {}
+TRADING_EDGE_CACHE_KEY = "trading_edge:dashboard"
 
 
 def _cache_get(key: str, ttl_seconds: int) -> Any | None:
@@ -1797,10 +1798,11 @@ async def _warm_brief_once() -> Dict[str, Any]:
         timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "30")),
     )
     try:
-        await asyncio.wait_for(
+        trading_edge = await asyncio.wait_for(
             asyncio.to_thread(get_morning_brief_service().get_trading_edge, snapshot),
             timeout=float(os.getenv("BRIEF_WARMUP_EDGE_TIMEOUT_SECONDS", "18")),
         )
+        _cache_set(TRADING_EDGE_CACHE_KEY, trading_edge or {})
     except Exception:
         # Trading Edge is heavy and optional for delivery. The brief cache is still useful without it.
         pass
@@ -4399,16 +4401,49 @@ async def get_trading_edge():
     """Heavy trading-signals payload (squeeze, insider, options, regime,
     sectors, yield curve). Loaded by the frontend separately so the main
     brief stays fast. Cached internally per-component (10min – 6h)."""
-    try:
-        cached = _cache_get("trading_edge:dashboard", int(os.getenv("TRADING_EDGE_HTTP_CACHE_TTL_SECONDS", "300")))
-        if cached is not None:
-            return convert_numpy_types(cached)
+    cache_ttl = int(os.getenv("TRADING_EDGE_HTTP_CACHE_TTL_SECONDS", "300"))
+    stale_ttl = int(os.getenv("TRADING_EDGE_STALE_CACHE_TTL_SECONDS", "1800"))
+    timeout_seconds = float(os.getenv("TRADING_EDGE_API_TIMEOUT_SECONDS", "12"))
+
+    cached = _cache_get(TRADING_EDGE_CACHE_KEY, cache_ttl)
+    if cached is not None:
+        return convert_numpy_types(cached)
+
+    def _build_trading_edge_payload() -> Dict[str, Any]:
         items = get_portfolio_manager().get_signal_watch_items()
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        payload = get_morning_brief_service().get_trading_edge(snapshot) or {}
+        if isinstance(payload, dict):
+            meta = payload.setdefault("meta", {})
+            if isinstance(meta, dict):
+                meta["delivery_mode"] = "generated"
+                meta["refresh_state"] = "ready"
+        return payload
+
+    try:
+        payload = await asyncio.wait_for(
+            asyncio.to_thread(_build_trading_edge_payload),
+            timeout=timeout_seconds,
+        )
+        return convert_numpy_types(_cache_set(TRADING_EDGE_CACHE_KEY, payload))
+    except asyncio.TimeoutError:
+        stale = _cache_get_stale(TRADING_EDGE_CACHE_KEY, stale_ttl)
+        if stale is not None:
+            return convert_numpy_types(stale)
         return convert_numpy_types(
-            _cache_set("trading_edge:dashboard", get_morning_brief_service().get_trading_edge(snapshot))
+            {
+                "meta": {
+                    "delivery_mode": "degraded",
+                    "refresh_state": "timeout",
+                    "fallback_reason": "trading_edge_timeout",
+                    "message": "Trading Edge wird im Hintergrund neu geladen.",
+                }
+            }
         )
     except Exception as e:
+        stale = _cache_get_stale(TRADING_EDGE_CACHE_KEY, stale_ttl)
+        if stale is not None:
+            return convert_numpy_types(stale)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -2149,6 +2149,7 @@ class PaperTradingService:
         for trade in open_trades:
             grade = str((trade.get("management_plan") or {}).get("decision_grade") or "hold")
             management_counts[grade] = management_counts.get(grade, 0) + 1
+        trade_action_queue = self._build_trade_action_queue(open_trades)
         if risk_circuit.get("active"):
             day_status = "risk_halt"
             day_action = "Keine neuen Paper-Entries: Verlustlimit oder Verlustserien-Cooldown zuerst auslaufen lassen."
@@ -2206,6 +2207,7 @@ class PaperTradingService:
             "open_trade_count": len(open_trades),
             "closed_trade_count": len(closed_trades),
             "management_counts": management_counts,
+            "trade_action_queue": trade_action_queue,
             "day_status": day_status,
             "day_action": day_action,
             "risk_budget_per_trade_value": risk_budget,
@@ -2229,6 +2231,61 @@ class PaperTradingService:
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],
             "learning_feedback": self._build_learning_feedback(trades),
+        }
+
+    def _build_trade_action_queue(self, open_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        priority_map = {
+            "exit": (1, "jetzt pruefen", "critical"),
+            "review": (2, "Risiko pruefen", "warning"),
+            "protect": (3, "Gewinn schuetzen", "positive"),
+            "wait": (4, "Daten abwarten", "neutral"),
+            "hold": (5, "Plan halten", "neutral"),
+        }
+        rows: List[Dict[str, Any]] = []
+        for trade in open_trades:
+            management = trade.get("management_plan") if isinstance(trade.get("management_plan"), dict) else {}
+            grade = str(management.get("decision_grade") or "hold")
+            priority, label, severity = priority_map.get(grade, priority_map["hold"])
+            rows.append(
+                {
+                    "id": trade.get("id"),
+                    "ticker": str(trade.get("ticker") or "UNKNOWN").upper(),
+                    "direction": str(trade.get("direction") or "").lower(),
+                    "asset_class": trade.get("asset_class") or "equity",
+                    "setup_type": trade.get("setup_type"),
+                    "priority": priority,
+                    "priority_label": label,
+                    "severity": severity,
+                    "management_status": management.get("status") or "monitor",
+                    "decision_grade": grade,
+                    "action": management.get("action") or "hold",
+                    "summary": management.get("summary") or "Paper-Plan halten, solange Trigger und Invalidierung gueltig bleiben.",
+                    "next_check": management.get("next_check") or "Trigger, Stop und Ziel erneut pruefen.",
+                    "invested_value": round(float(trade.get("invested_value") or 0), 2),
+                    "unrealized_pnl_value": round(float(trade.get("unrealized_pnl_value") or 0), 2),
+                    "unrealized_pnl_pct": trade.get("unrealized_pnl_pct"),
+                    "risk_distance_pct": management.get("risk_distance_pct"),
+                    "target_progress_pct": management.get("target_progress_pct"),
+                }
+            )
+        rows.sort(key=lambda item: (int(item["priority"]), -abs(float(item.get("unrealized_pnl_value") or 0))))
+        first = rows[0] if rows else None
+        return {
+            "status": first.get("decision_grade") if first else "no_open_trades",
+            "top_priority": first,
+            "items": rows[:8],
+            "counts": {
+                "exit": sum(1 for item in rows if item.get("decision_grade") == "exit"),
+                "review": sum(1 for item in rows if item.get("decision_grade") == "review"),
+                "protect": sum(1 for item in rows if item.get("decision_grade") == "protect"),
+                "hold": sum(1 for item in rows if item.get("decision_grade") == "hold"),
+                "wait": sum(1 for item in rows if item.get("decision_grade") == "wait"),
+            },
+            "message": (
+                f"Zuerst {first.get('ticker')} {str(first.get('direction') or '').upper()} pruefen: {first.get('priority_label')}."
+                if first
+                else "Keine offenen Paper-Trades. Naechsten Entry nur mit Trigger, Stop, Ziel und Risiko oeffnen."
+            ),
         }
 
     def _build_demo_exposure_profile(self, open_trades: List[Dict[str, Any]], equity: float) -> Dict[str, Any]:

@@ -572,6 +572,9 @@ def test_short_trade_money_flow_and_demo_equity() -> None:
     assert short_bucket["notional_value"] == 5000.0
     assert short_bucket["pnl_value"] == 500.0
     assert demo["exposure_profile"]["biggest_open_risk"]["ticker"] == "AAPL"
+    assert demo["trade_action_queue"]["top_priority"]["ticker"] == "AAPL"
+    assert demo["trade_action_queue"]["top_priority"]["direction"] == "short"
+    assert demo["trade_action_queue"]["counts"]["exit"] == 1
 
 
 def test_put_learning_inverts_underlying_move() -> None:
@@ -671,6 +674,9 @@ def test_demo_account_blocks_new_trades_during_risk_review() -> None:
     dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert dashboard["demo_account"]["day_status"] == "risk_review"
+    assert dashboard["demo_account"]["trade_action_queue"]["status"] == "review"
+    assert dashboard["demo_account"]["trade_action_queue"]["top_priority"]["ticker"] == "MSFT"
+    assert dashboard["demo_account"]["trade_action_queue"]["counts"]["review"] == 1
     assert aapl["demo_tradeable"] is False
     assert "Paper-Konto ist im Risiko-Review; schwache oder stop-nahe Trades zuerst prüfen." in aapl["demo_block_reasons"]
     assert dashboard["auto_selection"]["selected"] == []

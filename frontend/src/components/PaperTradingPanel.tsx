@@ -166,6 +166,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const capitalFlow = demoAccount.capital_flow || {};
   const exposureProfile = demoAccount.exposure_profile || {};
   const exposureBuckets = exposureProfile.buckets || [];
+  const tradeActionQueue = demoAccount.trade_action_queue || {};
+  const tradeActionItems = tradeActionQueue.items || [];
   const riskCircuit = demoAccount.risk_circuit || {};
   const learningFeedback = demoAccount.learning_feedback || {};
   const currency = demoAccount.currency || "EUR";
@@ -760,6 +762,59 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               {money(exposureProfile.biggest_open_risk?.risk_value, currency)} / Kapital{" "}
               {money(exposureProfile.biggest_open_risk?.notional_value, currency)}
             </div>
+          </div>
+          <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-white/90 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Was jetzt zuerst pruefen?
+                </div>
+                <div className="mt-1 text-sm font-semibold leading-6 text-slate-700">
+                  {tradeActionQueue.message || "Keine offenen Paper-Trades. Erst neues Setup mit Trigger und Risiko pruefen."}
+                </div>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+                tradeActionQueue.status === "exit"
+                  ? "bg-red-50 text-red-700"
+                  : tradeActionQueue.status === "review"
+                    ? "bg-amber-50 text-amber-700"
+                    : tradeActionQueue.status === "protect"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "border border-black/8 bg-slate-50 text-slate-600"
+              }`}>
+                {germanStatus(tradeActionQueue.status, "bereit")}
+              </div>
+            </div>
+            {tradeActionItems.length ? (
+              <div className="mt-4 grid gap-2 lg:grid-cols-2">
+                {tradeActionItems.slice(0, 4).map((item: any) => (
+                  <button
+                    key={item.id || `${item.ticker}-${item.direction}`}
+                    onClick={() => item.ticker && onAnalyze(item.ticker)}
+                    className="rounded-2xl border border-black/8 bg-slate-50/80 p-3 text-left transition hover:border-[var(--accent)]/30 hover:bg-white"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-slate-950">
+                          {item.ticker} / {String(item.direction || "").toUpperCase()}
+                        </div>
+                        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          {item.priority_label} / {germanStatus(item.management_status, "monitor")}
+                        </div>
+                      </div>
+                      <div className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] ${
+                        Number(item.unrealized_pnl_value || 0) >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                      }`}>
+                        {money(item.unrealized_pnl_value, currency)}
+                      </div>
+                    </div>
+                    <div className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-600">
+                      {germanText(item.summary, "Paper-Plan pruefen.")}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className={`mt-4 rounded-[1.4rem] border p-4 ${
             riskCircuit.active

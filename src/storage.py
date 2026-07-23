@@ -898,6 +898,49 @@ class PortfolioManager:
         self.set_app_setting("signal_score_settings", json.dumps(current))
         return current
 
+    def get_paper_autopilot_settings(self) -> Dict[str, Any]:
+        import json
+        default = {
+            "mode": "aggressive_learning",
+            "max_trades": 3,
+            "strict_min_score": 88,
+            "learning_min_score": 60,
+            "aggressive_min_score": 52,
+            "learning_risk_multiplier": 0.10,
+            "aggressive_risk_multiplier": 0.25,
+            "show_interesting_now": True,
+        }
+        raw = self.get_app_setting("paper_autopilot_settings")
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return {**default, **parsed}
+            except json.JSONDecodeError:
+                pass
+        return default
+
+    def save_paper_autopilot_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        import json
+        current = self.get_paper_autopilot_settings()
+        current.update(settings or {})
+        mode = str(current.get("mode") or "aggressive_learning")
+        if mode not in {"strict", "learn", "aggressive_learning"}:
+            mode = "aggressive_learning"
+        current["mode"] = mode
+        current["max_trades"] = max(1, min(8, int(float(current.get("max_trades") or 3))))
+        current["strict_min_score"] = max(50, min(99, float(current.get("strict_min_score") or 88)))
+        current["learning_min_score"] = max(40, min(95, float(current.get("learning_min_score") or 60)))
+        current["aggressive_min_score"] = max(35, min(90, float(current.get("aggressive_min_score") or 52)))
+        current["learning_risk_multiplier"] = max(0.03, min(0.35, float(current.get("learning_risk_multiplier") or 0.10)))
+        current["aggressive_risk_multiplier"] = max(
+            current["learning_risk_multiplier"],
+            min(0.65, float(current.get("aggressive_risk_multiplier") or 0.25)),
+        )
+        current["show_interesting_now"] = bool(current.get("show_interesting_now", True))
+        self.set_app_setting("paper_autopilot_settings", json.dumps(current))
+        return current
+
     def get_login_guard_state(self) -> Dict[str, Any]:
         import json
         raw = self.get_app_setting("login_guard")

@@ -28,6 +28,7 @@ class PaperTradingService:
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
         demo_account = self._build_demo_account(trades, playbooks)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account)
+        autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
         strategy_readiness = StrategyLibrary.build_readiness(
             trades,
             self.portfolio_manager.list_paper_trade_outcomes(limit=800),
@@ -47,7 +48,14 @@ class PaperTradingService:
             "outcome_learning": outcome_learning,
             "rules": rules,
             "demo_account": demo_account,
-            "auto_selection": self._build_auto_selection(sized_playbooks, trades, demo_account, strategy_readiness),
+            "paper_autopilot_settings": autopilot_settings,
+            "auto_selection": self._build_auto_selection(
+                sized_playbooks,
+                trades,
+                demo_account,
+                strategy_readiness,
+                autopilot_settings=autopilot_settings,
+            ),
             "auto_learn_status": self._build_auto_learn_status(),
         }
 
@@ -1194,7 +1202,17 @@ class PaperTradingService:
         demo_account: Dict[str, Any],
         strategy_readiness: List[Dict[str, Any]] | None = None,
         max_candidates: int = 5,
+        autopilot_settings: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
+        if autopilot_settings is None and hasattr(self, "portfolio_manager"):
+            autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
+        autopilot_settings = autopilot_settings or {
+            "strict_min_score": 88,
+            "learning_min_score": 60,
+            "aggressive_min_score": 52,
+            "learning_risk_multiplier": 0.10,
+            "aggressive_risk_multiplier": 0.25,
+        }
         open_keys = {
             (
                 str(trade.get("ticker") or "").upper(),
@@ -1205,16 +1223,32 @@ class PaperTradingService:
             for trade in trades
             if trade.get("status") == "open"
         }
-        min_score = float(os.getenv("PAPER_TRADING_AUTO_MIN_SCORE", "88"))
-        exploration_min_score = float(os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "60"))
-        aggressive_min_score = float(os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_MIN_SCORE", "52"))
+        min_score = float(autopilot_settings.get("strict_min_score") or os.getenv("PAPER_TRADING_AUTO_MIN_SCORE", "88"))
+        exploration_min_score = float(
+            autopilot_settings.get("learning_min_score") or os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "60")
+        )
+        aggressive_min_score = float(
+            autopilot_settings.get("aggressive_min_score") or os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_MIN_SCORE", "52")
+        )
         exploration_risk_multiplier = min(
             0.35,
-            max(0.03, float(os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.10"))),
+            max(
+                0.03,
+                float(
+                    autopilot_settings.get("learning_risk_multiplier")
+                    or os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.10")
+                ),
+            ),
         )
         aggressive_risk_multiplier = min(
             0.65,
-            max(exploration_risk_multiplier, float(os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.25"))),
+            max(
+                exploration_risk_multiplier,
+                float(
+                    autopilot_settings.get("aggressive_risk_multiplier")
+                    or os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.25")
+                ),
+            ),
         )
         selected: List[Dict[str, Any]] = []
         exploration: List[Dict[str, Any]] = []
@@ -1388,8 +1422,51 @@ class PaperTradingService:
             "rejected": rejected[:8],
             "rejected_count": len(rejected),
             "blocker_summary": self._summarize_auto_rejections(rejected),
+            "interesting_now": self._build_interesting_now(selected, exploration, aggressive_exploration, rejected),
+            "settings": autopilot_settings,
             "policy": "Paper-only Auto-Auswahl. Strict-Modus priorisiert Qualität; Lernmodus nutzt kleineres Demo-Risiko zum Sammeln von Beweisen.",
         }
+
+    def _build_interesting_now(
+        self,
+        selected: List[Dict[str, Any]],
+        exploration: List[Dict[str, Any]],
+        aggressive_exploration: List[Dict[str, Any]],
+        rejected: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for source, items, weight in (
+            ("strict", selected, 1000),
+            ("learn", exploration, 700),
+            ("aggressive_learning", aggressive_exploration, 500),
+            ("watch", rejected, 0),
+        ):
+            for item in items:
+                if not item.get("ticker"):
+                    continue
+                rows.append(
+                    {
+                        "ticker": item.get("ticker"),
+                        "asset_class": item.get("asset_class"),
+                        "direction": item.get("direction"),
+                        "setup_type": item.get("setup_type"),
+                        "source": source,
+                        "score": item.get("score"),
+                        "title": item.get("title") or item.get("headline"),
+                        "trigger": item.get("trigger"),
+                        "invalidation": item.get("invalidation"),
+                        "suggested_notional_value": item.get("suggested_notional_value"),
+                        "suggested_max_loss_value": item.get("suggested_max_loss_value"),
+                        "sort_score": weight + float(item.get("score") or 0),
+                    }
+                )
+        deduped: Dict[str, Dict[str, Any]] = {}
+        for row in sorted(rows, key=lambda item: float(item.get("sort_score") or 0), reverse=True):
+            key = str(row.get("ticker") or "").upper()
+            if key and key not in deduped:
+                row.pop("sort_score", None)
+                deduped[key] = row
+        return list(deduped.values())[:8]
 
     def _summarize_auto_rejections(self, rejected: List[Dict[str, Any]]) -> Dict[str, Any]:
         reason_counts: Dict[str, int] = {}

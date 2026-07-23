@@ -42,6 +42,18 @@ class FakePortfolioManager:
     def list_paper_trade_outcomes(self, limit: int = 500) -> List[Dict[str, Any]]:
         return self.outcomes[:limit]
 
+    def get_paper_autopilot_settings(self) -> Dict[str, Any]:
+        return {
+            "mode": "aggressive_learning",
+            "max_trades": 3,
+            "strict_min_score": 88,
+            "learning_min_score": 60,
+            "aggressive_min_score": 52,
+            "learning_risk_multiplier": 0.10,
+            "aggressive_risk_multiplier": 0.25,
+            "show_interesting_now": True,
+        }
+
     def list_due_paper_trade_outcomes(self, limit: int = 80) -> List[Dict[str, Any]]:
         due = []
         for item in self.outcomes:
@@ -855,6 +867,65 @@ def test_aggressive_learning_uses_wider_pool_with_capped_risk() -> None:
     assert aggressive["suggested_max_loss_value"] == round(float(sized["suggested_max_loss_value"]) * 0.25, 2)
 
 
+def test_aggressive_learning_respects_saved_autopilot_settings() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    demo_account = {
+        "equity": 500_000.0,
+        "risk_budget_per_trade_value": 1_750.0,
+        "remaining_risk_value": 15_000.0,
+        "max_position_value": 50_000.0,
+        "open_trade_slots": 5,
+        "day_status": "ok",
+        "learning_feedback": {},
+    }
+    playbook = {
+        "id": "equity-HOOD-long-aggressive-custom",
+        "ticker": "HOOD",
+        "asset_class": "equity",
+        "direction": "long",
+        "setup_type": "news_momentum",
+        "score": 57.0,
+        "reference_price": 100.0,
+        "risk_buffer_pct": 3.5,
+        "tradeable": False,
+        "do_not_trade_reasons": ["Score below minimum trade score 78."],
+        "thesis": "Custom aggressive paper-only test.",
+        "decision_framework": {
+            "entry_trigger": "HOOD confirms the headline with price and volume.",
+            "invalidation": "HOOD loses the trigger zone.",
+        },
+        "market_data": {
+            "price": 100.0,
+            "data_as_of": "2026-06-19T08:00:00+00:00",
+            "freshness": "fresh",
+            "liquidity_status": "strong",
+        },
+        "data_as_of": "2026-06-19T08:00:00+00:00",
+    }
+    sized = {**playbook, **service._suggest_demo_sizing(playbook, demo_account)}
+    sized["trade_ticket"] = service._build_trade_ticket(sized, demo_account)
+
+    blocked = service._build_auto_selection(
+        [sized],
+        [],
+        demo_account,
+        autopilot_settings={"aggressive_min_score": 58, "aggressive_risk_multiplier": 0.40},
+    )
+    assert blocked["aggressive_exploration"] == []
+
+    allowed = service._build_auto_selection(
+        [sized],
+        [],
+        demo_account,
+        autopilot_settings={"aggressive_min_score": 55, "aggressive_risk_multiplier": 0.40},
+    )
+    aggressive = allowed["aggressive_exploration"][0]
+    assert aggressive["ticker"] == "HOOD"
+    assert aggressive["risk_multiplier"] == 0.40
+    assert aggressive["suggested_max_loss_value"] == round(float(sized["suggested_max_loss_value"]) * 0.40, 2)
+    assert allowed["interesting_now"][0]["ticker"] == "HOOD"
+
+
 def test_market_quality_gate_blocks_stale_and_thin_snapshots() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     stale = {
@@ -1123,6 +1194,7 @@ if __name__ == "__main__":
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()
     test_aggressive_learning_uses_wider_pool_with_capped_risk()
+    test_aggressive_learning_respects_saved_autopilot_settings()
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_execution_fill_is_adverse_for_long_and_short()
     test_demo_exposure_capacity_gates()

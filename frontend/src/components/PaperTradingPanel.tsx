@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 interface PaperTradingPanelProps {
   data: any;
@@ -135,6 +135,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [lastAutopilotResult, setLastAutopilotResult] = useState<any | null>(null);
+  const [autopilotSettings, setAutopilotSettings] = useState<any>(data?.paper_autopilot_settings || data?.auto_selection?.settings || {});
   const [journalDraft, setJournalDraft] = useState<Record<string, { notes: string; exit_reason: string; lessons_learned: string }>>({});
 
   const stats = data?.stats || {};
@@ -183,6 +184,24 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     []
   ).slice(0, 2);
 
+  useEffect(() => {
+    const nextSettings = data?.paper_autopilot_settings || data?.auto_selection?.settings;
+    if (nextSettings) setAutopilotSettings(nextSettings);
+  }, [data?.paper_autopilot_settings, data?.auto_selection?.settings]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/trading/paper-autopilot/settings")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!cancelled && payload) setAutopilotSettings(payload);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const performance = stats.performance || {};
   const profitFactor = toFiniteNumber(performance.profit_factor);
 
@@ -199,6 +218,24 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     return [...openTrades]
       .sort((a: any, b: any) => Math.abs(Number(b.result_value_delta || 0)) - Math.abs(Number(a.result_value_delta || 0)));
   }, [openTrades]);
+
+  const interestingNow = useMemo(() => {
+    const rows = [
+      ...(autoSelection.interesting_now || []),
+      ...(autoSelection.selected || []),
+      ...(autoSelection.exploration || []),
+      ...(autoSelection.aggressive_exploration || []),
+    ];
+    const seen = new Set<string>();
+    return rows
+      .filter((item: any) => {
+        const key = String(item?.ticker || "").toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 6);
+  }, [autoSelection]);
 
   if (!data) return null;
 
@@ -281,6 +318,31 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
+  const updateAutopilotSetting = (key: string, value: any) => {
+    setAutopilotSettings((prev: any) => ({ ...(prev || {}), [key]: value }));
+  };
+
+  const saveAutopilotSettings = async () => {
+    setBusyId("save-autopilot-settings");
+    setStatus("");
+    try {
+      const response = await fetch("/api/trading/paper-autopilot/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(autopilotSettings || {}),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Autopilot-Settings konnten nicht gespeichert werden.");
+      setAutopilotSettings(payload);
+      await onRefresh?.();
+      setStatus("Autopilot-Settings gespeichert.");
+    } catch (error: any) {
+      setStatus(error?.message || "Autopilot-Settings konnten nicht gespeichert werden.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const runAutopilot = async (execute: boolean, mode: "strict" | "learn" | "aggressive_learning" = "strict") => {
     setBusyId(`${mode}-${execute ? "autopilot-execute" : "autopilot-preview"}`);
     setStatus("");
@@ -288,7 +350,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       const response = await fetch("/api/trading/paper-autopilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ execute, max_trades: mode === "aggressive_learning" ? 5 : 3, mode }),
+        body: JSON.stringify({
+          execute,
+          max_trades: Number(autopilotSettings?.max_trades || (mode === "aggressive_learning" ? 5 : 3)),
+          mode,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Paper-Autopilot fehlgeschlagen.");
@@ -304,6 +370,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     } finally {
       setBusyId(null);
     }
+  };
+
+  const runConfiguredAutopilot = async (execute: boolean) => {
+    const mode = String(autopilotSettings?.mode || "aggressive_learning") as "strict" | "learn" | "aggressive_learning";
+    await runAutopilot(execute, mode);
   };
 
   const startEditing = (entry: any) => {
@@ -412,6 +483,140 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} getrackte Trades
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Autopilot Steuerung
+                </div>
+                <div className="mt-1 text-sm font-bold text-slate-900">
+                  Wie stark soll das Demo-Konto lernen?
+                </div>
+              </div>
+              <button
+                onClick={saveAutopilotSettings}
+                disabled={busyId === "save-autopilot-settings"}
+                className="rounded-xl bg-[#101114] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+              >
+                Speichern
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Profil</span>
+                <select
+                  value={autopilotSettings?.mode || "aggressive_learning"}
+                  onChange={(event) => updateAutopilotSetting("mode", event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                >
+                  <option value="strict">Strict: nur Top-Setups</option>
+                  <option value="learn">Learn: mehr Tests, klein</option>
+                  <option value="aggressive_learning">Aggressive Learning: schneller lernen</option>
+                </select>
+              </label>
+              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Max. Trades pro Lauf</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={8}
+                  value={Number(autopilotSettings?.max_trades || 3)}
+                  onChange={(event) => updateAutopilotSetting("max_trades", Number(event.target.value))}
+                  className="mt-3 w-full"
+                />
+                <div className="mt-1 text-sm font-black text-slate-900">{Number(autopilotSettings?.max_trades || 3)} Paper-Trades</div>
+              </label>
+              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Aggro Mindestscore</span>
+                <input
+                  type="range"
+                  min={35}
+                  max={90}
+                  value={Number(autopilotSettings?.aggressive_min_score || autoSelection.aggressive_learning_min_score || 52)}
+                  onChange={(event) => updateAutopilotSetting("aggressive_min_score", Number(event.target.value))}
+                  className="mt-3 w-full"
+                />
+                <div className="mt-1 text-sm font-black text-slate-900">{Number(autopilotSettings?.aggressive_min_score || 52).toFixed(0)} Score</div>
+              </label>
+              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Aggro Risiko-Groesse</span>
+                <input
+                  type="range"
+                  min={3}
+                  max={65}
+                  value={Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || autoSelection.aggressive_learning_risk_multiplier || 0.25) * 100)}
+                  onChange={(event) => updateAutopilotSetting("aggressive_risk_multiplier", Number(event.target.value) / 100)}
+                  className="mt-3 w-full"
+                />
+                <div className="mt-1 text-sm font-black text-slate-900">
+                  {Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || 0.25) * 100)}% der normalen Paper-Groesse
+                </div>
+              </label>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={() => runConfiguredAutopilot(false)}
+                disabled={busyId?.includes("autopilot-preview")}
+                className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+              >
+                Profil pruefen
+              </button>
+              <button
+                onClick={() => runConfiguredAutopilot(true)}
+                disabled={busyId?.includes("autopilot-execute")}
+                className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+              >
+                Profil Paper traden
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[1.6rem] border border-emerald-500/15 bg-emerald-50/55 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                  Gerade interessant
+                </div>
+                <div className="mt-1 text-sm font-bold text-slate-900">
+                  Vorschlaege aus Strict, Learn und Aggro-Pool
+                </div>
+              </div>
+              <div className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-800">
+                {interestingNow.length} Ideen
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {interestingNow.length ? (
+                interestingNow.map((item: any) => (
+                  <button
+                    key={`${item.ticker}-${item.source || item.setup_type || "idea"}`}
+                    onClick={() => onAnalyze(item.ticker)}
+                    className="rounded-2xl border border-black/8 bg-white/85 p-3 text-left transition hover:border-emerald-300 hover:bg-white"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-black text-slate-950">{item.ticker}</div>
+                      <div className="rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                        Score {Number(item.score || 0).toFixed(0)}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
+                      {item.source || "watch"} / {item.direction || "watch"}
+                    </div>
+                    <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
+                      {item.trigger || item.title || "Analyse oeffnen und Trigger pruefen."}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-emerald-300 bg-white/70 p-4 text-sm font-semibold text-slate-600 sm:col-span-2">
+                  Noch keine saubere Idee. Erst Daten, Trigger und Risiko bestaetigen lassen.
+                </div>
+              )}
             </div>
           </div>
         </div>

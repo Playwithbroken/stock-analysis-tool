@@ -1679,13 +1679,18 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
         items = get_portfolio_manager().get_signal_watch_items()
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         settings = get_portfolio_manager().get_signal_score_settings()
+        autopilot_settings = get_portfolio_manager().get_paper_autopilot_settings()
         scoreboard = asyncio.run(get_signal_score_service().build_scoreboard(snapshot, settings))
         result = get_paper_trading_service().run_auto_selection(
             scoreboard,
             settings,
-            max_trades=_safe_int_env("PAPER_TRADING_AUTO_LEARN_MAX_TRADES", 3, minimum=1),
+            max_trades=_safe_int_env(
+                "PAPER_TRADING_AUTO_LEARN_MAX_TRADES",
+                int(autopilot_settings.get("max_trades") or 3),
+                minimum=1,
+            ),
             execute=True,
-            mode=os.getenv("PAPER_TRADING_AUTO_LEARN_MODE", "aggressive_learning"),
+            mode=os.getenv("PAPER_TRADING_AUTO_LEARN_MODE", str(autopilot_settings.get("mode") or "aggressive_learning")),
         )
         if result.get("opened"):
             try:
@@ -2056,6 +2061,17 @@ class PaperAutoSelectionRequest(BaseModel):
     execute: bool = False
     max_trades: int = Field(default=3, ge=1, le=8)
     mode: str = Field(default="strict", pattern="^(strict|learn|aggressive_learning)$")
+
+
+class PaperAutopilotSettingsRequest(BaseModel):
+    mode: Optional[str] = Field(default=None, pattern="^(strict|learn|aggressive_learning)$")
+    max_trades: Optional[int] = Field(default=None, ge=1, le=8)
+    strict_min_score: Optional[float] = Field(default=None, ge=50, le=99)
+    learning_min_score: Optional[float] = Field(default=None, ge=40, le=95)
+    aggressive_min_score: Optional[float] = Field(default=None, ge=35, le=90)
+    learning_risk_multiplier: Optional[float] = Field(default=None, ge=0.03, le=0.35)
+    aggressive_risk_multiplier: Optional[float] = Field(default=None, ge=0.03, le=0.65)
+    show_interesting_now: Optional[bool] = None
 
 
 class PaperTradeCloseRequest(BaseModel):
@@ -5401,6 +5417,26 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         except Exception as alert_error:
             trade["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
         return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/paper-autopilot/settings")
+async def get_paper_autopilot_settings():
+    try:
+        return convert_numpy_types(get_portfolio_manager().get_paper_autopilot_settings())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/paper-autopilot/settings")
+async def save_paper_autopilot_settings(req: PaperAutopilotSettingsRequest):
+    try:
+        payload = {key: value for key, value in req.model_dump().items() if value is not None}
+        saved = get_portfolio_manager().save_paper_autopilot_settings(payload)
+        _cache_forget("signals:scoreboard")
+        _cache_forget("search:suggestions")
+        return convert_numpy_types(saved)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

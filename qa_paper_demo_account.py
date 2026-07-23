@@ -109,6 +109,9 @@ def build_service(manager: FakePortfolioManager) -> PaperTradingService:
         "MSFT": 100.0,
         "JEPI": 50.0,
         "BTC-USD": 50_000.0,
+        "GLD": 220.0,
+        "USO": 80.0,
+        "XLE": 95.0,
     }
     service._get_market_snapshot = lambda ticker: (  # type: ignore[method-assign]
         {
@@ -238,6 +241,17 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["trade_ticket"]["status"] == "paper_only"
     assert "option_chain_not_validated" in aapl_call["trade_ticket"]["validation"]["warnings"]
     assert "prämie" in aapl_call["decision_framework"]["risk_plan"].lower()
+
+    gold_call = next(item for item in dashboard["playbooks"] if item["id"] == "commodity-option-GLD-call")
+    assert gold_call["asset_class"] == "option"
+    assert gold_call["setup_type"] == "commodity_call_leverage_learning"
+    assert gold_call["underlying_asset"] == "Gold"
+    assert gold_call["underlying_proxy"] == "GLD"
+    assert gold_call["trade_ticket"]["status"] == "paper_only"
+    assert gold_call["trade_ticket"]["real_money_ready"] is False
+    assert "leverage_product_data_required" in gold_call["trade_ticket"]["validation"]["warnings"]
+    assert "Strike or knockout level" in gold_call["decision_framework"]["product_data_required"]
+    assert "Knockout" in gold_call["decision_framework"]["risk_plan"]
 
     created = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},

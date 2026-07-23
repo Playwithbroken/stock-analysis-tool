@@ -13,6 +13,30 @@ from src.performance_metrics import build_trade_performance
 
 DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
+COMMODITY_LEVERAGE_PROXIES = [
+    {
+        "ticker": "GLD",
+        "label": "Gold",
+        "theme": "gold_safe_haven",
+        "headline": "Gold leverage paper setup: inflation, real yields and risk-off flows",
+        "score": 84,
+    },
+    {
+        "ticker": "USO",
+        "label": "Oil",
+        "theme": "oil_supply_demand",
+        "headline": "Oil leverage paper setup: supply shock, OPEC and geopolitical risk",
+        "score": 82,
+    },
+    {
+        "ticker": "XLE",
+        "label": "Energy equities",
+        "theme": "energy_equity_beta",
+        "headline": "Energy leverage paper setup: oil beta through liquid energy equities",
+        "score": 80,
+    },
+]
+
 
 class PaperTradingService:
     def __init__(self, portfolio_manager: PortfolioManager) -> None:
@@ -714,6 +738,7 @@ class PaperTradingService:
                 }
             )
 
+        playbooks.extend(self._build_commodity_leverage_playbooks())
         playbooks.extend(self._build_option_learning_playbooks(playbooks))
         self._apply_outcome_learning(playbooks, outcome_learning or {})
 
@@ -725,7 +750,7 @@ class PaperTradingService:
             item["tradeable"] = len(rule_state["blocked"]) == 0
             item["decision_framework"] = self._build_decision_framework(item)
 
-        return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:10]
+        return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:16]
 
     def _build_trade_note_snapshot(self, playbook: Dict[str, Any], demo_account: Dict[str, Any], is_option: bool) -> str:
         framework = playbook.get("decision_framework") or {}
@@ -746,6 +771,8 @@ class PaperTradingService:
             lines.append("Lernmodus: reduzierte Demo-Position, kein strenges Top-Setup und nicht Echtgeld-bereit.")
         if is_option:
             lines.append("Options-Gate: nur Paper-Premienmodell; Strike, Laufzeit, Spread, IV und maximalen Prämienverlust manuell prüfen.")
+        if playbook.get("product_data_required"):
+            lines.append("Hebelprodukt-Daten vor Echtgeld: " + " | ".join(str(item) for item in playbook.get("product_data_required", [])[:5]))
         for question in checklist[:3]:
             lines.append(f"Prüffrage: {question}")
         lines.append(framework.get("real_money_policy") or "Nur Entscheidungsrahmen; keine automatische Echtgeld-Ausführung.")
@@ -762,6 +789,7 @@ class PaperTradingService:
         blocked = list(playbook.get("do_not_trade_reasons") or [])
         warnings = list(playbook.get("leverage_warnings") or [])
         is_option = asset_class == "option"
+        is_commodity_leverage = str(playbook.get("setup_type") or "").startswith("commodity_")
         strategy = playbook.get("strategy") or StrategyLibrary.find_for_playbook(playbook)
 
         direction_label = "Aufwärtsbewegung" if direction in {"long", "call"} else "Abwärtsbewegung"
@@ -782,6 +810,22 @@ class PaperTradingService:
                 "Ungültig, wenn Underlying-Momentum nachlässt, Spread breit ist, IV/Laufzeit unattraktiv sind oder maximaler Prämienverlust nicht dokumentiert ist."
             )
             risk_plan = "Nur Paper-Option mit definiertem Risiko; maximaler Verlust ist die Prämie, keine Echtgeld-Ausführung aus diesem Modell."
+
+        if is_commodity_leverage:
+            underlying = playbook.get("underlying_asset") or ticker
+            proxy = playbook.get("underlying_proxy") or ticker
+            entry_trigger = (
+                f"{underlying} Hebel-Proxy {proxy}: Paper-Test nur, wenn Makro-Nachricht, Future/Spot-Reaktion "
+                "und ETF-Volumen dieselbe Richtung bestaetigen."
+            )
+            invalidation = (
+                "Ungueltig, wenn die Makro-Nachricht zurueckgenommen wird, der Future/Spot-Markt nicht bestaetigt, "
+                "Spread/IV unattraktiv ist oder das echte Hebelprodukt zu nah am Knockout liegt."
+            )
+            risk_plan = (
+                "Nur Paper-Hebelproxy. Maximaler Verlust ist im Modell die Praemie; echte Optionsscheine/Knockouts "
+                "brauchen Strike/Knockout, Laufzeit, Spread, Emittent und Overnight-Risiko vor jeder Real-Money-Pruefung."
+            )
 
         evidence_level = "watch"
         if blocked:
@@ -820,6 +864,7 @@ class PaperTradingService:
             "strategy_horizon": strategy.get("horizon"),
             "quality_gates": strategy.get("quality_gates") or [],
             "risk_notes": strategy.get("risk_notes") or [],
+            "product_data_required": playbook.get("product_data_required") or [],
             "real_world_gate": strategy.get("real_world_gate"),
             "real_money_policy": "Nur Entscheidungsrahmen; Echtgeld-Ausführung erfordert manuelle Prüfung und dokumentiertes Risiko.",
         }
@@ -1677,6 +1722,62 @@ class PaperTradingService:
             result.append(label)
         return result
 
+    def _build_commodity_leverage_playbooks(self) -> List[Dict[str, Any]]:
+        playbooks: List[Dict[str, Any]] = []
+        for proxy in COMMODITY_LEVERAGE_PROXIES:
+            ticker = str(proxy["ticker"])
+            market_fields = self._market_reference_fields(ticker)
+            underlying_price = float(market_fields.get("reference_price") or 0)
+            if underlying_price <= 0:
+                continue
+            estimated_premium = round(max(0.45, underlying_price * 0.022), 2)
+            for option_type, bias, score_penalty in (("call", "long", 0), ("put", "short", 3)):
+                score = max(0, float(proxy["score"]) - score_penalty)
+                playbooks.append(
+                    {
+                        "id": f"commodity-option-{ticker}-{option_type}",
+                        "ticker": ticker,
+                        "asset_class": "option",
+                        "direction": option_type,
+                        "setup_type": f"commodity_{option_type}_leverage_learning",
+                        "title": f"{proxy['label']} {option_type.upper()} leverage paper setup",
+                        "headline": proxy["headline"],
+                        "source_label": "commodity proxy paper model",
+                        "score": score,
+                        "risk_buffer_pct": 100.0,
+                        "reward_buffer_pct": 120.0,
+                        "thesis": (
+                            f"{proxy['label']} paper-only Hebelidee ueber den liquiden Proxy {ticker}. "
+                            f"Richtung {bias}; nur sinnvoll, wenn Makro-Trigger, Future/Spot-Bestaetigung und Volumen zusammenpassen."
+                        ),
+                        "tags": ["commodity", "leverage", proxy["theme"], option_type, "paper only"],
+                        "reference_price": estimated_premium,
+                        "underlying_reference_price": underlying_price,
+                        "option_type": option_type,
+                        "contract_multiplier": 100,
+                        "max_holding_days": 7,
+                        "leverage_product_type": "defined_risk_option_or_certificate_proxy",
+                        "underlying_asset": proxy["label"],
+                        "underlying_proxy": ticker,
+                        "quality_gate": [
+                            "Macro trigger is verified by at least one reliable source",
+                            "Underlying proxy price and liquidity are fresh",
+                            "No real-money warrant/knockout without broker product data",
+                            "Max loss is premium in this paper model",
+                        ],
+                        "product_data_required": [
+                            "Strike or knockout level",
+                            "Expiry",
+                            "Spread and issuer/broker quote",
+                            "Implied volatility or product pricing premium",
+                            "Overnight gap and issuer risk",
+                        ],
+                        "market_data": market_fields.get("market_data") or {},
+                        "data_as_of": market_fields.get("data_as_of"),
+                    }
+                )
+        return playbooks
+
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         option_playbooks: List[Dict[str, Any]] = []
         for item in base_playbooks:
@@ -2106,6 +2207,10 @@ class PaperTradingService:
             warnings.append("liquidity_unverified")
         if is_option:
             warnings.append("option_chain_not_validated")
+        if playbook.get("leverage_product_type"):
+            warnings.append("leverage_product_data_required")
+        if playbook.get("product_data_required"):
+            warnings.append("issuer_strike_expiry_spread_required")
         warnings.extend(str(item) for item in framework.get("warnings") or [])
 
         paper_ready = not errors and not blocked_reasons and bool(playbook.get("demo_tradeable"))
@@ -2152,6 +2257,10 @@ class PaperTradingService:
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
             "execution_model": execution_model or None,
+            "leverage_product_type": playbook.get("leverage_product_type") or None,
+            "underlying_asset": playbook.get("underlying_asset") or None,
+            "underlying_proxy": playbook.get("underlying_proxy") or None,
+            "product_data_required": playbook.get("product_data_required") or [],
             "generated_at": datetime.utcnow().isoformat(),
             "validation": {
                 "valid": not errors,

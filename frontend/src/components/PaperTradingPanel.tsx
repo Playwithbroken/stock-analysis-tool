@@ -1697,6 +1697,20 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     {item.asset_class === "option" && <div>Kontrakt: x{item.contract_multiplier || 100} · {item.option_type?.toUpperCase?.()}</div>}
                     {item.asset_class === "option" && <div>Max. Haltedauer: {item.max_holding_days || 10}d</div>}
                   </div>
+                  {item.leverage_product_type && (
+                    <div className="mt-3 rounded-[1rem] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                      <div className="font-extrabold uppercase tracking-[0.14em]">Hebel-Proxy</div>
+                      <div className="mt-1 leading-5">
+                        {item.underlying_asset || item.ticker} ueber {item.underlying_proxy || item.ticker}. Echter Optionsschein/Knockout erst mit Strike, Laufzeit, Spread, Emittent und Knockout-Abstand.
+                      </div>
+                    </div>
+                  )}
+                  {!!item.product_data_required?.length && (
+                    <div className="mt-3 rounded-[1rem] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                      <div className="font-extrabold uppercase tracking-[0.14em]">Produktdaten fehlen</div>
+                      <div className="mt-1 leading-5">{item.product_data_required.slice(0, 5).join(" · ")}</div>
+                    </div>
+                  )}
                   {!!item.do_not_trade_reasons?.length && (
                     <div className="mt-3 rounded-[1rem] border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                       {item.do_not_trade_reasons.map((reason: string) => <div key={reason}>{reason}</div>)}

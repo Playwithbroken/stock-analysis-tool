@@ -104,6 +104,9 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     reduced_risk: "reduziertes Risiko",
     risk_halt: "Trading pausiert",
     risk_review: "Risiko prüfen",
+    net_long: "netto long",
+    net_short: "netto short",
+    balanced: "ausgeglichen",
     watch: "beobachten",
   };
   return labels[key] || (key ? key.replace(/_/g, " ") : fallback);
@@ -161,6 +164,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
   const capitalFlow = demoAccount.capital_flow || {};
+  const exposureProfile = demoAccount.exposure_profile || {};
+  const exposureBuckets = exposureProfile.buckets || [];
   const riskCircuit = demoAccount.risk_circuit || {};
   const learningFeedback = demoAccount.learning_feedback || {};
   const currency = demoAccount.currency || "EUR";
@@ -710,6 +715,51 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Jetzt investiert" value={money(capitalFlow.open_exposure_value ?? demoAccount.open_exposure_value, currency)} />
             <StatTile label="Realisiert" value={money(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value, currency)} tone={(Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) > 0 ? "good" : Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) < 0 ? "bad" : "default") as any} />
             <StatTile label="Netto-Ergebnis" value={`${money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / ${formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
+          </div>
+          <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-white/90 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Trader-Konto auf einen Blick
+                </div>
+                <div className="mt-1 text-sm font-semibold leading-6 text-slate-700">
+                  {germanStatus(exposureProfile.net_direction, "ausgeglichen")} mit {exposureProfile.open_trade_count || 0} offenen Trades.
+                  Hebel/Options-Paper bindet {money(exposureProfile.leveraged_notional_value, currency)}.
+                </div>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
+                Number(exposureProfile.open_pnl_value || 0) >= 0
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-red-50 text-red-700"
+              }`}>
+                offen {money(exposureProfile.open_pnl_value, currency)}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              {exposureBuckets.map((bucket: any) => (
+                <div key={bucket.key} className="rounded-2xl border border-black/8 bg-slate-50/80 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{bucket.label}</div>
+                    <div className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                      {bucket.count || 0}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-lg font-black text-slate-950">{money(bucket.notional_value, currency)}</div>
+                  <div className={`mt-1 text-xs font-bold ${Number(bucket.pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    P/L {money(bucket.pnl_value, currency)} / {formatPct(bucket.pnl_pct_of_notional, 2, "0.00%")}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
+              Groesstes Einzelrisiko:{" "}
+              <span className="font-extrabold text-slate-900">
+                {exposureProfile.biggest_open_risk?.ticker || "kein Trade"}
+              </span>{" "}
+              {exposureProfile.biggest_open_risk?.direction ? `/${String(exposureProfile.biggest_open_risk.direction).toUpperCase()}` : ""} / Risiko{" "}
+              {money(exposureProfile.biggest_open_risk?.risk_value, currency)} / Kapital{" "}
+              {money(exposureProfile.biggest_open_risk?.notional_value, currency)}
+            </div>
           </div>
           <div className={`mt-4 rounded-[1.4rem] border p-4 ${
             riskCircuit.active

@@ -2114,6 +2114,7 @@ class PaperTradingService:
                 exposure_by_ticker.get(ticker, 0.0) + float(trade.get("invested_value") or 0),
                 2,
             )
+        exposure_profile = self._build_demo_exposure_profile(open_trades, equity)
         option_premium_exposure_value = round(
             sum(float(trade.get("invested_value") or 0) for trade in open_trades if trade.get("asset_class") == "option"),
             2,
@@ -2194,6 +2195,7 @@ class PaperTradingService:
             "open_risk_pct": round((open_risk_value / equity) * 100, 2) if equity > 0 else 0,
             "open_exposure_value": open_exposure_value,
             "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
+            "exposure_profile": exposure_profile,
             "exposure_by_ticker": exposure_by_ticker,
             "top_ticker_exposure": {
                 "ticker": top_ticker,
@@ -2227,6 +2229,75 @@ class PaperTradingService:
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],
             "learning_feedback": self._build_learning_feedback(trades),
+        }
+
+    def _build_demo_exposure_profile(self, open_trades: List[Dict[str, Any]], equity: float) -> Dict[str, Any]:
+        buckets = {
+            "long": {"label": "Long", "count": 0, "notional_value": 0.0, "pnl_value": 0.0},
+            "short": {"label": "Short", "count": 0, "notional_value": 0.0, "pnl_value": 0.0},
+            "call": {"label": "Calls", "count": 0, "notional_value": 0.0, "pnl_value": 0.0},
+            "put": {"label": "Puts", "count": 0, "notional_value": 0.0, "pnl_value": 0.0},
+            "other": {"label": "Andere", "count": 0, "notional_value": 0.0, "pnl_value": 0.0},
+        }
+        leveraged_value = 0.0
+        biggest_open_risk: Dict[str, Any] | None = None
+        total_notional = 0.0
+        open_pnl = 0.0
+
+        for trade in open_trades:
+            direction = str(trade.get("direction") or "").lower()
+            bucket_key = direction if direction in {"long", "short", "call", "put"} else "other"
+            notional = float(trade.get("invested_value") or 0)
+            pnl = float(trade.get("unrealized_pnl_value") or trade.get("result_value_delta") or 0)
+            risk = self._trade_open_risk_value(trade)
+            leverage = float(trade.get("leverage") or 1)
+            buckets[bucket_key]["count"] += 1
+            buckets[bucket_key]["notional_value"] += notional
+            buckets[bucket_key]["pnl_value"] += pnl
+            total_notional += notional
+            open_pnl += pnl
+            if leverage > 1 or trade.get("asset_class") == "option":
+                leveraged_value += notional
+            if not biggest_open_risk or risk > float(biggest_open_risk.get("risk_value") or 0):
+                biggest_open_risk = {
+                    "ticker": str(trade.get("ticker") or "UNKNOWN").upper(),
+                    "direction": direction or "unknown",
+                    "risk_value": round(risk, 2),
+                    "notional_value": round(notional, 2),
+                }
+
+        rows = []
+        for key, bucket in buckets.items():
+            value = round(float(bucket["notional_value"]), 2)
+            pnl_value = round(float(bucket["pnl_value"]), 2)
+            rows.append(
+                {
+                    "key": key,
+                    "label": bucket["label"],
+                    "count": int(bucket["count"]),
+                    "notional_value": value,
+                    "notional_pct": round((value / equity) * 100, 2) if equity > 0 else 0.0,
+                    "pnl_value": pnl_value,
+                    "pnl_pct_of_notional": round((pnl_value / value) * 100, 2) if value > 0 else 0.0,
+                }
+            )
+
+        net_direction = "balanced"
+        if buckets["long"]["notional_value"] + buckets["call"]["notional_value"] > buckets["short"]["notional_value"] + buckets["put"]["notional_value"]:
+            net_direction = "net_long"
+        elif buckets["short"]["notional_value"] + buckets["put"]["notional_value"] > buckets["long"]["notional_value"] + buckets["call"]["notional_value"]:
+            net_direction = "net_short"
+
+        return {
+            "net_direction": net_direction,
+            "open_trade_count": len(open_trades),
+            "total_notional_value": round(total_notional, 2),
+            "open_pnl_value": round(open_pnl, 2),
+            "leveraged_notional_value": round(leveraged_value, 2),
+            "leveraged_notional_pct": round((leveraged_value / equity) * 100, 2) if equity > 0 else 0.0,
+            "buckets": rows,
+            "biggest_open_risk": biggest_open_risk
+            or {"ticker": None, "direction": None, "risk_value": 0.0, "notional_value": 0.0},
         }
 
     def _attach_demo_sizing(self, playbooks: List[Dict[str, Any]], demo_account: Dict[str, Any]) -> List[Dict[str, Any]]:

@@ -564,6 +564,14 @@ def test_short_trade_money_flow_and_demo_equity() -> None:
     assert demo["open_exposure_value"] == 5000.0
     assert demo["cash_available_value"] == 495_000.0
     assert demo["capital_status"] == "flat"
+    assert demo["exposure_profile"]["net_direction"] == "net_short"
+    assert demo["exposure_profile"]["open_trade_count"] == 1
+    assert demo["exposure_profile"]["open_pnl_value"] == 500.0
+    short_bucket = next(item for item in demo["exposure_profile"]["buckets"] if item["key"] == "short")
+    assert short_bucket["count"] == 1
+    assert short_bucket["notional_value"] == 5000.0
+    assert short_bucket["pnl_value"] == 500.0
+    assert demo["exposure_profile"]["biggest_open_risk"]["ticker"] == "AAPL"
 
 
 def test_put_learning_inverts_underlying_move() -> None:

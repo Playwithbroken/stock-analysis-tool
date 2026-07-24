@@ -151,8 +151,8 @@ export default function NotificationSettingsPanel({
           </div>
           <h2 className="mt-2 text-3xl text-slate-900">Workspace profile and delivery</h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
-            Lokales Profil, Telegram-Status und Open-Brief-Zeiten. Email und Browser-Push bleiben
-            fuer diese private Beta bewusst aus, damit keine doppelten oder nervigen Meldungen entstehen.
+            Lokales Profil, Telegram-Status und Open-Brief-Zeiten. Telegram ist der einzige aktive Push-Kanal,
+            damit keine doppelten oder nervigen Meldungen entstehen.
           </p>
         </div>
         {statusText ? (
@@ -238,13 +238,13 @@ export default function NotificationSettingsPanel({
           </div>
           <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-              Email / Browser Push
+              Weitere Push-Kanäle
             </div>
             <div className="mt-2 text-sm font-black text-slate-900">
               Aus
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              Private Beta nutzt Telegram-only, damit Briefings und Alerts nicht doppelt ankommen.
+              Email und Browser-Push bleiben in dieser Beta bewusst aus. Alle Briefings und Alerts laufen über Telegram.
             </div>
           </div>
           <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">

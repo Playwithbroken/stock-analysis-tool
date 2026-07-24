@@ -327,13 +327,13 @@ export default function SignalWatchlistPanel({
             </div>
             <div className="rounded-[1.3rem] border border-black/8 bg-white/70 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                Email / Browser Push
+                Weitere Push-Kanäle
               </div>
               <div className="mt-2 text-sm font-black text-slate-900">
                 Aus
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Bewusst deaktiviert, damit keine doppelten Alerts entstehen.
+                Email und Browser-Push sind aus. Telegram bleibt der einzige aktive Alert-Kanal.
               </div>
             </div>
             <div className="rounded-[1.3rem] border border-black/8 bg-white/70 p-4">

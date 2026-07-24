@@ -731,6 +731,16 @@ def test_profit_protection_limits_autopilot_to_small_learning() -> None:
     assert rejected["next_action"].startswith("Erst Gewinnschutz")
     assert any(item["category"] == "profit_protection" for item in selection["blocker_summary"]["blocker_groups"])
 
+    executed = service.run_auto_selection(sample_scoreboard(), sample_settings(), execute=True, mode="learn")
+    assert executed["opened"]
+    opened = executed["opened"][0]
+    context = opened["trade_ticket"]["learning_context"]
+    assert context["autopilot_mode"] == "learn"
+    assert context["account_day_status"] == "protect_profit"
+    assert context["account_queue_status"] == "protect"
+    assert context["risk_multiplier"] == 0.1
+    assert "Lernkontext:" in opened["notes"]
+
 
 def test_learning_feedback_tracks_missing_journals() -> None:
     manager = FakePortfolioManager(

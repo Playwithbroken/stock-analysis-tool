@@ -158,6 +158,14 @@ class PaperTradingService:
                             "leverage": 1,
                             "learning_mode": mode in {"learn", "aggressive_learning"} or bool(candidate.get("learning_mode")),
                             "risk_multiplier_override": candidate.get("risk_multiplier"),
+                            "learning_context": {
+                                "autopilot_mode": mode,
+                                "candidate_reason": (candidate.get("reasons") or [None])[0],
+                                "candidate_source": source_key,
+                                "risk_multiplier": candidate.get("risk_multiplier"),
+                                "account_day_status": (dashboard.get("demo_account") or {}).get("day_status"),
+                                "account_queue_status": ((dashboard.get("demo_account") or {}).get("trade_action_queue") or {}).get("status"),
+                            },
                             "alert_source_label": "Paper-Autopilot",
                         },
                         scoreboard,
@@ -313,6 +321,20 @@ class PaperTradingService:
         playbook = {**playbook, "entry_source_label": entry_source_label}
         learning_mode = bool(payload.get("learning_mode"))
         risk_multiplier_override = payload.get("risk_multiplier_override")
+        learning_context_payload = payload.get("learning_context") if isinstance(payload.get("learning_context"), dict) else {}
+        if learning_mode:
+            playbook = {
+                **playbook,
+                "learning_context": {
+                    "autopilot_mode": learning_context_payload.get("autopilot_mode") or "manual_learning",
+                    "candidate_reason": learning_context_payload.get("candidate_reason") or "learning mode",
+                    "candidate_source": learning_context_payload.get("candidate_source") or "manual",
+                    "risk_multiplier": learning_context_payload.get("risk_multiplier") or risk_multiplier_override,
+                    "account_day_status": learning_context_payload.get("account_day_status") or demo_account.get("day_status"),
+                    "account_queue_status": learning_context_payload.get("account_queue_status")
+                    or (demo_account.get("trade_action_queue") or {}).get("status"),
+                },
+            }
         product_data_validation = {"valid": True, "errors": [], "warnings": [], "data": {}}
         if playbook.get("leverage_product_type"):
             product_data_validation = self._validate_leverage_product_data(payload.get("product_data") or {})
@@ -788,6 +810,15 @@ class PaperTradingService:
         ]
         if playbook.get("learning_mode"):
             lines.append("Lernmodus: reduzierte Demo-Position, kein strenges Top-Setup und nicht Echtgeld-bereit.")
+            context = playbook.get("learning_context") if isinstance(playbook.get("learning_context"), dict) else {}
+            if context:
+                lines.append(
+                    "Lernkontext: "
+                    f"Modus {context.get('autopilot_mode') or 'n/a'} | "
+                    f"Konto {context.get('account_day_status') or 'n/a'} | "
+                    f"Queue {context.get('account_queue_status') or 'n/a'} | "
+                    f"Grund {context.get('candidate_reason') or 'n/a'}."
+                )
         if is_option:
             lines.append("Options-Gate: nur Paper-Premienmodell; Strike, Laufzeit, Spread, IV und maximalen Prämienverlust manuell prüfen.")
         if playbook.get("product_data_required"):
@@ -2502,6 +2533,7 @@ class PaperTradingService:
             "evidence_level": framework.get("evidence_level") or "watch",
             "source_label": source_label or None,
             "entry_source_label": playbook.get("entry_source_label") or "Paper-Autopilot",
+            "learning_context": playbook.get("learning_context") or None,
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
             "execution_model": execution_model or None,

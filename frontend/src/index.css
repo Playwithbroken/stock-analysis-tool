@@ -229,27 +229,35 @@ h3,
 
 .desktop-movers-tape .ticker-marquee-wrap {
   height: 100%;
-  min-height: 4.45rem;
-  max-height: 4.6rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding-top: 1.95rem !important;
+  min-width: 0;
+  min-height: 4.55rem;
+  max-height: 4.7rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1.55rem minmax(1.75rem, 1fr);
+  align-items: stretch;
+  gap: 0.28rem;
+  padding-top: 0.32rem !important;
+  padding-bottom: 0.45rem !important;
   position: relative;
 }
 
 .header-movers-tape .header-movers-meta {
-  position: absolute;
-  top: 0.05rem;
-  left: 0.75rem;
-  right: 0.75rem;
-  min-height: 1.45rem;
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 1.55rem;
   margin-bottom: 0;
+  padding-inline: 0.15rem;
+  overflow: hidden;
   z-index: 3;
 }
 
 .header-movers-tape .ticker-marquee-track {
-  min-height: 1.75rem;
+  min-width: max-content;
+  min-height: 1.8rem;
   position: relative;
   z-index: 1;
 }
@@ -487,8 +495,8 @@ h3,
   }
 
   .desktop-movers-tape .ticker-marquee-wrap {
-    min-height: 4.55rem;
-    max-height: 4.7rem;
+    min-height: 4.65rem;
+    max-height: 4.78rem;
   }
 }
 

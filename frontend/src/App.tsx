@@ -1400,7 +1400,7 @@ function AppContent() {
 
         <div className="layout-shell hidden px-3 pb-2 pt-2 lg:block sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header app-shell-header-compact rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
-            <div className="grid items-center gap-3 lg:grid-cols-[minmax(18rem,1fr)_auto_minmax(18rem,1fr)]">
+            <div className="grid items-center gap-3 lg:grid-cols-[minmax(12rem,1fr)_auto_max-content]">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-[0.9rem] bg-[#101114] text-white">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

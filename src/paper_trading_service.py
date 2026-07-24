@@ -53,6 +53,7 @@ class PaperTradingService:
         demo_account = self._build_demo_account(trades, playbooks)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account)
         autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
+        autopilot_profile = self._build_autopilot_profile_summary(autopilot_settings, demo_account)
         strategy_readiness = StrategyLibrary.build_readiness(
             trades,
             self.portfolio_manager.list_paper_trade_outcomes(limit=800),
@@ -74,6 +75,7 @@ class PaperTradingService:
             "rules": rules,
             "demo_account": demo_account,
             "paper_autopilot_settings": autopilot_settings,
+            "paper_autopilot_profile": autopilot_profile,
             "auto_selection": self._build_auto_selection(
                 sized_playbooks,
                 trades,
@@ -82,6 +84,74 @@ class PaperTradingService:
                 autopilot_settings=autopilot_settings,
             ),
             "auto_learn_status": self._build_auto_learn_status(),
+        }
+
+    def _build_autopilot_profile_summary(
+        self,
+        autopilot_settings: Dict[str, Any],
+        demo_account: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        mode = str(autopilot_settings.get("mode") or "aggressive_learning")
+        max_trades = max(1, min(8, int(float(autopilot_settings.get("max_trades") or 3))))
+        learning_risk = max(0.03, min(0.35, float(autopilot_settings.get("learning_risk_multiplier") or 0.10)))
+        aggressive_risk = max(
+            learning_risk,
+            min(0.65, float(autopilot_settings.get("aggressive_risk_multiplier") or 0.25)),
+        )
+        risk_budget = float(demo_account.get("risk_budget_per_trade_value") or 0)
+        strict_score = float(autopilot_settings.get("strict_min_score") or 88)
+        learning_score = float(autopilot_settings.get("learning_min_score") or 60)
+        aggressive_score = float(autopilot_settings.get("aggressive_min_score") or 52)
+        mode_map = {
+            "strict": {
+                "label": "Strict",
+                "min_score": strict_score,
+                "risk_multiplier": 1.0,
+                "tone": "quality",
+                "description": "Nur sehr starke Paper-Setups. Weniger Trades, hoehere Datenqualitaet.",
+            },
+            "learn": {
+                "label": "Learn",
+                "min_score": learning_score,
+                "risk_multiplier": learning_risk,
+                "tone": "balanced",
+                "description": "Mehr kleine Tests, um schneller belastbare Beweise zu sammeln.",
+            },
+            "aggressive_learning": {
+                "label": "Aggressive Learning",
+                "min_score": aggressive_score,
+                "risk_multiplier": aggressive_risk,
+                "tone": "aggressive",
+                "description": "Schneller lernen mit mehr Paper-Ideen, aber weiter ohne Echtgeld-Ausfuehrung.",
+            },
+        }
+        active = mode_map.get(mode, mode_map["aggressive_learning"])
+        per_trade_risk = round(risk_budget * float(active["risk_multiplier"]), 2)
+        planned_risk = round(per_trade_risk * max_trades, 2)
+        protection_active = str(demo_account.get("day_status") or "") in {"protect_profit", "risk_review", "risk_halt"}
+        guardrails = [
+            "Paper-only: keine Echtgeld-Ausfuehrung.",
+            "Jeder Trade braucht These, Trigger und Invalidierung.",
+            "Offene Risiken und Verlustserien koennen neue Trades blockieren.",
+        ]
+        if protection_active:
+            guardrails.insert(0, "Konto-Schutz ist aktiv: aggressives Lernen wird begrenzt oder geblockt.")
+        return {
+            "mode": mode,
+            "label": active["label"],
+            "tone": active["tone"],
+            "description": active["description"],
+            "max_trades": max_trades,
+            "min_score": active["min_score"],
+            "risk_multiplier": active["risk_multiplier"],
+            "per_trade_risk_value": per_trade_risk,
+            "planned_run_risk_value": planned_risk,
+            "protection_active": protection_active,
+            "guardrails": guardrails,
+            "summary": (
+                f"{active['label']}: bis zu {max_trades} Paper-Trades ab Score {float(active['min_score']):.0f}, "
+                f"Risiko x{float(active['risk_multiplier']):.2f}, geplant max. {planned_risk:.0f} Demo-Risiko pro Lauf."
+            ),
         }
 
     def build_demo_account_snapshot(self) -> Dict[str, Any]:

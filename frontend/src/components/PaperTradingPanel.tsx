@@ -154,6 +154,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
   const autoSelection = data?.auto_selection || {};
+  const autopilotProfile = data?.paper_autopilot_profile || {};
   const autoLearnStatus = data?.auto_learn_status || {};
   const strategyReadiness = data?.strategy_readiness || [];
   const optionReadiness = outcomeLearning.option_readiness || {};
@@ -551,6 +552,56 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               >
                 Speichern
               </button>
+            </div>
+            <div className={`mt-4 rounded-[1.35rem] border p-4 ${
+              autopilotProfile.tone === "aggressive"
+                ? "border-red-200 bg-red-50/70"
+                : autopilotProfile.tone === "balanced"
+                  ? "border-amber-200 bg-amber-50/70"
+                  : "border-emerald-200 bg-emerald-50/70"
+            }`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    Aktives Risiko-Profil
+                  </div>
+                  <div className="mt-1 text-lg font-black text-slate-950">
+                    {autopilotProfile.label || "Aggressive Learning"}
+                  </div>
+                  <div className="mt-1 max-w-2xl text-xs font-semibold leading-5 text-slate-600">
+                    {autopilotProfile.description || "Paper-only: schneller lernen, ohne Echtgeld auszuführen."}
+                  </div>
+                </div>
+                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                  {autopilotProfile.protection_active ? "Schutz aktiv" : "Paper-only"}
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl border border-black/8 bg-white/80 p-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Score-Gate</div>
+                  <div className="mt-1 text-lg font-black text-slate-950">{Number(autopilotProfile.min_score || 0).toFixed(0)}</div>
+                </div>
+                <div className="rounded-2xl border border-black/8 bg-white/80 p-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Risiko pro Trade</div>
+                  <div className="mt-1 text-lg font-black text-slate-950">{moneyOrNA(autopilotProfile.per_trade_risk_value, currency)}</div>
+                </div>
+                <div className="rounded-2xl border border-black/8 bg-white/80 p-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Max. Lauf-Risiko</div>
+                  <div className="mt-1 text-lg font-black text-slate-950">{moneyOrNA(autopilotProfile.planned_run_risk_value, currency)}</div>
+                </div>
+              </div>
+              <div className="mt-3 rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
+                {autopilotProfile.summary || "Profil pruefen, bevor neue Paper-Trades geoeffnet werden."}
+              </div>
+              {Array.isArray(autopilotProfile.guardrails) && autopilotProfile.guardrails.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {autopilotProfile.guardrails.slice(0, 3).map((item: string) => (
+                    <span key={item} className="rounded-full border border-black/8 bg-white/80 px-3 py-1 text-[10px] font-bold text-slate-600">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">

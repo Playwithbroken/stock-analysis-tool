@@ -1086,6 +1086,32 @@ def test_aggressive_learning_respects_saved_autopilot_settings() -> None:
     assert allowed["interesting_now"][0]["ticker"] == "HOOD"
 
 
+def test_autopilot_profile_summary_explains_risk_and_protection() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    profile = service._build_autopilot_profile_summary(
+        {
+            "mode": "aggressive_learning",
+            "max_trades": 4,
+            "strict_min_score": 88,
+            "learning_min_score": 60,
+            "aggressive_min_score": 55,
+            "learning_risk_multiplier": 0.10,
+            "aggressive_risk_multiplier": 0.40,
+        },
+        {
+            "risk_budget_per_trade_value": 2_000.0,
+            "day_status": "protect_profit",
+        },
+    )
+    assert profile["label"] == "Aggressive Learning"
+    assert profile["min_score"] == 55.0
+    assert profile["risk_multiplier"] == 0.40
+    assert profile["per_trade_risk_value"] == 800.0
+    assert profile["planned_run_risk_value"] == 3_200.0
+    assert profile["protection_active"] is True
+    assert "Konto-Schutz" in profile["guardrails"][0]
+
+
 def test_leverage_product_validation_contract() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     blocked = service.validate_leverage_product_data({})
@@ -1395,6 +1421,7 @@ if __name__ == "__main__":
     test_strict_score_block_does_not_block_learning_candidate()
     test_aggressive_learning_uses_wider_pool_with_capped_risk()
     test_aggressive_learning_respects_saved_autopilot_settings()
+    test_autopilot_profile_summary_explains_risk_and_protection()
     test_leverage_product_validation_contract()
     test_market_quality_gate_blocks_stale_and_thin_snapshots()
     test_execution_fill_is_adverse_for_long_and_short()

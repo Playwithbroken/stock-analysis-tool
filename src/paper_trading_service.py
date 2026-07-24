@@ -108,7 +108,7 @@ class PaperTradingService:
                 "min_score": strict_score,
                 "risk_multiplier": 1.0,
                 "tone": "quality",
-                "description": "Nur sehr starke Paper-Setups. Weniger Trades, hoehere Datenqualitaet.",
+                "description": "Nur sehr starke Paper-Setups. Weniger Trades, hoehere Datenqualität.",
             },
             "learn": {
                 "label": "Learn",
@@ -122,7 +122,7 @@ class PaperTradingService:
                 "min_score": aggressive_score,
                 "risk_multiplier": aggressive_risk,
                 "tone": "aggressive",
-                "description": "Schneller lernen mit mehr Paper-Ideen, aber weiter ohne Echtgeld-Ausfuehrung.",
+                "description": "Schneller lernen mit mehr Paper-Ideen, aber weiter ohne Echtgeld-Ausführung.",
             },
         }
         active = mode_map.get(mode, mode_map["aggressive_learning"])
@@ -132,21 +132,21 @@ class PaperTradingService:
         learning_feedback = demo_account.get("learning_feedback") if isinstance(demo_account.get("learning_feedback"), dict) else {}
         journal_rate = float(learning_feedback.get("journal_completion_rate") or 0)
         open_trade_count = int(demo_account.get("open_trade_count") or 0)
-        recommendation = "Profil ist fuer Paper-Lernen freigegeben; vor Ausfuehrung trotzdem Trigger, Stop und Invalidierung pruefen."
+        recommendation = "Profil ist für Paper-Lernen freigegeben; vor Ausführung trotzdem Trigger, Stop und Invalidierung prüfen."
         recommended_mode = mode
         recommendation_tone = "ok"
         if str(demo_account.get("day_status") or "") == "risk_halt":
             recommended_mode = "strict"
             recommendation_tone = "block"
-            recommendation = "Trading pausieren: Risk-Halt ist aktiv. Erst offene Risiken und Verlustursache pruefen."
+            recommendation = "Trading pausieren: Risk-Halt ist aktiv. Erst offene Risiken und Verlustursache prüfen."
         elif str(demo_account.get("day_status") or "") == "risk_review":
             recommended_mode = "strict"
             recommendation_tone = "warning"
-            recommendation = "Risiko-Review zuerst abschliessen. Neue Paper-Trades nur nach manueller Pruefung."
+            recommendation = "Risiko-Review zuerst abschließen. Neue Paper-Trades nur nach manueller Prüfung."
         elif protection_active and mode == "aggressive_learning":
             recommended_mode = "learn"
             recommendation_tone = "warning"
-            recommendation = "Gewinnschutz ist aktiv. Aggressives Lernen zuruecknehmen und offene Gewinner zuerst managen."
+            recommendation = "Gewinnschutz ist aktiv. Aggressives Lernen zurücknehmen und offene Gewinner zuerst managen."
         elif open_trade_count >= int(demo_account.get("max_open_trades") or 12):
             recommended_mode = "strict"
             recommendation_tone = "warning"
@@ -154,11 +154,11 @@ class PaperTradingService:
         elif journal_rate and journal_rate < 70:
             recommended_mode = "learn"
             recommendation_tone = "warning"
-            recommendation = "Lernqualitaet leidet: Journale zuerst vervollstaendigen, sonst lernt das System aus zu wenig Kontext."
+            recommendation = "Lernqualität leidet: Journale zuerst vervollstaendigen, sonst lernt das System aus zu wenig Kontext."
         guardrails = [
-            "Paper-only: keine Echtgeld-Ausfuehrung.",
+            "Paper-only: keine Echtgeld-Ausführung.",
             "Jeder Trade braucht These, Trigger und Invalidierung.",
-            "Offene Risiken und Verlustserien koennen neue Trades blockieren.",
+            "Offene Risiken und Verlustserien können neue Trades blockieren.",
         ]
         if protection_active:
             guardrails.insert(0, "Konto-Schutz ist aktiv: aggressives Lernen wird begrenzt oder geblockt.")
@@ -225,11 +225,11 @@ class PaperTradingService:
         preview_message = (
             no_trade_message
             if not selected
-            else f"{len(selected)} aggressive Learning-Kandidaten erfuellen die erweiterten Paper-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
+            else f"{len(selected)} aggressive Learning-Kandidaten erfüllen die erweiterten Paper-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
             if mode == "aggressive_learning"
-            else f"{len(selected)} Learning-Kandidaten erfuellen die Exploration-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
+            else f"{len(selected)} Learning-Kandidaten erfüllen die Exploration-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
             if mode == "learn"
-            else f"{len(selected)} Demo-Kandidaten erfuellen die Auto-Selection-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
+            else f"{len(selected)} Demo-Kandidaten erfüllen die Auto-Selection-Gates: {selected_capital['notional_value']:.0f} Demo-Kapital, max. {selected_capital['max_loss_value']:.0f} Risiko."
         )
         if not execute:
             return {
@@ -926,7 +926,7 @@ class PaperTradingService:
         if playbook.get("leveraged_product"):
             product = playbook.get("leveraged_product") or {}
             lines.append(
-                "Geprueftes Hebelprodukt: "
+                "Geprüftes Hebelprodukt: "
                 f"{product.get('product_type') or 'product'} | Emittent {product.get('issuer') or 'n/a'} | "
                 f"Strike/KO {product.get('strike_or_knockout_level') or 'n/a'} | "
                 f"Bid/Ask {product.get('bid')}/{product.get('ask')} | Spread {product.get('spread_pct')}%."
@@ -1054,15 +1054,15 @@ class PaperTradingService:
             proxy = playbook.get("underlying_proxy") or ticker
             entry_trigger = (
                 f"{underlying} Hebel-Proxy {proxy}: Paper-Test nur, wenn Makro-Nachricht, Future/Spot-Reaktion "
-                "und ETF-Volumen dieselbe Richtung bestaetigen."
+                "und ETF-Volumen dieselbe Richtung bestätigen."
             )
             invalidation = (
-                "Ungueltig, wenn die Makro-Nachricht zurueckgenommen wird, der Future/Spot-Markt nicht bestaetigt, "
+                "Ungültig, wenn die Makro-Nachricht zurückgenommen wird, der Future/Spot-Markt nicht bestätigt, "
                 "Spread/IV unattraktiv ist oder das echte Hebelprodukt zu nah am Knockout liegt."
             )
             risk_plan = (
-                "Nur Paper-Hebelproxy. Maximaler Verlust ist im Modell die Praemie; echte Optionsscheine/Knockouts "
-                "brauchen Strike/Knockout, Laufzeit, Spread, Emittent und Overnight-Risiko vor jeder Real-Money-Pruefung."
+                "Nur Paper-Hebelproxy. Maximaler Verlust ist im Modell die Prämie; echte Optionsscheine/Knockouts "
+                "brauchen Strike/Knockout, Laufzeit, Spread, Emittent und Overnight-Risiko vor jeder Real-Money-Prüfung."
             )
 
         evidence_level = "watch"
@@ -1631,7 +1631,7 @@ class PaperTradingService:
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration) + len(aggressive_exploration):
                 aggressive_reasons.append("demo account open-trade slots exhausted")
             if playbook.get("asset_class") == "option" and not aggressive_reasons:
-                aggressive_reasons.append("Optionskette muss vor aggressive Learning manuell geprueft werden")
+                aggressive_reasons.append("Optionskette muss vor aggressive Learning manuell geprüft werden")
 
             row = {
                 "id": playbook.get("id"),
@@ -1871,7 +1871,7 @@ class PaperTradingService:
     def _auto_rejection_category_label(self, category: str) -> str:
         labels = {
             "journal": "Journal zuerst",
-            "risk_review": "Risiko pruefen",
+            "risk_review": "Risiko prüfen",
             "capacity": "Kapazitaet voll",
             "duplicate": "Duplikat offen",
             "score": "Score zu niedrig",
@@ -1887,9 +1887,9 @@ class PaperTradingService:
     def _auto_rejection_missing_to_trade(self, reasons: List[str]) -> str:
         text = " | ".join(str(reason or "").lower() for reason in reasons)
         if "score below auto minimum" in text:
-            return "Score 88+ oder staerkere Preis-/Volumenbestaetigung"
+            return "Score 88+ oder stärkere Preis-/Volumenbestätigung"
         if "score below minimum trade score" in text:
-            return "Score 78+ und bessere Signalqualitaet"
+            return "Score 78+ und bessere Signalqualität"
         if "missing thesis, trigger or invalidation" in text:
             return "These, Trigger und Invalidierung voll dokumentieren"
         if "missing ticker or reference price" in text:
@@ -1897,11 +1897,11 @@ class PaperTradingService:
         if "same ticker/setup/direction already open" in text:
             return "Bestehenden Paper-Trade managen statt doppeln"
         if "paper risk circuit" in text:
-            return "Cooldown abwarten und Verlustserie pruefen, bevor ein neuer Entry startet"
+            return "Cooldown abwarten und Verlustserie prüfen, bevor ein neuer Entry startet"
         if "risk review" in text or "exit actions open" in text:
-            return "Offene Trades pruefen und Risk-Review beenden"
+            return "Offene Trades prüfen und Risk-Review beenden"
         if "profit-protection priority" in text:
-            return "Gewinnschutz bei offenen Gewinnern pruefen"
+            return "Gewinnschutz bei offenen Gewinnern prüfen"
         if "gross exposure budget is exhausted" in text:
             return "Gesamt-Exposure durch Schliessen oder Verkleinern bestehender Trades reduzieren"
         if "demo cash capacity is exhausted" in text:
@@ -1913,9 +1913,9 @@ class PaperTradingService:
         if "open risk budget is exhausted" in text or "open-trade slots exhausted" in text:
             return "Risiko oder Slots freimachen"
         if "missing paper journal" in text:
-            return "Fehlende Journale abschliessen"
+            return "Fehlende Journale abschließen"
         if "option" in text or "optionskette" in text:
-            return "Strike, Laufzeit, Spread und IV manuell pruefen"
+            return "Strike, Laufzeit, Spread und IV manuell prüfen"
         if "paper outcome learning blocks" in text or "paper-ergebnisse" in text:
             return "Erst bessere Paper-Ergebnisse sammeln"
         return "Trigger, Risiko und Lern-Gates muessen sauber sein"
@@ -1929,7 +1929,7 @@ class PaperTradingService:
         if "risk review" in text or "exit actions open" in text:
             return "Erst offene Paper-Trades prüfen, Stop/Target bestätigen und Risk-Review abschließen."
         if "profit-protection priority" in text:
-            return "Erst Gewinnschutz oder Trailing-Plan fuer laufende Gewinner festhalten; danach wieder Strict/Aggro oeffnen."
+            return "Erst Gewinnschutz oder Trailing-Plan für laufende Gewinner festhalten; danach wieder Strict/Aggro öffnen."
         if "gross exposure budget is exhausted" in text:
             return "Kein neuer Entry: Gesamt-Exposure am Limit; erst Kapital freigeben."
         if "demo cash capacity is exhausted" in text:
@@ -1937,7 +1937,7 @@ class PaperTradingService:
         if "ticker exposure budget is exhausted" in text:
             return "Kein neuer Entry in diesem Ticker: bestehende Konzentration zuerst reduzieren."
         if "option premium budget is exhausted" in text:
-            return "Keine weitere Option: das aggregierte Praemienbudget ist ausgeschoepft."
+            return "Keine weitere Option: das aggregierte Prämienbudget ist ausgeschoepft."
         if "open risk budget is exhausted" in text or "open-trade slots exhausted" in text:
             return "Kein neuer Entry: Risiko oder Slots freimachen, bevor neue Exposure aufgebaut wird."
         if "same ticker/setup/direction already open" in text:
@@ -1996,7 +1996,7 @@ class PaperTradingService:
                         "reward_buffer_pct": 120.0,
                         "thesis": (
                             f"{proxy['label']} paper-only Hebelidee ueber den liquiden Proxy {ticker}. "
-                            f"Richtung {bias}; nur sinnvoll, wenn Makro-Trigger, Future/Spot-Bestaetigung und Volumen zusammenpassen."
+                            f"Richtung {bias}; nur sinnvoll, wenn Makro-Trigger, Future/Spot-Bestätigung und Volumen zusammenpassen."
                         ),
                         "tags": ["commodity", "leverage", proxy["theme"], option_type, "paper only"],
                         "reference_price": estimated_premium,
@@ -2051,8 +2051,8 @@ class PaperTradingService:
                     "risk_buffer_pct": 100.0,
                     "reward_buffer_pct": 100.0,
                     "thesis": (
-                        f"Options-Demo auf {item.get('ticker')}: nur testen, wenn Underlying-These, Timing und Volumen bestaetigt sind. "
-                        "Maximaler Verlust ist die Demo-Praemie; kein Real-Money-Einsatz ohne manuelle Optionskettenpruefung."
+                        f"Options-Demo auf {item.get('ticker')}: nur testen, wenn Underlying-These, Timing und Volumen bestätigt sind. "
+                        "Maximaler Verlust ist die Demo-Prämie; kein Real-Money-Einsatz ohne manuelle Optionskettenprüfung."
                     ),
                     "tags": ["option", option_type, "paper only", "defined risk"],
                     "reference_price": estimated_premium,
@@ -2376,8 +2376,8 @@ class PaperTradingService:
 
     def _build_trade_action_queue(self, open_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         priority_map = {
-            "exit": (1, "jetzt pruefen", "critical"),
-            "review": (2, "Risiko pruefen", "warning"),
+            "exit": (1, "jetzt prüfen", "critical"),
+            "review": (2, "Risiko prüfen", "warning"),
             "protect": (3, "Gewinn schuetzen", "positive"),
             "wait": (4, "Daten abwarten", "neutral"),
             "hold": (5, "Plan halten", "neutral"),
@@ -2401,7 +2401,7 @@ class PaperTradingService:
                     "decision_grade": grade,
                     "action": management.get("action") or "hold",
                     "summary": management.get("summary") or "Paper-Plan halten, solange Trigger und Invalidierung gueltig bleiben.",
-                    "next_check": management.get("next_check") or "Trigger, Stop und Ziel erneut pruefen.",
+                    "next_check": management.get("next_check") or "Trigger, Stop und Ziel erneut prüfen.",
                     "invested_value": round(float(trade.get("invested_value") or 0), 2),
                     "unrealized_pnl_value": round(float(trade.get("unrealized_pnl_value") or 0), 2),
                     "unrealized_pnl_pct": trade.get("unrealized_pnl_pct"),
@@ -2423,9 +2423,9 @@ class PaperTradingService:
                 "wait": sum(1 for item in rows if item.get("decision_grade") == "wait"),
             },
             "message": (
-                f"Zuerst {first.get('ticker')} {str(first.get('direction') or '').upper()} pruefen: {first.get('priority_label')}."
+                f"Zuerst {first.get('ticker')} {str(first.get('direction') or '').upper()} prüfen: {first.get('priority_label')}."
                 if first
-                else "Keine offenen Paper-Trades. Naechsten Entry nur mit Trigger, Stop, Ziel und Risiko oeffnen."
+                else "Keine offenen Paper-Trades. Nächsten Entry nur mit Trigger, Stop, Ziel und Risiko öffnen."
             ),
         }
 

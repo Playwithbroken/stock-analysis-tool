@@ -275,11 +275,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         body: JSON.stringify({ product_data: productDrafts[playbookId] || {} }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "Produktpruefung fehlgeschlagen.");
+      if (!response.ok) throw new Error(payload.detail || "Produktpr?fung fehlgeschlagen.");
       setProductChecks((prev) => ({ ...prev, [playbookId]: payload }));
-      setStatus(payload.message || "Produktdaten geprueft.");
+      setStatus(payload.message || "Produktdaten geprüft.");
     } catch (error: any) {
-      setStatus(error?.message || "Produktpruefung fehlgeschlagen.");
+      setStatus(error?.message || "Produktpr?fung fehlgeschlagen.");
     } finally {
       setBusyId(null);
     }
@@ -519,14 +519,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               disabled={busyId === "aggressive_learning-autopilot-preview"}
               className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-red-800 disabled:opacity-50"
             >
-              Aggro pruefen
+              Aggro prüfen
             </button>
             <button
               onClick={() => runAutopilot(true, "aggressive_learning")}
               disabled={busyId === "aggressive_learning-autopilot-execute"}
               className="rounded-xl bg-red-600 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
             >
-              Aggro Paper oeffnen
+              Aggro Paper öffnen
             </button>
             <div className="rounded-full border border-black/8 bg-white/75 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {stats.total_trades || 0} getrackte Trades
@@ -591,7 +591,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 </div>
               </div>
               <div className="mt-3 rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
-                {autopilotProfile.summary || "Profil pruefen, bevor neue Paper-Trades geoeffnet werden."}
+                {autopilotProfile.summary || "Profil prüfen, bevor neue Paper-Trades geöffnet werden."}
               </div>
               {autopilotProfile.recommendation ? (
                 <div className={`mt-2 rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
@@ -652,7 +652,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <div className="mt-1 text-sm font-black text-slate-900">{Number(autopilotSettings?.aggressive_min_score || 52).toFixed(0)} Score</div>
               </label>
               <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Aggro Risiko-Groesse</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Aggro Risiko-Größe</span>
                 <input
                   type="range"
                   min={3}
@@ -662,7 +662,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   className="mt-3 w-full"
                 />
                 <div className="mt-1 text-sm font-black text-slate-900">
-                  {Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || 0.25) * 100)}% der normalen Paper-Groesse
+                  {Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || 0.25) * 100)}% der normalen Paper-Größe
                 </div>
               </label>
             </div>
@@ -672,7 +672,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 disabled={busyId?.includes("autopilot-preview")}
                 className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
               >
-                Profil pruefen
+                Profil prüfen
               </button>
               <button
                 onClick={() => runConfiguredAutopilot(true)}
@@ -716,13 +716,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       {item.source || "watch"} / {item.direction || "watch"}
                     </div>
                     <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
-                      {item.trigger || item.title || "Analyse oeffnen und Trigger pruefen."}
+                      {item.trigger || item.title || "Analyse öffnen und Trigger prüfen."}
                     </div>
                   </button>
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-emerald-300 bg-white/70 p-4 text-sm font-semibold text-slate-600 sm:col-span-2">
-                  Noch keine saubere Idee. Erst Daten, Trigger und Risiko bestaetigen lassen.
+                  Noch keine saubere Idee. Erst Daten, Trigger und Risiko bestätigen lassen.
                 </div>
               )}
             </div>
@@ -830,10 +830,10 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Was jetzt zuerst pruefen?
+                  Was jetzt zuerst prüfen?
                 </div>
                 <div className="mt-1 text-sm font-semibold leading-6 text-slate-700">
-                  {tradeActionQueue.message || "Keine offenen Paper-Trades. Erst neues Setup mit Trigger und Risiko pruefen."}
+                  {tradeActionQueue.message || "Keine offenen Paper-Trades. Erst neues Setup mit Trigger und Risiko prüfen."}
                 </div>
               </div>
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
@@ -872,7 +872,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       </div>
                     </div>
                     <div className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-600">
-                      {germanText(item.summary, "Paper-Plan pruefen.")}
+                      {germanText(item.summary, "Paper-Plan prüfen.")}
                     </div>
                   </button>
                 ))}
@@ -1009,7 +1009,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   onClick={() => onAnalyze(nextPaperDecision.ticker)}
                   className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition hover:border-[var(--accent)]/30 hover:bg-[var(--accent-soft)]/35"
                 >
-                  Analyse oeffnen
+                  Analyse öffnen
                 </button>
               ) : null}
             </div>
@@ -1025,7 +1025,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
                   <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Trigger</div>
                   <div className="mt-1 font-semibold">
-                    {nextPaperDecision.trigger || nextPaperDecision.decision_framework?.entry_trigger || "Noch keine saubere Bestaetigung."}
+                    {nextPaperDecision.trigger || nextPaperDecision.decision_framework?.entry_trigger || "Noch keine saubere Bestätigung."}
                   </div>
                 </div>
                 <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
@@ -1038,7 +1038,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             ) : null}
             {nextPaperDecisionMode === "blocked" && nextPaperDecision ? (
               <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-5 text-red-800">
-                Kein Kauf: {(nextPaperDecision.display_reasons || nextPaperDecision.reasons || ["Quality-Gate noch nicht erfuellt"]).slice(0, 3).join(" / ")}.
+                Kein Kauf: {(nextPaperDecision.display_reasons || nextPaperDecision.reasons || ["Quality-Gate noch nicht erfüllt"]).slice(0, 3).join(" / ")}.
                 {nextPaperDecision.missing_to_trade ? (
                   <span className="block pt-1 text-red-900">Fehlt bis Paper-Kauf: {nextPaperDecision.missing_to_trade}.</span>
                 ) : null}
@@ -2022,7 +2022,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           disabled={busyId === `${item.id}-product-check`}
                           className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
                         >
-                          Produkt pruefen
+                          Produkt prüfen
                         </button>
                         {productChecks[item.id] ? (
                           <span

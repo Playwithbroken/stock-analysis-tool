@@ -289,7 +289,7 @@ def test_demo_account_sizing() -> None:
     assert created_gold_call["entry_price"] > 4.95
     assert created_gold_call["trade_ticket"]["leveraged_product"]["issuer"] == "QA Bank"
     assert created_gold_call["trade_ticket"]["leveraged_product"]["spread_pct"] < 6
-    assert "Geprueftes Hebelprodukt" in created_gold_call["notes"]
+    assert "Geprüftes Hebelprodukt" in created_gold_call["notes"]
 
     created = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
@@ -777,7 +777,7 @@ def test_profit_protection_limits_autopilot_to_small_learning() -> None:
     assert selection["aggressive_exploration"] == []
     assert selection["exploration"]
     rejected = selection["blocker_summary"]["next_best_rejected"]
-    assert rejected["missing_to_trade"] == "Gewinnschutz bei offenen Gewinnern pruefen"
+    assert rejected["missing_to_trade"] == "Gewinnschutz bei offenen Gewinnern prüfen"
     assert rejected["next_action"].startswith("Erst Gewinnschutz")
     assert any(item["category"] == "profit_protection" for item in selection["blocker_summary"]["blocker_groups"])
 

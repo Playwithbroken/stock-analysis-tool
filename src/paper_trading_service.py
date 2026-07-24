@@ -1490,6 +1490,9 @@ class PaperTradingService:
                 if readiness is None:
                     reasons.append("Option bleibt Paper-only und braucht manuelle Optionskettenprüfung")
                     exploration_reasons.append("Optionskette muss vor Exploration manuell geprüft werden")
+            if str(demo_account.get("day_status") or "") == "protect_profit":
+                reasons.append("Paper account has profit-protection priority; new strict entries wait.")
+                aggressive_reasons.append("Paper account has profit-protection priority; aggressive learning waits.")
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected):
                 reasons.append("demo account open-trade slots exhausted")
             if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration):
@@ -1705,6 +1708,8 @@ class PaperTradingService:
             return "journal"
         if "risk review" in lower or "exit actions open" in lower or "paper risk circuit" in lower:
             return "risk_review"
+        if "profit-protection priority" in lower:
+            return "profit_protection"
         if any(
             marker in lower
             for marker in (
@@ -1743,6 +1748,7 @@ class PaperTradingService:
             "setup_quality": "Setup unvollstaendig",
             "options_review": "Optionscheck fehlt",
             "learning_block": "Lernen blockiert",
+            "profit_protection": "Gewinnschutz zuerst",
             "quality_gate": "Quality-Gate",
         }
         return labels.get(str(category or ""), "Quality-Gate")
@@ -1763,6 +1769,8 @@ class PaperTradingService:
             return "Cooldown abwarten und Verlustserie pruefen, bevor ein neuer Entry startet"
         if "risk review" in text or "exit actions open" in text:
             return "Offene Trades pruefen und Risk-Review beenden"
+        if "profit-protection priority" in text:
+            return "Gewinnschutz bei offenen Gewinnern pruefen"
         if "gross exposure budget is exhausted" in text:
             return "Gesamt-Exposure durch Schliessen oder Verkleinern bestehender Trades reduzieren"
         if "demo cash capacity is exhausted" in text:
@@ -1789,6 +1797,8 @@ class PaperTradingService:
             return "Keine neuen Entries: Circuit-Breaker abwarten und die letzten Verlusttrades journalisieren."
         if "risk review" in text or "exit actions open" in text:
             return "Erst offene Paper-Trades prüfen, Stop/Target bestätigen und Risk-Review abschließen."
+        if "profit-protection priority" in text:
+            return "Erst Gewinnschutz oder Trailing-Plan fuer laufende Gewinner festhalten; danach wieder Strict/Aggro oeffnen."
         if "gross exposure budget is exhausted" in text:
             return "Kein neuer Entry: Gesamt-Exposure am Limit; erst Kapital freigeben."
         if "demo cash capacity is exhausted" in text:

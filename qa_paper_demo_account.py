@@ -698,6 +698,40 @@ def test_demo_account_blocks_new_trades_during_risk_review() -> None:
         raise AssertionError("Risk-review gate should block opening new paper trades.")
 
 
+def test_profit_protection_limits_autopilot_to_small_learning() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "near-target",
+                "ticker": "MSFT",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_protect",
+                "status": "open",
+                "opened_at": "2026-06-19T08:00:00",
+                "entry_price": 95.0,
+                "stop_price": 90.0,
+                "target_price": 101.0,
+                "quantity": 10,
+                "confidence_score": 95,
+                "leverage": 1,
+            }
+        ]
+    )
+    service = build_service(manager)
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+
+    assert dashboard["demo_account"]["day_status"] == "protect_profit"
+    selection = dashboard["auto_selection"]
+    assert selection["selected"] == []
+    assert selection["aggressive_exploration"] == []
+    assert selection["exploration"]
+    rejected = selection["blocker_summary"]["next_best_rejected"]
+    assert rejected["missing_to_trade"] == "Gewinnschutz bei offenen Gewinnern pruefen"
+    assert rejected["next_action"].startswith("Erst Gewinnschutz")
+    assert any(item["category"] == "profit_protection" for item in selection["blocker_summary"]["blocker_groups"])
+
+
 def test_learning_feedback_tracks_missing_journals() -> None:
     manager = FakePortfolioManager(
         [
@@ -1294,6 +1328,7 @@ if __name__ == "__main__":
     test_put_learning_inverts_underlying_move()
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_blocks_new_trades_during_risk_review()
+    test_profit_protection_limits_autopilot_to_small_learning()
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()

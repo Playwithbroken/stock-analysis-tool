@@ -1109,6 +1109,8 @@ def test_autopilot_profile_summary_explains_risk_and_protection() -> None:
     assert profile["per_trade_risk_value"] == 800.0
     assert profile["planned_run_risk_value"] == 3_200.0
     assert profile["protection_active"] is True
+    assert profile["recommended_mode"] == "learn"
+    assert profile["recommendation_tone"] == "warning"
     assert "Konto-Schutz" in profile["guardrails"][0]
 
 

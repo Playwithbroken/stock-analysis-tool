@@ -593,6 +593,17 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div className="mt-3 rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
                 {autopilotProfile.summary || "Profil pruefen, bevor neue Paper-Trades geoeffnet werden."}
               </div>
+              {autopilotProfile.recommendation ? (
+                <div className={`mt-2 rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
+                  autopilotProfile.recommendation_tone === "block"
+                    ? "border-red-200 bg-red-100/70 text-red-800"
+                    : autopilotProfile.recommendation_tone === "warning"
+                      ? "border-amber-200 bg-amber-100/70 text-amber-800"
+                      : "border-emerald-200 bg-emerald-100/70 text-emerald-800"
+                }`}>
+                  Empfehlung: {autopilotProfile.recommendation}
+                </div>
+              ) : null}
               {Array.isArray(autopilotProfile.guardrails) && autopilotProfile.guardrails.length ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {autopilotProfile.guardrails.slice(0, 3).map((item: string) => (

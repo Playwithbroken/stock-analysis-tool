@@ -129,6 +129,32 @@ class PaperTradingService:
         per_trade_risk = round(risk_budget * float(active["risk_multiplier"]), 2)
         planned_risk = round(per_trade_risk * max_trades, 2)
         protection_active = str(demo_account.get("day_status") or "") in {"protect_profit", "risk_review", "risk_halt"}
+        learning_feedback = demo_account.get("learning_feedback") if isinstance(demo_account.get("learning_feedback"), dict) else {}
+        journal_rate = float(learning_feedback.get("journal_completion_rate") or 0)
+        open_trade_count = int(demo_account.get("open_trade_count") or 0)
+        recommendation = "Profil ist fuer Paper-Lernen freigegeben; vor Ausfuehrung trotzdem Trigger, Stop und Invalidierung pruefen."
+        recommended_mode = mode
+        recommendation_tone = "ok"
+        if str(demo_account.get("day_status") or "") == "risk_halt":
+            recommended_mode = "strict"
+            recommendation_tone = "block"
+            recommendation = "Trading pausieren: Risk-Halt ist aktiv. Erst offene Risiken und Verlustursache pruefen."
+        elif str(demo_account.get("day_status") or "") == "risk_review":
+            recommended_mode = "strict"
+            recommendation_tone = "warning"
+            recommendation = "Risiko-Review zuerst abschliessen. Neue Paper-Trades nur nach manueller Pruefung."
+        elif protection_active and mode == "aggressive_learning":
+            recommended_mode = "learn"
+            recommendation_tone = "warning"
+            recommendation = "Gewinnschutz ist aktiv. Aggressives Lernen zuruecknehmen und offene Gewinner zuerst managen."
+        elif open_trade_count >= int(demo_account.get("max_open_trades") or 12):
+            recommended_mode = "strict"
+            recommendation_tone = "warning"
+            recommendation = "Zu viele offene Paper-Trades. Erst bestehende Positionen managen, dann neue Setups testen."
+        elif journal_rate and journal_rate < 70:
+            recommended_mode = "learn"
+            recommendation_tone = "warning"
+            recommendation = "Lernqualitaet leidet: Journale zuerst vervollstaendigen, sonst lernt das System aus zu wenig Kontext."
         guardrails = [
             "Paper-only: keine Echtgeld-Ausfuehrung.",
             "Jeder Trade braucht These, Trigger und Invalidierung.",
@@ -147,6 +173,9 @@ class PaperTradingService:
             "per_trade_risk_value": per_trade_risk,
             "planned_run_risk_value": planned_risk,
             "protection_active": protection_active,
+            "recommended_mode": recommended_mode,
+            "recommendation": recommendation,
+            "recommendation_tone": recommendation_tone,
             "guardrails": guardrails,
             "summary": (
                 f"{active['label']}: bis zu {max_trades} Paper-Trades ab Score {float(active['min_score']):.0f}, "

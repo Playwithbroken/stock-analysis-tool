@@ -149,6 +149,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const closedTrades = data?.closed_trades || [];
   const setupPerformance = data?.setup_performance || [];
   const entrySourcePerformance = data?.entry_source_performance || [];
+  const learningContextPerformance = data?.learning_context_performance || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
@@ -1693,6 +1694,61 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       </div>
                       <div>
                         <div className="font-black text-slate-900">{sourcePerformance.sample_size || 0}/{sourcePerformance.minimum_usable_sample || 30}</div>
+                        <div>Beweise</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-slate-600">
+                      {item.summary}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!!learningContextPerformance.length && (
+          <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Lernkontext bewerten</div>
+                <div className="mt-1 text-slate-500">Zeigt, ob Lerntrades in Konto-Zustaenden wie Gewinnschutz wirklich helfen.</div>
+              </div>
+              <div className="text-right font-semibold text-slate-500">
+                {learningContextPerformance.reduce((sum: number, item: any) => sum + Number(item.trades || 0), 0)} Kontext-Trades
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {learningContextPerformance.slice(0, 4).map((item: any) => {
+                const contextPerformance = item.performance || {};
+                const expectancy = Number(contextPerformance.expectancy_value || 0);
+                const profitFactor = toFiniteNumber(contextPerformance.profit_factor);
+                return (
+                  <div key={item.key} className="rounded-[1.15rem] border border-black/8 bg-white px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="font-black text-slate-900">
+                          {germanStatus(item.account_day_status, item.account_day_status)} / {germanStatus(item.account_queue_status, item.account_queue_status)}
+                        </div>
+                        <div className="mt-1 text-slate-500">{item.autopilot_mode} · Risiko x{Number(item.avg_risk_multiplier || 0).toFixed(2)}</div>
+                      </div>
+                      <div className={`font-black ${expectancy > 0 ? "text-emerald-700" : expectancy < 0 ? "text-red-700" : "text-slate-900"}`}>
+                        {money(contextPerformance.expectancy_value, currency)}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-slate-500">
+                      <div>
+                        <div className="font-black text-slate-900">{formatPct(contextPerformance.win_rate, 1, "0.0%").replace("+", "")}</div>
+                        <div>Treffer</div>
+                      </div>
+                      <div>
+                        <div className={`font-black ${profitFactor != null && profitFactor >= 1.2 ? "text-emerald-700" : profitFactor != null && profitFactor < 1 ? "text-red-700" : "text-slate-900"}`}>
+                          {profitFactor == null ? "offen" : profitFactor.toFixed(2)}
+                        </div>
+                        <div>PF</div>
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900">{contextPerformance.sample_size || 0}/{contextPerformance.minimum_usable_sample || 30}</div>
                         <div>Beweise</div>
                       </div>
                     </div>

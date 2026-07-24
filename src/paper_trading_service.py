@@ -67,6 +67,7 @@ class PaperTradingService:
             "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
             "setup_performance": self._build_setup_performance(closed_trades),
             "entry_source_performance": self._build_entry_source_performance(closed_trades),
+            "learning_context_performance": self._build_learning_context_performance(closed_trades),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
             "outcome_learning": outcome_learning,
@@ -2839,6 +2840,61 @@ class PaperTradingService:
             )
         )
         return rows
+
+    def _build_learning_context_performance(self, closed_trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        buckets: Dict[str, Dict[str, Any]] = {}
+        for trade in closed_trades:
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            context = ticket.get("learning_context") if isinstance(ticket.get("learning_context"), dict) else {}
+            if not context:
+                continue
+            mode = str(context.get("autopilot_mode") or "unknown")
+            day_status = str(context.get("account_day_status") or "unknown")
+            queue_status = str(context.get("account_queue_status") or "unknown")
+            key = f"{day_status}:{queue_status}:{mode}"
+            bucket = buckets.setdefault(
+                key,
+                {
+                    "key": key,
+                    "autopilot_mode": mode,
+                    "account_day_status": day_status,
+                    "account_queue_status": queue_status,
+                    "risk_multiplier_sum": 0.0,
+                    "trades": [],
+                },
+            )
+            try:
+                bucket["risk_multiplier_sum"] += float(context.get("risk_multiplier") or 0)
+            except (TypeError, ValueError):
+                pass
+            bucket["trades"].append(trade)
+
+        rows: List[Dict[str, Any]] = []
+        for bucket in buckets.values():
+            trades = bucket.pop("trades")
+            performance = build_trade_performance(trades)
+            count = max(1, len(trades))
+            rows.append(
+                {
+                    **bucket,
+                    "trades": len(trades),
+                    "avg_risk_multiplier": round(float(bucket.get("risk_multiplier_sum") or 0) / count, 3),
+                    "performance": performance,
+                    "summary": (
+                        f"{bucket['account_day_status']} / {bucket['account_queue_status']} / {bucket['autopilot_mode']}: "
+                        f"{len(trades)} geschlossene Lerntrades, Treffer {performance.get('win_rate', 0)}%, "
+                        f"Erwartung {performance.get('expectancy_value', 0)} pro Trade."
+                    ),
+                }
+            )
+        rows.sort(
+            key=lambda item: (
+                -int(item.get("trades") or 0),
+                -float((item.get("performance") or {}).get("expectancy_value") or 0),
+                str(item.get("key") or ""),
+            )
+        )
+        return rows[:8]
 
     def _build_journal(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         rows = []

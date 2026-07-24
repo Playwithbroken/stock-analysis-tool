@@ -445,6 +445,56 @@ def test_entry_source_performance_separates_manual_and_autopilot() -> None:
     assert rows[0]["entry_source_label"] == "Paper-Autopilot"
 
 
+def test_learning_context_performance_groups_account_state() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+    rows = service._build_learning_context_performance(
+        [
+            {
+                "id": "protect-win",
+                "status": "closed",
+                "realized_pnl_pct": 2.0,
+                "realized_pnl_value": 200.0,
+                "trade_ticket": {
+                    "learning_context": {
+                        "autopilot_mode": "learn",
+                        "account_day_status": "protect_profit",
+                        "account_queue_status": "protect",
+                        "risk_multiplier": 0.1,
+                    }
+                },
+            },
+            {
+                "id": "protect-loss",
+                "status": "closed",
+                "realized_pnl_pct": -1.0,
+                "realized_pnl_value": -100.0,
+                "trade_ticket": {
+                    "learning_context": {
+                        "autopilot_mode": "learn",
+                        "account_day_status": "protect_profit",
+                        "account_queue_status": "protect",
+                        "risk_multiplier": 0.1,
+                    }
+                },
+            },
+            {
+                "id": "normal-manual",
+                "status": "closed",
+                "realized_pnl_pct": 5.0,
+                "realized_pnl_value": 500.0,
+                "trade_ticket": {},
+            },
+        ]
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["key"] == "protect_profit:protect:learn"
+    assert row["trades"] == 2
+    assert row["avg_risk_multiplier"] == 0.1
+    assert row["performance"]["expectancy_value"] == 50.0
+    assert "protect_profit / protect / learn" in row["summary"]
+
+
 def test_strategy_readiness_requires_positive_money_expectancy() -> None:
     setup_type = "insider_follow"
     trades: List[Dict[str, Any]] = []
@@ -1333,6 +1383,7 @@ if __name__ == "__main__":
     test_realized_return_uses_account_equity()
     test_performance_metrics_expose_bad_payoff_despite_high_win_rate()
     test_entry_source_performance_separates_manual_and_autopilot()
+    test_learning_context_performance_groups_account_state()
     test_strategy_readiness_requires_positive_money_expectancy()
     test_short_trade_money_flow_and_demo_equity()
     test_put_learning_inverts_underlying_move()

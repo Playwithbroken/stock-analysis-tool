@@ -292,6 +292,7 @@ class EmailAlertService:
         events: List[Dict[str, Any]] = []
         for trade in opened[:5]:
             ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            management = trade.get("management_plan") if isinstance(trade.get("management_plan"), dict) else {}
             source_label = str(trade.get("alert_source_label") or ticket.get("entry_source_label") or "Paper-Autopilot")
             playbook_id = str(trade.get("playbook_id") or "")
             selected_item = by_id.get(playbook_id) or next(
@@ -327,6 +328,9 @@ class EmailAlertService:
                     "confidence_score": trade.get("confidence_score"),
                     "trigger": selected_item.get("trigger"),
                     "invalidation": selected_item.get("invalidation"),
+                    "management_action": management.get("action"),
+                    "management_next_check": management.get("next_check"),
+                    "management_summary": management.get("summary"),
                     "strategy_context": selected_item.get("strategy_context") or {},
                     "suggested_max_loss_value": selected_item.get("suggested_max_loss_value"),
                     "account_equity": (demo_account or {}).get("equity"),
@@ -3571,6 +3575,13 @@ class EmailAlertService:
         )
         trigger = self._tg_esc(str(event.get("trigger") or "Anschlussbewegung muss bestätigt bleiben."))[:520]
         invalidation = self._tg_esc(str(event.get("invalidation") or "Schließen/prüfen, wenn die These scheitert."))[:520]
+        action = self._tg_esc(self._paper_label(event.get("management_action"), "halten und prüfen"))[:260]
+        next_check = self._tg_esc(
+            str(event.get("management_next_check") or "Trigger, Stop und Ziel nach der nächsten Marktbewegung erneut prüfen.")
+        )[:520]
+        management_summary = self._tg_esc(
+            str(event.get("management_summary") or "Paper-Trade nur weiterlaufen lassen, solange Trigger und Risiko intakt bleiben.")
+        )[:520]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
         ticket_status = self._tg_esc(str(ticket.get("status") or "paper_open"))
         horizon = self._tg_esc(str(ticket.get("horizon") or "nicht klassifiziert"))
@@ -3626,6 +3637,8 @@ class EmailAlertService:
                 f"<b>Max. Demo-Verlust:</b> {max_loss}",
                 f"<b>Trigger:</b> {trigger}",
                 f"<b>Invalidierung:</b> {invalidation}",
+                f"<b>Jetzt tun:</b> {action} | {management_summary}",
+                f"<b>Nächste Prüfung:</b> {next_check}",
                 f"<b>Daten:</b> {source} | {data_as_of}",
                 f"<b>Marktcheck:</b> {freshness} ({age_text}) | Liquidität {liquidity} | 5T-Notional {notional_text}",
                 f"<b>Offene Checks:</b> {warning_text}",

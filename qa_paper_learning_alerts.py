@@ -126,6 +126,9 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "confidence_score": 91,
             "trigger": "Breakout mit Volumen bestätigt.",
             "invalidation": "Schließen, wenn Breakout scheitert.",
+            "management_action": "hold_with_plan",
+            "management_summary": "Position halten, solange Volumen und Trend intakt bleiben.",
+            "management_next_check": "Nach US-Eröffnung Preis, Volumen und Stop-Abstand erneut prüfen.",
             "trade_ticket": {
                 "status": "paper_ready",
                 "horizon": "days-weeks",
@@ -161,6 +164,8 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Ticket:</b> paper_ready" in opened
     assert "Horizont:</b> days-weeks" in opened
     assert "official filing" in opened
+    assert "Jetzt tun:</b> mit Plan halten | Position halten, solange Volumen und Trend intakt bleiben." in opened
+    assert "Nächste Prüfung:</b> Nach US-Eröffnung Preis, Volumen und Stop-Abstand erneut prüfen." in opened
     assert "Paper-Playbook manuell" in opened
     assert "fresh (1.5h)" in opened
     assert "Liquidität strong" in opened

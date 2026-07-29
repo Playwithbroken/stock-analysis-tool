@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
+from unittest.mock import patch
+
+import pandas as pd
 
 from src.paper_trading_service import PaperTradingService
 from src.strategy_library import StrategyLibrary
@@ -113,7 +116,7 @@ def build_service(manager: FakePortfolioManager) -> PaperTradingService:
         "USO": 80.0,
         "XLE": 95.0,
     }
-    service._get_market_snapshot = lambda ticker: (  # type: ignore[method-assign]
+    service._get_market_snapshot = lambda ticker, since=None: (  # type: ignore[method-assign]
         {
             "price": prices[ticker or ""],
             "data_as_of": "2026-06-19T08:00:00+00:00",
@@ -578,7 +581,7 @@ def test_short_trade_money_flow_and_demo_equity() -> None:
         ]
     )
     service = build_service(manager)
-    service._get_market_snapshot = lambda ticker: {  # type: ignore[method-assign]
+    service._get_market_snapshot = lambda ticker, since=None: {  # type: ignore[method-assign]
         "price": 90.0 if ticker == "AAPL" else 100.0,
         "data_as_of": "2026-06-19T08:00:00+00:00",
         "freshness": "fresh",
@@ -1406,6 +1409,111 @@ def test_outcome_learning_penalizes_weak_setups() -> None:
     assert option["required_hit_rate"] == 55
 
 
+def test_intraday_market_snapshot_tracks_range_since_entry() -> None:
+    manager = FakePortfolioManager()
+    service = PaperTradingService(manager)  # type: ignore[arg-type]
+    now = datetime.now().astimezone()
+    index = pd.date_range(
+        start=now - timedelta(minutes=15),
+        periods=4,
+        freq="5min",
+    )
+    intraday = pd.DataFrame(
+        {
+            "Close": [100.0, 101.0, 99.0, 100.5],
+            "High": [100.5, 103.0, 100.0, 101.0],
+            "Low": [99.5, 100.5, 94.0, 99.0],
+            "Volume": [100_000, 120_000, 110_000, 90_000],
+        },
+        index=index,
+    )
+
+    class IntradayTicker:
+        def history(self, *, period: str, interval: str):
+            assert period == "5d"
+            assert interval == "5m"
+            return intraday
+
+    with patch("src.paper_trading_service.yf.Ticker", return_value=IntradayTicker()):
+        snapshot = service._get_market_snapshot(
+            "AAPL",
+            since=(now - timedelta(minutes=11)).isoformat(),
+        )
+
+    assert snapshot["source"] == "yfinance_intraday"
+    assert snapshot["interval"] == "5m"
+    assert snapshot["price"] == 100.5
+    assert snapshot["monitoring_low"] == 94.0
+    assert snapshot["monitoring_high"] == 103.0
+    assert snapshot["average_volume_5d"] == 420_000.0
+    assert snapshot["liquidity_status"] == "strong"
+
+    management = service._build_trade_management_plan(
+        {
+            "entry_price": 100.0,
+            "current_price": 100.5,
+            "stop_price": 95.0,
+            "target_price": 110.0,
+            "direction": "long",
+            "current_market_data": snapshot,
+            "unrealized_pnl_pct": 0.5,
+        }
+    )
+    assert management["status"] == "stop_hit"
+
+    target_management = service._build_trade_management_plan(
+        {
+            "entry_price": 100.0,
+            "current_price": 100.5,
+            "stop_price": 90.0,
+            "target_price": 102.0,
+            "direction": "long",
+            "current_market_data": snapshot,
+            "unrealized_pnl_pct": 0.5,
+        }
+    )
+    assert target_management["status"] == "target_hit"
+
+
+def test_market_snapshot_falls_back_to_daily_data() -> None:
+    manager = FakePortfolioManager()
+    service = PaperTradingService(manager)  # type: ignore[arg-type]
+    index = pd.date_range(
+        start=datetime.now().astimezone() - timedelta(days=4),
+        periods=5,
+        freq="1d",
+    )
+    daily = pd.DataFrame(
+        {
+            "Close": [98.0, 99.0, 100.0, 101.0, 102.0],
+            "High": [99.0, 100.0, 101.0, 102.0, 103.0],
+            "Low": [97.0, 98.0, 99.0, 100.0, 101.0],
+            "Volume": [1_000_000] * 5,
+        },
+        index=index,
+    )
+    calls: List[str] = []
+
+    class FallbackTicker:
+        def history(self, *, period: str, interval: str):
+            calls.append(interval)
+            if interval == "5m":
+                raise RuntimeError("qa intraday provider outage")
+            return daily
+
+    with patch("src.paper_trading_service.yf.Ticker", return_value=FallbackTicker()):
+        snapshot = service._get_market_snapshot("AAPL")
+        cached_snapshot = service._get_market_snapshot("AAPL")
+
+    assert calls == ["5m", "1d"]
+    assert snapshot["source"] == "yfinance_daily"
+    assert snapshot["interval"] == "1d"
+    assert snapshot["price"] == 102.0
+    assert snapshot["monitoring_low"] is None
+    assert snapshot["monitoring_high"] is None
+    assert cached_snapshot["price"] == 102.0
+
+
 if __name__ == "__main__":
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
@@ -1431,4 +1539,6 @@ if __name__ == "__main__":
     test_paper_risk_circuit_breaker()
     test_close_trade_auto_documents_profitable_exit()
     test_outcome_learning_penalizes_weak_setups()
+    test_intraday_market_snapshot_tracks_range_since_entry()
+    test_market_snapshot_falls_back_to_daily_data()
     print("qa_paper_demo_account: ok")

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 import json
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import yfinance as yf
@@ -3045,7 +3046,14 @@ class PaperTradingService:
         is_option = row.get("asset_class") == "option"
         ticket = row.get("trade_ticket") if isinstance(row.get("trade_ticket"), dict) else {}
         execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
-        current_market = {} if is_option else self._get_market_snapshot(row.get("ticker"))
+        current_market = (
+            {}
+            if is_option or row.get("status") == "closed"
+            else self._get_market_snapshot(
+                row.get("ticker"),
+                since=row.get("opened_at"),
+            )
+        )
         current_reference = None if is_option else current_market.get("price")
         current_price = current_reference
         if current_reference not in (None, 0) and isinstance(execution_model.get("entry"), dict):
@@ -3062,6 +3070,7 @@ class PaperTradingService:
             row["estimated_exit_execution"] = current_execution
         row["current_reference_price"] = current_reference
         row["current_price"] = current_price
+        row["current_market_data"] = current_market
         direction_multiplier = -1 if row.get("direction") == "short" else 1
         contract_multiplier = 100 if is_option else 1
         invested_value = round(entry * quantity * leverage * contract_multiplier, 2)
@@ -3122,6 +3131,15 @@ class PaperTradingService:
             }
 
         current_price = float(current)
+        current_market = (
+            trade.get("current_market_data")
+            if isinstance(trade.get("current_market_data"), dict)
+            else {}
+        )
+        monitoring_low = current_market.get("monitoring_low")
+        monitoring_high = current_market.get("monitoring_high")
+        monitored_low_price = current_price if monitoring_low is None else float(monitoring_low)
+        monitored_high_price = current_price if monitoring_high is None else float(monitoring_high)
         stop_price = float(stop) if stop not in (None, 0) else None
         target_price = float(target) if target not in (None, 0) else None
         favorable_pct = float(trade.get("unrealized_pnl_pct") or 0)
@@ -3133,10 +3151,10 @@ class PaperTradingService:
 
         if stop_price is not None:
             if direction == "short":
-                stop_hit = current_price >= stop_price
+                stop_hit = monitored_high_price >= stop_price
                 risk_distance = ((stop_price - current_price) / entry) * 100
             else:
-                stop_hit = current_price <= stop_price
+                stop_hit = monitored_low_price <= stop_price
                 risk_distance = ((current_price - stop_price) / entry) * 100
             if stop_hit:
                 return {
@@ -3155,11 +3173,11 @@ class PaperTradingService:
 
         if target_price is not None:
             if direction == "short":
-                target_hit = current_price <= target_price
+                target_hit = monitored_low_price <= target_price
                 total_reward = max(0.0001, entry - target_price)
                 achieved = entry - current_price
             else:
-                target_hit = current_price >= target_price
+                target_hit = monitored_high_price >= target_price
                 total_reward = max(0.0001, target_price - entry)
                 achieved = current_price - entry
             target_progress = max(0.0, min(150.0, (achieved / total_reward) * 100))
@@ -3345,12 +3363,12 @@ class PaperTradingService:
             blockers.append("market_liquidity_too_thin")
         return self._dedupe_reason_list(blockers)
 
-    def _get_market_snapshot(self, ticker: Optional[str]) -> Dict[str, Any]:
+    def _get_market_snapshot(self, ticker: Optional[str], since: Any = None) -> Dict[str, Any]:
         if not ticker:
             return {}
         try:
-            hist = yf.Ticker(ticker).history(period="5d", interval="1d")
-            if hist.empty:
+            hist, interval = self._load_market_history(ticker)
+            if hist is None or hist.empty:
                 return {}
             close = hist["Close"].dropna()
             if close.empty:
@@ -3366,7 +3384,39 @@ class PaperTradingService:
             max_age_hours = max(24.0, float(os.getenv("PAPER_MARKET_DATA_MAX_AGE_HOURS", "96")))
 
             volume_values = hist["Volume"].dropna() if "Volume" in hist else []
-            average_volume = float(volume_values.tail(5).mean()) if len(volume_values) else None
+            average_volume = None
+            if len(volume_values):
+                if interval == "5m":
+                    daily_volume: Dict[Any, float] = {}
+                    for bar_timestamp, value in volume_values.items():
+                        bar_datetime = self._as_utc_naive_datetime(bar_timestamp)
+                        if bar_datetime is None:
+                            continue
+                        day = bar_datetime.date()
+                        daily_volume[day] = daily_volume.get(day, 0.0) + float(value or 0)
+                    daily_totals = [value for _, value in sorted(daily_volume.items()) if value > 0]
+                    completed_totals = daily_totals[:-1] if len(daily_totals) > 1 else daily_totals
+                    if completed_totals:
+                        average_volume = sum(completed_totals[-5:]) / len(completed_totals[-5:])
+                else:
+                    average_volume = float(volume_values.tail(5).mean())
+
+            monitoring_low = None
+            monitoring_high = None
+            since_datetime = self._as_utc_naive_datetime(since)
+            if interval == "5m" and since_datetime is not None:
+                monitored_positions = []
+                for position, bar_timestamp in enumerate(hist.index):
+                    bar_datetime = self._as_utc_naive_datetime(bar_timestamp)
+                    if bar_datetime is not None and bar_datetime >= since_datetime:
+                        monitored_positions.append(position)
+                if monitored_positions:
+                    monitored = hist.iloc[monitored_positions[0]:]
+                    lows = monitored["Low"].dropna() if "Low" in monitored else []
+                    highs = monitored["High"].dropna() if "High" in monitored else []
+                    monitoring_low = float(lows.min()) if len(lows) else None
+                    monitoring_high = float(highs.max()) if len(highs) else None
+
             is_crypto_pair = str(ticker).upper().endswith("-USD")
             dollar_volume = (
                 average_volume
@@ -3391,8 +3441,8 @@ class PaperTradingService:
             return {
                 "price": price,
                 "data_as_of": timestamp.isoformat(),
-                "source": "yfinance_daily",
-                "interval": "1d",
+                "source": "yfinance_intraday" if interval == "5m" else "yfinance_daily",
+                "interval": interval,
                 "age_hours": round(age_hours, 2),
                 "freshness": "fresh" if age_hours <= max_age_hours else "stale",
                 "average_volume_5d": round(average_volume, 2) if average_volume is not None else None,
@@ -3400,9 +3450,52 @@ class PaperTradingService:
                 "volume_basis": "reported_quote_volume" if is_crypto_pair else "shares_times_price",
                 "liquidity_status": liquidity_status,
                 "minimum_dollar_volume": min_dollar_volume,
+                "monitoring_since": since_datetime.isoformat() if monitoring_low is not None and since_datetime else None,
+                "monitoring_low": round(monitoring_low, 4) if monitoring_low is not None else None,
+                "monitoring_high": round(monitoring_high, 4) if monitoring_high is not None else None,
             }
         except Exception:
             return {}
+
+    def _load_market_history(self, ticker: str):
+        cache = getattr(self, "_market_history_cache", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._market_history_cache = cache
+
+        cache_key = str(ticker).strip().upper()
+        try:
+            ttl_seconds = max(
+                5.0,
+                float(os.getenv("PAPER_MARKET_HISTORY_CACHE_SECONDS", "120")),
+            )
+        except (TypeError, ValueError):
+            ttl_seconds = 120.0
+        now_monotonic = time.monotonic()
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and now_monotonic - float(cached.get("stored_at") or 0) <= ttl_seconds:
+            return cached.get("history"), str(cached.get("interval") or "1d")
+
+        ticker_client = yf.Ticker(ticker)
+        history = None
+        interval = "5m"
+        try:
+            history = ticker_client.history(period="5d", interval=interval)
+        except Exception:
+            history = None
+        if history is None or history.empty:
+            interval = "1d"
+            try:
+                history = ticker_client.history(period="5d", interval=interval)
+            except Exception:
+                history = None
+        if history is not None and not history.empty:
+            cache[cache_key] = {
+                "stored_at": now_monotonic,
+                "history": history,
+                "interval": interval,
+            }
+        return history, interval
 
     def _get_last_price(self, ticker: Optional[str]) -> Optional[float]:
         return self._get_market_snapshot(ticker).get("price")
@@ -3412,5 +3505,18 @@ class PaperTradingService:
             return None
         try:
             return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return None
+
+    def _as_utc_naive_datetime(self, value: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        try:
+            parsed = value.to_pydatetime() if hasattr(value, "to_pydatetime") else value
+            if not isinstance(parsed, datetime):
+                parsed = datetime.fromisoformat(str(parsed).replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
         except Exception:
             return None

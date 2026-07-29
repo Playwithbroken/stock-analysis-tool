@@ -250,6 +250,44 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       .slice(0, 6);
   }, [autoSelection]);
 
+  const configuredRun = useMemo(() => {
+    const mode = String(autopilotSettings?.mode || "aggressive_learning");
+    const source =
+      mode === "strict"
+        ? autoSelection.selected
+        : mode === "learn"
+          ? autoSelection.exploration
+          : autoSelection.aggressive_exploration;
+    const candidates = Array.isArray(source) ? source : [];
+    const maxTrades = Math.max(1, Math.min(8, Number(autopilotSettings?.max_trades || 3)));
+    const selected = candidates.slice(0, maxTrades);
+    const notional = selected.reduce((sum: number, item: any) => sum + Number(item?.suggested_notional_value || 0), 0);
+    const maxLoss = selected.reduce((sum: number, item: any) => sum + Number(item?.suggested_max_loss_value || 0), 0);
+    const label =
+      mode === "strict"
+        ? "Strict"
+        : mode === "learn"
+          ? "Learning"
+          : "Aggressive Learning";
+    const intent =
+      mode === "strict"
+        ? "nur die saubersten A-Setups"
+        : mode === "learn"
+          ? "kleine Testpositionen zum Beweise sammeln"
+          : "mehr Kandidaten, aber weiterhin Paper-only und risikogedeckelt";
+    return {
+      mode,
+      label,
+      intent,
+      candidates,
+      selected,
+      lead: selected[0] || candidates[0] || null,
+      count: selected.length,
+      notional,
+      maxLoss,
+    };
+  }, [autopilotSettings?.mode, autopilotSettings?.max_trades, autoSelection]);
+
   if (!data) return null;
 
   const updateProductDraft = (playbookId: string, key: string, value: any) => {
@@ -615,6 +653,65 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   ))}
                 </div>
               ) : null}
+            </div>
+            <div className="mt-4 rounded-[1.45rem] border border-sky-500/20 bg-sky-50/80 p-4 text-sky-950">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-700">
+                    Nächster Profil-Lauf
+                  </div>
+                  <div className="mt-1 text-sm font-black text-slate-950">
+                    {configuredRun.label}: {configuredRun.intent}
+                  </div>
+                </div>
+                <div className="rounded-full border border-sky-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-800">
+                  {configuredRun.count} von {configuredRun.candidates.length} Kandidaten
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl border border-sky-200 bg-white/85 px-3 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-sky-700">Demo-Kapital</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">{money(configuredRun.notional, currency)}</div>
+                </div>
+                <div className="rounded-xl border border-sky-200 bg-white/85 px-3 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-sky-700">Max. Verlust</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">{money(configuredRun.maxLoss, currency)}</div>
+                </div>
+                <div className="rounded-xl border border-sky-200 bg-white/85 px-3 py-2">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-sky-700">Ausführung</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">Preview oder Paper + Telegram</div>
+                </div>
+              </div>
+              {configuredRun.lead ? (
+                <div className="mt-3 rounded-xl border border-sky-200 bg-white/90 px-3 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-black text-slate-950">{configuredRun.lead.ticker || "Setup"}</span>
+                        <span className="rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                          {configuredRun.lead.direction || "watch"} / Score {Number(configuredRun.lead.score || 0).toFixed(0)}
+                        </span>
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-600">
+                        Trigger: {configuredRun.lead.trigger || configuredRun.lead.thesis || "erst nach bestätigtem Signal handeln"}
+                      </div>
+                    </div>
+                    {configuredRun.lead.ticker ? (
+                      <button
+                        type="button"
+                        onClick={() => onAnalyze(configuredRun.lead.ticker)}
+                        className="shrink-0 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-800"
+                      >
+                        Dossier prüfen
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                  Kein Kandidat erfüllt dieses Profil. Erst Preview nutzen oder Score/Risiko bewusst anpassen.
+                </div>
+              )}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">

@@ -123,7 +123,7 @@ def build_service(manager: FakePortfolioManager) -> PaperTradingService:
         "USO": 80.0,
         "XLE": 95.0,
     }
-    service._get_market_snapshot = lambda ticker, since=None: (  # type: ignore[method-assign]
+    service._get_market_snapshot = lambda ticker, since=None, **kwargs: (  # type: ignore[method-assign]
         {
             "price": prices[ticker or ""],
             "data_as_of": "2026-06-19T08:00:00+00:00",
@@ -588,7 +588,7 @@ def test_short_trade_money_flow_and_demo_equity() -> None:
         ]
     )
     service = build_service(manager)
-    service._get_market_snapshot = lambda ticker, since=None: {  # type: ignore[method-assign]
+    service._get_market_snapshot = lambda ticker, since=None, **kwargs: {  # type: ignore[method-assign]
         "price": 90.0 if ticker == "AAPL" else 100.0,
         "data_as_of": "2026-06-19T08:00:00+00:00",
         "freshness": "fresh",
@@ -1491,6 +1491,16 @@ def test_intraday_market_snapshot_tracks_range_since_entry() -> None:
         snapshot = service._get_market_snapshot(
             "AAPL",
             since=(now - timedelta(minutes=11)).isoformat(),
+            stop_price=95.0,
+            target_price=102.0,
+            direction="long",
+        )
+        stop_snapshot = service._get_market_snapshot(
+            "AAPL",
+            since=(now - timedelta(minutes=11)).isoformat(),
+            stop_price=95.0,
+            target_price=110.0,
+            direction="long",
         )
 
     assert snapshot["source"] == "yfinance_intraday"
@@ -1498,6 +1508,8 @@ def test_intraday_market_snapshot_tracks_range_since_entry() -> None:
     assert snapshot["price"] == 100.5
     assert snapshot["monitoring_low"] == 94.0
     assert snapshot["monitoring_high"] == 103.0
+    assert snapshot["monitoring_trigger"] == "target_hit"
+    assert snapshot["monitoring_triggered_at"]
     assert snapshot["average_volume_5d"] == 420_000.0
     assert snapshot["liquidity_status"] == "strong"
 
@@ -1506,26 +1518,77 @@ def test_intraday_market_snapshot_tracks_range_since_entry() -> None:
             "entry_price": 100.0,
             "current_price": 100.5,
             "stop_price": 95.0,
-            "target_price": 110.0,
-            "direction": "long",
-            "current_market_data": snapshot,
-            "unrealized_pnl_pct": 0.5,
-        }
-    )
-    assert management["status"] == "stop_hit"
-
-    target_management = service._build_trade_management_plan(
-        {
-            "entry_price": 100.0,
-            "current_price": 100.5,
-            "stop_price": 90.0,
             "target_price": 102.0,
             "direction": "long",
             "current_market_data": snapshot,
             "unrealized_pnl_pct": 0.5,
         }
     )
-    assert target_management["status"] == "target_hit"
+    assert management["status"] == "target_hit"
+    assert management["triggered_at"] == snapshot["monitoring_triggered_at"]
+
+    stop_management = service._build_trade_management_plan(
+        {
+            "entry_price": 100.0,
+            "current_price": 100.5,
+            "stop_price": 95.0,
+            "target_price": 110.0,
+            "direction": "long",
+            "current_market_data": stop_snapshot,
+            "unrealized_pnl_pct": 0.5,
+        }
+    )
+    assert stop_snapshot["monitoring_trigger"] == "stop_hit"
+    assert stop_management["status"] == "stop_hit"
+
+
+def test_intraday_same_bar_conflict_prefers_stop() -> None:
+    manager = FakePortfolioManager()
+    service = PaperTradingService(manager)  # type: ignore[arg-type]
+    now = datetime.now().astimezone()
+    index = pd.date_range(
+        start=now - timedelta(minutes=5),
+        periods=2,
+        freq="5min",
+    )
+    intraday = pd.DataFrame(
+        {
+            "Close": [100.0, 100.5],
+            "High": [103.0, 101.0],
+            "Low": [94.0, 99.0],
+            "Volume": [100_000, 90_000],
+        },
+        index=index,
+    )
+
+    class IntradayTicker:
+        def history(self, *, period: str, interval: str):
+            assert period == "5d"
+            assert interval == "5m"
+            return intraday
+
+    with patch("src.paper_trading_service.yf.Ticker", return_value=IntradayTicker()):
+        snapshot = service._get_market_snapshot(
+            "AAPL",
+            since=(now - timedelta(minutes=6)).isoformat(),
+            stop_price=95.0,
+            target_price=102.0,
+            direction="long",
+        )
+
+    assert snapshot["monitoring_trigger"] == "stop_hit"
+    management = service._build_trade_management_plan(
+        {
+            "entry_price": 100.0,
+            "current_price": 100.5,
+            "stop_price": 95.0,
+            "target_price": 102.0,
+            "direction": "long",
+            "current_market_data": snapshot,
+            "unrealized_pnl_pct": 0.5,
+        }
+    )
+    assert management["status"] == "stop_hit"
 
 
 def test_market_snapshot_falls_back_to_daily_data() -> None:
@@ -1594,5 +1657,6 @@ if __name__ == "__main__":
     test_managed_exit_applies_execution_cost_once()
     test_outcome_learning_penalizes_weak_setups()
     test_intraday_market_snapshot_tracks_range_since_entry()
+    test_intraday_same_bar_conflict_prefers_stop()
     test_market_snapshot_falls_back_to_daily_data()
     print("qa_paper_demo_account: ok")

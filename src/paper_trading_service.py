@@ -3053,6 +3053,9 @@ class PaperTradingService:
             else self._get_market_snapshot(
                 row.get("ticker"),
                 since=row.get("opened_at"),
+                stop_price=row.get("stop_price"),
+                target_price=row.get("target_price"),
+                direction=row.get("direction"),
             )
         )
         current_reference = None if is_option else current_market.get("price")
@@ -3139,6 +3142,8 @@ class PaperTradingService:
         )
         monitoring_low = current_market.get("monitoring_low")
         monitoring_high = current_market.get("monitoring_high")
+        monitoring_trigger = current_market.get("monitoring_trigger")
+        has_ordered_trigger = monitoring_trigger in {"stop_hit", "target_hit"}
         monitored_low_price = current_price if monitoring_low is None else float(monitoring_low)
         monitored_high_price = current_price if monitoring_high is None else float(monitoring_high)
         stop_price = float(stop) if stop not in (None, 0) else None
@@ -3152,10 +3157,18 @@ class PaperTradingService:
 
         if stop_price is not None:
             if direction == "short":
-                stop_hit = monitored_high_price >= stop_price
+                stop_hit = (
+                    monitoring_trigger == "stop_hit"
+                    if has_ordered_trigger
+                    else monitored_high_price >= stop_price
+                )
                 risk_distance = ((stop_price - current_price) / entry) * 100
             else:
-                stop_hit = monitored_low_price <= stop_price
+                stop_hit = (
+                    monitoring_trigger == "stop_hit"
+                    if has_ordered_trigger
+                    else monitored_low_price <= stop_price
+                )
                 risk_distance = ((current_price - stop_price) / entry) * 100
             if stop_hit:
                 return {
@@ -3166,6 +3179,7 @@ class PaperTradingService:
                     "summary": "Stop-Zone wurde erreicht oder gebrochen. Paper-Trade-Schließung prüfen und Lektion loggen.",
                     "risk_distance_pct": round(risk_distance, 2),
                     "target_progress_pct": None,
+                    "triggered_at": current_market.get("monitoring_triggered_at"),
                 }
             if risk_distance is not None and risk_distance <= 0.6:
                 status = "near_stop"
@@ -3174,11 +3188,19 @@ class PaperTradingService:
 
         if target_price is not None:
             if direction == "short":
-                target_hit = monitored_low_price <= target_price
+                target_hit = (
+                    monitoring_trigger == "target_hit"
+                    if has_ordered_trigger
+                    else monitored_low_price <= target_price
+                )
                 total_reward = max(0.0001, entry - target_price)
                 achieved = entry - current_price
             else:
-                target_hit = monitored_high_price >= target_price
+                target_hit = (
+                    monitoring_trigger == "target_hit"
+                    if has_ordered_trigger
+                    else monitored_high_price >= target_price
+                )
                 total_reward = max(0.0001, target_price - entry)
                 achieved = current_price - entry
             target_progress = max(0.0, min(150.0, (achieved / total_reward) * 100))
@@ -3191,6 +3213,7 @@ class PaperTradingService:
                     "summary": "Zielzone erreicht. Gewinnmitnahme oder Paper-Trade-Schließung prüfen.",
                     "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
                     "target_progress_pct": round(target_progress, 1),
+                    "triggered_at": current_market.get("monitoring_triggered_at"),
                 }
             if target_progress >= 75 and favorable_pct > 0 and status == "monitor":
                 status = "near_target"
@@ -3364,7 +3387,14 @@ class PaperTradingService:
             blockers.append("market_liquidity_too_thin")
         return self._dedupe_reason_list(blockers)
 
-    def _get_market_snapshot(self, ticker: Optional[str], since: Any = None) -> Dict[str, Any]:
+    def _get_market_snapshot(
+        self,
+        ticker: Optional[str],
+        since: Any = None,
+        stop_price: Any = None,
+        target_price: Any = None,
+        direction: Any = None,
+    ) -> Dict[str, Any]:
         if not ticker:
             return {}
         try:
@@ -3404,6 +3434,8 @@ class PaperTradingService:
 
             monitoring_low = None
             monitoring_high = None
+            monitoring_trigger = None
+            monitoring_triggered_at = None
             since_datetime = self._as_utc_naive_datetime(since)
             if interval == "5m" and since_datetime is not None:
                 monitored_positions = []
@@ -3417,6 +3449,34 @@ class PaperTradingService:
                     highs = monitored["High"].dropna() if "High" in monitored else []
                     monitoring_low = float(lows.min()) if len(lows) else None
                     monitoring_high = float(highs.max()) if len(highs) else None
+                    normalized_direction = str(direction or "").lower()
+                    stop_barrier = float(stop_price) if stop_price not in (None, 0) else None
+                    target_barrier = float(target_price) if target_price not in (None, 0) else None
+                    if normalized_direction in {"long", "short"} and (
+                        stop_barrier is not None or target_barrier is not None
+                    ):
+                        for bar_timestamp, bar in monitored.iterrows():
+                            try:
+                                bar_low = float(bar.get("Low"))
+                                bar_high = float(bar.get("High"))
+                            except (TypeError, ValueError):
+                                continue
+                            if normalized_direction == "short":
+                                stop_touched = stop_barrier is not None and bar_high >= stop_barrier
+                                target_touched = target_barrier is not None and bar_low <= target_barrier
+                            else:
+                                stop_touched = stop_barrier is not None and bar_low <= stop_barrier
+                                target_touched = target_barrier is not None and bar_high >= target_barrier
+                            if not stop_touched and not target_touched:
+                                continue
+                            monitoring_trigger = "stop_hit" if stop_touched else "target_hit"
+                            triggered_datetime = self._as_utc_naive_datetime(bar_timestamp)
+                            monitoring_triggered_at = (
+                                triggered_datetime.isoformat()
+                                if triggered_datetime is not None
+                                else None
+                            )
+                            break
 
             is_crypto_pair = str(ticker).upper().endswith("-USD")
             dollar_volume = (
@@ -3454,6 +3514,8 @@ class PaperTradingService:
                 "monitoring_since": since_datetime.isoformat() if monitoring_low is not None and since_datetime else None,
                 "monitoring_low": round(monitoring_low, 4) if monitoring_low is not None else None,
                 "monitoring_high": round(monitoring_high, 4) if monitoring_high is not None else None,
+                "monitoring_trigger": monitoring_trigger,
+                "monitoring_triggered_at": monitoring_triggered_at,
             }
         except Exception:
             return {}

@@ -707,12 +707,13 @@ class PaperTradingService:
                 )
                 continue
             current_price = trade.get("current_price")
-            if current_price in (None, 0):
+            exit_reference = trade.get("current_reference_price") or current_price
+            if exit_reference in (None, 0):
                 errors.append(
                     {
                         "id": trade.get("id"),
                         "ticker": trade.get("ticker"),
-                        "error": "Current price unavailable for managed close.",
+                        "error": "Current reference price unavailable for managed close.",
                     }
                 )
                 continue
@@ -730,7 +731,7 @@ class PaperTradingService:
                 closed.append(
                     self.close_trade(
                         str(trade.get("id")),
-                        closed_price=float(current_price),
+                        closed_price=float(exit_reference),
                         notes=notes,
                         exit_reason=exit_reason,
                         lessons_learned=lesson,

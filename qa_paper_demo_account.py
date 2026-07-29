@@ -17,8 +17,15 @@ class FakePortfolioManager:
         self.outcomes: List[Dict[str, Any]] = []
         self.app_settings: Dict[str, str] = {}
 
-    def list_paper_trades(self, limit: int = 150) -> List[Dict[str, Any]]:
-        return self.trades[:limit]
+    def list_paper_trades(
+        self,
+        status: str | None = None,
+        limit: int = 150,
+    ) -> List[Dict[str, Any]]:
+        rows = self.trades
+        if status is not None:
+            rows = [trade for trade in rows if trade.get("status") == status]
+        return rows[:limit]
 
     def create_paper_trade(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         trade = {
@@ -1371,6 +1378,52 @@ def test_close_trade_auto_documents_profitable_exit() -> None:
     assert feedback["missing_journal_count"] == 0
 
 
+def test_managed_exit_applies_execution_cost_once() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "managed-target",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_managed_exit",
+                "status": "open",
+                "opened_at": "2026-06-18T08:00:00",
+                "entry_price": 90.0,
+                "stop_price": 85.0,
+                "target_price": 95.0,
+                "quantity": 10,
+                "confidence_score": 90,
+                "leverage": 1,
+                "notes": "",
+                "exit_reason": "",
+                "lessons_learned": "",
+                "trade_ticket": {
+                    "execution_model": {
+                        "entry": {
+                            "reference_price": 89.9281,
+                            "fill_price": 90.0,
+                            "cost_bps": 8.0,
+                        }
+                    }
+                },
+            }
+        ]
+    )
+    service = build_service(manager)
+    result = service.close_trades_on_management_exits()
+
+    assert result["status"] == "ok"
+    assert len(result["closed"]) == 1
+    closed = result["closed"][0]
+    assert closed["closed_price"] == 99.92
+    assert closed["exit_reason"] == "managed_target_hit"
+    exit_execution = closed["trade_ticket"]["execution_model"]["exit"]
+    assert exit_execution["reference_price"] == 100.0
+    assert exit_execution["fill_price"] == 99.92
+    assert exit_execution["estimated_cost_value"] == 0.8
+
+
 def test_outcome_learning_penalizes_weak_setups() -> None:
     manager = FakePortfolioManager()
     for index in range(8):
@@ -1538,6 +1591,7 @@ if __name__ == "__main__":
     test_demo_exposure_capacity_gates()
     test_paper_risk_circuit_breaker()
     test_close_trade_auto_documents_profitable_exit()
+    test_managed_exit_applies_execution_cost_once()
     test_outcome_learning_penalizes_weak_setups()
     test_intraday_market_snapshot_tracks_range_since_entry()
     test_market_snapshot_falls_back_to_daily_data()

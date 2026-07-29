@@ -133,7 +133,16 @@ def main() -> None:
         )
         assert closed_trade is not None
         assert closed_trade["trade_ticket"]["execution_model"]["exit"]["fill_price"] == 104.916
+        duplicate_close = manager.close_paper_trade(
+            paper_trade["id"],
+            1.0,
+            exit_reason="duplicate_exit",
+            lessons_learned="This must not overwrite the first close.",
+        )
+        assert duplicate_close is None
         restarted_trade = next(item for item in PortfolioManager().list_paper_trades() if item["id"] == paper_trade["id"])
+        assert restarted_trade["closed_price"] == 104.916
+        assert restarted_trade["exit_reason"] == "qa_exit"
         assert restarted_trade["trade_ticket"]["execution_model"]["entry"]["cost_bps"] == 8
         assert restarted_trade["trade_ticket"]["execution_model"]["exit"]["reference_price"] == 105
 

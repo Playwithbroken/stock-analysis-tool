@@ -1217,6 +1217,9 @@ class PortfolioManager:
         if not existing:
             conn.close()
             return None
+        if str(existing["status"] or "").lower() != "open":
+            conn.close()
+            return None
         closed_at = datetime.now().isoformat()
         merged_notes = notes if notes is not None else existing["notes"]
         merged_exit_reason = exit_reason if exit_reason is not None else existing["exit_reason"]
@@ -1238,7 +1241,7 @@ class PortfolioManager:
                 exit_reason = ?,
                 lessons_learned = ?,
                 trade_ticket_json = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'open'
             ''',
             (
                 closed_at,
@@ -1250,7 +1253,11 @@ class PortfolioManager:
                 trade_id,
             ),
         )
+        changed = cursor.rowcount
         conn.commit()
+        if changed <= 0:
+            conn.close()
+            return None
         cursor.execute('SELECT * FROM paper_trades WHERE id = ?', (trade_id,))
         updated = dict(cursor.fetchone())
         conn.close()

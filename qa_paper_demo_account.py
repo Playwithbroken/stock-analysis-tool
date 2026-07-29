@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from src.paper_trading_service import PaperTradingService
+from src.paper_trading_service import PaperTradeAlreadyClosedError, PaperTradingService
 from src.strategy_library import StrategyLibrary
 
 
@@ -91,6 +91,8 @@ class FakePortfolioManager:
         for item in self.trades:
             if item.get("id") != trade_id:
                 continue
+            if item.get("status") != "open":
+                return None
             item.update(
                 {
                     "status": "closed",
@@ -1378,6 +1380,85 @@ def test_close_trade_auto_documents_profitable_exit() -> None:
     assert feedback["missing_journal_count"] == 0
 
 
+def test_closed_trade_cannot_be_closed_twice() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "closed-once",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_idempotent_close",
+                "status": "closed",
+                "opened_at": "2026-06-18T08:00:00",
+                "closed_at": "2026-06-19T08:00:00",
+                "entry_price": 100.0,
+                "closed_price": 104.0,
+                "stop_price": 95.0,
+                "target_price": 104.0,
+                "quantity": 10,
+                "exit_reason": "first_exit",
+                "lessons_learned": "First close must remain authoritative.",
+            }
+        ]
+    )
+    service = build_service(manager)
+
+    try:
+        service.close_trade(
+            "closed-once",
+            closed_price=1.0,
+            exit_reason="duplicate_exit",
+            lessons_learned="Must not be saved.",
+        )
+        raise AssertionError("Duplicate paper close unexpectedly succeeded.")
+    except PaperTradeAlreadyClosedError:
+        pass
+
+    persisted = manager.trades[0]
+    assert persisted["closed_at"] == "2026-06-19T08:00:00"
+    assert persisted["closed_price"] == 104.0
+    assert persisted["exit_reason"] == "first_exit"
+    assert persisted["lessons_learned"] == "First close must remain authoritative."
+
+
+def test_managed_exit_tolerates_concurrent_close() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "concurrent-close",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_concurrent_close",
+                "status": "open",
+                "opened_at": "2026-06-18T08:00:00",
+                "entry_price": 90.0,
+                "stop_price": 85.0,
+                "target_price": 95.0,
+                "quantity": 10,
+                "confidence_score": 90,
+                "leverage": 1,
+            }
+        ]
+    )
+    service = build_service(manager)
+    manager.close_paper_trade = lambda *args, **kwargs: None  # type: ignore[method-assign]
+
+    result = service.close_trades_on_management_exits()
+
+    assert result["status"] == "ok"
+    assert result["closed"] == []
+    assert result["errors"] == []
+    assert result["skipped"] == [
+        {
+            "id": "concurrent-close",
+            "ticker": "AAPL",
+            "status": "already_closed",
+        }
+    ]
+
+
 def test_managed_exit_applies_execution_cost_once() -> None:
     manager = FakePortfolioManager(
         [
@@ -1709,6 +1790,8 @@ if __name__ == "__main__":
     test_demo_exposure_capacity_gates()
     test_paper_risk_circuit_breaker()
     test_close_trade_auto_documents_profitable_exit()
+    test_closed_trade_cannot_be_closed_twice()
+    test_managed_exit_tolerates_concurrent_close()
     test_managed_exit_applies_execution_cost_once()
     test_managed_exit_uses_intraday_trigger_price()
     test_outcome_learning_penalizes_weak_setups()

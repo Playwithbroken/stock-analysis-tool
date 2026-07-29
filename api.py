@@ -38,7 +38,7 @@ from src.email_alert_service import (
     EmailAlertService,
 )
 from src.morning_brief_service import MorningBriefService
-from src.paper_trading_service import PaperTradingService
+from src.paper_trading_service import PaperTradeAlreadyClosedError, PaperTradingService
 from src.strategy_library import StrategyLibrary
 from src.forecast_learning_service import ForecastLearningService
 from src.signal_score_service import SignalScoreService
@@ -5521,6 +5521,8 @@ async def close_paper_trade(trade_id: str, req: PaperTradeCloseRequest):
         except Exception as alert_error:
             telegram_alerts = {"status": "error", "message": str(alert_error)}
         return convert_numpy_types({**trade, "telegram_alerts": telegram_alerts})
+    except PaperTradeAlreadyClosedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

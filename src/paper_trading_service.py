@@ -14,6 +14,11 @@ from src.performance_metrics import build_trade_performance
 
 DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
+
+class PaperTradeAlreadyClosedError(ValueError):
+    pass
+
+
 COMMODITY_LEVERAGE_PROXIES = [
     {
         "ticker": "GLD",
@@ -639,6 +644,8 @@ class PaperTradingService:
         existing = next((item for item in self.portfolio_manager.list_paper_trades(limit=300) if item.get("id") == trade_id), None)
         if not existing:
             raise ValueError("Trade not found.")
+        if str(existing.get("status") or "").lower() != "open":
+            raise PaperTradeAlreadyClosedError("Trade is already closed.")
         ticket = existing.get("trade_ticket") if isinstance(existing.get("trade_ticket"), dict) else {}
         entry_execution = (ticket.get("execution_model") or {}).get("entry") if isinstance(ticket.get("execution_model"), dict) else None
         exit_market: Dict[str, Any] = {}
@@ -684,7 +691,7 @@ class PaperTradingService:
             ticket,
         )
         if not closed:
-            raise ValueError("Trade not found.")
+            raise PaperTradeAlreadyClosedError("Trade was already closed by another process.")
         return self._enrich_trade(closed)
 
     def close_trades_on_management_exits(self, limit: int = 50) -> Dict[str, Any]:
@@ -738,6 +745,14 @@ class PaperTradingService:
                         exit_reason=exit_reason,
                         lessons_learned=lesson,
                     )
+                )
+            except PaperTradeAlreadyClosedError:
+                skipped.append(
+                    {
+                        "id": trade.get("id"),
+                        "ticker": trade.get("ticker"),
+                        "status": "already_closed",
+                    }
                 )
             except Exception as exc:
                 errors.append(

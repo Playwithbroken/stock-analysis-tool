@@ -1424,6 +1424,56 @@ def test_managed_exit_applies_execution_cost_once() -> None:
     assert exit_execution["estimated_cost_value"] == 0.8
 
 
+def test_managed_exit_uses_intraday_trigger_price() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "managed-intraday-target",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "qa_intraday_exit",
+                "status": "open",
+                "opened_at": "2026-06-18T08:00:00",
+                "entry_price": 100.0,
+                "stop_price": 95.0,
+                "target_price": 102.0,
+                "quantity": 10,
+                "confidence_score": 90,
+                "leverage": 1,
+                "notes": "",
+                "exit_reason": "",
+                "lessons_learned": "",
+            }
+        ]
+    )
+    service = build_service(manager)
+    service._get_market_snapshot = lambda ticker, since=None, **kwargs: {  # type: ignore[method-assign]
+        "price": 100.5,
+        "data_as_of": "2026-06-19T08:15:00+00:00",
+        "source": "qa_intraday",
+        "interval": "5m",
+        "age_hours": 0.1,
+        "freshness": "fresh",
+        "liquidity_status": "strong",
+        "monitoring_low": 99.0,
+        "monitoring_high": 103.0,
+        "monitoring_trigger": "target_hit",
+        "monitoring_triggered_at": "2026-06-19T08:05:00",
+        "monitoring_trigger_price": 102.0,
+    }
+
+    result = service.close_trades_on_management_exits()
+
+    assert result["status"] == "ok"
+    assert len(result["closed"]) == 1
+    closed = result["closed"][0]
+    assert closed["closed_price"] == 102.0
+    assert closed["closed_price"] != 100.5
+    assert closed["exit_reason"] == "managed_target_hit"
+    assert "Trigger reference: 102.0000" in closed["notes"]
+
+
 def test_outcome_learning_penalizes_weak_setups() -> None:
     manager = FakePortfolioManager()
     for index in range(8):
@@ -1510,6 +1560,7 @@ def test_intraday_market_snapshot_tracks_range_since_entry() -> None:
     assert snapshot["monitoring_high"] == 103.0
     assert snapshot["monitoring_trigger"] == "target_hit"
     assert snapshot["monitoring_triggered_at"]
+    assert snapshot["monitoring_trigger_price"] == 102.0
     assert snapshot["average_volume_5d"] == 420_000.0
     assert snapshot["liquidity_status"] == "strong"
 
@@ -1526,6 +1577,7 @@ def test_intraday_market_snapshot_tracks_range_since_entry() -> None:
     )
     assert management["status"] == "target_hit"
     assert management["triggered_at"] == snapshot["monitoring_triggered_at"]
+    assert management["trigger_reference_price"] == 102.0
 
     stop_management = service._build_trade_management_plan(
         {
@@ -1554,6 +1606,7 @@ def test_intraday_same_bar_conflict_prefers_stop() -> None:
     intraday = pd.DataFrame(
         {
             "Close": [100.0, 100.5],
+            "Open": [93.0, 100.0],
             "High": [103.0, 101.0],
             "Low": [94.0, 99.0],
             "Volume": [100_000, 90_000],
@@ -1577,6 +1630,7 @@ def test_intraday_same_bar_conflict_prefers_stop() -> None:
         )
 
     assert snapshot["monitoring_trigger"] == "stop_hit"
+    assert snapshot["monitoring_trigger_price"] == 93.0
     management = service._build_trade_management_plan(
         {
             "entry_price": 100.0,
@@ -1589,6 +1643,7 @@ def test_intraday_same_bar_conflict_prefers_stop() -> None:
         }
     )
     assert management["status"] == "stop_hit"
+    assert management["trigger_reference_price"] == 93.0
 
 
 def test_market_snapshot_falls_back_to_daily_data() -> None:
@@ -1655,6 +1710,7 @@ if __name__ == "__main__":
     test_paper_risk_circuit_breaker()
     test_close_trade_auto_documents_profitable_exit()
     test_managed_exit_applies_execution_cost_once()
+    test_managed_exit_uses_intraday_trigger_price()
     test_outcome_learning_penalizes_weak_setups()
     test_intraday_market_snapshot_tracks_range_since_entry()
     test_intraday_same_bar_conflict_prefers_stop()

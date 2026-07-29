@@ -707,7 +707,8 @@ class PaperTradingService:
                 )
                 continue
             current_price = trade.get("current_price")
-            exit_reference = trade.get("current_reference_price") or current_price
+            trigger_reference = management.get("trigger_reference_price")
+            exit_reference = trigger_reference or trade.get("current_reference_price") or current_price
             if exit_reference in (None, 0):
                 errors.append(
                     {
@@ -726,7 +727,8 @@ class PaperTradingService:
                 )
                 notes = (
                     f"Auto-managed paper exit: {status}. "
-                    f"{management.get('summary') or 'Management plan triggered.'}"
+                    f"{management.get('summary') or 'Management plan triggered.'} "
+                    f"Trigger reference: {float(exit_reference):.4f}"
                 )
                 closed.append(
                     self.close_trade(
@@ -3180,6 +3182,7 @@ class PaperTradingService:
                     "risk_distance_pct": round(risk_distance, 2),
                     "target_progress_pct": None,
                     "triggered_at": current_market.get("monitoring_triggered_at"),
+                    "trigger_reference_price": current_market.get("monitoring_trigger_price"),
                 }
             if risk_distance is not None and risk_distance <= 0.6:
                 status = "near_stop"
@@ -3214,6 +3217,7 @@ class PaperTradingService:
                     "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
                     "target_progress_pct": round(target_progress, 1),
                     "triggered_at": current_market.get("monitoring_triggered_at"),
+                    "trigger_reference_price": current_market.get("monitoring_trigger_price"),
                 }
             if target_progress >= 75 and favorable_pct > 0 and status == "monitor":
                 status = "near_target"
@@ -3436,6 +3440,7 @@ class PaperTradingService:
             monitoring_high = None
             monitoring_trigger = None
             monitoring_triggered_at = None
+            monitoring_trigger_price = None
             since_datetime = self._as_utc_naive_datetime(since)
             if interval == "5m" and since_datetime is not None:
                 monitored_positions = []
@@ -3470,6 +3475,20 @@ class PaperTradingService:
                             if not stop_touched and not target_touched:
                                 continue
                             monitoring_trigger = "stop_hit" if stop_touched else "target_hit"
+                            if monitoring_trigger == "stop_hit":
+                                monitoring_trigger_price = stop_barrier
+                                try:
+                                    bar_open = float(bar.get("Open"))
+                                except (TypeError, ValueError):
+                                    bar_open = None
+                                if bar_open is not None and bar_open > 0:
+                                    monitoring_trigger_price = (
+                                        max(float(stop_barrier), bar_open)
+                                        if normalized_direction == "short"
+                                        else min(float(stop_barrier), bar_open)
+                                    )
+                            else:
+                                monitoring_trigger_price = target_barrier
                             triggered_datetime = self._as_utc_naive_datetime(bar_timestamp)
                             monitoring_triggered_at = (
                                 triggered_datetime.isoformat()
@@ -3516,6 +3535,11 @@ class PaperTradingService:
                 "monitoring_high": round(monitoring_high, 4) if monitoring_high is not None else None,
                 "monitoring_trigger": monitoring_trigger,
                 "monitoring_triggered_at": monitoring_triggered_at,
+                "monitoring_trigger_price": (
+                    round(float(monitoring_trigger_price), 4)
+                    if monitoring_trigger_price is not None
+                    else None
+                ),
             }
         except Exception:
             return {}

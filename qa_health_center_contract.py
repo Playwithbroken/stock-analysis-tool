@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 import json
 import os
 import tempfile
@@ -208,11 +210,31 @@ def main() -> int:
                 require(isinstance(preview_payload.get("opened"), list), failures, f"paper {preview_mode} preview opened must be a list")
                 require(len(preview_payload.get("opened") or []) == 0, failures, f"paper {preview_mode} preview must not open trades")
 
+        scheduler_source = inspect.getsource(api._forecast_learning_loop)
+        require(
+            "_run_paper_outcome_cycle(force_alerts=False)" in scheduler_source,
+            failures,
+            "forecast scheduler does not use the persisted paper outcome cycle",
+        )
+        scheduled_outcome_payload = asyncio.run(
+            api._run_paper_outcome_cycle(force_alerts=False)
+        )
+        scheduled_outcome_raw = api.get_portfolio_manager().get_app_setting(
+            "paper_trade_outcomes_last_result",
+            "{}",
+        )
+        scheduled_outcome = json.loads(scheduled_outcome_raw or "{}")
+        require(
+            scheduled_outcome.get("checked_at") == scheduled_outcome_payload.get("checked_at"),
+            failures,
+            "scheduled paper outcome cycle was not persisted",
+        )
+
         paper_outcome_eval = client.post("/api/trading/paper-outcomes/evaluate")
         require(paper_outcome_eval.status_code == 200, failures, "paper outcome evaluation request failed")
         if paper_outcome_eval.status_code == 200:
             outcome_payload = paper_outcome_eval.json()
-            for key in ["status", "due", "evaluated", "pending_data", "errors", "paper_learning_alerts"]:
+            for key in ["checked_at", "status", "due", "evaluated", "pending_data", "errors", "paper_learning_alerts"]:
                 require(key in outcome_payload, failures, f"paper outcome evaluation missing {key!r}")
             require(isinstance(outcome_payload.get("errors"), list), failures, "paper outcome evaluation errors must be a list")
             require(
@@ -220,6 +242,31 @@ def main() -> int:
                 failures,
                 "paper outcome evaluation paper_learning_alerts must be an object",
             )
+            persisted_outcome_raw = api.get_portfolio_manager().get_app_setting(
+                "paper_trade_outcomes_last_result",
+                "{}",
+            )
+            persisted_outcome = json.loads(persisted_outcome_raw or "{}")
+            require(
+                persisted_outcome.get("checked_at") == outcome_payload.get("checked_at"),
+                failures,
+                "paper outcome run was not persisted for health diagnostics",
+            )
+            outcome_health = client.get("/api/admin/health-center")
+            require(outcome_health.status_code == 200, failures, "paper outcome health refresh failed")
+            if outcome_health.status_code == 200:
+                refreshed_payload = outcome_health.json()
+                refreshed_outcomes = refreshed_payload.get("paper_outcomes") or {}
+                require(
+                    refreshed_outcomes.get("status") != "not_seen",
+                    failures,
+                    "persisted paper outcome run still appears as not_seen",
+                )
+                require(
+                    (refreshed_outcomes.get("last_run") or {}).get("checked_at") == outcome_payload.get("checked_at"),
+                    failures,
+                    "health center does not expose the persisted paper outcome run",
+                )
 
         telegram_calls = []
 

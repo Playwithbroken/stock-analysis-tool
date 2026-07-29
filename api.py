@@ -1557,6 +1557,30 @@ async def _brief_warmup_loop():
         await asyncio.sleep(max(60, interval_seconds))
 
 
+async def _run_paper_outcome_cycle(*, force_alerts: bool) -> Dict[str, Any]:
+    result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
+    paper_learning = get_paper_trading_service()._build_outcome_learning_adjustments()
+    try:
+        alert_result = await asyncio.to_thread(
+            get_email_alert_service().send_paper_learning_alerts,
+            paper_learning,
+            force_alerts,
+        )
+    except Exception as alert_error:
+        alert_result = {"status": "error", "message": str(alert_error)}
+
+    payload = {
+        "checked_at": datetime.utcnow().isoformat(),
+        **result,
+        "paper_learning_alerts": alert_result,
+    }
+    get_portfolio_manager().set_app_setting(
+        "paper_trade_outcomes_last_result",
+        json.dumps(payload),
+    )
+    return payload
+
+
 async def _forecast_learning_loop():
     if not _env_enabled("FORECAST_LEARNING_ENABLED", "true"):
         return
@@ -1564,16 +1588,13 @@ async def _forecast_learning_loop():
     while True:
         try:
             result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
-            paper_result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
-            paper_learning = get_paper_trading_service()._build_outcome_learning_adjustments()
-            try:
-                paper_alert_result = await asyncio.to_thread(
-                    get_email_alert_service().send_paper_learning_alerts,
-                    paper_learning,
-                    False,
-                )
-            except Exception as alert_error:
-                paper_alert_result = {"status": "error", "message": str(alert_error)}
+            paper_cycle = await _run_paper_outcome_cycle(force_alerts=False)
+            paper_result = {
+                key: value
+                for key, value in paper_cycle.items()
+                if key not in {"checked_at", "paper_learning_alerts"}
+            }
+            paper_alert_result = paper_cycle.get("paper_learning_alerts") or {}
             paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
             paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
             paper_account_status_alerts = await asyncio.to_thread(_send_paper_account_status_alerts)
@@ -5345,21 +5366,8 @@ async def get_paper_trading_dashboard():
 @app.post("/api/trading/paper-outcomes/evaluate")
 async def evaluate_paper_trade_outcomes():
     try:
-        result = await asyncio.to_thread(get_paper_trading_service().evaluate_due_outcomes)
-        paper_learning = get_paper_trading_service()._build_outcome_learning_adjustments()
-        try:
-            alert_result = await asyncio.to_thread(
-                get_email_alert_service().send_paper_learning_alerts,
-                paper_learning,
-                True,
-            )
-        except Exception as alert_error:
-            alert_result = {"status": "error", "message": str(alert_error)}
-        get_portfolio_manager().set_app_setting(
-            "paper_trade_outcomes_last_result",
-            json.dumps({"checked_at": datetime.utcnow().isoformat(), **result, "paper_learning_alerts": alert_result}),
-        )
-        return convert_numpy_types({**result, "paper_learning_alerts": alert_result})
+        result = await _run_paper_outcome_cycle(force_alerts=True)
+        return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

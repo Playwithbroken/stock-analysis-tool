@@ -144,6 +144,33 @@ const ANALYSIS_TEXT: Record<string, string> = {
   "2,000 shares": "2.000 Aktien",
 };
 
+const RECOMMENDATION_ACTIONS: Record<string, string> = {
+  "strong buy": "Stark kaufen",
+  buy: "Kaufen",
+  accumulate: "Aufbauen",
+  "hold / accumulate": "Halten / Aufbauen",
+  hold: "Halten",
+  watch: "Beobachten",
+  wait: "Abwarten",
+  avoid: "Meiden",
+  sell: "Verkaufen",
+  "strong sell": "Stark verkaufen",
+};
+
+const SECTOR_LABELS: Record<string, string> = {
+  "basic materials": "Grundstoffe",
+  "communication services": "Kommunikationsdienste",
+  "consumer cyclical": "Zyklischer Konsum",
+  "consumer defensive": "Basiskonsumgüter",
+  energy: "Energie",
+  "financial services": "Finanzdienstleistungen",
+  healthcare: "Gesundheitswesen",
+  industrials: "Industrie",
+  "real estate": "Immobilien",
+  technology: "Technologie",
+  utilities: "Versorger",
+};
+
 function preserveInitialCase(source: string, translated: string) {
   if (!source || source[0] !== source[0].toUpperCase()) return translated;
   return translated.charAt(0).toUpperCase() + translated.slice(1);
@@ -215,6 +242,18 @@ export function localizeAnalysisText(value: unknown) {
     .replace(/\brevenue growth\b/gi, "Umsatzwachstum")
     .replace(/\bprofit margin\b/gi, "Gewinnmarge")
     .replace(/\bnet cash\b/gi, "Nettoliquidität");
+}
+
+export function localizeRecommendationAction(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return RECOMMENDATION_ACTIONS[text.toLowerCase()] || normalizeGermanDisplayText(text);
+}
+
+export function localizeSector(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return SECTOR_LABELS[text.toLowerCase()] || normalizeGermanDisplayText(text);
 }
 
 export function localizeLearningMessage(value: unknown) {

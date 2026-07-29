@@ -8,7 +8,13 @@ import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 import { formatAnalysisFetchTime, getAnalysisQualityState } from "../lib/analysisQuality";
-import { localizeAnalysisLabel, localizeAnalysisText, normalizeGermanDisplayText } from "../lib/displayText";
+import {
+  localizeAnalysisLabel,
+  localizeAnalysisText,
+  localizeRecommendationAction,
+  localizeSector,
+  normalizeGermanDisplayText,
+} from "../lib/displayText";
 
 interface AnalysisResultProps {
   data: any;
@@ -245,7 +251,7 @@ export default function AnalysisResult({
     ].reduce((sum, value) => sum + value, 10),
   );
   const valuationPressure = [
-    fundamentals?.pe_ratio && fundamentals.pe_ratio > 35 ? "P/E hoch, Bewertung braucht Wachstum." : null,
+    fundamentals?.pe_ratio && fundamentals.pe_ratio > 35 ? "KGV hoch, Bewertung braucht Wachstum." : null,
     fundamentals?.ps_ratio && fundamentals.ps_ratio > 8 ? "Sales-Multiple hoch, Umsatz muss liefern." : null,
     fundamentals?.peg_ratio && fundamentals.peg_ratio > 2 ? "PEG deutet auf teure Wachstumserwartung." : null,
   ].filter(Boolean);
@@ -385,7 +391,7 @@ export default function AnalysisResult({
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         setIsInWatchlist(true);
-        setAlertStatus(`${data.ticker} zur Watchlist hinzugefuegt.`);
+        setAlertStatus(`${data.ticker} zur Watchlist hinzugefügt.`);
       }
     } catch {
       setAlertStatus("Watchlist konnte nicht aktualisiert werden.");
@@ -407,7 +413,7 @@ export default function AnalysisResult({
     if (alertBusy) return;
     const target = Number(alertTarget);
     if (!Number.isFinite(target) || target <= 0) {
-      setAlertStatus("Bitte ein gueltiges Alert-Level eingeben.");
+      setAlertStatus("Bitte einen gültigen Zielkurs eingeben.");
       return;
     }
     setAlertBusy(true);
@@ -425,7 +431,9 @@ export default function AnalysisResult({
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setAlertModalOpen(false);
-      setAlertStatus(`Alert gesetzt: ${data.ticker} ${alertDirection} ${target.toFixed(2)}`);
+      setAlertStatus(
+        `Kursalarm gesetzt: ${data.ticker} ${alertDirection === "above" ? "oberhalb" : "unterhalb"} ${target.toFixed(2)}`,
+      );
     } catch {
       setAlertStatus("Kursalarm konnte nicht erstellt werden.");
     } finally {
@@ -483,7 +491,7 @@ export default function AnalysisResult({
     doc.text(`Performance-Score: ${total_score?.toFixed(1)} / 100`, 20, 85);
     doc.text(`Marktbewertung: ${localizeAnalysisLabel(valuation || "N/A")}`, 20, 92);
     doc.text(
-      `Handlungsempfehlung: ${recommendation?.action || "N/A"}`,
+      `Handlungsempfehlung: ${localizeRecommendationAction(recommendation?.action || "N/A")}`,
       20,
       99,
     );
@@ -542,7 +550,7 @@ export default function AnalysisResult({
         [
           "Basisszenario",
           recommendation?.action
-            ? `Aktueller App-Case: ${recommendation.action}. Trigger und nächster Ergebnis- oder Nachrichtenimpuls müssen zusammenpassen.`
+            ? `Aktueller App-Case: ${localizeRecommendationAction(recommendation.action)}. Trigger und nächster Ergebnis- oder Nachrichtenimpuls müssen zusammenpassen.`
             : "Neutrales Szenario: erst Preisreaktion und Datenbestätigung abwarten.",
         ],
         [
@@ -598,7 +606,7 @@ export default function AnalysisResult({
               </span>
               {fundamentals?.sector ? (
                 <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                  {fundamentals.sector}
+                  {localizeSector(fundamentals.sector)}
                 </span>
               ) : null}
               {!dataQuality.blocksDecision && fetchedAt ? (
@@ -633,7 +641,7 @@ export default function AnalysisResult({
                     <span className="text-slate-500">{data.ticker}</span>
                     <span className="text-gray-600">·</span>
                     <span className="text-slate-500">
-                      {fundamentals?.sector}
+                      {localizeSector(fundamentals?.sector)}
                     </span>
                   </div>
                 </div>
@@ -685,7 +693,7 @@ export default function AnalysisResult({
                     title={dataQuality.blocksDecision ? "Erst vollständige Daten laden" : undefined}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    Alert setzen
+                    Alarm setzen
                   </button>
                   <button
                     onClick={onOpenChat}
@@ -797,7 +805,7 @@ export default function AnalysisResult({
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                   Kursalarm
                 </div>
-                <h3 className="mt-2 text-2xl text-slate-900">{data.ticker} Alert setzen</h3>
+                <h3 className="mt-2 text-2xl text-slate-900">{data.ticker} Kursalarm setzen</h3>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <button
                     onClick={() => setAlertDirection("above")}
@@ -932,7 +940,7 @@ export default function AnalysisResult({
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">
                     {recommendation?.action
-                      ? `Aktueller App-Case: ${recommendation.action}. Entscheidend ist, ob Trigger und nächster Ergebnis- oder Nachrichtenimpuls zusammenpassen.`
+                      ? `Aktueller App-Case: ${localizeRecommendationAction(recommendation.action)}. Entscheidend ist, ob Trigger und nächster Ergebnis- oder Nachrichtenimpuls zusammenpassen.`
                       : "Neutrales Szenario: erst Preisreaktion und Datenbestätigung abwarten."}
                   </p>
                 </div>
@@ -1118,7 +1126,7 @@ export default function AnalysisResult({
                   Qualitätsprüfung des Geschäfts
                 </div>
                 <h3 className="mt-2 text-2xl font-black text-slate-900">
-                  Umsatz, Earnings, Dividende und Cashflow auf einen Blick
+                  Umsatz, Ergebnisse, Dividende und Cashflow auf einen Blick
                 </h3>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1366,7 +1374,7 @@ export default function AnalysisResult({
               <div className="mt-2 flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                  Live | Market Briefing
+                  Live | Marktbriefing
                 </p>
               </div>
             </div>
@@ -1379,10 +1387,12 @@ export default function AnalysisResult({
                 {dataQuality.blocksDecision ? "--" : scoreValue.toFixed(0)}
               </div>
               <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Pro Score
+                Analyse-Score
               </div>
               <div className={`inline-block rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest ${verdictTone}`}>
-                {dataQuality.blocksDecision ? "Nicht freigegeben" : recommendation?.action || recommendation}
+                {dataQuality.blocksDecision
+                  ? "Nicht freigegeben"
+                  : localizeRecommendationAction(recommendation?.action || recommendation)}
               </div>
             </div>
 

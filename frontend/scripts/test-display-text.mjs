@@ -32,7 +32,9 @@ try {
     localizeMarketRegime,
     localizeAnalysisLabel,
     localizeAnalysisText,
+    localizeRecommendationAction,
     localizeResolutionConfidence,
+    localizeSector,
     normalizeGermanDisplayText,
   } = await import(`file://${modulePath.replace(/\\/g, "/")}`);
 
@@ -63,6 +65,10 @@ try {
   assert.equal(localizeAnalysisText("12,500 Shares"), "12.500 Aktien");
   assert.equal(localizeAnalysisText("70.6% annual"), "70.6% jährlich");
   assert.equal(localizeAnalysisText("No clear guidance read"), "Kein klares Ausblickssignal");
+  assert.equal(localizeRecommendationAction("HOLD / ACCUMULATE"), "Halten / Aufbauen");
+  assert.equal(localizeRecommendationAction("STRONG SELL"), "Stark verkaufen");
+  assert.equal(localizeSector("Financial Services"), "Finanzdienstleistungen");
+  assert.equal(localizeSector("Consumer Defensive"), "Basiskonsumgüter");
   assert.equal(
     localizeLearningMessage("Promote morning_brief: 61.5% hit rate across 76 evaluated outcomes."),
     "Morning Briefing ausbauen: 61,5% Trefferquote aus 76 ausgewerteten Ergebnissen.",
@@ -120,6 +126,14 @@ try {
     ">Below<",
     ">Cancel<",
     "Aktivitaet / Bestaetigung",
+    "Global Search",
+    "Live | Market Briefing",
+    "Pro Score",
+    "hinzugefuegt",
+    "gueltiges Alert-Level",
+    "Alert setzen",
+    "P/E hoch",
+    "Umsatz, Earnings, Dividende",
   ]) {
     assert.equal(uiCopy.includes(obsoleteCopy), false, `Veralteter UI-Text gefunden: ${obsoleteCopy}`);
   }

@@ -860,7 +860,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
-                Global Search
+                Globale Suche
               </div>
               {/* Ghost-text overlay: shows query + ghost as overlaid read-only span */}
               <div className="relative mt-1">

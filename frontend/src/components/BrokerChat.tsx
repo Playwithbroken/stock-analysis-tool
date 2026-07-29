@@ -850,7 +850,7 @@ export default function BrokerChat({
       <button
         onClick={() => setIsOpen(true)}
         className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex h-9 w-9 items-center justify-center rounded-[0.85rem] border border-white/55 bg-[linear-gradient(180deg,rgba(15,118,110,0.88),rgba(14,92,87,0.86))] px-0 text-white shadow-[0_8px_18px_rgba(15,118,110,0.14)] transition-all duration-300 hover:scale-[1.01] hover:opacity-100 hover:shadow-[0_16px_36px_rgba(15,118,110,0.24)] active:scale-[0.99] ${fabCompact ? "opacity-70 scale-[0.88]" : "opacity-88 scale-100"} lg:bottom-5 lg:left-auto lg:right-5 lg:h-16 lg:w-16 lg:justify-center lg:rounded-[1.45rem] lg:px-0 lg:opacity-100 lg:scale-100`}
-        aria-label="Open Broker Freund Desk"
+        aria-label="Broker Freund Desk öffnen"
       >
         <div className="absolute inset-0 rounded-[1.45rem] bg-white/8 opacity-0 transition-opacity group-hover:opacity-100"></div>
         <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.7rem] border border-white/16 bg-white/14 lg:h-11 lg:w-11 lg:rounded-[1rem]">
@@ -861,7 +861,7 @@ export default function BrokerChat({
             Broker Freund
           </div>
           <div className="truncate text-sm font-bold text-white">
-            {isOpen ? "Desk Live" : "Open Desk"}
+            {isOpen ? "Desk aktiv" : "Desk öffnen"}
           </div>
         </div>
         <div className="relative hidden rounded-full border border-white/14 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/80">
@@ -876,9 +876,9 @@ export default function BrokerChat({
               Desk
             </span>
           </div>
-          <div className="mt-1 text-sm font-bold text-white">Open Desk</div>
+          <div className="mt-1 text-sm font-bold text-white">Desk öffnen</div>
           <div className="mt-1 text-[11px] leading-5 text-white/72">
-            Signals, news, macro and crowd context without covering the workspace.
+            Signale, Nachrichten, Makro- und Crowd-Kontext, ohne den Arbeitsbereich zu verdecken.
           </div>
         </div>
       </button>

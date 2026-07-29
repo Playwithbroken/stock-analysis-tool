@@ -41,5 +41,10 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "recharts": "^3.7.0"
+  },
+  "overrides": {
+    "filelist": {
+      "minimatch": "10.2.6"
+    }
   }
 }

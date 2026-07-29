@@ -30,6 +30,13 @@ const REGIME_LABELS: Record<string, string> = {
   bearish: "Negativ",
 };
 
+const RESOLUTION_CONFIDENCE_LABELS: Record<string, string> = {
+  high: "Hohe Sicherheit",
+  medium: "Mittlere Sicherheit",
+  low: "Niedrige Sicherheit",
+  resolved: "Erfolgreich aufgelöst",
+};
+
 function preserveInitialCase(source: string, translated: string) {
   if (!source || source[0] !== source[0].toUpperCase()) return translated;
   return translated.charAt(0).toUpperCase() + translated.slice(1);
@@ -61,6 +68,12 @@ export function localizeMarketRegime(value: unknown) {
   const text = String(value ?? "").trim();
   if (!text) return "Neutral";
   return REGIME_LABELS[text.toLowerCase()] || normalizeGermanDisplayText(text);
+}
+
+export function localizeResolutionConfidence(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return RESOLUTION_CONFIDENCE_LABELS.resolved;
+  return RESOLUTION_CONFIDENCE_LABELS[text.toLowerCase()] || normalizeGermanDisplayText(text);
 }
 
 export function localizeLearningMessage(value: unknown) {

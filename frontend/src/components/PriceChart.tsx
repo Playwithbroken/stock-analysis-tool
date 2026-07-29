@@ -74,17 +74,17 @@ const PERIODS = [
 type HistoryState = "loading" | "ready" | "stale" | "snapshot" | "unavailable";
 
 const HISTORY_STATUS_LABELS: Record<HistoryState, string> = {
-  loading: "laedt",
+  loading: "lädt",
   ready: "Live-Historie",
   stale: "gespeicherte Historie",
   snapshot: "Snapshot-Fallback",
-  unavailable: "nicht verfuegbar",
+  unavailable: "nicht verfügbar",
 };
 
 const friendlyRealtimeError = (error: string) => {
-  if (error === "snapshot_fetch_failed") return "Snapshot-Retry aktiv";
-  if (error.startsWith("snapshot_http_401") || error.startsWith("snapshot_http_403")) return "Session pruefen, Snapshot nicht freigegeben";
-  if (error === "ws_unavailable" || error === "websocket_unavailable") return "Realtime laeuft im Snapshot-Modus";
+  if (error === "snapshot_fetch_failed") return "Snapshot wird erneut geladen";
+  if (error.startsWith("snapshot_http_401") || error.startsWith("snapshot_http_403")) return "Session prüfen, Snapshot nicht freigegeben";
+  if (error === "ws_unavailable" || error === "websocket_unavailable") return "Realtime läuft im Snapshot-Modus";
   if (error.startsWith("ws_closed_") || error === "ws_error") return "WebSocket deaktiviert, Snapshot-Fallback aktiv";
   return error.replaceAll("_", " ");
 };
@@ -94,10 +94,10 @@ const dataStatusLabel = (
   connectionState: "live" | "degraded" | "snapshot",
   transportMode: "ws" | "snapshot",
 ) => {
-  if (historyState === "unavailable") return "Kursdaten aktuell nicht verfuegbar";
+  if (historyState === "unavailable") return "Kursdaten aktuell nicht verfügbar";
   if (historyState === "snapshot") return "Snapshot-Fallback aktiv";
   if (historyState === "stale") return "Gespeicherte Historie aktiv, Provider wird erneut versucht";
-  if (connectionState === "degraded") return "Live-Feed verzoegert, Chart bleibt nutzbar";
+  if (connectionState === "degraded") return "Live-Feed verzögert, Chart bleibt nutzbar";
   if (connectionState === "snapshot" || transportMode === "snapshot") return "Snapshot-Feed aktiv";
   return "Live-Daten aktiv";
 };
@@ -249,7 +249,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     const timeoutGuard = window.setTimeout(() => {
       abortRef.current?.abort();
       setFetchError(true);
-      setFetchErrorMessage("Kursverlauf braucht zu lange. Bitte Retry klicken.");
+      setFetchErrorMessage("Kursverlauf braucht zu lange. Bitte erneut laden.");
       setData([]);
       setLoading(false);
       setHistoryState("unavailable");
@@ -446,13 +446,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }
         const message = error instanceof Error ? error.message : "Kursdaten konnten nicht geladen werden.";
         if (message.includes("504")) {
-          setFetchErrorMessage("Datenprovider-Timeout. Bitte mit Retry erneut laden.");
+          setFetchErrorMessage("Datenprovider-Timeout. Bitte erneut laden.");
         } else if (message.includes("401")) {
-          setFetchErrorMessage("Session abgelaufen. Bitte kurz neu einloggen und Retry klicken.");
+          setFetchErrorMessage("Session abgelaufen. Bitte kurz neu einloggen und den Kursverlauf erneut laden.");
         } else if (message.includes("404")) {
-          setFetchErrorMessage("Keine Historie fuer diesen Zeitraum. Zeitraum wechseln oder Retry nutzen.");
+          setFetchErrorMessage("Keine Historie für diesen Zeitraum. Zeitraum wechseln oder erneut laden.");
         } else if (message.toLowerCase().includes("timeout")) {
-          setFetchErrorMessage("Request-Timeout beim Laden des Kursverlaufs. Bitte Retry nutzen.");
+          setFetchErrorMessage("Zeitüberschreitung beim Laden des Kursverlaufs. Bitte erneut laden.");
         } else if (message.includes("Failed to fetch")) {
           setFetchErrorMessage("Netzwerkproblem beim Laden der Historie.");
         } else {
@@ -710,7 +710,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               onClick={() => setRetryCounter((prev) => prev + 1)}
               className="rounded-[0.8rem] border border-black/8 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
             >
-              Retry
+              Erneut laden
             </button>
           </div>
         ) : chartData.length > 0 ? (

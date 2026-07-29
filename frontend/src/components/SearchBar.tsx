@@ -895,7 +895,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   }}
                   onKeyDown={handleKeyDown}
                   placeholder={ghostText ? "" : "AAPL, NVDA, ASML, BTC-USD"}
-                  aria-label="Search for a stock, ETF, or crypto ticker"
+                  aria-label="Aktie, ETF oder Kryptowährung suchen"
                   aria-expanded={showDropdown}
                   aria-controls="search-suggestion-list"
                   aria-autocomplete="list"
@@ -962,12 +962,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-[11px] text-slate-500">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-black/8 bg-white/65 px-3 py-1 font-bold uppercase tracking-[0.14em] text-slate-600">
-              Fast lane
+              Schnelleingabe
             </span>
-            <span>Tippe einen Namen oder Ticker - Tab vervollstaendigt automatisch.</span>
+            <span>Tippe einen Namen oder Ticker – Tab vervollständigt automatisch.</span>
           </div>
           <div className="font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
-            {loading ? "Deep scan running" : directSearchActive ? "Direct lookup ready" : "Ready"}
+            {loading ? "Tiefenanalyse läuft" : directSearchActive ? "Direktsuche bereit" : "Bereit"}
           </div>
         </div>
 

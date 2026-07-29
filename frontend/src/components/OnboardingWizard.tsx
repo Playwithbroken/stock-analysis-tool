@@ -61,9 +61,9 @@ export default function OnboardingWizard({
         <div className="mb-6 flex items-center justify-between">
           <div>
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              First Run
+              Erster Start
             </div>
-            <h2 className="mt-2 text-3xl text-slate-900">Workspace Setup</h2>
+            <h2 className="mt-2 text-3xl text-slate-900">Arbeitsbereich einrichten</h2>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -71,7 +71,7 @@ export default function OnboardingWizard({
               onClick={onDismiss}
               className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500"
             >
-              Spaeter
+              Später
             </button>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
               Schritt {step}/3
@@ -83,12 +83,12 @@ export default function OnboardingWizard({
           <div className="space-y-4">
             <div className="text-lg font-bold text-slate-900">1) Watchlist starten</div>
             <p className="text-sm text-slate-600">
-              Lege direkt einen ersten Ticker an, damit Signals und Briefings kontextbezogen starten.
+              Lege direkt einen ersten Ticker an, damit Signale und Briefings kontextbezogen starten.
             </p>
             <input
               value={watchTicker}
               onChange={(e) => setWatchTicker(e.target.value.toUpperCase())}
-              placeholder="z.B. AAPL"
+              placeholder="z. B. AAPL"
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
             />
             <div className="flex justify-end gap-3">
@@ -96,7 +96,7 @@ export default function OnboardingWizard({
                 onClick={() => setStep(2)}
                 className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
               >
-                Skip
+                Überspringen
               </button>
               <button
                 onClick={async () => {
@@ -115,7 +115,7 @@ export default function OnboardingWizard({
           <div className="space-y-4">
             <div className="text-lg font-bold text-slate-900">2) Telegram verbinden</div>
             <p className="text-sm text-slate-600">
-              Telegram Alerts laufen, sobald Bot Token und Chat ID in Railway gesetzt sind. Danach kommen Signale und Alerts automatisch.
+              Telegram-Benachrichtigungen laufen, sobald Bot-Token und Chat-ID in Railway gesetzt sind. Danach kommen Signale und Hinweise automatisch.
             </p>
             <div className="rounded-xl border border-black/8 bg-white/70 p-4 text-sm text-slate-600">
               ENV: <span className="font-semibold">TELEGRAM_BOT_TOKEN</span>,{" "}
@@ -127,7 +127,7 @@ export default function OnboardingWizard({
                 onClick={() => setStep(1)}
                 className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
               >
-                Zurueck
+                Zurück
               </button>
               <button
                 onClick={() => setStep(3)}
@@ -148,7 +148,7 @@ export default function OnboardingWizard({
             <input
               value={portfolioName}
               onChange={(e) => setPortfolioName(e.target.value)}
-              placeholder="Portfolio Name"
+              placeholder="Portfolio-Name"
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
             />
             {status ? (
@@ -161,14 +161,14 @@ export default function OnboardingWizard({
                 onClick={() => setStep(2)}
                 className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
               >
-                Zurueck
+                Zurück
               </button>
               <button
                 onClick={finish}
                 disabled={saving}
                 className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
               >
-                {saving ? "Speichert..." : "Setup abschliessen"}
+                {saving ? "Wird gespeichert..." : "Einrichtung abschließen"}
               </button>
             </div>
           </div>

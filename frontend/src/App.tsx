@@ -11,7 +11,11 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
 import { fetchJsonWithRetry } from "./lib/api";
 import { normalizeGeoRegions } from "./lib/geoRegions";
-import { localizeMarketRegime, normalizeGermanDisplayText } from "./lib/displayText";
+import {
+  localizeMarketRegime,
+  localizeResolutionConfidence,
+  normalizeGermanDisplayText,
+} from "./lib/displayText";
 import { getBriefLoadState, guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
 import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
@@ -1543,7 +1547,7 @@ function AppContent() {
                       }}
                       className="rounded-[0.9rem] border border-black/10 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-600"
                     >
-                      Spaeter
+                      Später
                     </button>
                   </div>
                 </div>
@@ -1715,7 +1719,7 @@ function AppContent() {
                       onClick={() => setBriefReloadTick((prev) => prev + 1)}
                       className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
                     >
-                      Retry Feed
+                      Feed neu laden
                     </button>
                   </section>
                 )}
@@ -1777,7 +1781,7 @@ function AppContent() {
             {searchResolution && (
               <div className="surface-panel mb-8 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-emerald-500/18 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-900">
                 <div>
-                  <span className="font-extrabold">Aufgeloest:</span>{" "}
+                  <span className="font-extrabold">Aufgelöst:</span>{" "}
                   <span className="text-emerald-800">{searchResolution.query}</span>{" "}
                   <span className="text-emerald-700">{"->"}</span>{" "}
                   <span className="font-black">{searchResolution.ticker}</span>
@@ -1786,7 +1790,7 @@ function AppContent() {
                   ) : null}
                 </div>
                 <span className="rounded-full border border-emerald-500/20 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-700">
-                  {searchResolution.confidence || "resolved"}
+                  {localizeResolutionConfidence(searchResolution.confidence)}
                 </span>
               </div>
             )}

@@ -314,6 +314,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const autopilotPerformance = paperPerformanceSummary(paperAutopilot.demo_account_after?.performance);
   const accountResultPerformance = paperPerformanceSummary(paperAccountResult?.demo_account?.performance);
   const paperPreviewBlock = previewBlockReasons(paperPreviewResult);
+  const paperNextCandidate =
+    paperAutopilot.next_candidate_summary ||
+    (paperAutopilot.next_candidate ? { ticker: paperAutopilot.next_candidate } : null);
+  const paperAutopilotReady =
+    paperAutopilot.enabled &&
+    paperAutopilot.loop_enabled &&
+    !paperAutopilot.stale &&
+    paperAutopilot.status !== "error";
   const healthProblems = (health?.problems || []).map((code: string) => ({
     code,
     ...healthProblemInfo(code),
@@ -658,7 +666,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
 
             <div className={`min-w-0 rounded-[1.5rem] border p-4 ${
-              paperAutopilot.enabled && paperAutopilot.loop_enabled && !paperAutopilot.stale && paperAutopilot.status !== "error"
+              paperAutopilotReady
                 ? "border-emerald-500/15 bg-emerald-500/6"
                 : "border-amber-500/20 bg-amber-500/8"
             }`}>
@@ -670,7 +678,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   {paperAutopilot.enabled ? displayValue(paperAutopilot.status) : "deaktiviert"}
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                  paperAutopilot.enabled && paperAutopilot.loop_enabled && !paperAutopilot.stale && paperAutopilot.status !== "error"
+                  paperAutopilotReady
                     ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
                     : "border-amber-500/20 bg-amber-500/10 text-amber-700"
                 }`}>
@@ -718,9 +726,15 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   <div className="font-extrabold uppercase tracking-[0.12em] text-emerald-700">Zuletzt geöffnet</div>
                   <div className="mt-1 space-y-1">
                     {paperAutopilot.last_opened.slice(0, 3).map((item: any) => (
-                      <div key={`${item.ticker}-${item.direction}`} className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-slate-900">{item.ticker} / {item.direction || "long"}</span>
-                        <span>{formatMoney(item.notional_value)}</span>
+                      <div key={`${item.ticker}-${item.direction}`} className="grid gap-1 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 sm:grid-cols-[1fr_auto] sm:items-center">
+                        <span className="font-bold text-slate-900">
+                          {item.ticker} / {item.direction || "long"}
+                          {item.setup_type ? <span className="ml-1 font-semibold text-slate-500">/{item.setup_type}</span> : null}
+                        </span>
+                        <span className="font-semibold text-slate-600">
+                          {formatMoney(item.notional_value)}
+                          {item.score ? ` / Score ${item.score}` : ""}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -731,9 +745,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   <div className="font-extrabold uppercase tracking-[0.12em] text-sky-700">Letzte Kandidaten</div>
                   <div className="mt-1 space-y-1">
                     {paperAutopilot.last_selected.slice(0, 3).map((item: any) => (
-                      <div key={`${item.ticker}-${item.direction}`} className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-slate-900">{item.ticker} / {item.direction || "long"}</span>
-                        <span>{item.score ? `Score ${item.score}` : formatMoney(item.notional_value)}</span>
+                      <div key={`${item.ticker}-${item.direction}`} className="grid gap-1 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 sm:grid-cols-[1fr_auto] sm:items-center">
+                        <span className="font-bold text-slate-900">
+                          {item.ticker} / {item.direction || "long"}
+                          {item.setup_type ? <span className="ml-1 font-semibold text-slate-500">/{item.setup_type}</span> : null}
+                        </span>
+                        <span className="font-semibold text-slate-600">
+                          {item.score ? `Score ${item.score}` : formatMoney(item.notional_value)}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -859,10 +878,44 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   ) : null}
                 </div>
               ) : null}
-              {paperAutopilot.next_candidate ? (
-                <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/65 px-2.5 py-2 text-xs leading-5 text-slate-700">
-                  Nächster Kandidat: <span className="font-extrabold">{paperAutopilot.next_candidate}</span>
-                  {paperAutopilot.block_reasons?.length ? ` / Block: ${paperAutopilot.block_reasons.join("; ")}` : ""}
+              {paperNextCandidate ? (
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/75 px-2.5 py-2 text-xs leading-5 text-slate-700">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-extrabold uppercase tracking-[0.12em] text-amber-800">
+                      Nächster prüfbarer Kandidat
+                    </div>
+                    {paperNextCandidate.score ? (
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                        Score {paperNextCandidate.score}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 font-extrabold text-slate-950">
+                    {paperNextCandidate.ticker}
+                    {paperNextCandidate.direction ? ` / ${paperNextCandidate.direction}` : ""}
+                    {paperNextCandidate.setup_type ? ` / ${paperNextCandidate.setup_type}` : ""}
+                  </div>
+                  <div className="mt-1 text-slate-600">
+                    Geplant {formatMoney(paperNextCandidate.notional_value)} /
+                    Max. Paper-Risiko {formatMoney(paperNextCandidate.max_loss_value)}
+                  </div>
+                  {paperNextCandidate.thesis ? (
+                    <div className="mt-1 line-clamp-2 font-semibold text-slate-700">
+                      These: {paperNextCandidate.thesis}
+                    </div>
+                  ) : null}
+                  {paperAutopilot.block_reasons?.length ? (
+                    <div className="mt-2 space-y-1">
+                      {paperAutopilot.block_reasons.map((reason: string) => (
+                        <div key={reason} className="rounded-md border border-amber-500/10 bg-amber-500/8 px-2 py-1 text-amber-900">
+                          Block: {reason}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800">
+                    Nur Paper: erst Trigger, Stop, Ziel, Positionsgröße und Outcome-Lernen prüfen.
+                  </div>
                 </div>
               ) : null}
             </div>

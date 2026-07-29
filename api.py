@@ -5079,6 +5079,7 @@ async def admin_health_center():
     paper_autopilot_block_reasons = list(
         dict.fromkeys(str(reason).strip() for reason in raw_block_reasons if str(reason).strip())
     )[:3]
+    paper_autopilot_next_candidate = _paper_autopilot_item_summary(next_blocked_candidate)
     try:
         paper_outcome_dashboard = get_paper_trading_service()._build_outcome_dashboard()
     except Exception as exc:
@@ -5280,6 +5281,7 @@ async def admin_health_center():
                 "mode": paper_autopilot_last.get("mode"),
                 "message": paper_autopilot_last.get("message"),
                 "next_candidate": next_blocked_candidate.get("ticker"),
+                "next_candidate_summary": paper_autopilot_next_candidate if paper_autopilot_next_candidate.get("ticker") else None,
                 "block_reasons": paper_autopilot_block_reasons,
             },
             "paper_outcomes": {

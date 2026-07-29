@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 from unittest.mock import patch
 
@@ -31,7 +31,7 @@ class FakePortfolioManager:
         trade = {
             "id": f"qa-{len(self.created) + 1}",
             "status": "open",
-            "opened_at": "2026-06-19T08:00:00",
+            "opened_at": datetime.now().isoformat(),
             **payload,
         }
         self.created.append(trade)
@@ -1459,6 +1459,51 @@ def test_managed_exit_tolerates_concurrent_close() -> None:
     ]
 
 
+def test_option_holding_period_expires_without_fabricated_quote() -> None:
+    opened_at = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "expired-option",
+                "ticker": "AAPL",
+                "asset_class": "option",
+                "direction": "call",
+                "option_type": "call",
+                "setup_type": "qa_option_time_exit",
+                "status": "open",
+                "opened_at": opened_at,
+                "entry_price": 2.5,
+                "stop_price": 1.25,
+                "target_price": 5.0,
+                "quantity": 2,
+                "contract_multiplier": 100,
+                "max_holding_days": 7,
+                "confidence_score": 90,
+                "leverage": 1,
+            }
+        ]
+    )
+    service = build_service(manager)
+
+    enriched = service._enrich_trade(manager.trades[0])
+    management = enriched["management_plan"]
+
+    assert enriched["current_price"] is None
+    assert management["status"] == "holding_period_expired"
+    assert management["action"] == "price_and_close_review"
+    assert management["decision_grade"] == "exit"
+    assert management["max_holding_days"] == 7
+    assert management["trigger_reference_price"] is None
+    assert "kein erfundener Auto-Exit" in management["summary"]
+
+    managed_exit = service.close_trades_on_management_exits()
+    assert managed_exit["status"] == "ok"
+    assert managed_exit["closed"] == []
+    assert managed_exit["errors"] == []
+    assert managed_exit["skipped"][0]["status"] == "holding_period_expired"
+    assert manager.trades[0]["status"] == "open"
+
+
 def test_managed_exit_applies_execution_cost_once() -> None:
     manager = FakePortfolioManager(
         [
@@ -1792,6 +1837,7 @@ if __name__ == "__main__":
     test_close_trade_auto_documents_profitable_exit()
     test_closed_trade_cannot_be_closed_twice()
     test_managed_exit_tolerates_concurrent_close()
+    test_option_holding_period_expires_without_fabricated_quote()
     test_managed_exit_applies_execution_cost_once()
     test_managed_exit_uses_intraday_trigger_price()
     test_outcome_learning_penalizes_weak_setups()

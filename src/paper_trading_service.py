@@ -3142,6 +3142,31 @@ class PaperTradingService:
         stop = trade.get("stop_price")
         target = trade.get("target_price")
         direction = str(trade.get("direction") or "long").lower()
+        max_holding_days = int(trade.get("max_holding_days") or 0)
+        opened_at = self._as_utc_naive_datetime(trade.get("opened_at"))
+        if max_holding_days > 0 and opened_at is not None:
+            expires_at = opened_at + timedelta(days=max_holding_days)
+            if datetime.now(timezone.utc).replace(tzinfo=None) >= expires_at:
+                return {
+                    "status": "holding_period_expired",
+                    "action": "price_and_close_review",
+                    "decision_grade": "exit",
+                    "next_check": (
+                        "Aktuellen Optionspreis und Spread erfassen, Paper-Trade schließen "
+                        "und die Zeitinvalidierung journalisieren."
+                        if trade.get("asset_class") == "option"
+                        else "Paper-Trade schließen und die Zeitinvalidierung journalisieren."
+                    ),
+                    "summary": (
+                        f"Maximale Haltedauer von {max_holding_days} Tagen ist erreicht. "
+                        "Ohne validierte aktuelle Quote erfolgt kein erfundener Auto-Exit."
+                    ),
+                    "risk_distance_pct": None,
+                    "target_progress_pct": None,
+                    "triggered_at": expires_at.isoformat(),
+                    "trigger_reference_price": None,
+                    "max_holding_days": max_holding_days,
+                }
         if not entry or current in (None, 0):
             return {
                 "status": "pending_data",

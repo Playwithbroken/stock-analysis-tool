@@ -364,7 +364,14 @@ class EmailAlertService:
 
         config = self.get_config()
         self._validate_telegram_config(config)
-        alert_statuses = {"stop_hit", "target_hit", "near_stop", "near_target", "weak_follow_through"}
+        alert_statuses = {
+            "stop_hit",
+            "target_hit",
+            "near_stop",
+            "near_target",
+            "weak_follow_through",
+            "holding_period_expired",
+        }
         events: List[Dict[str, Any]] = []
         for trade in open_trades:
             management = trade.get("management_plan") or {}
@@ -3512,6 +3519,7 @@ class EmailAlertService:
             "flat": "neutral",
             "hold": "halten",
             "hold_with_plan": "mit Plan halten",
+            "holding_period_expired": "maximale Haltedauer erreicht",
             "learning": "lernen",
             "loser": "Verlierer",
             "manual_review": "manuelle Prüfung",
@@ -3523,6 +3531,7 @@ class EmailAlertService:
             "not_started": "noch nicht gestartet",
             "pending_data": "wartet auf Daten",
             "paper_exit": "Paper-Exit",
+            "price_and_close_review": "Preis erfassen und schließen",
             "pause_and_review": "pausieren und prüfen",
             "protect": "schützen",
             "protect_profit": "Gewinn schützen",

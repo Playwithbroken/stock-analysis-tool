@@ -37,6 +37,31 @@ const RESOLUTION_CONFIDENCE_LABELS: Record<string, string> = {
   resolved: "Erfolgreich aufgelöst",
 };
 
+const ANALYSIS_LABELS: Record<string, string> = {
+  "price performance": "Kursentwicklung",
+  "volatility & risk": "Volatilität & Risiko",
+  volatility: "Volatilität",
+  fundamentals: "Fundamentaldaten",
+  "fundamental analysis": "Fundamentalanalyse",
+  "earnings quality": "Ergebnisqualität",
+  "fear factors & risks": "Risikofaktoren",
+  "opportunities & catalysts": "Chancen & Katalysatoren",
+  "recent news": "Aktuelle Nachrichten",
+  "news analysis": "Nachrichtenanalyse",
+  "insider activity": "Insider-Aktivität",
+  "peer benchmarking": "Vergleich mit Wettbewerbern",
+  "potential analysis": "Potenzialanalyse",
+  "rebound analysis": "Erholungsanalyse",
+  "technical analysis": "Technische Analyse",
+  "sentiment analysis": "Sentimentanalyse",
+  "data state": "Datenstatus",
+  "insufficient signal": "Signal unzureichend",
+  coverage: "Datenabdeckung",
+  partial: "Teilweise",
+  confidence: "Belastbarkeit",
+  low: "Niedrig",
+};
+
 function preserveInitialCase(source: string, translated: string) {
   if (!source || source[0] !== source[0].toUpperCase()) return translated;
   return translated.charAt(0).toUpperCase() + translated.slice(1);
@@ -74,6 +99,12 @@ export function localizeResolutionConfidence(value: unknown) {
   const text = String(value ?? "").trim();
   if (!text) return RESOLUTION_CONFIDENCE_LABELS.resolved;
   return RESOLUTION_CONFIDENCE_LABELS[text.toLowerCase()] || normalizeGermanDisplayText(text);
+}
+
+export function localizeAnalysisLabel(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return ANALYSIS_LABELS[text.toLowerCase()] || normalizeGermanDisplayText(text);
 }
 
 export function localizeLearningMessage(value: unknown) {

@@ -2327,27 +2327,27 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                 }
                 fallback_analysis = {
                     "technical": {
-                        "category": "Technical Analysis",
+                        "category": "Technische Analyse",
                         "score": 0.0,
-                        "summary": "Insufficient live market data. Retry for full signal quality.",
+                        "summary": "Live-Marktdaten reichen aktuell nicht aus. Bitte die vollständige Analyse erneut laden.",
                         "findings": [
-                            {"metric": "Data State", "value": "Insufficient signal", "rating": "neutral"}
+                            {"metric": "Datenstatus", "value": "Signal unzureichend", "rating": "neutral"}
                         ],
                     },
                     "fundamental": {
-                        "category": "Fundamental Analysis",
+                        "category": "Fundamentalanalyse",
                         "score": 0.0,
-                        "summary": "Live market pricing is temporarily degraded.",
+                        "summary": "Die Live-Kursversorgung ist vorübergehend eingeschränkt.",
                         "findings": [
-                            {"metric": "Coverage", "value": "Partial", "rating": "neutral"}
+                            {"metric": "Datenabdeckung", "value": "Teilweise", "rating": "neutral"}
                         ],
                     },
                     "sentiment": {
-                        "category": "Sentiment Analysis",
+                        "category": "Sentimentanalyse",
                         "score": 0.0,
-                        "summary": "Signal feed unavailable for this moment.",
+                        "summary": "Der Signal-Feed ist momentan nicht verfügbar.",
                         "findings": [
-                            {"metric": "Confidence", "value": "Low", "rating": "neutral"}
+                            {"metric": "Belastbarkeit", "value": "Niedrig", "rating": "neutral"}
                         ],
                     },
                 }
@@ -2373,11 +2373,11 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                     "etf_analysis": None,
                     "recommendation": {
                         "action": "HOLD",
-                        "reason": "Insufficient live market signal. Retry shortly.",
+                        "reason": "Das Live-Marktsignal reicht nicht aus. Bitte die Analyse in Kürze erneut laden.",
                     },
                     "valuation": Valuation.FAIRLY_VALUED.value,
                     "total_score": 0,
-                    "verdict": "Insufficient signal quality right now. Please retry for a full analysis.",
+                    "verdict": "Die Signalqualität reicht aktuell nicht aus. Bitte die vollständige Analyse erneut laden.",
                 })
         
         # Analyze

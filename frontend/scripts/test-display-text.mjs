@@ -12,6 +12,8 @@ const uiCopySources = await Promise.all([
   readFile(path.resolve("src/components/PriceChart.tsx"), "utf8"),
   readFile(path.resolve("src/components/SearchBar.tsx"), "utf8"),
   readFile(path.resolve("src/components/BrokerChat.tsx"), "utf8"),
+  readFile(path.resolve("src/components/AnalysisResult.tsx"), "utf8"),
+  readFile(path.resolve("src/lib/analysisQuality.ts"), "utf8"),
 ]);
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -28,6 +30,7 @@ try {
   const {
     localizeLearningMessage,
     localizeMarketRegime,
+    localizeAnalysisLabel,
     localizeResolutionConfidence,
     normalizeGermanDisplayText,
   } = await import(`file://${modulePath.replace(/\\/g, "/")}`);
@@ -37,6 +40,9 @@ try {
   assert.equal(localizeResolutionConfidence("high"), "Hohe Sicherheit");
   assert.equal(localizeResolutionConfidence("medium"), "Mittlere Sicherheit");
   assert.equal(localizeResolutionConfidence(undefined), "Erfolgreich aufgelöst");
+  assert.equal(localizeAnalysisLabel("Technical Analysis"), "Technische Analyse");
+  assert.equal(localizeAnalysisLabel("Data State"), "Datenstatus");
+  assert.equal(localizeAnalysisLabel("Partial"), "Teilweise");
   assert.equal(
     localizeLearningMessage("Promote morning_brief: 61.5% hit rate across 76 evaluated outcomes."),
     "Morning Briefing ausbauen: 61,5% Trefferquote aus 76 ausgewerteten Ergebnissen.",
@@ -63,6 +69,15 @@ try {
     "Direct lookup ready",
     "Open Broker Freund Desk",
     "Open Desk",
+    "Analysis Desk",
+    "Price History",
+    "Historical Market Data",
+    "Intraday Minute Data",
+    "Suitability score",
+    "Advisory Suitability",
+    "Suitability und Chart",
+    "Suitability-Check geladen",
+    "Live quote",
   ]) {
     assert.equal(uiCopy.includes(obsoleteCopy), false, `Veralteter UI-Text gefunden: ${obsoleteCopy}`);
   }

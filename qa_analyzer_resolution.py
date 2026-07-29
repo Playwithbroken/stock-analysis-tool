@@ -87,6 +87,26 @@ def main() -> int:
                 failures.append(f"{query}: expected {expected}, got {ticker}")
             if not degraded or not insufficient:
                 failures.append(f"{query}: fallback quality flags missing: {payload.get('data_quality')}")
+            sections = payload.get("analysis") or {}
+            expected_fallback_copy = {
+                "technical": ("Technische Analyse", "Datenstatus", "Signal unzureichend"),
+                "fundamental": ("Fundamentalanalyse", "Datenabdeckung", "Teilweise"),
+                "sentiment": ("Sentimentanalyse", "Belastbarkeit", "Niedrig"),
+            }
+            for key, (category, metric, value) in expected_fallback_copy.items():
+                section = sections.get(key) or {}
+                finding = (section.get("findings") or [{}])[0]
+                if (
+                    section.get("category") != category
+                    or finding.get("metric") != metric
+                    or finding.get("value") != value
+                ):
+                    failures.append(f"{query}: localized {key} fallback copy missing: {section}")
+            if payload.get("verdict") != (
+                "Die Signalqualität reicht aktuell nicht aus. "
+                "Bitte die vollständige Analyse erneut laden."
+            ):
+                failures.append(f"{query}: localized fallback verdict missing: {payload.get('verdict')!r}")
 
         if failures:
             print("\nAnalyzer resolution failures:")

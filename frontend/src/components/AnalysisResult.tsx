@@ -8,6 +8,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 import { formatAnalysisFetchTime, getAnalysisQualityState } from "../lib/analysisQuality";
+import { localizeAnalysisLabel, normalizeGermanDisplayText } from "../lib/displayText";
 
 interface AnalysisResultProps {
   data: any;
@@ -119,7 +120,7 @@ const suitabilityTone = (decision?: string): {
   }
   if (decision === "action_requires_review") {
     return {
-      label: "Pruefen",
+      label: "Prüfen",
       classes: "border-amber-500/25 bg-amber-500/10 text-amber-800",
       icon: <ShieldAlert size={16} />,
     };
@@ -434,14 +435,14 @@ export default function AnalysisResult({
 
   const suitabilityView = suitabilityTone(suitability?.decision);
   const suitabilityReasons = dataQuality.blocksDecision
-    ? ["Suitability bleibt gesperrt, bis ein vollstaendiger Datensatz vorliegt."]
+    ? ["Der Beratungsrahmen bleibt gesperrt, bis ein vollständiger Datensatz vorliegt."]
     : suitability?.reasons?.length
     ? suitability.reasons.slice(0, 2)
     : suitabilityLoading
-      ? ["Beratungsrahmen wird gegen dieses Dossier geprueft."]
+      ? ["Der Beratungsrahmen wird gegen dieses Dossier geprüft."]
       : suitabilityError
         ? [suitabilityError]
-        : ["Noch kein Suitability-Check geladen."];
+        : ["Der Beratungsrahmen wurde noch nicht geprüft."];
   const suitabilitySteps = suitability?.required_next_steps?.slice(0, 2) || [];
 
   const exportToPDF = async () => {
@@ -590,10 +591,10 @@ export default function AnalysisResult({
           <div className="surface-panel analysis-hero overflow-hidden rounded-[2rem] p-5 sm:p-7">
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
-                Analysis Desk
+                Analyse-Dossier
               </span>
               <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${dataQuality.badgeClasses}`}>
-                {realtimeConnected && !dataQuality.blocksDecision ? "Live quote" : dataQuality.label}
+                {realtimeConnected && !dataQuality.blocksDecision ? "Live-Kurs" : dataQuality.label}
               </span>
               {fundamentals?.sector ? (
                 <span className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
@@ -654,14 +655,14 @@ export default function AnalysisResult({
                     {formatPercent(chartStats?.changePct ?? price_data?.change_1y)} ({chartStats?.label ?? "1Y"})
                   </div>
                   <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                    {realtimeConnected && !dataQuality.blocksDecision ? "Live quote" : dataQuality.label}
+                    {realtimeConnected && !dataQuality.blocksDecision ? "Live-Kurs" : dataQuality.label}
                   </div>
                 </div>
                 <div className="grid gap-2">
                   <button
                     onClick={() => setIsModalOpen(true)}
                     disabled={dataQuality.blocksDecision}
-                    title={dataQuality.blocksDecision ? "Erst vollstaendige Daten laden" : undefined}
+                    title={dataQuality.blocksDecision ? "Erst vollständige Daten laden" : undefined}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <Plus size={16} /> Portfolio hinzufügen
@@ -681,7 +682,7 @@ export default function AnalysisResult({
                   <button
                     onClick={openAlertModal}
                     disabled={dataQuality.blocksDecision}
-                    title={dataQuality.blocksDecision ? "Erst vollstaendige Daten laden" : undefined}
+                    title={dataQuality.blocksDecision ? "Erst vollständige Daten laden" : undefined}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     Alert setzen
@@ -690,7 +691,7 @@ export default function AnalysisResult({
                     onClick={onOpenChat}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
                   >
-                    <FileText size={14} /> Dossier erklaeren
+                    <FileText size={14} /> Dossier erklären
                   </button>
                 </div>
                 {alertStatus ? (
@@ -715,7 +716,7 @@ export default function AnalysisResult({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Advisory Suitability
+                  Beratungsrahmen
                 </div>
                 <h3 className="mt-2 text-2xl text-slate-900">
                   Passt dieses Dossier zu deinem Beratungsrahmen?
@@ -727,14 +728,14 @@ export default function AnalysisResult({
               </div>
               <div className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${suitabilityView.classes}`}>
                 {suitabilityLoading ? <ShieldAlert size={16} /> : suitabilityView.icon}
-                {suitabilityLoading ? "Prueft" : suitabilityView.label}
+                {suitabilityLoading ? "Prüft" : suitabilityView.label}
               </div>
             </div>
 
             <div className="mt-5 grid gap-3 lg:grid-cols-[0.75fr_1.25fr_1fr]">
               <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Suitability score
+                  Eignungsscore
                 </div>
                 <div className="mt-2 text-4xl font-black text-slate-950">
                   {dataQuality.blocksDecision ? "--" : suitabilityLoading ? "..." : suitability?.suitability_score ?? "--"}
@@ -751,7 +752,7 @@ export default function AnalysisResult({
                 <div className="mt-3 space-y-2">
                   {suitabilityReasons.map((reason, index) => (
                     <div key={`${reason}-${index}`} className="text-sm font-semibold leading-6 text-slate-700">
-                      {reason}
+                      {normalizeGermanDisplayText(reason)}
                     </div>
                   ))}
                 </div>
@@ -759,12 +760,12 @@ export default function AnalysisResult({
 
               <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Naechster Schritt
+                  Nächster Schritt
                 </div>
                 <div className="mt-3 space-y-2">
-                  {(suitabilitySteps.length ? suitabilitySteps : ["Trigger, Positionsgroesse und Invalidierung vor Umsetzung pruefen."]).map((step, index) => (
+                  {(suitabilitySteps.length ? suitabilitySteps : ["Trigger, Positionsgröße und Invalidierung vor Umsetzung prüfen."]).map((step, index) => (
                     <div key={`${step}-${index}`} className="text-sm font-semibold leading-6 text-slate-700">
-                      {step}
+                      {normalizeGermanDisplayText(step)}
                     </div>
                   ))}
                 </div>
@@ -1274,7 +1275,7 @@ export default function AnalysisResult({
                 className="glass-card rounded-2xl p-6 transition-transform hover:scale-[1.01]"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold">{section.category}</h3>
+                  <h3 className="text-lg font-bold">{localizeAnalysisLabel(section.category)}</h3>
                   <span
                     className={`rounded-md px-2 py-1 text-xs font-bold ${section.score > 20 ? "bg-emerald-500/10 text-emerald-700" : section.score < -20 ? "bg-red-500/10 text-red-700" : "bg-amber-500/10 text-amber-700"}`}
                   >
@@ -1282,7 +1283,7 @@ export default function AnalysisResult({
                   </span>
                 </div>
                 <p className="mb-4 h-10 line-clamp-2 text-sm text-slate-500">
-                  {section.summary}
+                  {normalizeGermanDisplayText(section.summary)}
                 </p>
                 <div className="space-y-3">
                   {section.findings
@@ -1292,11 +1293,11 @@ export default function AnalysisResult({
                         key={idx}
                         className="flex justify-between items-center text-xs"
                       >
-                        <span className="text-slate-500">{finding.metric}</span>
+                        <span className="text-slate-500">{localizeAnalysisLabel(finding.metric)}</span>
                         <span
                           className={`font-medium ${finding.rating?.includes("positive") ? "text-emerald-700" : finding.rating?.includes("negative") ? "text-red-700" : "text-slate-600"}`}
                         >
-                          {finding.value}
+                          {localizeAnalysisLabel(finding.value)}
                         </span>
                       </div>
                     ))}

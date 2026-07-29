@@ -570,13 +570,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         <div>
           <div className="mb-1 flex flex-wrap items-center gap-2 text-slate-500">
             <TrendingUp size={16} className={isPositive ? "text-emerald-600" : "text-red-600"} />
-            <span className="text-sm font-semibold">Price History ({period.label})</span>
+            <span className="text-sm font-semibold">Kursverlauf ({period.label})</span>
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
                 connected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"
               }`}
             >
-              {connected ? "Live" : transportMode === "snapshot" ? "Snapshot" : "Polling"}
+              {connected ? "Live" : transportMode === "snapshot" ? "Snapshot" : "Abfrage"}
             </span>
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
@@ -591,13 +591,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                       : "bg-slate-500/10 text-slate-500"
               }`}
             >
-              {historyState === "ready"
-                ? "ready"
-                : historyState === "stale"
-                  ? "fallback"
-                  : historyState === "snapshot"
-                    ? "snapshot"
-                    : historyState}
+              {HISTORY_STATUS_LABELS[historyState]}
             </span>
           </div>
           <div className="flex items-baseline gap-3">
@@ -822,7 +816,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center rounded-[1.4rem] border border-dashed border-black/8 bg-white/70 text-slate-500">
             <Calendar size={32} className="mb-2 opacity-30" />
-            <p className="text-sm">Keine historischen Daten fuer diesen Zeitraum.</p>
+            <p className="text-sm">Keine historischen Daten für diesen Zeitraum.</p>
           </div>
         );
         }}
@@ -831,7 +825,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <div className="flex items-center gap-1">
           <Clock size={10} />
-          {period.id === "1d" ? "Intraday Minute Data" : "Historical Market Data"}
+          {period.id === "1d" ? "Intraday-Minutendaten" : "Historische Marktdaten"}
         </div>
         <div>
           {connected && lastUpdated
@@ -848,8 +842,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           }`}
         >
           Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
-          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} / Feed: {transportMode === "ws" ? "live" : "snapshot"}
-          {typeof staleForTicker === "number" && staleForTicker > 5 ? ` / verzoegert ${staleForTicker}s` : ""}
+          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} / Feed: {transportMode === "ws" ? "live" : "Snapshot"}
+          {typeof staleForTicker === "number" && staleForTicker > 5 ? ` / verzögert ${staleForTicker}s` : ""}
           {realtimeFallbackNote ? ` / ${realtimeFallbackNote}` : ""}
           {displayedRealtimeError ? ` / ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
         </div>

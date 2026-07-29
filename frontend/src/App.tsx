@@ -263,13 +263,13 @@ function AnalyzerLoadingPanel({ ticker }: { ticker?: string }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-            Analysis Desk
+            Analyse-Dossier
           </div>
           <h3 className="mt-2 text-2xl text-slate-900 sm:text-3xl">
             {label} wird aufgebaut
           </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Kursdaten, Fundamentaldaten, Suitability und Chart werden getrennt geladen, damit die App nicht leer wirkt.
+            Kursdaten, Fundamentaldaten, Beratungsrahmen und Chart werden getrennt geladen, damit die App nicht leer wirkt.
           </p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">

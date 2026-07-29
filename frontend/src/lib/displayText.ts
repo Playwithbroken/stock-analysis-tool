@@ -89,19 +89,51 @@ const ANALYSIS_LABELS: Record<string, string> = {
   "p/e relative to sector": "KGV im Branchenvergleich",
   "revenue growth vs sector": "Umsatzwachstum zur Branche",
   "reported eps": "Gemeldetes EPS",
+  "reported / estimate eps": "Gemeldetes / geschätztes EPS",
+  "eps vs erwartung": "EPS gegenüber Schätzung",
   "eps estimate": "EPS-Schätzung",
   "eps surprise": "EPS-Abweichung",
   "4q pattern": "Muster der letzten 4 Quartale",
+  "4q beat/miss pattern": "Muster der letzten 4 Quartale",
   "revenue yoy": "Umsatz zum Vorjahr",
+  "reported revenue yoy": "Gemeldeter Umsatz zum Vorjahr",
+  "quarterly revenue yoy": "Quartalsumsatz zum Vorjahr",
+  "revenue cagr": "Durchschnittliches Umsatzwachstum",
   "forward eps": "Erwartetes EPS",
+  "forward eps trend": "Trend des erwarteten EPS",
   "rev growth": "Umsatzwachstum",
   margin: "Marge",
+  "fcf margin": "FCF-Marge",
+  "operating margin change": "Veränderung der operativen Marge",
   "fcf yield": "FCF-Rendite",
   "analyst upside": "Analystenpotenzial",
   "net debt": "Nettoverschuldung",
+  "earnings coverage": "Abdeckung der Ergebnisdaten",
+  "high leverage risk": "Hohes Verschuldungsrisiko",
+  "cash burn": "Liquiditätsverbrauch",
+  "significant drawdown": "Deutlicher Kursrückgang",
+  "revenue decline": "Umsatzrückgang",
+  "valuation risk": "Bewertungsrisiko",
+  "no major red flags": "Keine wesentlichen Warnsignale",
+  "analyst target": "Analystenkursziel",
+  "value opportunity": "Bewertungschance",
+  "market outperformance": "Marktüberperformance",
+  "dividend income": "Dividendenertrag",
+  "limited catalysts": "Begrenzte Kurstreiber",
+  "hyper growth": "Sehr hohes Wachstum",
+  "high upside": "Hohes Kurspotenzial",
+  "moderate upside": "Moderates Kurspotenzial",
+  "attractive peg": "Attraktives PEG",
+  "reasonable peg": "Vertretbares PEG",
+  "sharp sell-off": "Starker Abverkauf",
+  "quality business": "Qualitätsunternehmen",
+  "oversold condition": "Überverkaufte Lage",
   met: "Erfüllt",
   missed: "Verfehlt",
   solid: "Solide",
+  watch: "Beobachten",
+  risk: "Risiko",
+  "not_dividend_stock": "Keine Dividendenaktie",
   inline: "Im Rahmen",
   "in line": "Im Rahmen",
   beat: "Übertroffen",
@@ -139,7 +171,20 @@ const ANALYSIS_TEXT: Record<string, string> = {
   "mixed or neutral news sentiment": "Gemischte oder neutrale Nachrichtenstimmung",
   "slightly positive insider sentiment": "Leicht positive Insider-Stimmung",
   "competitive position within industry": "Wettbewerbsfähige Position innerhalb der Branche",
+  "no guidance signal": "Kein Ausblickssignal",
+  "guidance maintained": "Ausblick bestätigt",
   "no clear guidance read": "Kein klares Ausblickssignal",
+  "umsatzziele / revenue-qualitaet": "Umsatzziele / Umsatzqualität",
+  "earnings-erwartung": "Ergebniserwartung",
+  "cash-/margenqualitaet": "Cash-/Margenqualität",
+  erfuellt: "Erfüllt",
+  "nicht klar erfuellt": "Nicht klar erfüllt",
+  "zu wenig daten": "Zu wenig Daten",
+  "yield, payout, cashflow und umsatztrend kombiniert": "Dividendenrendite, Ausschüttungsquote, Cashflow und Umsatztrend kombiniert",
+  "free cashflow negativ": "Freier Cashflow negativ",
+  "umsatz ruecklaeufig": "Umsatz rückläufig",
+  likely: "Wahrscheinlich",
+  inline: "Im Rahmen",
   "12,500 shares": "12.500 Aktien",
   "2,000 shares": "2.000 Aktien",
 };
@@ -236,11 +281,19 @@ export function localizeAnalysisText(value: unknown) {
     return `${count} positive${count === 1 ? "r Faktor" : " Faktoren"} erkannt`;
   }
 
+  const earningsPattern = text.match(/^(\d+)\s+Beat(?:s)?\s*\/\s*(\d+)\s+Miss(?:es)?$/i);
+  if (earningsPattern) {
+    return `${earningsPattern[1]} übertroffen / ${earningsPattern[2]} verfehlt`;
+  }
+
   return normalizeGermanDisplayText(text)
     .replace(/\b(\d+(?:[.,]\d+)?)\s+days?\b/gi, "$1 Tage")
     .replace(/\b(\d+(?:[.,]\d+)?)%\s+annual\b/gi, "$1% jährlich")
     .replace(/\brevenue growth\b/gi, "Umsatzwachstum")
     .replace(/\bprofit margin\b/gi, "Gewinnmarge")
+    .replace(/\bmargin\b/gi, "Marge")
+    .replace(/\byield\b/gi, "Rendite")
+    .replace(/\bpayout\b/gi, "Ausschüttungsquote")
     .replace(/\bnet cash\b/gi, "Nettoliquidität");
 }
 

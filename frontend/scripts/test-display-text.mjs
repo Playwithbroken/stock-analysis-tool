@@ -49,6 +49,12 @@ try {
   assert.equal(localizeAnalysisLabel("Annualized Volatility"), "Annualisierte Volatilität");
   assert.equal(localizeAnalysisLabel("P/E Ratio"), "KGV");
   assert.equal(localizeAnalysisLabel("Revenue Growth vs Sector"), "Umsatzwachstum zur Branche");
+  assert.equal(localizeAnalysisLabel("Reported Revenue YoY"), "Gemeldeter Umsatz zum Vorjahr");
+  assert.equal(localizeAnalysisLabel("High Leverage Risk"), "Hohes Verschuldungsrisiko");
+  assert.equal(localizeAnalysisLabel("4Q Beat/Miss Pattern"), "Muster der letzten 4 Quartale");
+  assert.equal(localizeAnalysisLabel("Reported / Estimate EPS"), "Gemeldetes / geschätztes EPS");
+  assert.equal(localizeAnalysisLabel("watch"), "Beobachten");
+  assert.equal(localizeAnalysisLabel("not_dividend_stock"), "Keine Dividendenaktie");
   assert.equal(localizeAnalysisLabel("speculative"), "Spekulativ");
   assert.equal(localizeAnalysisLabel("intermediate"), "Fortgeschritten");
   assert.equal(localizeAnalysisLabel("Heavily Undervalued"), "Stark unterbewertet");
@@ -65,6 +71,21 @@ try {
   assert.equal(localizeAnalysisText("12,500 Shares"), "12.500 Aktien");
   assert.equal(localizeAnalysisText("70.6% annual"), "70.6% jährlich");
   assert.equal(localizeAnalysisText("No clear guidance read"), "Kein klares Ausblickssignal");
+  assert.equal(localizeAnalysisText("No guidance signal"), "Kein Ausblickssignal");
+  assert.equal(localizeAnalysisText("Guidance maintained"), "Ausblick bestätigt");
+  assert.equal(localizeAnalysisText("6 Beat / 1 Miss"), "6 übertroffen / 1 verfehlt");
+  assert.equal(localizeAnalysisText("2 beats / 1 misses"), "2 übertroffen / 1 verfehlt");
+  assert.equal(localizeAnalysisText("Inline"), "Im Rahmen");
+  assert.equal(localizeAnalysisText("Umsatzziele / Revenue-Qualitaet"), "Umsatzziele / Umsatzqualität");
+  assert.equal(localizeAnalysisText("Earnings-Erwartung"), "Ergebniserwartung");
+  assert.equal(localizeAnalysisText("Cash-/Margenqualitaet"), "Cash-/Margenqualität");
+  assert.equal(localizeAnalysisText("Nicht klar erfuellt"), "Nicht klar erfüllt");
+  assert.equal(
+    localizeAnalysisText("Yield, Payout, Cashflow und Umsatztrend kombiniert"),
+    "Dividendenrendite, Ausschüttungsquote, Cashflow und Umsatztrend kombiniert",
+  );
+  assert.equal(localizeAnalysisText("Margin +41.1% / FCF +35.4%"), "Marge +41.1% / FCF +35.4%");
+  assert.equal(localizeAnalysisText("Likely"), "Wahrscheinlich");
   assert.equal(localizeRecommendationAction("HOLD / ACCUMULATE"), "Halten / Aufbauen");
   assert.equal(localizeRecommendationAction("STRONG SELL"), "Stark verkaufen");
   assert.equal(localizeSector("Financial Services"), "Finanzdienstleistungen");

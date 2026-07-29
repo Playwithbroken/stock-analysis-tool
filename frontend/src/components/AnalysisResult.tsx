@@ -1060,11 +1060,7 @@ export default function AnalysisResult({
                         : "border-amber-500/20 bg-amber-500/10 text-amber-700"
                   }`}
                 >
-                  {latestEarnings?.status === "beat"
-                    ? "Beat"
-                    : latestEarnings?.status === "miss"
-                      ? "Miss"
-                      : "Im Rahmen"}
+                  {localizeAnalysisLabel(latestEarnings?.status || "inline")}
                 </div>
               </div>
 
@@ -1143,7 +1139,9 @@ export default function AnalysisResult({
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
                         {localizeAnalysisText(check.label)}
                       </div>
-                      <div className="mt-2 text-xl font-black">{check.value || "n/a"}</div>
+                      <div className="mt-2 text-xl font-black">
+                        {localizeAnalysisText(check.value || "n/a")}
+                      </div>
                       <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em]">
                         {localizeAnalysisLabel(check.status || "unknown")}
                       </div>
@@ -1491,6 +1489,7 @@ function MetricCard({
   const help = METRIC_HELP[label] || info || "";
   const meta = info && info !== help ? info : "";
   const displayLabel = localizeAnalysisLabel(label);
+  const displayValue = typeof value === "string" ? localizeAnalysisText(value) : value;
 
   return (
     <div className="surface-panel relative group rounded-xl p-5 transition-all hover:border-black/12">
@@ -1518,13 +1517,13 @@ function MetricCard({
         ) : null}
       </div>
       <div className="text-xl font-mono font-bold text-slate-900">
-        {value ?? "N/A"}
+        {displayValue ?? "N/A"}
       </div>
       {trend && (
         <div
           className={`mt-2 text-[10px] font-bold ${trend === "up" ? "text-emerald-700" : "text-red-700"}`}
         >
-          {trend === "up" ? "↑ Optimiert" : "↓ Unter Bench"}
+          {trend === "up" ? "↑ Positiv" : "↓ Kritisch"}
         </div>
       )}
     </div>

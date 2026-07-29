@@ -31,6 +31,7 @@ try {
     localizeLearningMessage,
     localizeMarketRegime,
     localizeAnalysisLabel,
+    localizeAnalysisText,
     localizeResolutionConfidence,
     normalizeGermanDisplayText,
   } = await import(`file://${modulePath.replace(/\\/g, "/")}`);
@@ -43,6 +44,25 @@ try {
   assert.equal(localizeAnalysisLabel("Technical Analysis"), "Technische Analyse");
   assert.equal(localizeAnalysisLabel("Data State"), "Datenstatus");
   assert.equal(localizeAnalysisLabel("Partial"), "Teilweise");
+  assert.equal(localizeAnalysisLabel("Annualized Volatility"), "Annualisierte Volatilität");
+  assert.equal(localizeAnalysisLabel("P/E Ratio"), "KGV");
+  assert.equal(localizeAnalysisLabel("Revenue Growth vs Sector"), "Umsatzwachstum zur Branche");
+  assert.equal(localizeAnalysisLabel("speculative"), "Spekulativ");
+  assert.equal(localizeAnalysisLabel("intermediate"), "Fortgeschritten");
+  assert.equal(localizeAnalysisLabel("Heavily Undervalued"), "Stark unterbewertet");
+  assert.equal(
+    localizeAnalysisText("Moderate decline over the past year"),
+    "Moderater Rückgang im vergangenen Jahr",
+  );
+  assert.equal(
+    localizeAnalysisText("High volatility stock - suitable for risk-tolerant investors"),
+    "Hohe Volatilität – nur für risikotolerante Anleger geeignet",
+  );
+  assert.equal(localizeAnalysisText("Identified 1 significant risk factors"), "1 wesentlicher Risikofaktor erkannt");
+  assert.equal(localizeAnalysisText("Identified 4 positive factors"), "4 positive Faktoren erkannt");
+  assert.equal(localizeAnalysisText("12,500 Shares"), "12.500 Aktien");
+  assert.equal(localizeAnalysisText("70.6% annual"), "70.6% jährlich");
+  assert.equal(localizeAnalysisText("No clear guidance read"), "Kein klares Ausblickssignal");
   assert.equal(
     localizeLearningMessage("Promote morning_brief: 61.5% hit rate across 76 evaluated outcomes."),
     "Morning Briefing ausbauen: 61,5% Trefferquote aus 76 ausgewerteten Ergebnissen.",
@@ -54,6 +74,10 @@ try {
   assert.equal(
     normalizeGermanDisplayText("Nur mit Folgequelle und Preisbestaetigung pushen."),
     "Nur mit Folgequelle und Preisbestätigung pushen.",
+  );
+  assert.equal(
+    normalizeGermanDisplayText("Trigger, Positionsgroesse und Invalidierung pruefen."),
+    "Trigger, Positionsgröße und Invalidierung prüfen.",
   );
   const uiCopy = uiCopySources.join("\n");
   for (const obsoleteCopy of [
@@ -78,6 +102,24 @@ try {
     "Suitability und Chart",
     "Suitability-Check geladen",
     "Live quote",
+    "Dossier Intelligence",
+    "Quality Score",
+    "Bull Case",
+    "Base Case",
+    "Bear Case",
+    "Business Quality Check",
+    "Financial Statement Intelligence",
+    "Top News & Sentiment",
+    "Meine Einschaetzung",
+    "Bollinger-Baender",
+    "Aufwaertsdruck",
+    "Kaeufer oder Verkaeufer",
+    "Price Alert",
+    "Target Price",
+    ">Above<",
+    ">Below<",
+    ">Cancel<",
+    "Aktivitaet / Bestaetigung",
   ]) {
     assert.equal(uiCopy.includes(obsoleteCopy), false, `Veralteter UI-Text gefunden: ${obsoleteCopy}`);
   }

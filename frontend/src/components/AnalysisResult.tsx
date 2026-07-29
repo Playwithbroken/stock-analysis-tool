@@ -8,7 +8,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 import { formatAnalysisFetchTime, getAnalysisQualityState } from "../lib/analysisQuality";
-import { localizeAnalysisLabel, normalizeGermanDisplayText } from "../lib/displayText";
+import { localizeAnalysisLabel, localizeAnalysisText, normalizeGermanDisplayText } from "../lib/displayText";
 
 interface AnalysisResultProps {
   data: any;
@@ -133,25 +133,25 @@ const suitabilityTone = (decision?: string): {
 };
 
 const METRIC_HELP: Record<string, string> = {
-  "Market Cap": "Boersenwert des Unternehmens. Hilft einzuordnen, ob es Large Cap, Mid Cap oder Small Cap ist.",
-  "P/E Ratio": "Kurs-Gewinn-Verhaeltnis. Niedriger kann guenstiger wirken, hoher braucht meist starkes Wachstum.",
-  "Rev Growth": "Umsatzwachstum. Zeigt, ob das Geschaeft groesser wird, nicht ob es schon profitabler wird.",
-  Margin: "Profitabilitaet nach Kosten. Hoehere Margen geben oft mehr Preissetzungsmacht und Krisenpuffer.",
-  "Revenue Growth": "Wachstum der Erloese. Wichtig, um zu sehen, ob die Story fundamental getragen wird.",
-  "FCF Yield": "Free-Cashflow im Verhaeltnis zum Boersenwert. Hoeher bedeutet mehr Cash-Qualitaet pro investiertem Euro.",
+  "Market Cap": "Börsenwert des Unternehmens. Hilft einzuordnen, ob es ein Large Cap, Mid Cap oder Small Cap ist.",
+  "P/E Ratio": "Kurs-Gewinn-Verhältnis. Niedriger kann günstiger wirken, ein höherer Wert braucht meist starkes Wachstum.",
+  "Rev Growth": "Umsatzwachstum. Zeigt, ob das Geschäft größer wird, nicht ob es bereits profitabler wird.",
+  Margin: "Profitabilität nach Kosten. Höhere Margen geben oft mehr Preissetzungsmacht und Krisenpuffer.",
+  "Revenue Growth": "Wachstum der Erlöse. Wichtig, um zu sehen, ob die Story fundamental getragen wird.",
+  "FCF Yield": "Free-Cashflow im Verhältnis zum Börsenwert. Ein höherer Wert bedeutet mehr Cash-Qualität pro investiertem Euro.",
   "Analyst Upside": "Abstand zum durchschnittlichen Analystenziel. Nur als Stimmungsindikator nutzen, nicht blind folgen.",
-  "Net Debt": "Nettoschulden nach Cash. Hohe Werte koennen bei steigenden Zinsen oder schwachen Margen belasten.",
-  "Reported EPS": "Tatsaechlich gemeldeter Gewinn je Aktie im letzten Quartal.",
-  "EPS Estimate": "Konsensschaetzung vor den Zahlen. Relevant fuer Beat oder Miss.",
-  "EPS Surprise": "Abweichung zwischen gemeldetem EPS und Erwartung. Positive Surprise kann Momentum ausloesen.",
-  "4Q Pattern": "Trefferbild der letzten Quartale. Viele Beats zeigen bessere Planbarkeit, viele Misses erhoehen Risiko.",
-  "Revenue YoY": "Umsatzveraenderung gegenueber Vorjahr. Wichtig, weil EPS auch durch Kostenkuerzungen steigen kann.",
-  "Forward EPS": "Erwarteter Gewinn je Aktie fuer die Zukunft. Zeigt, was der Markt bereits einpreist.",
-  Umsatz: "Gesamterloese der letzten Berichtsperiode. Basis fuer Wachstum, Margen und Bewertung.",
-  "Umsatz YoY": "Umsatzwachstum gegenueber Vorjahr. Negativ kann auf Nachfrage- oder Preisprobleme hindeuten.",
-  "Umsatz CAGR": "Durchschnittliches Umsatzwachstum ueber mehrere Jahre. Glaettet Ausreisser.",
-  "Quartal YoY": "Umsatzwachstum im letzten Quartal gegenueber Vorjahresquartal. Gut fuer aktuelle Dynamik.",
-  "FCF-Marge": "Free-Cashflow nach Investitionen im Verhaeltnis zum Umsatz. Misst Cash-Qualitaet.",
+  "Net Debt": "Nettoschulden nach Cash. Hohe Werte können bei steigenden Zinsen oder schwachen Margen belasten.",
+  "Reported EPS": "Tatsächlich gemeldeter Gewinn je Aktie im letzten Quartal.",
+  "EPS Estimate": "Konsensschätzung vor den Zahlen. Relevant für über- oder untertroffene Erwartungen.",
+  "EPS Surprise": "Abweichung zwischen gemeldetem EPS und Erwartung. Eine positive Abweichung kann Momentum auslösen.",
+  "4Q Pattern": "Trefferbild der letzten Quartale. Viele übertroffene Erwartungen zeigen bessere Planbarkeit, viele verfehlte erhöhen das Risiko.",
+  "Revenue YoY": "Umsatzveränderung gegenüber dem Vorjahr. Wichtig, weil EPS auch durch Kostenkürzungen steigen kann.",
+  "Forward EPS": "Erwarteter Gewinn je Aktie für die Zukunft. Zeigt, was der Markt bereits einpreist.",
+  Umsatz: "Gesamterlöse der letzten Berichtsperiode. Basis für Wachstum, Margen und Bewertung.",
+  "Umsatz YoY": "Umsatzwachstum gegenüber dem Vorjahr. Ein negativer Wert kann auf Nachfrage- oder Preisprobleme hindeuten.",
+  "Umsatz CAGR": "Durchschnittliches Umsatzwachstum über mehrere Jahre. Glättet Ausreißer.",
+  "Quartal YoY": "Umsatzwachstum im letzten Quartal gegenüber dem Vorjahresquartal. Gut für die aktuelle Dynamik.",
+  "FCF-Marge": "Free-Cashflow nach Investitionen im Verhältnis zum Umsatz. Misst die Cash-Qualität.",
   "Op. Marge": "Operative Marge vor Zinsen und Steuern. Zeigt operative Effizienz.",
 };
 
@@ -312,27 +312,27 @@ export default function AnalysisResult({
 
   const dossierCatalysts = [
     latestEarnings
-      ? `Letzte Earnings: ${latestEarnings.status || "n/a"} (${formatPercent(latestEarnings.eps_surprise_pct)} EPS surprise).`
+      ? `Letztes Quartalsergebnis: ${localizeAnalysisLabel(latestEarnings.status || "n/a")} (${formatPercent(latestEarnings.eps_surprise_pct)} EPS-Abweichung).`
       : null,
     guidanceSignal?.label && guidanceSignal.label !== "No signal"
-      ? `Guidance: ${guidanceSignal.label}.`
+      ? `Ausblick: ${localizeAnalysisText(guidanceSignal.label)}.`
       : null,
-    quarterlyRevenueYoY != null ? `Quartalsumsatz YoY: ${formatRatioPercent(quarterlyRevenueYoY)}.` : null,
-    analystUpside != null ? `Analysten-Upside zum Mittelziel: ${formatPercent(analystUpside)}.` : null,
+    quarterlyRevenueYoY != null ? `Quartalsumsatz zum Vorjahr: ${formatRatioPercent(quarterlyRevenueYoY)}.` : null,
+    analystUpside != null ? `Analystenpotenzial zum Mittelziel: ${formatPercent(analystUpside)}.` : null,
     news?.[0]?.title ? `Top-News: ${news[0].title}` : null,
   ].filter(Boolean);
   const dossierRisks = [
     valuationPressure[0],
-    financialTrends?.revenue_yoy != null && financialTrends.revenue_yoy < 0 ? "Jahresumsatz ruecklaeufig." : null,
+    financialTrends?.revenue_yoy != null && financialTrends.revenue_yoy < 0 ? "Jahresumsatz rückläufig." : null,
     fundamentals?.earnings_growth != null && fundamentals.earnings_growth < 0 ? "Gewinnwachstum negativ." : null,
     latestEarnings?.status === "miss" ? "Letzte Earnings lagen unter Erwartung." : null,
     shortInterest?.short_percent_float != null && shortInterest.short_percent_float > 8
-      ? "Erhoehtes Short Interest kann Volatilitaet treiben."
+      ? "Eine erhöhte Leerverkaufsquote kann die Volatilität treiben."
       : null,
   ].filter(Boolean);
   const dossierQuestions = [
     "Wachsen Umsatz und Margen gleichzeitig oder nur eines von beiden?",
-    "Ist der naechste Kursimpuls earnings-, produkt- oder makrogetrieben?",
+    "Ist der nächste Kursimpuls ergebnis-, produkt- oder makrogetrieben?",
     "Rechtfertigt die Bewertung das aktuelle Wachstumstempo?",
     "Wo liegt die technische Invalidierung, falls der Markt gegen das Setup dreht?",
   ];
@@ -427,7 +427,7 @@ export default function AnalysisResult({
       setAlertModalOpen(false);
       setAlertStatus(`Alert gesetzt: ${data.ticker} ${alertDirection} ${target.toFixed(2)}`);
     } catch {
-      setAlertStatus("Price Alert konnte nicht erstellt werden.");
+      setAlertStatus("Kursalarm konnte nicht erstellt werden.");
     } finally {
       setAlertBusy(false);
     }
@@ -467,10 +467,10 @@ export default function AnalysisResult({
     // Executive Verdict
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(18);
-    doc.text("Broker-Freund Einschaetzung", 14, 55);
+    doc.text("Broker-Freund Einschätzung", 14, 55);
     doc.setFontSize(11);
     doc.text(
-      `Hey! Hier ist meine Analyse fuer dich: ${data.verdict || "Kein Verdict verfuegbar."}`,
+      `Hier ist meine Analyse für dich: ${data.verdict || "Keine Einschätzung verfügbar."}`,
       14,
       62,
       { maxWidth: pageWidth - 28 },
@@ -480,10 +480,10 @@ export default function AnalysisResult({
     doc.setFillColor(245, 245, 248);
     doc.rect(14, 75, pageWidth - 28, 30, "F");
     doc.setFontSize(12);
-    doc.text(`Performance Score: ${total_score?.toFixed(1)} / 100`, 20, 85);
-    doc.text(`Market Valuation: ${valuation || "N/A"}`, 20, 92);
+    doc.text(`Performance-Score: ${total_score?.toFixed(1)} / 100`, 20, 85);
+    doc.text(`Marktbewertung: ${localizeAnalysisLabel(valuation || "N/A")}`, 20, 92);
     doc.text(
-      `Action Recommendation: ${recommendation?.action || "N/A"}`,
+      `Handlungsempfehlung: ${recommendation?.action || "N/A"}`,
       20,
       99,
     );
@@ -491,27 +491,27 @@ export default function AnalysisResult({
     // Fundamentals Table
     autoTable(doc, {
       startY: 115,
-      head: [["Metric", "Value", "Benchmark Status"]],
+      head: [["Kennzahl", "Wert", "Einordnung"]],
       body: [
         [
-          "Market Cap",
+          "Marktkapitalisierung",
           formatBigNumber(fundamentals?.market_cap, formatPrice),
-          fundamentals?.market_cap > 100e9 ? "Mega Cap" : "Mainstream",
+          fundamentals?.market_cap > 100e9 ? "Sehr großes Unternehmen" : "Etabliertes Unternehmen",
         ],
         [
-          "P/E Ratio",
+          "KGV",
           fundamentals?.pe_ratio?.toFixed(2) || "N/A",
-          fundamentals?.pe_ratio < 20 ? "Undervalued" : "Premium",
+          fundamentals?.pe_ratio < 20 ? "Eher günstig" : "Prämienbewertung",
         ],
         [
-          "Rev Growth",
+          "Umsatzwachstum",
           formatRatioPercent(fundamentals?.revenue_growth),
-          fundamentals?.revenue_growth > 0.15 ? "High Growth" : "Moderate",
+          fundamentals?.revenue_growth > 0.15 ? "Hohes Wachstum" : "Moderat",
         ],
         [
-          "Profit Margin",
+          "Gewinnmarge",
           formatRatioPercent(fundamentals?.profit_margin),
-          fundamentals?.profit_margin > 0.1 ? "Efficient" : "Thin",
+          fundamentals?.profit_margin > 0.1 ? "Effizient" : "Dünn",
         ],
       ],
       theme: "grid",
@@ -520,10 +520,10 @@ export default function AnalysisResult({
 
     const afterFundamentalsY = (doc as any).lastAutoTable?.finalY || 155;
     doc.setFontSize(16);
-    doc.text("Dossier Intelligence", 14, afterFundamentalsY + 14);
+    doc.text("Dossier-Einordnung", 14, afterFundamentalsY + 14);
     doc.setFontSize(10);
     doc.text(
-      `Quality Score: ${Math.max(0, Math.min(100, qualityScore))}/100 | FCF Yield: ${formatPercent(fcfYield)} | Analyst Upside: ${formatPercent(analystUpside)}`,
+      `Qualität: ${Math.max(0, Math.min(100, qualityScore))}/100 | FCF-Rendite: ${formatPercent(fcfYield)} | Analystenpotenzial: ${formatPercent(analystUpside)}`,
       14,
       afterFundamentalsY + 21,
       { maxWidth: pageWidth - 28 },
@@ -531,25 +531,25 @@ export default function AnalysisResult({
 
     autoTable(doc, {
       startY: afterFundamentalsY + 30,
-      head: [["Case", "Interpretation"]],
+      head: [["Szenario", "Einordnung"]],
       body: [
         [
-          "Bull Case",
+          "Positives Szenario",
           fundamentals?.revenue_growth && fundamentals.revenue_growth > 0
-            ? `Wachstum sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Revenue Growth) und Score/Kursstruktur bleiben konstruktiv.`
-            : "Bull Case braucht frische Umsatz- oder Margenbestaetigung.",
+            ? `Wachstum sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Umsatzwachstum) und Score-/Kursstruktur bleiben konstruktiv.`
+            : "Das positive Szenario braucht eine frische Umsatz- oder Margenbestätigung.",
         ],
         [
-          "Base Case",
+          "Basisszenario",
           recommendation?.action
-            ? `Aktueller App-Case: ${recommendation.action}. Trigger und naechster Earnings-/News-Impuls muessen zusammenpassen.`
-            : "Neutraler Case: erst Preisreaktion und Datenbestaetigung abwarten.",
+            ? `Aktueller App-Case: ${recommendation.action}. Trigger und nächster Ergebnis- oder Nachrichtenimpuls müssen zusammenpassen.`
+            : "Neutrales Szenario: erst Preisreaktion und Datenbestätigung abwarten.",
         ],
         [
-          "Bear Case",
+          "Negatives Szenario",
           dossierRisks.length
             ? dossierRisks.slice(0, 3).join(" ")
-            : "Bear Case entsteht bei schwacher Anschlussdynamik, negativer Guidance oder Risk-off.",
+            : "Das negative Szenario entsteht bei schwacher Anschlussdynamik, negativem Ausblick oder breiter Risikoaversion.",
         ],
       ],
       theme: "grid",
@@ -564,9 +564,9 @@ export default function AnalysisResult({
         [
           dossierCatalysts.length ? dossierCatalysts.slice(0, 5).join("\n") : "Keine starken Katalysatoren im aktuellen Datenpaket.",
           [
-            ...(dossierRisks.length ? dossierRisks.slice(0, 4) : ["Keine harten Red Flags aus Kernkennzahlen erkannt."]),
+            ...(dossierRisks.length ? dossierRisks.slice(0, 4) : ["Keine harten Warnsignale aus Kernkennzahlen erkannt."]),
             "",
-            "Vor Trade pruefen:",
+            "Vor dem Handel prüfen:",
             ...dossierQuestions.slice(0, 4),
           ].join("\n"),
         ],
@@ -741,7 +741,7 @@ export default function AnalysisResult({
                   {dataQuality.blocksDecision ? "--" : suitabilityLoading ? "..." : suitability?.suitability_score ?? "--"}
                 </div>
                 <div className="mt-1 text-xs font-semibold text-slate-500">
-                  {assetClass.toUpperCase()} / Risiko {inferredRiskLevel}
+                  {localizeAnalysisLabel(assetClass)} / Risiko {localizeAnalysisLabel(inferredRiskLevel)}
                 </div>
               </div>
 
@@ -775,10 +775,10 @@ export default function AnalysisResult({
             {suitability?.profile_limits ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
-                  `Risiko: ${suitability.profile_limits.risk_tolerance || "offen"}`,
-                  `Verlust: ${suitability.profile_limits.loss_capacity || "offen"}`,
-                  `Erfahrung: ${suitability.profile_limits.experience_level || "offen"}`,
-                  `Max Position: ${suitability.profile_limits.max_single_position_pct ?? "--"}%`,
+                  `Risiko: ${localizeAnalysisLabel(suitability.profile_limits.risk_tolerance || "offen")}`,
+                  `Verlust: ${localizeAnalysisLabel(suitability.profile_limits.loss_capacity || "offen")}`,
+                  `Erfahrung: ${localizeAnalysisLabel(suitability.profile_limits.experience_level || "offen")}`,
+                  `Max. Position: ${suitability.profile_limits.max_single_position_pct ?? "--"}%`,
                 ].map((item) => (
                   <span
                     key={item}
@@ -795,7 +795,7 @@ export default function AnalysisResult({
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
               <div className="surface-panel w-full max-w-md rounded-[1.6rem] p-6">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Price Alert
+                  Kursalarm
                 </div>
                 <h3 className="mt-2 text-2xl text-slate-900">{data.ticker} Alert setzen</h3>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -807,7 +807,7 @@ export default function AnalysisResult({
                         : "border-black/8 bg-white text-slate-600"
                     }`}
                   >
-                    Above
+                    Oberhalb
                   </button>
                   <button
                     onClick={() => setAlertDirection("below")}
@@ -817,12 +817,12 @@ export default function AnalysisResult({
                         : "border-black/8 bg-white text-slate-600"
                     }`}
                   >
-                    Below
+                    Unterhalb
                   </button>
                 </div>
                 <div className="mt-4">
                   <label className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                    Target Price
+                    Zielkurs
                   </label>
                   <input
                     type="number"
@@ -837,14 +837,14 @@ export default function AnalysisResult({
                     onClick={() => setAlertModalOpen(false)}
                     className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
                   >
-                    Cancel
+                    Abbrechen
                   </button>
                   <button
                     onClick={createPriceAlert}
                     disabled={alertBusy}
                     className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
                   >
-                    {alertBusy ? "Speichert..." : "Alert speichern"}
+                    {alertBusy ? "Speichert..." : "Alarm speichern"}
                   </button>
                 </div>
               </div>
@@ -879,7 +879,7 @@ export default function AnalysisResult({
               </div>
               <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6 shadow-lg shadow-sky-500/5">
                 <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-700">
-                  <Plus size={14} /> Highlights
+                  <Plus size={14} /> Stärken
                 </h3>
                 <div className="space-y-3 text-sm font-medium text-slate-700">
                   {data.risk_audit.positive_signals?.map(
@@ -899,18 +899,18 @@ export default function AnalysisResult({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Dossier Intelligence
+                  Dossier-Einordnung
                 </div>
                 <h3 className="mt-2 text-3xl text-slate-900">
-                  Was fuer diese Aktie wirklich wichtig ist
+                  Was für diese Aktie wirklich wichtig ist
                 </h3>
                 <p className="mobile-dossier-copy mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-                  Kompakte Investment-Story aus Fundamentaldaten, Earnings, Bewertung, Analysten, News und Risiko.
+                  Kompakte Investment-Story aus Fundamentaldaten, Quartalsergebnissen, Bewertung, Analysten, Nachrichten und Risiko.
                   Keine Kaufempfehlung, sondern ein besserer Entscheidungsrahmen.
                 </p>
               </div>
               <div className={`rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${scoreTone(qualityScore)}`}>
-                Quality {Math.max(0, Math.min(100, qualityScore))}/100
+                Qualität {Math.max(0, Math.min(100, qualityScore))}/100
               </div>
             </div>
 
@@ -918,32 +918,32 @@ export default function AnalysisResult({
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-[1.5rem] border border-emerald-500/16 bg-emerald-500/8 p-4">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
-                    Bull Case
+                    Positives Szenario
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">
                     {fundamentals?.revenue_growth && fundamentals.revenue_growth > 0
-                      ? `Wachstum bleibt sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Revenue Growth), dazu spricht positive Kurs-/Score-Struktur fuer selektive Staerke.`
-                      : "Bull Case braucht frische Umsatz- oder Margenbestaetigung, sonst bleibt das Setup nur taktisch."}
+                      ? `Wachstum bleibt sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Umsatzwachstum), zudem spricht die positive Kurs- und Score-Struktur für selektive Stärke.`
+                      : "Das positive Szenario braucht eine frische Umsatz- oder Margenbestätigung, sonst bleibt das Setup nur taktisch."}
                   </p>
                 </div>
                 <div className="rounded-[1.5rem] border border-amber-500/16 bg-amber-500/8 p-4">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
-                    Base Case
+                    Basisszenario
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">
                     {recommendation?.action
-                      ? `Aktueller App-Case: ${recommendation.action}. Entscheidend ist, ob Trigger und naechster Earnings-/News-Impuls zusammenpassen.`
-                      : "Neutraler Case: erst Preisreaktion und Datenbestaetigung abwarten."}
+                      ? `Aktueller App-Case: ${recommendation.action}. Entscheidend ist, ob Trigger und nächster Ergebnis- oder Nachrichtenimpuls zusammenpassen.`
+                      : "Neutrales Szenario: erst Preisreaktion und Datenbestätigung abwarten."}
                   </p>
                 </div>
                 <div className="rounded-[1.5rem] border border-red-500/16 bg-red-500/8 p-4">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-red-700">
-                    Bear Case
+                    Negatives Szenario
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">
                     {dossierRisks.length
                       ? dossierRisks.slice(0, 2).join(" ")
-                      : "Bear Case entsteht vor allem bei schwacher Anschlussdynamik, negativer Guidance oder breitem Risk-off."}
+                      : "Das negative Szenario entsteht vor allem bei schwacher Anschlussdynamik, negativem Ausblick oder breiter Risikoaversion."}
                   </p>
                 </div>
               </div>
@@ -973,7 +973,7 @@ export default function AnalysisResult({
               </div>
               <div className="rounded-[1.5rem] border border-black/8 bg-white/74 p-4">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Risiken / Red Flags
+                  Risiken / Warnsignale
                 </div>
                 <div className="mt-3 space-y-2">
                   {dossierRisks.length ? dossierRisks.slice(0, 5).map((item: any, index: number) => (
@@ -981,13 +981,13 @@ export default function AnalysisResult({
                       {item}
                     </div>
                   )) : (
-                    <div className="text-sm text-slate-500">Keine harten Red Flags aus den Kernkennzahlen erkannt.</div>
+                    <div className="text-sm text-slate-500">Keine harten Warnsignale aus den Kernkennzahlen erkannt.</div>
                   )}
                 </div>
               </div>
               <div className="rounded-[1.5rem] border border-black/8 bg-white/74 p-4">
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
-                  Fragen vor Trade / Kauf
+                  Fragen vor Handel / Kauf
                 </div>
                 <div className="mt-3 space-y-2">
                   {dossierQuestions.map((item) => (
@@ -1013,7 +1013,7 @@ export default function AnalysisResult({
             <MetricCard
               label="Market Cap"
               value={formatBigNumber(fundamentals?.market_cap, formatPrice)}
-              info="Boersenwert"
+              info="Börsenwert"
             />
             <MetricCard
               label="P/E Ratio"
@@ -1037,10 +1037,10 @@ export default function AnalysisResult({
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Earnings vs Erwartung
+                    Quartalsergebnis zur Erwartung
                   </div>
                   <h3 className="mt-2 text-2xl font-black text-slate-900">
-                    Ergebnis, Schätzung und Surprise
+                    Ergebnis, Schätzung und Abweichung
                   </h3>
                 </div>
                 <div
@@ -1056,7 +1056,7 @@ export default function AnalysisResult({
                     ? "Beat"
                     : latestEarnings?.status === "miss"
                       ? "Miss"
-                      : "In line"}
+                      : "Im Rahmen"}
                 </div>
               </div>
 
@@ -1090,10 +1090,10 @@ export default function AnalysisResult({
                 />
                 <div className="surface-panel rounded-xl p-5">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                    Guidance
+                    Ausblick
                   </div>
                   <div className="text-sm font-bold text-slate-900">
-                    {guidanceSignal?.label || "No signal"}
+                    {localizeAnalysisText(guidanceSignal?.label || "No signal")}
                   </div>
                   {guidanceSignal?.sentiment === "positive" ? (
                     <div className="mt-2 text-[10px] font-bold text-emerald-700">↑ konstruktiv</div>
@@ -1105,8 +1105,8 @@ export default function AnalysisResult({
 
               <div className="mt-4 rounded-[1.2rem] border border-black/8 bg-white/72 p-4 text-sm leading-7 text-slate-600">
                 {guidanceSignal?.summary
-                  ? guidanceSignal.summary
-                  : "Kein klares Guidance-Signal aus den juengsten Headline-Quellen. Deshalb EPS immer zusammen mit Umsatztrend und Preisreaktion lesen."}
+                  ? localizeAnalysisText(guidanceSignal.summary)
+                  : "Kein klares Ausblickssignal aus den jüngsten Nachrichtenquellen. Deshalb EPS immer zusammen mit Umsatztrend und Preisreaktion lesen."}
               </div>
             </section>
           )}
@@ -1115,7 +1115,7 @@ export default function AnalysisResult({
             <section className="surface-panel rounded-[1.6rem] p-5">
               <div className="mb-4">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Business Quality Check
+                  Qualitätsprüfung des Geschäfts
                 </div>
                 <h3 className="mt-2 text-2xl font-black text-slate-900">
                   Umsatz, Earnings, Dividende und Cashflow auf einen Blick
@@ -1133,13 +1133,13 @@ export default function AnalysisResult({
                   return (
                     <div key={check.label} className={`rounded-[1.2rem] border p-4 ${tone}`}>
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
-                        {check.label}
+                        {localizeAnalysisText(check.label)}
                       </div>
                       <div className="mt-2 text-xl font-black">{check.value || "n/a"}</div>
                       <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em]">
-                        {check.status || "unknown"}
+                        {localizeAnalysisLabel(check.status || "unknown")}
                       </div>
-                      <p className="mt-2 text-sm leading-6 opacity-80">{check.detail}</p>
+                      <p className="mt-2 text-sm leading-6 opacity-80">{localizeAnalysisText(check.detail)}</p>
                     </div>
                   );
                 })}
@@ -1152,7 +1152,7 @@ export default function AnalysisResult({
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Financial Statement Intelligence
+                    Bilanz- und Cashflow-Analyse
                   </div>
                   <h3 className="mt-2 text-2xl font-black text-slate-900">
                     Umsatz, Margen und Cashflow
@@ -1206,7 +1206,7 @@ export default function AnalysisResult({
                       <th className="py-2 pr-4">Op. Marge</th>
                       <th className="py-2 pr-4">Nettoergebnis</th>
                       <th className="py-2 pr-4">Free Cashflow</th>
-                      <th className="py-2 pr-4">Net Debt</th>
+                      <th className="py-2 pr-4">Nettoverschuldung</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1283,7 +1283,7 @@ export default function AnalysisResult({
                   </span>
                 </div>
                 <p className="mb-4 h-10 line-clamp-2 text-sm text-slate-500">
-                  {normalizeGermanDisplayText(section.summary)}
+                  {localizeAnalysisText(section.summary)}
                 </p>
                 <div className="space-y-3">
                   {section.findings
@@ -1297,7 +1297,7 @@ export default function AnalysisResult({
                         <span
                           className={`font-medium ${finding.rating?.includes("positive") ? "text-emerald-700" : finding.rating?.includes("negative") ? "text-red-700" : "text-slate-600"}`}
                         >
-                          {localizeAnalysisLabel(finding.value)}
+                          {localizeAnalysisText(finding.value)}
                         </span>
                       </div>
                     ))}
@@ -1389,7 +1389,7 @@ export default function AnalysisResult({
             <div className="rounded-[1.7rem] border border-black/8 bg-white/80 p-5">
               <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
                 <span className="h-2 w-2 rounded-full bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.25)]"></span>
-                Meine Einschaetzung
+                Meine Einschätzung
               </h4>
               <div className="mt-4 text-sm font-medium leading-7 text-slate-700">
                 "{dataQuality.blocksDecision ? dataQuality.detail : data.verdict}"
@@ -1423,7 +1423,7 @@ export default function AnalysisResult({
                 size={16}
                 className="text-white/60 transition-colors group-hover:text-white"
               />
-              Dossier Exportieren
+              Dossier exportieren
             </button>
           </div>
         </div>
@@ -1437,7 +1437,7 @@ function NewsFeed({ news }: { news: any[] }) {
   return (
     <div className="surface-panel rounded-xl p-6">
       <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900">
-        <FileText size={20} className="text-emerald-700" /> Top News & Sentiment
+        <FileText size={20} className="text-emerald-700" /> Top-Nachrichten & Stimmung
       </h3>
       <div className="space-y-4">
         {news.slice(0, 5).map((item, i) => (
@@ -1480,21 +1480,22 @@ function MetricCard({
 }) {
   const help = METRIC_HELP[label] || info || "";
   const meta = info && info !== help ? info : "";
+  const displayLabel = localizeAnalysisLabel(label);
 
   return (
     <div className="surface-panel relative group rounded-xl p-5 transition-all hover:border-black/12">
       <div className="mb-2 flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-        <span>{label}</span>
+        <span>{displayLabel}</span>
         {help ? (
           <span
             className="relative inline-flex h-5 w-5 items-center justify-center rounded-full border border-black/8 bg-white/70 text-[10px] text-slate-500 opacity-70 transition-opacity group-hover:opacity-100"
             title={help}
-            aria-label={`${label}: ${help}`}
+            aria-label={`${displayLabel}: ${help}`}
           >
             ?
             <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 hidden w-64 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-within:block group-focus-within:opacity-100">
               <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
-                {label}
+                {displayLabel}
               </span>
               {help}
               {meta ? (

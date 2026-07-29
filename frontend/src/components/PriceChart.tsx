@@ -118,12 +118,12 @@ const displayMetaValue = (value?: string | number | null, fallback = "offen") =>
 };
 
 const INDICATOR_HELP: Record<string, string> = {
-  RSI: "RSI misst Momentum: ueber 70 oft ueberkauft, unter 30 oft ueberverkauft. Kein Kaufsignal allein.",
-  MACD: "MACD zeigt Trend-Momentum: steigendes Histogramm spricht fuer zunehmenden Aufwaertsdruck, fallend fuer nachlassenden Druck.",
+  RSI: "RSI misst Momentum: über 70 oft überkauft, unter 30 oft überverkauft. Kein Kaufsignal allein.",
+  MACD: "MACD zeigt Trend-Momentum: Ein steigendes Histogramm spricht für zunehmenden Aufwärtsdruck, ein fallendes für nachlassenden Druck.",
   SMA: "SMA ist der gleitende Durchschnitt. 20/50/200 Tage zeigen kurz-, mittel- und langfristigen Trend.",
-  Bollinger: "Bollinger-Baender zeigen normale Schwankungsbreite. Ausbrueche koennen Momentum oder Uebertreibung markieren.",
-  Volume: "Volume zeigt Handelsaktivitaet. Bewegungen mit hohem Volumen sind belastbarer als duenne Moves.",
-  VWAP: "VWAP ist der volumengewichtete Durchschnittspreis. Intraday oft Referenz, ob Kaeufer oder Verkaeufer Kontrolle haben.",
+  Bollinger: "Bollinger-Bänder zeigen die normale Schwankungsbreite. Ausbrüche können Momentum oder Übertreibung markieren.",
+  Volume: "Volumen zeigt die Handelsaktivität. Bewegungen mit hohem Volumen sind belastbarer als dünne Bewegungen.",
+  VWAP: "VWAP ist der volumengewichtete Durchschnittspreis. Intraday dient er oft als Referenz, ob Käufer oder Verkäufer die Kontrolle haben.",
 };
 
 const emptyIndicators = (): IndicatorSeries => ({
@@ -761,7 +761,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   className="px-2 text-[9px] font-bold uppercase tracking-wider text-slate-400"
                   title={INDICATOR_HELP.Volume}
                 >
-                  Volume / Hover: Aktivitaet / Bestaetigung
+                  Volumen / Hover: Aktivität / Bestätigung
                 </div>
               </div>
             ) : null}

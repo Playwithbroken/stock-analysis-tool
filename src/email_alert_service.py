@@ -2960,6 +2960,22 @@ class EmailAlertService:
                 lines2.append("<b>Quellenabgleich:</b> Einzelquelle – noch nicht mehrfach berichtet.")
             if evidence.get("source_agreement") == "mixed_headline_signal":
                 lines2.append("<b>⚠ Widerspruch:</b> Ähnliche Headlines zeigen unterschiedliche Richtungssignale.")
+            primary_sources = item.get("primary_sources") or []
+            for primary in primary_sources[:1]:
+                primary_url = str(primary.get("url") or "")
+                primary_label = (
+                    f"SEC {self._tg_esc(primary.get('form') or '')} · "
+                    f"eingereicht {self._tg_esc(primary.get('filed_at') or '')}"
+                )
+                if primary_url:
+                    lines2.append(
+                        f"<b>✅ Primärquelle:</b> <a href=\"{primary_url}\">{primary_label}</a>"
+                    )
+                else:
+                    lines2.append(f"<b>✅ Primärquelle:</b> {primary_label}")
+                lines2.append(
+                    "<i>Filing-Link verifiziert; Publisher-Kennzahlen nicht automatisch einzeln abgeglichen.</i>"
+                )
             market_confirmation = item.get("market_confirmation") or {}
             confirmation_status = str(market_confirmation.get("status") or "")
             if confirmation_status:

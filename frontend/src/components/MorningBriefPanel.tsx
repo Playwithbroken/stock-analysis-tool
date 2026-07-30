@@ -1382,6 +1382,9 @@ export default function MorningBriefPanel({
               const corroboratingSources = Array.isArray(item.corroborating_sources)
                 ? item.corroborating_sources
                 : [];
+              const primarySources = Array.isArray(item.primary_sources)
+                ? item.primary_sources
+                : [];
               const publisherCount = Number(evidence.publisher_count || corroboratingSources.length || 1);
               const mixedSourceSignal = evidence.source_agreement === "mixed_headline_signal";
               const marketConfirmation = item.market_confirmation || {};
@@ -1425,6 +1428,11 @@ export default function MorningBriefPanel({
                         {mixedSourceSignal ? (
                           <span className="rounded-full border border-red-500/25 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
                             Quellen-Signal widersprüchlich
+                          </span>
+                        ) : null}
+                        {evidence.original_document_verified ? (
+                          <span className="rounded-full border border-blue-500/25 bg-blue-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">
+                            SEC-Primärquelle verifiziert
                           </span>
                         ) : null}
                       </div>
@@ -1573,6 +1581,31 @@ export default function MorningBriefPanel({
                         ))}
                       </div>
                     </details>
+                  ) : null}
+
+                  {primarySources.length ? (
+                    <div className="rounded-[1rem] border border-blue-500/20 bg-blue-50/55 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700">
+                        Verifizierte Primärquelle
+                      </div>
+                      {primarySources.map((source: any, sourceIndex: number) => (
+                        <a
+                          key={`${source.accession}-${sourceIndex}`}
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 block rounded-lg border border-blue-500/15 bg-white/85 px-3 py-2 underline-offset-4 hover:underline"
+                        >
+                          <span className="font-extrabold text-slate-900">
+                            SEC {source.form} · eingereicht {source.filed_at}
+                          </span>
+                          <span className="ml-2 text-slate-500">Accession {source.accession}</span>
+                        </a>
+                      ))}
+                      <div className="mt-2 text-[11px] text-slate-500">
+                        Der Filing-Link ist geprüft. Einzelne Kennzahlen der Publisher-Meldung sind dadurch nicht automatisch abgeglichen.
+                      </div>
+                    </div>
                   ) : null}
 
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 sm:col-start-2">

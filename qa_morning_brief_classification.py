@@ -242,6 +242,92 @@ def main() -> int:
     if provider_only_news[0].get("market_confirmation"):
         failures.append("provider-feed-only ticker association received a misleading price confirmation")
 
+    sec_payload = {
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0000789019-26-000099", "0000789019-26-000100"],
+                "form": ["8-K", "8-K"],
+                "filingDate": ["2026-07-30", "2026-07-30"],
+                "reportDate": ["2026-07-30", "2026-07-30"],
+                "acceptanceDateTime": ["2026-07-30T12:00:00.000Z", "2026-07-30T13:00:00.000Z"],
+                "primaryDocument": ["unrelated.htm", "earnings.htm"],
+                "items": ["5.02,9.01", "2.02,9.01"],
+            }
+        }
+    }
+
+    class SecResponse:
+        def __init__(self, status_code: int, payload=None):
+            self.status_code = status_code
+            self.payload = payload or {}
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(f"HTTP {self.status_code}")
+
+        def json(self):
+            return self.payload
+
+        def close(self):
+            return None
+
+    sec_calls = []
+
+    def sec_get(url: str, headers=None, timeout=None, stream=False):
+        sec_calls.append({"url": url, "headers": headers or {}, "stream": stream})
+        if "data.sec.gov/submissions/" in url:
+            return SecResponse(200, sec_payload)
+        return SecResponse(200)
+
+    svc._sec_filing_cache.clear()
+    with patch.dict("os.environ", {"SEC_CONTACT_EMAIL": "qa@example.com"}), patch(
+        "src.morning_brief_service.requests.get",
+        sec_get,
+    ):
+        sec_filing = svc._find_sec_earnings_filing(
+            "MSFT",
+            "2026-07-30T12:30:00+00:00",
+        )
+    if sec_filing.get("status") != "verified" or sec_filing.get("form") != "8-K":
+        failures.append("matching SEC earnings 8-K was not verified")
+    if "2.02" not in str(sec_filing.get("items") or ""):
+        failures.append("unrelated SEC 8-K was accepted as earnings evidence")
+    if not str(sec_filing.get("url") or "").endswith("/earnings.htm"):
+        failures.append("SEC primary document URL is incorrect")
+    if not sec_calls or not str((sec_calls[0].get("headers") or {}).get("User-Agent") or "").strip():
+        failures.append("SEC request did not declare a User-Agent")
+
+    earnings_news = svc._enrich_news_item(
+        {
+            "ticker": "MSFT",
+            "related_tickers": ["MSFT"],
+            "ticker_association_basis": "explicit_title_entity",
+            "title": "Microsoft reports quarterly earnings",
+            "publisher": "Reuters",
+            "link": "https://www.reuters.com/technology/microsoft-quarterly-earnings/",
+            "source_url": "https://www.reuters.com/technology/microsoft-quarterly-earnings/",
+            "source_domain": "reuters.com",
+            "source_quality": "tier_1",
+            "is_trusted_source": True,
+            "published_at": "2026-07-30T12:30:00+00:00",
+            "age_hours": 1.0,
+            "event_type": "earnings",
+            "impact": "high",
+            "severity": "elevated",
+        }
+    )
+    with patch.object(svc, "_find_sec_earnings_filing", return_value=sec_filing):
+        primary_attached = svc._attach_news_primary_sources([earnings_news])
+    primary_evidence = primary_attached[0].get("source_evidence") or {}
+    if primary_evidence.get("original_document_verified") is not True:
+        failures.append("verified SEC filing was not attached as original evidence")
+    if len(primary_attached[0].get("primary_sources") or []) != 1:
+        failures.append("verified SEC filing link is missing from news")
+    if "nicht automatisch abgeglichen" not in str(
+        (primary_attached[0].get("news_intelligence") or {}).get("precision_note") or ""
+    ):
+        failures.append("SEC evidence overclaim disclosure is missing")
+
     telegram = EmailAlertService.__new__(EmailAlertService)
     telegram_messages: list[str] = []
     telegram._tg_post = (  # type: ignore[method-assign]
@@ -258,7 +344,17 @@ def main() -> int:
             "opening_bias": "QA",
             "regions": {},
             "macro_assets": [],
-            "top_news": [{**clustered[0], "market_confirmation": market_confirmation}],
+            "top_news": [
+                {
+                    **clustered[0],
+                    "market_confirmation": market_confirmation,
+                    "primary_sources": primary_attached[0].get("primary_sources"),
+                    "source_evidence": {
+                        **(clustered[0].get("source_evidence") or {}),
+                        "original_document_verified": True,
+                    },
+                }
+            ],
         },
         "global",
     )
@@ -267,6 +363,9 @@ def main() -> int:
         "",
     )
     for marker in ["Quellenabgleich:", "2 verschiedene Publisher", "Preisreaktion BESTÄTIGT:", "relativ +1.20%"]:
+        if marker not in important_message:
+            failures.append(f"important Telegram news missing {marker}")
+    for marker in ["Primärquelle:", "SEC 8-K", "Publisher-Kennzahlen nicht automatisch"]:
         if marker not in important_message:
             failures.append(f"important Telegram news missing {marker}")
     for marker in ["Fakt (Publisher-Zusammenfassung)", "Bedeutung:", "Einschätzung:", "Bestätigung:", "Invalidierung:"]:

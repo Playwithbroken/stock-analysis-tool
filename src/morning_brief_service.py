@@ -76,6 +76,16 @@ class MorningBriefService:
         "TTWO": ["take-two", "take two", "rockstar games"],
         "BMW.DE": ["bmw", "rolls-royce motor cars"],
     }
+    SEC_CIK_BY_TICKER = {
+        "NVDA": "0001045810",
+        "AAPL": "0000320193",
+        "MSFT": "0000789019",
+        "TSLA": "0001318605",
+        "AMZN": "0001018724",
+        "META": "0001326801",
+        "GOOGL": "0001652044",
+        "TTWO": "0000946581",
+    }
     FUNDAMENTAL_EXCLUDED_TICKERS = {"SPY", "QQQ", "GLD", "TLT", "XLE", "XLK", "XLY", "XLV", "XLU", "XLRE", "IWM"}
     PRODUCT_CATALYST_ALIASES = {
         "NVDA": ["nvidia", "geforce", "rtx", "blackwell", "gpu", "graphics card", "ai chip"],
@@ -255,6 +265,8 @@ class MorningBriefService:
     _event_ping_cooldown_seconds = 60 * 30
     _market_movers_cache: tuple[Dict[str, Any], datetime] | None = None
     _market_movers_ttl_seconds = 60 * 15
+    _sec_filing_cache: Dict[str, tuple[Dict[str, Any], datetime]] = {}
+    _sec_filing_ttl_seconds = 60 * 30
     _kalshi_enabled = str(os.getenv("KALSHI_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}
 
     def _persist_snapshot(self, brief: Dict[str, Any]) -> None:
@@ -457,6 +469,7 @@ class MorningBriefService:
             self._collect_news(extra_tickers=watchlist_tickers),
             fast=False,
         )
+        top_news = self._attach_news_primary_sources(top_news, fast=False)
         crowd_news = self._collect_crowd_news()
         social_news = self._collect_social_news()
 
@@ -547,6 +560,7 @@ class MorningBriefService:
                     "Top News benötigt einen klickbaren Bericht einer freigegebenen Quelle. "
                     "Als wichtig markiert werden nur Tier-1-Berichte mit Zeitstempel und hoher Relevanz. "
                     "Faktenbasis und Analyse sind getrennt; ein einzelner Bericht gilt nicht als unabhängig bestätigt. "
+                    "Bei unterstützten Earnings wird ein konkretes SEC-Filing nur nach Dokument-HTTP-200 als Primärquelle markiert. "
                     "Social/X und Reddit bleiben außerhalb des Trusted-News-Blocks."
                 ),
             },
@@ -637,6 +651,7 @@ class MorningBriefService:
             self._collect_news(extra_tickers=watchlist_tickers, fast=True),
             fast=True,
         )
+        top_news = self._attach_news_primary_sources(top_news, fast=True)
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
         if not event_pings:
@@ -712,7 +727,8 @@ class MorningBriefService:
                 "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
                 "note": (
                     "Fast Mode: klickbare Trusted-News-Berichte werden priorisiert; wichtig erfordert Tier 1, "
-                    "Zeitstempel und hohe Relevanz. Faktenbasis und Analyse bleiben getrennt; tiefe Social-Layer folgen später."
+                    "Zeitstempel und hohe Relevanz. Faktenbasis und Analyse bleiben getrennt; unterstützte Earnings erhalten "
+                    "bei erfolgreicher SEC-Prüfung einen konkreten Primärquellen-Link."
                 ),
             },
             "event_layer": event_layer,
@@ -1469,6 +1485,173 @@ class MorningBriefService:
                     "Relative Stärke ist kein Beweis, dass die Meldung die Bewegung verursacht hat."
                 ),
             }
+        return enriched
+
+    def _find_sec_earnings_filing(self, ticker: str, published_at: Any) -> Dict[str, Any]:
+        normalized = str(ticker or "").upper()
+        cik = self.SEC_CIK_BY_TICKER.get(normalized)
+        if not cik:
+            return {"status": "unsupported_ticker"}
+        try:
+            publication_time = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
+            if publication_time.tzinfo is None:
+                publication_time = publication_time.replace(tzinfo=timezone.utc)
+            publication_date = publication_time.astimezone(timezone.utc).date()
+        except Exception:
+            return {"status": "invalid_publication_time"}
+
+        cache_key = f"{normalized}:{publication_date.isoformat()}"
+        now = datetime.now(timezone.utc)
+        cached = self._sec_filing_cache.get(cache_key)
+        if cached and (now - cached[1]).total_seconds() < self._sec_filing_ttl_seconds:
+            return deepcopy(cached[0])
+
+        explicit_user_agent = str(os.getenv("SEC_USER_AGENT", "")).strip()
+        contact_email = str(
+            os.getenv("SEC_CONTACT_EMAIL")
+            or os.getenv("SMTP_FROM")
+            or os.getenv("SMTP_USER")
+            or ""
+        ).strip()
+        if not explicit_user_agent and ("@" not in contact_email or " " in contact_email):
+            return {
+                "status": "contact_not_configured",
+                "authority": "U.S. Securities and Exchange Commission",
+                "submissions_url": f"https://data.sec.gov/submissions/CIK{cik}.json",
+                "reason": "SEC_CONTACT_EMAIL or SEC_USER_AGENT is required for declared automated access",
+            }
+        user_agent = explicit_user_agent or f"BrokerFreund/0.9 {contact_email}"
+        headers = {
+            "User-Agent": user_agent,
+            "Accept-Encoding": "gzip, deflate",
+            "Accept": "application/json,text/html",
+        }
+        submissions_url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+        try:
+            response = requests.get(submissions_url, headers=headers, timeout=8)
+            response.raise_for_status()
+            recent = ((response.json().get("filings") or {}).get("recent") or {})
+            accessions = recent.get("accessionNumber") or []
+            candidates: List[Dict[str, Any]] = []
+            for index, accession in enumerate(accessions):
+                def field(name: str) -> Any:
+                    values = recent.get(name) or []
+                    return values[index] if index < len(values) else None
+
+                form = str(field("form") or "")
+                filed = str(field("filingDate") or "")
+                primary_document = str(field("primaryDocument") or "")
+                items = str(field("items") or "")
+                if not accession or not filed or not primary_document:
+                    continue
+                is_results_8k = form == "8-K" and "2.02" in items
+                if form not in {"10-Q", "10-K", "6-K"} and not is_results_8k:
+                    continue
+                try:
+                    filed_date = date.fromisoformat(filed)
+                except Exception:
+                    continue
+                distance_days = abs((filed_date - publication_date).days)
+                if distance_days > 7:
+                    continue
+                form_rank = 0 if is_results_8k else 1 if form == "10-Q" else 2 if form == "10-K" else 3
+                candidates.append(
+                    {
+                        "form": form,
+                        "accession": accession,
+                        "filed_at": filed,
+                        "report_date": field("reportDate"),
+                        "accepted_at": field("acceptanceDateTime"),
+                        "primary_document": primary_document,
+                        "items": items,
+                        "distance_days": distance_days,
+                        "form_rank": form_rank,
+                    }
+                )
+            if not candidates:
+                result = {
+                    "status": "not_found",
+                    "authority": "U.S. Securities and Exchange Commission",
+                    "submissions_url": submissions_url,
+                }
+                self._sec_filing_cache[cache_key] = (result, now)
+                return deepcopy(result)
+
+            filing = sorted(candidates, key=lambda candidate: (candidate["distance_days"], candidate["form_rank"]))[0]
+            accession_path = str(filing["accession"]).replace("-", "")
+            cik_path = str(int(cik))
+            document_url = (
+                f"https://www.sec.gov/Archives/edgar/data/{cik_path}/"
+                f"{accession_path}/{filing['primary_document']}"
+            )
+            document_response = requests.get(document_url, headers=headers, timeout=8, stream=True)
+            verified = document_response.status_code == 200
+            document_response.close()
+            result = {
+                "status": "verified" if verified else "document_unreachable",
+                "authority": "U.S. Securities and Exchange Commission",
+                "ticker": normalized,
+                "cik": cik,
+                "form": filing["form"],
+                "accession": filing["accession"],
+                "filed_at": filing["filed_at"],
+                "report_date": filing["report_date"],
+                "accepted_at": filing["accepted_at"],
+                "items": filing["items"],
+                "url": document_url,
+                "submissions_url": submissions_url,
+                "document_http_status": document_response.status_code,
+                "verified_at": now.isoformat() if verified else None,
+                "event_match_basis": "ticker_form_and_filing_date_within_7_days",
+            }
+        except Exception as exc:
+            result = {
+                "status": "lookup_error",
+                "authority": "U.S. Securities and Exchange Commission",
+                "submissions_url": submissions_url,
+                "reason": str(exc)[:180],
+            }
+        self._sec_filing_cache[cache_key] = (result, now)
+        return deepcopy(result)
+
+    def _attach_news_primary_sources(
+        self,
+        news: List[Dict[str, Any]],
+        fast: bool = False,
+    ) -> List[Dict[str, Any]]:
+        enriched = deepcopy(news)
+        lookup_limit = 2 if fast else 4
+        looked_up = 0
+        for item in enriched:
+            if looked_up >= lookup_limit:
+                break
+            if str(item.get("event_type") or "") != "earnings":
+                continue
+            if item.get("ticker_association_basis") == "provider_related_feed_only":
+                continue
+            ticker = str(item.get("ticker") or "").upper()
+            published_at = item.get("published_at")
+            if not ticker or not published_at or ticker not in self.SEC_CIK_BY_TICKER:
+                continue
+            looked_up += 1
+            filing = self._find_sec_earnings_filing(ticker, published_at)
+            evidence = {**(item.get("source_evidence") or {})}
+            evidence["primary_source_lookup"] = filing.get("status")
+            if filing.get("status") == "verified":
+                evidence["original_document_verified"] = True
+                evidence["primary_source_count"] = 1
+                item["primary_sources"] = [filing]
+                intelligence = {**(item.get("news_intelligence") or {})}
+                intelligence["precision_note"] = (
+                    f"{intelligence.get('precision_note', '')} Konkretes SEC-{filing.get('form')} "
+                    "wurde ticker-, formular- und zeitbezogen gefunden und per HTTP 200 verifiziert; "
+                    "die einzelnen Kennzahlen der Publisher-Meldung wurden dadurch nicht automatisch abgeglichen."
+                ).strip()
+                item["news_intelligence"] = intelligence
+            else:
+                evidence["original_document_verified"] = False
+                item["primary_source_lookup"] = filing
+            item["source_evidence"] = evidence
         return enriched
 
     def _clean_news_summary(self, value: Any) -> str:

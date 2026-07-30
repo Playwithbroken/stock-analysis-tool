@@ -120,6 +120,65 @@ def main() -> int:
     if unlinked_news.get("fact_basis") != "headline_only":
         failures.append("headline-only reporting basis was not disclosed")
 
+    second_report = svc._enrich_news_item(
+        {
+            **verified_news,
+            "title": "China tariff plan remains under review after Trump remarks",
+            "publisher": "Bloomberg",
+            "link": "https://www.bloomberg.com/news/articles/2026-07-30/china-tariff-plan-review",
+            "source_url": "https://www.bloomberg.com/news/articles/2026-07-30/china-tariff-plan-review",
+            "source_domain": "bloomberg.com",
+            "source_summary": "The China tariff plan remains under review after the latest Trump remarks.",
+        }
+    )
+    clustered = svc._cluster_news_events([verified_news, second_report])
+    if len(clustered) != 1:
+        failures.append("similar reports were not merged into one news event")
+    else:
+        clustered_evidence = clustered[0].get("source_evidence") or {}
+        clustered_intelligence = clustered[0].get("news_intelligence") or {}
+        if clustered_evidence.get("corroboration") != "multi_publisher":
+            failures.append("multi-publisher corroboration was not disclosed")
+        if clustered_evidence.get("publisher_count") != 2:
+            failures.append("distinct publisher count is incorrect")
+        if clustered_evidence.get("editorial_independence_verified") is not False:
+            failures.append("editorial independence was overclaimed")
+        if len(clustered[0].get("corroborating_sources") or []) != 2:
+            failures.append("corroborating source links are missing")
+        if "redaktionelle Unabhängigkeit" not in str(clustered_intelligence.get("precision_note") or ""):
+            failures.append("multi-publisher precision disclosure is missing")
+
+    conflicting_reports = []
+    for publisher, domain, title in [
+        ("Reuters", "reuters.com", "Tesla stock rises as robotaxi launch is approved"),
+        ("CNBC", "cnbc.com", "Tesla stock falls as robotaxi launch is delayed"),
+    ]:
+        conflicting_reports.append(
+            svc._enrich_news_item(
+                {
+                    "ticker": "TSLA",
+                    "related_tickers": ["TSLA"],
+                    "title": title,
+                    "publisher": publisher,
+                    "link": f"https://www.{domain}/tesla-robotaxi-launch",
+                    "source_url": f"https://www.{domain}/tesla-robotaxi-launch",
+                    "source_domain": domain,
+                    "source_quality": "tier_1",
+                    "is_trusted_source": True,
+                    "published_at": "2026-07-30T06:00:00+00:00",
+                    "age_hours": 1.0,
+                    "event_type": "product_catalyst",
+                    "impact": "high",
+                    "severity": "elevated",
+                }
+            )
+        )
+    conflicting_cluster = svc._cluster_news_events(conflicting_reports)
+    if len(conflicting_cluster) != 1:
+        failures.append("conflicting reports were not recognized as the same event")
+    elif (conflicting_cluster[0].get("source_evidence") or {}).get("source_agreement") != "mixed_headline_signal":
+        failures.append("conflicting headline direction was not flagged")
+
     telegram = EmailAlertService.__new__(EmailAlertService)
     telegram_messages: list[str] = []
     telegram._tg_post = (  # type: ignore[method-assign]
@@ -136,7 +195,7 @@ def main() -> int:
             "opening_bias": "QA",
             "regions": {},
             "macro_assets": [],
-            "top_news": [verified_news],
+            "top_news": clustered,
         },
         "global",
     )
@@ -144,6 +203,9 @@ def main() -> int:
         (message for message in telegram_messages if "WICHTIG" in message),
         "",
     )
+    for marker in ["Quellenabgleich:", "2 verschiedene Publisher"]:
+        if marker not in important_message:
+            failures.append(f"important Telegram news missing {marker}")
     for marker in ["Fakt (Publisher-Zusammenfassung)", "Bedeutung:", "Einschätzung:", "Bestätigung:", "Invalidierung:"]:
         if marker not in important_message:
             failures.append(f"important Telegram news missing {marker}")

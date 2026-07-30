@@ -1362,6 +1362,11 @@ export default function MorningBriefPanel({
               const forecast = newsForecastMeta(item);
               const intelligence = item.news_intelligence || {};
               const evidence = item.source_evidence || {};
+              const corroboratingSources = Array.isArray(item.corroborating_sources)
+                ? item.corroborating_sources
+                : [];
+              const publisherCount = Number(evidence.publisher_count || corroboratingSources.length || 1);
+              const mixedSourceSignal = evidence.source_agreement === "mixed_headline_signal";
               const relatedTickers = Array.isArray(item.related_tickers)
                 ? item.related_tickers.filter(Boolean).slice(0, 4)
                 : item.ticker
@@ -1389,6 +1394,18 @@ export default function MorningBriefPanel({
                         {item.is_important ? (
                           <span className="rounded-full border border-red-500/25 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
                             Wichtig {item.importance_score}/25
+                          </span>
+                        ) : null}
+                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                          publisherCount >= 2
+                            ? "border-emerald-500/25 bg-emerald-50 text-emerald-700"
+                            : "border-amber-500/25 bg-amber-50 text-amber-700"
+                        }`}>
+                          {publisherCount >= 2 ? `${publisherCount} Publisher` : "Einzelquelle"}
+                        </span>
+                        {mixedSourceSignal ? (
+                          <span className="rounded-full border border-red-500/25 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+                            Quellen-Signal widersprüchlich
                           </span>
                         ) : null}
                       </div>
@@ -1478,6 +1495,31 @@ export default function MorningBriefPanel({
                         <span className="font-extrabold text-slate-800">Invalidierung:</span> {intelligence.invalidation}
                       </div>
                       <div className="mt-2 text-[11px] text-slate-500">{intelligence.precision_note}</div>
+                    </details>
+                  ) : null}
+
+                  {corroboratingSources.length ? (
+                    <details className="rounded-[1rem] border border-emerald-500/15 bg-emerald-50/45 px-3 py-2 text-xs leading-5 text-slate-600 sm:col-start-2">
+                      <summary className="cursor-pointer font-extrabold text-slate-800">
+                        Quellenabgleich · {publisherCount} Publisher
+                      </summary>
+                      <div className="mt-2 text-[11px] text-slate-500">
+                        Verschiedene Publisher werden gezählt; redaktionelle Unabhängigkeit und Syndizierung sind technisch nicht verifiziert.
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {corroboratingSources.map((source: any, sourceIndex: number) => (
+                          <a
+                            key={`${source.publisher}-${source.domain}-${sourceIndex}`}
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block rounded-lg border border-black/8 bg-white/80 px-3 py-2 underline-offset-4 hover:underline"
+                          >
+                            <span className="font-extrabold text-slate-800">{source.publisher || source.domain}</span>
+                            {source.title ? <span className="ml-2">{source.title}</span> : null}
+                          </a>
+                        ))}
+                      </div>
                     </details>
                   ) : null}
 

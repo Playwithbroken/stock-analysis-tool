@@ -1026,14 +1026,15 @@ class MorningBriefService:
         if not _HAS_FEEDPARSER:
             return []
         items: List[Dict[str, Any]] = []
-        seen_titles: set = set()
+        seen_reports: set[tuple[str, str]] = set()
         for feed_url, feed_publisher in self.RSS_FEEDS:
             try:
                 parsed = feedparser.parse(feed_url, request_headers={"User-Agent": "Mozilla/5.0"})
                 for entry in (parsed.entries or [])[:5]:
                     title = (entry.get("title") or "").strip()
                     link = entry.get("link") or ""
-                    if not title or title in seen_titles:
+                    report_key = (self._news_identity(title), self._extract_domain(link) or feed_publisher.lower())
+                    if not title or report_key in seen_reports:
                         continue
                     # Filter out very old entries (older than 18 hours)
                     published = entry.get("published_parsed")
@@ -1046,7 +1047,7 @@ class MorningBriefService:
                     else:
                         age_hours = None
                         published_at = None
-                    seen_titles.add(title)
+                    seen_reports.add(report_key)
                     source_summary = self._clean_news_summary(
                         entry.get("summary") or entry.get("description")
                     )
@@ -1094,15 +1095,16 @@ class MorningBriefService:
 
     def _collect_news(self, extra_tickers: List[str] | None = None, fast: bool = False) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
-        seen_titles: set = set()
+        seen_reports: set[tuple[str, str]] = set()
 
         # 1. Collect from RSS feeds (real-time, highest priority)
         rss_items = self._collect_rss_news()
         for item in rss_items:
             title = item.get("title") or ""
             identity = self._news_identity(title)
-            if title and identity not in seen_titles:
-                seen_titles.add(identity)
+            report_key = (identity, str(item.get("source_domain") or item.get("publisher") or "").lower())
+            if title and report_key not in seen_reports:
+                seen_reports.add(report_key)
                 items.append(item)
 
         # 2. Collect from yfinance per ticker (includes user watchlist tickers)
@@ -1120,13 +1122,14 @@ class MorningBriefService:
             for item in news[:per_ticker_limit]:
                 title = item.get("title") or ""
                 identity = self._news_identity(title)
-                if not title or identity in seen_titles:
-                    continue
                 publisher = item.get("publisher") or ""
                 link = item.get("link")
                 source_summary = self._clean_news_summary(item.get("summary"))
                 text = f"{title} {link or ''}".lower()
                 source_meta = self._source_meta(publisher, link)
+                report_key = (identity, str(source_meta.get("domain") or publisher).lower())
+                if not title or report_key in seen_reports:
+                    continue
                 classification = self._classify_news_signal(text)
                 product_catalyst = self._classify_product_catalyst(text)
                 if source_meta["exclude"]:
@@ -1136,7 +1139,7 @@ class MorningBriefService:
                 age_hours, published_at = self._news_age(item.get("published_at") or item.get("timestamp"))
                 if age_hours is not None and age_hours > 30:
                     continue
-                seen_titles.add(identity)
+                seen_reports.add(report_key)
                 news_item = {
                         "ticker": ticker,
                         "related_tickers": [ticker],
@@ -1159,7 +1162,7 @@ class MorningBriefService:
                 }
                 items.append(self._enrich_news_item(news_item))
 
-        trusted_items = [
+        trusted_candidates = [
             item for item in items
             if (
                 item.get("is_trusted_source")
@@ -1168,6 +1171,7 @@ class MorningBriefService:
                 and self._news_relevance_score(item) > 0
             )
         ]
+        trusted_items = self._cluster_news_events(trusted_candidates)
         trusted_items.sort(
             key=lambda item: (
                 0 if item.get("is_important") else 1,
@@ -1186,6 +1190,158 @@ class MorningBriefService:
         stop = {"the", "a", "an", "to", "of", "and", "or", "for", "on", "in", "with", "as", "at", "is"}
         tokens = [token for token in text.split() if token not in stop]
         return " ".join(tokens[:12])
+
+    def _news_cluster_tokens(self, title: str) -> set[str]:
+        text = re.sub(r"[^a-z0-9 ]+", " ", str(title or "").lower())
+        stop = {
+            "the", "a", "an", "to", "of", "and", "or", "for", "on", "in", "with",
+            "as", "at", "is", "are", "be", "by", "from", "after", "before", "amid",
+            "says", "said", "report", "reports", "latest", "live", "update", "updates",
+            "stock", "stocks", "market", "markets", "shares",
+        }
+        return {token for token in text.split() if len(token) >= 3 and token not in stop}
+
+    def _same_news_event(self, left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+        if str(left.get("event_type") or "") != str(right.get("event_type") or ""):
+            return False
+        left_tickers = set(left.get("related_tickers") or ([left.get("ticker")] if left.get("ticker") else []))
+        right_tickers = set(right.get("related_tickers") or ([right.get("ticker")] if right.get("ticker") else []))
+        if left_tickers and right_tickers and not left_tickers.intersection(right_tickers):
+            return False
+        left_tokens = self._news_cluster_tokens(left.get("title") or "")
+        right_tokens = self._news_cluster_tokens(right.get("title") or "")
+        overlap = left_tokens.intersection(right_tokens)
+        if len(overlap) < 3:
+            return False
+        union = left_tokens.union(right_tokens)
+        jaccard = len(overlap) / max(1, len(union))
+        containment = len(overlap) / max(1, min(len(left_tokens), len(right_tokens)))
+        return jaccard >= 0.34 or containment >= 0.58
+
+    def _news_headline_stance(self, title: str) -> str:
+        text = str(title or "").lower()
+        positive = self._contains_news_term(
+            text,
+            ["rises", "surges", "jumps", "beats", "raises guidance", "strong", "approved", "deal reached"],
+        )
+        negative = self._contains_news_term(
+            text,
+            ["falls", "drops", "slumps", "misses", "cuts guidance", "weak", "rejected", "delayed", "warning"],
+        )
+        if positive and not negative:
+            return "positive"
+        if negative and not positive:
+            return "negative"
+        return "neutral"
+
+    def _cluster_news_events(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        clusters: List[List[Dict[str, Any]]] = []
+        for item in items:
+            matching = next(
+                (cluster for cluster in clusters if any(self._same_news_event(item, member) for member in cluster)),
+                None,
+            )
+            if matching is None:
+                clusters.append([item])
+            else:
+                matching.append(item)
+
+        merged: List[Dict[str, Any]] = []
+        for cluster in clusters:
+            ranked = sorted(
+                cluster,
+                key=lambda item: (
+                    0 if item.get("source_quality") == "tier_1" else 1,
+                    0 if item.get("source_summary") else 1,
+                    -self._news_relevance_score(item),
+                ),
+            )
+            primary = deepcopy(ranked[0])
+            sources: List[Dict[str, Any]] = []
+            seen_source_keys: set[tuple[str, str]] = set()
+            for report in ranked:
+                publisher = str(report.get("publisher") or "Unbekannt").strip()
+                domain = str(report.get("source_domain") or "").strip()
+                key = (publisher.lower(), domain.lower())
+                if key in seen_source_keys:
+                    continue
+                seen_source_keys.add(key)
+                sources.append(
+                    {
+                        "publisher": publisher,
+                        "domain": domain,
+                        "url": report.get("source_url") or report.get("link"),
+                        "published_at": report.get("published_at"),
+                        "quality": report.get("source_quality"),
+                        "title": report.get("title"),
+                    }
+                )
+
+            publisher_count = len({source["publisher"].lower() for source in sources if source["publisher"]})
+            domain_count = len({source["domain"].lower() for source in sources if source["domain"]})
+            stances = {
+                self._news_headline_stance(report.get("title") or "")
+                for report in ranked
+            } - {"neutral"}
+            agreement = "mixed_headline_signal" if len(stances) > 1 else "consistent_or_neutral"
+            corroboration = "multi_publisher" if publisher_count >= 2 else "single_source"
+            evidence = {
+                **(primary.get("source_evidence") or {}),
+                "corroboration": corroboration,
+                "publisher_count": publisher_count,
+                "domain_count": domain_count,
+                "source_agreement": agreement,
+                "independence_basis": "distinct_publishers" if publisher_count >= 2 else "single_publisher",
+                "editorial_independence_verified": False,
+                "syndication_checked": False,
+            }
+            intelligence = {**(primary.get("news_intelligence") or {})}
+            score = int(primary.get("importance_score") or intelligence.get("importance_score") or 0)
+            if publisher_count >= 2 and agreement == "consistent_or_neutral":
+                score = min(25, score + 2)
+                if intelligence.get("confidence") in {"niedrig", "mittel"}:
+                    intelligence["confidence"] = "mittel"
+                intelligence["precision_note"] = (
+                    f"{intelligence.get('precision_note', '')} Das Ereignis wird von {publisher_count} "
+                    "verschiedenen Publishern berichtet; redaktionelle Unabhängigkeit/Syndizierung ist technisch nicht verifiziert."
+                ).strip()
+            elif agreement == "mixed_headline_signal":
+                intelligence["confidence"] = "offen"
+                intelligence["assessment"] = (
+                    "Mehrere ähnliche Meldungen zeigen unterschiedliche Richtungssignale. "
+                    "Vor einem Trade die Quellen und Marktreaktion gegeneinander prüfen."
+                )
+                intelligence["precision_note"] = (
+                    f"{intelligence.get('precision_note', '')} Möglicher Widerspruch zwischen den Headlines erkannt."
+                ).strip()
+            intelligence["importance_score"] = score
+            primary_title = str(primary.get("title") or "")
+            personal_finance = self._contains_news_term(
+                primary_title,
+                [
+                    "retire", "retirees", "inherit", "inherited", "estate", "adviser",
+                    "advisor", "401", "credit card", "mortgage", "personal finance", "student loan",
+                ],
+            )
+            important_eligible = bool(
+                primary.get("source_quality") == "tier_1"
+                and (primary.get("source_url") or primary.get("link"))
+                and primary.get("published_at")
+                and not personal_finance
+            )
+            is_important = bool(important_eligible and score >= 12)
+            intelligence["is_important"] = is_important
+            primary.update(
+                {
+                    "corroborating_sources": sources,
+                    "source_evidence": evidence,
+                    "importance_score": score,
+                    "is_important": is_important,
+                    "news_intelligence": intelligence,
+                }
+            )
+            merged.append(primary)
+        return merged
 
     def _clean_news_summary(self, value: Any) -> str:
         text = unescape(str(value or ""))

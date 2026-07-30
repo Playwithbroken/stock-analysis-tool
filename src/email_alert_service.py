@@ -2949,6 +2949,17 @@ class EmailAlertService:
                 source_meta += f" · {self._tg_esc(item.get('source_domain'))}"
             source_meta += f" · Vertrauen {self._tg_esc(intelligence.get('confidence') or 'offen')}"
             lines2.append(source_meta)
+            evidence = item.get("source_evidence") or {}
+            publisher_count = int(evidence.get("publisher_count") or 1)
+            if publisher_count >= 2:
+                lines2.append(
+                    f"<b>Quellenabgleich:</b> {publisher_count} verschiedene Publisher berichten ähnlich "
+                    "(Unabhängigkeit/Syndizierung technisch nicht verifiziert)."
+                )
+            else:
+                lines2.append("<b>Quellenabgleich:</b> Einzelquelle – noch nicht mehrfach berichtet.")
+            if evidence.get("source_agreement") == "mixed_headline_signal":
+                lines2.append("<b>⚠ Widerspruch:</b> Ähnliche Headlines zeigen unterschiedliche Richtungssignale.")
             fact = self._tg_esc(str(intelligence.get("fact_summary") or "")[:320])
             meaning = self._tg_esc(str(intelligence.get("meaning") or "")[:260])
             if fact:

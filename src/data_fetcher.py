@@ -465,12 +465,20 @@ class DataFetcher:
                             published_at = ""
                     elif isinstance(raw_timestamp, str):
                         published_at = raw_timestamp
+                    summary = (
+                        content.get("summary")
+                        or content.get("description")
+                        or item.get("summary")
+                        or item.get("description")
+                        or ""
+                    )
                     processed_news.append({
                         "title": title,
                         "publisher": publisher,
                         "link": link,
                         "timestamp": published_at,
                         "published_at": published_at,
+                        "summary": str(summary).strip(),
                     })
                 return processed_news
             return []

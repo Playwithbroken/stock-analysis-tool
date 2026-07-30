@@ -8,6 +8,7 @@ market data, best-effort event classification, and watchlist-aware calendars.
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+from html import unescape
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
@@ -69,7 +70,7 @@ class MorningBriefService:
         "NVDA": ["nvidia", "geforce", "rtx", "blackwell", "gpu", "graphics card", "ai chip"],
         "AAPL": ["apple", "iphone", "ipad", "macbook", "vision pro", "ios"],
         "TTWO": ["take-two", "take two", "rockstar", "gta", "grand theft auto", "gta 6", "gta vi"],
-        "BMW.DE": ["bmw", "mini cooper", "rolls-royce", "neue klasse"],
+        "BMW.DE": ["bmw", "mini cooper", "rolls-royce motor cars", "neue klasse"],
         "TSLA": ["tesla", "model y", "model 3", "cybertruck", "robotaxi"],
         "MSFT": ["microsoft", "xbox", "copilot", "windows", "azure"],
         "AMZN": ["amazon", "aws", "kindle", "alexa", "anthropic"],
@@ -528,7 +529,12 @@ class MorningBriefService:
                 "allowed_domains": sorted(self.ALLOWED_DOMAINS),
                 "excluded_sources": sorted(self.EXCLUDED_SOURCE_TERMS),
                 "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
-                "note": "Top News zeigt nur priorisierte serioese Quellen. Social/X und Reddit laufen separat ueber Social und Crowd Radar, nicht im Trusted-News-Block.",
+                "note": (
+                    "Top News benötigt einen klickbaren Bericht einer freigegebenen Quelle. "
+                    "Als wichtig markiert werden nur Tier-1-Berichte mit Zeitstempel und hoher Relevanz. "
+                    "Faktenbasis und Analyse sind getrennt; ein einzelner Bericht gilt nicht als unabhängig bestätigt. "
+                    "Social/X und Reddit bleiben außerhalb des Trusted-News-Blocks."
+                ),
             },
             "event_layer": event_layer,
             "event_pings": event_pings,
@@ -687,7 +693,10 @@ class MorningBriefService:
                 "allowed_domains": sorted(self.ALLOWED_DOMAINS),
                 "excluded_sources": sorted(self.EXCLUDED_SOURCE_TERMS),
                 "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
-                "note": "Fast brief mode: trusted sources prioritised, deep social layers deferred.",
+                "note": (
+                    "Fast Mode: klickbare Trusted-News-Berichte werden priorisiert; wichtig erfordert Tier 1, "
+                    "Zeitstempel und hohe Relevanz. Faktenbasis und Analyse bleiben getrennt; tiefe Social-Layer folgen später."
+                ),
             },
             "event_layer": event_layer,
             "event_pings": event_pings,
@@ -1038,7 +1047,10 @@ class MorningBriefService:
                         age_hours = None
                         published_at = None
                     seen_titles.add(title)
-                    text = title.lower()
+                    source_summary = self._clean_news_summary(
+                        entry.get("summary") or entry.get("description")
+                    )
+                    text = f"{title} {link}".lower()
                     source_meta = self._source_meta(feed_publisher, link)
                     classification = self._classify_news_signal(text)
                     product_catalyst = self._classify_product_catalyst(text)
@@ -1046,20 +1058,22 @@ class MorningBriefService:
                         continue
                     if self._is_high_risk_unverified_headline(title, source_meta):
                         continue
-                    # Try to associate with a known ticker
-                    ticker = None
-                    for t in self.NEWS_TICKERS:
-                        if t.lower() in text:
-                            ticker = t
-                            break
-                    if not ticker and product_catalyst:
+                    related_tickers = [
+                        t for t in self.NEWS_TICKERS if self._contains_news_term(text, [t])
+                    ]
+                    ticker = related_tickers[0] if len(related_tickers) == 1 else None
+                    if not ticker and not related_tickers and product_catalyst:
                         ticker = product_catalyst.get("ticker")
-                    items.append(
-                        {
+                        if ticker and ticker not in related_tickers:
+                            related_tickers.append(ticker)
+                    news_item = {
                             "ticker": ticker,
+                            "related_tickers": related_tickers,
                             "title": title,
                             "publisher": feed_publisher,
                             "link": link,
+                            "source_url": link,
+                            "source_summary": source_summary,
                             "source_domain": source_meta["domain"],
                             "source_type": source_meta["source_type"],
                             "source_quality": source_meta["quality"],
@@ -1072,8 +1086,8 @@ class MorningBriefService:
                             "severity": classification["severity"],
                             "product_catalyst": product_catalyst,
                             "source": "rss",
-                        }
-                    )
+                    }
+                    items.append(self._enrich_news_item(news_item))
             except Exception:
                 continue
         return items
@@ -1108,9 +1122,10 @@ class MorningBriefService:
                 identity = self._news_identity(title)
                 if not title or identity in seen_titles:
                     continue
-                text = title.lower()
                 publisher = item.get("publisher") or ""
                 link = item.get("link")
+                source_summary = self._clean_news_summary(item.get("summary"))
+                text = f"{title} {link or ''}".lower()
                 source_meta = self._source_meta(publisher, link)
                 classification = self._classify_news_signal(text)
                 product_catalyst = self._classify_product_catalyst(text)
@@ -1122,12 +1137,14 @@ class MorningBriefService:
                 if age_hours is not None and age_hours > 30:
                     continue
                 seen_titles.add(identity)
-                items.append(
-                    {
+                news_item = {
                         "ticker": ticker,
+                        "related_tickers": [ticker],
                         "title": title,
                         "publisher": publisher,
                         "link": link,
+                        "source_url": link,
+                        "source_summary": source_summary,
                         "source_domain": source_meta["domain"],
                         "source_type": source_meta["source_type"],
                         "source_quality": source_meta["quality"],
@@ -1139,15 +1156,22 @@ class MorningBriefService:
                         "event_type": classification["event_type"],
                         "severity": classification["severity"],
                         "product_catalyst": product_catalyst,
-                    }
-                )
+                }
+                items.append(self._enrich_news_item(news_item))
 
         trusted_items = [
             item for item in items
-            if item.get("is_trusted_source") and self._news_relevance_score(item) > 0
+            if (
+                item.get("is_trusted_source")
+                and item.get("source_url")
+                and (item.get("source_evidence") or {}).get("link_verified")
+                and self._news_relevance_score(item) > 0
+            )
         ]
         trusted_items.sort(
             key=lambda item: (
+                0 if item.get("is_important") else 1,
+                -int(item.get("importance_score") or 0),
                 -self._news_relevance_score(item),
                 0 if item.get("source_quality") == "tier_1" else 1,
                 0 if item["impact"] == "high" else 1 if item["impact"] == "medium" else 2,
@@ -1162,6 +1186,227 @@ class MorningBriefService:
         stop = {"the", "a", "an", "to", "of", "and", "or", "for", "on", "in", "with", "as", "at", "is"}
         tokens = [token for token in text.split() if token not in stop]
         return " ".join(tokens[:12])
+
+    def _clean_news_summary(self, value: Any) -> str:
+        text = unescape(str(value or ""))
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:700]
+
+    def _enrich_news_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        intelligence = self._build_news_intelligence(item)
+        source_url = str(item.get("source_url") or item.get("link") or "").strip()
+        source_domain = str(item.get("source_domain") or self._extract_domain(source_url))
+        source_quality = str(item.get("source_quality") or "unverified")
+        published_at = item.get("published_at")
+        source_summary = str(item.get("source_summary") or "").strip()
+        evidence = {
+            "publisher": item.get("publisher") or "Unbekannt",
+            "domain": source_domain,
+            "url": source_url,
+            "published_at": published_at,
+            "quality": source_quality,
+            "link_verified": bool(source_url and source_domain),
+            "reporting_basis": "publisher_summary" if source_summary else "headline_only",
+            "corroboration": "single_source",
+            "original_document_verified": False,
+        }
+        return {
+            **item,
+            "source_url": source_url,
+            "source_evidence": evidence,
+            "importance_score": intelligence["importance_score"],
+            "is_important": intelligence["is_important"],
+            "news_intelligence": intelligence,
+        }
+
+    def _build_news_intelligence(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        event_type = str(item.get("event_type") or "macro").lower()
+        impact = str(item.get("impact") or "low").lower()
+        severity = str(item.get("severity") or "normal").lower()
+        source_quality = str(item.get("source_quality") or "unverified").lower()
+        source_url = str(item.get("source_url") or item.get("link") or "").strip()
+        source_summary = self._clean_news_summary(item.get("source_summary"))
+        title = str(item.get("title") or "").strip()
+        age_hours = item.get("age_hours")
+        published_at = item.get("published_at")
+
+        profiles: Dict[str, Dict[str, Any]] = {
+            "central_bank": {
+                "meaning": "Die Meldung kann Zinserwartungen und damit Bewertungsmultiplikatoren neu preisen.",
+                "channels": ["Staatsanleiherenditen", "US-Dollar", "Index-Futures", "Growth vs. Value"],
+                "bull": "Fallende Renditen und ein schwächerer Dollar bestätigen eine risk-on Interpretation.",
+                "bear": "Steigende Renditen und ein stärkerer Dollar belasten besonders zinssensitive Wachstumswerte.",
+                "confirm": ["Richtung der 2Y-/10Y-Renditen", "DXY-Reaktion", "Bestätigung durch SPY/QQQ nach Eröffnung"],
+                "invalidate": "Renditen und Dollar widersprechen der ersten Aktienmarktreaktion.",
+                "bias": "reaktionsabhängig",
+                "horizon": "Minuten bis 3 Handelstage",
+            },
+            "macro_data": {
+                "meaning": "Entscheidend ist die Abweichung zur Markterwartung, nicht die absolute Zahl allein.",
+                "channels": ["Zinserwartungen", "US-Dollar", "Index-Futures", "zyklische Sektoren"],
+                "bull": "Daten stützen Wachstum, ohne neue Inflations- oder Zinsangst auszulösen.",
+                "bear": "Inflations-/Zinsdruck oder deutliche Wachstumsschwäche dominieren die Reaktion.",
+                "confirm": ["Konsensabweichung prüfen", "2Y-Rendite und DXY beobachten", "Marktbreite nach Eröffnung"],
+                "invalidate": "Die ersten Zins- und Indexbewegungen werden innerhalb der ersten Stunde vollständig zurückgenommen.",
+                "bias": "reaktionsabhängig",
+                "horizon": "Minuten bis 2 Handelstage",
+            },
+            "conflict": {
+                "meaning": "Geopolitisches Risiko wirkt primär über Energie, Lieferketten, Inflation und Risikoaufschläge.",
+                "channels": ["Öl/Gas", "Gold", "Volatilität", "Transport und Defense"],
+                "bull": "Deeskalation oder begrenzte wirtschaftliche Übertragung lässt Risikoaufschläge wieder fallen.",
+                "bear": "Ausweitung auf Versorgung, Schifffahrt oder Sanktionen verstärkt den risk-off Impuls.",
+                "confirm": ["Brent/WTI und Gold", "VIX und Index-Futures", "offizielle Folgeerklärungen"],
+                "invalidate": "Energie und Volatilität bestätigen die Schlagzeile nicht.",
+                "bias": "Volatilität / möglicher risk-off Impuls",
+                "horizon": "Intraday bis mehrere Wochen",
+            },
+            "policy": {
+                "meaning": "Politikmeldungen werden handelbar, wenn konkrete Umsetzung, Umfang und betroffene Sektoren feststehen.",
+                "channels": ["betroffene Branchen", "Währungen", "Inflationserwartungen", "Lieferketten"],
+                "bull": "Umsetzung fällt milder aus als eingepreist oder begünstigt klar identifizierbare Sektoren.",
+                "bear": "Konkrete Zölle, Sanktionen oder Regulierung erhöhen Kosten und Unsicherheit.",
+                "confirm": ["Primärdokument/Behördenstatement", "Sektorrelative Stärke", "Währungs- und Renditereaktion"],
+                "invalidate": "Die Meldung bleibt unverbindliche Rhetorik ohne Termin, Umfang oder Marktbestätigung.",
+                "bias": "erst nach Umsetzungsdetails",
+                "horizon": "Intraday bis mehrere Monate",
+            },
+            "energy": {
+                "meaning": "Die Meldung betrifft Energiepreise und kann über Inflation auf Renditen und Aktienbewertungen wirken.",
+                "channels": ["Brent/WTI", "Energieaktien", "Inflationserwartungen", "Transportkosten"],
+                "bull": "Öl und Energieaktien halten den Impuls mit Volumen.",
+                "bear": "Der Preisschub belastet Konsum/Transport oder fällt nach politischen Gegenmaßnahmen zurück.",
+                "confirm": ["Brent/WTI-Futures", "XLE relativ zu SPY", "Volumen und Terminkurve"],
+                "invalidate": "Öl gibt den Headline-Impuls schnell wieder ab.",
+                "bias": "bedingt energiepositiv",
+                "horizon": "Intraday bis mehrere Wochen",
+            },
+            "earnings": {
+                "meaning": "Für die nachhaltige Kurswirkung zählen Guidance, Margen und Erwartungen stärker als der reine EPS-Schlag.",
+                "channels": ["Einzelaktie", "Peer Group", "Sektor-ETF", "Optionsvolatilität"],
+                "bull": "Guidance und Margenqualität bestätigen den positiven Erstimpuls.",
+                "bear": "Schwache Guidance oder Qualitätsprobleme relativieren einen oberflächlichen Beat.",
+                "confirm": ["Originalbericht/Investor Relations", "Guidance und Margen", "Preis hält Impuls mit Volumen"],
+                "invalidate": "Kurs und Peer Group verwerfen die erste Reaktion.",
+                "bias": "nur mit Fundamentaldetails und Preisbestätigung",
+                "horizon": "After-hours bis 5 Handelstage",
+            },
+            "product_catalyst": {
+                "meaning": "Produktmeldungen beeinflussen Erwartungen erst nachhaltig, wenn Termin, Nachfrage und wirtschaftlicher Beitrag belastbar sind.",
+                "channels": ["Einzelaktie", "Zulieferer", "Analystenschätzungen", "Volumen"],
+                "bull": "Offizielle Bestätigung und Nachfrageindikatoren stützen höhere Umsatz-/Margenerwartungen.",
+                "bear": "Verzögerung, schwache Nachfrage oder fehlende wirtschaftliche Relevanz dominieren.",
+                "confirm": ["Unternehmensquelle", "Termin/Preis/Verfügbarkeit", "Kurs und Volumen"],
+                "invalidate": "Keine offizielle Bestätigung oder kein Preis-Follow-through.",
+                "bias": "Watchlist bis zur Bestätigung",
+                "horizon": "Intraday bis mehrere Monate",
+            },
+            "public_figure": {
+                "meaning": "Eine Aussage ist zunächst Rhetorik; marktbewegend wird sie durch konkrete Maßnahmen oder glaubwürdige Folgequellen.",
+                "channels": ["Index-Futures", "betroffene Sektoren", "Währungen", "Volatilität"],
+                "bull": "Details reduzieren Unsicherheit oder fallen marktfreundlicher aus als befürchtet.",
+                "bear": "Konkrete Maßnahmen erhöhen Kosten, Zinsen oder geopolitische Risiken.",
+                "confirm": ["vollständiges Statement/Transkript", "offizielle Folgequelle", "Futures-, Rendite- und Sektorreaktion"],
+                "invalidate": "Keine Umsetzung und vollständiger Rücklauf der Marktreaktion.",
+                "bias": "keine Richtung ohne Umsetzung",
+                "horizon": "Minuten bis mehrere Wochen",
+            },
+            "ipo": {
+                "meaning": "IPO-Meldungen zeigen Risikoappetit, sind aber ohne Bewertung, Free Float und Nachfrage kein breites Kaufsignal.",
+                "channels": ["IPO-Aktie", "vergleichbare Unternehmen", "Growth-Sentiment", "Volatilität"],
+                "bull": "Solide Nachfrage bei vertretbarer Bewertung und stabilem Handel nach dem Debüt.",
+                "bear": "Aggressive Bewertung, kleiner Free Float oder schwacher Sekundärmarkt.",
+                "confirm": ["Prospekt/Regulatory Filing", "Preisspanne und Bewertung", "Volumen nach Handelsstart"],
+                "invalidate": "Debüt kann Preisniveau trotz hoher Aufmerksamkeit nicht halten.",
+                "bias": "beobachten, nicht der Eröffnung hinterherlaufen",
+                "horizon": "Debüttag bis mehrere Wochen",
+            },
+        }
+        profile = profiles.get(
+            event_type,
+            {
+                "meaning": "Die Schlagzeile ist ein Kontextsignal; erst Marktreaktion und belastbare Details machen sie handelbar.",
+                "channels": ["betroffener Basiswert", "Sektor", "Index-Futures", "Volumen"],
+                "bull": "Positive Details werden durch relative Stärke und Volumen bestätigt.",
+                "bear": "Negative Details oder fehlende Bestätigung dominieren.",
+                "confirm": ["Originalquelle öffnen", "betroffenen Markt prüfen", "Preis und Volumen bestätigen lassen"],
+                "invalidate": "Keine Folgequelle und kein nachhaltiger Preisimpuls.",
+                "bias": "neutral bis bestätigt",
+                "horizon": "Intraday bis 3 Handelstage",
+            },
+        )
+
+        relevance = self._news_relevance_score(item)
+        importance_score = relevance
+        importance_score += 3 if impact == "high" else 1 if impact == "medium" else 0
+        importance_score += 2 if severity == "critical" else 1 if severity == "elevated" else 0
+        importance_score += 2 if source_quality == "tier_1" else 0
+        importance_score += 1 if source_url else 0
+        importance_score += 1 if published_at else 0
+        if isinstance(age_hours, (int, float)):
+            importance_score += 1 if age_hours <= 6 else 0
+            importance_score -= 2 if age_hours > 24 else 0
+        importance_score = max(0, min(25, int(importance_score)))
+        is_personal_finance = self._contains_news_term(
+            title,
+            [
+                "retire",
+                "retirees",
+                "inherit",
+                "inherited",
+                "estate",
+                "adviser",
+                "advisor",
+                "401",
+                "credit card",
+                "mortgage",
+                "personal finance",
+                "student loan",
+            ],
+        )
+        is_important = bool(
+            importance_score >= 12
+            and source_quality == "tier_1"
+            and source_url
+            and published_at
+            and not is_personal_finance
+        )
+        confidence = (
+            "hoch"
+            if source_quality == "tier_1" and source_url and published_at and isinstance(age_hours, (int, float)) and age_hours <= 12
+            else "mittel"
+            if source_quality in {"tier_1", "tier_2"} and source_url
+            else "niedrig"
+        )
+        fact_basis = "publisher_summary" if source_summary else "headline_only"
+        fact_summary = source_summary or title
+        assessment = (
+            "Hohe Relevanz: sofort auf Marktbestätigung und Folgedetails prüfen."
+            if is_important
+            else "Relevantes Kontextsignal, aber noch kein eigenständiges Trade-Signal."
+        )
+        return {
+            "fact_summary": fact_summary[:700],
+            "fact_basis": fact_basis,
+            "meaning": profile["meaning"],
+            "market_channels": profile["channels"],
+            "bull_case": profile["bull"],
+            "bear_case": profile["bear"],
+            "confirmation": profile["confirm"],
+            "invalidation": profile["invalidate"],
+            "directional_bias": profile["bias"],
+            "execution_horizon": profile["horizon"],
+            "assessment": assessment,
+            "confidence": confidence,
+            "importance_score": importance_score,
+            "is_important": is_important,
+            "precision_note": (
+                "Faktenbasis ist die Publisher-Zusammenfassung; Einordnung und Szenarien sind Analyse."
+                if fact_basis == "publisher_summary"
+                else "Faktenbasis ist nur die Überschrift; Details vor einer Trading-Entscheidung in der Quelle prüfen."
+            ),
+        }
 
     def _news_age(self, value: Any) -> tuple[float | None, str | None]:
         if not value:
@@ -1207,8 +1452,8 @@ class MorningBriefService:
             score += 3
         if event_type in {"conflict", "central_bank", "energy", "policy", "public_figure", "ipo", "macro_data", "earnings", "product_catalyst"}:
             score += 4
-        if any(term in title for term in [
-            "fed", "rate", "yield", "inflation", "cpi", "ppi", "jobs", "payrolls",
+        if self._contains_news_term(title, [
+            "fed", "rate", "yield", "inflation", "cpi", "ppi", "gdp", "jobs", "payrolls",
             "earnings", "guidance", "upgrade", "downgrade", "oil", "opec", "war",
             "tariff", "sanction", "market", "stock", "futures", "nasdaq", "s&p",
             "dow", "dollar", "gold", "bitcoin", "crypto", "launch", "unveil", "delay",
@@ -1220,8 +1465,8 @@ class MorningBriefService:
             score += 5
         if self._is_ipo_headline(title):
             score += 5
-        if any(term in title for term in [
-            "retire", "retirees", "inherit", "estate", "adviser", "advisor",
+        if self._contains_news_term(title, [
+            "retire", "retirees", "retirement", "inherit", "inherited", "estate", "adviser", "advisor",
             "irs", "tax", "401", "credit card", "mortgage", "personal finance",
             "student loan",
         ]):
@@ -3959,6 +4204,17 @@ class MorningBriefService:
             return None
         return change_1w / 5
 
+    def _contains_news_term(self, text: str, terms: Sequence[str]) -> bool:
+        normalized = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+        for term in terms:
+            normalized_term = re.sub(r"[^a-z0-9]+", " ", str(term or "").lower()).strip()
+            if normalized_term and re.search(
+                rf"(?<![a-z0-9]){re.escape(normalized_term)}(?![a-z0-9])",
+                normalized,
+            ):
+                return True
+        return False
+
     def _classify_news_signal(self, text: str) -> Dict[str, str]:
         event_type = "macro"
         impact = "low"
@@ -3972,35 +4228,35 @@ class MorningBriefService:
             event_type = "ipo"
             impact = "high"
             severity = "elevated"
-        elif any(term in text for term in ["war", "missile", "attack", "israel", "iran", "russia", "ukraine", "lebanon", "beirut"]):
+        elif self._contains_news_term(text, ["war", "missile", "attack", "israel", "iran", "russia", "ukraine", "lebanon", "beirut"]):
             event_type = "conflict"
             impact = "high"
             severity = "critical"
-        elif any(term in text for term in ["fed", "ecb", "boj", "central bank", "rate", "yield"]):
+        elif self._contains_news_term(text, ["fed", "ecb", "boj", "central bank", "rate", "yield"]):
             event_type = "central_bank"
             impact = "high"
             severity = "elevated"
-        elif any(term in text for term in ["oil", "opec", "gas", "crude"]):
+        elif self._contains_news_term(text, ["oil", "opec", "gas", "crude"]):
             event_type = "energy"
             impact = "medium"
             severity = "elevated"
-        elif any(term in text for term in ["election", "vote", "ballot", "president", "prime minister", "parliament", "coalition", "campaign"]):
+        elif self._contains_news_term(text, ["election", "vote", "ballot", "president", "prime minister", "parliament", "coalition", "campaign"]):
             event_type = "election"
             impact = "high"
             severity = "elevated"
-        elif any(term in text for term in ["earthquake", "wildfire", "flood", "storm", "hurricane", "typhoon", "tsunami", "drought", "disaster"]):
+        elif self._contains_news_term(text, ["earthquake", "wildfire", "flood", "storm", "hurricane", "typhoon", "tsunami", "drought", "disaster"]):
             event_type = "disaster"
             impact = "high"
             severity = "critical"
-        elif any(term in text for term in ["tariff", "sanction", "trade", "regulation", "policy"]):
+        elif self._contains_news_term(text, ["tariff", "sanction", "trade war", "trade policy", "regulation", "policy"]):
             event_type = "policy"
             impact = "high"
             severity = "elevated"
-        elif any(term in text for term in ["inflation", "cpi", "ppi", "recession", "payrolls", "jobs"]):
+        elif self._contains_news_term(text, ["inflation", "cpi", "ppi", "gdp", "recession", "payrolls", "jobs"]):
             event_type = "macro_data"
             impact = "high"
             severity = "elevated"
-        elif any(term in text for term in ["earnings", "guidance", "upgrade", "downgrade"]):
+        elif self._contains_news_term(text, ["earnings", "guidance", "upgrade", "downgrade"]):
             event_type = "earnings"
             impact = "medium"
             severity = "normal"
@@ -4008,7 +4264,7 @@ class MorningBriefService:
             product = self._classify_product_catalyst(text) or {}
             event_type = "product_catalyst"
             impact = "medium"
-            severity = "elevated" if any(term in text for term in ["delay", "delayed", "postpone", "postponed", "launch", "unveil", "release"]) else "normal"
+            severity = "elevated" if self._contains_news_term(text, ["delay", "delayed", "postpone", "postponed", "launch", "unveil", "release"]) else "normal"
             product_region = {"BMW.DE": "europe"}.get(str(product.get("ticker") or ""))
             if product_region:
                 return {
@@ -4017,7 +4273,7 @@ class MorningBriefService:
                     "event_type": event_type,
                     "severity": severity,
                 }
-        elif any(term in text for term in ["china", "japan", "hong kong", "taiwan"]):
+        elif self._contains_news_term(text, ["china", "japan", "hong kong", "taiwan"]):
             event_type = "regional_macro"
             impact = "medium"
             severity = "normal"
@@ -4033,17 +4289,17 @@ class MorningBriefService:
         normalized = str(text or "").lower()
         if not normalized:
             return False
-        has_person = any(term in normalized for term in self.MARKET_MOVING_PERSON_TERMS)
-        has_statement = any(term in normalized for term in self.MARKET_MOVING_STATEMENT_TERMS)
+        has_person = self._contains_news_term(normalized, self.MARKET_MOVING_PERSON_TERMS)
+        has_statement = self._contains_news_term(normalized, self.MARKET_MOVING_STATEMENT_TERMS)
         return has_person and has_statement
 
     def _is_ipo_headline(self, text: str) -> bool:
         normalized = str(text or "").lower()
         if not normalized:
             return False
-        if not any(term in normalized for term in self.IPO_TERMS):
+        if not self._contains_news_term(normalized, self.IPO_TERMS):
             return False
-        return any(term in normalized for term in ["file", "files", "pricing", "prices", "raise", "raises", "valuation", "debut", "listing", "shares", "revenue", "growth"])
+        return self._contains_news_term(normalized, ["file", "files", "pricing", "prices", "raise", "raises", "valuation", "debut", "listing", "shares", "revenue", "growth"])
 
     def _classify_product_catalyst(self, text: str) -> Dict[str, str] | None:
         normalized = (text or "").lower()
@@ -4054,7 +4310,7 @@ class MorningBriefService:
         matched_theme = None
         for ticker, aliases in self.PRODUCT_CATALYST_ALIASES.items():
             for alias in aliases:
-                if alias in normalized:
+                if self._contains_news_term(normalized, [alias]):
                     matched_ticker = ticker
                     matched_theme = alias
                     break
@@ -4065,7 +4321,13 @@ class MorningBriefService:
 
         delay_terms = ["delay", "delayed", "postpone", "postponed", "pushed back", "misses launch", "slips"]
         launch_terms = ["launch", "unveil", "release", "preorder", "new", "next-gen", "upgrade", "ship", "debut"]
-        catalyst_type = "delay" if any(term in normalized for term in delay_terms) else "launch" if any(term in normalized for term in launch_terms) else "product_news"
+        catalyst_type = (
+            "delay"
+            if self._contains_news_term(normalized, delay_terms)
+            else "launch"
+            if self._contains_news_term(normalized, launch_terms)
+            else "product_news"
+        )
         if catalyst_type == "product_news" and matched_theme in {"gpu", "iphone", "gta", "gta 6", "gta vi", "model y", "neue klasse"}:
             catalyst_type = "launch"
 

@@ -2931,9 +2931,54 @@ class EmailAlertService:
             if t and identity and identity not in seen_titles:
                 seen_titles.add(identity)
                 all_news.append(item)
-        for item in all_news[:7]:
+        important_news = [item for item in all_news if item.get("is_important")][:2]
+        important_ids = {self._brief_line_identity(item.get("title") or "") for item in important_news}
+        for item in important_news:
+            intelligence = item.get("news_intelligence") or {}
             title = self._tg_esc(item.get("title") or "")
-            link = (item.get("link") or "").strip()
+            link = (item.get("source_url") or item.get("link") or "").strip()
+            publisher = self._tg_esc(item.get("publisher") or "")
+            ticker = (item.get("ticker") or "").strip()
+            tag = f"<code>{self._tg_esc(ticker)}</code> " if ticker else ""
+            score = int(item.get("importance_score") or 0)
+            headline = f"🔴 <b>WICHTIG {score}/25</b> {tag}"
+            headline += f"<a href=\"{link}\">{title}</a>" if link else title
+            lines2.append(headline)
+            source_meta = f"Quelle: {publisher or 'unbekannt'}"
+            if item.get("source_domain"):
+                source_meta += f" · {self._tg_esc(item.get('source_domain'))}"
+            source_meta += f" · Vertrauen {self._tg_esc(intelligence.get('confidence') or 'offen')}"
+            lines2.append(source_meta)
+            fact = self._tg_esc(str(intelligence.get("fact_summary") or "")[:320])
+            meaning = self._tg_esc(str(intelligence.get("meaning") or "")[:260])
+            if fact:
+                basis = "Publisher-Zusammenfassung" if intelligence.get("fact_basis") == "publisher_summary" else "nur Überschrift"
+                lines2.append(f"<b>Fakt ({basis}):</b> {fact}")
+            if meaning:
+                lines2.append(f"<b>Bedeutung:</b> {meaning}")
+            lines2.append(
+                f"<b>Einschätzung:</b> {self._tg_esc(intelligence.get('assessment') or '')} "
+                f"Bias {self._tg_esc(intelligence.get('directional_bias') or 'offen')} · "
+                f"{self._tg_esc(intelligence.get('execution_horizon') or '')}"
+            )
+            confirmation = intelligence.get("confirmation") if isinstance(intelligence.get("confirmation"), list) else []
+            if confirmation:
+                lines2.append(f"<b>Bestätigung:</b> {self._tg_esc(' · '.join(confirmation[:2]))}")
+            invalidation = self._tg_esc(str(intelligence.get("invalidation") or "")[:220])
+            if invalidation:
+                lines2.append(f"<b>Invalidierung:</b> {invalidation}")
+            lines2.append("")
+
+        remaining_news = [
+            item
+            for item in all_news
+            if self._brief_line_identity(item.get("title") or "") not in important_ids
+        ]
+        if remaining_news:
+            lines2.append("<b>Weitere bestätigte Meldungen</b>")
+        for item in remaining_news[:5]:
+            title = self._tg_esc(item.get("title") or "")
+            link = (item.get("source_url") or item.get("link") or "").strip()
             publisher = self._tg_esc(item.get("publisher") or "")
             ticker = (item.get("ticker") or "").strip()
             tag = f"<code>{self._tg_esc(ticker)}</code> " if ticker else ""
@@ -2944,6 +2989,9 @@ class EmailAlertService:
 
         if not all_news:
             lines2.append("<i>Keine aktuellen Meldungen.</i>")
+
+        self._tg_post(token, chat, "\n".join(lines2))
+        lines2 = ["📡 <b>Weitere Trading-Radare</b>"]
 
         product_catalysts = brief.get("product_catalysts") or []
         if product_catalysts:

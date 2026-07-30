@@ -1351,22 +1351,28 @@ export default function MorningBriefPanel({
         <div className="surface-panel rounded-[2rem] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Top News
+              News Intelligence
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              Trusted only
+              Quellengeprüft
             </div>
           </div>
           <div className="mt-4 space-y-3">
             {(regionNews.length ? regionNews : brief.top_news || []).slice(0, 6).map((item: any, index: number) => {
               const forecast = newsForecastMeta(item);
+              const intelligence = item.news_intelligence || {};
+              const evidence = item.source_evidence || {};
+              const relatedTickers = Array.isArray(item.related_tickers)
+                ? item.related_tickers.filter(Boolean).slice(0, 4)
+                : item.ticker
+                  ? [item.ticker]
+                  : [];
               return (
-                <a
+                <article
                   key={`${item.title}-${index}`}
-                  href={item.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group grid gap-3 overflow-hidden rounded-[1.35rem] border border-black/8 bg-white/72 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.055)] transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_22px_48px_rgba(15,23,42,0.09)] sm:grid-cols-[3.25rem_minmax(0,1fr)]"
+                  className={`group grid gap-3 overflow-hidden rounded-[1.35rem] border bg-white/72 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.055)] transition-all hover:bg-white hover:shadow-[0_22px_48px_rgba(15,23,42,0.09)] sm:grid-cols-[3.25rem_minmax(0,1fr)] ${
+                    item.is_important ? "border-red-500/30 ring-1 ring-red-500/10" : "border-black/8"
+                  }`}
                 >
                   <div className="flex items-start gap-3 sm:contents">
                     <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] text-2xl font-black shadow-[0_12px_26px_rgba(15,23,42,0.12)] ${forecast.arrowClass}`}>
@@ -1378,25 +1384,64 @@ export default function MorningBriefPanel({
                           {item.region} / {item.impact}
                         </span>
                         <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${forecast.className}`}>
-                          Prognose {forecast.arrow} {forecast.label}
+                          Modell-Szenario {forecast.arrow} {forecast.label}
                         </span>
+                        {item.is_important ? (
+                          <span className="rounded-full border border-red-500/25 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+                            Wichtig {item.importance_score}/25
+                          </span>
+                        ) : null}
                       </div>
-                      <div className="mt-2 text-sm font-black leading-5 text-slate-950">
+                      <a
+                        href={item.source_url || item.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 block text-sm font-black leading-5 text-slate-950 underline-offset-4 hover:underline"
+                      >
                         {item.title}
-                      </div>
-                      {item.ticker ? (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            onAnalyze(item.ticker);
-                          }}
-                          className="mt-3 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white"
-                        >
-                          {item.ticker} analysieren
-                        </button>
+                      </a>
+                      {relatedTickers.length ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {relatedTickers.map((ticker: string) => (
+                            <button
+                              key={ticker}
+                              onClick={() => onAnalyze(ticker)}
+                              className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white"
+                            >
+                              {ticker} analysieren
+                            </button>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
                   </div>
+
+                  {intelligence.fact_summary ? (
+                    <div className="rounded-[1rem] border border-sky-500/15 bg-sky-50/70 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
+                        Offengelegte Faktenbasis · {intelligence.fact_basis === "publisher_summary" ? "Publisher-Zusammenfassung" : "nur Überschrift"}
+                      </div>
+                      <div className="mt-1 font-semibold">{intelligence.fact_summary}</div>
+                    </div>
+                  ) : null}
+
+                  {intelligence.meaning ? (
+                    <div className="rounded-[1rem] border border-violet-500/15 bg-violet-50/60 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">Was bedeutet das?</div>
+                      <div className="mt-1 font-semibold">{intelligence.meaning}</div>
+                      {(intelligence.market_channels || []).length ? (
+                        <div className="mt-2 text-slate-600">
+                          <span className="font-extrabold">Wirkt über:</span>{" "}
+                          {intelligence.market_channels.join(" · ")}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 text-slate-600">
+                        <span className="font-extrabold">Einschätzung:</span> {intelligence.assessment}{" "}
+                        <span className="font-extrabold">Bias:</span> {intelligence.directional_bias}.{" "}
+                        <span className="font-extrabold">Horizont:</span> {intelligence.execution_horizon}.
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className={`rounded-[1rem] border px-3 py-2 sm:col-start-2 ${forecast.className}`}>
                     <div className="flex items-center justify-between gap-3">
@@ -1412,10 +1457,49 @@ export default function MorningBriefPanel({
                     </div>
                   </div>
 
+                  {intelligence.bull_case ? (
+                    <details className="rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs leading-5 text-slate-600 sm:col-start-2">
+                      <summary className="cursor-pointer font-extrabold text-slate-800">Trading-Einordnung und Bestätigung</summary>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-900">
+                          <div className="font-extrabold">Bull Case</div>
+                          <div className="mt-1">{intelligence.bull_case}</div>
+                        </div>
+                        <div className="rounded-lg bg-red-50 p-3 text-red-900">
+                          <div className="font-extrabold">Bear Case</div>
+                          <div className="mt-1">{intelligence.bear_case}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <span className="font-extrabold text-slate-800">Bestätigung:</span>{" "}
+                        {(intelligence.confirmation || []).join(" · ")}
+                      </div>
+                      <div className="mt-2">
+                        <span className="font-extrabold text-slate-800">Invalidierung:</span> {intelligence.invalidation}
+                      </div>
+                      <div className="mt-2 text-[11px] text-slate-500">{intelligence.precision_note}</div>
+                    </details>
+                  ) : null}
+
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 sm:col-start-2">
-                    <span>{item.publisher}</span>
+                    <a
+                      href={item.source_url || item.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-extrabold text-[var(--accent)] underline-offset-4 hover:underline"
+                    >
+                      Quellenbericht öffnen
+                    </a>
+                    <span>{evidence.publisher || item.publisher}</span>
+                    {evidence.domain ? <span>{evidence.domain}</span> : null}
+                    {item.age_hours != null ? (
+                      <span>{item.age_hours < 1 ? "vor < 1 Std." : `vor ${Math.round(item.age_hours)} Std.`}</span>
+                    ) : null}
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       {item.source_quality || "trusted"}
+                    </span>
+                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      Vertrauen {intelligence.confidence || "offen"}
                     </span>
                     {item.event_type ? (
                       <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
@@ -1423,7 +1507,7 @@ export default function MorningBriefPanel({
                       </span>
                     ) : null}
                   </div>
-                </a>
+                </article>
               );
             })}
           </div>

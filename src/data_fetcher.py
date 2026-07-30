@@ -6,7 +6,7 @@ Fetches market data, fundamentals, and news for stock analysis.
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 import requests
 from bs4 import BeautifulSoup
@@ -113,6 +113,7 @@ class DataFetcher:
             return {
                 "current_price": current_price,
                 "currency": self.info.get("currency", "USD"),
+                "change_1d": safe_pct_change(-2),
                 "change_1w": safe_pct_change(-6),
                 "change_1m": safe_pct_change(-22),
                 "change_6m": safe_pct_change(-127),
@@ -128,6 +129,12 @@ class DataFetcher:
     def get_price_data_fast(self) -> Dict[str, Any]:
         """Fast market snapshot without expensive info calls (used for dashboard brief)."""
         try:
+            now = datetime.now()
+            cache_key = f"fast_price_{self.ticker}"
+            if cache_key in DataFetcher._global_cache:
+                value, cached_at = DataFetcher._global_cache[cache_key]
+                if (now - cached_at).total_seconds() < DataFetcher._cache_ttl:
+                    return value
             hist = self.stock.history(period="6mo", interval="1d", auto_adjust=False)
             if hist.empty:
                 return {"error": "No price data available"}
@@ -142,9 +149,10 @@ class DataFetcher:
                     return 0.0
                 return ((current_price / start_val) - 1) * 100
 
-            return {
+            value = {
                 "current_price": current_price,
                 "currency": "USD",
+                "change_1d": safe_pct_change(-2),
                 "change_1w": safe_pct_change(-6),
                 "change_1m": safe_pct_change(-22),
                 "change_6m": safe_pct_change(0),
@@ -153,6 +161,68 @@ class DataFetcher:
                 "low_52w": None,
                 "from_52w_high": None,
                 "from_52w_low": None,
+            }
+            DataFetcher._global_cache[cache_key] = (value, now)
+            return value
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_intraday_reaction(self, published_at: Any) -> Dict[str, Any]:
+        """Measure the move from the last 15m bar before a publication to the latest bar."""
+        try:
+            event_time = pd.Timestamp(published_at)
+            if event_time.tzinfo is None:
+                event_time = event_time.tz_localize(timezone.utc)
+            event_time = event_time.tz_convert(timezone.utc)
+
+            now = datetime.now()
+            cache_key = f"intraday_5d_15m_{self.ticker}"
+            if cache_key in DataFetcher._global_cache:
+                hist, cached_at = DataFetcher._global_cache[cache_key]
+                if (now - cached_at).total_seconds() >= DataFetcher._cache_ttl:
+                    hist = None
+            else:
+                hist = None
+            if hist is None:
+                hist = self.stock.history(
+                    period="5d",
+                    interval="15m",
+                    auto_adjust=False,
+                    prepost=True,
+                )
+                DataFetcher._global_cache[cache_key] = (hist, now)
+            if hist is None or hist.empty or "Close" not in hist:
+                return {"error": "No intraday price data available"}
+
+            closes = hist["Close"].dropna().copy()
+            if closes.empty:
+                return {"error": "No intraday close data available"}
+            if closes.index.tz is None:
+                closes.index = closes.index.tz_localize(timezone.utc)
+            else:
+                closes.index = closes.index.tz_convert(timezone.utc)
+
+            before = closes[closes.index < event_time]
+            after = closes[closes.index >= event_time]
+            if before.empty or after.empty:
+                return {"error": "Publication is outside the available intraday window"}
+            baseline_time = before.index[-1]
+            observed_time = after.index[-1]
+            baseline_price = float(before.iloc[-1])
+            observed_price = float(after.iloc[-1])
+            if baseline_price == 0:
+                return {"error": "Invalid baseline price"}
+            return {
+                "ticker": self.ticker,
+                "change_since_publication": ((observed_price / baseline_price) - 1.0) * 100.0,
+                "baseline_price": baseline_price,
+                "observed_price": observed_price,
+                "baseline_at": baseline_time.isoformat(),
+                "observed_at": observed_time.isoformat(),
+                "published_at": event_time.isoformat(),
+                "bar_interval": "15m",
+                "measurement_basis": "last_bar_before_publication_to_latest_available_bar",
+                "event_window_aligned": True,
             }
         except Exception as e:
             return {"error": str(e)}

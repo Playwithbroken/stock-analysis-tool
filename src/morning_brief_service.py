@@ -65,6 +65,17 @@ class MorningBriefService:
         "NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "META", "GOOGL",
         "TTWO", "BMW.DE",
     ]
+    NEWS_ENTITY_ALIASES = {
+        "NVDA": ["nvidia"],
+        "AAPL": ["apple"],
+        "MSFT": ["microsoft"],
+        "TSLA": ["tesla"],
+        "AMZN": ["amazon"],
+        "META": ["meta platforms", "meta"],
+        "GOOGL": ["alphabet", "google"],
+        "TTWO": ["take-two", "take two", "rockstar games"],
+        "BMW.DE": ["bmw", "rolls-royce motor cars"],
+    }
     FUNDAMENTAL_EXCLUDED_TICKERS = {"SPY", "QQQ", "GLD", "TLT", "XLE", "XLK", "XLY", "XLV", "XLU", "XLRE", "IWM"}
     PRODUCT_CATALYST_ALIASES = {
         "NVDA": ["nvidia", "geforce", "rtx", "blackwell", "gpu", "graphics card", "ai chip"],
@@ -442,7 +453,10 @@ class MorningBriefService:
         europe = self._collect_region(self.EUROPE, "Europe")
         usa = self._collect_region(self.USA, "USA")
         macro = self._collect_assets(self.MACRO)
-        top_news = self._collect_news(extra_tickers=watchlist_tickers)
+        top_news = self._attach_news_market_confirmation(
+            self._collect_news(extra_tickers=watchlist_tickers),
+            fast=False,
+        )
         crowd_news = self._collect_crowd_news()
         social_news = self._collect_social_news()
 
@@ -619,7 +633,10 @@ class MorningBriefService:
         europe = self._collect_region(self.EUROPE, "Europe", fast=True)
         usa = self._collect_region(self.USA, "USA", fast=True)
         macro = self._collect_assets(self.MACRO, fast=True)
-        top_news = self._collect_news(extra_tickers=watchlist_tickers, fast=True)
+        top_news = self._attach_news_market_confirmation(
+            self._collect_news(extra_tickers=watchlist_tickers, fast=True),
+            fast=True,
+        )
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
         if not event_pings:
@@ -1059,17 +1076,18 @@ class MorningBriefService:
                         continue
                     if self._is_high_risk_unverified_headline(title, source_meta):
                         continue
-                    related_tickers = [
-                        t for t in self.NEWS_TICKERS if self._contains_news_term(text, [t])
-                    ]
+                    related_tickers = self._extract_related_news_tickers(text)
                     ticker = related_tickers[0] if len(related_tickers) == 1 else None
+                    association_basis = "explicit_title_entity" if related_tickers else "none"
                     if not ticker and not related_tickers and product_catalyst:
                         ticker = product_catalyst.get("ticker")
                         if ticker and ticker not in related_tickers:
                             related_tickers.append(ticker)
+                            association_basis = "product_catalyst_alias"
                     news_item = {
                             "ticker": ticker,
                             "related_tickers": related_tickers,
+                            "ticker_association_basis": association_basis,
                             "title": title,
                             "publisher": feed_publisher,
                             "link": link,
@@ -1140,9 +1158,21 @@ class MorningBriefService:
                 if age_hours is not None and age_hours > 30:
                     continue
                 seen_reports.add(report_key)
+                explicit_related_tickers = self._extract_related_news_tickers(text)
+                resolved_ticker = (
+                    explicit_related_tickers[0]
+                    if len(explicit_related_tickers) == 1
+                    else None
+                )
                 news_item = {
-                        "ticker": ticker,
-                        "related_tickers": [ticker],
+                        "ticker": resolved_ticker,
+                        "related_tickers": explicit_related_tickers,
+                        "provider_related_ticker": ticker,
+                        "ticker_association_basis": (
+                            "explicit_title_entity"
+                            if explicit_related_tickers
+                            else "provider_related_feed_only"
+                        ),
                         "title": title,
                         "publisher": publisher,
                         "link": link,
@@ -1191,6 +1221,16 @@ class MorningBriefService:
         tokens = [token for token in text.split() if token not in stop]
         return " ".join(tokens[:12])
 
+    def _extract_related_news_tickers(self, text: str) -> List[str]:
+        related = [
+            ticker for ticker in self.NEWS_TICKERS
+            if self._contains_news_term(text, [ticker])
+        ]
+        for ticker, aliases in self.NEWS_ENTITY_ALIASES.items():
+            if ticker not in related and self._contains_news_term(text, aliases):
+                related.append(ticker)
+        return related
+
     def _news_cluster_tokens(self, title: str) -> set[str]:
         text = re.sub(r"[^a-z0-9 ]+", " ", str(title or "").lower())
         stop = {
@@ -1222,11 +1262,17 @@ class MorningBriefService:
         text = str(title or "").lower()
         positive = self._contains_news_term(
             text,
-            ["rises", "surges", "jumps", "beats", "raises guidance", "strong", "approved", "deal reached"],
+            [
+                "rises", "rising", "surges", "surging", "soars", "soaring", "jumps", "jumping",
+                "beats", "raises guidance", "strong", "approved", "deal reached",
+            ],
         )
         negative = self._contains_news_term(
             text,
-            ["falls", "drops", "slumps", "misses", "cuts guidance", "weak", "rejected", "delayed", "warning"],
+            [
+                "falls", "falling", "drops", "dropping", "slumps", "slumping", "sinks", "sinking",
+                "misses", "cuts guidance", "weak", "rejected", "delayed", "warning",
+            ],
         )
         if positive and not negative:
             return "positive"
@@ -1342,6 +1388,88 @@ class MorningBriefService:
             )
             merged.append(primary)
         return merged
+
+    def _news_benchmark_ticker(self, ticker: str, event_type: str) -> str:
+        normalized = str(ticker or "").upper()
+        if normalized == "BMW.DE":
+            return "^GDAXI"
+        if normalized == "QQQ":
+            return "SPY"
+        if normalized in {"NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "META", "GOOGL", "TTWO"}:
+            return "QQQ"
+        if normalized == "XLE" or event_type == "energy":
+            return "SPY"
+        if normalized in {"GLD", "TLT"}:
+            return "SPY"
+        return "SPY"
+
+    def _attach_news_market_confirmation(
+        self,
+        news: List[Dict[str, Any]],
+        fast: bool = False,
+    ) -> List[Dict[str, Any]]:
+        enriched = deepcopy(news)
+        reaction_limit = 4 if fast else 7
+        measured = 0
+        for item in enriched:
+            if measured >= reaction_limit:
+                break
+            if item.get("ticker_association_basis") == "provider_related_feed_only":
+                continue
+            related = list(dict.fromkeys(item.get("related_tickers") or []))
+            ticker = str(item.get("ticker") or (related[0] if len(related) == 1 else "")).upper()
+            published_at = item.get("published_at")
+            if not ticker or not published_at:
+                continue
+            measured += 1
+            event_type = str(item.get("event_type") or "")
+            benchmark = self._news_benchmark_ticker(ticker, event_type)
+            asset_reaction = DataFetcher(ticker).get_intraday_reaction(published_at)
+            if asset_reaction.get("error"):
+                item["market_confirmation"] = {
+                    "status": "unavailable",
+                    "ticker": ticker,
+                    "benchmark": benchmark,
+                    "reason": asset_reaction.get("error"),
+                    "causality_proven": False,
+                }
+                continue
+            benchmark_reaction = DataFetcher(benchmark).get_intraday_reaction(published_at)
+            asset_move = asset_reaction.get("change_since_publication")
+            benchmark_move = benchmark_reaction.get("change_since_publication")
+            relative_move = (
+                float(asset_move) - float(benchmark_move)
+                if isinstance(asset_move, (int, float)) and isinstance(benchmark_move, (int, float))
+                else None
+            )
+            expected = self._news_headline_stance(item.get("title") or "")
+            threshold = 0.35
+            if expected == "positive" and isinstance(relative_move, (int, float)):
+                status = "confirmed" if relative_move >= threshold else "contradicted" if relative_move <= -threshold else "inconclusive"
+            elif expected == "negative" and isinstance(relative_move, (int, float)):
+                status = "confirmed" if relative_move <= -threshold else "contradicted" if relative_move >= threshold else "inconclusive"
+            else:
+                status = "observed_only"
+            item["market_confirmation"] = {
+                "status": status,
+                "expected_headline_direction": expected,
+                "ticker": ticker,
+                "asset_move_since_publication": asset_move,
+                "benchmark": benchmark,
+                "benchmark_move_since_publication": benchmark_move,
+                "relative_move_since_publication": relative_move,
+                "baseline_at": asset_reaction.get("baseline_at"),
+                "observed_at": asset_reaction.get("observed_at"),
+                "bar_interval": asset_reaction.get("bar_interval"),
+                "measurement_basis": asset_reaction.get("measurement_basis"),
+                "event_window_aligned": asset_reaction.get("event_window_aligned") is True,
+                "causality_proven": False,
+                "precision_note": (
+                    "Gemessene Preisreaktion ab dem letzten 15-Minuten-Kursbalken vor Veröffentlichung. "
+                    "Relative Stärke ist kein Beweis, dass die Meldung die Bewegung verursacht hat."
+                ),
+            }
+        return enriched
 
     def _clean_news_summary(self, value: Any) -> str:
         text = unescape(str(value or ""))
@@ -4355,6 +4483,9 @@ class MorningBriefService:
             return ""
 
     def _estimate_change_1d(self, price_data: Dict[str, Any]) -> float | None:
+        change_1d = price_data.get("change_1d")
+        if isinstance(change_1d, (int, float)):
+            return float(change_1d)
         change_1w = price_data.get("change_1w")
         if change_1w is None:
             return None

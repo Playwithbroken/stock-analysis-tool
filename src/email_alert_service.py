@@ -2960,6 +2960,37 @@ class EmailAlertService:
                 lines2.append("<b>Quellenabgleich:</b> Einzelquelle – noch nicht mehrfach berichtet.")
             if evidence.get("source_agreement") == "mixed_headline_signal":
                 lines2.append("<b>⚠ Widerspruch:</b> Ähnliche Headlines zeigen unterschiedliche Richtungssignale.")
+            market_confirmation = item.get("market_confirmation") or {}
+            confirmation_status = str(market_confirmation.get("status") or "")
+            if confirmation_status:
+                confirmation_labels = {
+                    "confirmed": "BESTÄTIGT",
+                    "contradicted": "WIDERSPRICHT",
+                    "inconclusive": "NOCH UNEINDEUTIG",
+                    "observed_only": "BEOBACHTET",
+                    "unavailable": "NICHT VERFÜGBAR",
+                }
+                reaction_line = (
+                    f"<b>Preisreaktion {confirmation_labels.get(confirmation_status, confirmation_status.upper())}:</b>"
+                )
+                asset_move = market_confirmation.get("asset_move_since_publication")
+                benchmark_move = market_confirmation.get("benchmark_move_since_publication")
+                relative_move = market_confirmation.get("relative_move_since_publication")
+                if isinstance(asset_move, (int, float)):
+                    reaction_line += (
+                        f" {self._tg_esc(market_confirmation.get('ticker') or '')} {float(asset_move):+.2f}%"
+                    )
+                if isinstance(benchmark_move, (int, float)):
+                    reaction_line += (
+                        f" · {self._tg_esc(market_confirmation.get('benchmark') or '')} {float(benchmark_move):+.2f}%"
+                    )
+                if isinstance(relative_move, (int, float)):
+                    reaction_line += f" · relativ {float(relative_move):+.2f}%"
+                lines2.append(reaction_line)
+                if confirmation_status != "unavailable":
+                    lines2.append(
+                        "<i>15m-Fenster ab Veröffentlichung; relative Stärke beweist keine Kausalität.</i>"
+                    )
             fact = self._tg_esc(str(intelligence.get("fact_summary") or "")[:320])
             meaning = self._tg_esc(str(intelligence.get("meaning") or "")[:260])
             if fact:

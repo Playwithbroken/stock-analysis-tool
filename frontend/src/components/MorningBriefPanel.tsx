@@ -111,6 +111,23 @@ function newsForecastMeta(item: any) {
   };
 }
 
+function marketConfirmationMeta(status?: string) {
+  const value = String(status || "unavailable").toLowerCase();
+  if (value === "confirmed") {
+    return { label: "Preisreaktion bestätigt", className: "border-emerald-500/20 bg-emerald-50 text-emerald-800" };
+  }
+  if (value === "contradicted") {
+    return { label: "Preisreaktion widerspricht", className: "border-red-500/20 bg-red-50 text-red-800" };
+  }
+  if (value === "inconclusive") {
+    return { label: "Preisreaktion noch uneindeutig", className: "border-amber-500/20 bg-amber-50 text-amber-800" };
+  }
+  if (value === "observed_only") {
+    return { label: "Preisreaktion beobachtet", className: "border-sky-500/20 bg-sky-50 text-sky-800" };
+  }
+  return { label: "Preisfenster nicht verfügbar", className: "border-slate-300 bg-white/70 text-slate-600" };
+}
+
 function formatBriefGenerated(value?: string) {
   if (!value) return "gerade aktualisiert";
   const date = new Date(value);
@@ -1367,6 +1384,8 @@ export default function MorningBriefPanel({
                 : [];
               const publisherCount = Number(evidence.publisher_count || corroboratingSources.length || 1);
               const mixedSourceSignal = evidence.source_agreement === "mixed_headline_signal";
+              const marketConfirmation = item.market_confirmation || {};
+              const confirmationMeta = marketConfirmationMeta(marketConfirmation.status);
               const relatedTickers = Array.isArray(item.related_tickers)
                 ? item.related_tickers.filter(Boolean).slice(0, 4)
                 : item.ticker
@@ -1473,6 +1492,39 @@ export default function MorningBriefPanel({
                       {forecast.copy}
                     </div>
                   </div>
+
+                  {marketConfirmation.status ? (
+                    <div className={`rounded-[1rem] border px-3 py-3 text-xs leading-5 sm:col-start-2 ${confirmationMeta.className}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em]">
+                          {confirmationMeta.label}
+                        </div>
+                        {marketConfirmation.event_window_aligned ? (
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] opacity-70">
+                            Ereignisfenster · {marketConfirmation.bar_interval || "15m"}
+                          </div>
+                        ) : null}
+                      </div>
+                      {marketConfirmation.status !== "unavailable" ? (
+                        <>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-semibold">
+                            <span>
+                              {marketConfirmation.ticker}: {signedPercent(marketConfirmation.asset_move_since_publication)}
+                            </span>
+                            <span>
+                              {marketConfirmation.benchmark}: {signedPercent(marketConfirmation.benchmark_move_since_publication)}
+                            </span>
+                            <span>
+                              Relative Stärke: {signedPercent(marketConfirmation.relative_move_since_publication)}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-[11px] opacity-75">{marketConfirmation.precision_note}</div>
+                        </>
+                      ) : (
+                        <div className="mt-2 text-[11px] opacity-75">{marketConfirmation.reason}</div>
+                      )}
+                    </div>
+                  ) : null}
 
                   {intelligence.bull_case ? (
                     <details className="rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs leading-5 text-slate-600 sm:col-start-2">

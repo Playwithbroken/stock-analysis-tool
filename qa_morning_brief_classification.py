@@ -1,5 +1,6 @@
 import sys
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from src.email_alert_service import EmailAlertService
 from src.morning_brief_service import MorningBriefService
@@ -55,6 +56,15 @@ def main() -> int:
     )
     if not bmw_luxury or bmw_luxury.get("ticker") != "BMW.DE":
         failures.append("specific Rolls-Royce Motor Cars alias no longer maps to BMW")
+    multi_company_tickers = svc._extract_related_news_tickers(
+        "Microsoft rises while Meta Platforms falls after earnings"
+    )
+    if set(multi_company_tickers) != {"MSFT", "META"}:
+        failures.append("explicit company names were not mapped to all related tickers")
+    if "BMW.DE" in svc._extract_related_news_tickers(
+        "Rolls-Royce Holdings announces a nuclear power agreement"
+    ):
+        failures.append("Rolls-Royce Holdings was falsely mapped to BMW news")
 
     public_intel = svc._build_event_intelligence("public_figure", "high", "elevated", "tier_1", None)
     ipo_intel = svc._build_event_intelligence("ipo", "high", "elevated", "tier_1", None)
@@ -179,6 +189,59 @@ def main() -> int:
     elif (conflicting_cluster[0].get("source_evidence") or {}).get("source_agreement") != "mixed_headline_signal":
         failures.append("conflicting headline direction was not flagged")
 
+    class ReactionFetcher:
+        def __init__(self, ticker: str):
+            self.ticker = ticker
+
+        def get_intraday_reaction(self, published_at: str):
+            move = {"TSLA": 1.4, "QQQ": 0.2}.get(self.ticker)
+            if move is None:
+                return {"error": "QA ticker unavailable"}
+            return {
+                "change_since_publication": move,
+                "baseline_at": "2026-07-30T05:45:00+00:00",
+                "observed_at": "2026-07-30T07:00:00+00:00",
+                "bar_interval": "15m",
+                "measurement_basis": "last_bar_before_publication_to_latest_available_bar",
+                "event_window_aligned": True,
+            }
+
+    with patch("src.morning_brief_service.DataFetcher", ReactionFetcher):
+        confirmed_news = svc._attach_news_market_confirmation(
+            [
+                {
+                    **conflicting_reports[0],
+                    "title": "Tesla stock rises after robotaxi approval",
+                    "ticker": "TSLA",
+                    "related_tickers": ["TSLA"],
+                }
+            ]
+        )
+    market_confirmation = confirmed_news[0].get("market_confirmation") or {}
+    if market_confirmation.get("status") != "confirmed":
+        failures.append("positive headline was not confirmed by positive benchmark-relative reaction")
+    if abs(float(market_confirmation.get("relative_move_since_publication") or 0) - 1.2) > 0.001:
+        failures.append("benchmark-relative reaction was calculated incorrectly")
+    if market_confirmation.get("causality_proven") is not False:
+        failures.append("market reaction incorrectly claimed causality")
+    if market_confirmation.get("event_window_aligned") is not True:
+        failures.append("event-aligned reaction basis was not disclosed")
+    with patch("src.morning_brief_service.DataFetcher", ReactionFetcher):
+        provider_only_news = svc._attach_news_market_confirmation(
+            [
+                {
+                    "title": "Equity futures mixed before the interest-rate announcement",
+                    "ticker": "GLD",
+                    "related_tickers": ["GLD"],
+                    "ticker_association_basis": "provider_related_feed_only",
+                    "published_at": "2026-07-30T06:00:00+00:00",
+                    "event_type": "central_bank",
+                }
+            ]
+        )
+    if provider_only_news[0].get("market_confirmation"):
+        failures.append("provider-feed-only ticker association received a misleading price confirmation")
+
     telegram = EmailAlertService.__new__(EmailAlertService)
     telegram_messages: list[str] = []
     telegram._tg_post = (  # type: ignore[method-assign]
@@ -195,7 +258,7 @@ def main() -> int:
             "opening_bias": "QA",
             "regions": {},
             "macro_assets": [],
-            "top_news": clustered,
+            "top_news": [{**clustered[0], "market_confirmation": market_confirmation}],
         },
         "global",
     )
@@ -203,7 +266,7 @@ def main() -> int:
         (message for message in telegram_messages if "WICHTIG" in message),
         "",
     )
-    for marker in ["Quellenabgleich:", "2 verschiedene Publisher"]:
+    for marker in ["Quellenabgleich:", "2 verschiedene Publisher", "Preisreaktion BESTÄTIGT:", "relativ +1.20%"]:
         if marker not in important_message:
             failures.append(f"important Telegram news missing {marker}")
     for marker in ["Fakt (Publisher-Zusammenfassung)", "Bedeutung:", "Einschätzung:", "Bestätigung:", "Invalidierung:"]:

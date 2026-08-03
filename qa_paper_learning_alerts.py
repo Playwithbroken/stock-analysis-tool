@@ -81,6 +81,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "stop_price": 194.0,
             "target_price": 218.5,
             "quantity": 61.38,
+            "leverage": 1.5,
             "invested_value": 12345.67,
             "current_value": 12390.12,
             "result_value_delta": 44.45,
@@ -167,6 +168,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
         }
     )
     assert "investiert 12.345,67 EUR" in opened
+    assert "Paper-Hebel:</b> 1.5x" in opened
     assert "Referenz 201.00 → Fill 201.12" in opened
     assert "6.2 bps" in opened
     assert "Kosten 7,67 EUR" in opened
@@ -211,6 +213,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
             "entry_price": 201.125,
             "closed_price": 218.5,
             "quantity": 61.38,
+            "leverage": 1.5,
             "invested_value": 12345.67,
             "final_value": 13412.33,
             "realized_pnl_value": 1066.66,
@@ -256,6 +259,7 @@ def test_paper_trade_telegram_money_formatting() -> None:
     )
     assert "[PAPER GESCHLOSSEN - GEWINN]" in closed
     assert "Asset:</b> equity | <b>Setup:</b> breakout | <b>Menge:</b> 61.38" in closed
+    assert "Paper-Hebel:</b> 1.5x" in closed
     assert "11.07.2026, 14:00 CEST bis 13.07.2026, 17:30 CEST | gehalten 2T 3Std 30Min" in closed
     assert "Kapitalfluss Trade:</b> Einsatz 12.345,67 EUR | R\u00fcckfluss 13.412,33 EUR" in closed
     assert "Realisiertes Ergebnis:</b> +1.066,66 EUR | +8.64%" in closed

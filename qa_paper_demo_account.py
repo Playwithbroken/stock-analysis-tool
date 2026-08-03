@@ -194,6 +194,81 @@ def sample_settings() -> Dict[str, Any]:
     }
 
 
+def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
+    manager = FakePortfolioManager()
+    service = build_service(manager)
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+    aapl = next(item for item in dashboard["playbooks"] if item["id"] == "equity-AAPL-long")
+    assessment = aapl["leverage_assessment"]
+    assert assessment["eligible"] is True
+    assert assessment["recommended_leverage"] == 2.0
+    assert assessment["real_money_ready"] is False
+    leveraged_sizing = assessment["recommended_sizing"]
+    assert leveraged_sizing["suggested_quantity"] == 250.0
+    assert leveraged_sizing["suggested_notional_value"] == 50_000.0
+    assert leveraged_sizing["suggested_max_loss_value"] == 1_750.0
+    assert leveraged_sizing["suggested_max_loss_value"] == aapl["suggested_max_loss_value"]
+
+    opened = service.create_trade_from_playbook(
+        {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 2},
+        sample_scoreboard(),
+        sample_settings(),
+    )
+    assert opened["leverage"] == 2
+    assert opened["quantity"] < aapl["suggested_quantity"]
+    assert opened["trade_ticket"]["leverage"] == 2
+    assert opened["trade_ticket"]["real_money_ready"] is False
+    assert opened["trade_ticket"]["max_loss_value"] <= 1_750.0
+    assert "Paper-Hebel: 2.0x" in opened["notes"]
+
+    try:
+        service.create_trade_from_playbook(
+            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 3},
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "between 1x and 2x" in str(exc)
+    else:
+        raise AssertionError("Paper leverage above 2x was not rejected.")
+
+    crypto_dashboard = build_service(FakePortfolioManager()).build_dashboard(
+        sample_scoreboard(),
+        sample_settings(),
+    )
+    crypto = next(item for item in crypto_dashboard["playbooks"] if item.get("asset_class") == "crypto")
+    assert crypto["leverage_assessment"]["eligible"] is False
+    assert any("Crypto-Hebel" in reason or "Krypto" in reason for reason in crypto["leverage_assessment"]["blockers"])
+
+    auto_service = build_service(FakePortfolioManager())
+    strict_run = auto_service.run_auto_selection(
+        sample_scoreboard(),
+        sample_settings(),
+        max_trades=1,
+        execute=True,
+        mode="strict",
+    )
+    assert strict_run["opened"]
+    assert strict_run["opened"][0]["leverage"] == 2.0
+
+    try:
+        build_service(FakePortfolioManager()).create_trade_from_playbook(
+            {
+                "playbook_id": "equity-AAPL-long",
+                "direction": "long",
+                "quantity": 0,
+                "leverage": 2,
+                "learning_mode": True,
+            },
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "disabled in learning" in str(exc)
+    else:
+        raise AssertionError("Learning mode incorrectly accepted paper leverage.")
+
+
 def test_confirmed_news_requires_full_evidence_chain() -> None:
     service = build_service(FakePortfolioManager())
     valid = {
@@ -2217,6 +2292,7 @@ def test_market_snapshot_falls_back_to_daily_data() -> None:
 
 
 if __name__ == "__main__":
+    test_equity_paper_leverage_is_quality_gated_and_risk_neutral()
     test_confirmed_news_requires_full_evidence_chain()
     test_news_trade_management_exits_failed_reaction_and_reviews_stall()
     test_news_management_auto_closes_reaction_and_equity_time_exits()

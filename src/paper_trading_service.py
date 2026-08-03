@@ -67,7 +67,7 @@ class PaperTradingService:
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
-        sized_playbooks = self._attach_demo_sizing(playbooks, demo_account)
+        sized_playbooks = self._attach_demo_sizing(playbooks, demo_account, rules)
         autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
         autopilot_profile = self._build_autopilot_profile_summary(autopilot_settings, demo_account)
         strategy_readiness = StrategyLibrary.build_readiness(
@@ -281,7 +281,11 @@ class PaperTradingService:
                             "direction": candidate.get("direction") or "long",
                             # Recalculate size against the account after every prior auto entry.
                             "quantity": 0,
-                            "leverage": 1,
+                            "leverage": (
+                                float(candidate.get("recommended_leverage") or 1)
+                                if mode == "strict" and candidate.get("leverage_eligible") is True
+                                else 1
+                            ),
                             "learning_mode": mode in {"learn", "aggressive_learning"} or bool(candidate.get("learning_mode")),
                             "risk_multiplier_override": candidate.get("risk_multiplier"),
                             "learning_context": {
@@ -418,6 +422,8 @@ class PaperTradingService:
         return text
 
     def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        if float(payload.get("leverage") or 1) > 1:
+            raise ValueError("Leveraged paper trades must come from a quality-gated playbook.")
         trade = self.portfolio_manager.create_paper_trade(payload)
         self._schedule_trade_outcomes(trade)
         return self._enrich_trade(trade)
@@ -436,6 +442,8 @@ class PaperTradingService:
         direction = (payload.get("direction") or "long").lower()
         requested_quantity = float(payload.get("quantity") or 0)
         leverage = float(payload.get("leverage") or 1)
+        if leverage < 1 or leverage > 2:
+            raise ValueError("Paper leverage must be between 1x and 2x.")
         rules = (settings or {}).get("do_not_trade") or {}
         outcome_learning = self._build_outcome_learning_adjustments()
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
@@ -447,7 +455,7 @@ class PaperTradingService:
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
-        playbooks = self._attach_demo_sizing(playbooks, demo_account)
+        playbooks = self._attach_demo_sizing(playbooks, demo_account, rules)
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
@@ -456,6 +464,8 @@ class PaperTradingService:
             and direction != str(playbook.get("direction") or "").lower()
         ):
             raise ValueError("Confirmed-news paper trade direction must match the verified price reaction.")
+        if leverage > 1 and direction != str(playbook.get("direction") or "").lower():
+            raise ValueError("Leveraged paper trade direction must match the evidence-backed playbook direction.")
         entry_source_label = str(payload.get("alert_source_label") or "Paper-Autopilot")
         playbook = {**playbook, "entry_source_label": entry_source_label}
         learning_mode = bool(payload.get("learning_mode"))
@@ -554,7 +564,25 @@ class PaperTradingService:
             "reference_price": last_price,
             "execution_model": {"entry": entry_execution},
         }
-        final_sizing = self._suggest_demo_sizing(playbook, demo_account, risk_multiplier_override if learning_mode else None)
+        leverage_assessment = self._build_leverage_assessment(playbook, demo_account, rules)
+        if leverage > 1:
+            if learning_mode:
+                raise ValueError("Paper leverage is disabled in learning and aggressive-learning modes.")
+            if leverage_assessment.get("eligible") is not True:
+                raise ValueError(
+                    "Paper leverage gate blocks this playbook: "
+                    + ", ".join(leverage_assessment.get("blockers") or ["quality gates not met"])
+                )
+            if leverage > float(leverage_assessment.get("max_leverage") or 1) + 1e-9:
+                raise ValueError("Requested leverage exceeds the evidence-based paper leverage cap.")
+        playbook["selected_leverage"] = leverage
+        playbook["leverage_assessment"] = leverage_assessment
+        final_sizing = self._suggest_demo_sizing(
+            playbook,
+            demo_account,
+            risk_multiplier_override if learning_mode else None,
+            leverage=leverage,
+        )
         if final_sizing.get("demo_tradeable") is False:
             raise ValueError("Demo account risk gate blocks the refreshed market snapshot.")
         max_quantity = float(final_sizing.get("suggested_quantity") or 0)
@@ -633,6 +661,8 @@ class PaperTradingService:
             "trigger": (playbook.get("decision_framework") or {}).get("entry_trigger"),
             "invalidation": (playbook.get("decision_framework") or {}).get("invalidation"),
             "suggested_max_loss_value": note_playbook.get("suggested_max_loss_value"),
+            "leverage": leverage,
+            "leverage_assessment": leverage_assessment,
             "trade_ticket": note_playbook.get("trade_ticket") or {},
             "news_evidence": playbook.get("news_evidence") or None,
         }
@@ -1144,6 +1174,7 @@ class PaperTradingService:
                 "original_document_verified": original_verified,
                 "primary_sources": list(news.get("primary_sources") or []),
                 "corroboration": evidence.get("corroboration") or "single_source",
+                "source_agreement": evidence.get("source_agreement") or "single_headline_signal",
                 "market_confirmation": {
                     "status": "confirmed",
                     "expected_headline_direction": expected,
@@ -1198,6 +1229,7 @@ class PaperTradingService:
             f"Setup: {playbook.get('setup_type') or 'signal_playbook'} / {playbook.get('asset_class') or 'equity'} / {playbook.get('direction') or 'long'}",
             f"Score: {playbook.get('score')}; Beweisniveau: {framework.get('evidence_level') or 'watch'}",
             f"Demo-Größe: vorgeschlagene Menge {playbook.get('suggested_quantity')}; max. Verlust {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}.",
+            f"Paper-Hebel: {float(playbook.get('selected_leverage') or 1):.1f}x; hebelbereinigte Stückzahl, Echtgeld gesperrt.",
             f"Trigger: {framework.get('entry_trigger') or 'Manuelle Trigger-Prüfung erforderlich.'}",
             f"Invalidierung: {framework.get('invalidation') or 'Manuelle Invalidierungsprüfung erforderlich.'}",
             f"Risikoplan: {framework.get('risk_plan') or 'Nur Paper-Risiko.'}",
@@ -1978,6 +2010,9 @@ class PaperTradingService:
                 "suggested_quantity": playbook.get("suggested_quantity"),
                 "suggested_notional_value": playbook.get("suggested_notional_value"),
                 "suggested_max_loss_value": playbook.get("suggested_max_loss_value"),
+                "leverage_eligible": (playbook.get("leverage_assessment") or {}).get("eligible") is True,
+                "recommended_leverage": (playbook.get("leverage_assessment") or {}).get("recommended_leverage") or 1,
+                "leverage_assessment": playbook.get("leverage_assessment") or {},
                 "learning_mode": False,
                 "trigger": framework.get("entry_trigger"),
                 "invalidation": framework.get("invalidation"),
@@ -2825,15 +2860,120 @@ class PaperTradingService:
             or {"ticker": None, "direction": None, "risk_value": 0.0, "notional_value": 0.0},
         }
 
-    def _attach_demo_sizing(self, playbooks: List[Dict[str, Any]], demo_account: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _attach_demo_sizing(
+        self,
+        playbooks: List[Dict[str, Any]],
+        demo_account: Dict[str, Any],
+        rules: Dict[str, Any] | None = None,
+    ) -> List[Dict[str, Any]]:
         sized: List[Dict[str, Any]] = []
         for item in playbooks:
             row = dict(item)
             sizing = self._suggest_demo_sizing(row, demo_account)
             row.update(sizing)
+            assessment = self._build_leverage_assessment(row, demo_account, rules or {})
+            if assessment.get("eligible") is True:
+                leveraged_sizing = self._suggest_demo_sizing(
+                    row,
+                    demo_account,
+                    leverage=float(assessment.get("recommended_leverage") or 1),
+                )
+                assessment["recommended_sizing"] = {
+                    key: leveraged_sizing.get(key)
+                    for key in (
+                        "suggested_quantity",
+                        "suggested_notional_value",
+                        "suggested_max_loss_value",
+                        "suggested_account_pct",
+                        "suggested_risk_pct",
+                    )
+                }
+            row["leverage_assessment"] = assessment
+            row["recommended_leverage"] = assessment.get("recommended_leverage") or 1
             row["trade_ticket"] = self._build_trade_ticket(row, demo_account)
             sized.append(row)
         return sized
+
+    def _build_leverage_assessment(
+        self,
+        playbook: Dict[str, Any],
+        demo_account: Dict[str, Any],
+        rules: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        """Conservative paper-only leverage gate with an auditable verdict."""
+        rules = rules or {}
+        blockers: List[str] = []
+        checks: List[str] = []
+        score = float(playbook.get("score") or 0)
+        min_score = max(88.0, float(rules.get("min_score_for_leverage") or 88))
+        asset_class = str(playbook.get("asset_class") or "equity").lower()
+        direction = str(playbook.get("direction") or "").lower()
+        market = playbook.get("market_data") if isinstance(playbook.get("market_data"), dict) else {}
+        risk_pct = float(playbook.get("risk_buffer_pct") or 0)
+        reward_pct = float(playbook.get("reward_buffer_pct") or 0)
+        risk_reward = reward_pct / risk_pct if risk_pct > 0 else 0
+        day_status = str(demo_account.get("day_status") or "")
+
+        if asset_class != "equity":
+            blockers.append("Hebel-Multiplikator ist nur für Equity-Paper-Setups erlaubt; Optionen und Krypto haben eigene Risikomodelle.")
+        if direction not in {"long", "short"}:
+            blockers.append("Keine eindeutig handelbare Long- oder Short-Richtung.")
+        if score < min_score:
+            blockers.append(f"Score {score:.0f} liegt unter dem Hebel-Mindestscore {min_score:.0f}.")
+        else:
+            checks.append(f"Score-Gate erfüllt ({score:.0f}/{min_score:.0f}).")
+        if playbook.get("leverage_warnings"):
+            blockers.extend(str(item) for item in playbook.get("leverage_warnings") or [])
+        if playbook.get("tradeable") is False or playbook.get("do_not_trade_reasons"):
+            blockers.append("Signalregeln geben das Setup nicht uneingeschränkt frei.")
+        if playbook.get("demo_tradeable") is False or playbook.get("demo_block_reasons"):
+            blockers.append("Demo-Konto- oder Risikogate blockiert neue Exposure.")
+        if day_status not in {"no_open_trades", "monitor"}:
+            blockers.append(f"Kontostatus {day_status or 'unbekannt'} erlaubt keinen neuen Hebel.")
+        else:
+            checks.append(f"Kontostatus {day_status} erlaubt eine Hebelprüfung.")
+        if str(market.get("freshness") or "") != "fresh":
+            blockers.append("Marktdaten sind nicht frisch.")
+        else:
+            checks.append("Marktdaten sind frisch.")
+        if str(market.get("liquidity_status") or "") != "strong":
+            blockers.append("Liquidität ist nicht stark genug für Hebel.")
+        else:
+            checks.append("Liquiditäts-Gate erfüllt.")
+        if risk_reward < 2.0:
+            blockers.append(f"Geplantes Chance/Risiko {risk_reward:.2f} liegt unter 2,00.")
+        else:
+            checks.append(f"Chance/Risiko-Gate erfüllt ({risk_reward:.2f}).")
+
+        news_evidence = playbook.get("news_evidence") if isinstance(playbook.get("news_evidence"), dict) else {}
+        if str(playbook.get("setup_type") or "") == "confirmed_news_event":
+            confirmation = news_evidence.get("market_confirmation") if isinstance(news_evidence.get("market_confirmation"), dict) else {}
+            if confirmation.get("status") != "confirmed" or confirmation.get("event_window_aligned") is not True:
+                blockers.append("News-Preisreaktion ist nicht sauber bestätigt und zeitlich ausgerichtet.")
+            if str(news_evidence.get("event_type") or "") == "earnings" and news_evidence.get("original_document_verified") is not True:
+                blockers.append("Earnings-Originaldokument ist nicht verifiziert.")
+            if news_evidence.get("source_agreement") == "mixed_headline_signal":
+                blockers.append("Quellen liefern widersprüchliche Richtungssignale.")
+
+        blockers = self._dedupe_reason_list(blockers)
+        eligible = not blockers
+        max_leverage = 1.0
+        if eligible:
+            max_leverage = 2.0 if score >= 95 and risk_reward >= 2.0 else 1.5
+        return {
+            "status": "eligible" if eligible else "blocked",
+            "eligible": eligible,
+            "recommended_leverage": max_leverage,
+            "max_leverage": max_leverage,
+            "score": score,
+            "minimum_score": min_score,
+            "risk_reward": round(risk_reward, 2),
+            "checks": checks,
+            "blockers": blockers,
+            "risk_policy": "Hebel erhöht nie das konfigurierte maximale Kontorisiko; die Stückzahl wird invers reduziert.",
+            "paper_only": True,
+            "real_money_ready": False,
+        }
 
     def _build_trade_ticket(self, playbook: Dict[str, Any], demo_account: Dict[str, Any]) -> Dict[str, Any]:
         framework = playbook.get("decision_framework") or {}
@@ -2949,6 +3089,8 @@ class PaperTradingService:
             "quantity": playbook.get("suggested_quantity"),
             "notional_value": playbook.get("suggested_notional_value"),
             "max_loss_value": playbook.get("suggested_max_loss_value"),
+            "leverage": float(playbook.get("selected_leverage") or 1),
+            "leverage_assessment": playbook.get("leverage_assessment") or None,
             "account_risk_pct": playbook.get("suggested_risk_pct"),
             "risk_reward": risk_reward,
             "thesis": required_text["thesis"],
@@ -2986,12 +3128,14 @@ class PaperTradingService:
         playbook: Dict[str, Any],
         demo_account: Dict[str, Any],
         risk_multiplier_override: Any = None,
+        leverage: float = 1.0,
     ) -> Dict[str, Any]:
+        leverage = max(1.0, min(2.0, float(leverage or 1)))
         price = float(playbook.get("reference_price") or 0)
         risk_buffer_pct = float(playbook.get("risk_buffer_pct") or 3.5)
         contract_multiplier = float(playbook.get("contract_multiplier") or 1)
         is_option = playbook.get("asset_class") == "option"
-        risk_per_unit = price * (risk_buffer_pct / 100) * contract_multiplier
+        risk_per_unit = price * (risk_buffer_pct / 100) * contract_multiplier * leverage
         risk_budget = min(
             float(
                 demo_account.get("risk_budget_per_option_trade_value")
@@ -3090,14 +3234,14 @@ class PaperTradingService:
                 block_reasons.append("Signalregel: Playbook hat kein freigegebenes Signal.")
 
         quantity_by_risk = risk_budget / risk_per_unit if risk_per_unit > 0 else 0
-        quantity_by_position = max_position_value / (price * contract_multiplier) if price > 0 else 0
+        quantity_by_position = max_position_value / (price * contract_multiplier * leverage) if price > 0 else 0
         quantity = max(0.0, min(quantity_by_risk, quantity_by_position))
         if is_option:
             quantity = float(int(quantity))
         if quantity < 0.0001:
             block_reasons.append("Vorgeschlagene Menge ist zu klein für das konfigurierte Risikobudget.")
 
-        notional = quantity * price * contract_multiplier
+        notional = quantity * price * contract_multiplier * leverage
         max_loss = quantity * risk_per_unit
         return {
             "suggested_quantity": round(quantity, 6),
@@ -3108,6 +3252,7 @@ class PaperTradingService:
             "remaining_gross_capacity_value": round(remaining_gross, 2),
             "remaining_ticker_capacity_value": round(remaining_ticker_exposure, 2),
             "risk_multiplier": risk_multiplier,
+            "sizing_leverage": leverage,
             "contract_multiplier": contract_multiplier,
             "demo_block_reasons": block_reasons,
             "demo_tradeable": not block_reasons,

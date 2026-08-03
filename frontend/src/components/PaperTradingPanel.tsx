@@ -344,7 +344,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
-  const openFromPlaybook = async (playbookId: string, direction: string, productData: any = undefined) => {
+  const openFromPlaybook = async (
+    playbookId: string,
+    direction: string,
+    productData: any = undefined,
+    leverage = 1,
+  ) => {
     setBusyId(playbookId);
     setStatus("");
     try {
@@ -355,14 +360,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           playbook_id: playbookId,
           direction,
           quantity: 0,
-          leverage: 1,
+          leverage,
           product_data: productData || {},
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Paper-Trade konnte nicht geöffnet werden.");
       await onRefresh?.();
-      setStatus("Paper-Trade eröffnet.");
+      setStatus(`Paper-Trade eröffnet${leverage > 1 ? ` · Hebel ${leverage}x` : ""}.`);
     } catch (error: any) {
       setStatus(error?.message || "Paper-Trade konnte nicht geöffnet werden.");
     } finally {
@@ -2368,6 +2373,34 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     {item.asset_class === "option" && <div>Kontrakt: x{item.contract_multiplier || 100} · {item.option_type?.toUpperCase?.()}</div>}
                     {item.asset_class === "option" && <div>Max. Haltedauer: {item.max_holding_days || 10}d</div>}
                   </div>
+                  {item.leverage_assessment && (
+                    <div className={`mt-3 rounded-[1rem] border p-3 text-xs ${
+                      item.leverage_assessment.eligible
+                        ? "border-violet-300 bg-violet-50 text-violet-900"
+                        : "border-slate-200 bg-slate-50 text-slate-700"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-extrabold uppercase tracking-[0.14em]">Paper-Hebel-Gate</div>
+                        <div className="rounded-full border border-current/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em]">
+                          {item.leverage_assessment.eligible
+                            ? `${item.leverage_assessment.recommended_leverage}x sinnvoll`
+                            : "Hebel gesperrt"}
+                        </div>
+                      </div>
+                      <div className="mt-2 font-semibold">{item.leverage_assessment.risk_policy}</div>
+                      {item.leverage_assessment.eligible && item.leverage_assessment.recommended_sizing ? (
+                        <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                          <div>Menge: {item.leverage_assessment.recommended_sizing.suggested_quantity}</div>
+                          <div>Exposure: {money(item.leverage_assessment.recommended_sizing.suggested_notional_value, currency)}</div>
+                          <div>Max. Verlust: {money(item.leverage_assessment.recommended_sizing.suggested_max_loss_value, currency)}</div>
+                        </div>
+                      ) : null}
+                      {!!item.leverage_assessment.blockers?.length && (
+                        <div className="mt-2 leading-5">Blocker: {item.leverage_assessment.blockers.slice(0, 4).join(" · ")}</div>
+                      )}
+                      <div className="mt-2 font-bold text-red-700">Nur Demokonto · Echtgeld gesperrt</div>
+                    </div>
+                  )}
                   {item.leverage_product_type && (
                     <div className="mt-3 rounded-[1rem] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                       <div className="font-extrabold uppercase tracking-[0.14em]">Hebel-Proxy</div>
@@ -2512,6 +2545,20 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           Paper short
                         </button>
                       </>
+                    )}
+                    {item.leverage_assessment?.eligible && Number(item.recommended_leverage || 1) > 1 && (
+                      <button
+                        onClick={() => openFromPlaybook(
+                          item.id,
+                          item.direction,
+                          undefined,
+                          Number(item.recommended_leverage),
+                        )}
+                        disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
+                        className="rounded-xl bg-violet-700 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+                      >
+                        Paper {item.direction} · Hebel {item.recommended_leverage}x
+                      </button>
                     )}
                   </div>
                 </div>

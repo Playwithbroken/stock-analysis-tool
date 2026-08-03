@@ -3713,6 +3713,7 @@ class EmailAlertService:
         stop = self._tg_price(event.get("stop_price"))
         target = self._tg_price(event.get("target_price"))
         qty = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
+        leverage = float(event.get("leverage") or ticket.get("leverage") or 1)
         invested = self._tg_money(event.get("invested_value"))
         current_value = self._tg_money(event.get("current_value"))
         result_delta = self._tg_signed_money(event.get("result_value_delta"))
@@ -3795,7 +3796,7 @@ class EmailAlertService:
                 *([news_line] if news_line else []),
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 *([strategy_line] if strategy_line else []),
-                f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",
+                f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty} | <b>Paper-Hebel:</b> {leverage:.1f}x",
                 *([execution_line] if execution_line else []),
                 f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
                 f"<b>Offenes Ergebnis:</b> {result_delta} ({result_label})",
@@ -3851,6 +3852,7 @@ class EmailAlertService:
         invested = self._tg_money(event.get("invested_value"))
         final_value = self._tg_money(event.get("final_value"))
         quantity = self._tg_esc(str(event.get("quantity") if event.get("quantity") is not None else "n/a"))
+        leverage = float(event.get("leverage") or ticket.get("leverage") or 1)
         result_label = self._tg_esc(self._paper_label(event.get("result_label"), "neutral"))
         pnl_pct = self._tg_pct(event.get("realized_pnl_pct"))
         pnl_value = self._tg_signed_money(event.get("realized_pnl_value"))
@@ -3879,7 +3881,7 @@ class EmailAlertService:
                 f"<b>[PAPER GESCHLOSSEN - {outcome}] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Zeitraum:</b> {' bis '.join(timing_parts[:2])} | gehalten {timing_parts[2]}"] if len(timing_parts) == 3 else []),
                 f"<b>Entry-Quelle:</b> {entry_source}",
-                f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Menge:</b> {quantity}",
+                f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Menge:</b> {quantity} | <b>Paper-Hebel:</b> {leverage:.1f}x",
                 f"<b>Exit-Grund:</b> {exit_reason}",
                 f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
                 *([execution_line] if execution_line else []),

@@ -2914,8 +2914,8 @@ class PaperTradingService:
         risk_reward = reward_pct / risk_pct if risk_pct > 0 else 0
         day_status = str(demo_account.get("day_status") or "")
 
-        if asset_class != "equity":
-            blockers.append("Hebel-Multiplikator ist nur für Equity-Paper-Setups erlaubt; Optionen und Krypto haben eigene Risikomodelle.")
+        if asset_class not in {"equity", "etf"}:
+            blockers.append("Hebel-Multiplikator ist nur für Aktien- und ETF-Paper-Setups erlaubt; Optionen und Krypto haben eigene Risikomodelle.")
         if direction not in {"long", "short"}:
             blockers.append("Keine eindeutig handelbare Long- oder Short-Richtung.")
         if score < min_score:

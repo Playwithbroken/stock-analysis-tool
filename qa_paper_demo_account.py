@@ -208,6 +208,9 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
     assert leveraged_sizing["suggested_notional_value"] == 50_000.0
     assert leveraged_sizing["suggested_max_loss_value"] == 1_750.0
     assert leveraged_sizing["suggested_max_loss_value"] == aapl["suggested_max_loss_value"]
+    jepi = next(item for item in dashboard["playbooks"] if item["id"] == "etf-JEPI-long")
+    assert jepi["leverage_assessment"]["eligible"] is True
+    assert jepi["leverage_assessment"]["recommended_leverage"] == 1.5
 
     opened = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 2},

@@ -61,6 +61,7 @@ class PaperTradingService:
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
         news_evidence_performance = self._build_news_evidence_performance(closed_trades)
+        news_shadow_lab = self._build_news_shadow_lab()
         playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         self._apply_news_evidence_learning(playbooks, news_evidence_performance)
         demo_account = self._build_demo_account(trades, playbooks)
@@ -89,6 +90,7 @@ class PaperTradingService:
             "setup_performance": self._build_setup_performance(closed_trades),
             "entry_source_performance": self._build_entry_source_performance(closed_trades),
             "news_evidence_performance": news_evidence_performance,
+            "news_shadow_lab": news_shadow_lab,
             "learning_context_performance": self._build_learning_context_performance(closed_trades),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
@@ -3348,6 +3350,160 @@ class PaperTradingService:
             },
             "sources": build_rows("source"),
             "event_types": build_rows("event_type"),
+        }
+
+    def _build_news_shadow_lab(self) -> Dict[str, Any]:
+        """Build a one-signal/one-outcome news study from persisted 24h forecasts."""
+        empty = {
+            "summary": {
+                "forecasts": 0,
+                "evaluated_24h": 0,
+                "pending_24h": 0,
+                "hits": 0,
+                "misses": 0,
+                "neutral": 0,
+                "hit_rate": 0.0,
+                "avg_directional_move_pct": None,
+                "strict_gate_lift_pct_points": None,
+                "sample_unit": "Eine Meldung mit genau einem 24-Stunden-Ergebnis.",
+                "policy": "Shadow-Studie ohne Position, PnL oder Echtgeldwirkung.",
+            },
+            "quality_cohorts": [],
+            "sources": [],
+            "event_types": [],
+        }
+        try:
+            forecasts = self.portfolio_manager.list_signal_forecasts(limit=500)
+            outcomes = self.portfolio_manager.list_signal_forecast_outcomes(limit=2200)
+        except Exception:
+            return empty
+
+        top_news = [
+            forecast
+            for forecast in forecasts
+            if str(forecast.get("setup_type") or "") == "top_news_forecast"
+            or str(forecast.get("source_label") or "") == "trusted_news"
+        ]
+        forecast_by_id = {str(forecast.get("id") or ""): forecast for forecast in top_news}
+        canonical_outcomes = [
+            outcome
+            for outcome in outcomes
+            if str(outcome.get("forecast_id") or "") in forecast_by_id
+            and int(outcome.get("horizon_hours") or 0) == 24
+        ]
+        pending_24h = sum(
+            1 for outcome in canonical_outcomes if str(outcome.get("status") or "") in {"pending", "pending_data"}
+        )
+        rows: List[Dict[str, Any]] = []
+        for outcome in canonical_outcomes:
+            if str(outcome.get("status") or "") != "evaluated":
+                continue
+            forecast = forecast_by_id.get(str(outcome.get("forecast_id") or "")) or {}
+            metadata_raw = forecast.get("metadata_json")
+            if isinstance(metadata_raw, dict):
+                metadata = metadata_raw
+            else:
+                try:
+                    metadata = json.loads(str(metadata_raw or "{}"))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    metadata = {}
+            news = metadata.get("news_item") if isinstance(metadata.get("news_item"), dict) else {}
+            reasons = set(self._news_gate_reasons(news)) if news else set()
+            price_reasons = {
+                "price_confirmation_missing",
+                "price_reaction_contradicted",
+                "event_window_not_aligned",
+            }
+            if not reasons:
+                quality_cohort = "strict_gate_confirmed"
+            elif "price_reaction_contradicted" in reasons and not (reasons - price_reasons):
+                quality_cohort = "price_contradicted"
+            elif reasons and not (reasons - price_reasons):
+                quality_cohort = "verified_unconfirmed"
+            else:
+                quality_cohort = "directional_headline"
+
+            direction = str(forecast.get("direction") or outcome.get("direction") or "").lower()
+            try:
+                raw_move = float(outcome.get("performance_pct"))
+            except (TypeError, ValueError):
+                continue
+            directional_move = -raw_move if any(token in direction for token in ("short", "hedge", "avoid", "reduce")) else raw_move
+            evidence = news.get("source_evidence") if isinstance(news.get("source_evidence"), dict) else {}
+            rows.append(
+                {
+                    "forecast_id": outcome.get("forecast_id"),
+                    "symbol": forecast.get("symbol") or outcome.get("symbol"),
+                    "result": outcome.get("result"),
+                    "directional_move_pct": round(directional_move, 2),
+                    "quality_cohort": quality_cohort,
+                    "source": str(news.get("publisher") or evidence.get("publisher") or "Unbekannte Quelle"),
+                    "event_type": str(news.get("event_type") or "unknown").lower(),
+                }
+            )
+
+        def group(field: str) -> List[Dict[str, Any]]:
+            buckets: Dict[str, List[Dict[str, Any]]] = {}
+            for row in rows:
+                buckets.setdefault(str(row.get(field) or "unknown"), []).append(row)
+            grouped: List[Dict[str, Any]] = []
+            for label, items in buckets.items():
+                hits = sum(1 for item in items if item.get("result") == "hit")
+                misses = sum(1 for item in items if item.get("result") == "miss")
+                neutral = sum(1 for item in items if item.get("result") == "neutral")
+                decisive = hits + misses
+                evaluated = len(items)
+                grouped.append(
+                    {
+                        "label": label,
+                        "evaluated": evaluated,
+                        "decisive": decisive,
+                        "hits": hits,
+                        "misses": misses,
+                        "neutral": neutral,
+                        "hit_rate": round((hits / max(1, decisive)) * 100, 1),
+                        "decision_rate": round((decisive / max(1, evaluated)) * 100, 1),
+                        "avg_directional_move_pct": round(
+                            sum(float(item.get("directional_move_pct") or 0) for item in items) / max(1, evaluated),
+                            2,
+                        ),
+                        "evidence_status": "usable" if evaluated >= 10 else "building" if evaluated >= 5 else "insufficient",
+                    }
+                )
+            grouped.sort(key=lambda item: (-int(item.get("evaluated") or 0), -float(item.get("hit_rate") or 0)))
+            return grouped
+
+        quality_cohorts = group("quality_cohort")
+        hits = sum(1 for row in rows if row.get("result") == "hit")
+        misses = sum(1 for row in rows if row.get("result") == "miss")
+        neutral = sum(1 for row in rows if row.get("result") == "neutral")
+        decisive = hits + misses
+        overall_hit_rate = round((hits / max(1, decisive)) * 100, 1)
+        strict = next((item for item in quality_cohorts if item.get("label") == "strict_gate_confirmed"), None)
+        strict_lift = None
+        if strict and int(strict.get("decisive") or 0) >= 3 and decisive >= 3:
+            strict_lift = round(float(strict.get("hit_rate") or 0) - overall_hit_rate, 1)
+        summary = {
+            "forecasts": len(top_news),
+            "evaluated_24h": len(rows),
+            "pending_24h": pending_24h,
+            "hits": hits,
+            "misses": misses,
+            "neutral": neutral,
+            "hit_rate": overall_hit_rate,
+            "avg_directional_move_pct": round(
+                sum(float(row.get("directional_move_pct") or 0) for row in rows) / max(1, len(rows)),
+                2,
+            ) if rows else None,
+            "strict_gate_lift_pct_points": strict_lift,
+            "sample_unit": "Eine Meldung mit genau einem 24-Stunden-Ergebnis.",
+            "policy": "Shadow-Studie ohne Position, PnL oder Echtgeldwirkung.",
+        }
+        return {
+            "summary": summary,
+            "quality_cohorts": quality_cohorts,
+            "sources": group("source"),
+            "event_types": group("event_type"),
         }
 
     def _apply_news_evidence_learning(

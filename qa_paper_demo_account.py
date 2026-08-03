@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 from unittest.mock import patch
@@ -15,6 +16,8 @@ class FakePortfolioManager:
         self.trades = trades or []
         self.created: List[Dict[str, Any]] = []
         self.outcomes: List[Dict[str, Any]] = []
+        self.signal_forecasts: List[Dict[str, Any]] = []
+        self.signal_forecast_outcomes: List[Dict[str, Any]] = []
         self.app_settings: Dict[str, str] = {}
 
     def list_paper_trades(
@@ -37,6 +40,12 @@ class FakePortfolioManager:
         self.created.append(trade)
         self.trades.append(trade)
         return trade
+
+    def list_signal_forecasts(self, limit: int = 500) -> List[Dict[str, Any]]:
+        return self.signal_forecasts[:limit]
+
+    def list_signal_forecast_outcomes(self, limit: int = 2200) -> List[Dict[str, Any]]:
+        return self.signal_forecast_outcomes[:limit]
 
     def upsert_paper_trade_outcomes(self, trade_id: str, outcomes: List[Dict[str, Any]]) -> int:
         inserted = 0
@@ -717,6 +726,88 @@ def test_news_evidence_learning_requires_sample_and_adjusts_conservatively() -> 
     assert playbooks[0]["score"] == 84
     assert playbooks[0]["news_learning_adjustment"]["score_delta"] == -6
     assert playbooks[0]["news_learning_adjustment"]["real_money_ready"] is False
+
+
+def test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast() -> None:
+    manager = FakePortfolioManager()
+    strict_news = {
+        "ticker": "MSFT",
+        "ticker_association_basis": "explicit_title_entity",
+        "publisher": "Reuters",
+        "source_quality": "tier_1",
+        "source_url": "https://www.reuters.com/markets/qa/",
+        "published_at": "2026-08-01T10:00:00+00:00",
+        "age_hours": 2.0,
+        "event_type": "earnings",
+        "source_evidence": {"link_verified": True},
+        "news_intelligence": {"is_important": True},
+        "market_confirmation": {
+            "status": "confirmed",
+            "expected_headline_direction": "positive",
+            "event_window_aligned": True,
+        },
+    }
+    directional_news = {
+        "ticker": "MSFT",
+        "publisher": "Reuters",
+        "source_url": "https://www.reuters.com/markets/qa/",
+        "published_at": "2026-08-01T10:00:00+00:00",
+        "event_type": "earnings",
+    }
+    for index in range(11):
+        news = strict_news if index < 5 or index == 10 else directional_news
+        forecast_id = f"shadow-{index}"
+        manager.signal_forecasts.append(
+            {
+                "id": forecast_id,
+                "symbol": "MSFT",
+                "direction": "long",
+                "setup_type": "top_news_forecast",
+                "source_label": "trusted_news",
+                "metadata_json": json.dumps({"news_item": news}),
+            }
+        )
+        if index == 10:
+            manager.signal_forecast_outcomes.append(
+                {"forecast_id": forecast_id, "horizon_hours": 24, "status": "pending"}
+            )
+            continue
+        hit = index < 5 or index in {5, 6}
+        move = 1.0 if hit else -1.0
+        result = "hit" if hit else "miss"
+        manager.signal_forecast_outcomes.extend(
+            [
+                {
+                    "forecast_id": forecast_id,
+                    "horizon_hours": 1,
+                    "status": "evaluated",
+                    "result": result,
+                    "performance_pct": move,
+                },
+                {
+                    "forecast_id": forecast_id,
+                    "horizon_hours": 24,
+                    "status": "evaluated",
+                    "result": result,
+                    "performance_pct": move,
+                },
+            ]
+        )
+
+    lab = PaperTradingService(manager)._build_news_shadow_lab()
+    summary = lab["summary"]
+    assert summary["forecasts"] == 11
+    assert summary["evaluated_24h"] == 10
+    assert summary["pending_24h"] == 1
+    assert summary["hit_rate"] == 70.0
+    assert summary["avg_directional_move_pct"] == 0.4
+    assert summary["strict_gate_lift_pct_points"] == 30.0
+    cohorts = {item["label"]: item for item in lab["quality_cohorts"]}
+    assert cohorts["strict_gate_confirmed"]["evaluated"] == 5
+    assert cohorts["strict_gate_confirmed"]["hit_rate"] == 100.0
+    assert cohorts["directional_headline"]["evaluated"] == 5
+    assert lab["sources"][0]["evaluated"] == 10
+    assert lab["sources"][0]["evidence_status"] == "usable"
 
 
 def test_learning_context_performance_groups_account_state() -> None:
@@ -2082,6 +2173,7 @@ if __name__ == "__main__":
     test_performance_metrics_expose_bad_payoff_despite_high_win_rate()
     test_entry_source_performance_separates_manual_and_autopilot()
     test_news_evidence_learning_requires_sample_and_adjusts_conservatively()
+    test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast()
     test_learning_context_performance_groups_account_state()
     test_strategy_readiness_requires_positive_money_expectancy()
     test_short_trade_money_flow_and_demo_equity()

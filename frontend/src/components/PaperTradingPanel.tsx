@@ -76,6 +76,7 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     ahead: "im Plus",
     behind: "im Minus",
     building_evidence: "Beweise sammeln",
+    building: "im Aufbau",
     blocked: "geblockt",
     collect_evidence: "Beweise sammeln",
     downgrade: "herabstufen",
@@ -85,6 +86,7 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     hold_with_plan: "mit Plan halten",
     holding_period_expired: "maximale Haltedauer erreicht",
     insufficient_sample: "zu wenig Daten",
+    insufficient: "zu wenig Daten",
     learning: "Lernen",
     manual_review_ready: "manuelle Prüfung bereit",
     miss: "Fehlschlag",
@@ -99,6 +101,7 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     paper_only: "nur Paper",
     partial: "teilweise",
     price_and_close_review: "Preis erfassen und schließen",
+    price_contradicted: "Preis widerspricht",
     paused: "pausiert",
     pending: "wartet",
     promising: "vielversprechend",
@@ -109,6 +112,10 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     reduced_risk: "reduziertes Risiko",
     risk_halt: "Trading pausiert",
     risk_review: "Risiko prüfen",
+    strict_gate_confirmed: "striktes Gate bestätigt",
+    verified_unconfirmed: "Quelle bestätigt, Preis offen",
+    directional_headline: "Richtungs-Headline",
+    usable: "nutzbare Stichprobe",
     net_long: "netto long",
     net_short: "netto short",
     balanced: "ausgeglichen",
@@ -158,6 +165,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const newsEvidenceSummary = newsEvidencePerformance.summary || {};
   const newsSourcePerformance = newsEvidencePerformance.sources || [];
   const newsEventPerformance = newsEvidencePerformance.event_types || [];
+  const newsShadowLab = data?.news_shadow_lab || {};
+  const newsShadowSummary = newsShadowLab.summary || {};
+  const newsShadowCohorts = newsShadowLab.quality_cohorts || [];
   const learningContextPerformance = data?.learning_context_performance || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
@@ -1976,6 +1986,68 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           </div>
         )}
+
+        <div className="mt-4 rounded-[1.6rem] border border-sky-500/20 bg-sky-50/60 p-4 text-xs text-slate-600">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-sky-700">News Shadow Lab · 24 Stunden</div>
+              <div className="mt-1 max-w-3xl text-slate-600">
+                Jede Meldung zählt genau einmal. So werden 1h-, 24h-, 72h- und 120h-Ergebnisse derselben Headline nicht als vier unabhängige Signale ausgegeben.
+              </div>
+            </div>
+            <div className="rounded-full border border-sky-500/20 bg-white px-3 py-1 font-black text-sky-800">
+              {newsShadowSummary.forecasts || 0} beobachtet · {newsShadowSummary.pending_24h || 0} offen
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-black/8 bg-white/85 px-3 py-3">
+              <div className="font-black text-slate-900">{newsShadowSummary.evaluated_24h || 0}</div>
+              <div className="mt-1 text-slate-500">einmalig ausgewertet</div>
+            </div>
+            <div className="rounded-xl border border-black/8 bg-white/85 px-3 py-3">
+              <div className="font-black text-slate-900">{Number(newsShadowSummary.hit_rate || 0).toFixed(1)}%</div>
+              <div className="mt-1 text-slate-500">Treffer bei klaren Fällen</div>
+            </div>
+            <div className="rounded-xl border border-black/8 bg-white/85 px-3 py-3">
+              <div className={`font-black ${Number(newsShadowSummary.avg_directional_move_pct || 0) > 0 ? "text-emerald-700" : Number(newsShadowSummary.avg_directional_move_pct || 0) < 0 ? "text-red-700" : "text-slate-900"}`}>
+                {formatPct(newsShadowSummary.avg_directional_move_pct, 2, "offen")}
+              </div>
+              <div className="mt-1 text-slate-500">Ø Richtungsbewegung</div>
+            </div>
+            <div className="rounded-xl border border-black/8 bg-white/85 px-3 py-3">
+              <div className={`font-black ${Number(newsShadowSummary.strict_gate_lift_pct_points || 0) > 0 ? "text-emerald-700" : Number(newsShadowSummary.strict_gate_lift_pct_points || 0) < 0 ? "text-red-700" : "text-slate-900"}`}>
+                {newsShadowSummary.strict_gate_lift_pct_points == null ? "noch offen" : `${Number(newsShadowSummary.strict_gate_lift_pct_points) >= 0 ? "+" : ""}${Number(newsShadowSummary.strict_gate_lift_pct_points).toFixed(1)} PP`}
+              </div>
+              <div className="mt-1 text-slate-500">Mehrwert des strikten Gates</div>
+            </div>
+          </div>
+
+          {newsShadowCohorts.length ? (
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              {newsShadowCohorts.slice(0, 4).map((item: any) => (
+                <div key={item.label} className="rounded-xl border border-black/8 bg-white/85 px-3 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-black text-slate-900">{germanStatus(item.label, item.label)}</div>
+                    <div className="font-black text-sky-800">{item.hit_rate || 0}%</div>
+                  </div>
+                  <div className="mt-2 text-slate-500">
+                    {item.evaluated || 0} Meldungen · {item.decisive || 0} klar · Ø {formatPct(item.avg_directional_move_pct, 2, "0.00%")}
+                  </div>
+                  <div className="mt-1 font-semibold text-slate-700">{germanStatus(item.evidence_status, "zu wenig Daten")}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-sky-500/25 bg-white/75 px-4 py-3">
+              Noch keine kanonischen 24-Stunden-News-Ergebnisse vorhanden.
+            </div>
+          )}
+
+          <div className="mt-3 font-semibold text-sky-900">
+            {newsShadowSummary.sample_unit || "Eine Meldung mit genau einem 24-Stunden-Ergebnis."} {newsShadowSummary.policy || "Shadow-Studie ohne Position oder Echtgeldwirkung."}
+          </div>
+        </div>
 
         <div className="mt-4 rounded-[1.6rem] border border-violet-500/20 bg-violet-50/55 p-4 text-xs text-slate-600">
           <div className="flex flex-wrap items-start justify-between gap-3">

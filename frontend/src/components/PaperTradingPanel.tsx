@@ -90,6 +90,8 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     monitor: "überwachen",
     needs_journal: "Journal fehlt",
     no_open_trades: "keine offenen Trades",
+    news_reaction_failed: "News-Reaktion gebrochen",
+    news_momentum_stalled: "News-Momentum stockt",
     not_started: "noch nicht gestartet",
     ok: "ok",
     open: "offen",
@@ -1262,6 +1264,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div className="mt-1 text-violet-800">
                           Relative Reaktion {newsEvidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {newsEvidence.fact_basis || "offen"} · Kausalität nicht bewiesen
                         </div>
+                        {trade.trade_ticket?.max_holding_days ? (
+                          <div className="mt-1 font-bold text-violet-700">
+                            Event-Fenster maximal {trade.trade_ticket.max_holding_days} Tage
+                            {management.elapsed_hours != null ? ` · bisher ${Number(management.elapsed_hours).toFixed(1)} Stunden` : ""}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
@@ -2082,7 +2090,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         Veröffentlicht {item.news_evidence.published_at ? new Date(item.news_evidence.published_at).toLocaleString() : "offen"} · relative Reaktion {item.news_evidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {item.news_evidence.fact_basis || "offen"}
                       </div>
                       <div className="mt-1 font-semibold text-violet-700">
-                        Zeitliche Bestätigung ist kein Kausalitätsbeweis. Echtgeld bleibt gesperrt.
+                        Event-Fenster maximal {item.max_holding_days || 3} Tage · zeitliche Bestätigung ist kein Kausalitätsbeweis. Echtgeld bleibt gesperrt.
                       </div>
                     </div>
                   ) : null}

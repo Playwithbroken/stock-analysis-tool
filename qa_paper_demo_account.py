@@ -298,6 +298,104 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
     )
     assert opened["trade_ticket"]["news_evidence"]["market_confirmation"]["causality_proven"] is False
     assert "Newsquelle: Reuters" in opened["notes"]
+    assert opened["max_holding_days"] == 3
+    assert opened["trade_ticket"]["max_holding_days"] == 3
+
+
+def test_news_trade_management_exits_failed_reaction_and_reviews_stall() -> None:
+    service = build_service(FakePortfolioManager())
+    base = {
+        "ticker": "MSFT",
+        "asset_class": "equity",
+        "direction": "long",
+        "setup_type": "confirmed_news_event",
+        "entry_price": 100.0,
+        "stop_price": 97.0,
+        "target_price": 106.5,
+        "current_market_data": {},
+        "trade_ticket": {
+            "news_evidence": {
+                "source_url": "https://www.reuters.com/technology/microsoft-guidance/",
+            }
+        },
+    }
+    failed = service._build_trade_management_plan(
+        {
+            **base,
+            "opened_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+            "current_price": 99.0,
+            "unrealized_pnl_pct": -1.0,
+        }
+    )
+    assert failed["status"] == "news_reaction_failed"
+    assert failed["decision_grade"] == "exit"
+    assert failed["action"] == "close_review"
+    assert failed["causality_proven"] is False
+    assert failed["source_url"].startswith("https://www.reuters.com/")
+
+    stalled = service._build_trade_management_plan(
+        {
+            **base,
+            "opened_at": (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat(),
+            "current_price": 100.1,
+            "unrealized_pnl_pct": 0.1,
+        }
+    )
+    assert stalled["status"] == "news_momentum_stalled"
+    assert stalled["decision_grade"] == "review"
+    assert stalled["action"] == "thesis_check"
+    assert float(stalled["elapsed_hours"]) >= 29.9
+
+
+def test_news_management_auto_closes_reaction_and_equity_time_exits() -> None:
+    recent_manager = FakePortfolioManager(
+        [
+            {
+                "id": "news-reaction-exit",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "confirmed_news_event",
+                "status": "open",
+                "opened_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+                "entry_price": 101.0,
+                "stop_price": 95.0,
+                "target_price": 108.0,
+                "quantity": 10,
+                "confidence_score": 91,
+                "leverage": 1,
+                "trade_ticket": {"news_evidence": {"source_url": "https://www.reuters.com/qa"}},
+            }
+        ]
+    )
+    recent_result = build_service(recent_manager).close_trades_on_management_exits()
+    assert len(recent_result["closed"]) == 1
+    assert recent_result["closed"][0]["exit_reason"] == "managed_news_reaction_failed"
+
+    expired_manager = FakePortfolioManager(
+        [
+            {
+                "id": "news-time-exit",
+                "ticker": "AAPL",
+                "asset_class": "equity",
+                "direction": "long",
+                "setup_type": "confirmed_news_event",
+                "status": "open",
+                "opened_at": (datetime.now(timezone.utc) - timedelta(days=4)).isoformat(),
+                "entry_price": 100.0,
+                "stop_price": 95.0,
+                "target_price": 108.0,
+                "quantity": 10,
+                "confidence_score": 91,
+                "leverage": 1,
+                "max_holding_days": 3,
+                "trade_ticket": {"news_evidence": {"source_url": "https://www.reuters.com/qa"}},
+            }
+        ]
+    )
+    expired_result = build_service(expired_manager).close_trades_on_management_exits()
+    assert len(expired_result["closed"]) == 1
+    assert expired_result["closed"][0]["exit_reason"] == "managed_holding_period_expired"
 
 
 def test_demo_account_sizing() -> None:
@@ -1928,6 +2026,8 @@ def test_market_snapshot_falls_back_to_daily_data() -> None:
 
 if __name__ == "__main__":
     test_confirmed_news_requires_full_evidence_chain()
+    test_news_trade_management_exits_failed_reaction_and_reviews_stall()
+    test_news_management_auto_closes_reaction_and_equity_time_exits()
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
     test_performance_metrics_expose_bad_payoff_despite_high_win_rate()

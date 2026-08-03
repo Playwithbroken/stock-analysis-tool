@@ -594,7 +594,7 @@ class PaperTradingService:
                 "underlying_entry_price": playbook.get("underlying_reference_price") if is_option else last_price,
                 "option_type": playbook.get("option_type") if is_option else None,
                 "contract_multiplier": playbook.get("contract_multiplier") or (100 if is_option else 1),
-                "max_holding_days": playbook.get("max_holding_days") if is_option else None,
+                "max_holding_days": playbook.get("max_holding_days"),
                 "notes": self._build_trade_note_snapshot(note_playbook, demo_account, is_option),
                 "trade_ticket": note_playbook.get("trade_ticket") or {},
             }
@@ -720,12 +720,13 @@ class PaperTradingService:
         closed: List[Dict[str, Any]] = []
         skipped: List[Dict[str, Any]] = []
         errors: List[Dict[str, Any]] = []
-        exit_statuses = {"stop_hit", "target_hit"}
+        exit_statuses = {"stop_hit", "target_hit", "news_reaction_failed"}
 
         for trade in open_trades:
             management = trade.get("management_plan") or {}
             status = str(management.get("status") or "")
-            if status not in exit_statuses:
+            equity_time_exit = status == "holding_period_expired" and trade.get("asset_class") != "option"
+            if status not in exit_statuses and not equity_time_exit:
                 skipped.append(
                     {
                         "id": trade.get("id"),
@@ -751,6 +752,10 @@ class PaperTradingService:
                 lesson = (
                     "Paper target reached: record whether the setup should be repeated."
                     if status == "target_hit"
+                    else "News reaction failed: review headline direction, timing and relative-price confirmation."
+                    if status == "news_reaction_failed"
+                    else "Event holding window expired: review whether the catalyst had durable follow-through."
+                    if status == "holding_period_expired"
                     else "Paper stop hit: review trigger quality, timing and invalidation."
                 )
                 notes = (
@@ -1148,6 +1153,7 @@ class PaperTradingService:
                 "score": score,
                 "risk_buffer_pct": 3.0,
                 "reward_buffer_pct": 6.5,
+                "max_holding_days": 3,
                 "thesis": (
                     f"Explizite Tier-1-Meldung zu {ticker} mit bestätigter relativer Preisreaktion "
                     f"seit Veröffentlichung ({relative_move if relative_move is not None else 'gemessen'}%)."
@@ -1414,7 +1420,7 @@ class PaperTradingService:
         opened_at = self._parse_datetime(trade.get("opened_at")) or datetime.utcnow()
         horizons = list(DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS)
         max_holding_days = int(trade.get("max_holding_days") or 0)
-        if trade.get("asset_class") == "option" and max_holding_days > 0:
+        if max_holding_days > 0:
             horizons.append(max_holding_days * 24)
         unique_horizons = sorted({int(hour) for hour in horizons if int(hour) > 0})
         outcomes = [
@@ -2918,6 +2924,7 @@ class PaperTradingService:
             "target_1": target_1,
             "target_2": target_2,
             "horizon": framework.get("strategy_horizon") or strategy.get("horizon") or "not classified",
+            "max_holding_days": playbook.get("max_holding_days") or None,
             "quantity": playbook.get("suggested_quantity"),
             "notional_value": playbook.get("suggested_notional_value"),
             "max_loss_value": playbook.get("suggested_max_loss_value"),
@@ -3473,6 +3480,15 @@ class PaperTradingService:
         stop_price = float(stop) if stop not in (None, 0) else None
         target_price = float(target) if target not in (None, 0) else None
         favorable_pct = float(trade.get("unrealized_pnl_pct") or 0)
+        is_news_event = str(trade.get("setup_type") or "") == "confirmed_news_event"
+        elapsed_hours = (
+            max(
+                0.0,
+                (datetime.now(timezone.utc).replace(tzinfo=None) - opened_at).total_seconds() / 3600,
+            )
+            if opened_at is not None
+            else None
+        )
         risk_distance = None
         target_progress = None
         action = "hold"
@@ -3546,7 +3562,34 @@ class PaperTradingService:
                 action = "protect_profit_review"
                 summary = "Trade ist nahe am Ziel. Prüfen, ob Gewinn geschützt oder Paper-Plan enger geführt wird."
 
-        if favorable_pct <= -1.5 and status == "monitor":
+        if is_news_event and favorable_pct <= -0.75:
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            news_evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
+            return {
+                "status": "news_reaction_failed",
+                "action": "close_review",
+                "decision_grade": "exit",
+                "next_check": "Paper-Trade schließen; Reaktionsrichtung, Entry-Timing und Quellenlage journalisieren.",
+                "summary": "Die bestätigte News-Reaktion ist deutlich zurückgelaufen. Event-These nicht bis zum normalen Stop aussitzen.",
+                "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
+                "target_progress_pct": round(target_progress, 1) if target_progress is not None else None,
+                "unrealized_pnl_pct": round(favorable_pct, 2),
+                "elapsed_hours": round(elapsed_hours, 1) if elapsed_hours is not None else None,
+                "source_url": news_evidence.get("source_url"),
+                "causality_proven": False,
+            }
+
+        if (
+            is_news_event
+            and elapsed_hours is not None
+            and elapsed_hours >= 24
+            and favorable_pct < 0.35
+            and status == "monitor"
+        ):
+            status = "news_momentum_stalled"
+            action = "thesis_check"
+            summary = "Nach 24 Stunden fehlt nachhaltiger News-Follow-through. These und Kapitalbindung erneut prüfen."
+        elif favorable_pct <= -1.5 and status == "monitor":
             status = "weak_follow_through"
             action = "thesis_check"
             summary = "Negative Anschlussbewegung. Prüfen, ob der ursprüngliche Trigger versagt."
@@ -3557,7 +3600,7 @@ class PaperTradingService:
 
         decision_grade = "hold"
         next_check = "Geplanten Stop und Ziel halten; nach dem nächsten relevanten Kursupdate erneut prüfen."
-        if status in {"near_stop", "weak_follow_through"}:
+        if status in {"near_stop", "weak_follow_through", "news_momentum_stalled"}:
             decision_grade = "review"
             next_check = "Trigger-Qualität und Invalidierung erneut prüfen, bevor aufgestockt oder länger gehalten wird."
         elif status == "near_target":
@@ -3576,6 +3619,7 @@ class PaperTradingService:
             "risk_distance_pct": round(risk_distance, 2) if risk_distance is not None else None,
             "target_progress_pct": round(target_progress, 1) if target_progress is not None else None,
             "unrealized_pnl_pct": round(favorable_pct, 2),
+            "elapsed_hours": round(elapsed_hours, 1) if elapsed_hours is not None else None,
         }
 
     def _get_do_not_trade_state(self, playbook: Dict[str, Any], rules: Dict[str, Any]) -> Dict[str, List[str]]:

@@ -378,6 +378,40 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "<code>TSLA</code> SHORT" in management_loss
     assert "Offenes Ergebnis:</b> -64,00 EUR | -2.00%" in management_loss
 
+    news_management = service._render_telegram_paper_trade_management_alert(
+        {
+            "ticker": "MSFT",
+            "direction": "long",
+            "asset_class": "equity",
+            "setup_type": "confirmed_news_event",
+            "opened_at": "2026-07-11T12:00:00+00:00",
+            "management_status": "news_reaction_failed",
+            "management_action": "close_review",
+            "decision_grade": "exit",
+            "entry_price": 100.0,
+            "current_price": 99.0,
+            "stop_price": 97.0,
+            "target_price": 106.5,
+            "quantity": 10,
+            "invested_value": 1000.0,
+            "current_value": 990.0,
+            "unrealized_pnl_pct": -1.0,
+            "unrealized_pnl_value": -10.0,
+            "elapsed_hours": 2.0,
+            "max_holding_days": 3,
+            "news_evidence": {
+                "publisher": "Reuters",
+                "source_url": "https://www.reuters.com/technology/microsoft-guidance/",
+            },
+            "management_summary": "Die bestätigte News-Reaktion ist zurückgelaufen.",
+            "next_check": "Paper-Trade schließen und journalisieren.",
+        }
+    )
+    assert "NEWS-REAKTION GEBROCHEN" in news_management
+    assert "News-Lifecycle:</b> 2.0h gelaufen | max. 3 Tage" in news_management
+    assert '<a href="https://www.reuters.com/technology/microsoft-guidance/">Reuters</a>' in news_management
+    assert "Stufe:</b> EXIT" in news_management
+
     account = service._render_telegram_paper_account_status_alert(
         {
             "day_status": "risk_halt",

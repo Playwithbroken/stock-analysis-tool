@@ -371,6 +371,8 @@ class PaperTradingService:
             return "Score unter Mindestqualität 78"
         if "same ticker/setup/direction already open" in lower:
             return "gleicher Ticker/Setup/Richtung läuft bereits"
+        if "paper re-entry cooldown active" in lower:
+            return "Re-Entry-Cooldown für denselben Lernfall aktiv"
         if "missing paper journal" in lower:
             return "fehlendes Paper-Journal"
         if "risk review" in lower:
@@ -459,6 +461,12 @@ class PaperTradingService:
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
+        reentry_cooldown = self._build_paper_reentry_cooldown(playbook, trades)
+        if reentry_cooldown.get("active") is True:
+            raise ValueError(
+                "Paper re-entry cooldown blocks the same ticker/setup/direction until "
+                f"{reentry_cooldown.get('until')}."
+            )
         if (
             playbook.get("setup_type") == "confirmed_news_event"
             and direction != str(playbook.get("direction") or "").lower()
@@ -1867,6 +1875,53 @@ class PaperTradingService:
             "next_step": readiness.get("next_step") or "Paper-Beweise sammeln.",
         }
 
+    def _build_paper_reentry_cooldown(
+        self,
+        playbook: Dict[str, Any],
+        trades: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        asset_class = str(playbook.get("asset_class") or "equity").lower()
+        default_hours = 24.0 if asset_class in {"crypto", "option"} else 72.0
+        env_name = f"PAPER_TRADING_REENTRY_COOLDOWN_HOURS_{asset_class.upper()}"
+        try:
+            cooldown_hours = min(720.0, max(1.0, float(os.getenv(env_name, str(default_hours)))))
+        except (TypeError, ValueError):
+            cooldown_hours = default_hours
+        key = (
+            str(playbook.get("ticker") or "").upper(),
+            str(playbook.get("setup_type") or ""),
+            str(playbook.get("direction") or "").lower(),
+            asset_class,
+        )
+        latest_closed_at = None
+        for trade in trades:
+            if trade.get("status") != "closed":
+                continue
+            trade_key = (
+                str(trade.get("ticker") or "").upper(),
+                str(trade.get("setup_type") or ""),
+                str(trade.get("direction") or "").lower(),
+                str(trade.get("asset_class") or "equity").lower(),
+            )
+            if trade_key != key:
+                continue
+            closed_at = self._as_utc_naive_datetime(trade.get("closed_at"))
+            if closed_at and (latest_closed_at is None or closed_at > latest_closed_at):
+                latest_closed_at = closed_at
+        if latest_closed_at is None:
+            return {"active": False, "cooldown_hours": cooldown_hours}
+        until = latest_closed_at + timedelta(hours=cooldown_hours)
+        compare_now = datetime.now(timezone.utc).replace(tzinfo=None)
+        active = compare_now < until
+        return {
+            "active": active,
+            "cooldown_hours": cooldown_hours,
+            "last_closed_at": latest_closed_at.isoformat(),
+            "until": until.isoformat(),
+            "remaining_hours": round(max(0.0, (until - compare_now).total_seconds() / 3600), 2),
+            "policy": "Require a fresh observation window before repeating the same ticker, setup and direction.",
+        }
+
     def _build_auto_selection(
         self,
         playbooks: List[Dict[str, Any]],
@@ -1938,6 +1993,12 @@ class PaperTradingService:
                 str(playbook.get("direction") or ""),
                 str(playbook.get("asset_class") or ""),
             )
+            reentry_cooldown = self._build_paper_reentry_cooldown(playbook, trades)
+            if reentry_cooldown.get("active") is True:
+                cooldown_reason = f"paper re-entry cooldown active until {reentry_cooldown.get('until')}"
+                reasons.append(cooldown_reason)
+                exploration_reasons.append(cooldown_reason)
+                aggressive_reasons.append(cooldown_reason)
             framework = playbook.get("decision_framework") or {}
             ticket = playbook.get("trade_ticket") if isinstance(playbook.get("trade_ticket"), dict) else {}
             ticket_validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
@@ -2047,6 +2108,7 @@ class PaperTradingService:
                 "trigger": framework.get("entry_trigger"),
                 "invalidation": framework.get("invalidation"),
                 "trade_ticket": playbook.get("trade_ticket") or {},
+                "reentry_cooldown": reentry_cooldown,
                 "reasons": self._dedupe_reason_list(reasons),
                 "learning_block_reasons": self._dedupe_reason_list(exploration_reasons),
                 "aggressive_learning_block_reasons": self._dedupe_reason_list(aggressive_reasons),
@@ -2184,6 +2246,7 @@ class PaperTradingService:
                 item
                 for item in rejected
                 if "same ticker/setup/direction already open" not in {str(reason) for reason in item.get("reasons") or []}
+                and not any("paper re-entry cooldown active" in str(reason) for reason in item.get("reasons") or [])
             ]
             next_pool = actionable_rejected or rejected
             next_best = max(next_pool, key=lambda item: float(item.get("score") or 0))
@@ -2223,6 +2286,11 @@ class PaperTradingService:
                 for item in rejected
                 if "same ticker/setup/direction already open" in {str(reason) for reason in item.get("reasons") or []}
             ),
+            "reentry_cooldown_count": sum(
+                1
+                for item in rejected
+                if any("paper re-entry cooldown active" in str(reason) for reason in item.get("reasons") or [])
+            ),
         }
 
     def _auto_rejection_category(self, reason: str) -> str:
@@ -2248,6 +2316,8 @@ class PaperTradingService:
             return "capacity"
         if "same ticker/setup/direction already open" in lower:
             return "duplicate"
+        if "paper re-entry cooldown active" in lower:
+            return "reentry_cooldown"
         if "score below" in lower:
             return "score"
         if "missing ticker or reference price" in lower or "trade ticket invalid" in lower:
@@ -2266,6 +2336,7 @@ class PaperTradingService:
             "risk_review": "Risiko prüfen",
             "capacity": "Kapazitaet voll",
             "duplicate": "Duplikat offen",
+            "reentry_cooldown": "Neues Beobachtungsfenster abwarten",
             "score": "Score zu niedrig",
             "data": "Daten fehlen",
             "setup_quality": "Setup unvollstaendig",
@@ -2288,6 +2359,8 @@ class PaperTradingService:
             return "Kursdaten oder Ticker-Zuordnung reparieren"
         if "same ticker/setup/direction already open" in text:
             return "Bestehenden Paper-Trade managen statt doppeln"
+        if "paper re-entry cooldown active" in text:
+            return "Re-Entry-Cooldown abwarten; danach beginnt ein unabhängigeres Beobachtungsfenster"
         if "paper risk circuit" in text:
             return "Cooldown abwarten und Verlustserie prüfen, bevor ein neuer Entry startet"
         if "risk review" in text or "exit actions open" in text:
@@ -2334,6 +2407,8 @@ class PaperTradingService:
             return "Kein neuer Entry: Risiko oder Slots freimachen, bevor neue Exposure aufgebaut wird."
         if "same ticker/setup/direction already open" in text:
             return "Kein Duplikat eröffnen; bestehenden Paper-Trade managen oder schließen."
+        if "paper re-entry cooldown active" in text:
+            return "Keinen identischen Lernfall sofort wiederholen; Cooldown bis zum nächsten Beobachtungsfenster abwarten."
         if "score below auto minimum" in text:
             return "Auf Score 88+ warten oder stärkere Bestätigung durch Preis, Volumen und Newsqualität verlangen."
         if "score below minimum trade score" in text:

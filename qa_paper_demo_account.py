@@ -1308,6 +1308,62 @@ def test_demo_account_limits_risk_review_to_affected_risk_and_scales_independent
     assert created["trade_ticket"]["max_loss_value"] <= 1_875.0
 
 
+def test_recent_closed_setup_requires_a_fresh_reentry_window() -> None:
+    manager = FakePortfolioManager(
+        [
+            {
+                "id": "recent-btc-close",
+                "ticker": "BTC-USD",
+                "asset_class": "crypto",
+                "direction": "long",
+                "setup_type": "crypto_flow",
+                "status": "closed",
+                "opened_at": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),
+                "closed_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+                "entry_price": 64_000.0,
+                "closed_price": 64_500.0,
+                "stop_price": 60_480.0,
+                "target_price": 71_040.0,
+                "quantity": 0.05,
+                "confidence_score": 82,
+                "leverage": 1,
+                "notes": "QA completed trade.",
+                "exit_reason": "managed_holding_period_expired",
+                "lessons_learned": "Wait for a fresh observation window.",
+            }
+        ]
+    )
+    service = build_service(manager)
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings())
+    aggressive_tickers = {
+        item["ticker"] for item in dashboard["auto_selection"]["aggressive_exploration"]
+    }
+    assert "BTC-USD" not in aggressive_tickers
+    assert dashboard["auto_selection"]["blocker_summary"]["reentry_cooldown_count"] == 1
+    btc_rejected = next(
+        item for item in dashboard["auto_selection"]["rejected"] if item["ticker"] == "BTC-USD"
+    )
+    assert btc_rejected["reentry_cooldown"]["active"] is True
+    assert btc_rejected["reentry_cooldown"]["remaining_hours"] >= 22.9
+
+    try:
+        service.create_trade_from_playbook(
+            {
+                "playbook_id": "crypto-BTC-USD-long",
+                "direction": "long",
+                "quantity": 0,
+                "leverage": 1,
+                "learning_mode": True,
+            },
+            sample_scoreboard(),
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "re-entry cooldown" in str(exc).lower()
+    else:
+        raise AssertionError("A recently closed identical setup was reopened without a fresh observation window.")
+
+
 def test_profit_protection_limits_autopilot_to_small_learning() -> None:
     manager = FakePortfolioManager(
         [
@@ -2405,6 +2461,7 @@ if __name__ == "__main__":
     test_put_learning_inverts_underlying_move()
     test_demo_account_blocks_when_open_risk_is_exhausted()
     test_demo_account_limits_risk_review_to_affected_risk_and_scales_independent_trades()
+    test_recent_closed_setup_requires_a_fresh_reentry_window()
     test_profit_protection_limits_autopilot_to_small_learning()
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()

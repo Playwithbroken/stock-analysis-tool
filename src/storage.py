@@ -902,12 +902,13 @@ class PortfolioManager:
         import json
         default = {
             "mode": "aggressive_learning",
-            "max_trades": 3,
+            "max_trades": 5,
             "strict_min_score": 88,
             "learning_min_score": 60,
             "aggressive_min_score": 52,
-            "learning_risk_multiplier": 0.10,
-            "aggressive_risk_multiplier": 0.25,
+            "learning_risk_multiplier": 0.25,
+            "aggressive_risk_multiplier": 0.60,
+            "capital_deployment_profile": "full_learning_v2",
             "show_interesting_now": True,
         }
         raw = self.get_app_setting("paper_autopilot_settings")
@@ -915,6 +916,20 @@ class PortfolioManager:
             try:
                 parsed = json.loads(raw)
                 if isinstance(parsed, dict):
+                    if not parsed.get("capital_deployment_profile"):
+                        parsed = {
+                            **parsed,
+                            "max_trades": max(5, int(float(parsed.get("max_trades") or 3))),
+                            "learning_risk_multiplier": max(
+                                0.25,
+                                float(parsed.get("learning_risk_multiplier") or 0.10),
+                            ),
+                            "aggressive_risk_multiplier": max(
+                                0.60,
+                                float(parsed.get("aggressive_risk_multiplier") or 0.25),
+                            ),
+                            "capital_deployment_profile": "full_learning_v2",
+                        }
                     return {**default, **parsed}
             except json.JSONDecodeError:
                 pass
@@ -928,14 +943,14 @@ class PortfolioManager:
         if mode not in {"strict", "learn", "aggressive_learning"}:
             mode = "aggressive_learning"
         current["mode"] = mode
-        current["max_trades"] = max(1, min(8, int(float(current.get("max_trades") or 3))))
+        current["max_trades"] = max(1, min(8, int(float(current.get("max_trades") or 5))))
         current["strict_min_score"] = max(50, min(99, float(current.get("strict_min_score") or 88)))
         current["learning_min_score"] = max(40, min(95, float(current.get("learning_min_score") or 60)))
         current["aggressive_min_score"] = max(35, min(90, float(current.get("aggressive_min_score") or 52)))
-        current["learning_risk_multiplier"] = max(0.03, min(0.35, float(current.get("learning_risk_multiplier") or 0.10)))
+        current["learning_risk_multiplier"] = max(0.03, min(0.35, float(current.get("learning_risk_multiplier") or 0.25)))
         current["aggressive_risk_multiplier"] = max(
             current["learning_risk_multiplier"],
-            min(0.65, float(current.get("aggressive_risk_multiplier") or 0.25)),
+            min(0.65, float(current.get("aggressive_risk_multiplier") or 0.60)),
         )
         current["show_interesting_now"] = bool(current.get("show_interesting_now", True))
         self.set_app_setting("paper_autopilot_settings", json.dumps(current))

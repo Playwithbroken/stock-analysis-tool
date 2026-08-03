@@ -117,11 +117,11 @@ class PaperTradingService:
         demo_account: Dict[str, Any],
     ) -> Dict[str, Any]:
         mode = str(autopilot_settings.get("mode") or "aggressive_learning")
-        max_trades = max(1, min(8, int(float(autopilot_settings.get("max_trades") or 3))))
-        learning_risk = max(0.03, min(0.35, float(autopilot_settings.get("learning_risk_multiplier") or 0.10)))
+        max_trades = max(1, min(8, int(float(autopilot_settings.get("max_trades") or 5))))
+        learning_risk = max(0.03, min(0.35, float(autopilot_settings.get("learning_risk_multiplier") or 0.25)))
         aggressive_risk = max(
             learning_risk,
-            min(0.65, float(autopilot_settings.get("aggressive_risk_multiplier") or 0.25)),
+            min(0.65, float(autopilot_settings.get("aggressive_risk_multiplier") or 0.60)),
         )
         risk_budget = float(demo_account.get("risk_budget_per_trade_value") or 0)
         strict_score = float(autopilot_settings.get("strict_min_score") or 88)
@@ -442,8 +442,8 @@ class PaperTradingService:
         direction = (payload.get("direction") or "long").lower()
         requested_quantity = float(payload.get("quantity") or 0)
         leverage = float(payload.get("leverage") or 1)
-        if leverage < 1 or leverage > 2:
-            raise ValueError("Paper leverage must be between 1x and 2x.")
+        if leverage < 1 or leverage > 1000:
+            raise ValueError("Paper leverage must be between 1x and the technical limit of 1000x.")
         rules = (settings or {}).get("do_not_trade") or {}
         outcome_learning = self._build_outcome_learning_adjustments()
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
@@ -497,6 +497,13 @@ class PaperTradingService:
                 "leveraged_product": product_data_validation["data"],
                 "product_data_warnings": product_data_validation["warnings"],
             }
+            offered_leverage = float(product_data_validation["data"].get("offered_leverage") or 1)
+            if leverage <= 1:
+                leverage = offered_leverage
+            elif leverage > offered_leverage + 1e-9:
+                raise ValueError("Requested leverage exceeds the validated provider-offered product leverage.")
+            if leverage > 1 and direction != str(playbook.get("direction") or "").lower():
+                raise ValueError("Leveraged product direction must match the evidence-backed playbook direction.")
         hard_rule_reasons = [
             str(item)
             for item in playbook.get("do_not_trade_reasons", [])
@@ -581,7 +588,11 @@ class PaperTradingService:
             playbook,
             demo_account,
             risk_multiplier_override if learning_mode else None,
-            leverage=leverage,
+            leverage=(
+                1
+                if (playbook.get("leveraged_product") or {}).get("leverage_is_embedded_in_product_price") is True
+                else leverage
+            ),
         )
         if final_sizing.get("demo_tradeable") is False:
             raise ValueError("Demo account risk gate blocks the refreshed market snapshot.")
@@ -1229,7 +1240,14 @@ class PaperTradingService:
             f"Setup: {playbook.get('setup_type') or 'signal_playbook'} / {playbook.get('asset_class') or 'equity'} / {playbook.get('direction') or 'long'}",
             f"Score: {playbook.get('score')}; Beweisniveau: {framework.get('evidence_level') or 'watch'}",
             f"Demo-Größe: vorgeschlagene Menge {playbook.get('suggested_quantity')}; max. Verlust {playbook.get('suggested_max_loss_value')} {demo_account.get('currency')}.",
-            f"Paper-Hebel: {float(playbook.get('selected_leverage') or 1):.1f}x; hebelbereinigte Stückzahl, Echtgeld gesperrt.",
+            (
+                f"Paper-Hebel: {float(playbook.get('selected_leverage') or 1):.1f}x; "
+                + (
+                    "Anbieterhebel ist bereits im Produktkurs enthalten, Echtgeld gesperrt."
+                    if (playbook.get("leveraged_product") or {}).get("leverage_is_embedded_in_product_price") is True
+                    else "hebelbereinigte Stückzahl, Echtgeld gesperrt."
+                )
+            ),
             f"Trigger: {framework.get('entry_trigger') or 'Manuelle Trigger-Prüfung erforderlich.'}",
             f"Invalidierung: {framework.get('invalidation') or 'Manuelle Invalidierungsprüfung erforderlich.'}",
             f"Risikoplan: {framework.get('risk_plan') or 'Nur Paper-Risiko.'}",
@@ -1299,6 +1317,12 @@ class PaperTradingService:
         strike_or_ko = number_field("strike_or_knockout_level")
         bid = number_field("bid")
         ask = number_field("ask")
+        offered_leverage = number_field("offered_leverage")
+        if offered_leverage is not None:
+            if offered_leverage <= 1:
+                errors.append("offered_leverage_must_exceed_1")
+            elif offered_leverage > 1000:
+                errors.append("offered_leverage_over_technical_limit_1000")
         distance_to_ko = None
         if payload.get("distance_to_knockout_pct") not in (None, ""):
             try:
@@ -1349,6 +1373,8 @@ class PaperTradingService:
                 "ask": ask,
                 "spread_pct": spread_pct,
                 "distance_to_knockout_pct": distance_to_ko,
+                "offered_leverage": offered_leverage,
+                "leverage_is_embedded_in_product_price": True,
                 "overnight_risk_ack": acknowledged,
                 "validated_at": datetime.utcnow().isoformat(),
             },
@@ -1852,8 +1878,8 @@ class PaperTradingService:
             "strict_min_score": 88,
             "learning_min_score": 60,
             "aggressive_min_score": 52,
-            "learning_risk_multiplier": 0.10,
-            "aggressive_risk_multiplier": 0.25,
+            "learning_risk_multiplier": 0.25,
+            "aggressive_risk_multiplier": 0.60,
         }
         open_keys = {
             (
@@ -1878,7 +1904,7 @@ class PaperTradingService:
                 0.03,
                 float(
                     autopilot_settings.get("learning_risk_multiplier")
-                    or os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.10")
+                    or os.getenv("PAPER_TRADING_EXPLORATION_RISK_MULTIPLIER", "0.25")
                 ),
             ),
         )
@@ -1888,7 +1914,7 @@ class PaperTradingService:
                 exploration_risk_multiplier,
                 float(
                     autopilot_settings.get("aggressive_risk_multiplier")
-                    or os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.25")
+                    or os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.60")
                 ),
             ),
         )
@@ -2486,17 +2512,17 @@ class PaperTradingService:
         return {
             "starting_capital": env_float("PAPER_TRADING_STARTING_CAPITAL", 500_000.0, minimum=1_000.0),
             "currency": os.getenv("PAPER_TRADING_CURRENCY", "EUR").strip().upper() or "EUR",
-            "risk_per_trade_pct": env_float("PAPER_TRADING_RISK_PER_TRADE_PCT", 0.35, minimum=0.01),
-            "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", 3.0, minimum=0.1),
-            "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", 10.0, minimum=0.1),
-            "max_gross_exposure_pct": env_float("PAPER_TRADING_MAX_GROSS_EXPOSURE_PCT", 60.0, minimum=1.0),
-            "max_ticker_exposure_pct": env_float("PAPER_TRADING_MAX_TICKER_EXPOSURE_PCT", 12.0, minimum=0.1),
-            "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 0.75, minimum=0.01),
-            "max_open_option_premium_pct": env_float("PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
-            "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.25, minimum=0.01),
+            "risk_per_trade_pct": env_float("PAPER_TRADING_RISK_PER_TRADE_PCT", 0.75, minimum=0.01),
+            "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", 6.0, minimum=0.1),
+            "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", 20.0, minimum=0.1),
+            "max_gross_exposure_pct": env_float("PAPER_TRADING_MAX_GROSS_EXPOSURE_PCT", 100.0, minimum=1.0),
+            "max_ticker_exposure_pct": env_float("PAPER_TRADING_MAX_TICKER_EXPOSURE_PCT", 25.0, minimum=0.1),
+            "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
+            "max_open_option_premium_pct": env_float("PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT", 8.0, minimum=0.01),
+            "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.50, minimum=0.01),
             "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", 12, minimum=1),
-            "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", 1.0, minimum=0.1),
-            "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", 8.0, minimum=0.5),
+            "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", 1.5, minimum=0.1),
+            "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", 12.0, minimum=0.5),
             "max_consecutive_losses": env_int("PAPER_TRADING_MAX_CONSECUTIVE_LOSSES", 3, minimum=1),
             "loss_streak_cooldown_hours": env_float("PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS", 24.0, minimum=1.0),
             "mode": "paper_learning_only",
@@ -2905,7 +2931,22 @@ class PaperTradingService:
         blockers: List[str] = []
         checks: List[str] = []
         score = float(playbook.get("score") or 0)
-        min_score = max(88.0, float(rules.get("min_score_for_leverage") or 88))
+        leveraged_product = (
+            playbook.get("leveraged_product")
+            if isinstance(playbook.get("leveraged_product"), dict)
+            else {}
+        )
+        provider_offered_leverage = float(leveraged_product.get("offered_leverage") or 0)
+        provider_product = bool(
+            playbook.get("leverage_product_type")
+            and provider_offered_leverage > 1
+            and leveraged_product.get("leverage_is_embedded_in_product_price") is True
+        )
+        min_score = (
+            max(80.0, float(rules.get("min_score_for_new_trade") or 78))
+            if provider_product
+            else max(88.0, float(rules.get("min_score_for_leverage") or 88))
+        )
         asset_class = str(playbook.get("asset_class") or "equity").lower()
         direction = str(playbook.get("direction") or "").lower()
         market = playbook.get("market_data") if isinstance(playbook.get("market_data"), dict) else {}
@@ -2914,16 +2955,19 @@ class PaperTradingService:
         risk_reward = reward_pct / risk_pct if risk_pct > 0 else 0
         day_status = str(demo_account.get("day_status") or "")
 
-        if asset_class not in {"equity", "etf"}:
+        if not provider_product and asset_class not in {"equity", "etf"}:
             blockers.append("Hebel-Multiplikator ist nur für Aktien- und ETF-Paper-Setups erlaubt; Optionen und Krypto haben eigene Risikomodelle.")
-        if direction not in {"long", "short"}:
+        if direction not in ({"long", "short", "call", "put"} if provider_product else {"long", "short"}):
             blockers.append("Keine eindeutig handelbare Long- oder Short-Richtung.")
         if score < min_score:
             blockers.append(f"Score {score:.0f} liegt unter dem Hebel-Mindestscore {min_score:.0f}.")
         else:
             checks.append(f"Score-Gate erfüllt ({score:.0f}/{min_score:.0f}).")
         if playbook.get("leverage_warnings"):
-            blockers.extend(str(item) for item in playbook.get("leverage_warnings") or [])
+            leverage_warnings = [str(item) for item in playbook.get("leverage_warnings") or []]
+            if provider_product:
+                leverage_warnings = [item for item in leverage_warnings if not item.startswith("Kein Hebel unter Score")]
+            blockers.extend(leverage_warnings)
         if playbook.get("tradeable") is False or playbook.get("do_not_trade_reasons"):
             blockers.append("Signalregeln geben das Setup nicht uneingeschränkt frei.")
         if playbook.get("demo_tradeable") is False or playbook.get("demo_block_reasons"):
@@ -2940,8 +2984,9 @@ class PaperTradingService:
             blockers.append("Liquidität ist nicht stark genug für Hebel.")
         else:
             checks.append("Liquiditäts-Gate erfüllt.")
-        if risk_reward < 2.0:
-            blockers.append(f"Geplantes Chance/Risiko {risk_reward:.2f} liegt unter 2,00.")
+        minimum_risk_reward = 1.2 if provider_product else 2.0
+        if risk_reward < minimum_risk_reward:
+            blockers.append(f"Geplantes Chance/Risiko {risk_reward:.2f} liegt unter {minimum_risk_reward:.2f}.")
         else:
             checks.append(f"Chance/Risiko-Gate erfüllt ({risk_reward:.2f}).")
 
@@ -2959,7 +3004,7 @@ class PaperTradingService:
         eligible = not blockers
         max_leverage = 1.0
         if eligible:
-            max_leverage = 2.0 if score >= 95 and risk_reward >= 2.0 else 1.5
+            max_leverage = provider_offered_leverage if provider_product else (2.0 if score >= 95 and risk_reward >= 2.0 else 1.5)
         return {
             "status": "eligible" if eligible else "blocked",
             "eligible": eligible,
@@ -2968,9 +3013,15 @@ class PaperTradingService:
             "score": score,
             "minimum_score": min_score,
             "risk_reward": round(risk_reward, 2),
+            "provider_offered_leverage": provider_offered_leverage if provider_product else None,
+            "leverage_embedded_in_product_price": provider_product,
             "checks": checks,
             "blockers": blockers,
-            "risk_policy": "Hebel erhöht nie das konfigurierte maximale Kontorisiko; die Stückzahl wird invers reduziert.",
+            "risk_policy": (
+                "Anbieterhebel wird vollständig ausgewiesen, ist aber bereits im Produktkurs enthalten; Einsatz, Stückzahl und P&L werden nicht erneut multipliziert."
+                if provider_product
+                else "Hebel erhöht nie das konfigurierte maximale Kontorisiko; die Stückzahl wird invers reduziert."
+            ),
             "paper_only": True,
             "real_money_ready": False,
         }
@@ -3130,7 +3181,7 @@ class PaperTradingService:
         risk_multiplier_override: Any = None,
         leverage: float = 1.0,
     ) -> Dict[str, Any]:
-        leverage = max(1.0, min(2.0, float(leverage or 1)))
+        leverage = max(1.0, min(1000.0, float(leverage or 1)))
         price = float(playbook.get("reference_price") or 0)
         risk_buffer_pct = float(playbook.get("risk_buffer_pct") or 3.5)
         contract_multiplier = float(playbook.get("contract_multiplier") or 1)
@@ -3265,10 +3316,13 @@ class PaperTradingService:
         stop = trade.get("stop_price")
         quantity = float(trade.get("quantity") or 0)
         leverage = float(trade.get("leverage") or 1)
+        ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+        leveraged_product = ticket.get("leveraged_product") if isinstance(ticket.get("leveraged_product"), dict) else {}
+        payout_multiplier = 1.0 if leveraged_product.get("leverage_is_embedded_in_product_price") is True else leverage
         contract_multiplier = 100 if trade.get("asset_class") == "option" else 1
         if not entry or stop in (None, 0) or quantity <= 0:
             return 0.0
-        return abs(entry - float(stop)) * quantity * leverage * contract_multiplier
+        return abs(entry - float(stop)) * quantity * payout_multiplier * contract_multiplier
 
     def _build_learning_feedback(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         closed = [trade for trade in trades if trade.get("status") == "closed" and trade.get("realized_pnl_pct") is not None]
@@ -3879,6 +3933,8 @@ class PaperTradingService:
         leverage = float(row.get("leverage") or 1)
         is_option = row.get("asset_class") == "option"
         ticket = row.get("trade_ticket") if isinstance(row.get("trade_ticket"), dict) else {}
+        leveraged_product = ticket.get("leveraged_product") if isinstance(ticket.get("leveraged_product"), dict) else {}
+        payout_multiplier = 1.0 if leveraged_product.get("leverage_is_embedded_in_product_price") is True else leverage
         execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
         current_market = (
             {}
@@ -3910,14 +3966,14 @@ class PaperTradingService:
         row["current_market_data"] = current_market
         direction_multiplier = -1 if row.get("direction") == "short" else 1
         contract_multiplier = 100 if is_option else 1
-        invested_value = round(entry * quantity * leverage * contract_multiplier, 2)
+        invested_value = round(entry * quantity * payout_multiplier * contract_multiplier, 2)
         row["invested_value"] = invested_value
         row["position_notional_value"] = invested_value
 
         if row.get("status") == "closed":
             exit_price = float(row.get("closed_price") or 0)
-            pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, leverage)
-            pnl_value = round(((exit_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
+            pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, payout_multiplier)
+            pnl_value = round(((exit_price - entry) * quantity * direction_multiplier * payout_multiplier * contract_multiplier), 2)
             row["realized_pnl_pct"] = pnl_pct
             row["realized_pnl_value"] = pnl_value
             row["unrealized_pnl_pct"] = None
@@ -3927,9 +3983,9 @@ class PaperTradingService:
             row["result_value_delta"] = pnl_value
             row["result_label"] = "more" if pnl_value > 0 else "less" if pnl_value < 0 else "flat"
         else:
-            pnl_pct = self._calc_return_pct(entry, current_price, direction_multiplier, leverage) if current_price else None
+            pnl_pct = self._calc_return_pct(entry, current_price, direction_multiplier, payout_multiplier) if current_price else None
             pnl_value = (
-                round(((current_price - entry) * quantity * direction_multiplier * leverage * contract_multiplier), 2)
+                round(((current_price - entry) * quantity * direction_multiplier * payout_multiplier * contract_multiplier), 2)
                 if current_price is not None
                 else None
             )

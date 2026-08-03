@@ -2082,7 +2082,7 @@ class PaperTradeCreateRequest(BaseModel):
     target_price: Optional[float] = None
     quantity: float = 1
     confidence_score: Optional[float] = None
-    leverage: float = Field(default=1, ge=1, le=2)
+    leverage: float = Field(default=1, ge=1, le=1000)
     notes: Optional[str] = None
     exit_reason: Optional[str] = None
     lessons_learned: Optional[str] = None
@@ -2092,7 +2092,7 @@ class PaperTradeFromPlaybookRequest(BaseModel):
     playbook_id: str
     direction: Optional[str] = "long"
     quantity: float = 1
-    leverage: float = Field(default=1, ge=1, le=2)
+    leverage: float = Field(default=1, ge=1, le=1000)
     product_data: Dict[str, Any] = Field(default_factory=dict)
 
 

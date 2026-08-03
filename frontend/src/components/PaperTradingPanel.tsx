@@ -2436,6 +2436,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           ["expiry", "Laufzeit"],
                           ["bid", "Bid"],
                           ["ask", "Ask"],
+                          ["offered_leverage", "Anbieter-Hebel"],
                           ["distance_to_knockout_pct", "KO-Abstand %"],
                         ].map(([key, label]) => (
                           <label key={key} className="block">
@@ -2489,6 +2490,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           {productChecks[item.id].warnings.slice(0, 3).join(" · ")}
                         </div>
                       ) : null}
+                      {productChecks[item.id]?.valid && productChecks[item.id]?.data?.offered_leverage ? (
+                        <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-800">
+                          Anbieterhebel {Number(productChecks[item.id].data.offered_leverage).toFixed(1)}x wird vollständig übernommen und nicht doppelt auf den Produktkurs gerechnet.
+                        </div>
+                      ) : null}
                     </div>
                   )}
                   {!!item.do_not_trade_reasons?.length && (
@@ -2522,7 +2528,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       </button>
                     ) : item.asset_class === "option" ? (
                       <button
-                        onClick={() => openFromPlaybook(item.id, item.direction, productDrafts[item.id])}
+                        onClick={() => openFromPlaybook(
+                          item.id,
+                          item.direction,
+                          productDrafts[item.id],
+                          Number(productDrafts[item.id]?.offered_leverage || 1),
+                        )}
                         disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
                         className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
                       >

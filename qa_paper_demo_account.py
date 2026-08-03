@@ -204,9 +204,9 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
     assert assessment["recommended_leverage"] == 2.0
     assert assessment["real_money_ready"] is False
     leveraged_sizing = assessment["recommended_sizing"]
-    assert leveraged_sizing["suggested_quantity"] == 250.0
-    assert leveraged_sizing["suggested_notional_value"] == 50_000.0
-    assert leveraged_sizing["suggested_max_loss_value"] == 1_750.0
+    assert leveraged_sizing["suggested_quantity"] == 500.0
+    assert leveraged_sizing["suggested_notional_value"] == 100_000.0
+    assert leveraged_sizing["suggested_max_loss_value"] == 3_500.0
     assert leveraged_sizing["suggested_max_loss_value"] == aapl["suggested_max_loss_value"]
     jepi = next(item for item in dashboard["playbooks"] if item["id"] == "etf-JEPI-long")
     assert jepi["leverage_assessment"]["eligible"] is True
@@ -221,7 +221,7 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
     assert opened["quantity"] < aapl["suggested_quantity"]
     assert opened["trade_ticket"]["leverage"] == 2
     assert opened["trade_ticket"]["real_money_ready"] is False
-    assert opened["trade_ticket"]["max_loss_value"] <= 1_750.0
+    assert opened["trade_ticket"]["max_loss_value"] <= 3_750.0
     assert "Paper-Hebel: 2.0x" in opened["notes"]
 
     try:
@@ -231,7 +231,7 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
             sample_settings(),
         )
     except ValueError as exc:
-        assert "between 1x and 2x" in str(exc)
+        assert "exceeds the evidence-based paper leverage cap" in str(exc)
     else:
         raise AssertionError("Paper leverage above 2x was not rejected.")
 
@@ -506,23 +506,23 @@ def test_demo_account_sizing() -> None:
     assert demo["capital_flow"]["unrealized_pnl_value"] == 0
     assert demo["capital_flow"]["net_pnl_value"] == 0
     assert demo["capital_flow"]["capital_status"] == "flat"
-    assert demo["risk_budget_per_trade_value"] == 1_750.0
-    assert demo["risk_budget_per_option_trade_value"] == 1_250.0
-    assert demo["max_position_value"] == 50_000.0
-    assert demo["max_gross_exposure_value"] == 300_000.0
-    assert demo["remaining_gross_exposure_value"] == 300_000.0
-    assert demo["max_ticker_exposure_value"] == 60_000.0
-    assert demo["max_option_premium_value"] == 3_750.0
-    assert demo["max_open_option_premium_value"] == 10_000.0
-    assert demo["remaining_option_premium_value"] == 10_000.0
+    assert demo["risk_budget_per_trade_value"] == 3_750.0
+    assert demo["risk_budget_per_option_trade_value"] == 2_500.0
+    assert demo["max_position_value"] == 100_000.0
+    assert demo["max_gross_exposure_value"] == 500_000.0
+    assert demo["remaining_gross_exposure_value"] == 500_000.0
+    assert demo["max_ticker_exposure_value"] == 125_000.0
+    assert demo["max_option_premium_value"] == 10_000.0
+    assert demo["max_open_option_premium_value"] == 40_000.0
+    assert demo["remaining_option_premium_value"] == 40_000.0
 
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert aapl["demo_tradeable"] is True
-    assert aapl["suggested_quantity"] == 500
-    assert aapl["suggested_notional_value"] == 50_000.0
-    assert aapl["suggested_max_loss_value"] <= 1_750.0
-    assert aapl["suggested_account_pct"] <= 10.0
-    assert aapl["suggested_risk_pct"] <= 0.35
+    assert aapl["suggested_quantity"] == 1000
+    assert aapl["suggested_notional_value"] == 100_000.0
+    assert aapl["suggested_max_loss_value"] <= 3_750.0
+    assert aapl["suggested_account_pct"] <= 20.0
+    assert aapl["suggested_risk_pct"] <= 0.75
     assert aapl["decision_framework"]["entry_trigger"]
     assert aapl["decision_framework"]["invalidation"]
     assert aapl["decision_framework"]["real_money_policy"].startswith("Nur Entscheidungsrahmen")
@@ -536,7 +536,7 @@ def test_demo_account_sizing() -> None:
     assert ticket["target_1"] == 103.75
     assert ticket["target_2"] == 107.5
     assert ticket["risk_reward"] == 2.14
-    assert ticket["account_risk_pct"] <= 0.35
+    assert ticket["account_risk_pct"] <= 0.75
     assert ticket["market_data"]["freshness"] == "fresh"
     assert ticket["market_data"]["liquidity_status"] == "strong"
     assert "market_data_timestamp_missing" not in ticket["validation"]["errors"]
@@ -551,10 +551,10 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["asset_class"] == "option"
     assert aapl_call["direction"] == "call"
     assert aapl_call["demo_tradeable"] is True
-    assert aapl_call["suggested_quantity"] == 5
-    assert aapl_call["suggested_notional_value"] == 1_250.0
-    assert aapl_call["suggested_max_loss_value"] == 1_250.0
-    assert aapl_call["suggested_risk_pct"] == 0.25
+    assert aapl_call["suggested_quantity"] == 10
+    assert aapl_call["suggested_notional_value"] == 2_500.0
+    assert aapl_call["suggested_max_loss_value"] == 2_500.0
+    assert aapl_call["suggested_risk_pct"] == 0.5
     assert aapl_call["decision_framework"]["evidence_level"] in {"paper_candidate", "high_quality_paper", "watch"}
     assert aapl_call["trade_ticket"]["status"] == "paper_only"
     assert "option_chain_not_validated" in aapl_call["trade_ticket"]["validation"]["warnings"]
@@ -596,6 +596,7 @@ def test_demo_account_sizing() -> None:
                 "expiry": "2030-01-17",
                 "bid": 4.80,
                 "ask": 4.95,
+                "offered_leverage": 20,
                 "distance_to_knockout_pct": 8.0,
                 "overnight_risk_ack": True,
             },
@@ -604,9 +605,13 @@ def test_demo_account_sizing() -> None:
         sample_settings(),
     )
     assert created_gold_call["asset_class"] == "option"
+    assert created_gold_call["leverage"] == 20
     assert created_gold_call["entry_price"] > 4.95
     assert created_gold_call["trade_ticket"]["leveraged_product"]["issuer"] == "QA Bank"
     assert created_gold_call["trade_ticket"]["leveraged_product"]["spread_pct"] < 6
+    assert created_gold_call["trade_ticket"]["leverage_assessment"]["provider_offered_leverage"] == 20
+    assert created_gold_call["trade_ticket"]["leverage_assessment"]["leverage_embedded_in_product_price"] is True
+    assert created_gold_call["invested_value"] < 20_000
     assert "Geprüftes Hebelprodukt" in created_gold_call["notes"]
 
     created = service.create_trade_from_playbook(
@@ -615,9 +620,9 @@ def test_demo_account_sizing() -> None:
         sample_settings(),
     )
     assert created["ticker"] == "AAPL"
-    assert created["quantity"] == 499.60032
+    assert created["quantity"] == 999.200639
     assert created["entry_price"] == 100.08
-    assert created["invested_value"] == 50_000.0
+    assert created["invested_value"] == 100_000.0
     assert created["stop_price"] < created["entry_price"] < created["target_price"]
     assert "Entscheidungs-Snapshot beim Paper-Einstieg" in created["notes"]
     assert "Trigger:" in created["notes"]
@@ -634,12 +639,12 @@ def test_demo_account_sizing() -> None:
     assert entry_execution["reference_price"] == 100.0
     assert entry_execution["fill_price"] == 100.08
     assert entry_execution["cost_bps"] == 8.0
-    assert entry_execution["estimated_cost_value"] == 39.97
+    assert entry_execution["estimated_cost_value"] == 79.94
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
 
     try:
         service.create_trade_from_playbook(
-            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 501, "leverage": 1},
+            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 1001, "leverage": 1},
             sample_scoreboard(),
             sample_settings(),
         )
@@ -656,7 +661,7 @@ def test_demo_account_sizing() -> None:
     assert created_call["ticker"] == "AAPL"
     assert created_call["asset_class"] == "option"
     assert created_call["direction"] == "call"
-    assert created_call["quantity"] == 4
+    assert created_call["quantity"] == 9
     assert created_call["entry_price"] == 2.5312
     assert created_call["stop_price"] == 1.27
     assert created_call["target_price"] == 5.06
@@ -674,7 +679,7 @@ def test_demo_account_sizing() -> None:
     assert closed_created["closed_price"] == 104.916
     assert closed_created["trade_ticket"]["execution_model"]["exit"]["reference_price"] == 105.0
     assert closed_created["trade_ticket"]["execution_model"]["exit"]["cost_bps"] == 8.0
-    assert closed_created["realized_pnl_value"] < (105.0 - 100.0) * 500
+    assert closed_created["realized_pnl_value"] < (105.0 - 100.0) * 1000
 
 
 def test_realized_return_uses_account_equity() -> None:
@@ -1170,7 +1175,7 @@ def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
                 "entry_price": 100.0,
                 "stop_price": 95.0,
                 "target_price": 110.0,
-                "quantity": 3000,
+                "quantity": 6000,
                 "confidence_score": 95,
                 "leverage": 1,
             }
@@ -1513,13 +1518,13 @@ def test_aggressive_learning_uses_wider_pool_with_capped_risk() -> None:
     assert selection["selected"] == []
     assert selection["exploration"] == []
     assert selection["aggressive_learning_min_score"] == 52.0
-    assert selection["aggressive_learning_risk_multiplier"] == 0.25
+    assert selection["aggressive_learning_risk_multiplier"] == 0.60
     aggressive = selection["aggressive_exploration"][0]
     assert aggressive["ticker"] == "AAPL"
     assert aggressive["aggressive_learning_mode"] is True
-    assert aggressive["risk_multiplier"] == 0.25
-    assert aggressive["suggested_notional_value"] == round(float(sized["suggested_notional_value"]) * 0.25, 2)
-    assert aggressive["suggested_max_loss_value"] == round(float(sized["suggested_max_loss_value"]) * 0.25, 2)
+    assert aggressive["risk_multiplier"] == 0.60
+    assert aggressive["suggested_notional_value"] == round(float(sized["suggested_notional_value"]) * 0.60, 2)
+    assert aggressive["suggested_max_loss_value"] == round(float(sized["suggested_max_loss_value"]) * 0.60, 2)
 
 
 def test_aggressive_learning_respects_saved_autopilot_settings() -> None:
@@ -1624,6 +1629,7 @@ def test_leverage_product_validation_contract() -> None:
             "expiry": "2030-01-17",
             "bid": 4.80,
             "ask": 4.95,
+            "offered_leverage": 20,
             "distance_to_knockout_pct": 8.0,
             "overnight_risk_ack": True,
         }
@@ -1631,6 +1637,8 @@ def test_leverage_product_validation_contract() -> None:
     assert valid["valid"] is True
     assert valid["errors"] == []
     assert valid["data"]["spread_pct"] < 6
+    assert valid["data"]["offered_leverage"] == 20
+    assert valid["data"]["leverage_is_embedded_in_product_price"] is True
 
     too_wide = service.validate_leverage_product_data(
         {
@@ -1640,11 +1648,37 @@ def test_leverage_product_validation_contract() -> None:
             "expiry": "2030-01-17",
             "bid": 4.00,
             "ask": 4.60,
+            "offered_leverage": 12,
             "overnight_risk_ack": True,
         }
     )
     assert too_wide["valid"] is False
     assert "spread_too_wide_over_12_pct" in too_wide["errors"]
+
+    enriched = service._enrich_trade(
+        {
+            "id": "provider-leverage-pnl",
+            "ticker": "GLD",
+            "asset_class": "option",
+            "direction": "call",
+            "status": "closed",
+            "entry_price": 5.0,
+            "closed_price": 5.5,
+            "quantity": 10,
+            "leverage": 20,
+            "stop_price": 2.5,
+            "target_price": 10.0,
+            "trade_ticket": {
+                "leveraged_product": {
+                    "offered_leverage": 20,
+                    "leverage_is_embedded_in_product_price": True,
+                }
+            },
+        }
+    )
+    assert enriched["invested_value"] == 5_000.0
+    assert enriched["realized_pnl_value"] == 500.0
+    assert enriched["realized_pnl_pct"] == 10.0
 
 
 def test_market_quality_gate_blocks_stale_and_thin_snapshots() -> None:

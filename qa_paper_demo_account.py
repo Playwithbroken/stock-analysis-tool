@@ -211,6 +211,11 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
     jepi = next(item for item in dashboard["playbooks"] if item["id"] == "etf-JEPI-long")
     assert jepi["leverage_assessment"]["eligible"] is True
     assert jepi["leverage_assessment"]["recommended_leverage"] == 1.5
+    aggressive_aapl = next(
+        item for item in dashboard["auto_selection"]["aggressive_exploration"] if item["ticker"] == "AAPL"
+    )
+    assert aggressive_aapl["risk_multiplier"] == 0.25
+    assert aggressive_aapl["score"] == 95
 
     opened = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 2},
@@ -1200,7 +1205,7 @@ def test_demo_account_blocks_when_open_risk_is_exhausted() -> None:
         raise AssertionError("Risk-gated playbook should not open a demo trade.")
 
 
-def test_demo_account_blocks_new_trades_during_risk_review() -> None:
+def test_demo_account_limits_risk_review_to_affected_risk_and_scales_independent_trades() -> None:
     manager = FakePortfolioManager(
         [
             {
@@ -1227,25 +1232,49 @@ def test_demo_account_blocks_new_trades_during_risk_review() -> None:
     assert dashboard["demo_account"]["trade_action_queue"]["status"] == "review"
     assert dashboard["demo_account"]["trade_action_queue"]["top_priority"]["ticker"] == "MSFT"
     assert dashboard["demo_account"]["trade_action_queue"]["counts"]["review"] == 1
-    assert aapl["demo_tradeable"] is False
-    assert "Paper-Konto ist im Risiko-Review; schwache oder stop-nahe Trades zuerst prüfen." in aapl["demo_block_reasons"]
-    assert dashboard["auto_selection"]["selected"] == []
-    blocker_summary = dashboard["auto_selection"]["blocker_summary"]
-    assert blocker_summary["checked"] >= 1
-    assert any("risiko-review" in item["reason"].lower() for item in blocker_summary["top_reasons"])
-    assert all(item["reason"] != "Playbook is blocked by signal rules." for item in blocker_summary["top_reasons"])
-    assert blocker_summary["next_best_rejected"]["ticker"]
+    assert dashboard["demo_account"]["review_tickers"] == ["MSFT"]
+    assert aapl["demo_tradeable"] is True
+    assert aapl["risk_multiplier"] == 0.5
+    assert aapl["suggested_max_loss_value"] == 1_875.0
+    assert dashboard["auto_selection"]["selected"]
 
-    try:
-        service.create_trade_from_playbook(
-            {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
-            sample_scoreboard(),
-            sample_settings(),
-        )
-    except ValueError as exc:
-        assert "risk gate" in str(exc)
-    else:
-        raise AssertionError("Risk-review gate should block opening new paper trades.")
+    reviewed_sizing = service._suggest_demo_sizing(
+        {
+            "ticker": "MSFT",
+            "asset_class": "equity",
+            "reference_price": 100.0,
+            "risk_buffer_pct": 3.5,
+            "tradeable": True,
+        },
+        dashboard["demo_account"],
+    )
+    assert reviewed_sizing["demo_tradeable"] is False
+    assert any("selbst im Risiko-Review" in reason for reason in reviewed_sizing["demo_block_reasons"])
+
+    correlated_crypto_sizing = service._suggest_demo_sizing(
+        {
+            "ticker": "ETH-USD",
+            "asset_class": "crypto",
+            "reference_price": 2_000.0,
+            "risk_buffer_pct": 5.5,
+            "tradeable": True,
+        },
+        {
+            **dashboard["demo_account"],
+            "review_tickers": ["BTC-USD"],
+            "review_asset_classes": ["crypto"],
+        },
+    )
+    assert correlated_crypto_sizing["demo_tradeable"] is False
+    assert any("korreliertes Krypto-Risiko" in reason for reason in correlated_crypto_sizing["demo_block_reasons"])
+
+    created = service.create_trade_from_playbook(
+        {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 1},
+        sample_scoreboard(),
+        sample_settings(),
+    )
+    assert created["ticker"] == "AAPL"
+    assert created["trade_ticket"]["max_loss_value"] <= 1_875.0
 
 
 def test_profit_protection_limits_autopilot_to_small_learning() -> None:
@@ -2344,7 +2373,7 @@ if __name__ == "__main__":
     test_short_trade_money_flow_and_demo_equity()
     test_put_learning_inverts_underlying_move()
     test_demo_account_blocks_when_open_risk_is_exhausted()
-    test_demo_account_blocks_new_trades_during_risk_review()
+    test_demo_account_limits_risk_review_to_affected_risk_and_scales_independent_trades()
     test_profit_protection_limits_autopilot_to_small_learning()
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()

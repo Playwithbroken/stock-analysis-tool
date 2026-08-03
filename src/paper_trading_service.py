@@ -2061,7 +2061,7 @@ class PaperTradingService:
                 rejected.append(row)
             else:
                 selected.append(row)
-            if not exploration_reasons and reasons and playbook.get("asset_class") != "option":
+            if not exploration_reasons and playbook.get("asset_class") != "option":
                 learning_row = dict(row)
                 learning_row["learning_mode"] = True
                 learning_row["suggested_quantity"] = round(float(playbook.get("suggested_quantity") or 0) * exploration_risk_multiplier, 6)
@@ -2070,7 +2070,7 @@ class PaperTradingService:
                 learning_row["risk_multiplier"] = exploration_risk_multiplier
                 learning_row["reasons"] = [f"learning mode: reduced risk x{exploration_risk_multiplier:g}"]
                 exploration.append(learning_row)
-            if not aggressive_reasons and reasons and playbook.get("asset_class") != "option":
+            if not aggressive_reasons and playbook.get("asset_class") != "option":
                 aggressive_row = dict(row)
                 aggressive_row["learning_mode"] = True
                 aggressive_row["aggressive_learning_mode"] = True
@@ -2520,6 +2520,10 @@ class PaperTradingService:
             "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
             "max_open_option_premium_pct": env_float("PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT", 8.0, minimum=0.01),
             "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.50, minimum=0.01),
+            "risk_review_new_trade_multiplier": min(
+                1.0,
+                env_float("PAPER_TRADING_RISK_REVIEW_NEW_TRADE_MULTIPLIER", 0.50, minimum=0.01),
+            ),
             "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", 12, minimum=1),
             "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", 1.5, minimum=0.1),
             "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", 12.0, minimum=0.5),
@@ -2679,6 +2683,15 @@ class PaperTradingService:
             grade = str((trade.get("management_plan") or {}).get("decision_grade") or "hold")
             management_counts[grade] = management_counts.get(grade, 0) + 1
         trade_action_queue = self._build_trade_action_queue(open_trades)
+        review_trades = [
+            trade
+            for trade in open_trades
+            if str((trade.get("management_plan") or {}).get("decision_grade") or "") == "review"
+        ]
+        review_tickers = sorted({str(trade.get("ticker") or "").upper() for trade in review_trades if trade.get("ticker")})
+        review_asset_classes = sorted(
+            {str(trade.get("asset_class") or "").lower() for trade in review_trades if trade.get("asset_class")}
+        )
         if risk_circuit.get("active"):
             day_status = "risk_halt"
             day_action = "Keine neuen Paper-Entries: Verlustlimit oder Verlustserien-Cooldown zuerst auslaufen lassen."
@@ -2687,7 +2700,7 @@ class PaperTradingService:
             day_action = "Exits prüfen, bevor ein neuer Paper-Trade geöffnet wird."
         elif management_counts.get("review"):
             day_status = "risk_review"
-            day_action = "Schwache oder stop-nahe Trades prüfen, bevor neue Exposure hinzukommt."
+            day_action = "Review-Ticker und korreliertes Krypto-Risiko nicht erhöhen; unabhängige Setups nur mit halbiertem Risiko."
         elif management_counts.get("protect"):
             day_status = "protect_profit"
             day_action = "Gewinnschutz bei Gewinnern nahe am Ziel prüfen."
@@ -2737,6 +2750,8 @@ class PaperTradingService:
             "closed_trade_count": len(closed_trades),
             "management_counts": management_counts,
             "trade_action_queue": trade_action_queue,
+            "review_tickers": review_tickers,
+            "review_asset_classes": review_asset_classes,
             "day_status": day_status,
             "day_action": day_action,
             "risk_budget_per_trade_value": risk_budget,
@@ -2756,6 +2771,7 @@ class PaperTradingService:
                 "Nur Demo-Lernkonto; keine automatische Echtgeld-Ausführung.",
                 "Jede Idee braucht These, Trigger, Stop, Ziel und Nachtrade-Journal.",
                 "Gesamt-, Ticker- und Options-Exposure werden vor jedem Auto-Entry neu berechnet.",
+                "Im Risiko-Review bleiben betroffene Ticker und neues Krypto-Risiko gesperrt; unabhängige Setups laufen höchstens mit halbem Risiko.",
                 "Calls und Puts bleiben Paper-only, bis Optionskette, IV, Strike, Laufzeit und Spread geprüft sind.",
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],
@@ -3214,6 +3230,7 @@ class PaperTradingService:
             else cash_available
         )
         ticker = str(playbook.get("ticker") or "").upper()
+        asset_class = str(playbook.get("asset_class") or "equity").lower()
         exposure_by_ticker = (
             demo_account.get("exposure_by_ticker")
             if isinstance(demo_account.get("exposure_by_ticker"), dict)
@@ -3234,6 +3251,17 @@ class PaperTradingService:
         max_position_value = max(0.0, min(capacity_limits))
         risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
         risk_multiplier = min(1.0, max(0.0, float(risk_circuit.get("risk_multiplier") or 1.0)))
+        day_status = str(demo_account.get("day_status") or "")
+        review_tickers = {str(item).upper() for item in demo_account.get("review_tickers") or []}
+        review_asset_classes = {str(item).lower() for item in demo_account.get("review_asset_classes") or []}
+        candidate_is_under_review = ticker in review_tickers or (
+            asset_class == "crypto" and "crypto" in review_asset_classes
+        )
+        if day_status == "risk_review" and not candidate_is_under_review:
+            risk_multiplier *= min(
+                1.0,
+                max(0.01, float(demo_account.get("risk_review_new_trade_multiplier") or 0.50)),
+            )
         if risk_multiplier_override is not None:
             try:
                 risk_multiplier *= min(1.0, max(0.01, float(risk_multiplier_override)))
@@ -3241,7 +3269,6 @@ class PaperTradingService:
                 pass
         risk_budget *= risk_multiplier
         block_reasons: List[str] = []
-        day_status = str(demo_account.get("day_status") or "")
         learning_feedback = demo_account.get("learning_feedback")
         if not isinstance(learning_feedback, dict):
             learning_feedback = {}
@@ -3254,8 +3281,8 @@ class PaperTradingService:
                 block_reasons.append(f"Paper risk circuit: {reason}")
         elif day_status == "action_required":
             block_reasons.append("Paper-Konto hat offene Exit-Aktionen; bestehende Trades vor neuer Exposure prüfen.")
-        elif day_status == "risk_review":
-            block_reasons.append("Paper-Konto ist im Risiko-Review; schwache oder stop-nahe Trades zuerst prüfen.")
+        elif day_status == "risk_review" and candidate_is_under_review:
+            block_reasons.append("Ticker oder korreliertes Krypto-Risiko ist selbst im Risiko-Review und darf nicht erhöht werden.")
         if missing_journal_count > 0:
             block_reasons.append(
                 f"{missing_journal_count} fehlende Paper-Journale abschließen, bevor neue Exposure hinzukommt."

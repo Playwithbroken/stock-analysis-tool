@@ -61,12 +61,15 @@ Die Web-App laeuft dann unter `http://localhost:3001`.
   - `PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS=24`
   - `PAPER_TRADING_AUTO_MIN_SCORE=88`
   - `PAPER_TRADING_EXPLORATION_MIN_SCORE=60`
+  - `PAPER_TRADING_NEWS_CONTEXT_MAX_AGE_SECONDS=3600`
   - `PAPER_MARKET_DATA_MAX_AGE_HOURS=96`
   - `PAPER_MIN_AVG_DOLLAR_VOLUME=2000000`
   - `PAPER_EXECUTION_EQUITY_BPS=8`
   - `PAPER_EXECUTION_ETF_BPS=6`
   - `PAPER_EXECUTION_CRYPTO_BPS=18`
   - `PAPER_EXECUTION_OPTION_BPS=125`
+- News-basierte Demo-Trades entstehen nur aus frischen, wichtigen Tier-1-Meldungen mit expliziter Ticker-Zuordnung und richtungskonformer relativer Preisbestätigung im Veröffentlichungsfenster.
+- Quelle, Faktenbasis, Primärdokumentstatus und Marktreaktion werden im Paper-Trade-Ticket gespeichert; die Messung ist kein Kausalitätsbeweis und schaltet niemals Echtgeld-Ausführung frei.
 - Vor jedem Paper-Einstieg werden Kurszeitpunkt, Datenalter und durchschnittliches Handelsnotional erneut geprueft. Veraltete oder sehr duenne Daten blockieren den Entry.
 - Angeforderte Mengen werden am aktuellen Demo-Risikolimit hart begrenzt; Calls und Puts bleiben Paper-only und pruefen beim Einstieg erneut das Underlying.
 - Entry, laufende Bewertung und Exit verwenden konservative Fill-Kosten. Referenzkurs, simulierter Ausfuehrungskurs und Kosten bleiben im Trade-Ticket und in Telegram sichtbar.

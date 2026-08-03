@@ -3738,6 +3738,24 @@ class EmailAlertService:
             if entry_execution
             else ""
         )
+        news_evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
+        news_market = (
+            news_evidence.get("market_confirmation")
+            if isinstance(news_evidence.get("market_confirmation"), dict)
+            else {}
+        )
+        news_url = self._tg_esc(str(news_evidence.get("source_url") or ""))
+        news_publisher = self._tg_esc(str(news_evidence.get("publisher") or "Tier-1-Quelle"))
+        news_title = self._tg_esc(str(news_evidence.get("title") or "Verifizierter News-Trigger"))[:320]
+        news_line = (
+            f"<b>News-Trigger:</b> <a href=\"{news_url}\">{news_publisher}</a> | {news_title}"
+            f"\n<b>News-Beweis:</b> Faktenbasis {self._tg_esc(str(news_evidence.get('fact_basis') or 'offen'))} | "
+            f"relative Reaktion {self._tg_pct(news_market.get('relative_move_since_publication')).lstrip('+')} | "
+            f"Primärdokument {'ja' if news_evidence.get('original_document_verified') else 'nein'}"
+            f"\n<i>Zeitfenster bestätigt; Kausalität nicht bewiesen. Echtgeld gesperrt.</i>"
+            if news_evidence and news_url
+            else ""
+        )
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
         strategy_line = self._paper_strategy_context_line(event.get("strategy_context"))
@@ -3747,6 +3765,7 @@ class EmailAlertService:
                 f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Ausloeser:</b> {source_label}",
+                *([news_line] if news_line else []),
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 *([strategy_line] if strategy_line else []),
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty}",

@@ -1184,6 +1184,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 const pnlValue = Number(trade.result_value_delta || 0);
                 const entryExecution = trade.trade_ticket?.execution_model?.entry || null;
                 const exitExecution = trade.estimated_exit_execution || null;
+                const newsEvidence = trade.trade_ticket?.news_evidence || null;
                 return (
                   <div
                     key={`decision-${trade.id}`}
@@ -1236,6 +1237,30 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                             Verkauf jetzt geschätzt: Referenz {priceOrNA(exitExecution.reference_price)} → Fill {priceOrNA(exitExecution.fill_price)}
                           </span>
                         ) : null}
+                      </div>
+                    ) : null}
+                    {newsEvidence ? (
+                      <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/80 px-3 py-3 text-[11px] leading-5 text-violet-950">
+                        <div className="flex flex-wrap items-center gap-2 font-extrabold uppercase tracking-[0.12em] text-violet-700">
+                          <span>News-Evidenz beim Entry</span>
+                          <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5">
+                            {newsEvidence.market_confirmation?.status || "offen"}
+                          </span>
+                          {newsEvidence.original_document_verified ? (
+                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">Primärdokument</span>
+                          ) : null}
+                        </div>
+                        <a
+                          href={newsEvidence.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 block font-bold underline-offset-4 hover:underline"
+                        >
+                          {newsEvidence.publisher || "Tier-1-Quelle"} · {newsEvidence.title}
+                        </a>
+                        <div className="mt-1 text-violet-800">
+                          Relative Reaktion {newsEvidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {newsEvidence.fact_basis || "offen"} · Kausalität nicht bewiesen
+                        </div>
                       </div>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
@@ -1963,6 +1988,33 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     ))}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">{item.thesis}</p>
+                  {item.news_evidence ? (
+                    <div className="mt-3 rounded-[1.1rem] border border-violet-200 bg-violet-50/80 p-3 text-xs leading-5 text-violet-950">
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-violet-700">
+                        <span>Verifizierter News-Trigger</span>
+                        <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5">
+                          Preisreaktion bestätigt
+                        </span>
+                        {item.news_evidence.original_document_verified ? (
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">Primärdokument geprüft</span>
+                        ) : null}
+                      </div>
+                      <a
+                        href={item.news_evidence.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 block font-black underline-offset-4 hover:underline"
+                      >
+                        {item.news_evidence.publisher || "Tier-1-Quelle"} · {item.news_evidence.headline || item.headline}
+                      </a>
+                      <div className="mt-1 text-violet-800">
+                        Veröffentlicht {item.news_evidence.published_at ? new Date(item.news_evidence.published_at).toLocaleString() : "offen"} · relative Reaktion {item.news_evidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {item.news_evidence.fact_basis || "offen"}
+                      </div>
+                      <div className="mt-1 font-semibold text-violet-700">
+                        Zeitliche Bestätigung ist kein Kausalitätsbeweis. Echtgeld bleibt gesperrt.
+                      </div>
+                    </div>
+                  ) : null}
                   {item.decision_framework && (
                     <div className="mt-3 grid gap-2 rounded-[1.1rem] border border-slate-200 bg-slate-50/90 p-3 text-xs text-slate-700 lg:grid-cols-3">
                       <div>
@@ -2168,7 +2220,15 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         Analysieren
                       </button>
                     )}
-                    {item.asset_class === "option" ? (
+                    {item.setup_type === "confirmed_news_event" ? (
+                      <button
+                        onClick={() => openFromPlaybook(item.id, item.direction)}
+                        disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
+                        className="rounded-xl bg-violet-700 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+                      >
+                        Paper {item.direction} · News bestätigt
+                      </button>
+                    ) : item.asset_class === "option" ? (
                       <button
                         onClick={() => openFromPlaybook(item.id, item.direction, productDrafts[item.id])}
                         disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}

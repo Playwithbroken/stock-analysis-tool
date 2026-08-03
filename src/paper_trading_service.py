@@ -48,11 +48,16 @@ class PaperTradingService:
     def __init__(self, portfolio_manager: PortfolioManager) -> None:
         self.portfolio_manager = portfolio_manager
 
-    def build_dashboard(self, scoreboard: Dict[str, Any], settings: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    def build_dashboard(
+        self,
+        scoreboard: Dict[str, Any],
+        settings: Dict[str, Any] | None = None,
+        news_context: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         settings = settings or {}
         rules = settings.get("do_not_trade") or {}
         outcome_learning = self._build_outcome_learning_adjustments()
-        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning)
+        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
@@ -218,8 +223,9 @@ class PaperTradingService:
         max_trades: int = 3,
         execute: bool = False,
         mode: str = "strict",
+        news_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        dashboard = self.build_dashboard(scoreboard, settings)
+        dashboard = self.build_dashboard(scoreboard, settings, news_context)
         selection = dashboard.get("auto_selection", {})
         raw_mode = str(mode or "").lower()
         mode = raw_mode if raw_mode in {"strict", "learn", "aggressive_learning"} else "strict"
@@ -276,6 +282,7 @@ class PaperTradingService:
                         },
                         scoreboard,
                         settings,
+                        news_context,
                     )
                 )
             except Exception as exc:
@@ -409,6 +416,7 @@ class PaperTradingService:
         payload: Dict[str, Any],
         scoreboard: Dict[str, Any],
         settings: Dict[str, Any] | None = None,
+        news_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         playbook_id = payload.get("playbook_id")
         direction = (payload.get("direction") or "long").lower()
@@ -416,13 +424,18 @@ class PaperTradingService:
         leverage = float(payload.get("leverage") or 1)
         rules = (settings or {}).get("do_not_trade") or {}
         outcome_learning = self._build_outcome_learning_adjustments()
-        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning)
+        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         demo_account = self._build_demo_account(trades, playbooks)
         playbooks = self._attach_demo_sizing(playbooks, demo_account)
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
+        if (
+            playbook.get("setup_type") == "confirmed_news_event"
+            and direction != str(playbook.get("direction") or "").lower()
+        ):
+            raise ValueError("Confirmed-news paper trade direction must match the verified price reaction.")
         entry_source_label = str(payload.get("alert_source_label") or "Paper-Autopilot")
         playbook = {**playbook, "entry_source_label": entry_source_label}
         learning_mode = bool(payload.get("learning_mode"))
@@ -601,6 +614,7 @@ class PaperTradingService:
             "invalidation": (playbook.get("decision_framework") or {}).get("invalidation"),
             "suggested_max_loss_value": note_playbook.get("suggested_max_loss_value"),
             "trade_ticket": note_playbook.get("trade_ticket") or {},
+            "news_evidence": playbook.get("news_evidence") or None,
         }
         return enriched
 
@@ -794,6 +808,7 @@ class PaperTradingService:
         scoreboard: Dict[str, Any],
         rules: Dict[str, Any],
         outcome_learning: Optional[Dict[str, Any]] = None,
+        news_context: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         playbooks: List[Dict[str, Any]] = []
 
@@ -898,6 +913,7 @@ class PaperTradingService:
                 }
             )
 
+        playbooks.extend(self._build_confirmed_news_playbooks(news_context or {}))
         playbooks.extend(self._build_commodity_leverage_playbooks())
         playbooks.extend(self._build_option_learning_playbooks(playbooks))
         self._apply_outcome_learning(playbooks, outcome_learning or {})
@@ -911,6 +927,106 @@ class PaperTradingService:
             item["decision_framework"] = self._build_decision_framework(item)
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:16]
+
+    def _build_confirmed_news_playbooks(self, news_context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Turn only explicit, fresh and price-confirmed Tier-1 news into paper candidates."""
+        candidates: Dict[tuple[str, str], Dict[str, Any]] = {}
+        for news in news_context.get("top_news", []) or []:
+            if not isinstance(news, dict):
+                continue
+            evidence = news.get("source_evidence") if isinstance(news.get("source_evidence"), dict) else {}
+            intelligence = news.get("news_intelligence") if isinstance(news.get("news_intelligence"), dict) else {}
+            confirmation = news.get("market_confirmation") if isinstance(news.get("market_confirmation"), dict) else {}
+            ticker = str(news.get("ticker") or confirmation.get("ticker") or "").upper().strip()
+            expected = str(confirmation.get("expected_headline_direction") or "").lower()
+            direction = "long" if expected == "positive" else "short" if expected == "negative" else ""
+            age_hours = news.get("age_hours")
+            explicit_ticker = str(news.get("ticker_association_basis") or "") == "explicit_title_entity"
+            tier_one = str(news.get("source_quality") or evidence.get("quality") or "") == "tier_1"
+            link_verified = evidence.get("link_verified") is True and bool(news.get("source_url") or news.get("link"))
+            event_aligned = confirmation.get("event_window_aligned") is True
+            if not all(
+                [
+                    ticker,
+                    direction,
+                    explicit_ticker,
+                    tier_one,
+                    link_verified,
+                    news.get("published_at"),
+                    intelligence.get("is_important") is True,
+                    confirmation.get("status") == "confirmed",
+                    event_aligned,
+                ]
+            ):
+                continue
+            if not isinstance(age_hours, (int, float)) or float(age_hours) > 24:
+                continue
+
+            importance = float(intelligence.get("importance_score") or news.get("importance_score") or 0)
+            original_verified = evidence.get("original_document_verified") is True
+            corroborated = str(evidence.get("corroboration") or "") == "corroborated"
+            score = min(96.0, 80.0 + max(0.0, importance - 12.0) * 1.2)
+            score += 2.0 if original_verified else 0.0
+            score += 2.0 if corroborated else 0.0
+            score = round(min(96.0, score), 1)
+            source_url = str(news.get("source_url") or news.get("link") or "")
+            title = str(news.get("title") or "Confirmed Tier-1 news event")
+            relative_move = confirmation.get("relative_move_since_publication")
+            market_fields = self._market_reference_fields(ticker)
+            news_evidence = {
+                "title": title,
+                "publisher": news.get("publisher"),
+                "source_url": source_url,
+                "published_at": news.get("published_at"),
+                "source_quality": "tier_1",
+                "fact_basis": intelligence.get("fact_basis"),
+                "fact_summary": intelligence.get("fact_summary"),
+                "importance_score": importance,
+                "original_document_verified": original_verified,
+                "primary_sources": list(news.get("primary_sources") or []),
+                "corroboration": evidence.get("corroboration") or "single_source",
+                "market_confirmation": {
+                    "status": "confirmed",
+                    "expected_headline_direction": expected,
+                    "ticker": ticker,
+                    "benchmark": confirmation.get("benchmark"),
+                    "asset_move_since_publication": confirmation.get("asset_move_since_publication"),
+                    "benchmark_move_since_publication": confirmation.get("benchmark_move_since_publication"),
+                    "relative_move_since_publication": relative_move,
+                    "baseline_at": confirmation.get("baseline_at"),
+                    "observed_at": confirmation.get("observed_at"),
+                    "event_window_aligned": True,
+                    "causality_proven": False,
+                },
+                "precision_note": (
+                    "Die Preisreaktion ist zeitlich am Veröffentlichungsfenster ausgerichtet, beweist aber keine Kausalität."
+                ),
+            }
+            playbook = {
+                "id": f"news-{ticker}-{direction}",
+                "ticker": ticker,
+                "asset_class": "equity",
+                "direction": direction,
+                "setup_type": "confirmed_news_event",
+                "title": "Bestätigtes Tier-1-Newsereignis",
+                "headline": title,
+                "source_label": news.get("publisher") or evidence.get("publisher"),
+                "source_url": source_url,
+                "score": score,
+                "risk_buffer_pct": 3.0,
+                "reward_buffer_pct": 6.5,
+                "thesis": (
+                    f"Explizite Tier-1-Meldung zu {ticker} mit bestätigter relativer Preisreaktion "
+                    f"seit Veröffentlichung ({relative_move if relative_move is not None else 'gemessen'}%)."
+                ),
+                "tags": ["tier-1 news", "event-window confirmed", direction, "paper-only"],
+                "news_evidence": news_evidence,
+                **market_fields,
+            }
+            key = (ticker, direction)
+            if key not in candidates or score > float(candidates[key].get("score") or 0):
+                candidates[key] = playbook
+        return list(candidates.values())[:4]
 
     def _build_trade_note_snapshot(self, playbook: Dict[str, Any], demo_account: Dict[str, Any], is_option: bool) -> str:
         framework = playbook.get("decision_framework") or {}
@@ -927,6 +1043,17 @@ class PaperTradingService:
             f"Risikoplan: {framework.get('risk_plan') or 'Nur Paper-Risiko.'}",
             f"Ticket: Schema {ticket.get('schema_version') or 'n/a'} / Status {ticket.get('status') or 'n/a'} / Paper-ready {bool(ticket.get('paper_ready'))} / Echtgeld-ready {bool(ticket.get('real_money_ready'))}.",
         ]
+        news_evidence = playbook.get("news_evidence") if isinstance(playbook.get("news_evidence"), dict) else {}
+        if news_evidence:
+            news_market = news_evidence.get("market_confirmation") if isinstance(news_evidence.get("market_confirmation"), dict) else {}
+            lines.extend(
+                [
+                    f"Newsquelle: {news_evidence.get('publisher') or 'n/a'} / {news_evidence.get('source_url') or 'n/a'}",
+                    f"News veröffentlicht: {news_evidence.get('published_at') or 'n/a'}; Faktenbasis: {news_evidence.get('fact_basis') or 'n/a'}.",
+                    f"Primärdokument verifiziert: {bool(news_evidence.get('original_document_verified'))}; unabhängige Bestätigung: {news_evidence.get('corroboration') or 'single_source'}.",
+                    f"Preisbestätigung: {news_market.get('status') or 'n/a'} / relative Bewegung {news_market.get('relative_move_since_publication')}%; Kausalität bewiesen: {bool(news_market.get('causality_proven'))}.",
+                ]
+            )
         if playbook.get("learning_mode"):
             lines.append("Lernmodus: reduzierte Demo-Position, kein strenges Top-Setup und nicht Echtgeld-bereit.")
             context = playbook.get("learning_context") if isinstance(playbook.get("learning_context"), dict) else {}
@@ -1084,6 +1211,20 @@ class PaperTradingService:
                 "brauchen Strike/Knockout, Laufzeit, Spread, Emittent und Overnight-Risiko vor jeder Real-Money-Prüfung."
             )
 
+        if setup_type == "confirmed_news_event":
+            entry_trigger = (
+                f"{ticker} hält die im Veröffentlichungsfenster gemessene relative "
+                f"{'Stärke' if direction == 'long' else 'Schwäche'}; Quelle und Meldung bleiben unverändert erreichbar."
+            )
+            invalidation = (
+                f"Ungültig, wenn {ticker} die relative Reaktion vollständig zurücknimmt, die Quelle korrigiert wird "
+                "oder die geplante Stop-Zone bricht."
+            )
+            risk_plan = (
+                "Nur Paper-Größe. Kein Entry allein aufgrund der Überschrift; Kursfenster, Liquidität, Stop und "
+                "gespeicherte News-Evidenz müssen beim Einstieg gültig sein."
+            )
+
         evidence_level = "watch"
         if blocked:
             evidence_level = "blocked"
@@ -1099,6 +1240,13 @@ class PaperTradingService:
         ]
         if setup_type == "political_copy_delay":
             review_questions.append("Ist das politische Filing zu verspätet, um noch Edge zu haben?")
+        if setup_type == "confirmed_news_event":
+            review_questions.extend(
+                [
+                    "Ist die Tier-1-Quelle weiterhin erreichbar und wurde die Meldung nicht korrigiert?",
+                    "Hält die relative Preisreaktion nach Kosten an, ohne der Bewegung hinterherzulaufen?",
+                ]
+            )
         if is_option:
             review_questions.append("Wurden Strike, Laufzeit, Spread, IV und Prämienrisiko manuell geprüft?")
 
@@ -2653,6 +2801,7 @@ class PaperTradingService:
             "source_label": source_label or None,
             "entry_source_label": playbook.get("entry_source_label") or "Paper-Autopilot",
             "learning_context": playbook.get("learning_context") or None,
+            "news_evidence": playbook.get("news_evidence") or None,
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
             "execution_model": execution_model or None,

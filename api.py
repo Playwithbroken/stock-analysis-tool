@@ -1385,6 +1385,21 @@ def get_paper_trading_service():
         _paper_trading_service = PaperTradingService(get_portfolio_manager())
     return _paper_trading_service
 
+
+def _get_paper_news_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """Reuse a recent brief or build a fast one without making news a hard dependency."""
+    cached = _cache_get(
+        "morning_brief:full",
+        _safe_int_env("PAPER_TRADING_NEWS_CONTEXT_MAX_AGE_SECONDS", 3600, minimum=60),
+    )
+    if isinstance(cached, dict):
+        return cached
+    try:
+        brief = get_morning_brief_service().get_brief_fast(snapshot)
+        return brief if isinstance(brief, dict) else {}
+    except Exception:
+        return {}
+
 def get_trading_intelligence_service():
     global _trading_intelligence_service
     if _trading_intelligence_service is None:
@@ -1702,6 +1717,7 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
         settings = get_portfolio_manager().get_signal_score_settings()
         autopilot_settings = get_portfolio_manager().get_paper_autopilot_settings()
         scoreboard = asyncio.run(get_signal_score_service().build_scoreboard(snapshot, settings))
+        news_context = _get_paper_news_context(snapshot)
         result = get_paper_trading_service().run_auto_selection(
             scoreboard,
             settings,
@@ -1712,6 +1728,7 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
             ),
             execute=True,
             mode=os.getenv("PAPER_TRADING_AUTO_LEARN_MODE", str(autopilot_settings.get("mode") or "aggressive_learning")),
+            news_context=news_context,
         )
         if result.get("opened"):
             try:
@@ -4231,14 +4248,17 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
     snapshot = get_public_signal_service().build_watchlist_snapshot(items)
     settings = get_portfolio_manager().get_signal_score_settings()
     scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+    brief = get_morning_brief_service().get_brief_fast(snapshot)
 
     return _cache_set(cache_key, {
         "watchlist": convert_numpy_types(snapshot),
         "history": convert_numpy_types(get_portfolio_manager().get_sent_signal_events(limit=limit)),
-        "brief": convert_numpy_types(get_morning_brief_service().get_brief_fast(snapshot)),
+        "brief": convert_numpy_types(brief),
         "scoreboard": convert_numpy_types(scoreboard),
         "session_lists": convert_numpy_types(await get_session_list_service().build_session_lists(snapshot)),
-        "paper_dashboard": convert_numpy_types(get_paper_trading_service().build_dashboard(scoreboard, settings)),
+        "paper_dashboard": convert_numpy_types(
+            get_paper_trading_service().build_dashboard(scoreboard, settings, brief)
+        ),
         "trading_intelligence": convert_numpy_types(get_trading_intelligence_service().build_snapshot(snapshot)),
         "learning": convert_numpy_types(get_forecast_learning_service().build_dashboard()),
     })
@@ -5360,7 +5380,8 @@ async def get_paper_trading_dashboard():
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         settings = get_portfolio_manager().get_signal_score_settings()
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
-        dashboard = get_paper_trading_service().build_dashboard(scoreboard, settings)
+        news_context = _get_paper_news_context(snapshot)
+        dashboard = get_paper_trading_service().build_dashboard(scoreboard, settings, news_context)
         return convert_numpy_types(dashboard)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -5420,7 +5441,13 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
         payload = req.model_dump()
         payload["alert_source_label"] = "Paper-Playbook manuell"
-        trade = get_paper_trading_service().create_trade_from_playbook(payload, scoreboard, settings)
+        news_context = _get_paper_news_context(snapshot)
+        trade = get_paper_trading_service().create_trade_from_playbook(
+            payload,
+            scoreboard,
+            settings,
+            news_context,
+        )
         _cache_forget("search:suggestions")
         try:
             trade["alert_source_label"] = "Paper-Playbook manuell"
@@ -5482,12 +5509,14 @@ async def run_paper_autopilot(req: PaperAutoSelectionRequest):
         snapshot = get_public_signal_service().build_watchlist_snapshot(items)
         settings = get_portfolio_manager().get_signal_score_settings()
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+        news_context = _get_paper_news_context(snapshot)
         result = get_paper_trading_service().run_auto_selection(
             scoreboard,
             settings,
             max_trades=req.max_trades,
             execute=req.execute,
             mode=req.mode,
+            news_context=news_context,
         )
         if req.execute and result.get("opened"):
             _cache_forget("search:suggestions")

@@ -185,6 +185,95 @@ def sample_settings() -> Dict[str, Any]:
     }
 
 
+def test_confirmed_news_requires_full_evidence_chain() -> None:
+    service = build_service(FakePortfolioManager())
+    valid = {
+        "title": "Microsoft raises guidance after cloud demand accelerates",
+        "publisher": "Reuters",
+        "source_url": "https://www.reuters.com/technology/microsoft-guidance-2026-08-03/",
+        "source_quality": "tier_1",
+        "published_at": "2026-08-03T08:00:00+00:00",
+        "age_hours": 2.0,
+        "ticker": "MSFT",
+        "related_tickers": ["MSFT"],
+        "ticker_association_basis": "explicit_title_entity",
+        "source_evidence": {
+            "quality": "tier_1",
+            "link_verified": True,
+            "original_document_verified": True,
+            "corroboration": "corroborated",
+        },
+        "news_intelligence": {
+            "is_important": True,
+            "importance_score": 18,
+            "fact_basis": "publisher_summary",
+            "fact_summary": "Microsoft raised its outlook after stronger cloud demand.",
+        },
+        "primary_sources": [
+            {
+                "authority": "U.S. Securities and Exchange Commission",
+                "form": "8-K",
+                "url": "https://www.sec.gov/Archives/edgar/data/qa/qa.htm",
+            }
+        ],
+        "market_confirmation": {
+            "status": "confirmed",
+            "expected_headline_direction": "positive",
+            "ticker": "MSFT",
+            "benchmark": "QQQ",
+            "asset_move_since_publication": 1.8,
+            "benchmark_move_since_publication": 0.4,
+            "relative_move_since_publication": 1.4,
+            "baseline_at": "2026-08-03T07:45:00+00:00",
+            "observed_at": "2026-08-03T09:00:00+00:00",
+            "event_window_aligned": True,
+            "causality_proven": False,
+        },
+    }
+    rejected = [
+        {**valid, "title": "Contradicted", "market_confirmation": {**valid["market_confirmation"], "status": "contradicted"}},
+        {**valid, "title": "No explicit ticker", "ticker_association_basis": "provider_related_feed_only"},
+        {**valid, "title": "Stale", "age_hours": 25.0},
+        {**valid, "title": "Not important", "news_intelligence": {**valid["news_intelligence"], "is_important": False}},
+    ]
+    playbooks = service._build_confirmed_news_playbooks({"top_news": [valid, *rejected]})
+
+    assert len(playbooks) == 1
+    candidate = playbooks[0]
+    assert candidate["id"] == "news-MSFT-long"
+    assert candidate["setup_type"] == "confirmed_news_event"
+    assert candidate["score"] >= 88
+    assert candidate["news_evidence"]["original_document_verified"] is True
+    assert candidate["news_evidence"]["market_confirmation"]["event_window_aligned"] is True
+    assert candidate["news_evidence"]["market_confirmation"]["causality_proven"] is False
+
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings(), {"top_news": [valid]})
+    news_playbook = next(item for item in dashboard["playbooks"] if item["id"] == "news-MSFT-long")
+    assert news_playbook["trade_ticket"]["news_evidence"]["source_url"] == valid["source_url"]
+    assert news_playbook["trade_ticket"]["real_money_ready"] is False
+
+    try:
+        service.create_trade_from_playbook(
+            {"playbook_id": "news-MSFT-long", "direction": "short"},
+            sample_scoreboard(),
+            sample_settings(),
+            {"top_news": [valid]},
+        )
+    except ValueError as exc:
+        assert "direction must match" in str(exc)
+    else:
+        raise AssertionError("Confirmed-news playbook allowed a direction opposite to its evidence.")
+
+    opened = service.create_trade_from_playbook(
+        {"playbook_id": "news-MSFT-long", "direction": "long"},
+        sample_scoreboard(),
+        sample_settings(),
+        {"top_news": [valid]},
+    )
+    assert opened["trade_ticket"]["news_evidence"]["market_confirmation"]["causality_proven"] is False
+    assert "Newsquelle: Reuters" in opened["notes"]
+
+
 def test_demo_account_sizing() -> None:
     manager = FakePortfolioManager()
     service = build_service(manager)
@@ -1812,6 +1901,7 @@ def test_market_snapshot_falls_back_to_daily_data() -> None:
 
 
 if __name__ == "__main__":
+    test_confirmed_news_requires_full_evidence_chain()
     test_demo_account_sizing()
     test_realized_return_uses_account_equity()
     test_performance_metrics_expose_bad_payoff_despite_high_win_rate()

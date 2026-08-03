@@ -148,6 +148,19 @@ def test_paper_trade_telegram_money_formatting() -> None:
                         "estimated_cost_value": 7.67,
                     }
                 },
+                "news_evidence": {
+                    "title": "Apple raises guidance",
+                    "publisher": "Reuters",
+                    "source_url": "https://www.reuters.com/technology/apple-guidance/",
+                    "fact_basis": "publisher_summary",
+                    "original_document_verified": True,
+                    "market_confirmation": {
+                        "status": "confirmed",
+                        "relative_move_since_publication": 1.4,
+                        "event_window_aligned": True,
+                        "causality_proven": False,
+                    },
+                },
                 "validation": {"warnings": ["manual_market_check"]},
             },
             "source_label": "Paper-Playbook manuell",
@@ -167,6 +180,10 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Jetzt tun:</b> mit Plan halten | Position halten, solange Volumen und Trend intakt bleiben." in opened
     assert "Nächste Prüfung:</b> Nach US-Eröffnung Preis, Volumen und Stop-Abstand erneut prüfen." in opened
     assert "Paper-Playbook manuell" in opened
+    assert "News-Trigger:</b> <a href=\"https://www.reuters.com/technology/apple-guidance/\">Reuters</a>" in opened
+    assert "relative Reaktion 1.40%" in opened
+    assert "Primärdokument ja" in opened
+    assert "Kausalität nicht bewiesen. Echtgeld gesperrt." in opened
     assert "fresh (1.5h)" in opened
     assert "Liquidität strong" in opened
     assert "5T-Notional 125.0 Mio." in opened

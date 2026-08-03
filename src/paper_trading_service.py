@@ -57,10 +57,12 @@ class PaperTradingService:
         settings = settings or {}
         rules = settings.get("do_not_trade") or {}
         outcome_learning = self._build_outcome_learning_adjustments()
-        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
+        news_evidence_performance = self._build_news_evidence_performance(closed_trades)
+        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
+        self._apply_news_evidence_learning(playbooks, news_evidence_performance)
         demo_account = self._build_demo_account(trades, playbooks)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account)
         autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
@@ -86,6 +88,7 @@ class PaperTradingService:
             "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
             "setup_performance": self._build_setup_performance(closed_trades),
             "entry_source_performance": self._build_entry_source_performance(closed_trades),
+            "news_evidence_performance": news_evidence_performance,
             "learning_context_performance": self._build_learning_context_performance(closed_trades),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
@@ -431,8 +434,11 @@ class PaperTradingService:
         leverage = float(payload.get("leverage") or 1)
         rules = (settings or {}).get("do_not_trade") or {}
         outcome_learning = self._build_outcome_learning_adjustments()
-        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
+        closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
+        news_evidence_performance = self._build_news_evidence_performance(closed_trades)
+        playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
+        self._apply_news_evidence_learning(playbooks, news_evidence_performance)
         demo_account = self._build_demo_account(trades, playbooks)
         playbooks = self._attach_demo_sizing(playbooks, demo_account)
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
@@ -1119,6 +1125,8 @@ class PaperTradingService:
                 "source_quality": "tier_1",
                 "fact_basis": intelligence.get("fact_basis"),
                 "fact_summary": intelligence.get("fact_summary"),
+                "event_type": news.get("event_type") or "unknown",
+                "impact": news.get("impact") or intelligence.get("impact") or "unknown",
                 "importance_score": importance,
                 "original_document_verified": original_verified,
                 "primary_sources": list(news.get("primary_sources") or []),
@@ -3247,6 +3255,143 @@ class PaperTradingService:
             )
         )
         return rows
+
+    def _build_news_evidence_performance(self, closed_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Measure realized news-trade evidence without treating correlation as causation."""
+        news_trades: List[Dict[str, Any]] = []
+        for trade in closed_trades:
+            if str(trade.get("setup_type") or "") != "confirmed_news_event":
+                continue
+            if trade.get("realized_pnl_pct") is None:
+                continue
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
+            if not evidence:
+                continue
+            news_trades.append(trade)
+
+        def build_rows(dimension: str) -> List[Dict[str, Any]]:
+            buckets: Dict[str, List[Dict[str, Any]]] = {}
+            for trade in news_trades:
+                ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+                evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
+                if dimension == "source":
+                    label = str(evidence.get("publisher") or "Unbekannte Quelle").strip() or "Unbekannte Quelle"
+                else:
+                    label = str(evidence.get("event_type") or "unknown").strip().lower() or "unknown"
+                buckets.setdefault(label, []).append(trade)
+
+            rows: List[Dict[str, Any]] = []
+            for label, trades in buckets.items():
+                performance = build_trade_performance(trades)
+                sample_size = int(performance.get("sample_size") or 0)
+                win_rate = float(performance.get("win_rate") or 0)
+                expectancy_pct = float(performance.get("expectancy_pct") or 0)
+                profit_factor = performance.get("profit_factor")
+                reaction_failures = sum(
+                    1 for trade in trades if "news_reaction_failed" in str(trade.get("exit_reason") or "")
+                )
+                reaction_failure_rate = round((reaction_failures / max(1, sample_size)) * 100, 1)
+                quality_status = "insufficient_sample"
+                score_delta = 0
+                next_action = "Mindestens 10 geschlossene News-Paper-Trades sammeln; Quelle noch nicht gewichten."
+                if sample_size >= 10:
+                    quality_status = "neutral"
+                    next_action = "Gewichtung unverändert lassen und weitere Marktregime sammeln."
+                    if expectancy_pct < 0 or win_rate < 40:
+                        quality_status = "downgrade"
+                        score_delta = -6
+                        next_action = "Künftige News-Setups vorsichtiger bewerten und stärkeren Follow-through verlangen."
+                    elif expectancy_pct > 0 and win_rate >= 55 and profit_factor is not None and float(profit_factor) >= 1.2:
+                        quality_status = "promising"
+                        score_delta = 3
+                        next_action = "Positive Paper-Evidenz weiter testen; keine Echtgeldfreigabe daraus ableiten."
+                elif sample_size >= 5:
+                    quality_status = "building_evidence"
+                    next_action = "Frühes Signal beobachten, aber bis 10 Abschlüssen keine Score-Anpassung vornehmen."
+                rows.append(
+                    {
+                        "dimension": dimension,
+                        "label": label,
+                        "trades": sample_size,
+                        "performance": performance,
+                        "reaction_failures": reaction_failures,
+                        "reaction_failure_rate": reaction_failure_rate,
+                        "quality_status": quality_status,
+                        "score_delta": score_delta,
+                        "next_action": next_action,
+                    }
+                )
+            status_rank = {"promising": 0, "neutral": 1, "building_evidence": 2, "insufficient_sample": 3, "downgrade": 4}
+            rows.sort(
+                key=lambda item: (
+                    status_rank.get(str(item.get("quality_status") or ""), 5),
+                    -int(item.get("trades") or 0),
+                    str(item.get("label") or ""),
+                )
+            )
+            return rows
+
+        overall = build_trade_performance(news_trades)
+        return {
+            "summary": {
+                "closed_news_trades": len(news_trades),
+                "minimum_adjustment_sample": 10,
+                "performance": overall,
+                "causality_note": (
+                    "Realisierte Ergebnisse messen zeitlichen Follow-through, beweisen aber keine Kausalität der Meldung."
+                ),
+                "policy": (
+                    "Score-Anpassungen beginnen erst ab 10 geschlossenen Trades je Quelle oder Eventtyp; "
+                    "eine automatische Echtgeldfreigabe ist ausgeschlossen."
+                ),
+            },
+            "sources": build_rows("source"),
+            "event_types": build_rows("event_type"),
+        }
+
+    def _apply_news_evidence_learning(
+        self,
+        playbooks: List[Dict[str, Any]],
+        news_performance: Dict[str, Any],
+    ) -> None:
+        source_rows = {
+            str(item.get("label") or "").strip().lower(): item
+            for item in news_performance.get("sources", [])
+        }
+        event_rows = {
+            str(item.get("label") or "").strip().lower(): item
+            for item in news_performance.get("event_types", [])
+        }
+        for item in playbooks:
+            if str(item.get("setup_type") or "") != "confirmed_news_event":
+                continue
+            evidence = item.get("news_evidence") if isinstance(item.get("news_evidence"), dict) else {}
+            source_key = str(evidence.get("publisher") or "").strip().lower()
+            event_key = str(evidence.get("event_type") or "unknown").strip().lower()
+            matched = [row for row in (source_rows.get(source_key), event_rows.get(event_key)) if row]
+            if not matched:
+                continue
+            # Source and event rows usually contain overlapping trades. Average them
+            # so the same realized outcome is not counted twice.
+            raw_delta = sum(int(row.get("score_delta") or 0) for row in matched) / max(1, len(matched))
+            score_delta = max(-6, min(3, int(round(raw_delta))))
+            notes = [
+                f"{row.get('dimension')} {row.get('label')}: {row.get('trades')} Abschlüsse, "
+                f"Erwartung {row.get('performance', {}).get('expectancy_pct', 0)}%."
+                for row in matched
+            ]
+            if score_delta:
+                item.setdefault("raw_score", item.get("score"))
+                item["score"] = max(0, min(100, round(float(item.get("score") or 0) + score_delta, 2)))
+            item["news_learning_adjustment"] = {
+                "score_delta": score_delta,
+                "source": source_key or None,
+                "event_type": event_key,
+                "minimum_sample": 10,
+                "notes": notes,
+                "real_money_ready": False,
+            }
 
     def _build_learning_context_performance(self, closed_trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         buckets: Dict[str, Dict[str, Any]] = {}

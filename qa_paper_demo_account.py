@@ -670,6 +670,55 @@ def test_entry_source_performance_separates_manual_and_autopilot() -> None:
     assert rows[0]["entry_source_label"] == "Paper-Autopilot"
 
 
+def test_news_evidence_learning_requires_sample_and_adjusts_conservatively() -> None:
+    service = PaperTradingService.__new__(PaperTradingService)
+
+    def news_trade(index: int, pnl: float, publisher: str = "Reuters") -> Dict[str, Any]:
+        return {
+            "id": f"news-{index}",
+            "status": "closed",
+            "setup_type": "confirmed_news_event",
+            "realized_pnl_pct": pnl,
+            "realized_pnl_value": pnl * 100,
+            "exit_reason": "managed_news_reaction_failed" if pnl < 0 else "managed_target_hit",
+            "trade_ticket": {
+                "news_evidence": {
+                    "publisher": publisher,
+                    "event_type": "earnings",
+                    "source_url": "https://www.reuters.com/markets/qa/",
+                }
+            },
+        }
+
+    early = service._build_news_evidence_performance([news_trade(i, -1.0) for i in range(9)])
+    assert early["sources"][0]["quality_status"] == "building_evidence"
+    assert early["sources"][0]["score_delta"] == 0
+
+    trades = [news_trade(i, 1.0 if i < 3 else -1.0) for i in range(10)]
+    performance = service._build_news_evidence_performance(trades)
+    reuters = performance["sources"][0]
+    earnings = performance["event_types"][0]
+    assert reuters["trades"] == 10
+    assert reuters["quality_status"] == "downgrade"
+    assert reuters["score_delta"] == -6
+    assert reuters["reaction_failure_rate"] == 70.0
+    assert earnings["score_delta"] == -6
+    assert performance["summary"]["minimum_adjustment_sample"] == 10
+
+    playbooks = [
+        {
+            "id": "news-MSFT-long",
+            "setup_type": "confirmed_news_event",
+            "score": 90,
+            "news_evidence": {"publisher": "Reuters", "event_type": "earnings"},
+        }
+    ]
+    service._apply_news_evidence_learning(playbooks, performance)
+    assert playbooks[0]["score"] == 84
+    assert playbooks[0]["news_learning_adjustment"]["score_delta"] == -6
+    assert playbooks[0]["news_learning_adjustment"]["real_money_ready"] is False
+
+
 def test_learning_context_performance_groups_account_state() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     rows = service._build_learning_context_performance(
@@ -2032,6 +2081,7 @@ if __name__ == "__main__":
     test_realized_return_uses_account_equity()
     test_performance_metrics_expose_bad_payoff_despite_high_win_rate()
     test_entry_source_performance_separates_manual_and_autopilot()
+    test_news_evidence_learning_requires_sample_and_adjusts_conservatively()
     test_learning_context_performance_groups_account_state()
     test_strategy_readiness_requires_positive_money_expectancy()
     test_short_trade_money_flow_and_demo_equity()

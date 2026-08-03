@@ -84,6 +84,7 @@ const germanStatus = (value: unknown, fallback = "Lernen") => {
     hold: "halten",
     hold_with_plan: "mit Plan halten",
     holding_period_expired: "maximale Haltedauer erreicht",
+    insufficient_sample: "zu wenig Daten",
     learning: "Lernen",
     manual_review_ready: "manuelle Prüfung bereit",
     miss: "Fehlschlag",
@@ -153,6 +154,10 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const closedTrades = data?.closed_trades || [];
   const setupPerformance = data?.setup_performance || [];
   const entrySourcePerformance = data?.entry_source_performance || [];
+  const newsEvidencePerformance = data?.news_evidence_performance || {};
+  const newsEvidenceSummary = newsEvidencePerformance.summary || {};
+  const newsSourcePerformance = newsEvidencePerformance.sources || [];
+  const newsEventPerformance = newsEvidencePerformance.event_types || [];
   const learningContextPerformance = data?.learning_context_performance || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
@@ -1972,6 +1977,66 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           </div>
         )}
 
+        <div className="mt-4 rounded-[1.6rem] border border-violet-500/20 bg-violet-50/55 p-4 text-xs text-slate-600">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-violet-700">News-Beweiskarte</div>
+              <div className="mt-1 max-w-3xl text-slate-600">
+                Misst realisierten Follow-through getrennt nach echter Quelle und Eventtyp. Erst ab {newsEvidenceSummary.minimum_adjustment_sample || 10} Abschlüssen wird der News-Score angepasst.
+              </div>
+            </div>
+            <div className="rounded-full border border-violet-500/20 bg-white px-3 py-1 font-black text-violet-800">
+              {newsEvidenceSummary.closed_news_trades || 0} geschlossene News-Trades
+            </div>
+          </div>
+
+          {newsSourcePerformance.length || newsEventPerformance.length ? (
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {[
+                { title: "Quellen", rows: newsSourcePerformance },
+                { title: "Eventtypen", rows: newsEventPerformance },
+              ].map((group: any) => (
+                <div key={group.title} className="rounded-[1.2rem] border border-black/8 bg-white/85 p-3">
+                  <div className="font-black uppercase tracking-[0.14em] text-slate-500">{group.title}</div>
+                  <div className="mt-3 space-y-2">
+                    {group.rows.slice(0, 4).map((item: any) => {
+                      const evidence = item.performance || {};
+                      const scoreDelta = Number(item.score_delta || 0);
+                      return (
+                        <div key={`${group.title}-${item.label}`} className="rounded-xl border border-black/8 bg-slate-50 px-3 py-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="font-black text-slate-900">{String(item.label || "unbekannt").replace(/_/g, " ")}</div>
+                              <div className="mt-1 text-slate-500">{item.trades || 0} Abschlüsse · Reaktionsbruch {item.reaction_failure_rate || 0}%</div>
+                            </div>
+                            <div className={`font-black ${scoreDelta > 0 ? "text-emerald-700" : scoreDelta < 0 ? "text-red-700" : "text-slate-600"}`}>
+                              {scoreDelta > 0 ? `Score +${scoreDelta}` : scoreDelta < 0 ? `Score ${scoreDelta}` : germanStatus(item.quality_status, "beobachten")}
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-slate-600">
+                            <span>Treffer {evidence.win_rate || 0}%</span>
+                            <span>Erwartung {formatPct(evidence.expectancy_pct, 2, "0.00%")}</span>
+                            <span>PF {evidence.profit_factor == null ? "offen" : Number(evidence.profit_factor).toFixed(2)}</span>
+                          </div>
+                          <div className="mt-2 font-semibold text-slate-700">{item.next_action}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[1.1rem] border border-dashed border-violet-500/25 bg-white/75 px-4 py-3 text-slate-600">
+              Noch keine geschlossenen bestätigten News-Trades. Quellen bleiben deshalb ungewichtet.
+            </div>
+          )}
+
+          <div className="mt-3 rounded-xl border border-violet-500/15 bg-white/75 px-3 py-2 font-semibold text-violet-900">
+            {newsEvidenceSummary.causality_note || "Zeitlicher Follow-through beweist keine Kausalität der Meldung."} Echtgeld bleibt gesperrt.
+          </div>
+        </div>
+
         {!!learningContextPerformance.length && (
           <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2174,6 +2239,19 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       {(item.learning_adjustment.notes || []).map((note: string) => (
                         <div key={note} className="mt-1">{note}</div>
                       ))}
+                    </div>
+                  )}
+                  {item.news_learning_adjustment && (
+                    <div className="mt-3 rounded-[1rem] border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+                      <div className="font-extrabold uppercase tracking-[0.14em]">News-Evidenz lernen</div>
+                      <div className="mt-1 font-black">
+                        Score {Number(item.news_learning_adjustment.score_delta || 0) >= 0 ? "+" : ""}
+                        {item.news_learning_adjustment.score_delta || 0} · Mindeststichprobe {item.news_learning_adjustment.minimum_sample || 10}
+                      </div>
+                      {(item.news_learning_adjustment.notes || []).map((note: string) => (
+                        <div key={note} className="mt-1">{note}</div>
+                      ))}
+                      <div className="mt-2 font-bold text-red-700">Echtgeld bleibt gesperrt.</div>
                     </div>
                   )}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">

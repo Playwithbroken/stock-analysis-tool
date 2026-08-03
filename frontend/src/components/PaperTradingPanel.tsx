@@ -156,6 +156,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
   const autoSelection = data?.auto_selection || {};
+  const newsGateMonitor = data?.news_gate_monitor || {};
   const autopilotProfile = data?.paper_autopilot_profile || {};
   const autoLearnStatus = data?.auto_learn_status || {};
   const strategyReadiness = data?.strategy_readiness || [];
@@ -1334,6 +1335,76 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             {autoLearnStatus.next_allowed_at ? ` · nächster Lauf ${new Date(autoLearnStatus.next_allowed_at).toLocaleString()}` : ""}
             {autoLearnStatus.message ? ` · ${autoLearnStatus.message}` : ""}
           </div>
+          {newsGateMonitor.status ? (
+            <div className={`mt-3 rounded-[1.1rem] border p-3 ${
+              newsGateMonitor.status === "ready"
+                ? "border-emerald-500/20 bg-emerald-50/80 text-emerald-950"
+                : newsGateMonitor.status === "account_blocked"
+                  ? "border-red-500/20 bg-red-50/80 text-red-950"
+                  : "border-violet-500/20 bg-violet-50/80 text-violet-950"
+            }`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-extrabold uppercase tracking-[0.18em]">News-Entry-Gate Monitor</div>
+                  <div className="mt-1 font-semibold leading-5">{newsGateMonitor.message}</div>
+                  {newsGateMonitor.brief_generated_at ? (
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">
+                      Brief-Stand {new Date(newsGateMonitor.brief_generated_at).toLocaleString()}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.12em]">
+                  <span className="rounded-full border border-current/15 bg-white/80 px-2.5 py-1">
+                    {newsGateMonitor.checked_count || 0} geprüft
+                  </span>
+                  <span className="rounded-full border border-current/15 bg-white/80 px-2.5 py-1">
+                    {newsGateMonitor.eligible_count || 0} News-Gate
+                  </span>
+                  <span className="rounded-full border border-current/15 bg-white/80 px-2.5 py-1">
+                    {newsGateMonitor.autopilot_qualified_count || 0} Auto-qualifiziert
+                  </span>
+                </div>
+              </div>
+              {newsGateMonitor.account_blocked ? (
+                <div className="mt-3 rounded-xl border border-red-300 bg-white/80 px-3 py-2 font-bold text-red-800">
+                  Konto-Gate blockiert · Status {germanStatus(newsGateMonitor.account_day_status, "prüfen")}. Erst Risiko-Review abschließen; keine neue Exposure.
+                </div>
+              ) : null}
+              {newsGateMonitor.top_reasons?.length ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {newsGateMonitor.top_reasons.slice(0, 4).map((item: any) => (
+                    <div key={item.reason} className="rounded-xl border border-current/10 bg-white/75 px-3 py-2">
+                      <span className="font-black">{item.count}×</span> {item.display_reason}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {newsGateMonitor.next_best_rejected ? (
+                <div className="mt-3 rounded-xl border border-current/10 bg-white/80 px-3 py-3">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] opacity-70">Nächste beinahe qualifizierte Meldung</div>
+                  {newsGateMonitor.next_best_rejected.source_url ? (
+                    <a
+                      href={newsGateMonitor.next_best_rejected.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block font-black underline-offset-4 hover:underline"
+                    >
+                      {newsGateMonitor.next_best_rejected.ticker ? `${newsGateMonitor.next_best_rejected.ticker} · ` : ""}
+                      {newsGateMonitor.next_best_rejected.publisher || "Quelle"} · {newsGateMonitor.next_best_rejected.title}
+                    </a>
+                  ) : (
+                    <div className="mt-1 font-black">{newsGateMonitor.next_best_rejected.title}</div>
+                  )}
+                  <div className="mt-1 font-semibold opacity-80">
+                    Fehlt: {(newsGateMonitor.next_best_rejected.display_reasons || []).join(" · ")}
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] opacity-65">
+                Diagnose-only · eröffnet selbst keinen Trade · Echtgeld gesperrt
+              </div>
+            </div>
+          ) : null}
           {lastAutopilotResult ? (
             <div className="mt-3 rounded-[1.1rem] border border-sky-500/20 bg-sky-50/80 p-3 text-sky-900">
               <div className="flex flex-wrap items-start justify-between gap-3">

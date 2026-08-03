@@ -69,6 +69,13 @@ class PaperTradingService:
             trades,
             self.portfolio_manager.list_paper_trade_outcomes(limit=800),
         )
+        auto_selection = self._build_auto_selection(
+            sized_playbooks,
+            trades,
+            demo_account,
+            strategy_readiness,
+            autopilot_settings=autopilot_settings,
+        )
         return {
             "generated_at": datetime.utcnow().isoformat(),
             "playbooks": sized_playbooks,
@@ -87,13 +94,13 @@ class PaperTradingService:
             "demo_account": demo_account,
             "paper_autopilot_settings": autopilot_settings,
             "paper_autopilot_profile": autopilot_profile,
-            "auto_selection": self._build_auto_selection(
-                sized_playbooks,
-                trades,
+            "news_gate_monitor": self._build_news_gate_monitor(
+                news_context or {},
                 demo_account,
-                strategy_readiness,
-                autopilot_settings=autopilot_settings,
+                sized_playbooks,
+                auto_selection,
             ),
+            "auto_selection": auto_selection,
             "auto_learn_status": self._build_auto_learn_status(),
         }
 
@@ -928,11 +935,159 @@ class PaperTradingService:
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:16]
 
+    def _news_gate_reasons(self, news: Dict[str, Any]) -> List[str]:
+        evidence = news.get("source_evidence") if isinstance(news.get("source_evidence"), dict) else {}
+        intelligence = news.get("news_intelligence") if isinstance(news.get("news_intelligence"), dict) else {}
+        confirmation = news.get("market_confirmation") if isinstance(news.get("market_confirmation"), dict) else {}
+        ticker = str(news.get("ticker") or confirmation.get("ticker") or "").upper().strip()
+        expected = str(confirmation.get("expected_headline_direction") or "").lower()
+        age_hours = news.get("age_hours")
+        reasons: List[str] = []
+        if not ticker:
+            reasons.append("explicit_ticker_missing")
+        if str(news.get("ticker_association_basis") or "") != "explicit_title_entity":
+            reasons.append("ticker_not_explicit_in_title")
+        if expected not in {"positive", "negative"}:
+            reasons.append("directional_stance_missing")
+        if str(news.get("source_quality") or evidence.get("quality") or "") != "tier_1":
+            reasons.append("tier_1_source_missing")
+        if evidence.get("link_verified") is not True or not bool(news.get("source_url") or news.get("link")):
+            reasons.append("verified_source_link_missing")
+        if not news.get("published_at"):
+            reasons.append("publication_timestamp_missing")
+        if intelligence.get("is_important") is not True:
+            reasons.append("importance_gate_not_met")
+        confirmation_status = str(confirmation.get("status") or "")
+        if confirmation_status != "confirmed":
+            reasons.append(
+                "price_reaction_contradicted"
+                if confirmation_status == "contradicted"
+                else "price_confirmation_missing"
+            )
+        if confirmation.get("event_window_aligned") is not True:
+            reasons.append("event_window_not_aligned")
+        if not isinstance(age_hours, (int, float)) or float(age_hours) < 0:
+            reasons.append("news_age_unavailable")
+        elif float(age_hours) > 24:
+            reasons.append("news_older_than_24h")
+        return self._dedupe_reason_list(reasons)
+
+    def _build_news_gate_monitor(
+        self,
+        news_context: Dict[str, Any],
+        demo_account: Dict[str, Any],
+        playbooks: List[Dict[str, Any]],
+        auto_selection: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        labels = {
+            "explicit_ticker_missing": "kein eindeutig handelbarer Ticker",
+            "ticker_not_explicit_in_title": "Ticker nicht ausdrücklich in der Überschrift zugeordnet",
+            "directional_stance_missing": "keine belastbare positive oder negative Richtung",
+            "tier_1_source_missing": "Quelle ist nicht Tier 1",
+            "verified_source_link_missing": "verifizierter Quellenlink fehlt",
+            "publication_timestamp_missing": "Veröffentlichungszeit fehlt",
+            "importance_gate_not_met": "Meldung unterschreitet das Wichtigkeits-Gate",
+            "price_reaction_contradicted": "Kursreaktion widerspricht der Meldungsrichtung",
+            "price_confirmation_missing": "richtungskonforme Preisbestätigung fehlt",
+            "event_window_not_aligned": "Preisfenster ist nicht an die Veröffentlichung ausgerichtet",
+            "news_age_unavailable": "Meldungsalter ist nicht belastbar",
+            "news_older_than_24h": "Meldung ist älter als 24 Stunden",
+        }
+        checked_items = [item for item in news_context.get("top_news", []) or [] if isinstance(item, dict)]
+        accepted: List[Dict[str, Any]] = []
+        rejected: List[Dict[str, Any]] = []
+        reason_counts: Dict[str, int] = {}
+        for news in checked_items:
+            reasons = self._news_gate_reasons(news)
+            intelligence = news.get("news_intelligence") if isinstance(news.get("news_intelligence"), dict) else {}
+            confirmation = news.get("market_confirmation") if isinstance(news.get("market_confirmation"), dict) else {}
+            row = {
+                "title": news.get("title"),
+                "publisher": news.get("publisher"),
+                "source_url": news.get("source_url") or news.get("link"),
+                "published_at": news.get("published_at"),
+                "ticker": news.get("ticker") or confirmation.get("ticker"),
+                "importance_score": intelligence.get("importance_score") or news.get("importance_score") or 0,
+                "confirmation_status": confirmation.get("status") or "unavailable",
+                "relative_move_since_publication": confirmation.get("relative_move_since_publication"),
+                "reasons": reasons,
+                "display_reasons": [labels.get(reason, reason) for reason in reasons],
+            }
+            if reasons:
+                rejected.append(row)
+                for reason in reasons:
+                    reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            else:
+                accepted.append(row)
+
+        rejected.sort(
+            key=lambda item: (
+                len(item.get("reasons") or []),
+                -float(item.get("importance_score") or 0),
+            )
+        )
+        news_playbooks = [item for item in playbooks if item.get("setup_type") == "confirmed_news_event"]
+        paper_ready = [
+            item for item in news_playbooks
+            if (item.get("trade_ticket") or {}).get("paper_ready") is True
+        ]
+        auto_pools = [
+            *(auto_selection.get("selected") or []),
+            *(auto_selection.get("exploration") or []),
+            *(auto_selection.get("aggressive_exploration") or []),
+        ]
+        auto_news_by_id = {
+            str(item.get("id") or f"{item.get('ticker')}:{item.get('direction')}"): item
+            for item in auto_pools
+            if item.get("setup_type") == "confirmed_news_event"
+        }
+        auto_news = list(auto_news_by_id.values())
+        day_status = str(demo_account.get("day_status") or "ready")
+        account_blocked = bool(accepted and not auto_news)
+        if not checked_items:
+            status = "news_unavailable"
+            message = "Keine aktuelle News-Stichprobe verfügbar; daraus entsteht kein Paper-Entry."
+        elif not accepted:
+            status = "no_eligible_news"
+            message = "Keine Meldung erfüllt derzeit die vollständige Quellen-, Richtungs- und Preisbestätigung."
+        elif account_blocked:
+            status = "account_blocked"
+            message = f"News-Gate erfüllt, aber Konto- oder Autopilot-Gates blockieren den Entry ({day_status})."
+        else:
+            status = "ready"
+            message = f"{len(auto_news)} bestätigte News-Kandidaten sind für den Paper-Autopiloten qualifiziert."
+        top_reasons = [
+            {
+                "reason": reason,
+                "display_reason": labels.get(reason, reason),
+                "count": count,
+            }
+            for reason, count in sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
+        return {
+            "status": status,
+            "message": message,
+            "brief_generated_at": news_context.get("generated_at"),
+            "checked_count": len(checked_items),
+            "eligible_count": len(accepted),
+            "rejected_count": len(rejected),
+            "paper_ready_count": len(paper_ready),
+            "autopilot_qualified_count": len(auto_news),
+            "account_blocked": account_blocked,
+            "account_day_status": day_status,
+            "top_reasons": top_reasons[:6],
+            "next_best_rejected": rejected[0] if rejected else None,
+            "eligible": accepted[:4],
+            "policy": "Diagnose-only; der Monitor eröffnet selbst keine Trades und schaltet kein Echtgeld frei.",
+        }
+
     def _build_confirmed_news_playbooks(self, news_context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Turn only explicit, fresh and price-confirmed Tier-1 news into paper candidates."""
         candidates: Dict[tuple[str, str], Dict[str, Any]] = {}
         for news in news_context.get("top_news", []) or []:
             if not isinstance(news, dict):
+                continue
+            if self._news_gate_reasons(news):
                 continue
             evidence = news.get("source_evidence") if isinstance(news.get("source_evidence"), dict) else {}
             intelligence = news.get("news_intelligence") if isinstance(news.get("news_intelligence"), dict) else {}
@@ -940,28 +1095,6 @@ class PaperTradingService:
             ticker = str(news.get("ticker") or confirmation.get("ticker") or "").upper().strip()
             expected = str(confirmation.get("expected_headline_direction") or "").lower()
             direction = "long" if expected == "positive" else "short" if expected == "negative" else ""
-            age_hours = news.get("age_hours")
-            explicit_ticker = str(news.get("ticker_association_basis") or "") == "explicit_title_entity"
-            tier_one = str(news.get("source_quality") or evidence.get("quality") or "") == "tier_1"
-            link_verified = evidence.get("link_verified") is True and bool(news.get("source_url") or news.get("link"))
-            event_aligned = confirmation.get("event_window_aligned") is True
-            if not all(
-                [
-                    ticker,
-                    direction,
-                    explicit_ticker,
-                    tier_one,
-                    link_verified,
-                    news.get("published_at"),
-                    intelligence.get("is_important") is True,
-                    confirmation.get("status") == "confirmed",
-                    event_aligned,
-                ]
-            ):
-                continue
-            if not isinstance(age_hours, (int, float)) or float(age_hours) > 24:
-                continue
-
             importance = float(intelligence.get("importance_score") or news.get("importance_score") or 0)
             original_verified = evidence.get("original_document_verified") is True
             corroborated = str(evidence.get("corroboration") or "") == "corroborated"

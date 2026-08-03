@@ -247,10 +247,36 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
     assert candidate["news_evidence"]["market_confirmation"]["event_window_aligned"] is True
     assert candidate["news_evidence"]["market_confirmation"]["causality_proven"] is False
 
-    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings(), {"top_news": [valid]})
+    news_context = {
+        "generated_at": "2026-08-03T10:00:00+00:00",
+        "top_news": [valid, *rejected],
+    }
+    dashboard = service.build_dashboard(sample_scoreboard(), sample_settings(), news_context)
     news_playbook = next(item for item in dashboard["playbooks"] if item["id"] == "news-MSFT-long")
     assert news_playbook["trade_ticket"]["news_evidence"]["source_url"] == valid["source_url"]
     assert news_playbook["trade_ticket"]["real_money_ready"] is False
+    monitor = dashboard["news_gate_monitor"]
+    assert monitor["status"] == "ready"
+    assert monitor["checked_count"] == 5
+    assert monitor["eligible_count"] == 1
+    assert monitor["rejected_count"] == 4
+    assert monitor["autopilot_qualified_count"] == 1
+    assert monitor["next_best_rejected"]["reasons"] == ["price_reaction_contradicted"]
+    assert {item["reason"] for item in monitor["top_reasons"]} >= {
+        "price_reaction_contradicted",
+        "ticker_not_explicit_in_title",
+        "news_older_than_24h",
+        "importance_gate_not_met",
+    }
+
+    blocked_monitor = service._build_news_gate_monitor(
+        news_context,
+        {"day_status": "risk_review"},
+        [news_playbook],
+        {"selected": [], "exploration": [], "aggressive_exploration": []},
+    )
+    assert blocked_monitor["status"] == "account_blocked"
+    assert blocked_monitor["account_blocked"] is True
 
     try:
         service.create_trade_from_playbook(

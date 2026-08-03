@@ -168,6 +168,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const newsShadowLab = data?.news_shadow_lab || {};
   const newsShadowSummary = newsShadowLab.summary || {};
   const newsShadowCohorts = newsShadowLab.quality_cohorts || [];
+  const newsShadowEvents = newsShadowLab.event_types || [];
   const learningContextPerformance = data?.learning_context_performance || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
@@ -2044,6 +2045,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           )}
 
+          {newsShadowEvents.some((item: any) => Number(item.paper_prior_score_delta || 0) !== 0) ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {newsShadowEvents
+                .filter((item: any) => Number(item.paper_prior_score_delta || 0) !== 0)
+                .slice(0, 4)
+                .map((item: any) => {
+                  const delta = Number(item.paper_prior_score_delta || 0);
+                  return (
+                    <div key={`prior-${item.label}`} className={`rounded-full border px-3 py-1 font-black ${delta > 0 ? "border-emerald-500/20 bg-emerald-50 text-emerald-800" : "border-red-500/20 bg-red-50 text-red-800"}`}>
+                      Event-Prior {String(item.label || "unknown").replace(/_/g, " ")} {delta > 0 ? "+" : ""}{delta} · {item.evaluated} Meldungen
+                    </div>
+                  );
+                })}
+            </div>
+          ) : null}
+
           <div className="mt-3 font-semibold text-sky-900">
             {newsShadowSummary.sample_unit || "Eine Meldung mit genau einem 24-Stunden-Ergebnis."} {newsShadowSummary.policy || "Shadow-Studie ohne Position oder Echtgeldwirkung."}
           </div>
@@ -2324,6 +2341,19 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         <div key={note} className="mt-1">{note}</div>
                       ))}
                       <div className="mt-2 font-bold text-red-700">Echtgeld bleibt gesperrt.</div>
+                    </div>
+                  )}
+                  {item.news_shadow_prior && (
+                    <div className="mt-3 rounded-[1rem] border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+                      <div className="font-extrabold uppercase tracking-[0.14em]">24h-Event-Prior</div>
+                      <div className="mt-1 font-black">
+                        {String(item.news_shadow_prior.event_type || "unknown").replace(/_/g, " ")} · {item.news_shadow_prior.evaluated_24h || 0} Meldungen · {item.news_shadow_prior.decisive_24h || 0} klar
+                      </div>
+                      <div className="mt-1">
+                        Treffer {item.news_shadow_prior.hit_rate || 0}% · Ø {formatPct(item.news_shadow_prior.avg_directional_move_pct, 2, "offen")} · angewendet {Number(item.news_shadow_prior.applied_score_delta || 0) > 0 ? "+" : ""}{item.news_shadow_prior.applied_score_delta || 0}
+                      </div>
+                      <div className="mt-1 font-semibold">{item.news_shadow_prior.note}</div>
+                      <div className="mt-2 font-bold text-red-700">Sekundärer Paper-Prior · kein Kausalitätsbeweis · Echtgeld gesperrt.</div>
                     </div>
                   )}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">

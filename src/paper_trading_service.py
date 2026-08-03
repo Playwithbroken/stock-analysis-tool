@@ -64,6 +64,8 @@ class PaperTradingService:
         news_shadow_lab = self._build_news_shadow_lab()
         playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         self._apply_news_evidence_learning(playbooks, news_evidence_performance)
+        self._apply_news_shadow_learning(playbooks, news_shadow_lab)
+        self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account)
         autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
@@ -439,8 +441,11 @@ class PaperTradingService:
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=150))
         closed_trades = [trade for trade in trades if trade.get("status") == "closed"]
         news_evidence_performance = self._build_news_evidence_performance(closed_trades)
+        news_shadow_lab = self._build_news_shadow_lab()
         playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         self._apply_news_evidence_learning(playbooks, news_evidence_performance)
+        self._apply_news_shadow_learning(playbooks, news_shadow_lab)
+        self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
         playbooks = self._attach_demo_sizing(playbooks, demo_account)
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
@@ -3499,12 +3504,82 @@ class PaperTradingService:
             "sample_unit": "Eine Meldung mit genau einem 24-Stunden-Ergebnis.",
             "policy": "Shadow-Studie ohne Position, PnL oder Echtgeldwirkung.",
         }
+        event_types = group("event_type")
+        for row in event_types:
+            row["paper_prior_score_delta"] = self._news_shadow_event_prior_delta(row)
         return {
             "summary": summary,
             "quality_cohorts": quality_cohorts,
             "sources": group("source"),
-            "event_types": group("event_type"),
+            "event_types": event_types,
         }
+
+    def _news_shadow_event_prior_delta(self, row: Dict[str, Any]) -> int:
+        """Return a deliberately small prior from one canonical outcome per signal."""
+        evaluated = int(row.get("evaluated") or 0)
+        decisive = int(row.get("decisive") or 0)
+        hit_rate = float(row.get("hit_rate") or 0)
+        avg_move = float(row.get("avg_directional_move_pct") or 0)
+        if evaluated < 10 or decisive < 8:
+            return 0
+        if hit_rate <= 35 and avg_move < 0:
+            return -4
+        if hit_rate >= 60 and avg_move >= 0.25:
+            return 2
+        return 0
+
+    def _apply_news_shadow_learning(
+        self,
+        playbooks: List[Dict[str, Any]],
+        news_shadow_lab: Dict[str, Any],
+    ) -> None:
+        event_rows = {
+            str(row.get("label") or "").strip().lower(): row
+            for row in news_shadow_lab.get("event_types", [])
+        }
+        for item in playbooks:
+            if str(item.get("setup_type") or "") != "confirmed_news_event":
+                continue
+            evidence = item.get("news_evidence") if isinstance(item.get("news_evidence"), dict) else {}
+            event_type = str(evidence.get("event_type") or "unknown").strip().lower()
+            row = event_rows.get(event_type)
+            if not row:
+                continue
+            direct_delta = int((item.get("news_learning_adjustment") or {}).get("score_delta") or 0)
+            prior_delta = int(row.get("paper_prior_score_delta") or 0)
+            applied_delta = 0 if direct_delta else prior_delta
+            if applied_delta:
+                item.setdefault("raw_score", item.get("score"))
+                item["score"] = max(0, min(100, round(float(item.get("score") or 0) + applied_delta, 2)))
+            item["news_shadow_prior"] = {
+                "event_type": event_type,
+                "evaluated_24h": row.get("evaluated"),
+                "decisive_24h": row.get("decisive"),
+                "hit_rate": row.get("hit_rate"),
+                "avg_directional_move_pct": row.get("avg_directional_move_pct"),
+                "prior_score_delta": prior_delta,
+                "applied_score_delta": applied_delta,
+                "direct_trade_evidence_precedence": bool(direct_delta),
+                "real_money_ready": False,
+                "note": (
+                    "Direkte geschlossene News-Trades haben Vorrang; Shadow-Prior wird nicht zusätzlich addiert."
+                    if direct_delta
+                    else "Sekundärer Eventtyp-Prior aus genau einem 24-Stunden-Ergebnis je Meldung."
+                ),
+            }
+
+    def _refresh_playbook_decision_state(
+        self,
+        playbooks: List[Dict[str, Any]],
+        rules: Dict[str, Any],
+    ) -> None:
+        """Recompute every score-sensitive gate after learning changes a playbook."""
+        for item in playbooks:
+            rule_state = self._get_do_not_trade_state(item, rules)
+            item["do_not_trade_reasons"] = rule_state["blocked"]
+            item["leverage_warnings"] = rule_state["leverage"]
+            item["tradeable"] = len(rule_state["blocked"]) == 0
+            item["decision_framework"] = self._build_decision_framework(item)
 
     def _apply_news_evidence_learning(
         self,

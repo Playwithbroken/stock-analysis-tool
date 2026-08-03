@@ -808,6 +808,48 @@ def test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast() -> None:
     assert cohorts["directional_headline"]["evaluated"] == 5
     assert lab["sources"][0]["evaluated"] == 10
     assert lab["sources"][0]["evidence_status"] == "usable"
+    earnings = lab["event_types"][0]
+    assert earnings["paper_prior_score_delta"] == 2
+
+    playbooks = [
+        {
+            "setup_type": "confirmed_news_event",
+            "score": 90,
+            "news_evidence": {"event_type": "earnings"},
+        },
+        {
+            "setup_type": "confirmed_news_event",
+            "score": 84,
+            "news_evidence": {"event_type": "earnings"},
+            "news_learning_adjustment": {"score_delta": -6},
+        },
+    ]
+    PaperTradingService(manager)._apply_news_shadow_learning(playbooks, lab)
+    assert playbooks[0]["score"] == 92
+    assert playbooks[0]["news_shadow_prior"]["applied_score_delta"] == 2
+    assert playbooks[1]["score"] == 84
+    assert playbooks[1]["news_shadow_prior"]["applied_score_delta"] == 0
+    assert playbooks[1]["news_shadow_prior"]["direct_trade_evidence_precedence"] is True
+    PaperTradingService(manager)._refresh_playbook_decision_state(
+        playbooks,
+        {"min_score_for_new_trade": 93, "min_score_for_leverage": 95},
+    )
+    assert playbooks[0]["tradeable"] is False
+    assert "Score below minimum trade score 93." in playbooks[0]["do_not_trade_reasons"]
+    playbooks[0]["score"] = 94
+    PaperTradingService(manager)._refresh_playbook_decision_state(
+        playbooks,
+        {"min_score_for_new_trade": 93, "min_score_for_leverage": 95},
+    )
+    assert playbooks[0]["tradeable"] is True
+    assert PaperTradingService(manager)._news_shadow_event_prior_delta(
+        {
+            "evaluated": 27,
+            "decisive": 14,
+            "hit_rate": 14.3,
+            "avg_directional_move_pct": -0.59,
+        }
+    ) == -4
 
 
 def test_learning_context_performance_groups_account_state() -> None:

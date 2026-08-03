@@ -226,6 +226,48 @@ def main() -> int:
         failures.append("market reaction incorrectly claimed causality")
     if market_confirmation.get("event_window_aligned") is not True:
         failures.append("event-aligned reaction basis was not disclosed")
+
+    ready_gate_item = {
+        **confirmed_news[0],
+        "ticker_association_basis": "explicit_title_entity",
+        "is_important": True,
+        "age_hours": 1.0,
+        "event_type": "product_catalyst",
+        "source_evidence": {
+            **(confirmed_news[0].get("source_evidence") or {}),
+            "quality": "tier_1",
+            "link_verified": True,
+            "source_agreement": "consistent_headline_signal",
+        },
+    }
+    ready_decision = svc._attach_news_decision_readiness([ready_gate_item])[0].get("decision_readiness") or {}
+    if ready_decision.get("status") != "ready_for_paper_review":
+        failures.append(f"fully verified news was not paper-review ready: {ready_decision}")
+    if ready_decision.get("real_money_ready") is not False:
+        failures.append("news decision gate incorrectly authorized real-money execution")
+
+    monitor_gate_item = {
+        **ready_gate_item,
+        "event_type": "earnings",
+        "source_evidence": {
+            **ready_gate_item["source_evidence"],
+            "original_document_verified": False,
+        },
+    }
+    monitor_decision = svc._attach_news_decision_readiness([monitor_gate_item])[0].get("decision_readiness") or {}
+    if monitor_decision.get("status") != "monitor" or "earnings_primary_document_missing" not in monitor_decision.get("verification_gap_codes", []):
+        failures.append("earnings without a verified primary document was not held for monitoring")
+
+    reject_gate_item = {
+        **ready_gate_item,
+        "source_evidence": {
+            **ready_gate_item["source_evidence"],
+            "source_agreement": "mixed_headline_signal",
+        },
+    }
+    reject_decision = svc._attach_news_decision_readiness([reject_gate_item])[0].get("decision_readiness") or {}
+    if reject_decision.get("status") != "reject" or "source_signal_conflict" not in reject_decision.get("hard_blocker_codes", []):
+        failures.append("mixed source direction was not rejected by the news decision gate")
     with patch("src.morning_brief_service.DataFetcher", ReactionFetcher):
         provider_only_news = svc._attach_news_market_confirmation(
             [
@@ -389,6 +431,7 @@ def main() -> int:
                         **(clustered[0].get("source_evidence") or {}),
                         "original_document_verified": True,
                     },
+                    "decision_readiness": ready_decision,
                 }
             ],
         },
@@ -407,6 +450,9 @@ def main() -> int:
     for marker in ["Fakt (Publisher-Zusammenfassung)", "Bedeutung:", "Einschätzung:", "Bestätigung:", "Invalidierung:"]:
         if marker not in important_message:
             failures.append(f"important Telegram news missing {marker}")
+    for marker in ["Decision Gate:", "PAPER-REVIEW BEREIT", "Richtung:", "Echtgeld gesperrt", "Aktion:"]:
+        if marker not in important_message:
+            failures.append(f"important Telegram decision gate missing {marker}")
 
     telegram_messages.clear()
     telegram._send_telegram_rich_brief(

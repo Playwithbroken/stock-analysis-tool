@@ -203,6 +203,7 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
         "source_quality": "tier_1",
         "published_at": "2026-08-03T08:00:00+00:00",
         "age_hours": 2.0,
+        "event_type": "earnings",
         "ticker": "MSFT",
         "related_tickers": ["MSFT"],
         "ticker_association_basis": "explicit_title_entity",
@@ -211,6 +212,7 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
             "link_verified": True,
             "original_document_verified": True,
             "corroboration": "corroborated",
+            "source_agreement": "consistent_headline_signal",
         },
         "news_intelligence": {
             "is_important": True,
@@ -244,6 +246,8 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
         {**valid, "title": "No explicit ticker", "ticker_association_basis": "provider_related_feed_only"},
         {**valid, "title": "Stale", "age_hours": 25.0},
         {**valid, "title": "Not important", "news_intelligence": {**valid["news_intelligence"], "is_important": False}},
+        {**valid, "title": "Mixed source direction", "source_evidence": {**valid["source_evidence"], "source_agreement": "mixed_headline_signal"}},
+        {**valid, "title": "No earnings filing", "source_evidence": {**valid["source_evidence"], "original_document_verified": False}},
     ]
     playbooks = service._build_confirmed_news_playbooks({"top_news": [valid, *rejected]})
 
@@ -266,9 +270,9 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
     assert news_playbook["trade_ticket"]["real_money_ready"] is False
     monitor = dashboard["news_gate_monitor"]
     assert monitor["status"] == "ready"
-    assert monitor["checked_count"] == 5
+    assert monitor["checked_count"] == 7
     assert monitor["eligible_count"] == 1
-    assert monitor["rejected_count"] == 4
+    assert monitor["rejected_count"] == 6
     assert monitor["autopilot_qualified_count"] == 1
     assert monitor["next_best_rejected"]["reasons"] == ["price_reaction_contradicted"]
     assert {item["reason"] for item in monitor["top_reasons"]} >= {
@@ -276,6 +280,8 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
         "ticker_not_explicit_in_title",
         "news_older_than_24h",
         "importance_gate_not_met",
+        "source_signal_conflict",
+        "earnings_primary_document_missing",
     }
 
     blocked_monitor = service._build_news_gate_monitor(
@@ -739,7 +745,11 @@ def test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast() -> None:
         "published_at": "2026-08-01T10:00:00+00:00",
         "age_hours": 2.0,
         "event_type": "earnings",
-        "source_evidence": {"link_verified": True},
+        "source_evidence": {
+            "link_verified": True,
+            "original_document_verified": True,
+            "source_agreement": "consistent_headline_signal",
+        },
         "news_intelligence": {"is_important": True},
         "market_confirmation": {
             "status": "confirmed",

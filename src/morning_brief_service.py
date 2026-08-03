@@ -318,6 +318,12 @@ class MorningBriefService:
         watchlist_snapshot: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         refreshed = self._refresh_cached_event_guidance(brief)
+        refreshed["top_news"] = self._attach_news_decision_readiness(
+            refreshed.get("top_news") or []
+        )
+        refreshed["google_news_extra"] = self._attach_news_decision_readiness(
+            refreshed.get("google_news_extra") or []
+        )
         refreshed["quality"] = self._build_quality_report(refreshed)
         return self._merge_watchlist_impact(refreshed, watchlist_snapshot)
 
@@ -484,6 +490,7 @@ class MorningBriefService:
             fast=False,
         )
         top_news = self._attach_news_primary_sources(top_news, fast=False)
+        top_news = self._attach_news_decision_readiness(top_news)
         crowd_news = self._collect_crowd_news()
         social_news = self._collect_social_news()
 
@@ -667,6 +674,7 @@ class MorningBriefService:
             fast=True,
         )
         top_news = self._attach_news_primary_sources(top_news, fast=True)
+        top_news = self._attach_news_decision_readiness(top_news)
         event_layer = self._build_event_layer(top_news)
         event_pings = self._build_event_pings(event_layer)
         if not event_pings:
@@ -1679,6 +1687,113 @@ class MorningBriefService:
                 evidence["original_document_verified"] = False
                 item["primary_source_lookup"] = filing
             item["source_evidence"] = evidence
+        return enriched
+
+    def _attach_news_decision_readiness(
+        self,
+        news: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Turn evidence into an explicit, conservative paper-trade verdict.
+
+        This gate deliberately separates a relevant headline from a trade-ready
+        event. It never authorizes real-money execution.
+        """
+        enriched = deepcopy(news)
+        labels = {
+            "explicit_ticker_missing": "kein eindeutig handelbarer Ticker",
+            "ticker_not_explicit_in_title": "Ticker nicht ausdrücklich in der Überschrift zugeordnet",
+            "directional_stance_missing": "keine belastbare positive oder negative Richtung",
+            "tier_1_source_missing": "Quelle ist nicht Tier 1",
+            "verified_source_link_missing": "verifizierter Quellenlink fehlt",
+            "publication_timestamp_missing": "Veröffentlichungszeit fehlt",
+            "importance_gate_not_met": "Meldung unterschreitet das Wichtigkeits-Gate",
+            "source_signal_conflict": "vergleichbare Quellen liefern widersprüchliche Richtungssignale",
+            "price_reaction_contradicted": "Kursreaktion widerspricht der Meldungsrichtung",
+            "news_age_unavailable": "Meldungsalter ist nicht belastbar",
+            "news_older_than_24h": "Meldung ist älter als 24 Stunden",
+            "price_confirmation_missing": "richtungskonforme Preisbestätigung fehlt",
+            "event_window_not_aligned": "Preisfenster ist nicht an die Veröffentlichung ausgerichtet",
+            "earnings_primary_document_missing": "Earnings-Originaldokument ist nicht verifiziert",
+        }
+        for item in enriched:
+            evidence = item.get("source_evidence") if isinstance(item.get("source_evidence"), dict) else {}
+            intelligence = item.get("news_intelligence") if isinstance(item.get("news_intelligence"), dict) else {}
+            confirmation = item.get("market_confirmation") if isinstance(item.get("market_confirmation"), dict) else {}
+            ticker = str(item.get("ticker") or confirmation.get("ticker") or "").upper().strip()
+            expected = str(
+                confirmation.get("expected_headline_direction")
+                or self._news_headline_stance(item.get("title") or "")
+                or ""
+            ).lower()
+            age_hours = item.get("age_hours")
+            hard_codes: List[str] = []
+            gap_codes: List[str] = []
+
+            if not ticker:
+                hard_codes.append("explicit_ticker_missing")
+            if str(item.get("ticker_association_basis") or "") != "explicit_title_entity":
+                hard_codes.append("ticker_not_explicit_in_title")
+            if expected not in {"positive", "negative"}:
+                hard_codes.append("directional_stance_missing")
+            if str(item.get("source_quality") or evidence.get("quality") or "") != "tier_1":
+                hard_codes.append("tier_1_source_missing")
+            if evidence.get("link_verified") is not True or not bool(item.get("source_url") or item.get("link")):
+                hard_codes.append("verified_source_link_missing")
+            if not item.get("published_at"):
+                hard_codes.append("publication_timestamp_missing")
+            if not (item.get("is_important") is True or intelligence.get("is_important") is True):
+                hard_codes.append("importance_gate_not_met")
+            if evidence.get("source_agreement") == "mixed_headline_signal":
+                hard_codes.append("source_signal_conflict")
+
+            confirmation_status = str(confirmation.get("status") or "")
+            if confirmation_status == "contradicted":
+                hard_codes.append("price_reaction_contradicted")
+            elif confirmation_status != "confirmed":
+                gap_codes.append("price_confirmation_missing")
+            if confirmation.get("event_window_aligned") is not True:
+                gap_codes.append("event_window_not_aligned")
+            if str(item.get("event_type") or "") == "earnings" and evidence.get("original_document_verified") is not True:
+                gap_codes.append("earnings_primary_document_missing")
+            if not isinstance(age_hours, (int, float)) or float(age_hours) < 0:
+                hard_codes.append("news_age_unavailable")
+            elif float(age_hours) > 24:
+                hard_codes.append("news_older_than_24h")
+
+            hard_codes = list(dict.fromkeys(hard_codes))
+            gap_codes = list(dict.fromkeys(gap_codes))
+            if hard_codes:
+                status = "reject"
+                action = "Kein Trade. Erst die harten Blocker auflösen; die Wichtigkeit allein ist kein Setup."
+            elif gap_codes:
+                status = "monitor"
+                action = "Beobachten. Paper-Trade erst nach Auflösung aller Verifikationslücken prüfen."
+            else:
+                status = "ready_for_paper_review"
+                action = "Nur für Paper-Review: Entry, Stop und Positionsgröße separat validieren."
+            direction = "long" if expected == "positive" else "short" if expected == "negative" else "watch"
+            status_label = {
+                "ready_for_paper_review": "Paper-Review bereit",
+                "monitor": "Beobachten",
+                "reject": "Ablehnen",
+            }[status]
+            summary_parts = [labels[code] for code in hard_codes + gap_codes if code in labels]
+            item["decision_readiness"] = {
+                "status": status,
+                "label": status_label,
+                "direction": direction,
+                "expected_headline_direction": expected or "undetermined",
+                "hard_blocker_codes": hard_codes,
+                "hard_blockers": [labels[code] for code in hard_codes],
+                "verification_gap_codes": gap_codes,
+                "verification_gaps": [labels[code] for code in gap_codes],
+                "summary": " · ".join(summary_parts) if summary_parts else "Quellen-, Zeit-, Richtungs- und Preis-Gates erfüllt.",
+                "action": action,
+                "paper_review_only": status == "ready_for_paper_review",
+                "real_money_ready": False,
+                "causality_proven": False,
+                "precision_note": "Regelbasiertes Evidenz-Gate; keine Renditeprognose und kein Kausalitätsbeweis.",
+            }
         return enriched
 
     def _clean_news_summary(self, value: Any) -> str:

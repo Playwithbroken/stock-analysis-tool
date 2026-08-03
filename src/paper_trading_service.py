@@ -969,6 +969,8 @@ class PaperTradingService:
             reasons.append("directional_stance_missing")
         if str(news.get("source_quality") or evidence.get("quality") or "") != "tier_1":
             reasons.append("tier_1_source_missing")
+        if evidence.get("source_agreement") == "mixed_headline_signal":
+            reasons.append("source_signal_conflict")
         if evidence.get("link_verified") is not True or not bool(news.get("source_url") or news.get("link")):
             reasons.append("verified_source_link_missing")
         if not news.get("published_at"):
@@ -984,6 +986,8 @@ class PaperTradingService:
             )
         if confirmation.get("event_window_aligned") is not True:
             reasons.append("event_window_not_aligned")
+        if str(news.get("event_type") or "") == "earnings" and evidence.get("original_document_verified") is not True:
+            reasons.append("earnings_primary_document_missing")
         if not isinstance(age_hours, (int, float)) or float(age_hours) < 0:
             reasons.append("news_age_unavailable")
         elif float(age_hours) > 24:
@@ -1002,12 +1006,14 @@ class PaperTradingService:
             "ticker_not_explicit_in_title": "Ticker nicht ausdrücklich in der Überschrift zugeordnet",
             "directional_stance_missing": "keine belastbare positive oder negative Richtung",
             "tier_1_source_missing": "Quelle ist nicht Tier 1",
+            "source_signal_conflict": "vergleichbare Quellen liefern widersprüchliche Richtungssignale",
             "verified_source_link_missing": "verifizierter Quellenlink fehlt",
             "publication_timestamp_missing": "Veröffentlichungszeit fehlt",
             "importance_gate_not_met": "Meldung unterschreitet das Wichtigkeits-Gate",
             "price_reaction_contradicted": "Kursreaktion widerspricht der Meldungsrichtung",
             "price_confirmation_missing": "richtungskonforme Preisbestätigung fehlt",
             "event_window_not_aligned": "Preisfenster ist nicht an die Veröffentlichung ausgerichtet",
+            "earnings_primary_document_missing": "Earnings-Originaldokument ist nicht verifiziert",
             "news_age_unavailable": "Meldungsalter ist nicht belastbar",
             "news_older_than_24h": "Meldung ist älter als 24 Stunden",
         }

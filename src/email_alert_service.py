@@ -3024,6 +3024,24 @@ class EmailAlertService:
                     lines2.append(
                         "<i>15m-Fenster ab Veröffentlichung; relative Stärke beweist keine Kausalität.</i>"
                     )
+            decision = item.get("decision_readiness") if isinstance(item.get("decision_readiness"), dict) else {}
+            if decision.get("status"):
+                decision_label = {
+                    "ready_for_paper_review": "PAPER-REVIEW BEREIT",
+                    "monitor": "BEOBACHTEN",
+                    "reject": "ABLEHNEN",
+                }.get(str(decision.get("status")), str(decision.get("status") or "").upper())
+                lines2.append(f"<b>Decision Gate:</b> {self._tg_esc(decision_label)}")
+                lines2.append(
+                    f"<b>Richtung:</b> {self._tg_esc(decision.get('direction') or 'watch')} · Echtgeld gesperrt"
+                )
+                hard_blockers = decision.get("hard_blockers") if isinstance(decision.get("hard_blockers"), list) else []
+                verification_gaps = decision.get("verification_gaps") if isinstance(decision.get("verification_gaps"), list) else []
+                if hard_blockers:
+                    lines2.append(f"<b>Harte Blocker:</b> {self._tg_esc(' · '.join(hard_blockers[:4]))}")
+                if verification_gaps:
+                    lines2.append(f"<b>Noch zu verifizieren:</b> {self._tg_esc(' · '.join(verification_gaps[:4]))}")
+                lines2.append(f"<b>Aktion:</b> {self._tg_esc(decision.get('action') or '')}")
             fact = self._tg_esc(str(intelligence.get("fact_summary") or "")[:320])
             meaning = self._tg_esc(str(intelligence.get("meaning") or "")[:260])
             if fact:

@@ -128,6 +128,17 @@ function marketConfirmationMeta(status?: string) {
   return { label: "Preisfenster nicht verfügbar", className: "border-slate-300 bg-white/70 text-slate-600" };
 }
 
+function newsDecisionMeta(status?: string) {
+  const value = String(status || "reject").toLowerCase();
+  if (value === "ready_for_paper_review") {
+    return { label: "Paper-Review bereit", icon: "✓", className: "border-emerald-500/25 bg-emerald-50 text-emerald-900" };
+  }
+  if (value === "monitor") {
+    return { label: "Beobachten", icon: "◷", className: "border-amber-500/25 bg-amber-50 text-amber-900" };
+  }
+  return { label: "Trade ablehnen", icon: "×", className: "border-red-500/25 bg-red-50 text-red-900" };
+}
+
 function newsFactBasisLabel(value?: string) {
   if (value === "official_release_summary") return "offizielle Behörden-Zusammenfassung";
   if (value === "official_release_headline") return "offizielle Behörden-Überschrift";
@@ -1396,6 +1407,8 @@ export default function MorningBriefPanel({
               const mixedSourceSignal = evidence.source_agreement === "mixed_headline_signal";
               const marketConfirmation = item.market_confirmation || {};
               const confirmationMeta = marketConfirmationMeta(marketConfirmation.status);
+              const decisionReadiness = item.decision_readiness || {};
+              const decisionMeta = newsDecisionMeta(decisionReadiness.status);
               const relatedTickers = Array.isArray(item.related_tickers)
                 ? item.related_tickers.filter(Boolean).slice(0, 4)
                 : item.ticker
@@ -1466,6 +1479,28 @@ export default function MorningBriefPanel({
                       ) : null}
                     </div>
                   </div>
+
+                  {decisionReadiness.status ? (
+                    <div className={`rounded-[1rem] border px-3 py-3 text-xs leading-5 sm:col-start-2 ${decisionMeta.className}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em]">
+                          Decision Gate · {decisionMeta.icon} {decisionMeta.label}
+                        </div>
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] opacity-75">
+                          Richtung {decisionReadiness.direction || "watch"} · Echtgeld gesperrt
+                        </div>
+                      </div>
+                      <div className="mt-2 font-semibold">{decisionReadiness.summary}</div>
+                      <div className="mt-1 opacity-80">{decisionReadiness.action}</div>
+                      {Array.isArray(decisionReadiness.hard_blockers) && decisionReadiness.hard_blockers.length ? (
+                        <div className="mt-2"><span className="font-extrabold">Harte Blocker:</span> {decisionReadiness.hard_blockers.join(" · ")}</div>
+                      ) : null}
+                      {Array.isArray(decisionReadiness.verification_gaps) && decisionReadiness.verification_gaps.length ? (
+                        <div className="mt-2"><span className="font-extrabold">Noch zu verifizieren:</span> {decisionReadiness.verification_gaps.join(" · ")}</div>
+                      ) : null}
+                      <div className="mt-2 text-[11px] opacity-65">{decisionReadiness.precision_note}</div>
+                    </div>
+                  ) : null}
 
                   {intelligence.fact_summary ? (
                     <div className="rounded-[1rem] border border-sky-500/15 bg-sky-50/70 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">

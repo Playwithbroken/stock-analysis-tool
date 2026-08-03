@@ -897,6 +897,7 @@ class PaperTradingService:
                     "score": score,
                     "risk_buffer_pct": 3.5 if direction == "long" else 4.0,
                     "reward_buffer_pct": 7.5,
+                    "max_holding_days": 10,
                     "thesis": (
                         f"{item.get('source_label')} with strong {direction} bias. "
                         f"Use only if price holds after filing delay of {item.get('delay_days') if item.get('delay_days') is not None else 'offen'} days."
@@ -924,6 +925,7 @@ class PaperTradingService:
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 4.5,
                     "reward_buffer_pct": 8.5,
+                    "max_holding_days": 15,
                     "thesis": (
                         f"Official PTR disclosure with {item.get('detail')}. "
                         "Only valid when the tape confirms after the delayed filing."
@@ -950,6 +952,7 @@ class PaperTradingService:
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 2.8,
                     "reward_buffer_pct": 6.0,
+                    "max_holding_days": 14,
                     "thesis": "Liquid ETF with decent quality and momentum profile. Favor clean continuation over narrative chasing.",
                     "tags": ["etf", "momentum", "long"],
                     **market_fields,
@@ -973,6 +976,7 @@ class PaperTradingService:
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 5.5,
                     "reward_buffer_pct": 11.0,
+                    "max_holding_days": 7,
                     "thesis": "Flow-driven crypto setup. Keep leverage conservative and size by volatility, not conviction alone.",
                     "tags": ["crypto", "momentum", "long"],
                     **market_fields,
@@ -4041,7 +4045,25 @@ class PaperTradingService:
         stop = trade.get("stop_price")
         target = trade.get("target_price")
         direction = str(trade.get("direction") or "long").lower()
-        max_holding_days = int(trade.get("max_holding_days") or 0)
+        configured_max_holding_days = int(trade.get("max_holding_days") or 0)
+        setup_type = str(trade.get("setup_type") or "").lower()
+        default_holding_days = 0
+        if setup_type == "confirmed_news_event":
+            default_holding_days = 3
+        elif setup_type == "crypto_flow":
+            default_holding_days = 7
+        elif setup_type == "insider_follow":
+            default_holding_days = 10
+        elif setup_type == "etf_momentum":
+            default_holding_days = 14
+        elif setup_type == "political_copy_delay":
+            default_holding_days = 15
+        elif setup_type.startswith("commodity_"):
+            default_holding_days = 7
+        elif setup_type.startswith("option_"):
+            default_holding_days = 10
+        max_holding_days = configured_max_holding_days or default_holding_days
+        holding_period_source = "trade_config" if configured_max_holding_days > 0 else "strategy_policy"
         opened_at = self._as_utc_naive_datetime(trade.get("opened_at"))
         if max_holding_days > 0 and opened_at is not None:
             expires_at = opened_at + timedelta(days=max_holding_days)
@@ -4065,6 +4087,7 @@ class PaperTradingService:
                     "triggered_at": expires_at.isoformat(),
                     "trigger_reference_price": None,
                     "max_holding_days": max_holding_days,
+                    "holding_period_source": holding_period_source,
                 }
         if not entry or current in (None, 0):
             return {

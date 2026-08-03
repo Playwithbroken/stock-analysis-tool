@@ -495,6 +495,34 @@ def test_news_management_auto_closes_reaction_and_equity_time_exits() -> None:
     assert len(expired_result["closed"]) == 1
     assert expired_result["closed"][0]["exit_reason"] == "managed_holding_period_expired"
 
+    legacy_crypto_manager = FakePortfolioManager(
+        [
+            {
+                "id": "legacy-crypto-time-exit",
+                "ticker": "BTC-USD",
+                "asset_class": "crypto",
+                "direction": "long",
+                "setup_type": "crypto_flow",
+                "status": "open",
+                "opened_at": (datetime.now(timezone.utc) - timedelta(days=8)).isoformat(),
+                "entry_price": 64_000.0,
+                "stop_price": 60_480.0,
+                "target_price": 71_040.0,
+                "quantity": 0.05,
+                "confidence_score": 82,
+                "leverage": 1,
+            }
+        ]
+    )
+    legacy_crypto_service = build_service(legacy_crypto_manager)
+    legacy_enriched = legacy_crypto_service._enrich_trade(legacy_crypto_manager.trades[0])
+    assert legacy_enriched["management_plan"]["status"] == "holding_period_expired"
+    assert legacy_enriched["management_plan"]["max_holding_days"] == 7
+    assert legacy_enriched["management_plan"]["holding_period_source"] == "strategy_policy"
+    legacy_result = legacy_crypto_service.close_trades_on_management_exits()
+    assert len(legacy_result["closed"]) == 1
+    assert legacy_result["closed"][0]["exit_reason"] == "managed_holding_period_expired"
+
 
 def test_demo_account_sizing() -> None:
     manager = FakePortfolioManager()
@@ -523,6 +551,7 @@ def test_demo_account_sizing() -> None:
 
     aapl = next(item for item in dashboard["playbooks"] if item["ticker"] == "AAPL")
     assert aapl["demo_tradeable"] is True
+    assert aapl["max_holding_days"] == 10
     assert aapl["suggested_quantity"] == 1000
     assert aapl["suggested_notional_value"] == 100_000.0
     assert aapl["suggested_max_loss_value"] <= 3_750.0
@@ -541,6 +570,7 @@ def test_demo_account_sizing() -> None:
     assert ticket["target_1"] == 103.75
     assert ticket["target_2"] == 107.5
     assert ticket["risk_reward"] == 2.14
+    assert ticket["max_holding_days"] == 10
     assert ticket["account_risk_pct"] <= 0.75
     assert ticket["market_data"]["freshness"] == "fresh"
     assert ticket["market_data"]["liquidity_status"] == "strong"
@@ -560,6 +590,7 @@ def test_demo_account_sizing() -> None:
     assert aapl_call["suggested_notional_value"] == 2_500.0
     assert aapl_call["suggested_max_loss_value"] == 2_500.0
     assert aapl_call["suggested_risk_pct"] == 0.5
+    assert aapl_call["max_holding_days"] == 10
     assert aapl_call["decision_framework"]["evidence_level"] in {"paper_candidate", "high_quality_paper", "watch"}
     assert aapl_call["trade_ticket"]["status"] == "paper_only"
     assert "option_chain_not_validated" in aapl_call["trade_ticket"]["validation"]["warnings"]
@@ -645,7 +676,7 @@ def test_demo_account_sizing() -> None:
     assert entry_execution["fill_price"] == 100.08
     assert entry_execution["cost_bps"] == 8.0
     assert entry_execution["estimated_cost_value"] == 79.94
-    assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 4
+    assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 5
 
     try:
         service.create_trade_from_playbook(

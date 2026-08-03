@@ -2963,19 +2963,29 @@ class EmailAlertService:
             primary_sources = item.get("primary_sources") or []
             for primary in primary_sources[:1]:
                 primary_url = str(primary.get("url") or "")
-                primary_label = (
-                    f"SEC {self._tg_esc(primary.get('form') or '')} · "
-                    f"eingereicht {self._tg_esc(primary.get('filed_at') or '')}"
-                )
+                authority = str(primary.get("authority") or "")
+                if "Securities and Exchange Commission" in authority:
+                    primary_label = (
+                        f"SEC {self._tg_esc(primary.get('form') or '')} · "
+                        f"eingereicht {self._tg_esc(primary.get('filed_at') or '')}"
+                    )
+                else:
+                    primary_label = (
+                        f"{self._tg_esc(authority or 'Offizielle Behörde')} · "
+                        f"{self._tg_esc(primary.get('form') or 'Official Release')}"
+                    )
                 if primary_url:
                     lines2.append(
                         f"<b>✅ Primärquelle:</b> <a href=\"{primary_url}\">{primary_label}</a>"
                     )
                 else:
                     lines2.append(f"<b>✅ Primärquelle:</b> {primary_label}")
-                lines2.append(
-                    "<i>Filing-Link verifiziert; Publisher-Kennzahlen nicht automatisch einzeln abgeglichen.</i>"
-                )
+                if "Securities and Exchange Commission" in authority:
+                    lines2.append(
+                        "<i>Filing-Link verifiziert; Publisher-Kennzahlen nicht automatisch einzeln abgeglichen.</i>"
+                    )
+                else:
+                    lines2.append("<i>Offizielle Herkunft verifiziert; Trading-Einordnung bleibt Analyse.</i>")
             market_confirmation = item.get("market_confirmation") or {}
             confirmation_status = str(market_confirmation.get("status") or "")
             if confirmation_status:
@@ -3010,7 +3020,12 @@ class EmailAlertService:
             fact = self._tg_esc(str(intelligence.get("fact_summary") or "")[:320])
             meaning = self._tg_esc(str(intelligence.get("meaning") or "")[:260])
             if fact:
-                basis = "Publisher-Zusammenfassung" if intelligence.get("fact_basis") == "publisher_summary" else "nur Überschrift"
+                basis = {
+                    "official_release_summary": "offizielle Behörden-Zusammenfassung",
+                    "official_release_headline": "offizielle Behörden-Überschrift",
+                    "publisher_summary": "Publisher-Zusammenfassung",
+                    "headline_only": "nur Überschrift",
+                }.get(str(intelligence.get("fact_basis") or ""), "offen")
                 lines2.append(f"<b>Fakt ({basis}):</b> {fact}")
             if meaning:
                 lines2.append(f"<b>Bedeutung:</b> {meaning}")

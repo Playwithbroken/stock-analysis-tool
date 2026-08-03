@@ -110,6 +110,9 @@ class MorningBriefService:
 
     # Free RSS feeds for real-time headlines
     RSS_FEEDS = [
+        ("https://www.federalreserve.gov/feeds/press_monetary.xml", "Federal Reserve Board"),
+        ("https://www.bls.gov/feed/bls_latest.rss", "U.S. Bureau of Labor Statistics"),
+        ("https://www.bea.gov/rss/rss.xml", "U.S. Bureau of Economic Analysis"),
         ("https://feeds.reuters.com/reuters/businessNews", "Reuters"),
         ("https://feeds.reuters.com/reuters/technologyNews", "Reuters"),
         ("https://feeds.reuters.com/news/economy", "Reuters"),
@@ -137,6 +140,16 @@ class MorningBriefService:
         "AP News",
         "Nikkei Asia",
         "WSJ",
+    }
+    OFFICIAL_PUBLISHERS = {
+        "Federal Reserve Board",
+        "U.S. Bureau of Labor Statistics",
+        "U.S. Bureau of Economic Analysis",
+    }
+    OFFICIAL_DOMAINS = {
+        "federalreserve.gov",
+        "bls.gov",
+        "bea.gov",
     }
     MARKET_MOVING_PERSON_TERMS = {
         "trump",
@@ -205,6 +218,7 @@ class MorningBriefService:
         "apnews.com",
         "nikkei.com",
         "finance.yahoo.com",
+        *OFFICIAL_DOMAINS,
     }
     EXCLUDED_SOURCE_TERMS = {
         "x.com",
@@ -560,6 +574,7 @@ class MorningBriefService:
                     "Top News benötigt einen klickbaren Bericht einer freigegebenen Quelle. "
                     "Als wichtig markiert werden nur Tier-1-Berichte mit Zeitstempel und hoher Relevanz. "
                     "Faktenbasis und Analyse sind getrennt; ein einzelner Bericht gilt nicht als unabhängig bestätigt. "
+                    "Fed-, BLS- und BEA-Releases werden direkt aus offiziellen Behördenfeeds als Primärquellen geladen. "
                     "Bei unterstützten Earnings wird ein konkretes SEC-Filing nur nach Dokument-HTTP-200 als Primärquelle markiert. "
                     "Social/X und Reddit bleiben außerhalb des Trusted-News-Blocks."
                 ),
@@ -727,7 +742,8 @@ class MorningBriefService:
                 "crowd_sources": sorted(self.CROWD_SOURCE_TERMS),
                 "note": (
                     "Fast Mode: klickbare Trusted-News-Berichte werden priorisiert; wichtig erfordert Tier 1, "
-                    "Zeitstempel und hohe Relevanz. Faktenbasis und Analyse bleiben getrennt; unterstützte Earnings erhalten "
+                    "Zeitstempel und hohe Relevanz. Offizielle Fed-/BLS-/BEA-Feeds haben Primärquellenstatus. "
+                    "Faktenbasis und Analyse bleiben getrennt; unterstützte Earnings erhalten "
                     "bei erfolgreicher SEC-Prüfung einen konkreten Primärquellen-Link."
                 ),
             },
@@ -1074,7 +1090,8 @@ class MorningBriefService:
                     if published:
                         import time as _time
                         age_hours = (_time.time() - _time.mktime(published)) / 3600
-                        if age_hours > 18:
+                        max_age_hours = 96 if feed_publisher in self.OFFICIAL_PUBLISHERS else 18
+                        if age_hours > max_age_hours:
                             continue
                         published_at = datetime.fromtimestamp(_time.mktime(published), timezone.utc).isoformat()
                     else:
@@ -1087,6 +1104,16 @@ class MorningBriefService:
                     text = f"{title} {link}".lower()
                     source_meta = self._source_meta(feed_publisher, link)
                     classification = self._classify_news_signal(text)
+                    if (
+                        feed_publisher == "U.S. Bureau of Labor Statistics"
+                        and title == "Major Economic Indicators Latest Numbers"
+                    ):
+                        classification = {
+                            "impact": "high",
+                            "region": "usa",
+                            "event_type": "macro_data",
+                            "severity": "elevated",
+                        }
                     product_catalyst = self._classify_product_catalyst(text)
                     if source_meta["exclude"]:
                         continue
@@ -1667,6 +1694,23 @@ class MorningBriefService:
         source_quality = str(item.get("source_quality") or "unverified")
         published_at = item.get("published_at")
         source_summary = str(item.get("source_summary") or "").strip()
+        is_official_primary = bool(
+            item.get("source_type") == "official_primary"
+            and source_url
+            and any(
+                source_domain == official or source_domain.endswith(f".{official}")
+                for official in self.OFFICIAL_DOMAINS
+            )
+        )
+        reporting_basis = (
+            "official_release_summary"
+            if is_official_primary and source_summary
+            else "official_release_headline"
+            if is_official_primary
+            else "publisher_summary"
+            if source_summary
+            else "headline_only"
+        )
         evidence = {
             "publisher": item.get("publisher") or "Unbekannt",
             "domain": source_domain,
@@ -1674,13 +1718,28 @@ class MorningBriefService:
             "published_at": published_at,
             "quality": source_quality,
             "link_verified": bool(source_url and source_domain),
-            "reporting_basis": "publisher_summary" if source_summary else "headline_only",
+            "reporting_basis": reporting_basis,
             "corroboration": "single_source",
-            "original_document_verified": False,
+            "original_document_verified": is_official_primary,
+            "primary_source_verification": (
+                "official_rss_and_allowlisted_domain" if is_official_primary else None
+            ),
         }
+        primary_sources = list(item.get("primary_sources") or [])
+        if is_official_primary:
+            primary_sources.append(
+                {
+                    "authority": item.get("publisher"),
+                    "form": "Official Release",
+                    "url": source_url,
+                    "published_at": published_at,
+                    "verification_status": "official_rss_and_allowlisted_domain",
+                }
+            )
         return {
             **item,
             "source_url": source_url,
+            "primary_sources": primary_sources,
             "source_evidence": evidence,
             "importance_score": intelligence["importance_score"],
             "is_important": intelligence["is_important"],
@@ -1692,6 +1751,7 @@ class MorningBriefService:
         impact = str(item.get("impact") or "low").lower()
         severity = str(item.get("severity") or "normal").lower()
         source_quality = str(item.get("source_quality") or "unverified").lower()
+        source_type = str(item.get("source_type") or "publisher").lower()
         source_url = str(item.get("source_url") or item.get("link") or "").strip()
         source_summary = self._clean_news_summary(item.get("source_summary"))
         title = str(item.get("title") or "").strip()
@@ -1846,7 +1906,15 @@ class MorningBriefService:
             if source_quality in {"tier_1", "tier_2"} and source_url
             else "niedrig"
         )
-        fact_basis = "publisher_summary" if source_summary else "headline_only"
+        fact_basis = (
+            "official_release_summary"
+            if source_type == "official_primary" and source_summary
+            else "official_release_headline"
+            if source_type == "official_primary"
+            else "publisher_summary"
+            if source_summary
+            else "headline_only"
+        )
         fact_summary = source_summary or title
         assessment = (
             "Hohe Relevanz: sofort auf Marktbestätigung und Folgedetails prüfen."
@@ -1869,7 +1937,11 @@ class MorningBriefService:
             "importance_score": importance_score,
             "is_important": is_important,
             "precision_note": (
-                "Faktenbasis ist die Publisher-Zusammenfassung; Einordnung und Szenarien sind Analyse."
+                "Faktenbasis ist die offizielle Behörden-Zusammenfassung; Einordnung und Szenarien sind Analyse."
+                if fact_basis == "official_release_summary"
+                else "Faktenbasis ist die Überschrift einer offiziellen Behördenmeldung; Details in der Primärquelle prüfen."
+                if fact_basis == "official_release_headline"
+                else "Faktenbasis ist die Publisher-Zusammenfassung; Einordnung und Szenarien sind Analyse."
                 if fact_basis == "publisher_summary"
                 else "Faktenbasis ist nur die Überschrift; Details vor einer Trading-Entscheidung in der Quelle prüfen."
             ),
@@ -1920,7 +1992,10 @@ class MorningBriefService:
         if event_type in {"conflict", "central_bank", "energy", "policy", "public_figure", "ipo", "macro_data", "earnings", "product_catalyst"}:
             score += 4
         if self._contains_news_term(title, [
-            "fed", "rate", "yield", "inflation", "cpi", "ppi", "gdp", "jobs", "payrolls",
+            "fed", "federal reserve", "fomc", "rate", "yield", "inflation",
+            "consumer price index", "cpi", "producer price index", "ppi",
+            "gdp", "gross domestic product", "personal income and outlays", "pce",
+            "employment situation", "jobs", "payrolls", "unemployment",
             "earnings", "guidance", "upgrade", "downgrade", "oil", "opec", "war",
             "tariff", "sanction", "market", "stock", "futures", "nasdaq", "s&p",
             "dow", "dollar", "gold", "bitcoin", "crypto", "launch", "unveil", "delay",
@@ -4622,6 +4697,13 @@ class MorningBriefService:
             domain_lower == allowed or domain_lower.endswith(f".{allowed}")
             for allowed in self.ALLOWED_DOMAINS
         )
+        official_publisher = any(
+            official.lower() == publisher_lower for official in self.OFFICIAL_PUBLISHERS
+        )
+        official_domain = any(
+            domain_lower == official or domain_lower.endswith(f".{official}")
+            for official in self.OFFICIAL_DOMAINS
+        )
 
         if social_hit:
             return {
@@ -4638,6 +4720,14 @@ class MorningBriefService:
                 "exclude": False,
                 "quality": "crowd",
                 "source_type": "crowd",
+            }
+        if official_publisher and official_domain:
+            return {
+                "domain": domain,
+                "trusted": True,
+                "exclude": False,
+                "quality": "tier_1",
+                "source_type": "official_primary",
             }
         if trusted_publisher or trusted_domain:
             quality = "tier_1" if trusted_publisher and trusted_domain else "tier_2"
@@ -4702,7 +4792,10 @@ class MorningBriefService:
             event_type = "conflict"
             impact = "high"
             severity = "critical"
-        elif self._contains_news_term(text, ["fed", "ecb", "boj", "central bank", "rate", "yield"]):
+        elif self._contains_news_term(
+            text,
+            ["fed", "federal reserve", "fomc", "ecb", "boj", "central bank", "rate", "yield"],
+        ):
             event_type = "central_bank"
             impact = "high"
             severity = "elevated"
@@ -4722,7 +4815,14 @@ class MorningBriefService:
             event_type = "policy"
             impact = "high"
             severity = "elevated"
-        elif self._contains_news_term(text, ["inflation", "cpi", "ppi", "gdp", "recession", "payrolls", "jobs"]):
+        elif self._contains_news_term(
+            text,
+            [
+                "inflation", "consumer price index", "cpi", "producer price index", "ppi",
+                "gdp", "gross domestic product", "personal income and outlays", "pce",
+                "employment situation", "payrolls", "jobs", "unemployment", "recession",
+            ],
+        ):
             event_type = "macro_data"
             impact = "high"
             severity = "elevated"

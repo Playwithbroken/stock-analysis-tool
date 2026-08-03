@@ -128,6 +128,13 @@ function marketConfirmationMeta(status?: string) {
   return { label: "Preisfenster nicht verfügbar", className: "border-slate-300 bg-white/70 text-slate-600" };
 }
 
+function newsFactBasisLabel(value?: string) {
+  if (value === "official_release_summary") return "offizielle Behörden-Zusammenfassung";
+  if (value === "official_release_headline") return "offizielle Behörden-Überschrift";
+  if (value === "publisher_summary") return "Publisher-Zusammenfassung";
+  return "nur Überschrift";
+}
+
 function formatBriefGenerated(value?: string) {
   if (!value) return "gerade aktualisiert";
   const date = new Date(value);
@@ -1432,7 +1439,7 @@ export default function MorningBriefPanel({
                         ) : null}
                         {evidence.original_document_verified ? (
                           <span className="rounded-full border border-blue-500/25 bg-blue-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">
-                            SEC-Primärquelle verifiziert
+                            Primärquelle verifiziert
                           </span>
                         ) : null}
                       </div>
@@ -1463,7 +1470,7 @@ export default function MorningBriefPanel({
                   {intelligence.fact_summary ? (
                     <div className="rounded-[1rem] border border-sky-500/15 bg-sky-50/70 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
-                        Offengelegte Faktenbasis · {intelligence.fact_basis === "publisher_summary" ? "Publisher-Zusammenfassung" : "nur Überschrift"}
+                        Offengelegte Faktenbasis · {newsFactBasisLabel(intelligence.fact_basis)}
                       </div>
                       <div className="mt-1 font-semibold">{intelligence.fact_summary}</div>
                     </div>
@@ -1597,13 +1604,17 @@ export default function MorningBriefPanel({
                           className="mt-2 block rounded-lg border border-blue-500/15 bg-white/85 px-3 py-2 underline-offset-4 hover:underline"
                         >
                           <span className="font-extrabold text-slate-900">
-                            SEC {source.form} · eingereicht {source.filed_at}
+                            {source.authority || "SEC"} · {source.form || "Primärdokument"}
+                            {source.filed_at ? ` · eingereicht ${source.filed_at}` : ""}
+                            {source.published_at ? ` · veröffentlicht ${new Date(source.published_at).toLocaleString()}` : ""}
                           </span>
-                          <span className="ml-2 text-slate-500">Accession {source.accession}</span>
+                          {source.accession ? (
+                            <span className="ml-2 text-slate-500">Accession {source.accession}</span>
+                          ) : null}
                         </a>
                       ))}
                       <div className="mt-2 text-[11px] text-slate-500">
-                        Der Filing-Link ist geprüft. Einzelne Kennzahlen der Publisher-Meldung sind dadurch nicht automatisch abgeglichen.
+                        Primärquellen-Link und offizielle Herkunft sind geprüft. Die Trading-Einordnung bleibt Analyse.
                       </div>
                     </div>
                   ) : null}

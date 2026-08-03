@@ -328,6 +328,42 @@ def main() -> int:
     ):
         failures.append("SEC evidence overclaim disclosure is missing")
 
+    official_url = "https://www.bea.gov/news/2026/gdp-advance-estimate-2nd-quarter-2026"
+    official_meta = svc._source_meta("U.S. Bureau of Economic Analysis", official_url)
+    if official_meta.get("source_type") != "official_primary" or official_meta.get("quality") != "tier_1":
+        failures.append("allowlisted government source was not classified as official primary")
+    official_classification = svc._classify_news_signal(
+        "GDP (Advance Estimate), 2nd Quarter 2026 " + official_url
+    )
+    official_news = svc._enrich_news_item(
+        {
+            "title": "GDP (Advance Estimate), 2nd Quarter 2026",
+            "publisher": "U.S. Bureau of Economic Analysis",
+            "link": official_url,
+            "source_url": official_url,
+            "source_summary": "Real gross domestic product increased in the second quarter.",
+            "source_domain": official_meta.get("domain"),
+            "source_type": official_meta.get("source_type"),
+            "source_quality": official_meta.get("quality"),
+            "is_trusted_source": official_meta.get("trusted"),
+            "published_at": "2026-07-30T12:30:00+00:00",
+            "age_hours": 1.0,
+            **official_classification,
+        }
+    )
+    official_evidence = official_news.get("source_evidence") or {}
+    official_intelligence = official_news.get("news_intelligence") or {}
+    if official_news.get("event_type") != "macro_data":
+        failures.append("official GDP release was not classified as macro data")
+    if official_evidence.get("original_document_verified") is not True:
+        failures.append("official BEA release was not marked as primary evidence")
+    if official_evidence.get("primary_source_verification") != "official_rss_and_allowlisted_domain":
+        failures.append("official source verification method is missing")
+    if official_intelligence.get("fact_basis") != "official_release_summary":
+        failures.append("official release fact basis was not disclosed")
+    if len(official_news.get("primary_sources") or []) != 1:
+        failures.append("official primary-source link is missing")
+
     telegram = EmailAlertService.__new__(EmailAlertService)
     telegram_messages: list[str] = []
     telegram._tg_post = (  # type: ignore[method-assign]
@@ -371,6 +407,35 @@ def main() -> int:
     for marker in ["Fakt (Publisher-Zusammenfassung)", "Bedeutung:", "Einschätzung:", "Bestätigung:", "Invalidierung:"]:
         if marker not in important_message:
             failures.append(f"important Telegram news missing {marker}")
+
+    telegram_messages.clear()
+    telegram._send_telegram_rich_brief(
+        SimpleNamespace(
+            telegram_enabled=True,
+            telegram_bot_token="qa-token",
+            telegram_chat_id="qa-chat",
+        ),
+        {
+            "macro_regime": "mixed",
+            "opening_bias": "QA",
+            "regions": {},
+            "macro_assets": [],
+            "top_news": [official_news],
+        },
+        "global",
+    )
+    official_message = next(
+        (message for message in telegram_messages if "WICHTIG" in message),
+        "",
+    )
+    for marker in [
+        "Primärquelle:",
+        "U.S. Bureau of Economic Analysis",
+        "Offizielle Herkunft verifiziert",
+        "Fakt (offizielle Behörden-Zusammenfassung)",
+    ]:
+        if marker not in official_message:
+            failures.append(f"official Telegram news missing {marker}")
 
     if failures:
         print("\nClassification failures:")

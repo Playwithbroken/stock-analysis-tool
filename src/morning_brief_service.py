@@ -19,6 +19,7 @@ import re
 
 import pandas as pd
 import requests
+import yfinance as yf
 
 from src.data_fetcher import DataFetcher
 from src.storage import PortfolioManager
@@ -2451,6 +2452,104 @@ class MorningBriefService:
 
         gainers = sorted([row for row in rows if move_value(row) > 0], key=move_value, reverse=True)[:8]
         losers = sorted([row for row in rows if move_value(row) < 0], key=move_value)[:8]
+        payload = {"gainers": gainers, "losers": losers}
+        self._market_movers_cache = (payload, now)
+        return payload
+
+    def collect_market_movers_for_delivery(
+        self,
+        extra_tickers: List[str] | None = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Build deterministic 1-day movers for time-sensitive session delivery.
+
+        A single threaded batch request is materially faster than loading company
+        metadata one ticker at a time. The result deliberately ranks only the
+        configured universe plus the user's watchlist and never substitutes a
+        weekly move when today's move is unavailable.
+        """
+        now = datetime.now(timezone.utc)
+        if (
+            self._market_movers_cache is not None
+            and (now - self._market_movers_cache[1]).total_seconds() < self._market_movers_ttl_seconds
+        ):
+            cached = self._market_movers_cache[0]
+            cached_daily = [
+                row
+                for row in [*(cached.get("gainers") or []), *(cached.get("losers") or [])]
+                if isinstance(row.get("change_1d"), (int, float))
+            ]
+            cached_gainers = sorted(
+                [row for row in cached_daily if float(row.get("change_1d") or 0) > 0],
+                key=lambda row: float(row.get("change_1d") or 0),
+                reverse=True,
+            )[:8]
+            cached_losers = sorted(
+                [row for row in cached_daily if float(row.get("change_1d") or 0) < 0],
+                key=lambda row: float(row.get("change_1d") or 0),
+            )[:8]
+            if cached_gainers or cached_losers:
+                return {"gainers": cached_gainers, "losers": cached_losers}
+
+        symbols = []
+        for raw in [*(extra_tickers or []), *self.MARKET_MOVER_UNIVERSE]:
+            ticker = str(raw or "").upper().strip()
+            if (
+                ticker
+                and ticker not in symbols
+                and not ticker.startswith("^")
+                and not ticker.endswith("=F")
+                and not ticker.endswith("-USD")
+            ):
+                symbols.append(ticker)
+        if not symbols:
+            return {"gainers": [], "losers": []}
+
+        frame = yf.download(
+            symbols,
+            period="7d",
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=False,
+            progress=False,
+            threads=True,
+            timeout=8,
+        )
+        rows: List[Dict[str, Any]] = []
+        for ticker in symbols:
+            try:
+                if isinstance(frame.columns, pd.MultiIndex):
+                    closes = frame[ticker]["Close"].dropna()
+                else:
+                    closes = frame["Close"].dropna()
+                if len(closes) < 2:
+                    continue
+                previous_close = float(closes.iloc[-2])
+                latest_close = float(closes.iloc[-1])
+                if not previous_close or not pd.notna(previous_close) or not pd.notna(latest_close):
+                    continue
+                change_1d = ((latest_close / previous_close) - 1.0) * 100.0
+                rows.append(
+                    {
+                        "ticker": ticker,
+                        "name": ticker,
+                        "price": latest_close,
+                        "change_1d": change_1d,
+                        "mover_window": "1d",
+                        "as_of": now.isoformat(),
+                    }
+                )
+            except (KeyError, TypeError, ValueError, IndexError):
+                continue
+
+        gainers = sorted(
+            [row for row in rows if float(row.get("change_1d") or 0) > 0],
+            key=lambda row: float(row.get("change_1d") or 0),
+            reverse=True,
+        )[:8]
+        losers = sorted(
+            [row for row in rows if float(row.get("change_1d") or 0) < 0],
+            key=lambda row: float(row.get("change_1d") or 0),
+        )[:8]
         payload = {"gainers": gainers, "losers": losers}
         self._market_movers_cache = (payload, now)
         return payload

@@ -26,6 +26,7 @@ CONTRACT_TESTS = [
     "qa_telegram_deduplication.py",
     "qa_telegram_news_integrity.py",
     "qa_macro_alert_quality.py",
+    "qa_session_market_movers.py",
     "qa_morning_brief_classification.py",
 ]
 

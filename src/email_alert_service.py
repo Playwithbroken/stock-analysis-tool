@@ -697,6 +697,7 @@ class EmailAlertService:
         except Exception as exc:
             print(f"Brief warm-cache failed before manual {session}: {exc}")
         brief = dict(self.morning_brief_service.get_brief(snapshot))
+        brief = self._attach_delivery_market_movers(brief, snapshot)
         try:
             brief["trading_edge"] = self.morning_brief_service.get_trading_edge(snapshot)
         except Exception:
@@ -716,6 +717,57 @@ class EmailAlertService:
             "message": f"Session brief '{session}' sent to Telegram.",
             "forecasts_recorded": learning.get("recorded", 0),
         }
+
+    def _attach_delivery_market_movers(
+        self,
+        brief: Dict[str, Any],
+        snapshot: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        enriched = dict(brief or {})
+        watchlist_tickers = [
+            str(item.get("value") or "").upper().strip()
+            for item in (snapshot or {}).get("items", [])
+            if isinstance(item, dict)
+            and item.get("kind") == "ticker"
+            and str(item.get("value") or "").strip()
+        ]
+        timeout_seconds = self._safe_int_env("SCHEDULED_BRIEF_MOVERS_TIMEOUT_SECONDS", 15, minimum=3)
+        try:
+            movers = self._run_with_timeout(
+                "session market movers",
+                lambda: self.morning_brief_service.collect_market_movers_for_delivery(watchlist_tickers),
+                timeout_seconds,
+            )
+            gainers = movers.get("gainers") if isinstance(movers, dict) else []
+            losers = movers.get("losers") if isinstance(movers, dict) else []
+            if not gainers and not losers:
+                raise RuntimeError("no valid one-day mover quotes")
+            enriched["market_movers"] = {
+                "gainers": list(gainers or []),
+                "losers": list(losers or []),
+            }
+            universe = list(
+                dict.fromkeys(
+                    [*watchlist_tickers, *getattr(self.morning_brief_service, "MARKET_MOVER_UNIVERSE", [])]
+                )
+            )
+            sample = next(iter([*(gainers or []), *(losers or [])]), {})
+            enriched["market_movers_meta"] = {
+                "status": "ready",
+                "window": "1d",
+                "scope": "configured_universe_plus_watchlist",
+                "universe_size": len(universe),
+                "as_of": sample.get("as_of") or datetime.now(ZoneInfo("UTC")).isoformat(),
+            }
+        except Exception as exc:
+            print(f"Session market movers unavailable: {exc}")
+            enriched["market_movers"] = {"gainers": [], "losers": []}
+            enriched["market_movers_meta"] = {
+                "status": "unavailable",
+                "window": "1d",
+                "scope": "configured_universe_plus_watchlist",
+            }
+        return enriched
 
     async def send_a_setup_digest_async(self) -> Dict[str, Any]:
         config = self.get_config()
@@ -1035,8 +1087,8 @@ class EmailAlertService:
                     self._set_brief_job_status(str(job["job_key"]), failure)
                     results.append(failure)
                     continue
+                brief = self._attach_delivery_market_movers(dict(brief), snapshot)
                 try:
-                    brief = dict(brief)
                     brief["trading_edge"] = self._run_with_timeout(
                         f"{job['job_key']} trading edge",
                         lambda: self.morning_brief_service.get_trading_edge(snapshot),
@@ -3384,21 +3436,35 @@ class EmailAlertService:
                     lines2.append(f"   Risiko: {risk}")
 
         market_movers = brief.get("market_movers") or {}
+        market_movers_meta = brief.get("market_movers_meta") or {}
         gainers = market_movers.get("gainers") or []
         losers = market_movers.get("losers") or []
         if gainers or losers:
-            lines2.extend(["", "<b>Biggest Winners / Losers</b>"])
+            universe_size = market_movers_meta.get("universe_size")
+            scope_suffix = f" · {int(universe_size)} Werte + Watchlist" if isinstance(universe_size, int) else ""
+            lines2.extend(["", f"<b>Biggest Winners / Losers</b>{scope_suffix}"])
+            as_of = self._paper_trade_time(market_movers_meta.get("as_of"))
+            if as_of:
+                lines2.append(f"<i>1-Tages-Bewegung · Scan {self._tg_esc(as_of)}</i>")
             for label, rows in (("WIN", gainers[:4]), ("LOSE", losers[:4])):
                 for item in rows:
                     ticker = self._tg_esc(item.get("ticker") or "")
-                    name = self._tg_esc((item.get("name") or ticker)[:28])
+                    raw_name = str(item.get("name") or "").strip()
+                    name = self._tg_esc(raw_name[:28]) if raw_name and raw_name.upper() != str(item.get("ticker") or "").upper() else ""
                     chg = item.get("change_1d")
                     if not isinstance(chg, (int, float)):
-                        chg = item.get("change_1w")
-                    chg_str = f"{chg:+.2f}%" if isinstance(chg, (int, float)) else "offen"
+                        continue
+                    chg_str = f"{chg:+.2f}%"
                     price = item.get("price")
                     price_str = f" ${price:,.2f}" if isinstance(price, (int, float)) else ""
-                    lines2.append(f"{label} <code>{ticker}</code> {name} {chg_str}{price_str}")
+                    name_part = f" {name}" if name else ""
+                    lines2.append(f"{label} <code>{ticker}</code>{name_part} {chg_str}{price_str}")
+        elif market_movers_meta.get("status") == "unavailable":
+            lines2.extend([
+                "",
+                "<b>Biggest Winners / Losers</b>",
+                "<i>Aktuelle 1-Tages-Mover konnten nicht verlässlich geladen werden; keine Ersatzwerte ausgegeben.</i>",
+            ])
 
         # Watchlist impact
         watchlist_impact = brief.get("watchlist_impact", [])

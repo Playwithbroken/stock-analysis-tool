@@ -20,6 +20,7 @@ CONTRACT_TESTS = [
     "qa_paper_learning_alerts.py",
     "qa_option_contract_alerts.py",
     "qa_leverage_end_to_end.py",
+    "qa_paper_entry_market_regime.py",
     "qa_news_evidence_schema.py",
     "qa_news_trade_entry_gate.py",
     "qa_news_source_revalidation.py",

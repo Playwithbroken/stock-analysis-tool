@@ -5437,7 +5437,12 @@ async def get_strategy_library():
 async def create_paper_trade(req: PaperTradeCreateRequest):
     try:
         payload = req.model_dump()
-        trade = get_paper_trading_service().create_trade_from_payload(payload)
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        trade = get_paper_trading_service().create_trade_from_payload(
+            payload,
+            _get_paper_news_context(snapshot),
+        )
         _cache_forget("search:suggestions")
         return convert_numpy_types(trade)
     except Exception as e:

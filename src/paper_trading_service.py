@@ -6,6 +6,7 @@ import ipaddress
 import re
 import socket
 import time
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
@@ -336,6 +337,8 @@ class PaperTradingService:
             "news_evidence_performance": news_evidence_performance,
             "news_shadow_lab": news_shadow_lab,
             "learning_context_performance": self._build_learning_context_performance(closed_trades),
+            "market_regime_performance": self._build_market_regime_performance(closed_trades),
+            "current_entry_market_regime": self._build_entry_market_regime(news_context or {}),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
             "outcome_learning": outcome_learning,
@@ -689,10 +692,19 @@ class PaperTradingService:
             return text
         return text
 
-    def create_trade_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def create_trade_from_payload(
+        self,
+        payload: Dict[str, Any],
+        market_context: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         if float(payload.get("leverage") or 1) > 1:
             raise ValueError("Leveraged paper trades must come from a quality-gated playbook.")
-        trade = self.portfolio_manager.create_paper_trade(payload)
+        enriched_payload = dict(payload)
+        ticket = dict(payload.get("trade_ticket") or {}) if isinstance(payload.get("trade_ticket"), dict) else {}
+        ticket.setdefault("schema_version", "1.1")
+        ticket["entry_market_regime"] = self._build_entry_market_regime(market_context or {})
+        enriched_payload["trade_ticket"] = ticket
+        trade = self.portfolio_manager.create_paper_trade(enriched_payload)
         self._schedule_trade_outcomes(trade)
         return self._enrich_trade(trade)
 
@@ -1300,8 +1312,10 @@ class PaperTradingService:
         playbooks.extend(self._build_commodity_leverage_playbooks())
         playbooks.extend(self._build_option_learning_playbooks(playbooks))
         self._apply_outcome_learning(playbooks, outcome_learning or {})
+        entry_market_regime = self._build_entry_market_regime(news_context or {})
 
         for item in playbooks:
+            item["entry_market_regime"] = deepcopy(entry_market_regime)
             item["strategy"] = StrategyLibrary.find_for_playbook(item)
             rule_state = self._get_do_not_trade_state(item, rules)
             item["do_not_trade_reasons"] = rule_state["blocked"]
@@ -1310,6 +1324,117 @@ class PaperTradingService:
             item["decision_framework"] = self._build_decision_framework(item)
 
         return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:16]
+
+    def _build_entry_market_regime(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Freeze the observable market state used when a Paper trade is opened.
+
+        Volatility and breadth are explicitly labelled proxies because the free
+        brief feed does not provide executable VIX or exchange advance/decline data.
+        """
+        context = context if isinstance(context, dict) else {}
+        captured_at = datetime.now(timezone.utc).isoformat()
+        regions = context.get("regions") if isinstance(context.get("regions"), dict) else {}
+        region_moves: List[float] = []
+        for region in regions.values():
+            if not isinstance(region, dict):
+                continue
+            for asset in region.get("assets") or []:
+                if not isinstance(asset, dict):
+                    continue
+                value = asset.get("change_1d")
+                if isinstance(value, (int, float)):
+                    region_moves.append(float(value))
+
+        avg_move = sum(region_moves) / len(region_moves) if region_moves else None
+        avg_abs_move = sum(abs(value) for value in region_moves) / len(region_moves) if region_moves else None
+        positive = sum(1 for value in region_moves if value > 0)
+        negative = sum(1 for value in region_moves if value < 0)
+        breadth_ratio = positive / len(region_moves) if region_moves else None
+
+        trend_label = "unavailable"
+        if avg_move is not None:
+            trend_label = "uptrend" if avg_move >= 0.35 else "downtrend" if avg_move <= -0.35 else "mixed"
+        volatility_label = "unavailable"
+        if avg_abs_move is not None:
+            volatility_label = "calm" if avg_abs_move < 0.5 else "normal" if avg_abs_move < 1.25 else "elevated"
+        breadth_label = "unavailable"
+        if breadth_ratio is not None:
+            breadth_label = "positive" if breadth_ratio >= 0.65 else "negative" if breadth_ratio <= 0.35 else "mixed"
+
+        macro_assets = {
+            str(item.get("ticker") or "").upper(): item
+            for item in (context.get("macro_assets") or [])
+            if isinstance(item, dict) and item.get("ticker")
+        }
+
+        def macro_state(ticker: str, positive_label: str, negative_label: str) -> Dict[str, Any]:
+            row = macro_assets.get(ticker) or {}
+            change = row.get("change_1d")
+            label = "unavailable"
+            if isinstance(change, (int, float)):
+                label = positive_label if float(change) > 0.1 else negative_label if float(change) < -0.1 else "stable"
+            return {
+                "label": label,
+                "ticker": ticker,
+                "value": row.get("price") if isinstance(row.get("price"), (int, float)) else None,
+                "change_1d_pct": float(change) if isinstance(change, (int, float)) else None,
+                "source": "morning_brief_macro_asset",
+            }
+
+        rates = macro_state("^TNX", "rising", "falling")
+        dollar = macro_state("DX-Y.NYB", "strengthening", "weakening")
+        risk_label = str(context.get("macro_regime") or "unavailable").strip().lower() or "unavailable"
+        missing = []
+        for dimension, label in (
+            ("trend", trend_label),
+            ("volatility", volatility_label),
+            ("rates", rates["label"]),
+            ("dollar", dollar["label"]),
+            ("risk_appetite", risk_label),
+            ("breadth", breadth_label),
+        ):
+            if label == "unavailable":
+                missing.append(dimension)
+        return {
+            "schema_version": "1.0",
+            "captured_at": captured_at,
+            "data_as_of": context.get("generated_at"),
+            "immutable_at_entry": True,
+            "source": "morning_brief_snapshot",
+            "trend": {
+                "label": trend_label,
+                "average_observed_move_1d_pct": round(avg_move, 4) if avg_move is not None else None,
+                "observations": len(region_moves),
+                "method": "mean_1d_move_available_region_indices_and_futures",
+            },
+            "volatility": {
+                "label": volatility_label,
+                "observed_abs_move_1d_pct": round(avg_abs_move, 4) if avg_abs_move is not None else None,
+                "is_proxy": True,
+                "method": "mean_absolute_1d_move_region_indices_and_futures_not_vix",
+            },
+            "rates": rates,
+            "dollar": dollar,
+            "risk_appetite": {
+                "label": risk_label,
+                "opening_bias": context.get("opening_bias"),
+                "source": "morning_brief_macro_regime",
+            },
+            "breadth": {
+                "label": breadth_label,
+                "positive": positive,
+                "negative": negative,
+                "observations": len(region_moves),
+                "positive_ratio": round(breadth_ratio, 4) if breadth_ratio is not None else None,
+                "is_proxy": True,
+                "method": "cross_market_index_and_futures_participation_not_exchange_advance_decline",
+            },
+            "quality": {
+                "status": "complete" if not missing else "partial" if len(missing) < 6 else "unavailable",
+                "missing_dimensions": missing,
+                "proxy_dimensions": ["volatility", "breadth"],
+            },
+        }
 
     def _news_gate_reasons(self, news: Dict[str, Any]) -> List[str]:
         evidence = news.get("source_evidence") if isinstance(news.get("source_evidence"), dict) else {}
@@ -4136,7 +4261,7 @@ class PaperTradingService:
         else:
             status = "watch"
         return {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "ticket_id": str(playbook.get("id") or f"{ticker}-{direction}"),
             "instrument": ticker,
             "asset_class": asset_class,
@@ -4178,6 +4303,7 @@ class PaperTradingService:
             "source_label": source_label or None,
             "entry_source_label": playbook.get("entry_source_label") or "Paper-Autopilot",
             "learning_context": playbook.get("learning_context") or None,
+            "entry_market_regime": deepcopy(playbook.get("entry_market_regime") or self._build_entry_market_regime({})),
             "news_evidence": playbook.get("news_evidence") or None,
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
@@ -4924,6 +5050,45 @@ class PaperTradingService:
             )
         )
         return rows[:8]
+
+    def _build_market_regime_performance(self, closed_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        dimensions = ("trend", "volatility", "rates", "dollar", "risk_appetite", "breadth")
+        buckets: Dict[str, Dict[str, List[Dict[str, Any]]]] = {dimension: {} for dimension in dimensions}
+        captured_trades = 0
+        for trade in closed_trades:
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            regime = ticket.get("entry_market_regime") if isinstance(ticket.get("entry_market_regime"), dict) else {}
+            if not regime:
+                continue
+            captured_trades += 1
+            for dimension in dimensions:
+                state = regime.get(dimension) if isinstance(regime.get(dimension), dict) else {}
+                label = str(state.get("label") or "unavailable").strip().lower() or "unavailable"
+                buckets[dimension].setdefault(label, []).append(trade)
+
+        rows: List[Dict[str, Any]] = []
+        for dimension in dimensions:
+            for label, trades in buckets[dimension].items():
+                performance = build_trade_performance(trades)
+                sample_size = int(performance.get("sample_size") or 0)
+                rows.append(
+                    {
+                        "dimension": dimension,
+                        "label": label,
+                        "trades": sample_size,
+                        "performance": performance,
+                        "readiness": "usable" if sample_size >= 30 else "building" if sample_size >= 10 else "insufficient_sample",
+                        "minimum_usable_sample": 30,
+                    }
+                )
+        rows.sort(key=lambda item: (str(item["dimension"]), -int(item["trades"]), str(item["label"])))
+        return {
+            "captured_closed_trades": captured_trades,
+            "total_closed_trades": len(closed_trades),
+            "coverage_pct": round((captured_trades / len(closed_trades)) * 100, 1) if closed_trades else 0.0,
+            "rows": rows,
+            "policy": "Marktregime wird nur am Entry eingefroren; Auswertung ab 30 geschlossenen Trades je Regime belastbar.",
+        }
 
     def _build_journal(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         rows = []

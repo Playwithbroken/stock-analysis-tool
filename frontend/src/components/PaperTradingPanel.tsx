@@ -170,6 +170,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const newsShadowCohorts = newsShadowLab.quality_cohorts || [];
   const newsShadowEvents = newsShadowLab.event_types || [];
   const learningContextPerformance = data?.learning_context_performance || [];
+  const marketRegimePerformance = data?.market_regime_performance || {};
+  const marketRegimeRows = marketRegimePerformance.rows || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
@@ -1209,6 +1211,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 const entryExecution = trade.trade_ticket?.execution_model?.entry || null;
                 const exitExecution = trade.estimated_exit_execution || null;
                 const newsEvidence = trade.trade_ticket?.news_evidence || null;
+                const entryRegime = trade.trade_ticket?.entry_market_regime || null;
                 return (
                   <div
                     key={`decision-${trade.id}`}
@@ -1291,6 +1294,20 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                             {management.elapsed_hours != null ? ` · bisher ${Number(management.elapsed_hours).toFixed(1)} Stunden` : ""}
                           </div>
                         ) : null}
+                      </div>
+                    ) : null}
+                    {entryRegime ? (
+                      <div className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50/80 px-3 py-3 text-[11px] leading-5 text-cyan-950">
+                        <div className="font-extrabold uppercase tracking-[0.12em] text-cyan-700">Marktregime beim Entry · eingefroren</div>
+                        <div className="mt-1 font-bold">
+                          {entryRegime.risk_appetite?.label || "unbekannt"} · Trend {entryRegime.trend?.label || "unbekannt"} · Volatilität {entryRegime.volatility?.label || "unbekannt"} (Proxy)
+                        </div>
+                        <div className="text-cyan-800">
+                          Breite {entryRegime.breadth?.label || "unbekannt"} (Proxy) · US10Y {entryRegime.rates?.label || "unbekannt"} · Dollar {entryRegime.dollar?.label || "unbekannt"}
+                        </div>
+                        <div className="text-cyan-700">
+                          Stand {entryRegime.data_as_of ? new Date(entryRegime.data_as_of).toLocaleString() : "nicht verfügbar"} · Qualität {entryRegime.quality?.status || "partial"}
+                        </div>
                       </div>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
@@ -2186,6 +2203,47 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           </div>
         )}
 
+        <div className="mt-4 rounded-[1.6rem] border border-cyan-500/20 bg-cyan-50/60 p-4 text-xs text-cyan-950">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-cyan-700">Performance nach Entry-Marktregime</div>
+              <div className="mt-1 text-cyan-800">Trend, Volatilitäts-Proxy, Zinsen, Dollar, Risikoappetit und Breiten-Proxy werden beim Einstieg unveränderlich gespeichert.</div>
+            </div>
+            <div className="rounded-full border border-cyan-500/20 bg-white px-3 py-1 font-black text-cyan-800">
+              Abdeckung {Number(marketRegimePerformance.coverage_pct || 0).toFixed(1)}%
+            </div>
+          </div>
+          {marketRegimeRows.length ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {marketRegimeRows.slice(0, 12).map((item: any) => {
+                const performance = item.performance || {};
+                return (
+                  <div key={`${item.dimension}-${item.label}`} className="rounded-[1.1rem] border border-cyan-500/15 bg-white px-3 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-600">{String(item.dimension).replace(/_/g, " ")}</div>
+                        <div className="mt-1 font-black text-slate-900">{String(item.label).replace(/_/g, " ")}</div>
+                      </div>
+                      <div className="font-black text-cyan-800">{item.trades || 0}/30</div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-600">
+                      <span>Treffer {Number(performance.win_rate || 0).toFixed(1)}%</span>
+                      <span>PF {performance.profit_factor == null ? "offen" : Number(performance.profit_factor).toFixed(2)}</span>
+                      <span>Erwartung {money(performance.expectancy_value, currency)}</span>
+                    </div>
+                    <div className="mt-2 font-semibold text-cyan-800">{germanStatus(item.readiness, item.readiness)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-cyan-500/25 bg-white/75 px-3 py-3 text-cyan-800">
+              Neue Trades speichern das Entry-Regime ab jetzt. Bestehende historische Trades werden nicht rückwirkend geschätzt.
+            </div>
+          )}
+          <div className="mt-3 font-semibold text-cyan-900">{marketRegimePerformance.policy || "Belastbare Bewertung erst ab 30 geschlossenen Trades je Regime."}</div>
+        </div>
+
         <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
           <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500">Nicht-handeln-Regeln</div>
           <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -2393,6 +2451,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           <div>Menge: {item.leverage_assessment.recommended_sizing.suggested_quantity}</div>
                           <div>Exposure: {money(item.leverage_assessment.recommended_sizing.suggested_notional_value, currency)}</div>
                           <div>Max. Verlust: {money(item.leverage_assessment.recommended_sizing.suggested_max_loss_value, currency)}</div>
+                        </div>
+                      ) : null}
+                      {item.trade_ticket.entry_market_regime ? (
+                        <div className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-[11px] font-semibold leading-5 text-cyan-900">
+                          Entry-Regime: {item.trade_ticket.entry_market_regime.risk_appetite?.label || "unbekannt"} · Trend {item.trade_ticket.entry_market_regime.trend?.label || "unbekannt"} · Volatilität {item.trade_ticket.entry_market_regime.volatility?.label || "unbekannt"} (Proxy) · Breite {item.trade_ticket.entry_market_regime.breadth?.label || "unbekannt"} (Proxy)
                         </div>
                       ) : null}
                       {!!item.leverage_assessment.blockers?.length && (

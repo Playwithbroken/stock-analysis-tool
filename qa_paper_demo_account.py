@@ -586,7 +586,7 @@ def test_demo_account_sizing() -> None:
     assert aapl["decision_framework"]["invalidation"]
     assert aapl["decision_framework"]["real_money_policy"].startswith("Nur Entscheidungsrahmen")
     ticket = aapl["trade_ticket"]
-    assert ticket["schema_version"] == "1.0"
+    assert ticket["schema_version"] == "1.1"
     assert ticket["status"] == "paper_ready"
     assert ticket["paper_ready"] is True
     assert ticket["real_money_ready"] is False
@@ -689,7 +689,7 @@ def test_demo_account_sizing() -> None:
     assert "Entscheidungs-Snapshot beim Paper-Einstieg" in created["notes"]
     assert "Trigger:" in created["notes"]
     assert "Invalidierung:" in created["notes"]
-    assert created["trade_ticket"]["schema_version"] == "1.0"
+    assert created["trade_ticket"]["schema_version"] == "1.1"
     assert created["trade_ticket"]["real_money_ready"] is False
     assert created["trade_ticket"]["entry_source_label"] == "Paper-Autopilot"
     assert created["playbook_id"] == "equity-AAPL-long"

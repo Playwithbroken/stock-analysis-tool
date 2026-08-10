@@ -48,7 +48,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [x] Unabhängige Risikobuckets innerhalb eines Laufs und gegenüber offenen Trades.
 - [x] Automatische Kauf-, Management- und Verkaufsmeldungen.
 - [ ] Portfolio-Korrelation quantitativ mit Renditehistorien messen; statische Buckets bleiben zusätzlicher Sicherheitsgurt.
-- [ ] Marktregime beim Einstieg speichern: Trend, Volatilität, Zinsen, Dollar, Risikoappetit und Marktbreite.
+- [x] Marktregime beim Einstieg unveränderlich speichern: Trend, Volatilitäts-Proxy, Zinsen, Dollar, Risikoappetit und Breiten-Proxy; Proxy-Methoden und fehlende Dimensionen bleiben sichtbar.
 - [ ] Slippage und Gebühren je Assetklasse regelmäßig gegen beobachtbare Spreads kalibrieren.
 - [ ] Strategieauswertung nach Setup, Marktregime, Quelle, Scoreband und Risikobucket anzeigen.
 - [ ] Mindestens 30 geschlossene Trades je freizugebender Strategie und mindestens 100 entscheidende Outcome-Prüfungen sammeln.
@@ -106,7 +106,7 @@ Ziel: Ein Fehler wird erkannt, erklärt und ohne Datenverlust behoben.
 - [ ] Strukturierte Fehlercodes und Provider-Metriken für Quote-, News-, Options- und Telegram-Dienste vereinheitlichen.
 - [ ] Automatisches tägliches Backup plus regelmäßig getesteter Restore auf leerer Instanz.
 - [ ] Alarm bei ausgefallenem Scheduler, veralteten Kursdaten, Telegram-Fehlern und nicht beschreibbarem Volume.
-- [ ] Abhängigkeiten prüfen und bekannte moderate/hohe Sicherheitslücken vor Release beseitigen oder dokumentiert akzeptieren.
+- [x] Frontend- und Backend-Abhängigkeiten prüfen: `npm audit --audit-level=moderate` und `pip-audit -r requirements.txt` ohne bekannte Schwachstellen; vier gemeldete Frontend-Pakete wurden auf sichere kompatible Versionen aktualisiert.
 - [ ] Rollback-Runbook mit letztem guten Commit, Datenbankkompatibilität und maximaler Wiederanlaufzeit testen.
 
 Abnahme:

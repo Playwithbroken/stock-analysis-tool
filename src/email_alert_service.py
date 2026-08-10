@@ -4090,6 +4090,7 @@ class EmailAlertService:
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
         strategy_line = self._paper_strategy_context_line(event.get("strategy_context"))
+        regime_lines = self._paper_entry_regime_lines(ticket)
         option_lines = self._paper_option_contract_lines(event)
         opened_at = self._paper_trade_time(event.get("opened_at"))
         return "\n".join(
@@ -4101,6 +4102,7 @@ class EmailAlertService:
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 *option_lines,
                 *([strategy_line] if strategy_line else []),
+                *regime_lines,
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty} | <b>Paper-Hebel:</b> {leverage:.1f}x",
                 *([execution_line] if execution_line else []),
                 f"<b>Demo-Geld:</b> investiert {invested} | aktueller Wert {current_value}",
@@ -4119,6 +4121,27 @@ class EmailAlertService:
                 "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",
             ]
         )
+
+    def _paper_entry_regime_lines(self, ticket: Dict[str, Any]) -> List[str]:
+        regime = ticket.get("entry_market_regime") if isinstance(ticket.get("entry_market_regime"), dict) else {}
+        if not regime:
+            return []
+        state = lambda key: regime.get(key) if isinstance(regime.get(key), dict) else {}
+        trend = self._tg_esc(str(state("trend").get("label") or "unavailable"))
+        volatility = self._tg_esc(str(state("volatility").get("label") or "unavailable"))
+        appetite = self._tg_esc(str(state("risk_appetite").get("label") or "unavailable"))
+        breadth = self._tg_esc(str(state("breadth").get("label") or "unavailable"))
+        rates = self._tg_esc(str(state("rates").get("label") or "unavailable"))
+        dollar = self._tg_esc(str(state("dollar").get("label") or "unavailable"))
+        quality = self._tg_esc(str(state("quality").get("status") or (regime.get("quality") or {}).get("status") or "partial"))
+        data_as_of = self._paper_trade_time(regime.get("data_as_of"))
+        lines = [
+            f"<b>Entry-Regime:</b> {appetite} | Trend {trend} | Volatilität {volatility} (Proxy) | Breite {breadth} (Proxy)",
+            f"<b>Makro am Entry:</b> US10Y {rates} | Dollar {dollar} | Qualität {quality}",
+        ]
+        if data_as_of:
+            lines.append(f"<i>Regime-Datenstand {self._tg_esc(data_as_of)} · unveränderlich im Trade-Ticket</i>")
+        return lines
 
     def _paper_option_contract_lines(self, event: Dict[str, Any]) -> List[str]:
         ticket = event.get("trade_ticket") if isinstance(event.get("trade_ticket"), dict) else {}

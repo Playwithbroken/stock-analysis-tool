@@ -1592,6 +1592,41 @@ def test_strict_score_block_does_not_block_learning_candidate() -> None:
     assert capital["max_loss_value"] > 0
 
 
+def test_aggressive_learning_executes_soft_score_candidate_through_final_sizing_gate() -> None:
+    scoreboard = {
+        "equities": [
+            {
+                "ticker": "AAPL",
+                "action": "buy",
+                "total_score": 55.0,
+                "headline": "Early learning setup",
+                "source_label": "QA learning source",
+                "delay_days": 1,
+            }
+        ],
+        "etfs": [],
+        "crypto": [],
+        "politics": [],
+    }
+    manager = FakePortfolioManager()
+    service = build_service(manager)
+    result = service.run_auto_selection(
+        scoreboard,
+        sample_settings(),
+        max_trades=1,
+        execute=True,
+        mode="aggressive_learning",
+    )
+    assert result["errors"] == []
+    assert len(result["opened"]) == 1
+    opened = result["opened"][0]
+    assert opened["ticker"] == "AAPL"
+    assert opened["leverage"] == 1
+    assert opened["quantity"] > 0
+    assert opened["trade_ticket"]["learning_context"]["autopilot_mode"] == "aggressive_learning"
+    assert opened["trade_ticket"]["max_loss_value"] <= 937.5
+
+
 def test_aggressive_learning_uses_wider_pool_with_capped_risk() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     demo_account = {
@@ -2466,6 +2501,7 @@ if __name__ == "__main__":
     test_learning_feedback_tracks_missing_journals()
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()
+    test_aggressive_learning_executes_soft_score_candidate_through_final_sizing_gate()
     test_aggressive_learning_uses_wider_pool_with_capped_risk()
     test_aggressive_learning_respects_saved_autopilot_settings()
     test_autopilot_profile_summary_explains_risk_and_protection()

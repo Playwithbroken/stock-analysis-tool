@@ -592,8 +592,15 @@ class PaperTradingService:
                 raise ValueError("Requested leverage exceeds the evidence-based paper leverage cap.")
         playbook["selected_leverage"] = leverage
         playbook["leverage_assessment"] = leverage_assessment
+        final_sizing_playbook = playbook
+        if learning_mode and not hard_rule_reasons:
+            final_sizing_playbook = {
+                **playbook,
+                "tradeable": True,
+                "do_not_trade_reasons": [],
+            }
         final_sizing = self._suggest_demo_sizing(
-            playbook,
+            final_sizing_playbook,
             demo_account,
             risk_multiplier_override if learning_mode else None,
             leverage=(

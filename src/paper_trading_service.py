@@ -1089,6 +1089,7 @@ class PaperTradingService:
         evidence = news.get("source_evidence") if isinstance(news.get("source_evidence"), dict) else {}
         intelligence = news.get("news_intelligence") if isinstance(news.get("news_intelligence"), dict) else {}
         confirmation = news.get("market_confirmation") if isinstance(news.get("market_confirmation"), dict) else {}
+        correction = evidence.get("correction_status") if isinstance(evidence.get("correction_status"), dict) else {}
         ticker = str(news.get("ticker") or confirmation.get("ticker") or "").upper().strip()
         expected = str(confirmation.get("expected_headline_direction") or "").lower()
         age_hours = news.get("age_hours")
@@ -1103,6 +1104,8 @@ class PaperTradingService:
             reasons.append("tier_1_source_missing")
         if evidence.get("source_agreement") == "mixed_headline_signal":
             reasons.append("source_signal_conflict")
+        if str(correction.get("status") or "") in {"correction_detected", "retracted_or_withdrawn"}:
+            reasons.append("source_corrected_or_retracted")
         if evidence.get("link_verified") is not True or not bool(news.get("source_url") or news.get("link")):
             reasons.append("verified_source_link_missing")
         if not news.get("published_at"):
@@ -1139,6 +1142,7 @@ class PaperTradingService:
             "directional_stance_missing": "keine belastbare positive oder negative Richtung",
             "tier_1_source_missing": "Quelle ist nicht Tier 1",
             "source_signal_conflict": "vergleichbare Quellen liefern widersprüchliche Richtungssignale",
+            "source_corrected_or_retracted": "Quelle wurde korrigiert, zurückgezogen oder als Widerruf erkannt",
             "verified_source_link_missing": "verifizierter Quellenlink fehlt",
             "publication_timestamp_missing": "Veröffentlichungszeit fehlt",
             "importance_gate_not_met": "Meldung unterschreitet das Wichtigkeits-Gate",
@@ -1262,7 +1266,21 @@ class PaperTradingService:
             title = str(news.get("title") or "Confirmed Tier-1 news event")
             relative_move = confirmation.get("relative_move_since_publication")
             market_fields = self._market_reference_fields(ticker)
+            primary_sources = list(news.get("primary_sources") or [])
+            primary_source = primary_sources[0] if primary_sources else None
+            correction_status = (
+                evidence.get("correction_status")
+                if isinstance(evidence.get("correction_status"), dict)
+                else {
+                    "status": "not_checked_legacy_context",
+                    "checked_at": news_context.get("generated_at"),
+                    "signals": [],
+                    "monitoring_scope": "legacy_context_without_correction_scan",
+                    "ongoing_monitor_verified": False,
+                }
+            )
             news_evidence = {
+                "schema_version": "2.0",
                 "title": title,
                 "publisher": news.get("publisher"),
                 "source_url": source_url,
@@ -1274,9 +1292,44 @@ class PaperTradingService:
                 "impact": news.get("impact") or intelligence.get("impact") or "unknown",
                 "importance_score": importance,
                 "original_document_verified": original_verified,
-                "primary_sources": list(news.get("primary_sources") or []),
+                "primary_sources": primary_sources,
                 "corroboration": evidence.get("corroboration") or "single_source",
                 "source_agreement": evidence.get("source_agreement") or "single_headline_signal",
+                "reporting_source": {
+                    "publisher": news.get("publisher"),
+                    "domain": news.get("source_domain") or evidence.get("domain"),
+                    "url": source_url,
+                    "published_at": news.get("published_at"),
+                    "quality": news.get("source_quality") or evidence.get("quality"),
+                    "link_verified": evidence.get("link_verified") is True,
+                    "reporting_basis": evidence.get("reporting_basis") or intelligence.get("fact_basis"),
+                },
+                "primary_source": primary_source,
+                "facts": {
+                    "summary": intelligence.get("fact_summary") or title,
+                    "basis": intelligence.get("fact_basis") or evidence.get("reporting_basis"),
+                    "verified_against_primary": bool(original_verified and primary_source),
+                    "source_layer": "primary_document" if original_verified else "reporting_source",
+                },
+                "interpretation": {
+                    "meaning": intelligence.get("meaning"),
+                    "assessment": intelligence.get("assessment"),
+                    "directional_bias": intelligence.get("directional_bias"),
+                    "bull_case": intelligence.get("bull_case"),
+                    "bear_case": intelligence.get("bear_case"),
+                    "confirmation": intelligence.get("confirmation") or [],
+                    "invalidation": intelligence.get("invalidation"),
+                    "execution_horizon": intelligence.get("execution_horizon"),
+                    "generated_by": "Broker Freund rule-based news intelligence",
+                    "is_reported_fact": False,
+                },
+                "source_comparison": {
+                    "corroboration": evidence.get("corroboration") or "single_source",
+                    "publisher_count": int(evidence.get("publisher_count") or 1),
+                    "source_agreement": evidence.get("source_agreement") or "single_headline_signal",
+                    "independence_verified": False,
+                },
+                "correction_status": correction_status,
                 "market_confirmation": {
                     "status": "confirmed",
                     "expected_headline_direction": expected,

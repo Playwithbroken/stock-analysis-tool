@@ -66,8 +66,9 @@ Ziel: Jede Push-Nachricht beantwortet in unter einer Minute, was passiert ist un
 
 - [x] Kauf/Verkauf enthält Kontoübersicht, Risiko, Trigger und Invalidierung.
 - [x] Management-Push bei Stopnähe, Zielnähe, schwacher Anschlussbewegung und abgelaufener Haltedauer.
-- [ ] Einheitliches Schema für wichtige Nachrichten: Fakt, Originalquelle, Zeitpunkt, betroffene Assets, erwarteter Mechanismus, bestätigende Marktreaktion, Gegenargument, Trigger, Invalidierung und Unsicherheit.
-- [ ] Primärquelle und berichtende Sekundärquelle getrennt speichern und anzeigen.
+- [x] Einheitliches Schema für wichtige Nachrichten: Fakt, Originalquelle, Zeitpunkt, betroffene Assets, erwarteter Mechanismus, bestätigende Marktreaktion, Gegenargument, Trigger, Invalidierung und Unsicherheit.
+- [x] Primärquelle und berichtende Sekundärquelle getrennt speichern und anzeigen.
+- [x] Korrektur- und Widerrufsmarker bei der Erfassung erkennen und das News-Trade-Gate blockieren.
 - [ ] Korrektur-/Widerrufsmonitor: Eine geänderte Quelle muss den bestehenden News-Trade neu bewerten.
 - [ ] Telegram-Deduplizierung in QA für Kauf, Verkauf, Management, Kontoübersicht und News vollständig abdecken.
 - [ ] Optional planbare Tagesübersicht aktivierbar machen, ohne die ereignisgesteuerten Risiko-Pushes zu verwässern.

@@ -3769,23 +3769,7 @@ class EmailAlertService:
             else ""
         )
         news_evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
-        news_market = (
-            news_evidence.get("market_confirmation")
-            if isinstance(news_evidence.get("market_confirmation"), dict)
-            else {}
-        )
-        news_url = self._tg_esc(str(news_evidence.get("source_url") or ""))
-        news_publisher = self._tg_esc(str(news_evidence.get("publisher") or "Tier-1-Quelle"))
-        news_title = self._tg_esc(str(news_evidence.get("title") or "Verifizierter News-Trigger"))[:320]
-        news_line = (
-            f"<b>News-Trigger:</b> <a href=\"{news_url}\">{news_publisher}</a> | {news_title}"
-            f"\n<b>News-Beweis:</b> Faktenbasis {self._tg_esc(str(news_evidence.get('fact_basis') or 'offen'))} | "
-            f"relative Reaktion {self._tg_pct(news_market.get('relative_move_since_publication')).lstrip('+')} | "
-            f"Primärdokument {'ja' if news_evidence.get('original_document_verified') else 'nein'}"
-            f"\n<i>Zeitfenster bestätigt; Kausalität nicht bewiesen. Echtgeld gesperrt.</i>"
-            if news_evidence and news_url
-            else ""
-        )
+        news_lines = self._paper_news_evidence_lines(news_evidence)
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
         strategy_line = self._paper_strategy_context_line(event.get("strategy_context"))
@@ -3796,7 +3780,7 @@ class EmailAlertService:
                 f"<b>[PAPER GEÖFFNET] <code>{ticker}</code> {direction}</b>",
                 *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Ausloeser:</b> {source_label}",
-                *([news_line] if news_line else []),
+                *news_lines,
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
                 *option_lines,
                 *([strategy_line] if strategy_line else []),
@@ -3876,6 +3860,79 @@ class EmailAlertService:
             lines.append(f"<b>Entscheidende Treiber:</b> {' / '.join(drivers)}")
         if data_limit:
             lines.append(f"<b>Datenlimit:</b> {data_limit}")
+        return lines
+
+    def _paper_news_evidence_lines(self, evidence: Dict[str, Any]) -> List[str]:
+        if not isinstance(evidence, dict) or not evidence:
+            return []
+        reporting = evidence.get("reporting_source") if isinstance(evidence.get("reporting_source"), dict) else {}
+        primary = evidence.get("primary_source") if isinstance(evidence.get("primary_source"), dict) else {}
+        facts = evidence.get("facts") if isinstance(evidence.get("facts"), dict) else {}
+        interpretation = evidence.get("interpretation") if isinstance(evidence.get("interpretation"), dict) else {}
+        comparison = evidence.get("source_comparison") if isinstance(evidence.get("source_comparison"), dict) else {}
+        correction = evidence.get("correction_status") if isinstance(evidence.get("correction_status"), dict) else {}
+        market = evidence.get("market_confirmation") if isinstance(evidence.get("market_confirmation"), dict) else {}
+
+        reporting_url = self._tg_esc(str(reporting.get("url") or evidence.get("source_url") or ""))
+        reporting_publisher = self._tg_esc(str(reporting.get("publisher") or evidence.get("publisher") or "Tier-1-Quelle"))
+        title = self._tg_esc(str(evidence.get("title") or "Verifizierter News-Trigger"))[:320]
+        lines: List[str] = []
+        if reporting_url:
+            lines.append(f"<b>Berichtende Quelle:</b> <a href=\"{reporting_url}\">{reporting_publisher}</a> | {title}")
+        else:
+            lines.append(f"<b>Berichtende Quelle:</b> {reporting_publisher} | {title}")
+
+        primary_url = self._tg_esc(str(primary.get("url") or ""))
+        primary_label = self._tg_esc(
+            " · ".join(
+                part
+                for part in [str(primary.get("authority") or ""), str(primary.get("form") or "")]
+                if part
+            )
+            or (
+                "verifiziert, Link im Legacy-Ticket nicht gespeichert"
+                if evidence.get("original_document_verified") is True
+                else "nicht verifiziert"
+            )
+        )
+        if primary_url:
+            lines.append(f"<b>Primärquelle:</b> <a href=\"{primary_url}\">{primary_label}</a>")
+        else:
+            lines.append(f"<b>Primärquelle:</b> {primary_label}")
+
+        fact_summary = self._tg_esc(str(facts.get("summary") or evidence.get("fact_summary") or evidence.get("title") or ""))[:620]
+        fact_basis = self._tg_esc(str(facts.get("basis") or evidence.get("fact_basis") or "offen"))
+        if fact_summary:
+            lines.append(f"<b>Bestätigter Faktenstand ({fact_basis}):</b> {fact_summary}")
+
+        meaning = self._tg_esc(str(interpretation.get("meaning") or ""))[:420]
+        assessment = self._tg_esc(str(interpretation.get("assessment") or ""))[:360]
+        if meaning or assessment:
+            lines.append(f"<b>Unsere Interpretation – kein Quellenfakt:</b> {meaning or assessment}")
+            if meaning and assessment:
+                lines.append(f"<b>Einschätzung:</b> {assessment}")
+
+        publisher_count = int(comparison.get("publisher_count") or 1)
+        agreement = self._tg_esc(str(comparison.get("source_agreement") or evidence.get("source_agreement") or "single_headline_signal"))
+        lines.append(
+            f"<b>Quellenabgleich:</b> {publisher_count} Publisher | {agreement} | Unabhängigkeit nicht technisch bewiesen"
+        )
+        correction_status = str(correction.get("status") or "not_checked_legacy_context")
+        correction_label = {
+            "not_detected_at_capture": "bei Erfassung keine Korrektur erkannt",
+            "not_checked_legacy_context": "bei Legacy-Daten nicht geprüft",
+            "correction_detected": "KORREKTUR ERKANNT – Trade-Gate blockiert",
+            "retracted_or_withdrawn": "WIDERRUF/RÜCKZUG ERKANNT – Trade-Gate blockiert",
+        }.get(correction_status, correction_status)
+        lines.append(f"<b>Korrekturstatus:</b> {self._tg_esc(correction_label)}")
+
+        if market:
+            lines.append(
+                f"<b>Marktbestätigung:</b> {self._tg_esc(str(market.get('status') or 'offen'))} | "
+                f"relative Reaktion {self._tg_pct(market.get('relative_move_since_publication')).lstrip('+')} | "
+                f"Fenster {'ausgerichtet' if market.get('event_window_aligned') else 'nicht ausgerichtet'}"
+            )
+        lines.append("<i>Zeitliche Marktbestätigung beweist keine Kausalität; laufende Quellenkorrekturen sind nicht garantiert.</i>")
         return lines
 
     def _paper_strategy_context_line(self, context: Any) -> str:

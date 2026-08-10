@@ -1802,6 +1802,29 @@ class MorningBriefService:
         text = re.sub(r"\s+", " ", text).strip()
         return text[:700]
 
+    def _news_correction_status(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        title = str(item.get("title") or "")
+        summary = self._clean_news_summary(item.get("source_summary"))
+        haystack = f"{title} {summary}".lower()
+        retraction_markers = ("retraction", "retracted", "withdrawn report", "story withdrawn")
+        correction_markers = ("correction:", "corrected:", "corrects ", "corrected version")
+        if any(marker in haystack for marker in retraction_markers):
+            status = "retracted_or_withdrawn"
+            signals = [marker for marker in retraction_markers if marker in haystack]
+        elif any(marker in haystack for marker in correction_markers):
+            status = "correction_detected"
+            signals = [marker for marker in correction_markers if marker in haystack]
+        else:
+            status = "not_detected_at_capture"
+            signals = []
+        return {
+            "status": status,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "signals": signals,
+            "monitoring_scope": "headline_and_publisher_summary_at_capture",
+            "ongoing_monitor_verified": False,
+        }
+
     def _enrich_news_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         intelligence = self._build_news_intelligence(item)
         source_url = str(item.get("source_url") or item.get("link") or "").strip()
@@ -1839,6 +1862,7 @@ class MorningBriefService:
             "primary_source_verification": (
                 "official_rss_and_allowlisted_domain" if is_official_primary else None
             ),
+            "correction_status": self._news_correction_status(item),
         }
         primary_sources = list(item.get("primary_sources") or [])
         if is_official_primary:

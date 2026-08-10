@@ -182,10 +182,11 @@ def test_paper_trade_telegram_money_formatting() -> None:
     assert "Jetzt tun:</b> mit Plan halten | Position halten, solange Volumen und Trend intakt bleiben." in opened
     assert "Nächste Prüfung:</b> Nach US-Eröffnung Preis, Volumen und Stop-Abstand erneut prüfen." in opened
     assert "Paper-Playbook manuell" in opened
-    assert "News-Trigger:</b> <a href=\"https://www.reuters.com/technology/apple-guidance/\">Reuters</a>" in opened
+    assert "Berichtende Quelle:</b> <a href=\"https://www.reuters.com/technology/apple-guidance/\">Reuters</a>" in opened
+    assert "Primärquelle:</b> verifiziert, Link im Legacy-Ticket nicht gespeichert" in opened
+    assert "Bestätigter Faktenstand (publisher_summary)" in opened
     assert "relative Reaktion 1.40%" in opened
-    assert "Primärdokument ja" in opened
-    assert "Kausalität nicht bewiesen. Echtgeld gesperrt." in opened
+    assert "Zeitliche Marktbestätigung beweist keine Kausalität" in opened
     assert "fresh (1.5h)" in opened
     assert "Liquidität strong" in opened
     assert "5T-Notional 125.0 Mio." in opened

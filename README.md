@@ -104,6 +104,7 @@ python qa_paper_learning_alerts.py
 python qa_option_contract_alerts.py
 python qa_news_evidence_schema.py
 python qa_news_source_revalidation.py
+python qa_telegram_deduplication.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
 cd frontend
@@ -131,6 +132,7 @@ python qa_paper_learning_alerts.py
 python qa_option_contract_alerts.py
 python qa_news_evidence_schema.py
 python qa_news_source_revalidation.py
+python qa_telegram_deduplication.py
 python qa_static_cache_headers.py
 python qa_security_headers.py
 python qa_live_release_smoke.py

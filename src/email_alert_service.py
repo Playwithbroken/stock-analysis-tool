@@ -288,6 +288,7 @@ class EmailAlertService:
 
         config = self.get_config()
         self._validate_telegram_config(config)
+        sent_keys = self.portfolio_manager.get_sent_signal_event_keys()
         by_id = {str(item.get("id") or ""): item for item in selected or []}
         events: List[Dict[str, Any]] = []
         for trade in opened[:5]:
@@ -306,6 +307,8 @@ class EmailAlertService:
                 {},
             )
             event_key = f"paper-open:{trade.get('id') or datetime.utcnow().isoformat()}"
+            if event_key in sent_keys:
+                continue
             events.append(
                 {
                     "event_key": event_key,
@@ -348,6 +351,8 @@ class EmailAlertService:
                     "source_url": "",
                 }
             )
+        if not events:
+            return {"status": "ok", "sent": 0, "message": "Keine neuen Paper-Open-Alerts."}
         self._send_notifications(config, events, subject=self._paper_trade_open_subject(events))
         self.portfolio_manager.mark_signal_events_sent(events)
         return {"status": "ok", "sent": len(events), "message": "Paper-Trade-Telegram-Alerts gesendet."}

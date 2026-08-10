@@ -196,11 +196,111 @@ def test_telegram_contains_contract_evidence_and_honest_fallback() -> None:
     require("provider_timeout" in fallback_text, "fallback should expose the concrete provider reason")
 
 
+def test_locked_contract_drives_quote_pnl_and_outcome() -> None:
+    service = PaperTradingService(DummyPortfolioManager())
+    contract = quoted_contract("GLD", "call", 100.0, 2.2)
+    identity = service._build_option_contract_identity(
+        {
+            "ticker": "GLD",
+            "asset_class": "option",
+            "direction": "call",
+            "option_contract": contract,
+        }
+    )
+    require(identity["status"] == "locked", "available chain contract must be locked")
+    require(identity["contract_symbol"] == contract["contract_symbol"], "locked identity must retain the exact symbol")
+    require(identity["immutable"] is True, "contract identity must be immutable")
+    provider_identity = service._build_option_contract_identity(
+        {
+            "ticker": "GLD",
+            "asset_class": "option",
+            "direction": "call",
+            "option_contract": contract,
+            "leveraged_product": {
+                "product_type": "knockout",
+                "issuer": "QA Bank",
+                "expiry": "2026-12-18",
+                "strike_or_knockout_level": 92.0,
+                "bid": 4.8,
+                "ask": 5.0,
+                "offered_leverage": 6.0,
+            },
+        }
+    )
+    require(
+        provider_identity["identity_source"] == "manually_validated_provider_product",
+        "validated provider product must take precedence over a research chain snapshot",
+    )
+
+    current_row = {
+        "contractSymbol": contract["contract_symbol"],
+        "strike": 100.0,
+        "bid": 3.0,
+        "ask": 3.2,
+        "lastPrice": 3.1,
+        "openInterest": 1800,
+        "volume": 420,
+        "impliedVolatility": 0.27,
+        "lastTradeDate": datetime.now(timezone.utc),
+    }
+    chain = SimpleNamespace(calls=pd.DataFrame([current_row]), puts=pd.DataFrame())
+    ticket = {
+        "instrument": "GLD",
+        "asset_class": "option",
+        "direction": "call",
+        "underlying_proxy": "GLD",
+        "option_contract": contract,
+        "option_contract_identity": identity,
+    }
+    with patch("src.paper_trading_service.yf.Ticker", return_value=SimpleNamespace(option_chain=lambda expiry: chain)):
+        quote = service._get_stored_option_contract_quote(ticket)
+        require(quote["status"] == "available", "exact stored contract should receive a quote")
+        require(quote["price"] == 3.0, "option exit reference must use the conservative bid")
+        require(quote["contract_symbol"] == contract["contract_symbol"], "quote must not switch contracts")
+
+        trade = {
+            "id": "option-qa-open",
+            "ticker": "GLD",
+            "asset_class": "option",
+            "direction": "call",
+            "setup_type": "commodity_call_leverage_learning",
+            "status": "open",
+            "opened_at": datetime.now(timezone.utc).isoformat(),
+            "entry_price": 2.0,
+            "stop_price": 1.0,
+            "target_price": 4.0,
+            "quantity": 1.0,
+            "leverage": 1.0,
+            "trade_ticket": ticket,
+        }
+        enriched = service._enrich_trade(trade)
+        require(enriched["option_quote_status"] == "available", "open option should expose quote status")
+        require(enriched["current_reference_price"] == 3.0, "open option should use stored-contract bid")
+        require(enriched["unrealized_pnl_value"] is not None, "stored-contract quote should produce option P&L")
+
+        outcome = service._evaluate_outcome_item(
+            {**trade, "entry_price": 2.0, "horizon_hours": 24},
+            "2026-08-10T10:30:00",
+        )
+        require(outcome["status"] == "evaluated", "stored-contract quote should drive the option outcome")
+        require(outcome["check_price"] == 3.0, "option outcome must use the stored contract price")
+        require("Stored option contract premium move" in outcome["notes"], "outcome should identify contract-premium scoring")
+
+    mismatch_ticket = {
+        **ticket,
+        "option_contract": {**contract, "contract_symbol": "GLD-DIFFERENT-CONTRACT"},
+    }
+    mismatch = service._get_stored_option_contract_quote(mismatch_ticket)
+    require(mismatch["status"] == "blocked", "changed contract symbol must be blocked")
+    require(mismatch["reason"] == "stored_contract_identity_mismatch", "mismatch must expose a precise reason")
+
+
 def main() -> int:
     tests = [
         test_chain_contract_selection,
         test_playbooks_are_contract_and_direction_specific,
         test_telegram_contains_contract_evidence_and_honest_fallback,
+        test_locked_contract_drives_quote_pnl_and_outcome,
     ]
     for test in tests:
         test()

@@ -3831,7 +3831,22 @@ class EmailAlertService:
             return []
 
         lines: List[str] = []
-        if contract.get("status") == "available":
+        identity = ticket.get("option_contract_identity") if isinstance(ticket.get("option_contract_identity"), dict) else {}
+        product = ticket.get("leveraged_product") if isinstance(ticket.get("leveraged_product"), dict) else {}
+        if identity.get("identity_source") == "manually_validated_provider_product" and product:
+            product_type = self._tg_esc(str(product.get("product_type") or "provider product"))
+            issuer = self._tg_esc(str(product.get("issuer") or "n/a"))
+            expiry = self._tg_esc(str(product.get("expiry") or "n/a"))
+            spread = self._tg_pct(product.get("spread_pct")).lstrip("+")
+            leverage = self._tg_esc(str(product.get("offered_leverage") or "n/a"))
+            lines.extend(
+                [
+                    f"<b>Validiertes Produkt:</b> {product_type} | Emittent {issuer} | Strike/KO {self._tg_price(product.get('strike_or_knockout_level'))} | Verfall {expiry}",
+                    f"<b>Produktquote:</b> Bid {self._tg_price(product.get('bid'))} / Ask {self._tg_price(product.get('ask'))} | Spread {spread} | angebotener Hebel {leverage}x",
+                    "<b>Produktidentität:</b> Beim Paper-Einstieg gesperrt; Wechsel von Emittent, Strike/KO oder Verfall ist nicht erlaubt.",
+                ]
+            )
+        elif contract.get("status") == "available":
             symbol = self._tg_esc(str(contract.get("contract_symbol") or "n/a"))
             option_type = self._tg_esc(str(contract.get("option_type") or event.get("direction") or "n/a").upper())
             expiry = self._tg_esc(str(contract.get("expiry") or "n/a"))

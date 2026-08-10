@@ -799,8 +799,21 @@ class PaperTradingService:
         entry_execution = (ticket.get("execution_model") or {}).get("entry") if isinstance(ticket.get("execution_model"), dict) else None
         exit_market: Dict[str, Any] = {}
         if existing.get("asset_class") == "option":
-            exit_reference = float(closed_price or 0) or float(existing.get("entry_price") or 0)
-            exit_market = ticket.get("market_data") if isinstance(ticket.get("market_data"), dict) else {}
+            if closed_price not in (None, 0):
+                exit_reference = float(closed_price or 0)
+                exit_market = {
+                    "source": "manual_option_close_price",
+                    "data_as_of": datetime.utcnow().isoformat(),
+                    "freshness": "manual",
+                    "liquidity_status": "unknown",
+                }
+            else:
+                exit_market = self._get_stored_option_contract_quote(ticket)
+                exit_reference = float(exit_market.get("price") or 0)
+                if exit_market.get("status") != "available" or exit_reference <= 0:
+                    raise ValueError(
+                        "Stored option contract quote unavailable; an explicit reviewed close price is required."
+                    )
         else:
             exit_market = self._get_market_snapshot(existing.get("ticker"))
             exit_reference = float(closed_price or 0) or float(exit_market.get("price") or 0) or float(existing.get("entry_price") or 0)
@@ -1622,6 +1635,24 @@ class PaperTradingService:
             }
 
         if asset_class == "option":
+            ticket = item.get("trade_ticket") if isinstance(item.get("trade_ticket"), dict) else {}
+            option_quote = self._get_stored_option_contract_quote(ticket)
+            if option_quote.get("status") == "available" and float(option_quote.get("price") or 0) > 0:
+                current_price = float(option_quote.get("price") or 0)
+                raw_move = ((current_price / entry) - 1) * 100
+                result, error_tag, notes = self._score_paper_outcome(raw_move, item)
+                return {
+                    "status": "evaluated",
+                    "result": result,
+                    "checked_at": checked_at,
+                    "check_price": current_price,
+                    "performance_pct": round(raw_move, 2),
+                    "notes": (
+                        f"Stored option contract premium move for {option_quote.get('contract_symbol')}: {notes} "
+                        "Quote uses the delayed bid as a conservative exit reference."
+                    ),
+                    "error_tag": error_tag,
+                }
             underlying_entry = float(item.get("underlying_entry_price") or 0)
             underlying_price = self._get_last_price(ticker)
             if underlying_entry <= 0 or underlying_price is None:
@@ -1639,7 +1670,10 @@ class PaperTradingService:
                 "checked_at": checked_at,
                 "check_price": underlying_price,
                 "performance_pct": round(favorable, 2),
-                "notes": f"Underlying move model for paper {direction}: {notes}",
+                "notes": (
+                    f"Underlying fallback model for paper {direction}: {notes} "
+                    f"Stored contract quote unavailable ({option_quote.get('reason') or 'unknown reason'})."
+                ),
                 "error_tag": error_tag,
             }
 
@@ -2830,6 +2864,164 @@ class PaperTradingService:
         cache[cache_key] = {"stored_at": now_monotonic, "snapshot": snapshot}
         return dict(snapshot)
 
+    def _build_option_contract_identity(self, playbook: Dict[str, Any]) -> Dict[str, Any]:
+        ticker = str(playbook.get("ticker") or playbook.get("underlying_proxy") or "").upper()
+        option_contract = playbook.get("option_contract") if isinstance(playbook.get("option_contract"), dict) else {}
+        leveraged_product = playbook.get("leveraged_product") if isinstance(playbook.get("leveraged_product"), dict) else {}
+        if not leveraged_product and option_contract.get("status") == "available" and option_contract.get("contract_symbol"):
+            contract_symbol = str(option_contract.get("contract_symbol") or "").upper()
+            expiry = str(option_contract.get("expiry") or "")
+            strike = option_contract.get("strike")
+            option_type = str(option_contract.get("option_type") or playbook.get("direction") or "").lower()
+            return {
+                "status": "locked",
+                "identity_source": "option_chain_contract_symbol",
+                "identity_key": f"option:{ticker}:{contract_symbol}:{expiry}:{strike}:{option_type}",
+                "underlying_ticker": ticker,
+                "contract_symbol": contract_symbol,
+                "option_type": option_type,
+                "strike": strike,
+                "expiry": expiry,
+                "locked_at": datetime.utcnow().isoformat(),
+                "immutable": True,
+            }
+        if leveraged_product:
+            product_type = str(leveraged_product.get("product_type") or "option_certificate").lower()
+            issuer = str(leveraged_product.get("issuer") or "").strip()
+            expiry = str(leveraged_product.get("expiry") or "")
+            strike = leveraged_product.get("strike_or_knockout_level")
+            return {
+                "status": "locked",
+                "identity_source": "manually_validated_provider_product",
+                "identity_key": f"provider:{ticker}:{product_type}:{issuer}:{expiry}:{strike}",
+                "underlying_ticker": ticker,
+                "product_type": product_type,
+                "issuer": issuer,
+                "strike_or_knockout_level": strike,
+                "expiry": expiry,
+                "locked_at": datetime.utcnow().isoformat(),
+                "immutable": True,
+            }
+        return {
+            "status": "unverified",
+            "identity_source": "estimated_premium_only",
+            "identity_key": None,
+            "underlying_ticker": ticker,
+            "option_type": str(playbook.get("direction") or "").lower(),
+            "locked_at": datetime.utcnow().isoformat(),
+            "immutable": True,
+        }
+
+    def _get_stored_option_contract_quote(self, ticket: Dict[str, Any]) -> Dict[str, Any]:
+        ticket = ticket if isinstance(ticket, dict) else {}
+        contract = ticket.get("option_contract") if isinstance(ticket.get("option_contract"), dict) else {}
+        identity = (
+            ticket.get("option_contract_identity")
+            if isinstance(ticket.get("option_contract_identity"), dict)
+            else {}
+        )
+        symbol = str(contract.get("contract_symbol") or identity.get("contract_symbol") or "").upper()
+        underlying = str(identity.get("underlying_ticker") or contract.get("ticker") or ticket.get("underlying_proxy") or ticket.get("instrument") or "").upper()
+        expiry = str(identity.get("expiry") or contract.get("expiry") or "")
+        option_type = str(identity.get("option_type") or contract.get("option_type") or ticket.get("direction") or "").lower()
+        if not symbol or not underlying or not expiry or option_type not in {"call", "put"}:
+            return {
+                "status": "unavailable",
+                "reason": "stored_contract_identity_incomplete",
+                "contract_symbol": symbol or None,
+            }
+        if identity.get("status") == "locked":
+            locked_symbol = str(identity.get("contract_symbol") or "").upper()
+            if locked_symbol and locked_symbol != symbol:
+                return {
+                    "status": "blocked",
+                    "reason": "stored_contract_identity_mismatch",
+                    "contract_symbol": symbol,
+                }
+
+        cache = getattr(self, "_stored_option_quote_cache", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._stored_option_quote_cache = cache
+        try:
+            ttl_seconds = max(15.0, float(os.getenv("PAPER_OPTION_QUOTE_CACHE_SECONDS", "120")))
+        except (TypeError, ValueError):
+            ttl_seconds = 120.0
+        now_monotonic = time.monotonic()
+        cached = cache.get(symbol)
+        if isinstance(cached, dict) and now_monotonic - float(cached.get("stored_at") or 0) <= ttl_seconds:
+            return dict(cached.get("quote") or {})
+
+        quote: Dict[str, Any] = {
+            "status": "unavailable",
+            "reason": "stored_contract_quote_unavailable",
+            "contract_symbol": symbol,
+            "underlying_ticker": underlying,
+            "expiry": expiry,
+            "option_type": option_type,
+        }
+        try:
+            chain = yf.Ticker(underlying).option_chain(expiry)
+            frame = chain.calls if option_type == "call" else chain.puts
+            if frame is None or frame.empty or "contractSymbol" not in frame:
+                raise ValueError("stored_contract_not_in_chain")
+            matched = frame[frame["contractSymbol"].astype(str).str.upper() == symbol]
+            if matched.empty:
+                raise ValueError("stored_contract_symbol_not_found")
+            record = matched.iloc[0].to_dict()
+            bid = max(0.0, float(record.get("bid") or 0))
+            ask = max(0.0, float(record.get("ask") or 0))
+            last_price = max(0.0, float(record.get("lastPrice") or 0))
+            open_interest = max(0, int(record.get("openInterest") or 0))
+            volume = max(0, int(record.get("volume") or 0))
+            iv = max(0.0, float(record.get("impliedVolatility") or 0))
+            last_trade_dt = self._as_utc_naive_datetime(record.get("lastTradeDate"))
+            if last_trade_dt is None:
+                raise ValueError("stored_contract_last_trade_missing")
+            age_hours = max(0.0, (datetime.utcnow() - last_trade_dt).total_seconds() / 3600)
+            if age_hours > 168:
+                raise ValueError("stored_contract_quote_stale_over_7d")
+            if bid <= 0 or ask < bid:
+                raise ValueError("stored_contract_two_sided_quote_missing")
+            mid = (bid + ask) / 2
+            spread_pct = ((ask - bid) / mid) * 100 if mid > 0 else None
+            if spread_pct is None or spread_pct > 25:
+                raise ValueError("stored_contract_spread_over_25_pct")
+            liquidity_status = (
+                "strong"
+                if spread_pct <= 10 and open_interest >= 100
+                else "adequate"
+                if (open_interest > 0 or volume > 0)
+                else "thin"
+            )
+            quote = {
+                "status": "available",
+                "price": round(bid, 4),
+                "bid": round(bid, 4),
+                "ask": round(ask, 4),
+                "mid": round(mid, 4),
+                "last_price": round(last_price, 4),
+                "spread_pct": round(spread_pct, 2),
+                "implied_volatility_pct": round(iv * 100, 2),
+                "volume": volume,
+                "open_interest": open_interest,
+                "contract_symbol": symbol,
+                "underlying_ticker": underlying,
+                "expiry": expiry,
+                "option_type": option_type,
+                "source": "yfinance_stored_option_contract",
+                "quote_side": "bid_for_conservative_exit",
+                "data_as_of": last_trade_dt.isoformat(),
+                "age_hours": round(age_hours, 2),
+                "freshness": "fresh",
+                "liquidity_status": liquidity_status,
+                "quote_quality": "delayed_snapshot_not_executable",
+            }
+        except Exception as exc:
+            quote["reason"] = str(exc) or quote["reason"]
+        cache[symbol] = {"stored_at": now_monotonic, "quote": quote}
+        return dict(quote)
+
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         option_playbooks: List[Dict[str, Any]] = []
         for item in base_playbooks:
@@ -3563,6 +3755,7 @@ class PaperTradingService:
         if market_data.get("liquidity_status") == "unknown":
             warnings.append("liquidity_unverified")
         option_contract = playbook.get("option_contract") if isinstance(playbook.get("option_contract"), dict) else {}
+        option_contract_identity = self._build_option_contract_identity(playbook) if is_option else None
         if is_option and option_contract.get("status") != "available":
             warnings.append("option_chain_not_validated")
         elif is_option:
@@ -3629,6 +3822,7 @@ class PaperTradingService:
             "underlying_asset": playbook.get("underlying_asset") or None,
             "underlying_proxy": playbook.get("underlying_proxy") or None,
             "option_contract": option_contract or None,
+            "option_contract_identity": option_contract_identity,
             "option_decision": playbook.get("option_decision") or None,
             "product_data_required": playbook.get("product_data_required") or [],
             "leveraged_product": playbook.get("leveraged_product") or None,
@@ -4417,7 +4611,9 @@ class PaperTradingService:
         execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
         current_market = (
             {}
-            if is_option or row.get("status") == "closed"
+            if row.get("status") == "closed"
+            else self._get_stored_option_contract_quote(ticket)
+            if is_option
             else self._get_market_snapshot(
                 row.get("ticker"),
                 since=row.get("opened_at"),
@@ -4426,7 +4622,7 @@ class PaperTradingService:
                 direction=row.get("direction"),
             )
         )
-        current_reference = None if is_option else current_market.get("price")
+        current_reference = current_market.get("price")
         current_price = current_reference
         if current_reference not in (None, 0) and isinstance(execution_model.get("entry"), dict):
             current_execution = self._simulate_execution_fill(
@@ -4443,6 +4639,10 @@ class PaperTradingService:
         row["current_reference_price"] = current_reference
         row["current_price"] = current_price
         row["current_market_data"] = current_market
+        if is_option:
+            row["option_quote_status"] = current_market.get("status") or "unavailable"
+            row["option_quote_reason"] = current_market.get("reason")
+            row["option_contract_identity"] = ticket.get("option_contract_identity")
         direction_multiplier = -1 if row.get("direction") == "short" else 1
         contract_multiplier = 100 if is_option else 1
         invested_value = round(entry * quantity * payout_multiplier * contract_multiplier, 2)
@@ -4820,6 +5020,10 @@ class PaperTradingService:
             "estimated_cost_value": round(estimated_cost_value, 2),
             "liquidity_status": (market_data or {}).get("liquidity_status") or "unknown",
             "data_as_of": (market_data or {}).get("data_as_of"),
+            "market_source": (market_data or {}).get("source"),
+            "contract_symbol": (market_data or {}).get("contract_symbol"),
+            "quote_side": (market_data or {}).get("quote_side"),
+            "spread_pct": (market_data or {}).get("spread_pct"),
             "policy": "Paper estimate only; no broker fill or live order-book guarantee.",
         }
 

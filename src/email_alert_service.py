@@ -341,6 +341,8 @@ class EmailAlertService:
                     "account_performance": (demo_account or {}).get("performance") or {},
                     "account_capital_flow": (demo_account or {}).get("capital_flow") or {},
                     "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
+                    "option_contract": ticket.get("option_contract") or selected_item.get("option_contract") or None,
+                    "option_decision": ticket.get("option_decision") or selected_item.get("option_decision") or None,
                     "line": f"{trade.get('ticker')} {trade.get('direction')} Paper-Trade geöffnet.",
                     "source_label": source_label,
                     "source_url": "",
@@ -3787,6 +3789,7 @@ class EmailAlertService:
         warning_text = ", ".join(self._tg_esc(str(item)) for item in (validation.get("warnings") or [])[:3]) or "keine"
         account_after = self._paper_account_after_line(event)
         strategy_line = self._paper_strategy_context_line(event.get("strategy_context"))
+        option_lines = self._paper_option_contract_lines(event)
         opened_at = self._paper_trade_time(event.get("opened_at"))
         return "\n".join(
             [
@@ -3795,6 +3798,7 @@ class EmailAlertService:
                 f"<b>Ausloeser:</b> {source_label}",
                 *([news_line] if news_line else []),
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Score:</b> {confidence}",
+                *option_lines,
                 *([strategy_line] if strategy_line else []),
                 f"<b>Einstieg:</b> {entry} | <b>Menge:</b> {qty} | <b>Paper-Hebel:</b> {leverage:.1f}x",
                 *([execution_line] if execution_line else []),
@@ -3814,6 +3818,50 @@ class EmailAlertService:
                 "<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.",
             ]
         )
+
+    def _paper_option_contract_lines(self, event: Dict[str, Any]) -> List[str]:
+        ticket = event.get("trade_ticket") if isinstance(event.get("trade_ticket"), dict) else {}
+        contract = event.get("option_contract") if isinstance(event.get("option_contract"), dict) else {}
+        if not contract and isinstance(ticket.get("option_contract"), dict):
+            contract = ticket.get("option_contract") or {}
+        decision = event.get("option_decision") if isinstance(event.get("option_decision"), dict) else {}
+        if not decision and isinstance(ticket.get("option_decision"), dict):
+            decision = ticket.get("option_decision") or {}
+        if str(event.get("asset_class") or ticket.get("asset_class") or "").lower() != "option":
+            return []
+
+        lines: List[str] = []
+        if contract.get("status") == "available":
+            symbol = self._tg_esc(str(contract.get("contract_symbol") or "n/a"))
+            option_type = self._tg_esc(str(contract.get("option_type") or event.get("direction") or "n/a").upper())
+            expiry = self._tg_esc(str(contract.get("expiry") or "n/a"))
+            dte = self._tg_esc(str(contract.get("days_to_expiry") if contract.get("days_to_expiry") is not None else "n/a"))
+            spread = self._tg_pct(contract.get("spread_pct")).lstrip("+")
+            iv = self._tg_pct(contract.get("implied_volatility_pct")).lstrip("+")
+            moneyness = self._tg_pct(contract.get("moneyness_pct"))
+            break_even_distance = self._tg_pct(contract.get("distance_to_break_even_pct"))
+            lines.extend(
+                [
+                    f"<b>Kontrakt:</b> <code>{symbol}</code> | {option_type} | Strike {self._tg_price(contract.get('strike'))} | Verfall {expiry} ({dte} Tage)",
+                    f"<b>Optionsquote:</b> Bid {self._tg_price(contract.get('bid'))} / Ask {self._tg_price(contract.get('ask'))} | Spread {spread} | IV {iv}",
+                    f"<b>Optionsliquidität:</b> Volumen {self._tg_esc(str(contract.get('volume') or 0))} | Open Interest {self._tg_esc(str(contract.get('open_interest') or 0))} | Moneyness {moneyness}",
+                    f"<b>Break-even:</b> {self._tg_price(contract.get('break_even'))} ({break_even_distance} zum Underlying) | max. Prämienverlust/Kontrakt {self._tg_money(contract.get('max_loss_per_contract'))}",
+                ]
+            )
+        else:
+            reason = self._tg_esc(str(contract.get("reason") or "Optionskette nicht verfügbar"))[:260]
+            lines.append(f"<b>Optionsdaten:</b> Kein verifizierbarer Kontrakt-Snapshot ({reason}); Prämie ist nur eine Schätzung.")
+
+        thesis = self._tg_esc(str(decision.get("thesis") or ""))[:520]
+        drivers = [self._tg_esc(str(item)) for item in (decision.get("event_drivers") or [])[:5]]
+        data_limit = self._tg_esc(str(decision.get("data_limit") or ""))[:360]
+        if thesis:
+            lines.append(f"<b>Options-These:</b> {thesis}")
+        if drivers:
+            lines.append(f"<b>Entscheidende Treiber:</b> {' / '.join(drivers)}")
+        if data_limit:
+            lines.append(f"<b>Datenlimit:</b> {data_limit}")
+        return lines
 
     def _paper_strategy_context_line(self, context: Any) -> str:
         if not isinstance(context, dict) or not context:
@@ -3864,6 +3912,7 @@ class EmailAlertService:
         exit_reason = self._tg_esc(self._paper_label(event.get("exit_reason"), "Paper-Exit"))
         lesson = self._tg_esc(str(event.get("lessons_learned") or "Journal prüfen, bevor dieses Setup wieder genutzt wird."))[:620]
         rr = self._tg_esc(str(event.get("risk_reward") or "n/a"))
+        option_lines = self._paper_option_contract_lines(event)
         account_after = self._paper_account_after_line(event)
         opened_at = self._paper_trade_time(event.get("opened_at"))
         closed_at = self._paper_trade_time(event.get("closed_at"))
@@ -3882,6 +3931,7 @@ class EmailAlertService:
                 *([f"<b>Zeitraum:</b> {' bis '.join(timing_parts[:2])} | gehalten {timing_parts[2]}"] if len(timing_parts) == 3 else []),
                 f"<b>Entry-Quelle:</b> {entry_source}",
                 f"<b>Asset:</b> {asset_class} | <b>Setup:</b> {setup} | <b>Menge:</b> {quantity} | <b>Paper-Hebel:</b> {leverage:.1f}x",
+                *option_lines,
                 f"<b>Exit-Grund:</b> {exit_reason}",
                 f"<b>Einstieg:</b> {entry} | <b>Schluss:</b> {exit_price} | <b>CRV:</b> {rr}",
                 *([execution_line] if execution_line else []),

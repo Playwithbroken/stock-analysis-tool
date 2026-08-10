@@ -24,21 +24,45 @@ COMMODITY_LEVERAGE_PROXIES = [
         "ticker": "GLD",
         "label": "Gold",
         "theme": "gold_safe_haven",
-        "headline": "Gold leverage paper setup: inflation, real yields and risk-off flows",
+        "call_headline": "Gold CALL: falling real yields, a softer dollar or risk-off demand must confirm",
+        "put_headline": "Gold PUT: rising real yields, a firmer dollar and failed safe-haven demand must confirm",
+        "call_thesis": "Gold should benefit only if real yields fall, the US dollar weakens or verified risk-off demand persists.",
+        "put_thesis": "Gold should weaken only if real yields rise, the US dollar strengthens and safe-haven demand fails.",
+        "call_confirmation": "GLD must hold above the reaction high while gold spot/futures and volume confirm the upside move.",
+        "put_confirmation": "GLD must remain below the reaction low while gold spot/futures and volume confirm the downside move.",
+        "call_invalidation": "The CALL case fails if real yields or the dollar reverse higher and GLD loses the confirmed breakout zone.",
+        "put_invalidation": "The PUT case fails if real yields or the dollar reverse lower and GLD reclaims the confirmed breakdown zone.",
+        "event_drivers": ["US real yields", "US dollar", "inflation data", "central-bank guidance", "risk-off flows"],
         "score": 84,
     },
     {
         "ticker": "USO",
         "label": "Oil",
         "theme": "oil_supply_demand",
-        "headline": "Oil leverage paper setup: supply shock, OPEC and geopolitical risk",
+        "call_headline": "Oil CALL: verified supply tightening must beat demand concerns",
+        "put_headline": "Oil PUT: demand weakness or verified supply growth must break support",
+        "call_thesis": "Oil should rise only if a verified supply disruption, inventory draw or OPEC restraint is confirmed by the futures curve.",
+        "put_thesis": "Oil should fall only if demand weakens, inventories build or verified supply growth is confirmed by the futures curve.",
+        "call_confirmation": "USO and front-month crude must hold the reaction high with supportive volume and no immediate headline reversal.",
+        "put_confirmation": "USO and front-month crude must remain below the reaction low with supportive volume and no immediate headline reversal.",
+        "call_invalidation": "The CALL case fails if the supply headline is reversed, inventories contradict it or crude loses the reaction low.",
+        "put_invalidation": "The PUT case fails if the demand/supply evidence improves or crude reclaims the reaction high.",
+        "event_drivers": ["OPEC decisions", "inventory data", "supply disruptions", "futures curve", "global demand"],
         "score": 82,
     },
     {
         "ticker": "XLE",
         "label": "Energy equities",
         "theme": "energy_equity_beta",
-        "headline": "Energy leverage paper setup: oil beta through liquid energy equities",
+        "call_headline": "Energy CALL: oil strength, margins and sector breadth must align",
+        "put_headline": "Energy PUT: oil weakness and deteriorating sector breadth must align",
+        "call_thesis": "Energy equities should outperform only if oil strength, refining/upstream margins and broad participation across XLE holdings align.",
+        "put_thesis": "Energy equities should underperform only if oil weakens and sector breadth, margins or earnings expectations deteriorate.",
+        "call_confirmation": "XLE must outperform the broad market and hold the reaction high with participation beyond one large constituent.",
+        "put_confirmation": "XLE must underperform the broad market and remain below the reaction low with broad constituent weakness.",
+        "call_invalidation": "The CALL case fails if crude reverses, sector breadth narrows or XLE loses relative strength versus the broad market.",
+        "put_invalidation": "The PUT case fails if crude and margins recover or XLE regains relative strength versus the broad market.",
+        "event_drivers": ["crude prices", "refining margins", "earnings revisions", "sector breadth", "relative strength"],
         "score": 80,
     },
 ]
@@ -568,8 +592,13 @@ class PaperTradingService:
                 raise ValueError(f"Underlying market data gate blocks this option playbook: {', '.join(execution_blockers)}")
             direction = playbook.get("direction") or direction
             underlying_price = float(execution_market.get("price") or 0)
+            option_contract = playbook.get("option_contract") if isinstance(playbook.get("option_contract"), dict) else {}
             last_price = round(
-                float((playbook.get("leveraged_product") or {}).get("ask") or max(0.35, underlying_price * 0.025)),
+                float(
+                    (playbook.get("leveraged_product") or {}).get("ask")
+                    or option_contract.get("ask")
+                    or max(0.35, underlying_price * 0.025)
+                ),
                 4,
             )
             playbook = {
@@ -1325,7 +1354,18 @@ class PaperTradingService:
                     f"Grund {context.get('candidate_reason') or 'n/a'}."
                 )
         if is_option:
-            lines.append("Options-Gate: nur Paper-Premienmodell; Strike, Laufzeit, Spread, IV und maximalen Prämienverlust manuell prüfen.")
+            option_contract = playbook.get("option_contract") if isinstance(playbook.get("option_contract"), dict) else {}
+            if option_contract.get("status") == "available":
+                lines.append(
+                    "Options-Snapshot: "
+                    f"{option_contract.get('contract_symbol') or 'n/a'} | Strike {option_contract.get('strike')} | "
+                    f"Verfall {option_contract.get('expiry')} | Bid/Ask {option_contract.get('bid')}/{option_contract.get('ask')} | "
+                    f"Spread {option_contract.get('spread_pct')}% | IV {option_contract.get('implied_volatility_pct')}% | "
+                    f"Open Interest {option_contract.get('open_interest')} | Break-even {option_contract.get('break_even')}."
+                )
+                lines.append("Options-Gate: nur Paper-Premienmodell; Snapshot ist verzögert und kein ausführbarer Brokerkurs; Greeks und Kontrakt vor jeder Echtgeld-Prüfung neu validieren.")
+            else:
+                lines.append("Options-Gate: nur Paper-Premienmodell; kein brauchbarer Optionsketten-Snapshot; Prämie ist geschätzt und der Kontrakt nicht handelbar freigegeben.")
         if playbook.get("product_data_required"):
             lines.append("Hebelprodukt-Daten vor Echtgeld: " + " | ".join(str(item) for item in playbook.get("product_data_required", [])[:5]))
         if playbook.get("leveraged_product"):
@@ -1454,10 +1494,10 @@ class PaperTradingService:
             f"Nur Paper-Größe. Geplanter Risikopuffer {risk_pct}% und Zielpuffer {reward_pct}%; keine Positionsvergrößerung nach Einstieg."
         )
         if is_option:
-            entry_trigger = (
+            entry_trigger = str(playbook.get("entry_trigger") or "").strip() or (
                 f"{direction.upper()} nur als Paper-Test, nachdem Underlying, Liquidität und Timing bestätigt sind."
             )
-            invalidation = (
+            invalidation = str(playbook.get("invalidation") or "").strip() or (
                 "Ungültig, wenn Underlying-Momentum nachlässt, Spread breit ist, IV/Laufzeit unattraktiv sind oder maximaler Prämienverlust nicht dokumentiert ist."
             )
             risk_plan = "Nur Paper-Option mit definiertem Risiko; maximaler Verlust ist die Prämie, keine Echtgeld-Ausführung aus diesem Modell."
@@ -1465,11 +1505,11 @@ class PaperTradingService:
         if is_commodity_leverage:
             underlying = playbook.get("underlying_asset") or ticker
             proxy = playbook.get("underlying_proxy") or ticker
-            entry_trigger = (
+            entry_trigger = str(playbook.get("entry_trigger") or "").strip() or (
                 f"{underlying} Hebel-Proxy {proxy}: Paper-Test nur, wenn Makro-Nachricht, Future/Spot-Reaktion "
                 "und ETF-Volumen dieselbe Richtung bestätigen."
             )
-            invalidation = (
+            invalidation = str(playbook.get("invalidation") or "").strip() or (
                 "Ungültig, wenn die Makro-Nachricht zurückgenommen wird, der Future/Spot-Markt nicht bestätigt, "
                 "Spread/IV unattraktiv ist oder das echte Hebelprodukt zu nah am Knockout liegt."
             )
@@ -2554,9 +2594,16 @@ class PaperTradingService:
             underlying_price = float(market_fields.get("reference_price") or 0)
             if underlying_price <= 0:
                 continue
-            estimated_premium = round(max(0.45, underlying_price * 0.022), 2)
             for option_type, bias, score_penalty in (("call", "long", 0), ("put", "short", 3)):
                 score = max(0, float(proxy["score"]) - score_penalty)
+                option_contract = self._get_option_contract_snapshot(ticker, option_type, underlying_price)
+                estimated_premium = round(max(0.45, underlying_price * 0.022), 2)
+                premium = float(option_contract.get("ask") or option_contract.get("mid") or estimated_premium)
+                contract_verified = option_contract.get("status") == "available"
+                headline = str(proxy.get(f"{option_type}_headline") or f"{proxy['label']} {option_type.upper()} paper setup")
+                thesis = str(proxy.get(f"{option_type}_thesis") or "")
+                confirmation = str(proxy.get(f"{option_type}_confirmation") or "")
+                invalidation = str(proxy.get(f"{option_type}_invalidation") or "")
                 playbooks.append(
                     {
                         "id": f"commodity-option-{ticker}-{option_type}",
@@ -2565,18 +2612,31 @@ class PaperTradingService:
                         "direction": option_type,
                         "setup_type": f"commodity_{option_type}_leverage_learning",
                         "title": f"{proxy['label']} {option_type.upper()} leverage paper setup",
-                        "headline": proxy["headline"],
-                        "source_label": "commodity proxy paper model",
+                        "headline": headline,
+                        "source_label": "Yahoo Finance options chain snapshot" if contract_verified else "commodity proxy paper model fallback",
                         "score": score,
                         "risk_buffer_pct": 100.0,
                         "reward_buffer_pct": 120.0,
-                        "thesis": (
-                            f"{proxy['label']} paper-only Hebelidee ueber den liquiden Proxy {ticker}. "
-                            f"Richtung {bias}; nur sinnvoll, wenn Makro-Trigger, Future/Spot-Bestätigung und Volumen zusammenpassen."
-                        ),
+                        "thesis": thesis,
+                        "entry_trigger": confirmation,
+                        "invalidation": invalidation,
+                        "option_decision": {
+                            "underlying": proxy["label"],
+                            "bias": bias,
+                            "thesis": thesis,
+                            "confirmation": confirmation,
+                            "invalidation": invalidation,
+                            "event_drivers": list(proxy.get("event_drivers") or []),
+                            "data_limit": (
+                                "Delayed options-chain snapshot; Greeks and executable broker quote are not verified."
+                                if contract_verified
+                                else "No usable options-chain snapshot; premium is an estimate and the setup cannot be treated as contract-specific."
+                            ),
+                        },
                         "tags": ["commodity", "leverage", proxy["theme"], option_type, "paper only"],
-                        "reference_price": estimated_premium,
+                        "reference_price": round(premium, 4),
                         "underlying_reference_price": underlying_price,
+                        "option_contract": option_contract,
                         "option_type": option_type,
                         "contract_multiplier": 100,
                         "max_holding_days": 7,
@@ -2597,10 +2657,178 @@ class PaperTradingService:
                             "Overnight gap and issuer risk",
                         ],
                         "market_data": market_fields.get("market_data") or {},
-                        "data_as_of": market_fields.get("data_as_of"),
+                        "data_as_of": option_contract.get("data_as_of") or market_fields.get("data_as_of"),
                     }
                 )
         return playbooks
+
+    def _get_option_contract_snapshot(
+        self,
+        ticker: str,
+        option_type: str,
+        underlying_price: float,
+    ) -> Dict[str, Any]:
+        cache = getattr(self, "_option_chain_cache", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._option_chain_cache = cache
+        cache_key = f"{str(ticker).upper()}:{str(option_type).lower()}"
+        try:
+            ttl_seconds = max(30.0, float(os.getenv("PAPER_OPTION_CHAIN_CACHE_SECONDS", "900")))
+        except (TypeError, ValueError):
+            ttl_seconds = 900.0
+        now_monotonic = time.monotonic()
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and now_monotonic - float(cached.get("stored_at") or 0) <= ttl_seconds:
+            return dict(cached.get("snapshot") or {})
+
+        fallback = {
+            "status": "unavailable",
+            "ticker": str(ticker).upper(),
+            "option_type": str(option_type).lower(),
+            "source": "yfinance_option_chain",
+            "data_as_of": datetime.utcnow().isoformat(),
+            "reason": "option_chain_unavailable",
+        }
+        try:
+            raw_cache = getattr(self, "_option_chain_raw_cache", None)
+            if not isinstance(raw_cache, dict):
+                raw_cache = {}
+                self._option_chain_raw_cache = raw_cache
+            raw_key = str(ticker).upper()
+            raw_cached = raw_cache.get(raw_key)
+            expiry_chains: List[tuple[int, str, Any]] = []
+            if (
+                isinstance(raw_cached, dict)
+                and now_monotonic - float(raw_cached.get("stored_at") or 0) <= ttl_seconds
+            ):
+                expiry_chains = list(raw_cached.get("expiry_chains") or [])
+            else:
+                client = yf.Ticker(ticker)
+                today = datetime.utcnow().date()
+                expiries: List[tuple[int, str]] = []
+                for raw_expiry in list(client.options or []):
+                    try:
+                        expiry_date = datetime.fromisoformat(str(raw_expiry)).date()
+                    except (TypeError, ValueError):
+                        continue
+                    days = (expiry_date - today).days
+                    if days > 0:
+                        expiries.append((days, str(raw_expiry)))
+                preferred = [item for item in expiries if 14 <= item[0] <= 45]
+                expiry_candidates = sorted(preferred or expiries, key=lambda item: abs(item[0] - 30))[:3]
+                for expiry_days, expiry in expiry_candidates:
+                    try:
+                        expiry_chains.append((expiry_days, expiry, client.option_chain(expiry)))
+                    except Exception:
+                        continue
+                raw_cache[raw_key] = {
+                    "stored_at": now_monotonic,
+                    "expiry_chains": expiry_chains,
+                }
+            rows: List[Dict[str, Any]] = []
+            if not expiry_chains:
+                raise ValueError("no_future_option_expiry")
+            for expiry_days, expiry, chain in expiry_chains:
+                frame = chain.calls if str(option_type).lower() == "call" else chain.puts
+                if frame is None or frame.empty:
+                    continue
+                for record in frame.to_dict("records"):
+                    try:
+                        strike = float(record.get("strike") or 0)
+                        bid = max(0.0, float(record.get("bid") or 0))
+                        ask = max(0.0, float(record.get("ask") or 0))
+                        last_price = max(0.0, float(record.get("lastPrice") or 0))
+                        open_interest = max(0, int(record.get("openInterest") or 0))
+                        volume = max(0, int(record.get("volume") or 0))
+                        iv = max(0.0, float(record.get("impliedVolatility") or 0))
+                    except (TypeError, ValueError):
+                        continue
+                    last_trade_dt = self._as_utc_naive_datetime(record.get("lastTradeDate"))
+                    quote_is_stale = (
+                        last_trade_dt is None
+                        or datetime.utcnow() - last_trade_dt > timedelta(days=7)
+                    )
+                    if strike <= 0 or bid <= 0 or ask <= bid or iv < 0.01 or quote_is_stale:
+                        continue
+                    mid = (bid + ask) / 2
+                    spread_pct = ((ask - bid) / mid) * 100 if mid > 0 else None
+                    moneyness_pct = ((strike / underlying_price) - 1) * 100 if underlying_price > 0 else None
+                    if (
+                        spread_pct is None
+                        or spread_pct > 25
+                        or abs(moneyness_pct or 0) > 10
+                        or (underlying_price > 0 and ask > underlying_price * 0.35)
+                    ):
+                        continue
+                    if open_interest <= 0 and volume <= 0:
+                        continue
+                    distance = abs(moneyness_pct or 0)
+                    liquidity_penalty = 0 if open_interest >= 100 else 1.5 if open_interest > 0 else 4.0
+                    spread_penalty = min(8.0, spread_pct / 5)
+                    rows.append(
+                        {
+                            "record": record,
+                            "last_trade_dt": last_trade_dt,
+                            "expiry": expiry,
+                            "expiry_days": expiry_days,
+                            "strike": strike,
+                            "bid": bid,
+                            "ask": ask,
+                            "last_price": last_price,
+                            "mid": mid,
+                            "spread_pct": spread_pct,
+                            "open_interest": open_interest,
+                            "volume": volume,
+                            "iv": iv,
+                            "moneyness_pct": moneyness_pct,
+                            "selection_score": distance + liquidity_penalty + spread_penalty + abs(expiry_days - 30) / 30,
+                        }
+                    )
+            if not rows:
+                raise ValueError("no_liquid_two_sided_near_money_contract")
+            selected = min(rows, key=lambda item: float(item["selection_score"]))
+            expiry = str(selected["expiry"])
+            expiry_days = int(selected["expiry_days"])
+            strike = float(selected["strike"])
+            ask = float(selected["ask"])
+            break_even = strike + ask if str(option_type).lower() == "call" else strike - ask
+            distance_to_break_even_pct = ((break_even / underlying_price) - 1) * 100 if underlying_price > 0 else None
+            last_trade = selected.get("last_trade_dt")
+            if hasattr(last_trade, "isoformat"):
+                last_trade = last_trade.isoformat()
+            snapshot = {
+                "status": "available",
+                "ticker": str(ticker).upper(),
+                "option_type": str(option_type).lower(),
+                "contract_symbol": selected["record"].get("contractSymbol"),
+                "expiry": expiry,
+                "days_to_expiry": expiry_days,
+                "strike": round(strike, 4),
+                "underlying_price": round(float(underlying_price), 4),
+                "bid": round(float(selected["bid"]), 4),
+                "ask": round(ask, 4),
+                "mid": round(float(selected["mid"]), 4),
+                "spread_pct": round(float(selected["spread_pct"]), 2) if selected["spread_pct"] is not None else None,
+                "last_price": round(float(selected["last_price"]), 4),
+                "implied_volatility_pct": round(float(selected["iv"]) * 100, 2),
+                "volume": int(selected["volume"]),
+                "open_interest": int(selected["open_interest"]),
+                "moneyness_pct": round(float(selected["moneyness_pct"]), 2) if selected["moneyness_pct"] is not None else None,
+                "break_even": round(break_even, 4),
+                "distance_to_break_even_pct": round(float(distance_to_break_even_pct), 2) if distance_to_break_even_pct is not None else None,
+                "max_loss_per_contract": round(ask * 100, 2),
+                "last_trade_at": str(last_trade) if last_trade is not None else None,
+                "source": "yfinance_option_chain",
+                "data_as_of": datetime.utcnow().isoformat(),
+                "quote_quality": "delayed_snapshot_not_executable",
+                "selection_basis": "near-the-money contract around 30 days, penalizing weak open interest and wide spreads",
+            }
+        except Exception as exc:
+            fallback["reason"] = str(exc) or fallback["reason"]
+            snapshot = fallback
+        cache[cache_key] = {"stored_at": now_monotonic, "snapshot": snapshot}
+        return dict(snapshot)
 
     def _build_option_learning_playbooks(self, base_playbooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         option_playbooks: List[Dict[str, Any]] = []
@@ -2613,7 +2841,25 @@ class PaperTradingService:
             option_type = "call" if direction == "long" else "put" if direction == "short" else None
             if not option_type:
                 continue
+            ticker = str(item.get("ticker") or "").upper()
+            option_contract = self._get_option_contract_snapshot(ticker, option_type, price)
             estimated_premium = round(max(0.35, price * 0.025), 2)
+            premium = float(option_contract.get("ask") or option_contract.get("mid") or estimated_premium)
+            contract_verified = option_contract.get("status") == "available"
+            base_headline = str(item.get("headline") or item.get("title") or f"{ticker} underlying setup")
+            confirmation = (
+                f"{ticker} must sustain the bullish trigger from '{base_headline}' with confirming relative volume before the CALL is valid."
+                if option_type == "call"
+                else f"{ticker} must sustain the bearish trigger from '{base_headline}' with confirming relative volume before the PUT is valid."
+            )
+            invalidation = (
+                f"The CALL case fails if {ticker} loses the underlying stop zone, relative volume fades or the source catalyst is contradicted."
+                if option_type == "call"
+                else f"The PUT case fails if {ticker} reclaims the underlying stop zone, downside volume fades or the source catalyst is contradicted."
+            )
+            thesis = (
+                f"Options-Demo on {ticker}: {base_headline}. The contract is useful only if the underlying thesis, timing and volume remain aligned."
+            )
             option_playbooks.append(
                 {
                     "id": f"option-{item.get('ticker')}-{option_type}",
@@ -2621,18 +2867,31 @@ class PaperTradingService:
                     "asset_class": "option",
                     "direction": option_type,
                     "setup_type": f"option_{option_type}_learning",
-                    "title": f"Paper {option_type.upper()} learning setup",
-                    "headline": item.get("headline"),
+                    "title": f"{ticker} {option_type.upper()} contract-specific paper setup",
+                    "headline": f"{ticker} {option_type.upper()}: {base_headline}",
                     "score": max(0, score - 3),
                     "risk_buffer_pct": 100.0,
                     "reward_buffer_pct": 100.0,
-                    "thesis": (
-                        f"Options-Demo auf {item.get('ticker')}: nur testen, wenn Underlying-These, Timing und Volumen bestätigt sind. "
-                        "Maximaler Verlust ist die Demo-Prämie; kein Real-Money-Einsatz ohne manuelle Optionskettenprüfung."
-                    ),
+                    "thesis": thesis,
+                    "entry_trigger": confirmation,
+                    "invalidation": invalidation,
+                    "option_decision": {
+                        "underlying": ticker,
+                        "bias": direction,
+                        "thesis": thesis,
+                        "confirmation": confirmation,
+                        "invalidation": invalidation,
+                        "event_drivers": [base_headline, "underlying price trend", "relative volume", "source catalyst"],
+                        "data_limit": (
+                            "Delayed options-chain snapshot; Greeks and executable broker quote are not verified."
+                            if contract_verified
+                            else "No usable options-chain snapshot; premium is an estimate and the setup cannot be treated as contract-specific."
+                        ),
+                    },
                     "tags": ["option", option_type, "paper only", "defined risk"],
-                    "reference_price": estimated_premium,
+                    "reference_price": round(premium, 4),
                     "underlying_reference_price": price,
+                    "option_contract": option_contract,
                     "option_type": option_type,
                     "contract_multiplier": 100,
                     "max_holding_days": 10,
@@ -2641,8 +2900,8 @@ class PaperTradingService:
                         "Price reference exists",
                         "Use only as demo option idea until IV, strike and expiry are verified",
                     ],
-                    "source_label": item.get("source_label"),
-                    "data_as_of": item.get("data_as_of"),
+                    "source_label": "Yahoo Finance options chain snapshot" if contract_verified else item.get("source_label"),
+                    "data_as_of": option_contract.get("data_as_of") or item.get("data_as_of"),
                     "market_data": item.get("market_data") or {},
                 }
             )
@@ -3303,8 +3562,11 @@ class PaperTradingService:
         errors.extend(self._market_snapshot_blockers(market_data))
         if market_data.get("liquidity_status") == "unknown":
             warnings.append("liquidity_unverified")
-        if is_option:
+        option_contract = playbook.get("option_contract") if isinstance(playbook.get("option_contract"), dict) else {}
+        if is_option and option_contract.get("status") != "available":
             warnings.append("option_chain_not_validated")
+        elif is_option:
+            warnings.append("option_chain_snapshot_not_executable_quote")
         if playbook.get("leverage_product_type"):
             warnings.append("leverage_product_data_required")
         if playbook.get("product_data_required"):
@@ -3366,6 +3628,8 @@ class PaperTradingService:
             "leverage_product_type": playbook.get("leverage_product_type") or None,
             "underlying_asset": playbook.get("underlying_asset") or None,
             "underlying_proxy": playbook.get("underlying_proxy") or None,
+            "option_contract": option_contract or None,
+            "option_decision": playbook.get("option_decision") or None,
             "product_data_required": playbook.get("product_data_required") or [],
             "leveraged_product": playbook.get("leveraged_product") or None,
             "generated_at": datetime.utcnow().isoformat(),

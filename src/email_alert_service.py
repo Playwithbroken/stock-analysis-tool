@@ -379,6 +379,7 @@ class EmailAlertService:
             "holding_period_expired",
             "news_reaction_failed",
             "news_momentum_stalled",
+            "news_source_invalidated",
         }
         events: List[Dict[str, Any]] = []
         for trade in open_trades:
@@ -421,6 +422,9 @@ class EmailAlertService:
                     "next_check": management.get("next_check"),
                     "management_summary": management.get("summary"),
                     "elapsed_hours": management.get("elapsed_hours"),
+                    "source_status": management.get("source_status"),
+                    "source_checked_at": management.get("source_checked_at"),
+                    "affected_source_url": management.get("source_url"),
                     "max_holding_days": trade.get("max_holding_days"),
                     "news_evidence": (trade.get("trade_ticket") or {}).get("news_evidence")
                     if isinstance(trade.get("trade_ticket"), dict)
@@ -3674,6 +3678,10 @@ class EmailAlertService:
             "holding_period_expired": "maximale Haltedauer erreicht",
             "news_reaction_failed": "News-Reaktion gebrochen",
             "news_momentum_stalled": "News-Momentum stockt",
+            "news_source_invalidated": "News-Quelle invalidiert",
+            "correction_detected": "Korrektur erkannt",
+            "retracted_or_withdrawn": "widerrufen/zurückgezogen",
+            "source_unavailable": "Quelle nicht mehr erreichbar",
             "learning": "lernen",
             "loser": "Verlierer",
             "manual_review": "manuelle Prüfung",
@@ -4114,6 +4122,15 @@ class EmailAlertService:
         news_publisher = self._tg_esc(str(news_evidence.get("publisher") or "Newsquelle"))
         elapsed_hours = event.get("elapsed_hours")
         max_holding_days = event.get("max_holding_days")
+        source_status = self._tg_esc(self._paper_label(event.get("source_status"), ""))
+        source_checked_at = self._paper_trade_time(event.get("source_checked_at"))
+        affected_source_url = self._tg_esc(str(event.get("affected_source_url") or ""))
+        source_warning = (
+            f'<b>QUELLENWARNUNG:</b> {source_status} | geprüft {source_checked_at}'
+            + (f' | <a href="{affected_source_url}">betroffene Quelle</a>' if affected_source_url else "")
+            if event.get("management_status") == "news_source_invalidated"
+            else ""
+        )
         event_window_line = (
             f"<b>News-Lifecycle:</b> {float(elapsed_hours):.1f}h gelaufen | max. {self._tg_esc(str(max_holding_days))} Tage | "
             f"<a href=\"{news_url}\">{news_publisher}</a>"
@@ -4125,6 +4142,7 @@ class EmailAlertService:
                 f"<b>[PAPER MANAGEN] <code>{ticker}</code> {direction} | {status}</b>",
                 *([f"<b>Eröffnet:</b> {opened_at}"] if opened_at else []),
                 f"<b>Aktion:</b> {action} | <b>Stufe:</b> {grade}",
+                *([source_warning] if source_warning else []),
                 *([event_window_line] if event_window_line else []),
                 f"<b>Position:</b> {asset_class} | {setup} | Menge {quantity}",
                 f"<b>Preis:</b> Einstieg {entry} | jetzt {current}",

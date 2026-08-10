@@ -1282,6 +1282,40 @@ class PortfolioManager:
             updated["trade_ticket"] = {}
         return updated
 
+    def update_paper_trade_ticket(
+        self,
+        trade_id: str,
+        trade_ticket: Dict[str, Any],
+        open_only: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Persist evidence/management metadata without changing the trade lifecycle."""
+        if not isinstance(trade_ticket, dict):
+            raise ValueError("trade_ticket must be a dictionary")
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        where = "id = ? AND status = 'open'" if open_only else "id = ?"
+        cursor.execute(
+            f"UPDATE paper_trades SET trade_ticket_json = ? WHERE {where}",
+            (json.dumps(trade_ticket, ensure_ascii=True, default=str), trade_id),
+        )
+        changed = cursor.rowcount
+        conn.commit()
+        if changed <= 0:
+            conn.close()
+            return None
+        cursor.execute("SELECT * FROM paper_trades WHERE id = ?", (trade_id,))
+        row = cursor.fetchone()
+        updated = dict(row) if row else None
+        conn.close()
+        if not updated:
+            return None
+        try:
+            updated["trade_ticket"] = json.loads(updated.pop("trade_ticket_json", "{}") or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            updated["trade_ticket"] = {}
+        return updated
+
     def list_price_alerts(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row

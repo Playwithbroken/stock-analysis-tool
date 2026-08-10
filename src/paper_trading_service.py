@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import os
 import json
+import ipaddress
+import re
+import socket
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin, urlparse
 
+import requests
 import yfinance as yf
 
 from src.storage import PortfolioManager
@@ -71,6 +76,219 @@ COMMODITY_LEVERAGE_PROXIES = [
 class PaperTradingService:
     def __init__(self, portfolio_manager: PortfolioManager) -> None:
         self.portfolio_manager = portfolio_manager
+
+    @staticmethod
+    def _is_safe_public_news_url(url: str) -> bool:
+        try:
+            parsed = urlparse(str(url or "").strip())
+            hostname = (parsed.hostname or "").strip().lower()
+            if parsed.scheme not in {"http", "https"} or not hostname:
+                return False
+            if hostname == "localhost" or hostname.endswith((".local", ".internal")):
+                return False
+            addresses = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+            for address in addresses:
+                ip = ipaddress.ip_address(address[4][0])
+                if not ip.is_global:
+                    return False
+            return bool(addresses)
+        except (OSError, ValueError):
+            return False
+
+    def _fetch_news_source_status(self, url: str) -> Dict[str, Any]:
+        checked_at = datetime.now(timezone.utc).isoformat()
+        current_url = str(url or "").strip()
+        if not self._is_safe_public_news_url(current_url):
+            return {
+                "url": current_url,
+                "status": "unsafe_or_unresolvable_url",
+                "checked_at": checked_at,
+                "actionable": False,
+            }
+        try:
+            for _ in range(4):
+                response = requests.get(
+                    current_url,
+                    headers={"User-Agent": "BrokerFreund-NewsEvidenceMonitor/1.0"},
+                    timeout=12,
+                    stream=True,
+                    allow_redirects=False,
+                )
+                if response.status_code in {301, 302, 303, 307, 308}:
+                    target = urljoin(current_url, response.headers.get("Location") or "")
+                    response.close()
+                    if not self._is_safe_public_news_url(target):
+                        return {
+                            "url": str(url),
+                            "final_url": target,
+                            "status": "unsafe_redirect",
+                            "checked_at": checked_at,
+                            "actionable": False,
+                        }
+                    current_url = target
+                    continue
+                status_code = int(response.status_code)
+                if status_code in {404, 410}:
+                    response.close()
+                    return {
+                        "url": str(url),
+                        "final_url": current_url,
+                        "http_status": status_code,
+                        "status": "source_unavailable",
+                        "checked_at": checked_at,
+                        "actionable": True,
+                    }
+                if status_code >= 400:
+                    response.close()
+                    return {
+                        "url": str(url),
+                        "final_url": current_url,
+                        "http_status": status_code,
+                        "status": "access_blocked" if status_code in {401, 403, 429} else "check_failed",
+                        "checked_at": checked_at,
+                        "actionable": False,
+                    }
+                body = bytearray()
+                for chunk in response.iter_content(chunk_size=16384):
+                    body.extend(chunk)
+                    if len(body) >= 262144:
+                        break
+                encoding = response.encoding or "utf-8"
+                response.close()
+                text = bytes(body[:262144]).decode(encoding, errors="replace")
+                visible = re.sub(r"<script\b[^>]*>.*?</script>|<style\b[^>]*>.*?</style>", " ", text, flags=re.I | re.S)
+                visible = re.sub(r"<[^>]+>", " ", visible)
+                visible = re.sub(r"\s+", " ", visible).strip().lower()[:50000]
+                withdrawn = re.search(
+                    r"\b(retracted|retraction|story withdrawn|report withdrawn|withdrawn report|zur(?:ue|ü)ckgezogen|widerrufen)\b",
+                    visible,
+                )
+                corrected = re.search(
+                    r"\b(correction|corrected version|corrects?\b|korrigiert|korrektur|berichtigt)\b",
+                    visible,
+                )
+                status = "retracted_or_withdrawn" if withdrawn else "correction_detected" if corrected else "unchanged"
+                signal = withdrawn.group(0) if withdrawn else corrected.group(0) if corrected else None
+                return {
+                    "url": str(url),
+                    "final_url": current_url,
+                    "http_status": status_code,
+                    "status": status,
+                    "signal": signal,
+                    "checked_at": checked_at,
+                    "actionable": status in {"retracted_or_withdrawn", "correction_detected"},
+                }
+            return {
+                "url": str(url),
+                "final_url": current_url,
+                "status": "redirect_limit",
+                "checked_at": checked_at,
+                "actionable": False,
+            }
+        except requests.RequestException as exc:
+            return {
+                "url": str(url),
+                "final_url": current_url,
+                "status": "check_failed",
+                "error_type": type(exc).__name__,
+                "checked_at": checked_at,
+                "actionable": False,
+            }
+
+    def revalidate_open_news_sources(self, limit: int = 50) -> Dict[str, Any]:
+        trades = self.portfolio_manager.list_paper_trades(status="open", limit=limit)
+        checked: List[Dict[str, Any]] = []
+        skipped = 0
+        priority = {
+            "retracted_or_withdrawn": 5,
+            "correction_detected": 4,
+            "source_unavailable": 3,
+            "unchanged": 1,
+        }
+        for trade in trades:
+            if str(trade.get("setup_type") or "") != "confirmed_news_event":
+                skipped += 1
+                continue
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
+            sources: List[Dict[str, str]] = []
+            reporting = evidence.get("reporting_source") if isinstance(evidence.get("reporting_source"), dict) else {}
+            primary = evidence.get("primary_source") if isinstance(evidence.get("primary_source"), dict) else {}
+            for source_type, source_url in (
+                ("reporting_source", reporting.get("url") or evidence.get("source_url")),
+                ("primary_source", primary.get("url")),
+            ):
+                normalized = str(source_url or "").strip()
+                if normalized and normalized not in {item["url"] for item in sources}:
+                    sources.append({"source_type": source_type, "url": normalized})
+            if not sources:
+                skipped += 1
+                continue
+            checks = []
+            for source in sources:
+                result = self._fetch_news_source_status(source["url"])
+                checks.append({**result, "source_type": source["source_type"]})
+            actionable = [item for item in checks if item.get("actionable")]
+            if actionable:
+                selected = max(actionable, key=lambda item: priority.get(str(item.get("status")), 0))
+            elif checks and all(item.get("status") == "unchanged" for item in checks):
+                selected = {"status": "unchanged", "actionable": False}
+            else:
+                selected = {"status": "check_failed", "actionable": False}
+            prior = evidence.get("correction_status") if isinstance(evidence.get("correction_status"), dict) else {}
+            prior_status = str(prior.get("status") or "")
+            if (
+                not selected.get("actionable")
+                and prior_status in {"retracted_or_withdrawn", "correction_detected", "source_unavailable"}
+            ):
+                selected = {"status": prior_status, "actionable": True, "latched": True}
+            checked_at = datetime.now(timezone.utc).isoformat()
+            history = list(prior.get("history") or [])
+            if prior_status and prior_status != selected["status"]:
+                history.append({"status": prior_status, "checked_at": prior.get("checked_at")})
+            correction_status = {
+                **prior,
+                "status": selected["status"],
+                "checked_at": checked_at,
+                "checks": checks,
+                "signals": [item.get("signal") for item in checks if item.get("signal")],
+                "monitoring_scope": "stored_reporting_and_primary_source_urls",
+                "ongoing_monitor_verified": all(
+                    item.get("status") not in {"check_failed", "access_blocked", "unsafe_redirect", "unsafe_or_unresolvable_url", "redirect_limit"}
+                    for item in checks
+                ),
+                "actionable": bool(selected.get("actionable")),
+                "latched_for_manual_review": bool(selected.get("latched")),
+                "history": history[-8:],
+            }
+            updated_ticket = {
+                **ticket,
+                "news_evidence": {**evidence, "correction_status": correction_status},
+                "news_source_revalidation": {
+                    "status": selected["status"],
+                    "actionable": bool(selected.get("actionable")),
+                    "checked_at": checked_at,
+                },
+            }
+            persisted = self.portfolio_manager.update_paper_trade_ticket(str(trade.get("id")), updated_ticket)
+            checked.append(
+                {
+                    "id": trade.get("id"),
+                    "ticker": trade.get("ticker"),
+                    "status": selected["status"],
+                    "actionable": bool(selected.get("actionable")),
+                    "persisted": bool(persisted),
+                    "checks": checks,
+                }
+            )
+        return {
+            "status": "ok",
+            "checked": len(checked),
+            "actionable": sum(1 for item in checked if item["actionable"]),
+            "skipped": skipped,
+            "trades": checked,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     def build_dashboard(
         self,
@@ -4766,6 +4984,49 @@ class PaperTradingService:
         max_holding_days = configured_max_holding_days or default_holding_days
         holding_period_source = "trade_config" if configured_max_holding_days > 0 else "strategy_policy"
         opened_at = self._as_utc_naive_datetime(trade.get("opened_at"))
+        if setup_type == "confirmed_news_event":
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            news_evidence = ticket.get("news_evidence") if isinstance(ticket.get("news_evidence"), dict) else {}
+            correction = (
+                news_evidence.get("correction_status")
+                if isinstance(news_evidence.get("correction_status"), dict)
+                else {}
+            )
+            correction_state = str(correction.get("status") or "")
+            if correction_state in {"retracted_or_withdrawn", "correction_detected", "source_unavailable"}:
+                reporting = (
+                    news_evidence.get("reporting_source")
+                    if isinstance(news_evidence.get("reporting_source"), dict)
+                    else {}
+                )
+                affected = next(
+                    (
+                        item
+                        for item in (correction.get("checks") or [])
+                        if isinstance(item, dict) and item.get("actionable")
+                    ),
+                    {},
+                )
+                return {
+                    "status": "news_source_invalidated",
+                    "action": "close_review",
+                    "decision_grade": "exit",
+                    "next_check": (
+                        "Originalquelle und berichtende Quelle manuell vergleichen. Paper-Exit nur nach Prüfung "
+                        "dokumentieren; die Kursbewegung beweist keine Nachrichtenkausalität."
+                    ),
+                    "summary": (
+                        "Die gespeicherte News-Grundlage wurde nach dem Entry korrigiert, zurückgezogen "
+                        "oder ist dauerhaft nicht mehr auffindbar. Die ursprüngliche Event-These ist neu zu bewerten."
+                    ),
+                    "source_status": correction_state,
+                    "source_url": affected.get("url") or reporting.get("url") or news_evidence.get("source_url"),
+                    "source_type": affected.get("source_type"),
+                    "source_checked_at": correction.get("checked_at"),
+                    "causality_proven": False,
+                    "risk_distance_pct": None,
+                    "target_progress_pct": None,
+                }
         if max_holding_days > 0 and opened_at is not None:
             expires_at = opened_at + timedelta(days=max_holding_days)
             if datetime.now(timezone.utc).replace(tzinfo=None) >= expires_at:

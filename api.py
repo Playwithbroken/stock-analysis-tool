@@ -1611,6 +1611,7 @@ async def _forecast_learning_loop():
             }
             paper_alert_result = paper_cycle.get("paper_learning_alerts") or {}
             paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
+            paper_news_source_revalidation = await asyncio.to_thread(_run_paper_news_source_revalidation)
             paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
             paper_account_status_alerts = await asyncio.to_thread(_send_paper_account_status_alerts)
             paper_managed_exits = await asyncio.to_thread(_run_paper_managed_exits)
@@ -1623,6 +1624,7 @@ async def _forecast_learning_loop():
                         "paper_trades": paper_result,
                         "paper_learning_alerts": paper_alert_result,
                         "paper_learning_autopilot": paper_autopilot_result,
+                        "paper_news_source_revalidation": paper_news_source_revalidation,
                         "paper_management_alerts": paper_management_alerts,
                         "paper_account_status_alerts": paper_account_status_alerts,
                         "paper_managed_exits": paper_managed_exits,
@@ -1637,6 +1639,15 @@ async def _forecast_learning_loop():
                 pass
         interval_minutes = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", 30, minimum=5)
         await asyncio.sleep(interval_minutes * 60)
+
+
+def _run_paper_news_source_revalidation() -> Dict[str, Any]:
+    if not _env_enabled("PAPER_NEWS_SOURCE_REVALIDATION_ENABLED", "true"):
+        return {"status": "disabled", "message": "Paper-News-Quellenmonitor ist deaktiviert."}
+    try:
+        return get_paper_trading_service().revalidate_open_news_sources(limit=50)
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
 
 
 def _send_paper_trade_management_alerts() -> Dict[str, Any]:

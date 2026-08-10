@@ -290,12 +290,16 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
 
 def test_confirmed_news_requires_full_evidence_chain() -> None:
     service = build_service(FakePortfolioManager())
+    now = datetime.now(timezone.utc)
+    published_at = now - timedelta(hours=2)
+    baseline_at = published_at - timedelta(minutes=15)
+    observed_at = published_at + timedelta(hours=1)
     valid = {
         "title": "Microsoft raises guidance after cloud demand accelerates",
         "publisher": "Reuters",
         "source_url": "https://www.reuters.com/technology/microsoft-guidance-2026-08-03/",
         "source_quality": "tier_1",
-        "published_at": "2026-08-03T08:00:00+00:00",
+        "published_at": published_at.isoformat(),
         "age_hours": 2.0,
         "event_type": "earnings",
         "ticker": "MSFT",
@@ -329,8 +333,8 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
             "asset_move_since_publication": 1.8,
             "benchmark_move_since_publication": 0.4,
             "relative_move_since_publication": 1.4,
-            "baseline_at": "2026-08-03T07:45:00+00:00",
-            "observed_at": "2026-08-03T09:00:00+00:00",
+            "baseline_at": baseline_at.isoformat(),
+            "observed_at": observed_at.isoformat(),
             "event_window_aligned": True,
             "causality_proven": False,
         },
@@ -338,7 +342,17 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
     rejected = [
         {**valid, "title": "Contradicted", "market_confirmation": {**valid["market_confirmation"], "status": "contradicted"}},
         {**valid, "title": "No explicit ticker", "ticker_association_basis": "provider_related_feed_only"},
-        {**valid, "title": "Stale", "age_hours": 25.0},
+        {
+            **valid,
+            "title": "Stale",
+            "published_at": (now - timedelta(hours=25)).isoformat(),
+            "age_hours": 25.0,
+            "market_confirmation": {
+                **valid["market_confirmation"],
+                "baseline_at": (now - timedelta(hours=25, minutes=15)).isoformat(),
+                "observed_at": (now - timedelta(hours=24)).isoformat(),
+            },
+        },
         {**valid, "title": "Not important", "news_intelligence": {**valid["news_intelligence"], "is_important": False}},
         {**valid, "title": "Mixed source direction", "source_evidence": {**valid["source_evidence"], "source_agreement": "mixed_headline_signal"}},
         {**valid, "title": "No earnings filing", "source_evidence": {**valid["source_evidence"], "original_document_verified": False}},
@@ -355,7 +369,7 @@ def test_confirmed_news_requires_full_evidence_chain() -> None:
     assert candidate["news_evidence"]["market_confirmation"]["causality_proven"] is False
 
     news_context = {
-        "generated_at": "2026-08-03T10:00:00+00:00",
+        "generated_at": now.isoformat(),
         "top_news": [valid, *rejected],
     }
     dashboard = service.build_dashboard(sample_scoreboard(), sample_settings(), news_context)
@@ -867,13 +881,15 @@ def test_news_evidence_learning_requires_sample_and_adjusts_conservatively() -> 
 
 def test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast() -> None:
     manager = FakePortfolioManager()
+    now = datetime.now(timezone.utc)
+    published_at = now - timedelta(hours=2)
     strict_news = {
         "ticker": "MSFT",
         "ticker_association_basis": "explicit_title_entity",
         "publisher": "Reuters",
         "source_quality": "tier_1",
         "source_url": "https://www.reuters.com/markets/qa/",
-        "published_at": "2026-08-01T10:00:00+00:00",
+        "published_at": published_at.isoformat(),
         "age_hours": 2.0,
         "event_type": "earnings",
         "source_evidence": {
@@ -885,6 +901,9 @@ def test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast() -> None:
         "market_confirmation": {
             "status": "confirmed",
             "expected_headline_direction": "positive",
+            "relative_move_since_publication": 1.2,
+            "baseline_at": (published_at - timedelta(minutes=15)).isoformat(),
+            "observed_at": (published_at + timedelta(hours=1)).isoformat(),
             "event_window_aligned": True,
         },
     }
@@ -892,7 +911,7 @@ def test_news_shadow_lab_uses_one_canonical_24h_outcome_per_forecast() -> None:
         "ticker": "MSFT",
         "publisher": "Reuters",
         "source_url": "https://www.reuters.com/markets/qa/",
-        "published_at": "2026-08-01T10:00:00+00:00",
+        "published_at": published_at.isoformat(),
         "event_type": "earnings",
     }
     for index in range(11):

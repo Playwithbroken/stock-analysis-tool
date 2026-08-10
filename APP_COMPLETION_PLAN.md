@@ -31,7 +31,7 @@ Ziel: Kein Trade und keine Push-Nachricht darf auf erfundenen oder unklaren Hand
 - [ ] Greeks (Delta, Gamma, Theta, Vega) aus Anbieterwerten übernehmen oder mit dokumentiertem Modell berechnen und Quelle/Modell kennzeichnen.
 - [x] Kontrakt-Mapping vom Paper-Einstieg bis zum Exit unveränderlich speichern; kein späterer Wechsel auf einen anderen Strike oder Verfall.
 - [x] Options-Management gegen den gespeicherten Kontraktpreis auswerten; fehlt eine brauchbare Quote, P&L/Auto-Exit blockieren und den Underlying nur ausdrücklich als Outcome-Fallback verwenden.
-- [ ] News-getriebene Trades nur öffnen, wenn Primärquelle oder belastbare Tier-1-Quelle, Veröffentlichungszeit und Marktreaktionsfenster gespeichert sind.
+- [x] News-getriebene Trades nur öffnen, wenn Primärquelle oder verifizierte Tier-1-Quelle, echte Veröffentlichungszeit sowie chronologisch plausibles Marktreaktionsfenster unveränderlich im Trade-Ticket gespeichert sind.
 - [x] Hebel-End-to-End-Test für Aktien/ETFs, Standardoptionen und Anbieterprodukte: angebotener Hebel, Produktmultiplikator, eingebetteter Hebel, Stoprisiko und P&L werden exakt einmal angewendet.
 
 Abnahme:

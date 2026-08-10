@@ -727,6 +727,13 @@ class PaperTradingService:
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
+        if str(playbook.get("setup_type") or "") == "confirmed_news_event":
+            news_entry_errors = self._confirmed_news_entry_errors(playbook)
+            if news_entry_errors:
+                raise ValueError(
+                    "Confirmed-news entry evidence gate blocks this paper trade: "
+                    + ", ".join(news_entry_errors)
+                )
         reentry_cooldown = self._build_paper_reentry_cooldown(playbook, trades)
         if reentry_cooldown.get("active") is True:
             raise ValueError(
@@ -1311,7 +1318,11 @@ class PaperTradingService:
         correction = evidence.get("correction_status") if isinstance(evidence.get("correction_status"), dict) else {}
         ticker = str(news.get("ticker") or confirmation.get("ticker") or "").upper().strip()
         expected = str(confirmation.get("expected_headline_direction") or "").lower()
-        age_hours = news.get("age_hours")
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        published_at = self._as_utc_naive_datetime(news.get("published_at"))
+        baseline_at = self._as_utc_naive_datetime(confirmation.get("baseline_at"))
+        observed_at = self._as_utc_naive_datetime(confirmation.get("observed_at"))
+        age_hours = ((now_utc - published_at).total_seconds() / 3600) if published_at else None
         reasons: List[str] = []
         if not ticker:
             reasons.append("explicit_ticker_missing")
@@ -1325,9 +1336,15 @@ class PaperTradingService:
             reasons.append("source_signal_conflict")
         if str(correction.get("status") or "") in {"correction_detected", "retracted_or_withdrawn"}:
             reasons.append("source_corrected_or_retracted")
-        if evidence.get("link_verified") is not True or not bool(news.get("source_url") or news.get("link")):
+        source_url = str(news.get("source_url") or news.get("link") or "").strip()
+        parsed_source = urlparse(source_url)
+        if (
+            evidence.get("link_verified") is not True
+            or parsed_source.scheme not in {"http", "https"}
+            or not parsed_source.hostname
+        ):
             reasons.append("verified_source_link_missing")
-        if not news.get("published_at"):
+        if published_at is None:
             reasons.append("publication_timestamp_missing")
         if intelligence.get("is_important") is not True:
             reasons.append("importance_gate_not_met")
@@ -1340,6 +1357,12 @@ class PaperTradingService:
             )
         if confirmation.get("event_window_aligned") is not True:
             reasons.append("event_window_not_aligned")
+        if baseline_at is None or observed_at is None:
+            reasons.append("reaction_window_timestamps_missing")
+        elif published_at is not None and not (baseline_at <= published_at <= observed_at <= now_utc + timedelta(minutes=5)):
+            reasons.append("reaction_window_timestamp_order_invalid")
+        if not isinstance(confirmation.get("relative_move_since_publication"), (int, float)):
+            reasons.append("relative_market_reaction_missing")
         if str(news.get("event_type") or "") == "earnings" and evidence.get("original_document_verified") is not True:
             reasons.append("earnings_primary_document_missing")
         if not isinstance(age_hours, (int, float)) or float(age_hours) < 0:
@@ -1347,6 +1370,56 @@ class PaperTradingService:
         elif float(age_hours) > 24:
             reasons.append("news_older_than_24h")
         return self._dedupe_reason_list(reasons)
+
+    def _confirmed_news_entry_errors(self, playbook: Dict[str, Any]) -> List[str]:
+        evidence = playbook.get("news_evidence") if isinstance(playbook.get("news_evidence"), dict) else {}
+        reporting = evidence.get("reporting_source") if isinstance(evidence.get("reporting_source"), dict) else {}
+        primary = evidence.get("primary_source") if isinstance(evidence.get("primary_source"), dict) else {}
+        confirmation = evidence.get("market_confirmation") if isinstance(evidence.get("market_confirmation"), dict) else {}
+        correction = evidence.get("correction_status") if isinstance(evidence.get("correction_status"), dict) else {}
+        errors: List[str] = []
+
+        reporting_url = str(reporting.get("url") or evidence.get("source_url") or "").strip()
+        reporting_parsed = urlparse(reporting_url)
+        primary_url = str(primary.get("url") or "").strip()
+        primary_parsed = urlparse(primary_url)
+        reporting_is_tier_1 = str(reporting.get("quality") or evidence.get("source_quality") or "") == "tier_1"
+        reporting_verified = (
+            reporting.get("link_verified") is True
+            and reporting_parsed.scheme in {"http", "https"}
+            and bool(reporting_parsed.hostname)
+        )
+        primary_verified = (
+            evidence.get("original_document_verified") is True
+            and primary_parsed.scheme in {"http", "https"}
+            and bool(primary_parsed.hostname)
+        )
+        if not primary_verified and not (reporting_is_tier_1 and reporting_verified):
+            errors.append("primary_or_verified_tier_1_source_required")
+
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        published_at = self._as_utc_naive_datetime(evidence.get("published_at") or reporting.get("published_at"))
+        baseline_at = self._as_utc_naive_datetime(confirmation.get("baseline_at"))
+        observed_at = self._as_utc_naive_datetime(confirmation.get("observed_at"))
+        if published_at is None:
+            errors.append("publication_timestamp_missing_or_invalid")
+        elif published_at > now_utc + timedelta(minutes=5) or (now_utc - published_at).total_seconds() > 24 * 3600:
+            errors.append("publication_outside_24h_entry_window")
+        if confirmation.get("status") != "confirmed" or confirmation.get("event_window_aligned") is not True:
+            errors.append("market_reaction_window_not_confirmed")
+        if baseline_at is None or observed_at is None:
+            errors.append("market_reaction_timestamps_missing")
+        elif published_at is not None and not (baseline_at <= published_at <= observed_at <= now_utc + timedelta(minutes=5)):
+            errors.append("market_reaction_timestamp_order_invalid")
+        if not isinstance(confirmation.get("relative_move_since_publication"), (int, float)):
+            errors.append("relative_market_reaction_missing")
+        expected = str(confirmation.get("expected_headline_direction") or "")
+        expected_direction = "long" if expected == "positive" else "short" if expected == "negative" else ""
+        if not expected_direction or expected_direction != str(playbook.get("direction") or ""):
+            errors.append("market_reaction_direction_mismatch")
+        if str(correction.get("status") or "") in {"correction_detected", "retracted_or_withdrawn", "source_unavailable"}:
+            errors.append("source_corrected_retracted_or_unavailable")
+        return self._dedupe_reason_list(errors)
 
     def _build_news_gate_monitor(
         self,
@@ -1368,6 +1441,9 @@ class PaperTradingService:
             "price_reaction_contradicted": "Kursreaktion widerspricht der Meldungsrichtung",
             "price_confirmation_missing": "richtungskonforme Preisbestätigung fehlt",
             "event_window_not_aligned": "Preisfenster ist nicht an die Veröffentlichung ausgerichtet",
+            "reaction_window_timestamps_missing": "Start- oder Beobachtungszeit des Reaktionsfensters fehlt",
+            "reaction_window_timestamp_order_invalid": "Zeitfolge von Baseline, Veröffentlichung und Beobachtung ist ungültig",
+            "relative_market_reaction_missing": "relative Marktreaktion ist nicht numerisch gespeichert",
             "earnings_primary_document_missing": "Earnings-Originaldokument ist nicht verifiziert",
             "news_age_unavailable": "Meldungsalter ist nicht belastbar",
             "news_older_than_24h": "Meldung ist älter als 24 Stunden",

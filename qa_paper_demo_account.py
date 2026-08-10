@@ -129,7 +129,16 @@ def build_service(manager: FakePortfolioManager) -> PaperTradingService:
         "AAPL": 100.0,
         "MSFT": 100.0,
         "JEPI": 50.0,
+        "VUG": 90.0,
+        "VTI": 380.0,
+        "VOO": 700.0,
+        "IWM": 260.0,
+        "VT": 140.0,
+        "VYM": 145.0,
+        "VTV": 190.0,
+        "SCHD": 35.0,
         "BTC-USD": 50_000.0,
+        "ETH-USD": 2_000.0,
         "GLD": 220.0,
         "USO": 80.0,
         "XLE": 95.0,
@@ -232,7 +241,7 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
     assert "Paper-Hebel: 2.0x" in opened["notes"]
 
     try:
-        service.create_trade_from_playbook(
+        build_service(FakePortfolioManager()).create_trade_from_playbook(
             {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 3},
             sample_scoreboard(),
             sample_settings(),
@@ -681,7 +690,7 @@ def test_demo_account_sizing() -> None:
     assert len([item for item in manager.outcomes if item["trade_id"] == created["id"]]) == 5
 
     try:
-        service.create_trade_from_playbook(
+        build_service(FakePortfolioManager()).create_trade_from_playbook(
             {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 1001, "leverage": 1},
             sample_scoreboard(),
             sample_settings(),
@@ -1629,6 +1638,85 @@ def test_aggressive_learning_executes_soft_score_candidate_through_final_sizing_
     assert opened["trade_ticket"]["max_loss_value"] <= 937.5
 
 
+def test_paper_autopilot_selects_independent_risk_buckets() -> None:
+    scoreboard = {
+        "equities": [],
+        "etfs": [
+            {"ticker": "VOO", "total_score": 68.0, "headline": "Broad US"},
+            {"ticker": "IWM", "total_score": 67.0, "headline": "Small caps"},
+            {"ticker": "VYM", "total_score": 66.0, "headline": "Dividend"},
+            {"ticker": "VTV", "total_score": 65.0, "headline": "Value"},
+        ],
+        "crypto": [
+            {"ticker": "BTC-USD", "total_score": 70.0, "headline": "Bitcoin"},
+            {"ticker": "ETH-USD", "total_score": 69.0, "headline": "Ethereum"},
+        ],
+        "politics": [],
+    }
+    service = build_service(FakePortfolioManager())
+    preview = service.run_auto_selection(
+        scoreboard,
+        sample_settings(),
+        max_trades=5,
+        execute=False,
+        mode="aggressive_learning",
+    )
+    selected_tickers = [item["ticker"] for item in preview["selected"]]
+    assert len(selected_tickers) == 4
+    assert len(preview["selected_risk_buckets"]) == 4
+    assert len(set(preview["selected_risk_buckets"])) == 4
+    assert len({ticker for ticker in selected_tickers if ticker.endswith("-USD")}) == 1
+    assert len({ticker for ticker in selected_tickers if ticker in {"VYM", "VTV"}}) == 1
+    skipped_tickers = {item["ticker"] for item in preview["diversification_skipped"]}
+    assert skipped_tickers == {"ETH-USD", "VTV"}
+
+    open_manager = FakePortfolioManager(
+        [
+            {
+                "id": "open-broad-etf",
+                "ticker": "VTI",
+                "asset_class": "etf",
+                "direction": "long",
+                "setup_type": "etf_momentum",
+                "status": "open",
+                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "entry_price": 380.0,
+                "stop_price": 360.0,
+                "target_price": 420.0,
+                "quantity": 10,
+                "confidence_score": 70,
+                "leverage": 1,
+                "max_holding_days": 14,
+            }
+        ]
+    )
+    open_service = build_service(open_manager)
+    open_dashboard = open_service.build_dashboard(scoreboard, sample_settings())
+    assert "VOO" not in {
+        item["ticker"] for item in open_dashboard["auto_selection"]["aggressive_exploration"]
+    }
+    assert any(
+        item["category"] == "correlation"
+        for item in open_dashboard["auto_selection"]["blocker_summary"]["blocker_groups"]
+    )
+    try:
+        open_service.create_trade_from_playbook(
+            {
+                "playbook_id": "etf-VOO-long",
+                "direction": "long",
+                "quantity": 0,
+                "leverage": 1,
+                "learning_mode": True,
+            },
+            scoreboard,
+            sample_settings(),
+        )
+    except ValueError as exc:
+        assert "correlated paper risk bucket" in str(exc).lower()
+    else:
+        raise AssertionError("A second broad-US ETF bypassed the correlation gate.")
+
+
 def test_aggressive_learning_uses_wider_pool_with_capped_risk() -> None:
     service = PaperTradingService.__new__(PaperTradingService)
     demo_account = {
@@ -2504,6 +2592,7 @@ if __name__ == "__main__":
     test_auto_rejection_summary_prefers_fixable_candidate()
     test_strict_score_block_does_not_block_learning_candidate()
     test_aggressive_learning_executes_soft_score_candidate_through_final_sizing_gate()
+    test_paper_autopilot_selects_independent_risk_buckets()
     test_aggressive_learning_uses_wider_pool_with_capped_risk()
     test_aggressive_learning_respects_saved_autopilot_settings()
     test_autopilot_profile_summary_explains_risk_and_protection()

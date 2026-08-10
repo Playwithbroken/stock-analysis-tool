@@ -244,7 +244,25 @@ class PaperTradingService:
         raw_mode = str(mode or "").lower()
         mode = raw_mode if raw_mode in {"strict", "learn", "aggressive_learning"} else "strict"
         source_key = "aggressive_exploration" if mode == "aggressive_learning" else "exploration" if mode == "learn" else "selected"
-        selected = selection.get(source_key, [])[: max(1, int(max_trades or 1))]
+        candidate_pool = selection.get(source_key, [])
+        selected: List[Dict[str, Any]] = []
+        diversification_skipped: List[Dict[str, Any]] = []
+        selected_buckets: set[str] = set()
+        for candidate in candidate_pool:
+            risk_bucket = str(candidate.get("risk_bucket") or self._paper_risk_bucket(candidate))
+            if risk_bucket in selected_buckets:
+                diversification_skipped.append(
+                    {
+                        "ticker": candidate.get("ticker"),
+                        "risk_bucket": risk_bucket,
+                        "reason": "correlated risk bucket already selected in this run",
+                    }
+                )
+                continue
+            selected.append(candidate)
+            selected_buckets.add(risk_bucket)
+            if len(selected) >= max(1, int(max_trades or 1)):
+                break
         selected_capital = self._summarize_candidate_capital(selected)
         blocker_summary = selection.get("blocker_summary") if isinstance(selection.get("blocker_summary"), dict) else {}
         no_trade_message = self._auto_selection_no_trade_message(mode, blocker_summary)
@@ -265,6 +283,8 @@ class PaperTradingService:
                 "selected": selected,
                 "selected_capital": selected_capital,
                 "opened": [],
+                "selected_risk_buckets": sorted(selected_buckets),
+                "diversification_skipped": diversification_skipped,
                 "rejected_count": selection.get("rejected_count"),
                 "blocker_summary": blocker_summary,
                 "message": preview_message,
@@ -327,6 +347,8 @@ class PaperTradingService:
             "selected": selected,
             "selected_capital": selected_capital,
             "opened": opened,
+            "selected_risk_buckets": sorted(selected_buckets),
+            "diversification_skipped": diversification_skipped,
             "errors": errors,
             "rejected_count": selection.get("rejected_count"),
             "blocker_summary": blocker_summary,
@@ -373,6 +395,8 @@ class PaperTradingService:
             return "gleicher Ticker/Setup/Richtung läuft bereits"
         if "paper re-entry cooldown active" in lower:
             return "Re-Entry-Cooldown für denselben Lernfall aktiv"
+        if "correlated paper risk bucket already open" in lower:
+            return "korrelierte Risikogruppe ist bereits im Portfolio"
         if "missing paper journal" in lower:
             return "fehlendes Paper-Journal"
         if "risk review" in lower:
@@ -529,6 +553,12 @@ class PaperTradingService:
             raise ValueError("Playbook is blocked by do-not-trade rules.")
         if playbook.get("demo_block_reasons") and (not learning_mode or hard_demo_reasons):
             raise ValueError("Demo account risk gate blocks this playbook.")
+        risk_bucket = self._paper_risk_bucket(playbook)
+        if any(
+            trade.get("status") == "open" and self._paper_risk_bucket(trade) == risk_bucket
+            for trade in trades
+        ):
+            raise ValueError(f"Correlated paper risk bucket already has an open trade: {risk_bucket}.")
 
         is_option = playbook.get("asset_class") == "option"
         if is_option:
@@ -950,7 +980,7 @@ class PaperTradingService:
                 }
             )
 
-        for item in scoreboard.get("etfs", [])[:2]:
+        for item in scoreboard.get("etfs", [])[:8]:
             if not item.get("ticker"):
                 continue
             market_fields = self._market_reference_fields(item.get("ticker"))
@@ -974,7 +1004,7 @@ class PaperTradingService:
                 }
             )
 
-        for item in scoreboard.get("crypto", [])[:2]:
+        for item in scoreboard.get("crypto", [])[:4]:
             if not item.get("ticker"):
                 continue
             market_fields = self._market_reference_fields(item.get("ticker"))
@@ -1929,6 +1959,31 @@ class PaperTradingService:
             "policy": "Require a fresh observation window before repeating the same ticker, setup and direction.",
         }
 
+    def _paper_risk_bucket(self, item: Dict[str, Any]) -> str:
+        ticker = str(item.get("ticker") or "UNKNOWN").upper()
+        asset_class = str(item.get("asset_class") or "equity").lower()
+        if asset_class == "crypto":
+            return "crypto"
+        if asset_class == "etf":
+            etf_groups = {
+                "etf_growth": {"VUG", "QQQ"},
+                "etf_broad_us": {"VTI", "VOO", "SPY"},
+                "etf_small_cap": {"IWM"},
+                "etf_global": {"VT"},
+                "etf_dividend_value": {"VYM", "VTV", "SCHD", "JEPI"},
+                "etf_real_estate": {"VNQ"},
+                "etf_emerging": {"VWO", "EEM"},
+                "etf_bonds": {"TLT", "IEF", "SHY", "BND"},
+            }
+            for bucket, tickers in etf_groups.items():
+                if ticker in tickers:
+                    return bucket
+            return f"etf_{ticker.lower()}"
+        if asset_class == "option":
+            underlying = str(item.get("underlying_proxy") or ticker).upper()
+            return f"option_{underlying.lower()}"
+        return f"{asset_class}_{ticker.lower()}"
+
     def _build_auto_selection(
         self,
         playbooks: List[Dict[str, Any]],
@@ -1954,6 +2009,11 @@ class PaperTradingService:
                 str(trade.get("direction") or ""),
                 str(trade.get("asset_class") or ""),
             )
+            for trade in trades
+            if trade.get("status") == "open"
+        }
+        open_risk_buckets = {
+            self._paper_risk_bucket(trade)
             for trade in trades
             if trade.get("status") == "open"
         }
@@ -2006,6 +2066,12 @@ class PaperTradingService:
                 reasons.append(cooldown_reason)
                 exploration_reasons.append(cooldown_reason)
                 aggressive_reasons.append(cooldown_reason)
+            risk_bucket = self._paper_risk_bucket(playbook)
+            if risk_bucket in open_risk_buckets:
+                bucket_reason = f"correlated paper risk bucket already open: {risk_bucket}"
+                reasons.append(bucket_reason)
+                exploration_reasons.append(bucket_reason)
+                aggressive_reasons.append(bucket_reason)
             framework = playbook.get("decision_framework") or {}
             ticket = playbook.get("trade_ticket") if isinstance(playbook.get("trade_ticket"), dict) else {}
             ticket_validation = ticket.get("validation") if isinstance(ticket.get("validation"), dict) else {}
@@ -2116,6 +2182,7 @@ class PaperTradingService:
                 "invalidation": framework.get("invalidation"),
                 "trade_ticket": playbook.get("trade_ticket") or {},
                 "reentry_cooldown": reentry_cooldown,
+                "risk_bucket": risk_bucket,
                 "reasons": self._dedupe_reason_list(reasons),
                 "learning_block_reasons": self._dedupe_reason_list(exploration_reasons),
                 "aggressive_learning_block_reasons": self._dedupe_reason_list(aggressive_reasons),
@@ -2353,6 +2420,8 @@ class PaperTradingService:
             return "duplicate"
         if "paper re-entry cooldown active" in lower:
             return "reentry_cooldown"
+        if "correlated paper risk bucket already open" in lower:
+            return "correlation"
         if "score below" in lower:
             return "score"
         if "missing ticker or reference price" in lower or "trade ticket invalid" in lower:
@@ -2372,6 +2441,7 @@ class PaperTradingService:
             "capacity": "Kapazitaet voll",
             "duplicate": "Duplikat offen",
             "reentry_cooldown": "Neues Beobachtungsfenster abwarten",
+            "correlation": "Korrelationsrisiko",
             "score": "Score zu niedrig",
             "data": "Daten fehlen",
             "setup_quality": "Setup unvollstaendig",
@@ -2396,6 +2466,8 @@ class PaperTradingService:
             return "Bestehenden Paper-Trade managen statt doppeln"
         if "paper re-entry cooldown active" in text:
             return "Re-Entry-Cooldown abwarten; danach beginnt ein unabhängigeres Beobachtungsfenster"
+        if "correlated paper risk bucket already open" in text:
+            return "Erst einen unabhängigen Risikobucket wählen oder die bestehende Gruppenposition schließen"
         if "paper risk circuit" in text:
             return "Cooldown abwarten und Verlustserie prüfen, bevor ein neuer Entry startet"
         if "risk review" in text or "exit actions open" in text:
@@ -2444,6 +2516,8 @@ class PaperTradingService:
             return "Kein Duplikat eröffnen; bestehenden Paper-Trade managen oder schließen."
         if "paper re-entry cooldown active" in text:
             return "Keinen identischen Lernfall sofort wiederholen; Cooldown bis zum nächsten Beobachtungsfenster abwarten."
+        if "correlated paper risk bucket already open" in text:
+            return "Keine zweite stark korrelierte Position eröffnen; einen anderen Markt- oder Faktor-Bucket verwenden."
         if "score below auto minimum" in text:
             return "Auf Score 88+ warten oder stärkere Bestätigung durch Preis, Volumen und Newsqualität verlangen."
         if "score below minimum trade score" in text:

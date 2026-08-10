@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.email_alert_service import EmailAlertConfig, EmailAlertService
 
 
@@ -127,6 +129,13 @@ def test_important_news_is_deduplicated_and_failed_delivery_is_retryable():
         "country": "Middle East",
         "source_status": "official confirmed wire",
         "source_url": "https://news.example/red-sea",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "source_quality": "tier_1",
+        "source_evidence": {
+            "url": "https://news.example/red-sea",
+            "link_verified": True,
+            "quality": "tier_1",
+        },
         "impact_score": 93,
         "symbols": ["XLE", "USO", "GLD", "DAX"],
         "trigger": "Brent and energy equities hold the move for 30 minutes after the European open.",

@@ -24,6 +24,8 @@ CONTRACT_TESTS = [
     "qa_news_trade_entry_gate.py",
     "qa_news_source_revalidation.py",
     "qa_telegram_deduplication.py",
+    "qa_telegram_news_integrity.py",
+    "qa_macro_alert_quality.py",
     "qa_morning_brief_classification.py",
 ]
 

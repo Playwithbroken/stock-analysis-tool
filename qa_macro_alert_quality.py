@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime, timezone
 
 from src.email_alert_service import EmailAlertService
 from src.morning_brief_service import MorningBriefService
@@ -12,6 +13,15 @@ def service() -> EmailAlertService:
 
 def main() -> int:
     svc = service()
+    published_at = datetime.now(timezone.utc).isoformat()
+    verified_source = {
+        "published_at": published_at,
+        "source_quality": "tier_1",
+        "source_evidence": {
+            "link_verified": True,
+            "quality": "tier_1",
+        },
+    }
 
     brief_service = MorningBriefService.__new__(MorningBriefService)
     for event_type in (
@@ -99,11 +109,13 @@ def main() -> int:
         return 1
 
     thin_event = {
+        **verified_source,
         "title": "Confirmed attack near energy corridor",
         "summary": "Confirmed report, but no explicit trigger or invalidation is available yet.",
         "event_type": "conflict",
         "country": "Middle East",
         "source_status": "official confirmed",
+        "source_url": "https://official.example/thin-event",
         "impact_score": 91,
         "symbols": ["XLE", "USO", "GLD"],
     }
@@ -112,11 +124,13 @@ def main() -> int:
         return 1
 
     strong_event = {
+        **verified_source,
         "title": "Official escalation near Red Sea shipping corridor",
         "summary": "Confirmed escalation can affect oil, shipping, insurance and European risk appetite into the next liquid session.",
         "event_type": "conflict",
         "country": "Middle East",
         "source_status": "official confirmed wire",
+        "source_url": "https://reuters.example/red-sea",
         "impact_score": 93,
         "symbols": ["XLE", "USO", "GLD", "DAX"],
         "trigger": "Brent and energy equities hold the move for 30 minutes after the European open.",
@@ -179,9 +193,11 @@ def main() -> int:
         return 1
 
     strong_person = {
+        **verified_source,
         "title": "Trump says new China tariff plan is under review",
         "summary": "A confirmed policy statement can affect China-exposed equities, industrials, retailers, inflation expectations and broad index risk.",
         "publisher": "Reuters",
+        "source_url": "https://reuters.example/tariff-plan",
         "impact_score": 91,
         "symbols": ["SPY", "DAX", "CNH", "XLI"],
     }
@@ -195,9 +211,11 @@ def main() -> int:
         return 1
 
     strong_ipo = {
+        **verified_source,
         "title": "AI infrastructure startup files for IPO after revenue doubles",
         "summary": "A confirmed IPO filing can reset peer valuation, risk appetite and capital-market demand across AI infrastructure and small-cap growth.",
         "publisher": "Bloomberg",
+        "source_url": "https://bloomberg.example/ipo-filing",
         "impact_score": 90,
         "symbols": ["QQQ", "IWM", "IPO", "AI"],
     }

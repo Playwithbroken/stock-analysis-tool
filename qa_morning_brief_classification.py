@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -407,6 +408,7 @@ def main() -> int:
         failures.append("official primary-source link is missing")
 
     telegram = EmailAlertService.__new__(EmailAlertService)
+    fresh_at = datetime.now(timezone.utc).isoformat()
     telegram_messages: list[str] = []
     telegram._tg_post = (  # type: ignore[method-assign]
         lambda token, chat_id, text, disable_preview=True: telegram_messages.append(text)
@@ -425,11 +427,13 @@ def main() -> int:
             "top_news": [
                 {
                     **clustered[0],
+                    "published_at": fresh_at,
                     "market_confirmation": market_confirmation,
                     "primary_sources": primary_attached[0].get("primary_sources"),
                     "source_evidence": {
                         **(clustered[0].get("source_evidence") or {}),
                         "original_document_verified": True,
+                        "published_at": fresh_at,
                     },
                     "decision_readiness": ready_decision,
                 }
@@ -466,7 +470,14 @@ def main() -> int:
             "opening_bias": "QA",
             "regions": {},
             "macro_assets": [],
-            "top_news": [official_news],
+            "top_news": [{
+                **official_news,
+                "published_at": fresh_at,
+                "source_evidence": {
+                    **(official_news.get("source_evidence") or {}),
+                    "published_at": fresh_at,
+                },
+            }],
         },
         "global",
     )

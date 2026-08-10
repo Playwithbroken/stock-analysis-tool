@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from html import escape, unescape
+import hashlib
 import json
 import math
 import os
@@ -16,7 +17,8 @@ import re
 import smtplib
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
 import requests
 
 from src.public_signal_service import PublicSignalService
@@ -1712,8 +1714,10 @@ class EmailAlertService:
             "quality_passed": 0,
             "already_sent": 0,
             "cooldown_blocked": 0,
+            "story_duplicate": 0,
             "eligible": 0,
         }
+        story_registry = self._news_story_registry()
         for item in macro_candidates:
             macro_event = self._normalize_macro_alert_event(item, min_critical_score)
             if not macro_event:
@@ -1725,8 +1729,12 @@ class EmailAlertService:
             if not self._macro_alert_can_send(macro_event):
                 macro_audit["cooldown_blocked"] += 1
                 continue
+            if not self._news_story_can_send(macro_event, story_registry):
+                macro_audit["story_duplicate"] += 1
+                continue
             macro_audit["eligible"] += 1
             events.append(macro_event)
+            story_registry.append(self._news_story_descriptor(macro_event))
 
         for item in (brief.get("watchlist_impact") or [])[:10]:
             summary = str(item.get("summary") or "").strip()
@@ -1889,6 +1897,9 @@ class EmailAlertService:
             or "Makro-Event mit potenzieller Auswirkung auf Risiko, Sektoren und Indizes."
         ).strip()
         source_quality = self._macro_source_quality(item, source_status)
+        source_contract = self._telegram_news_source_contract(item, require_tier_1=True)
+        if source_contract.get("valid") is not True:
+            return None
         explicit_trigger = str(intelligence.get("trigger") or trade_impact.get("trigger") or item.get("trigger") or "").strip()
         explicit_invalidation = str(
             intelligence.get("invalidation") or trade_impact.get("invalidation") or item.get("invalidation") or ""
@@ -1922,7 +1933,7 @@ class EmailAlertService:
         action = str(intelligence.get("action") or trade_impact.get("action") or item.get("action") or "watch").strip().lower()
         identity = self._macro_event_identity(event_type, country or region, title)
         bucket_identity = self._macro_event_bucket_identity(event_type, country or region, affected_assets)
-        return {
+        event = {
             "event_key": f"macro-alert:{identity}:{severity}",
             "macro_identity": identity,
             "macro_bucket_identity": bucket_identity,
@@ -1951,11 +1962,14 @@ class EmailAlertService:
             "next_check": next_check,
             "edge_question": edge_question,
             "source_quality": source_quality,
-            "source_url": item.get("source_url") or item.get("url") or item.get("link") or "",
+            "source_url": source_contract.get("source_url"),
             "source_label": source_status,
+            "published_at": source_contract.get("published_at"),
             "conviction_score": int(round(impact_score)),
             "priority": 1 if severity == "critical" else 3,
         }
+        event["story_identity"] = self._news_story_descriptor(event).get("identity")
+        return event
 
     def _macro_alert_quality_gate(
         self,
@@ -2346,6 +2360,224 @@ class EmailAlertService:
         safe = re.sub(r"[^a-z0-9.-]+", "-", f"{event_type}-{country}-{asset_part}".lower()).strip("-")
         return safe[:120] or "macro-bucket"
 
+    def _telegram_news_source_contract(
+        self,
+        item: Dict[str, Any],
+        require_tier_1: bool = True,
+    ) -> Dict[str, Any]:
+        evidence = item.get("source_evidence") if isinstance(item.get("source_evidence"), dict) else {}
+        correction = evidence.get("correction_status") if isinstance(evidence.get("correction_status"), dict) else {}
+        source_url = str(item.get("source_url") or item.get("url") or item.get("link") or evidence.get("url") or "").strip()
+        parsed = urlparse(source_url)
+        published_raw = item.get("published_at") or evidence.get("published_at")
+        published_dt = self._paper_trade_datetime(published_raw)
+        published_at = self._paper_trade_time(published_raw)
+        source_quality = str(item.get("source_quality") or evidence.get("quality") or "").strip().lower()
+        errors: List[str] = []
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            errors.append("clickable_source_url_required")
+        if evidence.get("link_verified") is not True:
+            errors.append("source_link_not_verified")
+        if not published_at:
+            errors.append("publication_timestamp_required")
+        elif published_dt:
+            now = datetime.now(published_dt.tzinfo or ZoneInfo("UTC"))
+            max_age_hours = self._safe_int_env("TELEGRAM_NEWS_MAX_AGE_HOURS", 24, minimum=1)
+            if published_dt > now + timedelta(minutes=10):
+                errors.append("publication_timestamp_in_future")
+            elif published_dt < now - timedelta(hours=max_age_hours):
+                errors.append("publication_timestamp_stale")
+        if require_tier_1 and source_quality not in {"tier_1", "official_primary"}:
+            errors.append("tier_1_or_primary_source_required")
+        if str(correction.get("status") or "") in {
+            "correction_detected",
+            "retracted_or_withdrawn",
+            "source_unavailable",
+        }:
+            errors.append("source_corrected_retracted_or_unavailable")
+        return {
+            "valid": not errors,
+            "errors": errors,
+            "source_url": source_url,
+            "published_at": published_dt.isoformat() if published_dt else "",
+            "published_display": published_at,
+            "source_quality": source_quality,
+        }
+
+    def _canonical_news_url(self, value: Any) -> str:
+        raw = str(value or "").strip()
+        try:
+            parsed = urlparse(raw)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                return ""
+            path = re.sub(r"/{2,}", "/", parsed.path or "/").rstrip("/") or "/"
+            return urlunparse((parsed.scheme.lower(), parsed.hostname.lower(), path, "", "", ""))
+        except Exception:
+            return ""
+
+    def _news_story_descriptor(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        title = str(item.get("title") or item.get("headline") or item.get("line") or "").strip()
+        normalized_title = re.sub(r"[^a-z0-9äöüß]+", " ", title.lower()).strip()
+        stop_words = {
+            "a", "an", "and", "as", "at", "auf", "aus", "bei", "das", "der", "die", "ein", "eine",
+            "for", "from", "für", "im", "in", "ist", "mit", "nach", "of", "on", "sagt", "says",
+            "the", "to", "und", "von", "vor", "with", "zu", "zur", "zum", "update", "breaking",
+        }
+        tokens = sorted(
+            {
+                token
+                for token in normalized_title.split()
+                if len(token) >= 3 and token not in stop_words
+            }
+        )[:24]
+        precomputed_identity = str(item.get("story_identity") or "").strip()
+        explicit_id = str(
+            item.get("story_id")
+            or item.get("event_cluster_id")
+            or item.get("cluster_id")
+            or ""
+        ).strip()
+        canonical_url = self._canonical_news_url(
+            item.get("source_url") or item.get("url") or item.get("link")
+        )
+        event_type = str(item.get("event_type") or item.get("type") or "news").strip().lower()
+        ticker = str(item.get("ticker") or item.get("symbol") or "").strip().upper()
+        country = str(item.get("country") or item.get("region") or "global").strip().lower()
+        # Keep the scope stable when the same story is enriched differently by the
+        # rich brief and critical-alert pipelines.
+        scope = f"{event_type}:{ticker or country}"
+        published_raw = item.get("published_at")
+        published = None
+        try:
+            published = datetime.fromisoformat(str(published_raw).replace("Z", "+00:00")) if published_raw else None
+            if published and published.tzinfo is None:
+                published = published.replace(tzinfo=ZoneInfo("UTC"))
+        except Exception:
+            published = None
+        correction = item.get("source_evidence") if isinstance(item.get("source_evidence"), dict) else {}
+        correction = correction.get("correction_status") if isinstance(correction.get("correction_status"), dict) else {}
+        revision = str(correction.get("status") or "original")
+        raw_identity = explicit_id or f"{scope}|{published.isoformat() if published else ''}|{' '.join(tokens)}|{revision}"
+        identity = precomputed_identity or (
+            "news-story:" + hashlib.sha256(raw_identity.encode("utf-8")).hexdigest()[:24]
+        )
+        return {
+            "identity": identity,
+            "explicit_id": explicit_id,
+            "canonical_url": canonical_url,
+            "scope": scope,
+            "tokens": tokens,
+            "published_at": published.isoformat() if published else None,
+            "revision": revision,
+            "title": title,
+        }
+
+    def _news_story_registry(self) -> List[Dict[str, Any]]:
+        if not getattr(self, "portfolio_manager", None):
+            return []
+        raw = self.portfolio_manager.get_app_setting("telegram_news_story_registry_v1", "[]")
+        try:
+            rows = json.loads(raw or "[]")
+        except Exception:
+            rows = []
+        if not isinstance(rows, list):
+            rows = []
+        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(
+            hours=self._safe_int_env("NEWS_STORY_DEDUPE_HOURS", 168, minimum=1)
+        )
+        active = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                delivered = datetime.fromisoformat(str(row.get("delivered_at") or "").replace("Z", "+00:00"))
+                if delivered.tzinfo is None:
+                    delivered = delivered.replace(tzinfo=ZoneInfo("UTC"))
+            except Exception:
+                continue
+            if delivered >= cutoff:
+                active.append(row)
+        return active[-300:]
+
+    def _news_story_descriptors_match(self, current: Dict[str, Any], previous: Dict[str, Any]) -> bool:
+        if current.get("revision") != previous.get("revision"):
+            return False
+        if current.get("explicit_id") and current.get("explicit_id") == previous.get("explicit_id"):
+            return True
+        if current.get("canonical_url") and current.get("canonical_url") == previous.get("canonical_url"):
+            return True
+        if current.get("identity") == previous.get("identity"):
+            return True
+        if not current.get("scope") or current.get("scope") != previous.get("scope"):
+            return False
+        try:
+            current_time = datetime.fromisoformat(str(current.get("published_at") or ""))
+            previous_time = datetime.fromisoformat(str(previous.get("published_at") or ""))
+            if abs((current_time - previous_time).total_seconds()) > 12 * 3600:
+                return False
+        except Exception:
+            return False
+        current_tokens = set(current.get("tokens") or [])
+        previous_tokens = set(previous.get("tokens") or [])
+        if not current_tokens or not previous_tokens:
+            return False
+        intersection = len(current_tokens & previous_tokens)
+        union = len(current_tokens | previous_tokens)
+        containment = intersection / max(1, min(len(current_tokens), len(previous_tokens)))
+        jaccard = intersection / max(1, union)
+        return containment >= 0.70 or jaccard >= 0.55
+
+    def _news_story_can_send(self, item: Dict[str, Any], registry: Optional[List[Dict[str, Any]]] = None) -> bool:
+        descriptor = self._news_story_descriptor(item)
+        return not any(
+            self._news_story_descriptors_match(descriptor, previous)
+            for previous in (registry if registry is not None else self._news_story_registry())
+        )
+
+    def _select_new_verified_news(
+        self,
+        items: List[Dict[str, Any]],
+        limit: int = 7,
+    ) -> List[Dict[str, Any]]:
+        registry = self._news_story_registry()
+        selected: List[Dict[str, Any]] = []
+        selected_descriptors: List[Dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            source = self._telegram_news_source_contract(item, require_tier_1=True)
+            if source.get("valid") is not True:
+                continue
+            normalized = {
+                **item,
+                "source_url": source.get("source_url"),
+                "published_at": source.get("published_at"),
+            }
+            descriptor = self._news_story_descriptor(normalized)
+            if any(self._news_story_descriptors_match(descriptor, previous) for previous in [*registry, *selected_descriptors]):
+                continue
+            normalized["story_identity"] = descriptor["identity"]
+            selected.append(normalized)
+            selected_descriptors.append(descriptor)
+            if len(selected) >= limit:
+                break
+        return selected
+
+    def _record_news_story_deliveries(self, items: List[Dict[str, Any]], channel: str) -> None:
+        if not items or not getattr(self, "portfolio_manager", None):
+            return
+        registry = self._news_story_registry()
+        delivered_at = datetime.now(ZoneInfo("UTC")).isoformat()
+        for item in items:
+            descriptor = self._news_story_descriptor(item)
+            if any(self._news_story_descriptors_match(descriptor, previous) for previous in registry):
+                continue
+            registry.append({**descriptor, "delivered_at": delivered_at, "channel": channel})
+        self.portfolio_manager.set_app_setting(
+            "telegram_news_story_registry_v1",
+            json.dumps(registry[-300:], ensure_ascii=True, default=str),
+        )
+
     def _macro_alert_state_key(self, identity: str) -> str:
         safe = re.sub(r"[^a-zA-Z0-9:_-]+", "-", identity)[:120]
         return f"macro_alert_state:{safe}"
@@ -2400,9 +2632,11 @@ class EmailAlertService:
 
     def _record_macro_alert_delivery(self, events: List[Dict[str, Any]]) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
+        delivered_news: List[Dict[str, Any]] = []
         for event in events:
             if event.get("category") != "macro_alert":
                 continue
+            delivered_news.append(event)
             identities = self._macro_alert_identities(event)
             if not identities:
                 continue
@@ -2415,6 +2649,7 @@ class EmailAlertService:
             }
             for identity in identities:
                 self.portfolio_manager.set_app_setting(self._macro_alert_state_key(identity), json.dumps(payload))
+        self._record_news_story_deliveries(delivered_news, "critical_macro_alert")
 
     def _paper_account_status_state_key(self) -> str:
         return "paper_account_status_alert_state"
@@ -2940,15 +3175,11 @@ class EmailAlertService:
         # ── MSG 2: News (Reuters/CNBC/Bloomberg + Google News) ─────────────
         lines2: List[str] = ["📰 <b>News</b>", ""]
 
-        # Merge top_news + google_news_extra, deduplicate
-        seen_titles: set = set()
-        all_news: List[Dict[str, Any]] = []
-        for item in brief.get("top_news", []) + brief.get("google_news_extra", []):
-            t = item.get("title") or ""
-            identity = self._brief_line_identity(t)
-            if t and identity and identity not in seen_titles:
-                seen_titles.add(identity)
-                all_news.append(item)
+        # One shared story registry covers every Telegram news format.
+        all_news = self._select_new_verified_news(
+            brief.get("top_news", []) + brief.get("google_news_extra", []),
+            limit=7,
+        )
         important_news = [item for item in all_news if item.get("is_important")][:2]
         important_ids = {self._brief_line_identity(item.get("title") or "") for item in important_news}
         for item in important_news:
@@ -2965,6 +3196,9 @@ class EmailAlertService:
             source_meta = f"Quelle: {publisher or 'unbekannt'}"
             if item.get("source_domain"):
                 source_meta += f" · {self._tg_esc(item.get('source_domain'))}"
+            publication = self._paper_trade_time(item.get("published_at"))
+            if publication:
+                source_meta += f" · Veröffentlicht {self._tg_esc(publication)}"
             source_meta += f" · Vertrauen {self._tg_esc(intelligence.get('confidence') or 'offen')}"
             lines2.append(source_meta)
             evidence = item.get("source_evidence") or {}
@@ -3091,15 +3325,19 @@ class EmailAlertService:
             publisher = self._tg_esc(item.get("publisher") or "")
             ticker = (item.get("ticker") or "").strip()
             tag = f"<code>{self._tg_esc(ticker)}</code> " if ticker else ""
-            line = f"• {tag}<a href=\"{link}\">{title}</a>" if link else f"• {tag}{title}"
+            line = f"• {tag}<a href=\"{link}\">{title}</a>"
             if publisher:
                 line += f" <i>({publisher})</i>"
+            publication = self._paper_trade_time(item.get("published_at"))
+            if publication:
+                line += f" · {self._tg_esc(publication)}"
             lines2.append(line)
 
         if not all_news:
-            lines2.append("<i>Keine aktuellen Meldungen.</i>")
+            lines2.append("<i>Keine neuen, verifizierten Tier-1-Meldungen seit dem letzten Versand.</i>")
 
         self._tg_post(token, chat, "\n".join(lines2))
+        self._record_news_story_deliveries(all_news, f"rich_brief:{sl}")
         lines2 = ["📡 <b>Weitere Trading-Radare</b>"]
 
         product_catalysts = brief.get("product_catalysts") or []

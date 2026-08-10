@@ -71,6 +71,7 @@ Ziel: Jede Push-Nachricht beantwortet in unter einer Minute, was passiert ist un
 - [x] Korrektur- und Widerrufsmarker bei der Erfassung erkennen und das News-Trade-Gate blockieren.
 - [x] Korrektur-/Widerrufsmonitor: Eine geänderte Quelle bewertet den bestehenden News-Trade neu und löst eine deduplizierte Exit-Prüfung aus; Abruffehler allein invalidieren nicht.
 - [x] Telegram-Deduplizierung in QA für Kauf, Verkauf, Management, Kontoübersicht und News vollständig abdecken; fehlgeschlagene Zustellung bleibt wiederholbar.
+- [x] Telegram-News kanalübergreifend per stabiler und semantischer Story-ID deduplizieren; nur frische, link-verifizierte Tier-1-/Primärquellen mit Veröffentlichungszeit zulassen und erst nach erfolgreicher Zustellung als gesendet markieren.
 - [ ] Optional planbare Tagesübersicht aktivierbar machen, ohne die ereignisgesteuerten Risiko-Pushes zu verwässern.
 
 Abnahme:

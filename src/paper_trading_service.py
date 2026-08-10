@@ -769,13 +769,14 @@ class PaperTradingService:
             playbook = {
                 **playbook,
                 "leveraged_product": product_data_validation["data"],
+                "contract_multiplier": product_data_validation["data"]["contract_multiplier"],
                 "product_data_warnings": product_data_validation["warnings"],
             }
             offered_leverage = float(product_data_validation["data"].get("offered_leverage") or 1)
             if leverage <= 1:
                 leverage = offered_leverage
-            elif leverage > offered_leverage + 1e-9:
-                raise ValueError("Requested leverage exceeds the validated provider-offered product leverage.")
+            elif abs(leverage - offered_leverage) > 1e-9:
+                raise ValueError("Requested leverage must exactly match the validated provider-offered product leverage.")
             if leverage > 1 and direction != str(playbook.get("direction") or "").lower():
                 raise ValueError("Leveraged product direction must match the evidence-backed playbook direction.")
         hard_rule_reasons = [
@@ -1691,6 +1692,7 @@ class PaperTradingService:
         bid = number_field("bid")
         ask = number_field("ask")
         offered_leverage = number_field("offered_leverage")
+        contract_multiplier = number_field("contract_multiplier")
         if offered_leverage is not None:
             if offered_leverage <= 1:
                 errors.append("offered_leverage_must_exceed_1")
@@ -1747,6 +1749,7 @@ class PaperTradingService:
                 "spread_pct": spread_pct,
                 "distance_to_knockout_pct": distance_to_ko,
                 "offered_leverage": offered_leverage,
+                "contract_multiplier": contract_multiplier,
                 "leverage_is_embedded_in_product_price": True,
                 "overnight_risk_ack": acknowledged,
                 "validated_at": datetime.utcnow().isoformat(),
@@ -2958,6 +2961,7 @@ class PaperTradingService:
                             "Strike or knockout level",
                             "Expiry",
                             "Spread and issuer/broker quote",
+                            "Provider contract multiplier / product ratio",
                             "Implied volatility or product pricing premium",
                             "Overnight gap and issuer risk",
                         ],
@@ -4041,6 +4045,10 @@ class PaperTradingService:
         warnings.extend(str(item) for item in framework.get("warnings") or [])
 
         paper_ready = not errors and not blocked_reasons and bool(playbook.get("demo_tradeable"))
+        selected_leverage = float(playbook.get("selected_leverage") or 1)
+        contract_multiplier = float(playbook.get("contract_multiplier") or (100 if is_option else 1))
+        leveraged_product = playbook.get("leveraged_product") if isinstance(playbook.get("leveraged_product"), dict) else {}
+        leverage_embedded = leveraged_product.get("leverage_is_embedded_in_product_price") is True
         if blocked_reasons:
             status = "blocked"
         elif errors:
@@ -4070,7 +4078,16 @@ class PaperTradingService:
             "quantity": playbook.get("suggested_quantity"),
             "notional_value": playbook.get("suggested_notional_value"),
             "max_loss_value": playbook.get("suggested_max_loss_value"),
-            "leverage": float(playbook.get("selected_leverage") or 1),
+            "leverage": selected_leverage,
+            "contract_multiplier": contract_multiplier,
+            "leverage_calculation": {
+                "selected_or_offered_leverage": selected_leverage,
+                "leverage_embedded_in_product_price": leverage_embedded,
+                "pnl_leverage_multiplier": 1.0 if leverage_embedded else selected_leverage,
+                "contract_multiplier": contract_multiplier,
+                "formula": "price_move * quantity * direction * pnl_leverage_multiplier * contract_multiplier",
+                "double_application_blocked": True,
+            },
             "leverage_assessment": playbook.get("leverage_assessment") or None,
             "account_risk_pct": playbook.get("suggested_risk_pct"),
             "risk_reward": risk_reward,
@@ -4263,7 +4280,11 @@ class PaperTradingService:
         ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
         leveraged_product = ticket.get("leveraged_product") if isinstance(ticket.get("leveraged_product"), dict) else {}
         payout_multiplier = 1.0 if leveraged_product.get("leverage_is_embedded_in_product_price") is True else leverage
-        contract_multiplier = 100 if trade.get("asset_class") == "option" else 1
+        contract_multiplier = float(
+            trade.get("contract_multiplier")
+            or ticket.get("contract_multiplier")
+            or (100 if trade.get("asset_class") == "option" else 1)
+        )
         if not entry or stop in (None, 0) or quantity <= 0:
             return 0.0
         return abs(entry - float(stop)) * quantity * payout_multiplier * contract_multiplier
@@ -4915,7 +4936,11 @@ class PaperTradingService:
             row["option_quote_reason"] = current_market.get("reason")
             row["option_contract_identity"] = ticket.get("option_contract_identity")
         direction_multiplier = -1 if row.get("direction") == "short" else 1
-        contract_multiplier = 100 if is_option else 1
+        contract_multiplier = float(
+            row.get("contract_multiplier")
+            or ticket.get("contract_multiplier")
+            or (100 if is_option else 1)
+        )
         invested_value = round(entry * quantity * payout_multiplier * contract_multiplier, 2)
         row["invested_value"] = invested_value
         row["position_notional_value"] = invested_value
@@ -5322,7 +5347,7 @@ class PaperTradingService:
         fill_price = reference * (1 + adjustment if is_buy else 1 - adjustment)
         fill_price = round(max(0.0001, fill_price), 4)
         cost_per_unit = abs(fill_price - reference)
-        estimated_cost_value = cost_per_unit * max(0.0, float(quantity or 0)) * max(1.0, float(contract_multiplier or 1))
+        estimated_cost_value = cost_per_unit * max(0.0, float(quantity or 0)) * max(0.0, float(contract_multiplier or 1))
         return {
             "phase": normalized_phase,
             "side": "buy" if is_buy else "sell",

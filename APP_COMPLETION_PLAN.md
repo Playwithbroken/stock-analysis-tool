@@ -32,7 +32,7 @@ Ziel: Kein Trade und keine Push-Nachricht darf auf erfundenen oder unklaren Hand
 - [x] Kontrakt-Mapping vom Paper-Einstieg bis zum Exit unveränderlich speichern; kein späterer Wechsel auf einen anderen Strike oder Verfall.
 - [x] Options-Management gegen den gespeicherten Kontraktpreis auswerten; fehlt eine brauchbare Quote, P&L/Auto-Exit blockieren und den Underlying nur ausdrücklich als Outcome-Fallback verwenden.
 - [ ] News-getriebene Trades nur öffnen, wenn Primärquelle oder belastbare Tier-1-Quelle, Veröffentlichungszeit und Marktreaktionsfenster gespeichert sind.
-- [ ] Hebel-End-to-End-Test für Aktien/ETFs sowie Anbieterprodukte: angebotener Hebel, eingebetteter Hebel, Stoprisiko und P&L dürfen nie doppelt multipliziert werden.
+- [x] Hebel-End-to-End-Test für Aktien/ETFs, Standardoptionen und Anbieterprodukte: angebotener Hebel, Produktmultiplikator, eingebetteter Hebel, Stoprisiko und P&L werden exakt einmal angewendet.
 
 Abnahme:
 

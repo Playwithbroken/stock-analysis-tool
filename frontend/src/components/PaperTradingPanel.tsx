@@ -2437,13 +2437,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           ["bid", "Bid"],
                           ["ask", "Ask"],
                           ["offered_leverage", "Anbieter-Hebel"],
+                          ["contract_multiplier", "Bezugsverhältnis/Multiplikator"],
                           ["distance_to_knockout_pct", "KO-Abstand %"],
                         ].map(([key, label]) => (
                           <label key={key} className="block">
                             <span className="font-bold text-slate-500">{label}</span>
                             <input
                               type={key === "expiry" ? "date" : key === "issuer" ? "text" : "number"}
-                              step="0.01"
+                              step={key === "contract_multiplier" ? "0.0001" : "0.01"}
                               value={productDrafts[item.id]?.[key] || ""}
                               onChange={(event) => updateProductDraft(item.id, key, event.target.value)}
                               className="mt-1 w-full rounded-lg border border-black/8 bg-white px-2 py-1.5 text-xs font-bold text-slate-900"
@@ -2492,7 +2493,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       ) : null}
                       {productChecks[item.id]?.valid && productChecks[item.id]?.data?.offered_leverage ? (
                         <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-800">
-                          Anbieterhebel {Number(productChecks[item.id].data.offered_leverage).toFixed(1)}x wird vollständig übernommen und nicht doppelt auf den Produktkurs gerechnet.
+                          Anbieterhebel {Number(productChecks[item.id].data.offered_leverage).toFixed(1)}x und Produktmultiplikator {Number(productChecks[item.id].data.contract_multiplier).toFixed(4)} werden exakt übernommen; der Hebel wird nicht nochmals auf Produktkurs oder P&amp;L gerechnet.
                         </div>
                       ) : null}
                     </div>

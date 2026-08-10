@@ -102,6 +102,7 @@ python qa_macro_alert_quality.py
 python qa_paper_demo_account.py
 python qa_paper_learning_alerts.py
 python qa_option_contract_alerts.py
+python qa_leverage_end_to_end.py
 python qa_news_evidence_schema.py
 python qa_news_source_revalidation.py
 python qa_telegram_deduplication.py
@@ -130,6 +131,7 @@ python qa_macro_alert_quality.py
 python qa_paper_demo_account.py
 python qa_paper_learning_alerts.py
 python qa_option_contract_alerts.py
+python qa_leverage_end_to_end.py
 python qa_news_evidence_schema.py
 python qa_news_source_revalidation.py
 python qa_telegram_deduplication.py

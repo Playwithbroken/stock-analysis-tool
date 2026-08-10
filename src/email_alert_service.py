@@ -3839,7 +3839,7 @@ class EmailAlertService:
             lines.extend(
                 [
                     f"<b>Validiertes Produkt:</b> {product_type} | Emittent {issuer} | Strike/KO {self._tg_price(product.get('strike_or_knockout_level'))} | Verfall {expiry}",
-                    f"<b>Produktquote:</b> Bid {self._tg_price(product.get('bid'))} / Ask {self._tg_price(product.get('ask'))} | Spread {spread} | angebotener Hebel {leverage}x",
+                    f"<b>Produktquote:</b> Bid {self._tg_price(product.get('bid'))} / Ask {self._tg_price(product.get('ask'))} | Spread {spread} | angebotener Hebel {leverage}x | Multiplikator {self._tg_esc(str(product.get('contract_multiplier') or 'n/a'))}",
                     "<b>Produktidentität:</b> Beim Paper-Einstieg gesperrt; Wechsel von Emittent, Strike/KO oder Verfall ist nicht erlaubt.",
                 ]
             )

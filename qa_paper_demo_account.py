@@ -644,6 +644,7 @@ def test_demo_account_sizing() -> None:
                 "bid": 4.80,
                 "ask": 4.95,
                 "offered_leverage": 20,
+                "contract_multiplier": 1,
                 "distance_to_knockout_pct": 8.0,
                 "overnight_risk_ack": True,
             },
@@ -1871,6 +1872,7 @@ def test_leverage_product_validation_contract() -> None:
             "bid": 4.80,
             "ask": 4.95,
             "offered_leverage": 20,
+            "contract_multiplier": 0.1,
             "distance_to_knockout_pct": 8.0,
             "overnight_risk_ack": True,
         }
@@ -1879,6 +1881,7 @@ def test_leverage_product_validation_contract() -> None:
     assert valid["errors"] == []
     assert valid["data"]["spread_pct"] < 6
     assert valid["data"]["offered_leverage"] == 20
+    assert valid["data"]["contract_multiplier"] == 0.1
     assert valid["data"]["leverage_is_embedded_in_product_price"] is True
 
     too_wide = service.validate_leverage_product_data(
@@ -1890,6 +1893,7 @@ def test_leverage_product_validation_contract() -> None:
             "bid": 4.00,
             "ask": 4.60,
             "offered_leverage": 12,
+            "contract_multiplier": 1,
             "overnight_risk_ack": True,
         }
     )
@@ -1907,18 +1911,20 @@ def test_leverage_product_validation_contract() -> None:
             "closed_price": 5.5,
             "quantity": 10,
             "leverage": 20,
+            "contract_multiplier": 0.1,
             "stop_price": 2.5,
             "target_price": 10.0,
             "trade_ticket": {
                 "leveraged_product": {
                     "offered_leverage": 20,
+                    "contract_multiplier": 0.1,
                     "leverage_is_embedded_in_product_price": True,
                 }
             },
         }
     )
-    assert enriched["invested_value"] == 5_000.0
-    assert enriched["realized_pnl_value"] == 500.0
+    assert enriched["invested_value"] == 5.0
+    assert enriched["realized_pnl_value"] == 0.5
     assert enriched["realized_pnl_pct"] == 10.0
 
 

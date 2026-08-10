@@ -216,6 +216,8 @@ def test_equity_paper_leverage_is_quality_gated_and_risk_neutral() -> None:
     )
     assert aggressive_aapl["risk_multiplier"] == 0.25
     assert aggressive_aapl["score"] == 95
+    assert aggressive_aapl["suggested_notional_value"] == 26_785.71
+    assert aggressive_aapl["suggested_max_loss_value"] == 937.5
 
     opened = service.create_trade_from_playbook(
         {"playbook_id": "equity-AAPL-long", "direction": "long", "quantity": 0, "leverage": 2},

@@ -2137,20 +2137,48 @@ class PaperTradingService:
             if not exploration_reasons and playbook.get("asset_class") != "option":
                 learning_row = dict(row)
                 learning_row["learning_mode"] = True
-                learning_row["suggested_quantity"] = round(float(playbook.get("suggested_quantity") or 0) * exploration_risk_multiplier, 6)
-                learning_row["suggested_notional_value"] = round(float(playbook.get("suggested_notional_value") or 0) * exploration_risk_multiplier, 2)
-                learning_row["suggested_max_loss_value"] = round(float(playbook.get("suggested_max_loss_value") or 0) * exploration_risk_multiplier, 2)
-                learning_row["risk_multiplier"] = exploration_risk_multiplier
+                learning_sizing = self._suggest_demo_sizing(
+                    {**playbook, "tradeable": True, "do_not_trade_reasons": []},
+                    demo_account,
+                    risk_multiplier_override=exploration_risk_multiplier,
+                )
+                learning_row.update(
+                    {
+                        key: learning_sizing.get(key)
+                        for key in (
+                            "suggested_quantity",
+                            "suggested_notional_value",
+                            "suggested_max_loss_value",
+                            "suggested_account_pct",
+                            "suggested_risk_pct",
+                        )
+                    }
+                )
+                learning_row["risk_multiplier"] = learning_sizing.get("risk_multiplier")
                 learning_row["reasons"] = [f"learning mode: reduced risk x{exploration_risk_multiplier:g}"]
                 exploration.append(learning_row)
             if not aggressive_reasons and playbook.get("asset_class") != "option":
                 aggressive_row = dict(row)
                 aggressive_row["learning_mode"] = True
                 aggressive_row["aggressive_learning_mode"] = True
-                aggressive_row["suggested_quantity"] = round(float(playbook.get("suggested_quantity") or 0) * aggressive_risk_multiplier, 6)
-                aggressive_row["suggested_notional_value"] = round(float(playbook.get("suggested_notional_value") or 0) * aggressive_risk_multiplier, 2)
-                aggressive_row["suggested_max_loss_value"] = round(float(playbook.get("suggested_max_loss_value") or 0) * aggressive_risk_multiplier, 2)
-                aggressive_row["risk_multiplier"] = aggressive_risk_multiplier
+                aggressive_sizing = self._suggest_demo_sizing(
+                    {**playbook, "tradeable": True, "do_not_trade_reasons": []},
+                    demo_account,
+                    risk_multiplier_override=aggressive_risk_multiplier,
+                )
+                aggressive_row.update(
+                    {
+                        key: aggressive_sizing.get(key)
+                        for key in (
+                            "suggested_quantity",
+                            "suggested_notional_value",
+                            "suggested_max_loss_value",
+                            "suggested_account_pct",
+                            "suggested_risk_pct",
+                        )
+                    }
+                )
+                aggressive_row["risk_multiplier"] = aggressive_sizing.get("risk_multiplier")
                 aggressive_row["reasons"] = [f"aggressive learning mode: reduced risk x{aggressive_risk_multiplier:g}"]
                 aggressive_exploration.append(aggressive_row)
             if len(selected) >= max_candidates:

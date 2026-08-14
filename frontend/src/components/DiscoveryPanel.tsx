@@ -524,6 +524,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               setMarketView("movers");
               setActiveTab("overview");
             }}
+            aria-pressed={marketView === "movers"}
             className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
               marketView === "movers" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
             }`}
@@ -536,6 +537,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               setMarketView("explorer");
               setActiveTab("signals");
             }}
+            aria-pressed={marketView === "explorer"}
             className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
               marketView === "explorer" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
             }`}
@@ -548,11 +550,13 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
       {/* Tab Navigation */}
       <div className="no-scrollbar sticky top-16 z-40 -mx-1 overflow-x-auto px-1 md:top-20">
-        <div className="surface-panel inline-flex min-w-max items-center gap-2 rounded-2xl p-1.5">
+        <div role="tablist" aria-label="Markets-Bereiche" className="surface-panel inline-flex min-w-max items-center gap-2 rounded-2xl p-1.5">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              role="tab"
+              aria-selected={activeTab === tab.id}
               className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all sm:px-6 ${
                 activeTab === tab.id
                   ? "bg-[var(--accent)] text-white shadow-[0_10px_30px_rgba(15,118,110,0.18)]"

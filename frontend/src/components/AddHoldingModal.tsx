@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
+import useAccessibleDialog from "../hooks/useAccessibleDialog";
 
 interface AddHoldingModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export default function AddHoldingModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useAccessibleDialog<HTMLDivElement>(isOpen, onClose, "input, select, button");
 
   useEffect(() => {
     if (initialTicker) setTicker(initialTicker);
@@ -56,12 +58,12 @@ export default function AddHoldingModal({
   // No portfolios exist yet — show helpful message
   if (portfolios.length === 0) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm">
-        <div className="surface-panel w-full max-w-sm rounded-[2rem] p-8 text-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm" role="presentation">
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="no-portfolio-title" tabIndex={-1} className="surface-panel w-full max-w-sm rounded-[2rem] p-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[var(--accent-soft)] text-[var(--accent)]">
             <Plus size={24} />
           </div>
-          <h3 className="text-xl font-black text-[var(--text-primary)]">Noch kein Portfolio</h3>
+          <h3 id="no-portfolio-title" className="text-xl font-black text-[var(--text-primary)]">Noch kein Portfolio</h3>
           <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
             Erstelle zuerst ein Portfolio im <strong>Portfolio-Tab</strong>, dann kannst du
             Aktien direkt aus der Analyse hinzufügen.
@@ -113,8 +115,8 @@ export default function AddHoldingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm">
-      <div className="surface-panel w-full max-w-md rounded-[2rem] p-6 sm:p-7">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm" role="presentation">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="add-holding-title" aria-describedby={error ? "add-holding-error" : undefined} tabIndex={-1} className="surface-panel w-full max-w-md rounded-[2rem] p-6 sm:p-7">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] bg-[var(--accent-soft)] text-[var(--accent)]">
             <Plus size={18} />
@@ -123,7 +125,7 @@ export default function AddHoldingModal({
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
               Portfolio
             </div>
-            <h3 className="mt-1 text-2xl font-black text-slate-900">
+            <h3 id="add-holding-title" className="mt-1 text-2xl font-black text-slate-900">
               Asset hinzufuegen
             </h3>
           </div>
@@ -200,7 +202,7 @@ export default function AddHoldingModal({
         </div>
 
         {error ? (
-          <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          <div id="add-holding-error" role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             {error}
           </div>
         ) : null}

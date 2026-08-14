@@ -7,6 +7,7 @@ import { Plus, Download, FileText, ShieldCheck, ShieldAlert, Ban, AlertTriangle 
 import { useCurrency } from "../context/CurrencyContext";
 import ETFComparison from "./ETFComparison";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
+import useAccessibleDialog from "../hooks/useAccessibleDialog";
 import { formatAnalysisFetchTime, getAnalysisQualityState } from "../lib/analysisQuality";
 import {
   localizeAnalysisLabel,
@@ -170,6 +171,11 @@ export default function AnalysisResult({
 }: AnalysisResultProps) {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [alertModalOpen, setAlertModalOpen] = React.useState(false);
+  const alertDialogRef = useAccessibleDialog<HTMLDivElement>(
+    alertModalOpen,
+    () => setAlertModalOpen(false),
+    "input",
+  );
   const [alertDirection, setAlertDirection] = React.useState<"above" | "below">("above");
   const [alertTarget, setAlertTarget] = React.useState("");
   const [alertBusy, setAlertBusy] = React.useState(false);
@@ -800,15 +806,16 @@ export default function AnalysisResult({
           </section>
 
           {alertModalOpen ? (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
-              <div className="surface-panel w-full max-w-md rounded-[1.6rem] p-6">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4" role="presentation">
+              <div ref={alertDialogRef} role="dialog" aria-modal="true" aria-labelledby="price-alert-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[1.6rem] p-6">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
                   Kursalarm
                 </div>
-                <h3 className="mt-2 text-2xl text-slate-900">{data.ticker} Kursalarm setzen</h3>
+                <h3 id="price-alert-title" className="mt-2 text-2xl text-slate-900">{data.ticker} Kursalarm setzen</h3>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <button
                     onClick={() => setAlertDirection("above")}
+                    aria-pressed={alertDirection === "above"}
                     className={`rounded-xl border px-4 py-3 text-sm font-bold ${
                       alertDirection === "above"
                         ? "border-emerald-300 bg-emerald-50 text-emerald-700"
@@ -819,6 +826,7 @@ export default function AnalysisResult({
                   </button>
                   <button
                     onClick={() => setAlertDirection("below")}
+                    aria-pressed={alertDirection === "below"}
                     className={`rounded-xl border px-4 py-3 text-sm font-bold ${
                       alertDirection === "below"
                         ? "border-red-300 bg-red-50 text-red-700"

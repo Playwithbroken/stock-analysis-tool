@@ -20,6 +20,7 @@ import {
 import { getBriefLoadState, guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
 import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
+import useAccessibleDialog from "./hooks/useAccessibleDialog";
 
 const CHUNK_RELOAD_GUARD_KEY = "brokerfreund:chunk-reload-once";
 
@@ -519,6 +520,10 @@ function AppContent() {
   const searchRequestIdRef = useRef(0);
   const briefRequestIdRef = useRef(0);
   const discoveryAnalyzeEnabledAtRef = useRef(0);
+  const installHelpDialogRef = useAccessibleDialog<HTMLDivElement>(
+    showInstallHelp,
+    () => setShowInstallHelp(false),
+  );
   const globalBriefSlow = useSlowProviderState(
     globalBriefStatus === "loading" || globalBriefStatus === "idle",
     6500,
@@ -1268,6 +1273,7 @@ function AppContent() {
                 key={window}
                 type="button"
                 onClick={() => setMarketMoversWindow(window)}
+                aria-pressed={marketMoversWindow === window}
                 className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] transition-colors ${
                   marketMoversWindow === window
                     ? "bg-[#101114] text-white"
@@ -1340,6 +1346,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
+      <a href="#main-content" className="skip-link">Zum Hauptinhalt springen</a>
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
         <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] lg:hidden">
           <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
@@ -1364,6 +1371,8 @@ function AppContent() {
                 className={`flex h-2.5 w-2.5 rounded-full ${
                   headerRealtimeConnected ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" : "bg-amber-500"
                 }`}
+                role="status"
+                aria-label={`Marktdaten: ${headerStatusLabel}`}
                 title={`Marktdaten: ${headerStatusLabel}`}
               />
               <button
@@ -1434,6 +1443,7 @@ function AppContent() {
                   <button
                     key={item.id}
                     onClick={() => selectTab(item.id)}
+                    aria-current={activeTab === item.id ? "page" : undefined}
                     className={`rounded-[0.85rem] px-3 py-2 text-xs font-bold transition-all ${
                       activeTab === item.id
                         ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)]"
@@ -1451,6 +1461,7 @@ function AppContent() {
                   <button
                     onClick={() => setCurrency("USD")}
                     aria-label="Währung auf USD wechseln"
+                    aria-pressed={currency === "USD"}
                     className={`rounded-[0.9rem] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] transition-all ${
                       currency === "USD" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-800"
                     }`}
@@ -1460,6 +1471,7 @@ function AppContent() {
                   <button
                     onClick={() => setCurrency("EUR")}
                     aria-label="Währung auf EUR wechseln"
+                    aria-pressed={currency === "EUR"}
                     className={`rounded-[0.9rem] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] transition-all ${
                       currency === "EUR" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-800"
                     }`}
@@ -1521,6 +1533,8 @@ function AppContent() {
       </header>
 
       <main
+        id="main-content"
+        tabIndex={-1}
         className={`content-shell px-4 pt-3 transition-all duration-300 sm:px-6 lg:pt-5 xl:px-8 2xl:px-10 ${
           isChatOpen ? "xl:pr-[32rem] 2xl:pr-[36rem]" : ""
         }`}
@@ -2019,6 +2033,7 @@ function AppContent() {
             <button
               key={item.id}
               onClick={() => selectTab(item.id)}
+              aria-current={activeTab === item.id ? "page" : undefined}
               className={`mobile-tabbar-button rounded-[0.95rem] px-1.5 py-2.5 text-center text-[9px] font-extrabold uppercase tracking-[0.12em] transition-all ${
                 activeTab === item.id ? "bg-[#101114] text-white" : "text-slate-500 hover:bg-black/[0.04]"
               }`}
@@ -2080,8 +2095,14 @@ function AppContent() {
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
           onClick={() => setShowInstallHelp(false)}
+          role="presentation"
         >
           <div
+            ref={installHelpDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="install-help-title"
+            tabIndex={-1}
             className="surface-panel w-full max-w-md rounded-[2rem] p-7 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2090,7 +2111,7 @@ function AppContent() {
                 <Smartphone size={18} />
               </div>
               <div>
-                <div className="text-lg font-black text-[var(--text-primary)]">App installieren</div>
+                <div id="install-help-title" className="text-lg font-black text-[var(--text-primary)]">App installieren</div>
                 <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
               Wenn kein Installationsdialog erscheint, nutze im Browser-Menü den Punkt
               "App installieren" oder "Zum Startbildschirm hinzufügen".

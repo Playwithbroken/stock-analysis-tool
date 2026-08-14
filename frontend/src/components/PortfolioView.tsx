@@ -10,6 +10,7 @@ import ProviderStatePanel, { useSlowProviderState } from "./ProviderStatePanel";
 import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
+import useAccessibleDialog from "../hooks/useAccessibleDialog";
 
 interface PortfolioViewProps {
   portfolios: Portfolio[];
@@ -220,6 +221,11 @@ export default function PortfolioView({
   const [paperDashboardLoading, setPaperDashboardLoading] = useState(false);
   const [paperDashboardError, setPaperDashboardError] = useState("");
   const paperDashboardSlow = useSlowProviderState(paperDashboardLoading, 5500);
+  const createPortfolioDialogRef = useAccessibleDialog<HTMLDivElement>(
+    showCreateModal,
+    () => setShowCreateModal(false),
+    "input",
+  );
 
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
@@ -1618,12 +1624,12 @@ export default function PortfolioView({
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="surface-panel w-full max-w-md rounded-[2rem] p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="presentation">
+          <div ref={createPortfolioDialogRef} role="dialog" aria-modal="true" aria-labelledby="create-portfolio-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[2rem] p-6">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Neues Portfolio
             </div>
-            <h3 className="mt-2 text-2xl text-slate-900">Portfolio anlegen</h3>
+            <h3 id="create-portfolio-title" className="mt-2 text-2xl text-slate-900">Portfolio anlegen</h3>
             <input
               type="text"
               value={newPortfolioName}
@@ -1636,12 +1642,12 @@ export default function PortfolioView({
               autoFocus
             />
             {createPortfolioError ? (
-              <div className="mt-3 rounded-[1rem] border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-700">
+              <div role="alert" className="mt-3 rounded-[1rem] border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-700">
                 {createPortfolioError}
               </div>
             ) : null}
             {createPortfolioNotice ? (
-              <div className="mt-3 rounded-[1rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-700">
+              <div role="status" aria-live="polite" className="mt-3 rounded-[1rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-700">
                 {createPortfolioNotice}
               </div>
             ) : null}

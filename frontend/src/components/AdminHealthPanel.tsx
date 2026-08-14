@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import useAccessibleDialog from "../hooks/useAccessibleDialog";
 
 interface AdminHealthPanelProps {
   isOpen: boolean;
@@ -141,6 +142,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [paperOutcomeResult, setPaperOutcomeResult] = useState<any>(null);
   const [paperAccountResult, setPaperAccountResult] = useState<any>(null);
   const [error, setError] = useState("");
+  const dialogRef = useAccessibleDialog<HTMLDivElement>(isOpen, onClose, "button");
 
   const load = async () => {
     setLoading(true);
@@ -427,8 +429,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           : "Nächsten Termin abwarten";
 
   return (
-    <div className="fixed inset-0 z-[210] bg-black/45 p-3 backdrop-blur-sm sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-[210] bg-black/45 p-3 backdrop-blur-sm sm:p-6" onClick={onClose} role="presentation">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="health-center-title"
+        tabIndex={-1}
         className="surface-panel ml-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[2rem]"
         onClick={(event) => event.stopPropagation()}
       >
@@ -437,7 +444,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Admin Health Center
             </div>
-            <h2 className="mt-1 text-3xl text-slate-900">Briefings, Scheduler und Datenfeeds</h2>
+            <h2 id="health-center-title" className="mt-1 text-3xl text-slate-900">Briefings, Scheduler und Datenfeeds</h2>
           </div>
           <div className="flex w-full min-w-0 max-w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
             {health?.status ? (
@@ -497,7 +504,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
         <div className="min-w-0 overflow-x-hidden overflow-y-auto p-4 sm:p-5">
           {error ? (
-            <div className="mb-4 rounded-[1.2rem] border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-700">
+            <div role="alert" className="mb-4 rounded-[1.2rem] border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-700">
               {error}
             </div>
           ) : null}

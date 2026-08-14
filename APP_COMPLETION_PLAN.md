@@ -89,7 +89,7 @@ Ziel: Alle entscheidenden Funktionen sind mobil und am Desktop ohne versteckte A
 - [x] Paper-Trader zeigt Risikobuckets, quantitative Korrelationsblocker, Assetklassen-Limits, Cashreserve und verbleibende Kapazität direkt an jeder Kandidatenkarte.
 - [x] Nachrichtenansicht trennt bestätigte Fakten, Interpretation und offene Unsicherheit als drei gleichzeitig sichtbare Blöcke; Quellenbasis, Publisher/Domain, Veröffentlichungszeit, Link- und Primärquellenstatus, Gegenargument, Bestätigung und Invalidierung bleiben explizit prüfbar.
 - [x] Leere, langsame und fehlerhafte Provider-Zustände sind für Dashboard, Analyzer, Markets, Portfolio und Paper-Trader vereinheitlicht; Teil-Ausfälle und lokale Fallbacks bleiben sichtbar und jeder Fehlerpfad hat einen gezielten Retry.
-- [ ] Accessibility: Tastaturbedienung, Fokusführung, Kontrast und Screenreader-Bezeichnungen prüfen.
+- [x] Accessibility: global sichtbarer Tastaturfokus, Skip-Link, Reduced-Motion, aktive Navigation, semantische Tabs/Statusmeldungen sowie Fokusfang, Escape-Schließen und Fokus-Rückgabe für die kritischen Dialoge sind automatisiert und im Browser geprüft; zentrale Textfarben bestehen den WCAG-AA-Kontrastvertrag.
 - [ ] Visuelle QA für 390x844, 768x1024, 1366x768 und 1920x1080 automatisieren.
 
 Abnahme:

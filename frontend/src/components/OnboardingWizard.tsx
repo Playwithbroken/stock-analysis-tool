@@ -1,4 +1,5 @@
 import { useState } from "react";
+import useAccessibleDialog from "../hooks/useAccessibleDialog";
 
 interface OnboardingWizardProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export default function OnboardingWizard({
   const [portfolioName, setPortfolioName] = useState("Main Portfolio");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const dialogRef = useAccessibleDialog<HTMLDivElement>(isOpen, onDismiss, "input, button");
 
   if (!isOpen) return null;
 
@@ -56,14 +58,14 @@ export default function OnboardingWizard({
   };
 
   return (
-    <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/45 px-4">
-      <div className="surface-panel w-full max-w-2xl rounded-[2rem] p-6 sm:p-8">
+    <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/45 px-4" role="presentation">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabIndex={-1} className="surface-panel w-full max-w-2xl rounded-[2rem] p-6 sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Erster Start
             </div>
-            <h2 className="mt-2 text-3xl text-slate-900">Arbeitsbereich einrichten</h2>
+            <h2 id="onboarding-title" className="mt-2 text-3xl text-slate-900">Arbeitsbereich einrichten</h2>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -88,6 +90,7 @@ export default function OnboardingWizard({
             <input
               value={watchTicker}
               onChange={(e) => setWatchTicker(e.target.value.toUpperCase())}
+              aria-label="Erster Watchlist-Ticker"
               placeholder="z. B. AAPL"
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
             />
@@ -148,11 +151,12 @@ export default function OnboardingWizard({
             <input
               value={portfolioName}
               onChange={(e) => setPortfolioName(e.target.value)}
+              aria-label="Name des ersten Portfolios"
               placeholder="Portfolio-Name"
               className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
             />
             {status ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+              <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                 {status}
               </div>
             ) : null}

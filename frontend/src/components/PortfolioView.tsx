@@ -6,6 +6,7 @@ import RiskCorrelationMatrix from "./RiskCorrelationMatrix";
 import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
 import PaperTradingPanel from "./PaperTradingPanel";
+import ProviderStatePanel, { useSlowProviderState } from "./ProviderStatePanel";
 import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
@@ -217,6 +218,8 @@ export default function PortfolioView({
   const [portfolioAdvisoryLoading, setPortfolioAdvisoryLoading] = useState(false);
   const [paperDashboard, setPaperDashboard] = useState<any>(null);
   const [paperDashboardLoading, setPaperDashboardLoading] = useState(false);
+  const [paperDashboardError, setPaperDashboardError] = useState("");
+  const paperDashboardSlow = useSlowProviderState(paperDashboardLoading, 5500);
 
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
@@ -277,6 +280,7 @@ export default function PortfolioView({
 
   const refreshPaperDashboard = async () => {
     setPaperDashboardLoading(true);
+    setPaperDashboardError("");
     try {
       const response = await fetch("/api/trading/paper-dashboard");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -284,6 +288,7 @@ export default function PortfolioView({
       setPaperDashboard(payload || null);
     } catch {
       setPaperDashboard(null);
+      setPaperDashboardError("Paper-Dashboard konnte vom Server nicht geladen werden.");
     } finally {
       setPaperDashboardLoading(false);
     }
@@ -293,13 +298,17 @@ export default function PortfolioView({
     let cancelled = false;
     const loadPaperDashboard = async () => {
       setPaperDashboardLoading(true);
+      setPaperDashboardError("");
       try {
         const response = await fetch("/api/trading/paper-dashboard");
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = await response.json();
         if (!cancelled) setPaperDashboard(payload || null);
       } catch {
-        if (!cancelled) setPaperDashboard(null);
+        if (!cancelled) {
+          setPaperDashboard(null);
+          setPaperDashboardError("Paper-Dashboard konnte vom Server nicht geladen werden.");
+        }
       } finally {
         if (!cancelled) setPaperDashboardLoading(false);
       }
@@ -1585,16 +1594,27 @@ export default function PortfolioView({
           onRefresh={refreshPaperDashboard}
         />
       ) : (
-        <section className="surface-panel rounded-[2rem] p-6">
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-            Paper-Lernkonto
-          </div>
-          <div className="mt-3 text-sm leading-6 text-slate-600">
-            {paperDashboardLoading
-              ? "Demo-Trades und Geldfluss werden geladen."
-              : "Noch keine Paper-Trading-Daten verfügbar. Sobald der Lernmodus einen Trade öffnet, siehst du hier Einsatz, aktuellen Wert und Abschluss-Ergebnis."}
-          </div>
-        </section>
+        <ProviderStatePanel
+          view="paper-trader"
+          state={paperDashboardLoading ? (paperDashboardSlow ? "slow" : "loading") : paperDashboardError ? "error" : "empty"}
+          title={
+            paperDashboardLoading
+              ? paperDashboardSlow
+                ? "Paper-Lernkonto antwortet langsam"
+                : "Paper-Lernkonto wird geladen"
+              : paperDashboardError
+                ? "Paper-Lernkonto nicht erreichbar"
+                : "Noch keine Paper-Trading-Daten"
+          }
+          description={
+            paperDashboardLoading
+              ? "Demo-Trades, Geldfluss, Risikobuckets und Lernstände werden getrennt geladen."
+              : paperDashboardError || "Der Provider hat geantwortet, aber noch keine Demo-Trades oder Lernstände geliefert."
+          }
+          source="Paper-Trading-Service"
+          onRetry={() => void refreshPaperDashboard()}
+          retryLabel="Paper-Daten neu laden"
+        />
       )}
 
       {showCreateModal && (

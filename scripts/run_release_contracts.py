@@ -18,6 +18,7 @@ CONTRACT_TESTS = [
     "qa_operational_alerts.py",
     "qa_security_headers.py",
     "qa_static_cache_headers.py",
+    "qa_provider_states.py",
     "qa_advisory_profile.py",
     "qa_paper_demo_account.py",
     "qa_paper_learning_alerts.py",

@@ -5,6 +5,7 @@ import SignalWatchlistPanel from "./SignalWatchlistPanel";
 import NotificationSettingsPanel from "./NotificationSettingsPanel";
 import { useCurrency } from "../context/CurrencyContext";
 import { fetchJsonWithRetry } from "../lib/api";
+import ProviderStatePanel, { useSlowProviderState } from "./ProviderStatePanel";
 
 /** Wraps a promise with a timeout — resolves null instead of hanging forever */
 function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T | null> {
@@ -120,6 +121,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   const [isComparing, setIsComparing] = useState(false);
   const [highRiskOpps, setHighRiskOpps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [primaryFailureCount, setPrimaryFailureCount] = useState(0);
+  const [providerReloadTick, setProviderReloadTick] = useState(0);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -139,6 +142,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   const [selectedMarketDetailScope, setSelectedMarketDetailScope] = useState<"movers" | "ai" | "alternative" | null>(null);
   const analyzeEnabledAtRef = useRef(0);
   const aiLoadedRef = useRef(false);
+  const providerSlow = useSlowProviderState(loading, 5500);
 
   const onAnalyze = (ticker: string) => {
     const symbol = (ticker || "").trim().toUpperCase();
@@ -172,6 +176,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     let deferredTimer: number | null = null;
     const fetchAll = async () => {
       setLoading(true);
+      setPrimaryFailureCount(0);
 
       const safeFetch = <T,>(url: string) =>
         withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }), 6500);
@@ -191,6 +196,9 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
         r.status === "fulfilled" && r.value != null ? r.value : fallback;
 
       const [s, ps, sw, t, g, l] = primaryResults;
+      setPrimaryFailureCount(
+        primaryResults.filter((result) => result.status === "rejected" || result.value == null).length,
+      );
 
       setStars(val(s, null));
       setPublicSignals(val(ps, null));
@@ -226,7 +234,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
       cancelled = true;
       if (deferredTimer !== null) window.clearTimeout(deferredTimer);
     };
-  }, []);
+  }, [providerReloadTick]);
 
   const refreshAiScanners = async (force = false) => {
     if (!force && (aiLoadedRef.current || aiLoading)) return;
@@ -417,6 +425,15 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
   if (loading && !stars) {
     return (
       <div className="content-shell space-y-8 p-4 xl:px-2">
+        <ProviderStatePanel
+          view="markets"
+          state={providerSlow ? "slow" : "loading"}
+          title={providerSlow ? "Marktdaten brauchen länger als erwartet" : "Markets werden aufgebaut"}
+          description="Mover, Signale und Watchlist kommen aus getrennten Quellen. Bereits beantwortete Provider blockieren die übrigen nicht."
+          source="Discovery-Provider"
+          onRetry={() => setProviderReloadTick((current) => current + 1)}
+          retryLabel="Provider neu anfragen"
+        />
         {/* Banner Skeleton */}
         <div className="relative h-48 w-full overflow-hidden rounded-3xl border border-black/8 bg-white/80 animate-pulse">
           <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-white/40"></div>
@@ -450,8 +467,41 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
     );
   }
 
+  const primaryDataEmpty = !stars && !publicSignals && !signalWatchlist && !trending.length && !gainers.length && !losers.length;
+  if (!loading && primaryDataEmpty) {
+    return (
+      <div className="content-shell p-4 xl:px-2">
+        <ProviderStatePanel
+          view="markets"
+          state={primaryFailureCount > 0 ? "error" : "empty"}
+          title={primaryFailureCount > 0 ? "Marktquellen sind aktuell nicht erreichbar" : "Aktuell liegen keine Markt-Kandidaten vor"}
+          description={
+            primaryFailureCount > 0
+              ? "Keiner der primären Markets-Feeds hat belastbare Daten geliefert. Es werden keine Ersatz-Kandidaten als live ausgegeben."
+              : "Die Provider haben geantwortet, aber derzeit keine belastbaren Signale geliefert. Das ist ein gültiger Leerzustand."
+          }
+          source="Discovery-Provider"
+          onRetry={() => setProviderReloadTick((current) => current + 1)}
+          retryLabel="Markets neu laden"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-20">
+      {primaryFailureCount > 0 ? (
+        <ProviderStatePanel
+          view="markets"
+          state="degraded"
+          title="Ein Teil der Marktquellen ist verzögert"
+          description={`${primaryFailureCount} von 6 primären Feeds haben keine Daten geliefert. Die sichtbaren Kandidaten stammen nur aus den erfolgreich beantworteten Quellen.`}
+          source="Discovery-Provider"
+          onRetry={() => setProviderReloadTick((current) => current + 1)}
+          retryLabel="Fehlende Feeds neu laden"
+          compact
+        />
+      ) : null}
       <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-3">
         <div>
           <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500">

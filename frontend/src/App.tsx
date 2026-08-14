@@ -4,6 +4,7 @@ import SearchBar, { normalizeTickerInput } from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AdminHealthPanel from "./components/AdminHealthPanel";
+import ProviderStatePanel, { useSlowProviderState } from "./components/ProviderStatePanel";
 import { usePortfolios } from "./hooks/usePortfolios";
 import type { Holding, Portfolio } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
@@ -482,6 +483,7 @@ function AppContent() {
   });
   const [loading, setLoading] = useState(false);
   const [pendingAnalysisTicker, setPendingAnalysisTicker] = useState("");
+  const [lastRequestedTicker, setLastRequestedTicker] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searchResolution, setSearchResolution] = useState<{
     query: string;
@@ -517,6 +519,10 @@ function AppContent() {
   const searchRequestIdRef = useRef(0);
   const briefRequestIdRef = useRef(0);
   const discoveryAnalyzeEnabledAtRef = useRef(0);
+  const globalBriefSlow = useSlowProviderState(
+    globalBriefStatus === "loading" || globalBriefStatus === "idle",
+    6500,
+  );
 
   const {
     portfolios,
@@ -1105,10 +1111,12 @@ function AppContent() {
     setActiveTab("analyze");
 
     let searchTicker = normalizeTickerInput(ticker);
+    setLastRequestedTicker(searchTicker || ticker);
     setPendingAnalysisTicker(searchTicker || ticker);
     try {
       searchTicker = await resolveTickerForAnalyze(ticker, controller);
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId || !searchTicker) return;
+      setLastRequestedTicker(searchTicker);
       setPendingAnalysisTicker(searchTicker);
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
@@ -1704,24 +1712,27 @@ function AppContent() {
                     </Suspense>
                   </ErrorBoundary>
                 ) : (
-                  <section className="surface-panel rounded-[2rem] p-6">
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      Weltkarten-Daten
-                    </div>
-                    <div className="mt-3 text-base font-semibold text-slate-800">
-                      Live-Morning-Briefing aktuell nicht verfügbar.
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Die Datenquelle antwortet gerade langsam oder unvollständig. Du kannst sofort neu laden.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setBriefReloadTick((prev) => prev + 1)}
-                      className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
-                    >
-                      Feed neu laden
-                    </button>
-                  </section>
+                  <ProviderStatePanel
+                    view="dashboard-map"
+                    state={
+                      globalBriefStatus === "error"
+                        ? "error"
+                        : globalBriefStatus === "ready"
+                          ? "empty"
+                          : globalBriefSlow
+                            ? "slow"
+                            : "loading"
+                    }
+                    title={globalBriefStatus === "ready" ? "Keine belastbaren Regionen im aktuellen Brief" : "Weltkarten-Daten sind noch nicht belastbar"}
+                    description={
+                      globalBriefStatus === "ready"
+                        ? "Der Provider hat geantwortet, aber keine ausreichend vollständigen Regionsdaten geliefert. Es werden keine Ersatzwerte als live dargestellt."
+                        : "Der Morning-Brief-Provider antwortet langsam oder unvollständig. Bereits geladene Bereiche bleiben nutzbar."
+                    }
+                    source="Morning Brief"
+                    onRetry={() => setBriefReloadTick((prev) => prev + 1)}
+                    retryLabel="Feed neu laden"
+                  />
                 )}
                 {decisionBrief ? (
                   <ErrorBoundary>
@@ -1739,26 +1750,25 @@ function AppContent() {
                     </Suspense>
                   </ErrorBoundary>
                 ) : globalBriefStatus === "loading" || globalBriefStatus === "idle" ? (
-                  <LoadingState />
+                  <ProviderStatePanel
+                    view="dashboard-brief"
+                    state={globalBriefSlow ? "slow" : "loading"}
+                    title={globalBriefSlow ? "Briefing dauert länger als erwartet" : "Briefing wird aufgebaut"}
+                    description="News, Marktreaktionen und Entscheidungsgates werden getrennt geladen. Das Dashboard bleibt währenddessen bedienbar."
+                    source="News- und Marktdaten"
+                    onRetry={() => setBriefReloadTick((prev) => prev + 1)}
+                    retryLabel="Neu anfordern"
+                  />
                 ) : (
-                  <section className="surface-panel rounded-[2rem] p-5 sm:p-6">
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                      Briefing-Daten
-                    </div>
-                    <div className="mt-3 text-base font-semibold text-slate-800">
-                      Briefing gerade nicht verfügbar.
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Die World Map bleibt nutzbar. Lade nur den Briefing-Feed erneut, ohne das Dashboard zu blockieren.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setBriefReloadTick((prev) => prev + 1)}
-                      className="mt-4 rounded-[0.95rem] bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
-                    >
-                      Briefing neu laden
-                    </button>
-                  </section>
+                  <ProviderStatePanel
+                    view="dashboard-brief"
+                    state="error"
+                    title="Briefing gerade nicht verfügbar"
+                    description="Die Weltkarte bleibt nutzbar. Lade nur den Briefing-Feed erneut, ohne andere Ansichten zu blockieren."
+                    source="News- und Marktdaten"
+                    onRetry={() => setBriefReloadTick((prev) => prev + 1)}
+                    retryLabel="Briefing neu laden"
+                  />
                 )}
             </div>
           </div>
@@ -1796,8 +1806,16 @@ function AppContent() {
             )}
 
             {error && (
-              <div className="surface-panel mb-8 rounded-[1.75rem] border border-red-200 bg-red-50/80 p-4 text-sm text-red-700">
-                {error}
+              <div className="mb-8">
+                <ProviderStatePanel
+                  view="analyzer"
+                  state="error"
+                  title="Analyse konnte nicht vollständig geladen werden"
+                  description={error}
+                  source={lastRequestedTicker || "Analyse-Provider"}
+                  onRetry={lastRequestedTicker ? () => void handleSearch(lastRequestedTicker) : undefined}
+                  retryLabel="Analyse erneut starten"
+                />
               </div>
             )}
 
@@ -1918,14 +1936,28 @@ function AppContent() {
           </ErrorBoundary>
         ) : (
           <ErrorBoundary>
+            {portfolioLoading && safePortfolios.length === 0 ? (
+              <div className="mb-4">
+                <ProviderStatePanel
+                  view="portfolio"
+                  state="loading"
+                  title="Portfolios werden verbunden"
+                  description="Serverbestand und lokale Sicherung werden abgeglichen. Es wird nichts überschrieben, solange die Quelle nicht bestätigt ist."
+                  source="Portfolio-Speicher"
+                />
+              </div>
+            ) : null}
             {portfolioDataSource !== "server" && portfolioDataSource !== "empty" ? (
-              <div className="mb-4 rounded-[1.4rem] border border-amber-400/30 bg-amber-50 p-5 shadow-sm">
-                <div className="text-sm font-extrabold text-amber-800">
-                  Portfolio-Datenquelle: {portfolioDataSource === "local-cache" ? "lokale Browser-Sicherung" : portfolioDataSource}
-                </div>
-                <p className="mt-1 text-sm leading-6 text-amber-700">
-                  {portfolioDataSourceMessage || "Serverdaten sind gerade nicht verfügbar."}
-                </p>
+              <div className="mb-4">
+                <ProviderStatePanel
+                  view="portfolio"
+                  state="degraded"
+                  title={portfolioDataSource === "local-cache" ? "Lokale Portfolio-Sicherung aktiv" : "Portfolio-Quelle eingeschränkt"}
+                  description={portfolioDataSourceMessage || "Serverdaten sind gerade nicht verfügbar; bestehende lokale Daten bleiben erhalten."}
+                  source="Portfolio-Speicher"
+                  onRetry={() => void refreshPortfolios()}
+                  retryLabel="Server erneut prüfen"
+                />
               </div>
             ) : null}
             {needsRestore && cachedPortfolios.length > 0 && (

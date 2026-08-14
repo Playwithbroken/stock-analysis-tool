@@ -146,6 +146,112 @@ function newsFactBasisLabel(value?: string) {
   return "nur Überschrift";
 }
 
+function formatNewsPublishedAt(value?: string) {
+  if (!value) return "Veröffentlichungszeit fehlt";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Veröffentlichungszeit ungültig";
+  return `Veröffentlicht ${date.toLocaleString([], {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  })}`;
+}
+
+function NewsEvidenceLayers({
+  item,
+  intelligence,
+  evidence,
+  decisionReadiness,
+}: {
+  item: any;
+  intelligence: any;
+  evidence: any;
+  decisionReadiness: any;
+}) {
+  const layers = intelligence.evidence_layers || {};
+  const facts = layers.facts || {};
+  const interpretation = layers.interpretation || {};
+  const uncertainty = layers.uncertainty || {};
+  const factSummary = facts.summary || intelligence.fact_summary || item.title;
+  const factBasis = facts.basis || intelligence.fact_basis;
+  const marketChannels = interpretation.market_channels || intelligence.market_channels || [];
+  const confirmationNeeded = uncertainty.confirmation_needed || intelligence.confirmation || [];
+  const openChecks = Array.from(new Set([
+    ...(Array.isArray(decisionReadiness.hard_blockers) ? decisionReadiness.hard_blockers : []),
+    ...(Array.isArray(decisionReadiness.verification_gaps) ? decisionReadiness.verification_gaps : []),
+  ])).slice(0, 4);
+  const sourceName = evidence.publisher || item.publisher || evidence.domain || item.source_domain || "Quelle nicht benannt";
+  const sourceDomain = evidence.domain || item.source_domain;
+
+  return (
+    <section
+      data-testid="news-evidence-layers"
+      aria-label="Nachrichtenprüfung: Fakten, Interpretation und Unsicherheit"
+      className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3 [overflow-wrap:anywhere] sm:col-start-2"
+    >
+      <div className="rounded-[1rem] border border-sky-500/20 bg-sky-50/75 px-3 py-3 text-xs leading-5 text-slate-700">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-800">
+          1 · Bestätigte Fakten
+        </div>
+        <div className="mt-2 font-semibold">{factSummary}</div>
+        <div className="mt-3 space-y-1 text-[11px] text-slate-600">
+          <div><span className="font-extrabold">Basis:</span> {newsFactBasisLabel(factBasis)}</div>
+          <div><span className="font-extrabold">Quelle:</span> {sourceName}{sourceDomain ? ` · ${sourceDomain}` : ""}</div>
+          <div className={item.published_at ? "" : "font-bold text-amber-700"}>{formatNewsPublishedAt(item.published_at)}</div>
+          <div>
+            Link {evidence.link_verified ? "technisch geprüft" : "nicht technisch bestätigt"}
+            {evidence.original_document_verified ? " · Primärdokument verifiziert" : " · Primärdokument nicht verifiziert"}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[1rem] border border-violet-500/20 bg-violet-50/65 px-3 py-3 text-xs leading-5 text-slate-700">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-800">
+          2 · Interpretation (Analyse)
+        </div>
+        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-600">
+          Analyse, nicht Quellenfakt
+        </div>
+        <div className="mt-2 font-semibold">{interpretation.meaning || intelligence.meaning || "Einordnung noch offen."}</div>
+        {marketChannels.length ? (
+          <div className="mt-2 text-slate-600"><span className="font-extrabold">Wirkt über:</span> {marketChannels.join(" · ")}</div>
+        ) : null}
+        <div className="mt-2 text-slate-600">
+          <span className="font-extrabold">Einschätzung:</span> {interpretation.assessment || intelligence.assessment || "offen"}
+        </div>
+        <div className="mt-1 text-slate-600">
+          <span className="font-extrabold">Bias:</span> {interpretation.directional_bias || intelligence.directional_bias || "offen"} ·{" "}
+          <span className="font-extrabold">Horizont:</span> {interpretation.execution_horizon || intelligence.execution_horizon || "offen"}
+        </div>
+      </div>
+
+      <div className="rounded-[1rem] border border-amber-500/25 bg-amber-50/70 px-3 py-3 text-xs leading-5 text-slate-700">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-800">
+          3 · Offene Unsicherheit
+        </div>
+        <div className="mt-2 font-semibold">
+          {uncertainty.counterargument || intelligence.bear_case || "Auch bei guter Quellenlage bleibt die Marktreaktion offen."}
+        </div>
+        {openChecks.length ? (
+          <div className="mt-2"><span className="font-extrabold">Offene Prüfung:</span> {openChecks.join(" · ")}</div>
+        ) : null}
+        {confirmationNeeded.length ? (
+          <div className="mt-2"><span className="font-extrabold">Noch bestätigen:</span> {confirmationNeeded.join(" · ")}</div>
+        ) : (
+          <div className="mt-2"><span className="font-extrabold">Noch bestätigen:</span> Preisreaktion und Folgemeldungen.</div>
+        )}
+        <div className="mt-2"><span className="font-extrabold">Invalidierung:</span> {uncertainty.invalidation || intelligence.invalidation || "noch nicht definiert"}</div>
+        <div className="mt-2 text-[11px] text-slate-500">
+          Vertrauen {uncertainty.confidence || intelligence.confidence || "offen"} · {uncertainty.precision_note || intelligence.precision_note || "Restunsicherheit bleibt bestehen."}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function formatBriefGenerated(value?: string) {
   if (!value) return "gerade aktualisiert";
   const date = new Date(value);
@@ -1480,6 +1586,13 @@ export default function MorningBriefPanel({
                     </div>
                   </div>
 
+                  <NewsEvidenceLayers
+                    item={item}
+                    intelligence={intelligence}
+                    evidence={evidence}
+                    decisionReadiness={decisionReadiness}
+                  />
+
                   {decisionReadiness.status ? (
                     <div className={`rounded-[1rem] border px-3 py-3 text-xs leading-5 sm:col-start-2 ${decisionMeta.className}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1499,33 +1612,6 @@ export default function MorningBriefPanel({
                         <div className="mt-2"><span className="font-extrabold">Noch zu verifizieren:</span> {decisionReadiness.verification_gaps.join(" · ")}</div>
                       ) : null}
                       <div className="mt-2 text-[11px] opacity-65">{decisionReadiness.precision_note}</div>
-                    </div>
-                  ) : null}
-
-                  {intelligence.fact_summary ? (
-                    <div className="rounded-[1rem] border border-sky-500/15 bg-sky-50/70 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
-                        Offengelegte Faktenbasis · {newsFactBasisLabel(intelligence.fact_basis)}
-                      </div>
-                      <div className="mt-1 font-semibold">{intelligence.fact_summary}</div>
-                    </div>
-                  ) : null}
-
-                  {intelligence.meaning ? (
-                    <div className="rounded-[1rem] border border-violet-500/15 bg-violet-50/60 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">Was bedeutet das?</div>
-                      <div className="mt-1 font-semibold">{intelligence.meaning}</div>
-                      {(intelligence.market_channels || []).length ? (
-                        <div className="mt-2 text-slate-600">
-                          <span className="font-extrabold">Wirkt über:</span>{" "}
-                          {intelligence.market_channels.join(" · ")}
-                        </div>
-                      ) : null}
-                      <div className="mt-2 text-slate-600">
-                        <span className="font-extrabold">Einschätzung:</span> {intelligence.assessment}{" "}
-                        <span className="font-extrabold">Bias:</span> {intelligence.directional_bias}.{" "}
-                        <span className="font-extrabold">Horizont:</span> {intelligence.execution_horizon}.
-                      </div>
                     </div>
                   ) : null}
 

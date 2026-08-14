@@ -2061,6 +2061,15 @@ class MorningBriefService:
             if is_important
             else "Relevantes Kontextsignal, aber noch kein eigenständiges Trade-Signal."
         )
+        precision_note = (
+            "Faktenbasis ist die offizielle Behörden-Zusammenfassung; Einordnung und Szenarien sind Analyse."
+            if fact_basis == "official_release_summary"
+            else "Faktenbasis ist die Überschrift einer offiziellen Behördenmeldung; Details in der Primärquelle prüfen."
+            if fact_basis == "official_release_headline"
+            else "Faktenbasis ist die Publisher-Zusammenfassung; Einordnung und Szenarien sind Analyse."
+            if fact_basis == "publisher_summary"
+            else "Faktenbasis ist nur die Überschrift; Details vor einer Trading-Entscheidung in der Quelle prüfen."
+        )
         return {
             "fact_summary": fact_summary[:700],
             "fact_basis": fact_basis,
@@ -2076,15 +2085,29 @@ class MorningBriefService:
             "confidence": confidence,
             "importance_score": importance_score,
             "is_important": is_important,
-            "precision_note": (
-                "Faktenbasis ist die offizielle Behörden-Zusammenfassung; Einordnung und Szenarien sind Analyse."
-                if fact_basis == "official_release_summary"
-                else "Faktenbasis ist die Überschrift einer offiziellen Behördenmeldung; Details in der Primärquelle prüfen."
-                if fact_basis == "official_release_headline"
-                else "Faktenbasis ist die Publisher-Zusammenfassung; Einordnung und Szenarien sind Analyse."
-                if fact_basis == "publisher_summary"
-                else "Faktenbasis ist nur die Überschrift; Details vor einer Trading-Entscheidung in der Quelle prüfen."
-            ),
+            "precision_note": precision_note,
+            "evidence_layers": {
+                "schema_version": "1.0",
+                "facts": {
+                    "summary": fact_summary[:700],
+                    "basis": fact_basis,
+                    "source_type": source_type,
+                },
+                "interpretation": {
+                    "meaning": profile["meaning"],
+                    "assessment": assessment,
+                    "directional_bias": profile["bias"],
+                    "execution_horizon": profile["horizon"],
+                    "market_channels": profile["channels"],
+                },
+                "uncertainty": {
+                    "counterargument": profile["bear"],
+                    "confirmation_needed": profile["confirm"],
+                    "invalidation": profile["invalidate"],
+                    "confidence": confidence,
+                    "precision_note": precision_note,
+                },
+            },
         }
 
     def _news_age(self, value: Any) -> tuple[float | None, str | None]:

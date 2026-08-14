@@ -87,7 +87,7 @@ Ziel: Alle entscheidenden Funktionen sind mobil und am Desktop ohne versteckte A
 
 - [x] Optionskarte zeigt denselben Kontrakt- und Datenqualitätsblock wie Telegram: Symbol, Richtung, Strike, Verfall, Bid/Ask, Spread, IV, Liquidität, Break-even, maximaler Prämienverlust, Quelle, Zeitstempel und ehrlicher Nicht-verifizierbar-Fallback.
 - [x] Paper-Trader zeigt Risikobuckets, quantitative Korrelationsblocker, Assetklassen-Limits, Cashreserve und verbleibende Kapazität direkt an jeder Kandidatenkarte.
-- [ ] Nachrichtenansicht trennt bestätigte Fakten, Interpretation und offene Unsicherheit visuell.
+- [x] Nachrichtenansicht trennt bestätigte Fakten, Interpretation und offene Unsicherheit als drei gleichzeitig sichtbare Blöcke; Quellenbasis, Publisher/Domain, Veröffentlichungszeit, Link- und Primärquellenstatus, Gegenargument, Bestätigung und Invalidierung bleiben explizit prüfbar.
 - [ ] Leere, langsame und fehlerhafte Provider-Zustände für alle Hauptansichten gestalten.
 - [ ] Accessibility: Tastaturbedienung, Fokusführung, Kontrast und Screenreader-Bezeichnungen prüfen.
 - [ ] Visuelle QA für 390x844, 768x1024, 1366x768 und 1920x1080 automatisieren.

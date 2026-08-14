@@ -27,6 +27,7 @@ CONTRACT_TESTS = [
     "qa_paper_entry_market_regime.py",
     "qa_paper_diversification.py",
     "qa_news_evidence_schema.py",
+    "qa_news_evidence_layers.py",
     "qa_news_trade_entry_gate.py",
     "qa_news_source_revalidation.py",
     "qa_telegram_deduplication.py",

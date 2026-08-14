@@ -174,12 +174,15 @@ function OptionContractEvidence({ item }: { item: any }) {
   }
 
   const quoteQuality = String(contract.quote_quality || "delayed_snapshot_not_executable");
+  const realtimeBrokerReference = contract.broker_quote_reference === true && contract.realtime === true;
+  const greeks = contract.greeks && typeof contract.greeks === "object" ? contract.greeks : {};
+  const hasProviderGreeks = contract.greeks_status === "provider_supplied" || contract.greeks_status === "provider_partial";
   return (
     <div data-testid="option-contract-evidence" className="mt-3 rounded-[1.1rem] border border-violet-200 bg-violet-50/85 p-3 text-xs text-violet-950">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-extrabold uppercase tracking-[0.14em]">Konkreter Optionskontrakt</div>
-        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-amber-800">
-          Delayed Research · nicht ausführbar
+        <span className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${realtimeBrokerReference ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+          {realtimeBrokerReference ? "Broker-Echtzeit · kein Fill-Versprechen" : "Delayed Research · nicht ausführbar"}
         </span>
       </div>
       <div className="mt-2 break-all font-black text-violet-950">
@@ -208,12 +211,30 @@ function OptionContractEvidence({ item }: { item: any }) {
           </div>
         ))}
       </div>
+      {hasProviderGreeks ? (
+        <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-violet-200 bg-white/70 p-3 sm:grid-cols-4">
+          {[
+            ["Delta", greeks.delta],
+            ["Gamma", greeks.gamma],
+            ["Theta", greeks.theta],
+            ["Vega", greeks.vega],
+          ].map(([label, value]) => (
+            <div key={String(label)}>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.11em] text-violet-500">{label}</div>
+              <div className="mt-1 font-black text-violet-950">{value != null ? Number(value).toFixed(4) : "N/A"}</div>
+            </div>
+          ))}
+          <div className="col-span-2 text-[10px] font-semibold leading-4 text-violet-700 sm:col-span-4">
+            Greeks: {contract.greeks_source || "Anbieter"} · {contract.greeks_model || "Anbietermodell"} · {contract.greeks_status === "provider_partial" ? "teilweise verfügbar" : "vollständig geliefert"}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-3 rounded-xl border border-violet-200 bg-white/70 px-3 py-2 leading-5 text-violet-800">
-        <div><span className="font-extrabold">Quelle:</span> {contract.source || "unbekannt"} · Datenstand {asOf ? new Date(asOf).toLocaleString("de-DE") : "offen"}</div>
-        <div><span className="font-extrabold">Datenqualität:</span> {quoteQuality.replace(/_/g, " ")} · keine verifizierte Broker-Ausführungsquote</div>
+        <div><span className="font-extrabold">Quelle:</span> {contract.source_label || contract.source || "unbekannt"} · Datenstand {asOf ? new Date(asOf).toLocaleString("de-DE") : "offen"}</div>
+        <div><span className="font-extrabold">Datenqualität:</span> {quoteQuality.replace(/_/g, " ")} · {realtimeBrokerReference ? "Marktdatenreferenz, Ausführungspreis nicht garantiert" : "keine verifizierte Broker-Ausführungsquote"}</div>
         {contract.selection_basis ? <div><span className="font-extrabold">Auswahl:</span> {contract.selection_basis}</div> : null}
       </div>
-      <div className="mt-2 font-bold text-red-700">Greeks nicht verifiziert · Echtgeld und automatische Ausführung gesperrt.</div>
+      <div className="mt-2 font-bold text-red-700">{hasProviderGreeks ? "Greeks vom Anbieter, nicht von Broker Freund berechnet" : "Greeks nicht verifiziert"} · Echtgeld und automatische Ausführung gesperrt.</div>
     </div>
   );
 }

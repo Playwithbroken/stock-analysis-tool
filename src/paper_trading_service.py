@@ -17,6 +17,7 @@ import yfinance as yf
 from src.storage import PortfolioManager
 from src.strategy_library import StrategyLibrary
 from src.performance_metrics import build_trade_performance
+from src.option_data_provider import TradierOptionDataProvider
 
 DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
@@ -3328,6 +3329,20 @@ class PaperTradingService:
             result.append(label)
         return result
 
+    @staticmethod
+    def _option_contract_source_label(contract: Dict[str, Any], fallback: str) -> str:
+        if contract.get("status") != "available":
+            return fallback
+        return str(contract.get("source_label") or "Yahoo Finance options chain snapshot")
+
+    @staticmethod
+    def _option_contract_data_limit(contract: Dict[str, Any]) -> str:
+        if contract.get("status") != "available":
+            return "No usable options-chain snapshot; premium is an estimate and the setup cannot be treated as contract-specific."
+        if contract.get("broker_quote_reference"):
+            return "Realtime broker market-data reference with provider Greeks; this is not a fill guarantee and Broker Freund remains paper-only."
+        return "Delayed options-chain snapshot; Greeks and executable broker quote are not verified."
+
     def _build_commodity_leverage_playbooks(self) -> List[Dict[str, Any]]:
         playbooks: List[Dict[str, Any]] = []
         for proxy in COMMODITY_LEVERAGE_PROXIES:
@@ -3341,7 +3356,6 @@ class PaperTradingService:
                 option_contract = self._get_option_contract_snapshot(ticker, option_type, underlying_price)
                 estimated_premium = round(max(0.45, underlying_price * 0.022), 2)
                 premium = float(option_contract.get("ask") or option_contract.get("mid") or estimated_premium)
-                contract_verified = option_contract.get("status") == "available"
                 headline = str(proxy.get(f"{option_type}_headline") or f"{proxy['label']} {option_type.upper()} paper setup")
                 thesis = str(proxy.get(f"{option_type}_thesis") or "")
                 confirmation = str(proxy.get(f"{option_type}_confirmation") or "")
@@ -3355,7 +3369,7 @@ class PaperTradingService:
                         "setup_type": f"commodity_{option_type}_leverage_learning",
                         "title": f"{proxy['label']} {option_type.upper()} leverage paper setup",
                         "headline": headline,
-                        "source_label": "Yahoo Finance options chain snapshot" if contract_verified else "commodity proxy paper model fallback",
+                        "source_label": self._option_contract_source_label(option_contract, "commodity proxy paper model fallback"),
                         "score": score,
                         "risk_buffer_pct": 100.0,
                         "reward_buffer_pct": 120.0,
@@ -3369,11 +3383,7 @@ class PaperTradingService:
                             "confirmation": confirmation,
                             "invalidation": invalidation,
                             "event_drivers": list(proxy.get("event_drivers") or []),
-                            "data_limit": (
-                                "Delayed options-chain snapshot; Greeks and executable broker quote are not verified."
-                                if contract_verified
-                                else "No usable options-chain snapshot; premium is an estimate and the setup cannot be treated as contract-specific."
-                            ),
+                            "data_limit": self._option_contract_data_limit(option_contract),
                         },
                         "tags": ["commodity", "leverage", proxy["theme"], option_type, "paper only"],
                         "reference_price": round(premium, 4),
@@ -3405,6 +3415,179 @@ class PaperTradingService:
                 )
         return playbooks
 
+    @staticmethod
+    def _tradier_number(value: Any, default: float = 0.0) -> float:
+        try:
+            number = float(value)
+            return number if number == number and abs(number) != float("inf") else default
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _tradier_timestamp(value: Any) -> Optional[str]:
+        if value in {None, ""}:
+            return None
+        try:
+            if isinstance(value, (int, float)) or str(value).strip().isdigit():
+                epoch = float(value)
+                if epoch > 10_000_000_000:
+                    epoch /= 1000
+                return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc).isoformat()
+        except (TypeError, ValueError, OSError):
+            return None
+
+    def _tradier_option_provider(self) -> TradierOptionDataProvider:
+        return TradierOptionDataProvider.from_env()
+
+    def _get_tradier_option_contract_snapshot(
+        self,
+        ticker: str,
+        option_type: str,
+        underlying_price: float,
+    ) -> Dict[str, Any]:
+        provider = self._tradier_option_provider()
+        base: Dict[str, Any] = {
+            "status": "unavailable",
+            "provider": "tradier",
+            "environment": provider.environment,
+            "realtime": provider.realtime,
+            "reason": "tradier_access_token_not_configured" if not provider.configured else "tradier_option_chain_unavailable",
+        }
+        if not provider.configured:
+            return base
+        try:
+            today = datetime.now(timezone.utc).date()
+            expiries: List[tuple[int, str]] = []
+            for raw_expiry in provider.get_expirations(ticker):
+                try:
+                    expiry_date = datetime.fromisoformat(str(raw_expiry)).date()
+                except (TypeError, ValueError):
+                    continue
+                days = (expiry_date - today).days
+                if days > 0:
+                    expiries.append((days, str(raw_expiry)))
+            preferred = [item for item in expiries if 14 <= item[0] <= 45]
+            candidates = sorted(preferred or expiries, key=lambda item: abs(item[0] - 30))[:3]
+            rows: List[Dict[str, Any]] = []
+            for expiry_days, expiry in candidates:
+                for record in provider.get_chain(ticker, expiry):
+                    record_type = str(record.get("option_type") or record.get("type") or "").lower()
+                    if record_type != str(option_type).lower():
+                        continue
+                    strike = self._tradier_number(record.get("strike"))
+                    bid = max(0.0, self._tradier_number(record.get("bid")))
+                    ask = max(0.0, self._tradier_number(record.get("ask")))
+                    last_price = max(0.0, self._tradier_number(record.get("last")))
+                    open_interest = max(0, int(self._tradier_number(record.get("open_interest"))))
+                    volume = max(0, int(self._tradier_number(record.get("volume"))))
+                    greeks = record.get("greeks") if isinstance(record.get("greeks"), dict) else {}
+                    iv = max(
+                        0.0,
+                        self._tradier_number(
+                            greeks.get("mid_iv") or greeks.get("smv_vol") or record.get("implied_volatility")
+                        ),
+                    )
+                    if iv > 3:
+                        iv /= 100
+                    if strike <= 0 or bid <= 0 or ask <= bid:
+                        continue
+                    mid = (bid + ask) / 2
+                    spread_pct = ((ask - bid) / mid) * 100 if mid > 0 else None
+                    moneyness_pct = ((strike / underlying_price) - 1) * 100 if underlying_price > 0 else None
+                    if (
+                        spread_pct is None
+                        or spread_pct > 25
+                        or abs(moneyness_pct or 0) > 10
+                        or (underlying_price > 0 and ask > underlying_price * 0.35)
+                        or (open_interest <= 0 and volume <= 0)
+                    ):
+                        continue
+                    rows.append(
+                        {
+                            "record": record,
+                            "greeks": greeks,
+                            "expiry": expiry,
+                            "expiry_days": expiry_days,
+                            "strike": strike,
+                            "bid": bid,
+                            "ask": ask,
+                            "last_price": last_price,
+                            "mid": mid,
+                            "spread_pct": spread_pct,
+                            "open_interest": open_interest,
+                            "volume": volume,
+                            "iv": iv,
+                            "moneyness_pct": moneyness_pct,
+                            "selection_score": abs(moneyness_pct or 0)
+                            + (0 if open_interest >= 100 else 1.5)
+                            + min(8.0, spread_pct / 5)
+                            + abs(expiry_days - 30) / 30,
+                        }
+                    )
+            if not rows:
+                raise ValueError("tradier_no_liquid_two_sided_near_money_contract")
+            selected = min(rows, key=lambda item: float(item["selection_score"]))
+            record = selected["record"]
+            greeks = selected["greeks"]
+            strike = float(selected["strike"])
+            ask = float(selected["ask"])
+            break_even = strike + ask if str(option_type).lower() == "call" else strike - ask
+            distance_to_break_even_pct = ((break_even / underlying_price) - 1) * 100 if underlying_price > 0 else None
+            greek_values = {
+                name: round(self._tradier_number(greeks.get(name)), 6)
+                if greeks.get(name) is not None
+                else None
+                for name in ("delta", "gamma", "theta", "vega")
+            }
+            quote_timestamp = self._tradier_timestamp(
+                record.get("ask_date") or record.get("bid_date") or record.get("trade_date") or greeks.get("updated_at")
+            )
+            received_at = datetime.now(timezone.utc).isoformat()
+            return {
+                "status": "available",
+                "ticker": str(ticker).upper(),
+                "option_type": str(option_type).lower(),
+                "contract_symbol": record.get("symbol") or record.get("option_symbol"),
+                "expiry": str(selected["expiry"]),
+                "days_to_expiry": int(selected["expiry_days"]),
+                "strike": round(strike, 4),
+                "underlying_price": round(float(underlying_price), 4),
+                "bid": round(float(selected["bid"]), 4),
+                "ask": round(ask, 4),
+                "mid": round(float(selected["mid"]), 4),
+                "spread_pct": round(float(selected["spread_pct"]), 2),
+                "last_price": round(float(selected["last_price"]), 4),
+                "implied_volatility_pct": round(float(selected["iv"]) * 100, 2),
+                "volume": int(selected["volume"]),
+                "open_interest": int(selected["open_interest"]),
+                "moneyness_pct": round(float(selected["moneyness_pct"]), 2) if selected["moneyness_pct"] is not None else None,
+                "break_even": round(break_even, 4),
+                "distance_to_break_even_pct": round(float(distance_to_break_even_pct), 2) if distance_to_break_even_pct is not None else None,
+                "max_loss_per_contract": round(ask * 100, 2),
+                "greeks": greek_values,
+                "greeks_status": "provider_supplied" if all(value is not None for value in greek_values.values()) else "provider_partial",
+                "greeks_source": "ORATS via Tradier",
+                "greeks_model": str(greeks.get("model") or "provider methodology; parameters not controlled by Broker Freund"),
+                "provider_quote_at": quote_timestamp,
+                "source": "tradier_brokerage_options",
+                "source_label": "Tradier Brokerage realtime options quote" if provider.realtime else "Tradier Sandbox delayed options quote",
+                "provider_environment": provider.environment,
+                "data_as_of": quote_timestamp or received_at,
+                "received_at": received_at,
+                "realtime": provider.realtime,
+                "broker_quote_reference": provider.realtime,
+                "fill_guaranteed": False,
+                "quote_quality": "realtime_broker_reference_not_fill_guarantee" if provider.realtime else "sandbox_delayed_not_executable",
+                "selection_basis": "near-the-money contract around 30 days, penalizing weak open interest and wide spreads",
+            }
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            base["reason"] = f"tradier_{type(exc).__name__.lower()}"
+            return base
+
     def _get_option_contract_snapshot(
         self,
         ticker: str,
@@ -3425,6 +3608,11 @@ class PaperTradingService:
         if isinstance(cached, dict) and now_monotonic - float(cached.get("stored_at") or 0) <= ttl_seconds:
             return dict(cached.get("snapshot") or {})
 
+        tradier_snapshot = self._get_tradier_option_contract_snapshot(ticker, option_type, underlying_price)
+        if tradier_snapshot.get("status") == "available":
+            cache[cache_key] = {"stored_at": now_monotonic, "snapshot": tradier_snapshot}
+            return dict(tradier_snapshot)
+
         fallback = {
             "status": "unavailable",
             "ticker": str(ticker).upper(),
@@ -3432,6 +3620,9 @@ class PaperTradingService:
             "source": "yfinance_option_chain",
             "data_as_of": datetime.utcnow().isoformat(),
             "reason": "option_chain_unavailable",
+            "live_provider_status": tradier_snapshot.get("status"),
+            "live_provider_reason": tradier_snapshot.get("reason"),
+            "live_provider_environment": tradier_snapshot.get("environment"),
         }
         try:
             raw_cache = getattr(self, "_option_chain_raw_cache", None)
@@ -3566,6 +3757,10 @@ class PaperTradingService:
                 "data_as_of": datetime.utcnow().isoformat(),
                 "quote_quality": "delayed_snapshot_not_executable",
                 "selection_basis": "near-the-money contract around 30 days, penalizing weak open interest and wide spreads",
+                "live_provider_status": tradier_snapshot.get("status"),
+                "live_provider_reason": tradier_snapshot.get("reason"),
+                "broker_quote_reference": False,
+                "fill_guaranteed": False,
             }
         except Exception as exc:
             fallback["reason"] = str(exc) or fallback["reason"]
@@ -3621,6 +3816,91 @@ class PaperTradingService:
             "immutable": True,
         }
 
+    def _get_tradier_stored_option_quote(
+        self,
+        symbol: str,
+        underlying: str,
+        expiry: str,
+        option_type: str,
+    ) -> Dict[str, Any]:
+        provider = self._tradier_option_provider()
+        base: Dict[str, Any] = {
+            "status": "unavailable",
+            "reason": "tradier_access_token_not_configured" if not provider.configured else "tradier_option_quote_unavailable",
+            "provider": "tradier",
+            "provider_environment": provider.environment,
+            "realtime": provider.realtime,
+            "contract_symbol": symbol,
+        }
+        if not provider.configured:
+            return base
+        try:
+            record = provider.get_quote(symbol)
+            bid = max(0.0, self._tradier_number(record.get("bid")))
+            ask = max(0.0, self._tradier_number(record.get("ask")))
+            last_price = max(0.0, self._tradier_number(record.get("last")))
+            open_interest = max(0, int(self._tradier_number(record.get("open_interest"))))
+            volume = max(0, int(self._tradier_number(record.get("volume"))))
+            if bid <= 0 or ask < bid:
+                raise ValueError("tradier_stored_contract_two_sided_quote_missing")
+            mid = (bid + ask) / 2
+            spread_pct = ((ask - bid) / mid) * 100 if mid > 0 else None
+            if spread_pct is None or spread_pct > 25:
+                raise ValueError("tradier_stored_contract_spread_over_25_pct")
+            greeks = record.get("greeks") if isinstance(record.get("greeks"), dict) else {}
+            iv = max(0.0, self._tradier_number(greeks.get("mid_iv") or greeks.get("smv_vol")))
+            if iv > 3:
+                iv /= 100
+            greek_values = {
+                name: round(self._tradier_number(greeks.get(name)), 6)
+                if greeks.get(name) is not None
+                else None
+                for name in ("delta", "gamma", "theta", "vega")
+            }
+            data_as_of = self._tradier_timestamp(
+                record.get("ask_date") or record.get("bid_date") or record.get("trade_date") or greeks.get("updated_at")
+            ) or datetime.now(timezone.utc).isoformat()
+            liquidity_status = (
+                "strong"
+                if spread_pct <= 10 and open_interest >= 100
+                else "adequate"
+                if (open_interest > 0 or volume > 0)
+                else "thin"
+            )
+            return {
+                "status": "available",
+                "price": round(bid, 4),
+                "bid": round(bid, 4),
+                "ask": round(ask, 4),
+                "mid": round(mid, 4),
+                "last_price": round(last_price, 4),
+                "spread_pct": round(spread_pct, 2),
+                "implied_volatility_pct": round(iv * 100, 2),
+                "volume": volume,
+                "open_interest": open_interest,
+                "greeks": greek_values,
+                "greeks_status": "provider_supplied" if all(value is not None for value in greek_values.values()) else "provider_partial",
+                "greeks_source": "ORATS via Tradier",
+                "contract_symbol": symbol,
+                "underlying_ticker": underlying,
+                "expiry": expiry,
+                "option_type": option_type,
+                "source": "tradier_brokerage_option_quote",
+                "source_label": "Tradier Brokerage realtime option quote" if provider.realtime else "Tradier Sandbox delayed option quote",
+                "provider_environment": provider.environment,
+                "quote_side": "bid_for_conservative_paper_exit",
+                "data_as_of": data_as_of,
+                "freshness": "provider_realtime" if provider.realtime else "sandbox_delayed",
+                "liquidity_status": liquidity_status,
+                "realtime": provider.realtime,
+                "broker_quote_reference": provider.realtime,
+                "fill_guaranteed": False,
+                "quote_quality": "realtime_broker_reference_not_fill_guarantee" if provider.realtime else "sandbox_delayed_not_executable",
+            }
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            base["reason"] = f"tradier_{type(exc).__name__.lower()}"
+            return base
+
     def _get_stored_option_contract_quote(self, ticket: Dict[str, Any]) -> Dict[str, Any]:
         ticket = ticket if isinstance(ticket, dict) else {}
         contract = ticket.get("option_contract") if isinstance(ticket.get("option_contract"), dict) else {}
@@ -3661,6 +3941,11 @@ class PaperTradingService:
         if isinstance(cached, dict) and now_monotonic - float(cached.get("stored_at") or 0) <= ttl_seconds:
             return dict(cached.get("quote") or {})
 
+        tradier_quote = self._get_tradier_stored_option_quote(symbol, underlying, expiry, option_type)
+        if tradier_quote.get("status") == "available":
+            cache[symbol] = {"stored_at": now_monotonic, "quote": tradier_quote}
+            return dict(tradier_quote)
+
         quote: Dict[str, Any] = {
             "status": "unavailable",
             "reason": "stored_contract_quote_unavailable",
@@ -3668,6 +3953,9 @@ class PaperTradingService:
             "underlying_ticker": underlying,
             "expiry": expiry,
             "option_type": option_type,
+            "live_provider_status": tradier_quote.get("status"),
+            "live_provider_reason": tradier_quote.get("reason"),
+            "live_provider_environment": tradier_quote.get("provider_environment"),
         }
         try:
             chain = yf.Ticker(underlying).option_chain(expiry)
@@ -3725,6 +4013,10 @@ class PaperTradingService:
                 "freshness": "fresh",
                 "liquidity_status": liquidity_status,
                 "quote_quality": "delayed_snapshot_not_executable",
+                "live_provider_status": tradier_quote.get("status"),
+                "live_provider_reason": tradier_quote.get("reason"),
+                "broker_quote_reference": False,
+                "fill_guaranteed": False,
             }
         except Exception as exc:
             quote["reason"] = str(exc) or quote["reason"]
@@ -3746,7 +4038,6 @@ class PaperTradingService:
             option_contract = self._get_option_contract_snapshot(ticker, option_type, price)
             estimated_premium = round(max(0.35, price * 0.025), 2)
             premium = float(option_contract.get("ask") or option_contract.get("mid") or estimated_premium)
-            contract_verified = option_contract.get("status") == "available"
             base_headline = str(item.get("headline") or item.get("title") or f"{ticker} underlying setup")
             confirmation = (
                 f"{ticker} must sustain the bullish trigger from '{base_headline}' with confirming relative volume before the CALL is valid."
@@ -3783,11 +4074,7 @@ class PaperTradingService:
                         "confirmation": confirmation,
                         "invalidation": invalidation,
                         "event_drivers": [base_headline, "underlying price trend", "relative volume", "source catalyst"],
-                        "data_limit": (
-                            "Delayed options-chain snapshot; Greeks and executable broker quote are not verified."
-                            if contract_verified
-                            else "No usable options-chain snapshot; premium is an estimate and the setup cannot be treated as contract-specific."
-                        ),
+                        "data_limit": self._option_contract_data_limit(option_contract),
                     },
                     "tags": ["option", option_type, "paper only", "defined risk"],
                     "reference_price": round(premium, 4),
@@ -3801,7 +4088,7 @@ class PaperTradingService:
                         "Price reference exists",
                         "Use only as demo option idea until IV, strike and expiry are verified",
                     ],
-                    "source_label": "Yahoo Finance options chain snapshot" if contract_verified else item.get("source_label"),
+                    "source_label": self._option_contract_source_label(option_contract, str(item.get("source_label") or "Paper research fallback")),
                     "data_as_of": option_contract.get("data_as_of") or item.get("data_as_of"),
                     "market_data": item.get("market_data") or {},
                 }

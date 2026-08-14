@@ -46,7 +46,7 @@ PLACEHOLDER_MARKERS = (
 
 TELEGRAM_TOKEN_RE = re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b")
 ENV_ASSIGN_RE = re.compile(
-    r"\b(?P<name>APP_ACCESS_PASSWORD|APP_SESSION_SECRET|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)\b\s*=\s*[\"']?(?P<value>[^\"'\s#]+)"
+    r"\b(?P<name>APP_ACCESS_PASSWORD|APP_SESSION_SECRET|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|TRADIER_ACCESS_TOKEN)\b\s*=\s*[\"']?(?P<value>[^\"'\s#]+)"
 )
 
 

@@ -27,8 +27,8 @@ Ziel: Kein Trade und keine Push-Nachricht darf auf erfundenen oder unklaren Hand
 - [x] Options-Alerts nach Basiswert und Richtung individualisieren.
 - [x] Konkreten Optionsketten-Snapshot mit Kontrakt, Strike, Verfall, Bid/Ask, Spread, IV, Volumen, Open Interest, Break-even und Prämienrisiko modellieren.
 - [x] Unbrauchbare oder einseitige Optionsquotes ausdrücklich als nicht verfügbar markieren.
-- [ ] Produktionsfähigen Optionsdatenanbieter oder Broker-Quote integrieren. Yahoo-Snapshots bleiben bis dahin verzögerte Research-Daten und niemals Ausführungsfreigabe.
-- [ ] Greeks (Delta, Gamma, Theta, Vega) aus Anbieterwerten übernehmen oder mit dokumentiertem Modell berechnen und Quelle/Modell kennzeichnen.
+- [x] Produktionsfähigen Optionsdatenanbieter integrieren: Die read-only Tradier-Schicht lädt bei konfiguriertem Produktionskonto Echtzeit-Optionsketten und gespeicherte Kontraktquotes; Sandbox und Yahoo bleiben ausdrücklich verzögert, jeder Quote fehlt bewusst eine Fill-Garantie und keinerlei Order-Endpunkt wird verwendet.
+- [x] Greeks (Delta, Gamma, Theta, Vega) aus den von Tradier gelieferten ORATS-Werten übernehmen, Anbieterstatus, Quelle und Modellgrenze in App und Telegram kennzeichnen; fehlende oder partielle Greeks bleiben sichtbar.
 - [x] Kontrakt-Mapping vom Paper-Einstieg bis zum Exit unveränderlich speichern; kein späterer Wechsel auf einen anderen Strike oder Verfall.
 - [x] Options-Management gegen den gespeicherten Kontraktpreis auswerten; fehlt eine brauchbare Quote, P&L/Auto-Exit blockieren und den Underlying nur ausdrücklich als Outcome-Fallback verwenden.
 - [x] News-getriebene Trades nur öffnen, wenn Primärquelle oder verifizierte Tier-1-Quelle, echte Veröffentlichungszeit sowie chronologisch plausibles Marktreaktionsfenster unveränderlich im Trade-Ticket gespeichert sind.

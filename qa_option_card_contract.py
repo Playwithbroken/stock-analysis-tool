@@ -28,6 +28,10 @@ def main() -> int:
         "quote_quality",
         "selection_basis",
         "data_as_of",
+        "broker_quote_reference",
+        "realtime",
+        "greeks_source",
+        "greeks_status",
     ]
     required_copy = [
         "Konkreter Optionskontrakt",
@@ -36,6 +40,8 @@ def main() -> int:
         "Die angezeigte Prämie ist nur eine Schätzung und keine ausführbare Quote.",
         "keine verifizierte Broker-Ausführungsquote",
         "Greeks nicht verifiziert",
+        "Broker-Echtzeit · kein Fill-Versprechen",
+        "Greeks vom Anbieter, nicht von Broker Freund berechnet",
         'data-testid="option-contract-evidence"',
         "<OptionContractEvidence item={item} />",
     ]

@@ -24,6 +24,10 @@ TELEGRAM_ALERTS_ENABLED=true
 TELEGRAM_BOT_TOKEN=<telegram-bot-token>
 TELEGRAM_CHAT_ID=<telegram-chat-id>
 
+# Optional read-only realtime US options data (no order endpoint is used).
+TRADIER_ACCESS_TOKEN=<tradier-production-market-data-token>
+TRADIER_ENVIRONMENT=production
+
 BRIEF_SCHEDULE_TIMEZONE=Europe/Berlin
 EUROPE_OPEN_BRIEF_TIME=08:40
 US_OPEN_BRIEF_TIME=15:10
@@ -36,6 +40,7 @@ Notes:
 - Keep `.env` local and do not upload local secrets to git.
 - For a private single-user setup, keep the app behind the local access code and use a strong `APP_SESSION_SECRET`.
 - Briefings und Alerts laufen in dieser Beta nur ueber Telegram. SMTP/E-Mail und Browser-Push fuer Briefings bleiben aus.
+- `TRADIER_ENVIRONMENT=production` nutzt bei einem berechtigten Brokerage-Konto Echtzeit-Optionsmarktdaten; `sandbox` ist verzoegert. Broker Freund greift nur lesend auf Marktdaten zu, sendet keine Orders und garantiert keinen Fill.
 
 ## Persistente SQLite auf Railway (Volume)
 

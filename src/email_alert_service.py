@@ -4211,6 +4211,18 @@ class EmailAlertService:
                     f"<b>Break-even:</b> {self._tg_price(contract.get('break_even'))} ({break_even_distance} zum Underlying) | max. Prämienverlust/Kontrakt {self._tg_money(contract.get('max_loss_per_contract'))}",
                 ]
             )
+            source_label = self._tg_esc(str(contract.get("source_label") or contract.get("source") or "unbekannt"))
+            quality = self._tg_esc(str(contract.get("quote_quality") or "unbekannt").replace("_", " "))
+            lines.append(f"<b>Optionsdaten:</b> {source_label} | {quality} | Fill nicht garantiert")
+            greeks = contract.get("greeks") if isinstance(contract.get("greeks"), dict) else {}
+            if greeks:
+                lines.append(
+                    f"<b>Greeks:</b> Delta {self._tg_esc(str(greeks.get('delta') if greeks.get('delta') is not None else 'n/a'))} | "
+                    f"Gamma {self._tg_esc(str(greeks.get('gamma') if greeks.get('gamma') is not None else 'n/a'))} | "
+                    f"Theta {self._tg_esc(str(greeks.get('theta') if greeks.get('theta') is not None else 'n/a'))} | "
+                    f"Vega {self._tg_esc(str(greeks.get('vega') if greeks.get('vega') is not None else 'n/a'))} | "
+                    f"Quelle {self._tg_esc(str(contract.get('greeks_source') or 'Anbieter'))}"
+                )
         else:
             reason = self._tg_esc(str(contract.get("reason") or "Optionskette nicht verfügbar"))[:260]
             lines.append(f"<b>Optionsdaten:</b> Kein verifizierbarer Kontrakt-Snapshot ({reason}); Prämie ist nur eine Schätzung.")

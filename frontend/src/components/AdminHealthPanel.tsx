@@ -101,6 +101,12 @@ function healthProblemInfo(code: string) {
     database_integrity: { label: "Datenbank-Integrität auffällig", action: "Backup ziehen, Logs prüfen und SQLite quick_check ernst nehmen.", tone: "red" },
     database_not_writable: { label: "Datenbank ist nicht beschreibbar", action: "Volume-Rechte prüfen. Neue Portfolios, Trades und Learnings können sonst verloren gehen.", tone: "red" },
     database_volume_missing: { label: "Persistentes Volume fehlt", action: "Railway Volume für /app/data prüfen, damit Redeploys keine Daten verlieren.", tone: "red" },
+    backup_missing: { label: "Noch kein automatisches Backup", action: "Backup jetzt ausführen und den Scheduler kontrollieren.", tone: "red" },
+    backup_stale: { label: "Datenbank-Backup ist veraltet", action: "Backup sofort ausführen und Backup-Verzeichnis/Volume prüfen.", tone: "red" },
+    backup_error: { label: "Datenbank-Backup fehlgeschlagen", action: "Backup-Fehler, freien Speicher und Volume-Rechte prüfen.", tone: "red" },
+    restore_test_missing: { label: "Restore wurde noch nicht verifiziert", action: "Restore-Test starten; die Live-Datenbank wird dabei nicht verändert.", tone: "amber" },
+    restore_test_error: { label: "Restore-Test fehlgeschlagen", action: "Backup-Integrität und Tabellenvergleich prüfen.", tone: "red" },
+    scheduler_error: { label: "Scheduler meldet einen Fehler", action: "Letzten Step-Fehler und Railway Logs prüfen.", tone: "red" },
     scheduler_not_seen: { label: "Scheduler wurde noch nicht gesehen", action: "App-Prozess und Background-Loop prüfen; Briefings starten sonst nicht automatisch.", tone: "amber" },
     scheduler_loop_stale: { label: "Scheduler-Loop ist stale", action: "Railway Logs prüfen und Service neu starten, wenn der Loop hängt.", tone: "red" },
     brief_missed_today: { label: "Briefing wurde heute verpasst", action: "Run Due/Missed oder den passenden Brief-Job manuell senden.", tone: "amber" },
@@ -125,6 +131,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const [runningDue, setRunningDue] = useState(false);
   const [sendingSession, setSendingSession] = useState("");
   const [downloadingBackup, setDownloadingBackup] = useState(false);
+  const [verifyingRestore, setVerifyingRestore] = useState(false);
   const [runningPaperPreview, setRunningPaperPreview] = useState("");
   const [evaluatingPaperOutcomes, setEvaluatingPaperOutcomes] = useState(false);
   const [sendingPaperAccount, setSendingPaperAccount] = useState(false);
@@ -239,6 +246,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     }
   };
 
+  const verifyRestore = async () => {
+    setVerifyingRestore(true);
+    setError("");
+    setRunResult(null);
+    try {
+      const res = await fetch("/api/admin/backup/verify-restore", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Restore verification failed");
+      setRunResult([{ job: "Restore-Test", status: data.restore_test?.status || data.status, message: "Temporäre Wiederherstellung, Integrität und Tabellenzähler stimmen." }]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore verification failed");
+    } finally {
+      setVerifyingRestore(false);
+    }
+  };
+
   const runPaperPreview = async (mode: "strict" | "learn" = "strict") => {
     setRunningPaperPreview(mode);
     setError("");
@@ -307,6 +331,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const feeds = health?.data_feeds || {};
   const appInfo = health?.app || {};
   const database = health?.database || {};
+  const backup = health?.backup || {};
+  const operationalAlerts = health?.operational_alerts || {};
   const jobs = health?.schedule?.jobs || [];
   const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
@@ -438,10 +464,18 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             <button
               type="button"
               onClick={downloadBackup}
-              disabled={loading || warming || runningDue || downloadingBackup || !database.exists}
+              disabled={loading || warming || runningDue || downloadingBackup || verifyingRestore || !database.exists}
               className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700 disabled:opacity-50"
             >
               {downloadingBackup ? "Lädt" : "DB Backup"}
+            </button>
+            <button
+              type="button"
+              onClick={verifyRestore}
+              disabled={loading || warming || runningDue || downloadingBackup || verifyingRestore || !backup.latest_at}
+              className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-sky-700 disabled:opacity-50"
+            >
+              {verifyingRestore ? "Prüft" : "Restore testen"}
             </button>
             <button
               type="button"
@@ -651,6 +685,28 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               ) : null}
             </div>
 
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${backup.latest_at && backup.restore_test_last_success_at && !backup.last_error && !backup.restore_test_last_error ? "border-emerald-500/15 bg-emerald-500/6" : "border-amber-500/20 bg-amber-500/8"}`}>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Backup & Restore</div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="text-lg font-black text-slate-900">{backup.backup_count ?? 0} Sicherungen</div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${backup.latest_at && backup.restore_test_last_success_at && !backup.last_error && !backup.restore_test_last_error ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-amber-500/20 bg-amber-500/10 text-amber-700"}`}>
+                  {backup.restore_test_last_success_at ? "restore ok" : "prüfen"}
+                </span>
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Letztes Backup: {fmtDate(backup.latest_at)} ({backup.latest_age_hours ?? "–"}h)
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Restore-Test: {fmtDate(backup.restore_test_last_success_at)} / Rhythmus {backup.restore_test_interval_days ?? 7} Tage
+              </div>
+              <div className="mt-1 truncate text-xs leading-5 text-slate-500" title={backup.directory || ""}>
+                {backup.directory || "Backup-Verzeichnis fehlt"} / Retention {backup.retention_count ?? 14}
+              </div>
+              {backup.last_error || backup.restore_test_last_error ? (
+                <div className="mt-2 text-xs font-semibold text-red-700">{backup.last_error || backup.restore_test_last_error}</div>
+              ) : null}
+            </div>
+
             <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Telegram</div>
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -663,6 +719,9 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Chat: {displayValue(telegram.chat_id, "fehlt")}
               </div>
               {telegram.error ? <div className="mt-2 text-xs text-red-700">{telegram.error}</div> : null}
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Betriebsmonitor: {displayValue(operationalAlerts.status, "noch nicht gelaufen")} / {fmtDate(operationalAlerts.checked_at)}
+              </div>
             </div>
 
             <div className={`min-w-0 rounded-[1.5rem] border p-4 ${

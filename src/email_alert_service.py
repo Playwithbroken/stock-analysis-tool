@@ -223,6 +223,26 @@ class EmailAlertService:
         self._send_notifications(config, [sample_event], subject="Test Alert: Telegram aktiv")
         return {"status": "ok", "message": "Telegram test sent."}
 
+    def send_operational_alert(self, code: str, title: str, detail: str, action: str) -> Dict[str, Any]:
+        """Send a deduplicated operational alert and persist it only after delivery."""
+        cooldown_hours = self._safe_int_env("OPERATIONAL_ALERT_COOLDOWN_HOURS", 6, minimum=1)
+        bucket = int(datetime.now().timestamp() // (cooldown_hours * 3600))
+        event = {
+            "event_key": f"operational:{code}:{bucket}",
+            "category": "operational",
+            "title": title,
+            "line": f"{title}: {detail} | Aktion: {action}",
+            "severity": "critical",
+            "event_type": code,
+        }
+        if event["event_key"] in self.portfolio_manager.get_sent_signal_event_keys():
+            return {"status": "deduplicated", "sent": 0, "event_key": event["event_key"]}
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        self._send_notifications(config, [event], subject="Broker Freund: Betriebsalarm")
+        self.portfolio_manager.mark_signal_events_sent([event])
+        return {"status": "ok", "sent": 1, "event_key": event["event_key"]}
+
     def send_test_email(self) -> Dict[str, Any]:
         """Backward-compatible endpoint name; delivery is Telegram-only."""
         return self.send_test_telegram()

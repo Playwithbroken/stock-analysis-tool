@@ -48,6 +48,7 @@ from src.realtime_market_service import RealtimeMarketService
 from src.public_signal_service import PublicSignalService
 from src.advisory_service import advisory_profile_subset, build_portfolio_advisory_check, build_suitability_check
 from src.storage import DB_PATH, PortfolioManager, get_database_status, get_persistence_status
+from src.backup_service import DatabaseBackupService
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -126,9 +127,17 @@ _realtime_market_service = None
 _forecast_learning_service = None
 _forecast_learning_task = None
 _push_service = None
+_database_backup_service = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 _RESPONSE_CACHE: Dict[str, tuple[datetime, Any]] = {}
 TRADING_EDGE_CACHE_KEY = "trading_edge:dashboard"
+
+
+def get_database_backup_service() -> DatabaseBackupService:
+    global _database_backup_service
+    if _database_backup_service is None:
+        _database_backup_service = DatabaseBackupService(DB_PATH)
+    return _database_backup_service
 
 
 def _cache_get(key: str, ttl_seconds: int) -> Any | None:
@@ -1526,6 +1535,148 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
         "Scheduled brief delivery",
         lambda: get_email_alert_service().send_scheduled_open_briefs(include_missed),
     )
+    if _env_enabled("APP_DAILY_BACKUP_ENABLED", "true"):
+        await run_step("Daily database backup", _run_backup_cycle)
+    if _env_enabled("OPERATIONAL_ALERTS_ENABLED", "true"):
+        await run_step("Operational health alerts", _run_operational_alert_cycle)
+
+
+def _setting_datetime(key: str) -> datetime | None:
+    raw = get_portfolio_manager().get_app_setting(key)
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _run_backup_cycle(force_backup: bool = False, force_restore_test: bool = False) -> Dict[str, Any]:
+    """Create due backups and verify restores without touching the live database."""
+    manager = get_portfolio_manager()
+    service = get_database_backup_service()
+    now = datetime.now(timezone.utc)
+    backup_interval_hours = _safe_int_env("APP_BACKUP_INTERVAL_HOURS", 24, minimum=1)
+    restore_interval_days = _safe_int_env("APP_RESTORE_TEST_INTERVAL_DAYS", 7, minimum=1)
+    last_backup = _setting_datetime("database_backup_last_success_at")
+    backup_due = force_backup or last_backup is None or (now - last_backup) >= timedelta(hours=backup_interval_hours)
+    result: Dict[str, Any] = {"status": "ok", "checked_at": now.isoformat(), "backup_due": backup_due}
+    stage = "backup"
+    try:
+        if backup_due:
+            backup = service.create_backup()
+            result["backup"] = backup
+            manager.set_app_setting("database_backup_last_success_at", backup["created_at"])
+            manager.set_app_setting("database_backup_last_result", json.dumps(backup))
+            manager.set_app_setting("database_backup_last_error", "")
+        else:
+            result["backup"] = {"status": "not_due"}
+
+        last_restore = _setting_datetime("database_restore_test_last_success_at")
+        restore_due = force_restore_test or last_restore is None or (now - last_restore) >= timedelta(days=restore_interval_days)
+        result["restore_test_due"] = restore_due
+        if restore_due:
+            stage = "restore_test"
+            restore = service.verify_restore()
+            result["restore_test"] = restore
+            manager.set_app_setting("database_restore_test_last_success_at", restore["verified_at"])
+            manager.set_app_setting("database_restore_test_last_result", json.dumps(restore))
+            manager.set_app_setting("database_restore_test_last_error", "")
+        else:
+            result["restore_test"] = {"status": "not_due"}
+        return result
+    except Exception as exc:
+        message = f"{exc.__class__.__name__}: {exc}"
+        if stage == "backup":
+            manager.set_app_setting("database_backup_last_error", message)
+        else:
+            manager.set_app_setting("database_restore_test_last_error", message)
+        result.update({"status": "error", "error": message})
+        raise
+
+
+def _run_operational_alert_cycle() -> Dict[str, Any]:
+    """Detect launch-critical failures and send cooldown-protected Telegram alarms."""
+    manager = get_portfolio_manager()
+    issues: list[Dict[str, str]] = []
+    database = get_database_status()
+    if not database.get("writable"):
+        issues.append({
+            "code": "database_not_writable",
+            "title": "Volume/Datenbank nicht beschreibbar",
+            "detail": str(database.get("error") or database.get("path") or "SQLite write check failed"),
+            "action": "Railway Volume, Mount-Pfad und Schreibrechte sofort pruefen.",
+        })
+    if database.get("railway_runtime") and not database.get("persistence_ready"):
+        issues.append({
+            "code": "database_volume_missing",
+            "title": "Persistentes Railway Volume fehlt",
+            "detail": "Die Datenbank liegt nicht sicher auf dem erkannten Volume.",
+            "action": "Volume unter /app/data mounten und PORTFOLIO_DB_PATH abgleichen.",
+        })
+
+    scheduler_error = manager.get_app_setting("brief_scheduler_loop_error")
+    scheduler_step_error = manager.get_app_setting("brief_scheduler_last_step_error")
+    if scheduler_error or scheduler_step_error:
+        issues.append({
+            "code": "scheduler_error",
+            "title": "Scheduler-Fehler erkannt",
+            "detail": str(scheduler_error or scheduler_step_error),
+            "action": "Health Center und Railway Logs pruefen; faellige Briefings kontrollieren.",
+        })
+
+    feed_health = _market_feed_health_check()
+    realtime = feed_health.get("realtime") or {}
+    yfinance = feed_health.get("yfinance") or {}
+    stale_values = []
+    for value in (realtime.get("stale_seconds") or {}).values() if isinstance(realtime.get("stale_seconds"), dict) else []:
+        try:
+            stale_values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    stale_limit = _safe_int_env("OPERATIONAL_QUOTE_STALE_SECONDS", 900, minimum=60)
+    realtime_state = str(realtime.get("status") or "unknown").lower()
+    quotes_stale = bool(stale_values and max(stale_values) > stale_limit)
+    if yfinance.get("status") != "ok" or realtime_state in {"error", "degraded", "disconnected", "failed"} or quotes_stale:
+        issues.append({
+            "code": "market_quotes_stale",
+            "title": "Kursdaten fehlerhaft oder veraltet",
+            "detail": f"yfinance={yfinance.get('status')}; realtime={realtime_state}; max_stale={max(stale_values) if stale_values else 'n/a'}s",
+            "action": "Keine neuen Paper-Trades freigeben; Provider und Kurszeitstempel pruefen.",
+        })
+
+    telegram = _telegram_health_check()
+    if telegram.get("status") != "ok":
+        issues.append({
+            "code": "telegram_unavailable",
+            "title": "Telegram-Zustellung nicht verfuegbar",
+            "detail": str(telegram.get("diagnosis") or telegram.get("error") or telegram.get("status")),
+            "action": str(telegram.get("next_step") or "Telegram-Konfiguration pruefen."),
+        })
+
+    deliveries: list[Dict[str, Any]] = []
+    for issue in issues:
+        if issue["code"] == "telegram_unavailable":
+            deliveries.append({"code": issue["code"], "status": "unavailable_same_channel"})
+            continue
+        try:
+            delivery = get_email_alert_service().send_operational_alert(
+                issue["code"], issue["title"], issue["detail"], issue["action"]
+            )
+            deliveries.append({"code": issue["code"], **delivery})
+        except Exception as exc:
+            deliveries.append({"code": issue["code"], "status": "delivery_error", "error": f"{exc.__class__.__name__}: {exc}"})
+    payload = {
+        "status": "ok" if not issues else "degraded",
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "issues": issues,
+        "deliveries": deliveries,
+    }
+    manager.set_app_setting("operational_alerts_last_result", json.dumps(payload))
+    return payload
 
 
 async def _scheduler_startup_catchup() -> None:
@@ -4902,6 +5053,17 @@ async def admin_health_center():
     now_local = datetime.now(tz)
     notification_status = get_email_alert_service().get_notification_status()
     database_status = get_database_status()
+    backup_status = get_database_backup_service().status()
+    backup_status.update(
+        {
+            "last_success_at": get_portfolio_manager().get_app_setting("database_backup_last_success_at"),
+            "last_error": get_portfolio_manager().get_app_setting("database_backup_last_error"),
+            "restore_test_last_success_at": get_portfolio_manager().get_app_setting("database_restore_test_last_success_at"),
+            "restore_test_last_error": get_portfolio_manager().get_app_setting("database_restore_test_last_error"),
+            "interval_hours": _safe_int_env("APP_BACKUP_INTERVAL_HOURS", 24, minimum=1),
+            "restore_test_interval_days": _safe_int_env("APP_RESTORE_TEST_INTERVAL_DAYS", 7, minimum=1),
+        }
+    )
     schedule_status = notification_status.get("schedule", {})
     on_time_window_minutes = int(schedule_status.get("on_time_window_minutes") or 30)
     grace_minutes = int(schedule_status.get("delivery_grace_minutes") or 720)
@@ -5030,6 +5192,13 @@ async def admin_health_center():
         scheduler_last_result = json.loads(raw_scheduler_result or "[]")
     except Exception:
         scheduler_last_result = []
+    raw_operational_alerts = get_portfolio_manager().get_app_setting("operational_alerts_last_result", "{}")
+    try:
+        operational_alerts = json.loads(raw_operational_alerts or "{}")
+        if not isinstance(operational_alerts, dict):
+            operational_alerts = {}
+    except Exception:
+        operational_alerts = {}
     paper_autopilot_enabled = _env_enabled("PAPER_TRADING_AUTO_LEARN_ENABLED", "true")
     forecast_loop_enabled = _env_enabled("FORECAST_LEARNING_ENABLED", "true")
     paper_autopilot_raw = get_portfolio_manager().get_app_setting("paper_learning_autopilot_last_run", "{}")
@@ -5171,10 +5340,22 @@ async def admin_health_center():
         problems.append("database_not_writable")
     if database_status.get("railway_runtime") and not database_status.get("persistence_ready"):
         problems.append("database_volume_missing")
+    if backup_status.get("enabled") and not backup_status.get("latest_at"):
+        problems.append("backup_missing")
+    if backup_status.get("enabled") and backup_status.get("latest_age_hours") is not None and float(backup_status["latest_age_hours"]) > float(backup_status["interval_hours"] + 6):
+        problems.append("backup_stale")
+    if backup_status.get("last_error"):
+        problems.append("backup_error")
+    if backup_status.get("restore_test_last_error"):
+        problems.append("restore_test_error")
+    if backup_status.get("enabled") and not backup_status.get("restore_test_last_success_at"):
+        problems.append("restore_test_missing")
     if notification_status.get("schedule", {}).get("enabled") and not scheduler_loop_seen_at:
         problems.append("scheduler_not_seen")
     if scheduler_loop_stale:
         problems.append("scheduler_loop_stale")
+    if scheduler_loop_error or scheduler_step_error:
+        problems.append("scheduler_error")
     if any(job.get("missed_today") for job in schedule_jobs):
         problems.append("brief_missed_today")
     if any(job.get("catchup_available") for job in schedule_jobs):
@@ -5248,6 +5429,8 @@ async def admin_health_center():
                 "auth_configured": bool(get_app_password() and get_session_secret()),
             },
             "database": database_status,
+            "backup": backup_status,
+            "operational_alerts": operational_alerts,
             "schedule": {
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
@@ -5360,15 +5543,38 @@ async def admin_health_center():
 
 @app.get("/api/admin/backup/portfolio-db")
 async def download_portfolio_db_backup():
-    """Download the private workspace SQLite database for manual backup."""
+    """Create and download a consistent SQLite online backup."""
     if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Portfolio database not found.")
-    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    try:
+        result = await asyncio.to_thread(get_database_backup_service().create_backup)
+        get_portfolio_manager().set_app_setting("database_backup_last_success_at", result["created_at"])
+        get_portfolio_manager().set_app_setting("database_backup_last_result", json.dumps(result))
+        get_portfolio_manager().set_app_setting("database_backup_last_error", "")
+    except Exception as exc:
+        get_portfolio_manager().set_app_setting("database_backup_last_error", f"{exc.__class__.__name__}: {exc}")
+        raise HTTPException(status_code=500, detail="Consistent database backup failed.") from exc
     return FileResponse(
-        DB_PATH,
+        result["path"],
         media_type="application/vnd.sqlite3",
-        filename=f"broker-freund-portfolio-backup-{stamp}.db",
+        filename=result["filename"],
     )
+
+
+@app.post("/api/admin/backup/run")
+async def run_database_backup():
+    try:
+        return await asyncio.to_thread(_run_backup_cycle, True, False)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Database backup failed: {exc}") from exc
+
+
+@app.post("/api/admin/backup/verify-restore")
+async def verify_database_restore():
+    try:
+        return await asyncio.to_thread(_run_backup_cycle, False, True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Restore verification failed: {exc}") from exc
 
 @app.get("/api/signals/scoreboard")
 async def get_signal_scoreboard():

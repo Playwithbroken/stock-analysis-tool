@@ -1,6 +1,6 @@
 # Broker Freund – Abschlussplan
 
-Stand: 10. August 2026
+Stand: 14. August 2026
 
 ## Ziel und klare Endbedingung
 
@@ -104,8 +104,8 @@ Ziel: Ein Fehler wird erkannt, erklärt und ohne Datenverlust behoben.
 - [x] Security Header, Login-Lockout, sichere Cookies und Origin-Regeln sind automatisiert geprüft.
 - [x] Health Center prüft Persistenz, Telegram und Hintergrundjobs.
 - [ ] Strukturierte Fehlercodes und Provider-Metriken für Quote-, News-, Options- und Telegram-Dienste vereinheitlichen.
-- [ ] Automatisches tägliches Backup plus regelmäßig getesteter Restore auf leerer Instanz.
-- [ ] Alarm bei ausgefallenem Scheduler, veralteten Kursdaten, Telegram-Fehlern und nicht beschreibbarem Volume.
+- [x] Automatisches tägliches konsistentes SQLite-Backup mit Retention plus wöchentlicher, nicht-destruktiver Restore-Test auf temporärer leerer Instanz; Health Center zeigt Alter, Fehler und letzten erfolgreichen Drill.
+- [x] Deduplizierter Betriebsalarm bei Scheduler-Fehlern, veralteten Kursdaten und nicht beschreibbarem Volume; Telegram-Ausfälle werden als nicht über denselben Kanal zustellbar im Health Center protokolliert. Für echte Out-of-band-Meldung bei komplettem App-/Telegram-Ausfall bleibt ein externer Uptime-Kanal erforderlich.
 - [x] Frontend- und Backend-Abhängigkeiten prüfen: `npm audit --audit-level=moderate` und `pip-audit -r requirements.txt` ohne bekannte Schwachstellen; vier gemeldete Frontend-Pakete wurden auf sichere kompatible Versionen aktualisiert.
 - [ ] Rollback-Runbook mit letztem guten Commit, Datenbankkompatibilität und maximaler Wiederanlaufzeit testen.
 
@@ -145,7 +145,7 @@ Abnahme:
 3. `Option Management`: P&L, Stop, Ziel und Zeitwert anhand des Kontrakts auswerten.
 4. `News Evidence Schema`: Primärquelle, Sekundärquelle, Fakten, Interpretation und Korrekturstatus vereinheitlichen.
 5. `Paper Evidence Dashboard`: Regime-, Bucket- und Strategieauswertung mit Mindeststichprobe.
-6. `Release Recovery Drill`: Backup, Restore, Scheduler-Ausfall und Rollback praktisch testen.
+6. `Release Recovery Drill`: Backup und temporärer Restore sind automatisiert; als Nächstes externen Uptime-Kanal und Rollback praktisch testen.
 
 ## Pflichtprüfung für jeden Abschluss-Commit
 

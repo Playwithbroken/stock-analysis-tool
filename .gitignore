@@ -43,5 +43,6 @@ qa-artifacts/
 qa_smoke_playwright.mjs
 data/*.db
 data/*.db-*
+data/backups/
 data/vapid_keys.json
 data/morning_brief_snapshot.json

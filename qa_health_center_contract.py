@@ -97,6 +97,8 @@ def main() -> int:
             "notifications",
             "app",
             "database",
+            "backup",
+            "operational_alerts",
             "schedule",
             "learning",
             "paper_autopilot",
@@ -120,6 +122,10 @@ def main() -> int:
             require(key in database, failures, f"database missing {key!r}")
         require(database.get("exists") is True, failures, "database.exists should be true")
         require(database.get("writable") is True, failures, "database.writable should be true")
+
+        backup = payload.get("backup") or {}
+        for key in ["enabled", "directory", "backup_count", "retention_count", "interval_hours", "restore_test_interval_days"]:
+            require(key in backup, failures, f"backup missing {key!r}")
 
         schedule = payload.get("schedule") or {}
         require(isinstance(schedule.get("jobs"), list), failures, "schedule.jobs must be a list")

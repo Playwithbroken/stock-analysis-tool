@@ -2,6 +2,7 @@ import sqlite3
 import os
 import uuid
 import json
+import tempfile
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -49,7 +50,16 @@ def get_database_status() -> Dict[str, Any]:
     db_dir = os.path.dirname(DB_PATH)
     persistence = get_persistence_status()
     exists = os.path.exists(DB_PATH)
-    writable = os.access(db_dir, os.W_OK) if os.path.isdir(db_dir) else False
+    writable = False
+    write_probe_error = None
+    if os.path.isdir(db_dir):
+        try:
+            with tempfile.NamedTemporaryFile(prefix=".write-probe-", dir=db_dir, delete=True) as probe:
+                probe.write(b"ok")
+                probe.flush()
+            writable = True
+        except Exception as exc:
+            write_probe_error = exc.__class__.__name__
     quick_check = None
     error = None
     identity = None
@@ -86,6 +96,7 @@ def get_database_status() -> Dict[str, Any]:
         "exists": exists,
         "size_bytes": os.path.getsize(DB_PATH) if exists else 0,
         "writable": writable,
+        "write_probe_error": write_probe_error,
         "quick_check": quick_check,
         "error": error,
         "identity": identity,

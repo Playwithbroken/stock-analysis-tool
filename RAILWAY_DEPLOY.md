@@ -11,6 +11,12 @@ APP_ALLOWED_ORIGINS=https://your-app.up.railway.app
 APP_LOGIN_MAX_ATTEMPTS=5
 APP_LOGIN_LOCKOUT_MINUTES=15
 APP_DATA_DIR=/app/data
+APP_DAILY_BACKUP_ENABLED=true
+APP_BACKUP_DIR=/app/data/backups
+APP_BACKUP_INTERVAL_HOURS=24
+APP_BACKUP_RETENTION_COUNT=14
+APP_RESTORE_TEST_INTERVAL_DAYS=7
+OPERATIONAL_ALERTS_ENABLED=true
 
 SIGNAL_ALERTS_ENABLED=true
 
@@ -42,7 +48,8 @@ Damit Portfolios, Alerts und Watchlists nach Redeploys erhalten bleiben:
    - `GET /api/health` -> `status: ok` und `persistence.ready: true`
    - Im Health Center muessen Volume-Name, Mount `/app/data` und `Volume aktiv` erscheinen.
    - Neues Portfolio anlegen, Redeploy ausfuehren, danach `GET /api/portfolios` pruefen.
-   - Im Health Center `DB Backup` klicken und pruefen, dass eine `.db`-Datei heruntergeladen wird.
+   - Im Health Center `DB Backup` klicken und pruefen, dass eine konsistente `.db`-Datei heruntergeladen wird.
+   - `Restore testen` ausfuehren. Der Drill kopiert das Backup nur in eine temporaere leere Datenbank und veraendert die Live-DB nicht.
 5. Redeploy-Beweis:
    - DB-ID im Health Center notieren.
    - Testportfolio anlegen und erneut deployen.
@@ -50,9 +57,11 @@ Damit Portfolios, Alerts und Watchlists nach Redeploys erhalten bleiben:
 6. Recovery-Checkliste:
    - Wenn Daten fehlen: Mount-Pfad `/app/data` kontrollieren.
    - Sicherstellen, dass nur ein Service auf dieselbe DB schreibt.
-   - Backup der `data/portfolios.db` regelmaessig exportieren.
+   - Automatische Sicherungen unter `/app/data/backups` und den letzten Restore-Test im Health Center pruefen.
 
 ## Restore aus Backup
+
+Der automatische Restore-Test ist nicht-destruktiv. Eine echte Wiederherstellung der Live-Datenbank bleibt bewusst ein manueller Wartungsvorgang:
 
 1. Railway Service stoppen oder kurzfristig auf Maintenance setzen.
 2. Backup-Datei als `/app/data/portfolios.db` in das Volume legen.

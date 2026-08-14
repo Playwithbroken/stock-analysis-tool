@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.email_alert_service import EmailAlertService
 from src.morning_brief_service import MorningBriefService
@@ -17,12 +17,15 @@ def require(condition: bool, message: str) -> None:
 
 
 def sample_news() -> dict:
+    observed_at = datetime.now(timezone.utc)
+    published_at = observed_at - timedelta(hours=1)
+    primary_at = published_at - timedelta(minutes=15)
     return {
         "title": "Microsoft raises guidance after cloud demand improves",
         "publisher": "Reuters",
         "source_domain": "reuters.com",
         "source_url": "https://www.reuters.com/markets/companies/msft-guidance-qa",
-        "published_at": "2026-08-10T09:00:00+00:00",
+        "published_at": published_at.isoformat(),
         "age_hours": 1.0,
         "source_quality": "tier_1",
         "ticker": "MSFT",
@@ -40,7 +43,7 @@ def sample_news() -> dict:
             "source_agreement": "aligned_headline_signal",
             "correction_status": {
                 "status": "not_detected_at_capture",
-                "checked_at": "2026-08-10T10:00:00+00:00",
+                "checked_at": observed_at.isoformat(),
                 "signals": [],
                 "monitoring_scope": "headline_and_publisher_summary_at_capture",
                 "ongoing_monitor_verified": False,
@@ -51,7 +54,7 @@ def sample_news() -> dict:
                 "authority": "Microsoft Investor Relations",
                 "form": "Earnings Release",
                 "url": "https://www.microsoft.com/en-us/Investor/earnings/qa",
-                "published_at": "2026-08-10T08:45:00+00:00",
+                "published_at": primary_at.isoformat(),
                 "verification_status": "official_domain",
             }
         ],
@@ -77,8 +80,8 @@ def sample_news() -> dict:
             "asset_move_since_publication": 2.1,
             "benchmark_move_since_publication": 0.4,
             "relative_move_since_publication": 1.7,
-            "baseline_at": "2026-08-10T09:00:00+00:00",
-            "observed_at": "2026-08-10T10:00:00+00:00",
+            "baseline_at": published_at.isoformat(),
+            "observed_at": observed_at.isoformat(),
             "event_window_aligned": True,
             "causality_proven": False,
         },

@@ -47,12 +47,12 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [x] Risikobasierte Positionsgrößen und hohe Kapitalnutzung bei ausreichenden Setups.
 - [x] Unabhängige Risikobuckets innerhalb eines Laufs und gegenüber offenen Trades.
 - [x] Automatische Kauf-, Management- und Verkaufsmeldungen.
-- [ ] Portfolio-Korrelation quantitativ mit Renditehistorien messen; statische Buckets bleiben zusätzlicher Sicherheitsgurt.
+- [x] Portfolio-Korrelation quantitativ mit sechs Monaten Tagesrenditen messen; extreme Korrelation blockiert erst ab dokumentierter Mindeststichprobe, statische Buckets bleiben zusätzlicher Sicherheitsgurt.
 - [x] Marktregime beim Einstieg unveränderlich speichern: Trend, Volatilitäts-Proxy, Zinsen, Dollar, Risikoappetit und Breiten-Proxy; Proxy-Methoden und fehlende Dimensionen bleiben sichtbar.
 - [ ] Slippage und Gebühren je Assetklasse regelmäßig gegen beobachtbare Spreads kalibrieren.
-- [ ] Strategieauswertung nach Setup, Marktregime, Quelle, Scoreband und Risikobucket anzeigen.
+- [x] Strategieauswertung nach Setup, Marktregime, Quelle, Scoreband und Risikobucket mit Trefferquote, Profit Factor, Erwartungswert, Drawdown und Stichprobenstatus anzeigen.
 - [ ] Mindestens 30 geschlossene Trades je freizugebender Strategie und mindestens 100 entscheidende Outcome-Prüfungen sammeln.
-- [ ] Eine Strategie nur hochstufen, wenn Trefferquote, Profit Factor, Erwartungswert und Drawdown gleichzeitig die dokumentierten Mindestwerte erfüllen.
+- [x] Eine Strategie nur hochstufen, wenn mindestens 30 geschlossene Trades/klare Prüfungen, Trefferquote, Profit Factor, positive Erwartung und Drawdown gleichzeitig die dokumentierten Mindestwerte erfüllen.
 
 Abnahme:
 
@@ -86,7 +86,7 @@ Abnahme:
 Ziel: Alle entscheidenden Funktionen sind mobil und am Desktop ohne versteckte Admin-Wege erreichbar.
 
 - [ ] Optionskarte zeigt denselben Kontrakt- und Datenqualitätsblock wie Telegram.
-- [ ] Paper-Trader zeigt Risikobuckets, Korrelationsblocker und verbleibende Kapazität direkt an jeder Kandidatenkarte.
+- [x] Paper-Trader zeigt Risikobuckets, quantitative Korrelationsblocker, Assetklassen-Limits, Cashreserve und verbleibende Kapazität direkt an jeder Kandidatenkarte.
 - [ ] Nachrichtenansicht trennt bestätigte Fakten, Interpretation und offene Unsicherheit visuell.
 - [ ] Leere, langsame und fehlerhafte Provider-Zustände für alle Hauptansichten gestalten.
 - [ ] Accessibility: Tastaturbedienung, Fokusführung, Kontrast und Screenreader-Bezeichnungen prüfen.

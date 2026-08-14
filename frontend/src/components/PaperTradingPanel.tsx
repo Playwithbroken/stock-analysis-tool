@@ -172,6 +172,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const learningContextPerformance = data?.learning_context_performance || [];
   const marketRegimePerformance = data?.market_regime_performance || {};
   const marketRegimeRows = marketRegimePerformance.rows || [];
+  const strategyDimensionPerformance = data?.strategy_dimension_performance || {};
+  const strategyDimensionRows = strategyDimensionPerformance.rows || [];
   const journal = data?.journal || [];
   const outcomes = data?.outcomes || {};
   const outcomeLearning = data?.outcome_learning || {};
@@ -191,6 +193,9 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const capitalFlow = demoAccount.capital_flow || {};
   const exposureProfile = demoAccount.exposure_profile || {};
   const exposureBuckets = exposureProfile.buckets || [];
+  const assetClassLimits = Object.entries(demoAccount.asset_class_limits || {}) as Array<[string, any]>;
+  const correlationAnalysis = demoAccount.correlation_analysis || {};
+  const highCorrelationPairs = correlationAnalysis.high_correlation_pairs || [];
   const tradeActionQueue = demoAccount.trade_action_queue || {};
   const tradeActionItems = tradeActionQueue.items || [];
   const riskCircuit = demoAccount.risk_circuit || {};
@@ -1087,6 +1092,29 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 {" "}{money(demoAccount.top_ticker_exposure?.value, currency)} / Optionen {money(demoAccount.option_premium_exposure_value, currency)}
               </div>
             </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {assetClassLimits.map(([assetClass, limit]: [string, any]) => (
+                <div
+                  key={assetClass}
+                  className={`rounded-xl border px-3 py-2 text-xs ${
+                    limit.over_limit ? "border-red-200 bg-red-50 text-red-800" : "border-black/8 bg-white text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 font-extrabold uppercase tracking-[0.12em]">
+                    <span>{assetClass}</span>
+                    <span>{Number(limit.used_pct || 0).toFixed(1)} / {Number(limit.limit_pct || 0).toFixed(0)}%</span>
+                  </div>
+                  <div className="mt-1">Frei: {money(limit.remaining_value, currency)}</div>
+                  {limit.over_limit ? <div className="mt-1 font-bold">Über Limit · keine neue Position</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Cashreserve: {money(demoAccount.cash_available_value, currency)} vorhanden · Ziel {money(demoAccount.cash_reserve_target_value, currency)}
+              {Number(demoAccount.cash_reserve_gap_value || 0) > 0
+                ? ` · ${money(demoAccount.cash_reserve_gap_value, currency)} fehlen bis zur Reserve`
+                : " · Reserve erfüllt"}
+            </div>
           </div>
           <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-white/90 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1824,6 +1852,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               <div>Startkapital: {money(demoAccount.starting_capital || DEFAULT_DEMO_CAPITAL, currency)}</div>
               <div>Max. Position: {money(demoAccount.max_position_value, currency)} / Idee</div>
               <div>Max. Gesamt-Exposure: {money(demoAccount.max_gross_exposure_value, currency)}</div>
+              <div>Cashreserve-Ziel: {money(demoAccount.cash_reserve_target_value, currency)}</div>
               <div>Freie Gesamt-Exposure: {money(demoAccount.remaining_gross_exposure_value, currency)}</div>
               <div>Max. pro Ticker: {money(demoAccount.max_ticker_exposure_value, currency)}</div>
               <div>Max. offenes Risiko: {money(demoAccount.max_open_risk_value, currency)}</div>
@@ -2088,6 +2117,30 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           </div>
         </div>
 
+        <div className="mt-4 rounded-[1.6rem] border border-violet-500/20 bg-violet-50/70 p-4 text-xs text-violet-950">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-violet-700">Quantitative Korrelation</div>
+              <div className="mt-1">{correlationAnalysis.message || "Renditekorrelation wird geladen; statische Risikobuckets bleiben aktiv."}</div>
+            </div>
+            <div className="rounded-full border border-violet-500/20 bg-white px-3 py-1 font-black">
+              {correlationAnalysis.status || "unavailable"}
+            </div>
+          </div>
+          <div className="mt-2 text-violet-800">
+            Methode: {correlationAnalysis.method || "6-Monats-Tagesrenditen"} · Block ab {Number(correlationAnalysis.threshold || 0.88).toFixed(2)} bei mindestens {correlationAnalysis.minimum_observations || 40} Beobachtungen.
+          </div>
+          {!!highCorrelationPairs.length && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {highCorrelationPairs.slice(0, 8).map((pair: any) => (
+                <span key={`${pair.candidate}-${pair.existing_ticker}`} className="rounded-full border border-violet-200 bg-white px-3 py-1 font-bold">
+                  {pair.candidate}/{pair.existing_ticker}: {Number(pair.correlation || 0).toFixed(2)} ({pair.observations}d)
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="mt-4 rounded-[1.6rem] border border-violet-500/20 bg-violet-50/55 p-4 text-xs text-slate-600">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -2242,6 +2295,36 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           )}
           <div className="mt-3 font-semibold text-cyan-900">{marketRegimePerformance.policy || "Belastbare Bewertung erst ab 30 geschlossenen Trades je Regime."}</div>
+        </div>
+
+        <div className="mt-4 rounded-[1.6rem] border border-indigo-500/20 bg-indigo-50/60 p-4 text-xs text-indigo-950">
+          <div className="font-extrabold uppercase tracking-[0.18em] text-indigo-700">Strategie-Auswertung nach Dimension</div>
+          <div className="mt-1 text-indigo-800">Setup, Marktregime, Quelle, Scoreband und Risikobucket werden getrennt ausgewertet.</div>
+          {strategyDimensionRows.length ? (
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {strategyDimensionRows.slice(0, 18).map((item: any) => (
+                <div key={`${item.dimension}-${item.label}`} className="rounded-xl border border-indigo-200 bg-white px-3 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-indigo-600">{String(item.dimension).replace(/_/g, " ")}</div>
+                      <div className="mt-1 font-black text-slate-900">{String(item.label).replace(/_/g, " ")}</div>
+                    </div>
+                    <div className="font-black">{item.trades || 0}/30</div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-600">
+                    <span>Treffer {Number(item.performance?.win_rate || 0).toFixed(1)}%</span>
+                    <span>PF {item.performance?.profit_factor == null ? "offen" : Number(item.performance.profit_factor).toFixed(2)}</span>
+                    <span>Erwartung {money(item.performance?.expectancy_value, currency)}</span>
+                    <span>Drawdown {Number(item.performance?.max_drawdown_pct || 0).toFixed(2)}%</span>
+                  </div>
+                  <div className="mt-2 font-semibold text-indigo-800">{germanStatus(item.readiness, item.readiness)}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-indigo-300 bg-white px-3 py-3">Noch keine geschlossenen Trades für die Segmentauswertung.</div>
+          )}
+          <div className="mt-3 font-semibold">{strategyDimensionPerformance.policy}</div>
         </div>
 
         <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/70 p-4 text-xs text-slate-600">
@@ -2430,7 +2513,19 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div>Konto/Risiko: {item.suggested_account_pct || 0}% / {item.suggested_risk_pct || 0}%</div>
                     {item.asset_class === "option" && <div>Kontrakt: x{item.contract_multiplier || 100} · {item.option_type?.toUpperCase?.()}</div>}
                     {item.asset_class === "option" && <div>Max. Haltedauer: {item.max_holding_days || 10}d</div>}
+                    <div>Risikobucket: {item.risk_bucket || "offen"}</div>
+                    <div>Assetklasse frei: {money(item.remaining_asset_class_capacity_value, currency)}</div>
                   </div>
+                  {item.correlation_check && item.correlation_check.status !== "not_applicable" ? (
+                    <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
+                      item.correlation_check.blocked
+                        ? "border-red-200 bg-red-50 text-red-800"
+                        : "border-violet-200 bg-violet-50 text-violet-900"
+                    }`}>
+                      <div className="font-extrabold uppercase tracking-[0.12em]">Korrelationscheck</div>
+                      <div className="mt-1">{item.correlation_check.reason || item.correlation_check.status}</div>
+                    </div>
+                  ) : null}
                   {item.leverage_assessment && (
                     <div className={`mt-3 rounded-[1rem] border p-3 text-xs ${
                       item.leverage_assessment.eligible

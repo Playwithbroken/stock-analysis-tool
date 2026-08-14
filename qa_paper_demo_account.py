@@ -567,8 +567,12 @@ def test_demo_account_sizing() -> None:
     assert demo["risk_budget_per_trade_value"] == 3_750.0
     assert demo["risk_budget_per_option_trade_value"] == 2_500.0
     assert demo["max_position_value"] == 100_000.0
-    assert demo["max_gross_exposure_value"] == 500_000.0
-    assert demo["remaining_gross_exposure_value"] == 500_000.0
+    assert demo["max_gross_exposure_value"] == 450_000.0
+    assert demo["remaining_gross_exposure_value"] == 450_000.0
+    assert demo["cash_reserve_target_value"] == 50_000.0
+    assert demo["asset_class_limits"]["equity"]["limit_value"] == 225_000.0
+    assert demo["asset_class_limits"]["etf"]["limit_value"] == 225_000.0
+    assert demo["asset_class_limits"]["crypto"]["limit_value"] == 60_000.0
     assert demo["max_ticker_exposure_value"] == 125_000.0
     assert demo["max_option_premium_value"] == 10_000.0
     assert demo["max_open_option_premium_value"] == 40_000.0
@@ -1102,7 +1106,8 @@ def test_strategy_readiness_requires_positive_money_expectancy() -> None:
     assert momentum["recommendation"] == "continue_learning"
     assert any("Erwartung pro Trade" in gap for gap in momentum["readiness_gaps"])
     assert any("Profit Factor" in gap for gap in momentum["readiness_gaps"])
-    assert "Erwartung pro Trade" in momentum["next_step"]
+    assert any("Drawdown" in gap for gap in momentum["readiness_gaps"])
+    assert "weitere klare Paper-Prüfungen" in momentum["next_step"]
 
 
 def test_short_trade_money_flow_and_demo_equity() -> None:

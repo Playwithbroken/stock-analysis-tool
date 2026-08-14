@@ -20,9 +20,10 @@ class StrategyDefinition:
     risk_notes: List[str]
     real_world_gate: str
     source_basis: str
-    min_paper_trades: int = 12
+    min_paper_trades: int = 30
     min_hit_rate: float = 55.0
     max_avg_loss_pct: float = -1.5
+    max_drawdown_pct: float = 10.0
     tags: List[str] = field(default_factory=list)
 
 
@@ -51,7 +52,7 @@ class StrategyLibrary:
             ],
             real_world_gate="At least 12 paper checks, no unresolved thesis break, and manual portfolio fit review.",
             source_basis="Factor research: quality, value discipline and low-volatility risk control.",
-            min_paper_trades=12,
+            min_paper_trades=30,
             min_hit_rate=52,
             tags=["long_term", "quality", "dividend"],
         ),
@@ -60,7 +61,7 @@ class StrategyLibrary:
             label="Momentum Follow-Through",
             horizon="days-weeks",
             asset_classes=["equity", "etf", "crypto"],
-            setup_types=["etf_momentum", "crypto_flow", "insider_follow", "political_copy_delay"],
+            setup_types=["etf_momentum", "crypto_flow", "insider_follow", "political_copy_delay", "equity_quality_momentum"],
             objective="Trade strength only when price, volume and context confirm the signal.",
             quality_gates=[
                 "Relative strength is positive",
@@ -76,7 +77,7 @@ class StrategyLibrary:
             ],
             real_world_gate="At least 20 decisive paper outcomes with >=55% hit rate after costs/slippage assumption.",
             source_basis="Academic momentum evidence plus execution gates for trend confirmation.",
-            min_paper_trades=20,
+            min_paper_trades=30,
             min_hit_rate=55,
             tags=["swing", "momentum", "trend"],
         ),
@@ -101,7 +102,7 @@ class StrategyLibrary:
             ],
             real_world_gate="Braucht wiederholte Paper-Beweise rund um echte Earnings-Events vor Echtgeld-Nutzung.",
             source_basis="Event-driven earnings analysis with revenue/guidance verification.",
-            min_paper_trades=16,
+            min_paper_trades=30,
             min_hit_rate=56,
             tags=["earnings", "event", "guidance"],
         ),
@@ -126,7 +127,7 @@ class StrategyLibrary:
             ],
             real_world_gate="Only after alert quality and paper outcomes prove that the event type has edge.",
             source_basis="Official macro data, central-bank calendar, event classification and cross-asset confirmation.",
-            min_paper_trades=18,
+            min_paper_trades=30,
             min_hit_rate=55,
             tags=["macro", "telegram", "risk"],
         ),
@@ -151,7 +152,7 @@ class StrategyLibrary:
             ],
             real_world_gate="Braucht manuelle Due Diligence plus Paper-Beweise; niemals automatisch Echtgeld.",
             source_basis="Growth/catalyst screening combined with liquidity and fraud-risk filters.",
-            min_paper_trades=20,
+            min_paper_trades=30,
             min_hit_rate=58,
             tags=["small_cap", "discovery", "ipo"],
         ),
@@ -183,7 +184,7 @@ class StrategyLibrary:
             ],
             real_world_gate="At least 20 decisive paper option checks and >=55% hit rate; still manual review only.",
             source_basis="Cboe/FINRA options education: defined risk, suitability and risk disclosure.",
-            min_paper_trades=20,
+            min_paper_trades=30,
             min_hit_rate=55,
             tags=["options", "paper_only", "defined_risk"],
         ),
@@ -260,6 +261,10 @@ class StrategyLibrary:
                 readiness_gaps.append(
                     f"Profit Factor braucht 1.20+, aktuell {profit_factor:.2f}."
                 )
+            if float(performance.get("max_drawdown_pct") or 0) > float(strategy.max_drawdown_pct):
+                readiness_gaps.append(
+                    f"Maximaler Drawdown muss unter {strategy.max_drawdown_pct:.1f}% bleiben, aktuell {float(performance.get('max_drawdown_pct') or 0):.2f}%."
+                )
             ready = not readiness_gaps
             if ready:
                 status = "manual_review_ready"
@@ -330,5 +335,6 @@ class StrategyLibrary:
             "min_paper_trades": strategy.min_paper_trades,
             "min_hit_rate": strategy.min_hit_rate,
             "max_avg_loss_pct": strategy.max_avg_loss_pct,
+            "max_drawdown_pct": strategy.max_drawdown_pct,
             "tags": list(strategy.tags),
         }

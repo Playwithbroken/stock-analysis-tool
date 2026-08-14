@@ -77,6 +77,7 @@ COMMODITY_LEVERAGE_PROXIES = [
 class PaperTradingService:
     def __init__(self, portfolio_manager: PortfolioManager) -> None:
         self.portfolio_manager = portfolio_manager
+        self._correlation_cache: Dict[str, Any] = {}
 
     @staticmethod
     def _is_safe_public_news_url(url: str) -> bool:
@@ -310,6 +311,7 @@ class PaperTradingService:
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
+        self._attach_quantitative_correlation(playbooks, open_trades, demo_account)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account, rules)
         autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
         autopilot_profile = self._build_autopilot_profile_summary(autopilot_settings, demo_account)
@@ -338,6 +340,7 @@ class PaperTradingService:
             "news_shadow_lab": news_shadow_lab,
             "learning_context_performance": self._build_learning_context_performance(closed_trades),
             "market_regime_performance": self._build_market_regime_performance(closed_trades),
+            "strategy_dimension_performance": self._build_strategy_dimension_performance(closed_trades),
             "current_entry_market_regime": self._build_entry_market_regime(news_context or {}),
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
@@ -704,9 +707,60 @@ class PaperTradingService:
         ticket.setdefault("schema_version", "1.1")
         ticket["entry_market_regime"] = self._build_entry_market_regime(market_context or {})
         enriched_payload["trade_ticket"] = ticket
+        stored_trades = (
+            self.portfolio_manager.list_paper_trades(limit=300)
+            if hasattr(self.portfolio_manager, "list_paper_trades")
+            else []
+        )
+        trades = self._enrich_trades(stored_trades)
+        account = self._build_demo_account(trades, [])
+        manual_candidate = {
+            "ticker": enriched_payload.get("ticker"),
+            "asset_class": enriched_payload.get("asset_class") or "equity",
+            "direction": enriched_payload.get("direction") or "long",
+        }
+        self._attach_quantitative_correlation(
+            [manual_candidate],
+            [trade for trade in trades if trade.get("status") == "open"],
+            account,
+        )
+        self._validate_requested_trade_capacity(enriched_payload, account, manual_candidate.get("correlation_check") or {})
         trade = self.portfolio_manager.create_paper_trade(enriched_payload)
         self._schedule_trade_outcomes(trade)
         return self._enrich_trade(trade)
+
+    def _validate_requested_trade_capacity(
+        self,
+        payload: Dict[str, Any],
+        account: Dict[str, Any],
+        correlation_check: Dict[str, Any] | None = None,
+    ) -> None:
+        ticker = str(payload.get("ticker") or "").upper()
+        asset_class = str(payload.get("asset_class") or "equity").lower()
+        quantity = float(payload.get("quantity") or 0)
+        entry_price = float(payload.get("entry_price") or 0)
+        multiplier = float(payload.get("contract_multiplier") or (100 if asset_class == "option" else 1))
+        leverage = float(payload.get("leverage") or 1)
+        requested = quantity * entry_price * multiplier * leverage
+        if requested <= 0:
+            return
+        limits = account.get("asset_class_limits") if isinstance(account.get("asset_class_limits"), dict) else {}
+        class_limit = limits.get(asset_class) if isinstance(limits.get(asset_class), dict) else {}
+        ticker_used = float((account.get("exposure_by_ticker") or {}).get(ticker) or 0)
+        capacities = {
+            "gross exposure": float(account.get("remaining_gross_exposure_value") or 0),
+            "cash": float(account.get("cash_available_value") or 0),
+            "ticker exposure": max(0.0, float(account.get("max_ticker_exposure_value") or 0) - ticker_used),
+            f"{asset_class} exposure": float(class_limit.get("remaining_value") or 0) if class_limit else requested,
+        }
+        exceeded = [label for label, capacity in capacities.items() if requested > capacity + 0.01]
+        if exceeded:
+            raise ValueError(
+                f"Requested paper notional {requested:.2f} exceeds " + ", ".join(exceeded) + "."
+            )
+        check = correlation_check if isinstance(correlation_check, dict) else {}
+        if check.get("blocked") is True and check.get("static_bucket_duplicate") is not True:
+            raise ValueError("Quantitative correlation gate blocks this paper trade: " + str(check.get("reason") or "extreme overlap"))
 
     def validate_leverage_product_data(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._validate_leverage_product_data(payload)
@@ -735,6 +789,11 @@ class PaperTradingService:
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
+        self._attach_quantitative_correlation(
+            playbooks,
+            [trade for trade in trades if trade.get("status") == "open"],
+            demo_account,
+        )
         playbooks = self._attach_demo_sizing(playbooks, demo_account, rules)
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
@@ -814,7 +873,7 @@ class PaperTradingService:
         if playbook.get("do_not_trade_reasons") and (not learning_mode or hard_rule_reasons):
             raise ValueError("Playbook is blocked by do-not-trade rules.")
         if playbook.get("demo_block_reasons") and (not learning_mode or hard_demo_reasons):
-            raise ValueError("Demo account risk gate blocks this playbook.")
+            raise ValueError("Demo account risk gate blocks this playbook: " + ", ".join(hard_demo_reasons[:3]))
         risk_bucket = self._paper_risk_bucket(playbook)
         if any(
             trade.get("status") == "open" and self._paper_risk_bucket(trade) == risk_bucket
@@ -1208,6 +1267,7 @@ class PaperTradingService:
                 continue
             direction = "long" if item.get("action") == "buy" else "short"
             score = float(item.get("total_score") or 0)
+            broad_equity = item.get("signal_type") == "broad_equity_quality_momentum"
             market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
@@ -1215,19 +1275,29 @@ class PaperTradingService:
                     "ticker": item.get("ticker"),
                     "asset_class": "equity",
                     "direction": direction,
-                    "setup_type": "insider_follow",
-                    "title": "Insider follow-through",
+                    "setup_type": "equity_quality_momentum" if broad_equity else "insider_follow",
+                    "title": "Aktien-Qualität und Momentum" if broad_equity else "Insider follow-through",
                     "headline": item.get("headline"),
                     "source_label": item.get("source_label"),
                     "score": score,
-                    "risk_buffer_pct": 3.5 if direction == "long" else 4.0,
-                    "reward_buffer_pct": 7.5,
-                    "max_holding_days": 10,
+                    "risk_buffer_pct": 4.0 if broad_equity else 3.5 if direction == "long" else 4.0,
+                    "reward_buffer_pct": 8.5 if broad_equity else 7.5,
+                    "max_holding_days": 15 if broad_equity else 10,
                     "thesis": (
+                        "Breiter Aktien-Screen bestätigt Qualität, Trend über 20/50 Tage und beobachtbare Marktteilnahme. "
+                        "Nur handeln, wenn Kurs und Volumen am Entry weiter bestätigen; Research-Snapshot ist keine Ausführungsquote."
+                        if broad_equity
+                        else
                         f"{item.get('source_label')} with strong {direction} bias. "
                         f"Use only if price holds after filing delay of {item.get('delay_days') if item.get('delay_days') is not None else 'offen'} days."
                     ),
-                    "tags": ["long" if direction == "long" else "short", "official filing", "equity"],
+                    "tags": (
+                        ["equity", "quality", "momentum", "diversified scanner"]
+                        if broad_equity
+                        else ["long" if direction == "long" else "short", "official filing", "equity"]
+                    ),
+                    "market_evidence": item.get("market_evidence") if broad_equity else None,
+                    "data_quality": item.get("data_quality") if broad_equity else None,
                     **market_fields,
                 }
             )
@@ -2533,6 +2603,169 @@ class PaperTradingService:
             return f"option_{underlying.lower()}"
         return f"{asset_class}_{ticker.lower()}"
 
+    def _attach_quantitative_correlation(
+        self,
+        playbooks: List[Dict[str, Any]],
+        open_trades: List[Dict[str, Any]],
+        demo_account: Dict[str, Any],
+    ) -> None:
+        """Measure daily-return correlations and block only well-observed extreme overlap."""
+        open_tickers = sorted(
+            {
+                str(trade.get("ticker") or "").upper()
+                for trade in open_trades
+                if trade.get("ticker") and trade.get("asset_class") != "option"
+            }
+        )
+        candidate_tickers = sorted(
+            {
+                str(playbook.get("ticker") or "").upper()
+                for playbook in playbooks
+                if playbook.get("ticker") and playbook.get("asset_class") != "option"
+            }
+        )
+        tickers = sorted(set(open_tickers + candidate_tickers))
+        analysis = self._build_return_correlation_analysis(tickers, open_tickers, candidate_tickers)
+        demo_account["correlation_analysis"] = {
+            key: value for key, value in analysis.items() if key != "candidate_checks"
+        }
+        checks = analysis.get("candidate_checks") if isinstance(analysis.get("candidate_checks"), dict) else {}
+        open_risk_buckets = {self._paper_risk_bucket(trade) for trade in open_trades}
+        for playbook in playbooks:
+            ticker = str(playbook.get("ticker") or "").upper()
+            check = checks.get(ticker) if isinstance(checks.get(ticker), dict) else None
+            if check:
+                playbook["correlation_check"] = {
+                    **deepcopy(check),
+                    "static_bucket_duplicate": self._paper_risk_bucket(playbook) in open_risk_buckets,
+                }
+            else:
+                playbook["correlation_check"] = {
+                    "status": "not_applicable" if playbook.get("asset_class") == "option" else analysis.get("status"),
+                    "blocked": False,
+                    "reason": "Options use their underlying risk bucket." if playbook.get("asset_class") == "option" else analysis.get("message"),
+                }
+
+    def _build_return_correlation_analysis(
+        self,
+        tickers: List[str],
+        open_tickers: List[str],
+        candidate_tickers: List[str],
+    ) -> Dict[str, Any]:
+        threshold = min(0.99, max(0.50, float(os.getenv("PAPER_TRADING_CORRELATION_BLOCK_THRESHOLD", "0.88"))))
+        minimum_observations = max(20, int(os.getenv("PAPER_TRADING_CORRELATION_MIN_OBSERVATIONS", "40")))
+        if len(tickers) < 2 or not open_tickers:
+            return {
+                "status": "insufficient_universe",
+                "method": "Pearson correlation of daily adjusted returns over six months",
+                "threshold": threshold,
+                "minimum_observations": minimum_observations,
+                "candidate_checks": {},
+                "high_correlation_pairs": [],
+                "message": "Mindestens eine offene Vergleichsposition und ein weiterer Ticker werden benötigt.",
+            }
+        cache_key = "|".join(tickers)
+        cached = self._correlation_cache.get(cache_key)
+        if isinstance(cached, dict) and time.time() - float(cached.get("cached_at") or 0) < 900:
+            matrix_payload = cached.get("payload") or {}
+        else:
+            try:
+                raw = yf.download(
+                    tickers=tickers,
+                    period="6mo",
+                    interval="1d",
+                    auto_adjust=True,
+                    progress=False,
+                    threads=True,
+                    group_by="column",
+                )
+                if raw is None or raw.empty:
+                    raise ValueError("empty_history")
+                if getattr(raw.columns, "nlevels", 1) > 1:
+                    closes = raw["Close"]
+                else:
+                    closes = raw[["Close"]].rename(columns={"Close": tickers[0]})
+                returns = closes.pct_change(fill_method=None)
+                correlations = returns.corr(min_periods=minimum_observations)
+                matrix_payload = {
+                    "returns": returns,
+                    "correlations": correlations,
+                    "data_as_of": (
+                        closes.dropna(how="all").index[-1].isoformat()
+                        if not closes.dropna(how="all").empty and hasattr(closes.dropna(how="all").index[-1], "isoformat")
+                        else None
+                    ),
+                }
+                self._correlation_cache = {cache_key: {"cached_at": time.time(), "payload": matrix_payload}}
+            except Exception as exc:
+                return {
+                    "status": "unavailable",
+                    "method": "Pearson correlation of daily adjusted returns over six months",
+                    "threshold": threshold,
+                    "minimum_observations": minimum_observations,
+                    "candidate_checks": {},
+                    "high_correlation_pairs": [],
+                    "message": f"Renditehistorien nicht verfügbar ({type(exc).__name__}); statische Risikobuckets bleiben aktiv.",
+                }
+
+        returns = matrix_payload.get("returns")
+        correlations = matrix_payload.get("correlations")
+        if returns is None or correlations is None:
+            return {
+                "status": "unavailable",
+                "candidate_checks": {},
+                "high_correlation_pairs": [],
+                "message": "Korrelationsmatrix ist nicht verfügbar; statische Risikobuckets bleiben aktiv.",
+            }
+        checks: Dict[str, Dict[str, Any]] = {}
+        pairs: List[Dict[str, Any]] = []
+        for candidate in candidate_tickers:
+            best: Dict[str, Any] | None = None
+            if candidate not in correlations.columns:
+                continue
+            for existing in open_tickers:
+                if existing == candidate or existing not in correlations.columns:
+                    continue
+                value = correlations.at[candidate, existing]
+                if value != value:
+                    continue
+                observations = int(returns[[candidate, existing]].dropna().shape[0])
+                row = {
+                    "candidate": candidate,
+                    "existing_ticker": existing,
+                    "correlation": round(float(value), 3),
+                    "absolute_correlation": round(abs(float(value)), 3),
+                    "observations": observations,
+                }
+                if best is None or row["absolute_correlation"] > best["absolute_correlation"]:
+                    best = row
+            if best:
+                blocked = best["absolute_correlation"] >= threshold and best["observations"] >= minimum_observations
+                checks[candidate] = {
+                    **best,
+                    "status": "blocked" if blocked else "clear",
+                    "blocked": blocked,
+                    "threshold": threshold,
+                    "minimum_observations": minimum_observations,
+                    "reason": (
+                        f"{candidate} korreliert mit {best['existing_ticker']} zu {best['correlation']:.2f} über {best['observations']} Handelstage."
+                    ),
+                }
+                if best["absolute_correlation"] >= 0.75:
+                    pairs.append(best)
+        pairs.sort(key=lambda item: float(item["absolute_correlation"]), reverse=True)
+        return {
+            "status": "ready",
+            "method": "Pearson correlation of daily adjusted returns over six months",
+            "threshold": threshold,
+            "minimum_observations": minimum_observations,
+            "data_as_of": matrix_payload.get("data_as_of"),
+            "open_tickers": open_tickers,
+            "candidate_checks": checks,
+            "high_correlation_pairs": pairs[:12],
+            "message": "Extreme, ausreichend beobachtete Renditekorrelation blockiert neue Doppelwetten; statische Buckets bleiben zusätzlicher Sicherheitsgurt.",
+        }
+
     def _build_auto_selection(
         self,
         playbooks: List[Dict[str, Any]],
@@ -3631,7 +3864,12 @@ class PaperTradingService:
             "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", 6.0, minimum=0.1),
             "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", 20.0, minimum=0.1),
             "max_gross_exposure_pct": env_float("PAPER_TRADING_MAX_GROSS_EXPOSURE_PCT", 100.0, minimum=1.0),
+            "min_cash_reserve_pct": min(40.0, env_float("PAPER_TRADING_MIN_CASH_RESERVE_PCT", 10.0, minimum=0.0)),
             "max_ticker_exposure_pct": env_float("PAPER_TRADING_MAX_TICKER_EXPOSURE_PCT", 25.0, minimum=0.1),
+            "max_equity_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_EQUITY_EXPOSURE_PCT", 45.0, minimum=0.1)),
+            "max_etf_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_ETF_EXPOSURE_PCT", 45.0, minimum=0.1)),
+            "max_crypto_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_CRYPTO_EXPOSURE_PCT", 12.0, minimum=0.1)),
+            "max_option_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_OPTION_EXPOSURE_PCT", 8.0, minimum=0.1)),
             "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
             "max_open_option_premium_pct": env_float("PAPER_TRADING_MAX_OPEN_OPTION_PREMIUM_PCT", 8.0, minimum=0.01),
             "risk_per_option_trade_pct": env_float("PAPER_TRADING_RISK_PER_OPTION_TRADE_PCT", 0.50, minimum=0.01),
@@ -3756,10 +3994,17 @@ class PaperTradingService:
             2,
         )
         exposure_by_ticker: Dict[str, float] = {}
+        exposure_by_asset_class: Dict[str, float] = {}
         for trade in open_trades:
             ticker = str(trade.get("ticker") or "UNKNOWN").upper()
+            asset_class = str(trade.get("asset_class") or "equity").lower()
+            invested_value = float(trade.get("invested_value") or 0)
             exposure_by_ticker[ticker] = round(
-                exposure_by_ticker.get(ticker, 0.0) + float(trade.get("invested_value") or 0),
+                exposure_by_ticker.get(ticker, 0.0) + invested_value,
+                2,
+            )
+            exposure_by_asset_class[asset_class] = round(
+                exposure_by_asset_class.get(asset_class, 0.0) + invested_value,
                 2,
             )
         exposure_profile = self._build_demo_exposure_profile(open_trades, equity)
@@ -3828,7 +4073,11 @@ class PaperTradingService:
         risk_budget = round(equity * (float(config["risk_per_trade_pct"]) / 100), 2)
         max_open_risk_value = round(equity * (float(config["max_open_risk_pct"]) / 100), 2)
         max_position_value = round(equity * (float(config["max_position_pct"]) / 100), 2)
-        max_gross_exposure_value = round(equity * (float(config["max_gross_exposure_pct"]) / 100), 2)
+        effective_max_gross_exposure_pct = min(
+            float(config["max_gross_exposure_pct"]),
+            max(0.0, 100.0 - float(config["min_cash_reserve_pct"])),
+        )
+        max_gross_exposure_value = round(equity * (effective_max_gross_exposure_pct / 100), 2)
         max_ticker_exposure_value = round(equity * (float(config["max_ticker_exposure_pct"]) / 100), 2)
         max_option_premium_value = round(equity * (float(config["max_option_premium_pct"]) / 100), 2)
         max_open_option_premium_value = round(equity * (float(config["max_open_option_premium_pct"]) / 100), 2)
@@ -3836,6 +4085,25 @@ class PaperTradingService:
         remaining_risk = round(max(0.0, max_open_risk_value - open_risk_value), 2)
         remaining_gross_exposure = round(max(0.0, max_gross_exposure_value - open_exposure_value), 2)
         remaining_option_premium = round(max(0.0, max_open_option_premium_value - option_premium_exposure_value), 2)
+        asset_class_limit_pcts = {
+            "equity": float(config["max_equity_exposure_pct"]),
+            "etf": float(config["max_etf_exposure_pct"]),
+            "crypto": float(config["max_crypto_exposure_pct"]),
+            "option": float(config["max_option_exposure_pct"]),
+        }
+        asset_class_limits: Dict[str, Dict[str, Any]] = {}
+        for asset_class, limit_pct in asset_class_limit_pcts.items():
+            limit_value = round(equity * (limit_pct / 100), 2)
+            used_value = round(float(exposure_by_asset_class.get(asset_class) or 0), 2)
+            asset_class_limits[asset_class] = {
+                "limit_pct": limit_pct,
+                "limit_value": limit_value,
+                "used_value": used_value,
+                "used_pct": round((used_value / equity) * 100, 2) if equity > 0 else 0.0,
+                "remaining_value": round(max(0.0, limit_value - used_value), 2),
+                "over_limit": used_value > limit_value + 0.01,
+            }
+        cash_reserve_target_value = round(equity * (float(config["min_cash_reserve_pct"]) / 100), 2)
         top_ticker = max(exposure_by_ticker, key=exposure_by_ticker.get) if exposure_by_ticker else None
         return {
             **config,
@@ -3855,6 +4123,11 @@ class PaperTradingService:
             "open_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0,
             "exposure_profile": exposure_profile,
             "exposure_by_ticker": exposure_by_ticker,
+            "exposure_by_asset_class": exposure_by_asset_class,
+            "asset_class_limits": asset_class_limits,
+            "effective_max_gross_exposure_pct": effective_max_gross_exposure_pct,
+            "cash_reserve_target_value": cash_reserve_target_value,
+            "cash_reserve_gap_value": round(max(0.0, cash_reserve_target_value - cash_available_value), 2),
             "top_ticker_exposure": {
                 "ticker": top_ticker,
                 "value": exposure_by_ticker.get(top_ticker, 0.0) if top_ticker else 0.0,
@@ -3886,6 +4159,7 @@ class PaperTradingService:
                 "Nur Demo-Lernkonto; keine automatische Echtgeld-Ausführung.",
                 "Jede Idee braucht These, Trigger, Stop, Ziel und Nachtrade-Journal.",
                 "Gesamt-, Ticker- und Options-Exposure werden vor jedem Auto-Entry neu berechnet.",
+                f"Mindestens {float(config['min_cash_reserve_pct']):g}% Cashreserve und Assetklassen-Limits verhindern einseitige Vollinvestition.",
                 "Im Risiko-Review bleiben betroffene Ticker und neues Krypto-Risiko gesperrt; unabhängige Setups laufen höchstens mit halbem Risiko.",
                 "Calls und Puts bleiben Paper-only, bis Optionskette, IV, Strike, Laufzeit und Spread geprüft sind.",
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
@@ -4026,6 +4300,7 @@ class PaperTradingService:
         sized: List[Dict[str, Any]] = []
         for item in playbooks:
             row = dict(item)
+            row["risk_bucket"] = self._paper_risk_bucket(row)
             sizing = self._suggest_demo_sizing(row, demo_account)
             row.update(sizing)
             assessment = self._build_leverage_assessment(row, demo_account, rules or {})
@@ -4375,7 +4650,28 @@ class PaperTradingService:
         current_ticker_exposure = float(exposure_by_ticker.get(ticker) or 0)
         ticker_limit = float(demo_account.get("max_ticker_exposure_value") or max_position_value)
         remaining_ticker_exposure = max(0.0, ticker_limit - current_ticker_exposure)
-        capacity_limits = [max_position_value, remaining_gross, cash_available, remaining_ticker_exposure]
+        asset_class_limits = (
+            demo_account.get("asset_class_limits")
+            if isinstance(demo_account.get("asset_class_limits"), dict)
+            else {}
+        )
+        asset_class_limit = (
+            asset_class_limits.get(asset_class)
+            if isinstance(asset_class_limits.get(asset_class), dict)
+            else {}
+        )
+        remaining_asset_class_exposure = float(
+            asset_class_limit.get("remaining_value")
+            if asset_class_limit.get("remaining_value") is not None
+            else max_position_value
+        )
+        capacity_limits = [
+            max_position_value,
+            remaining_gross,
+            cash_available,
+            remaining_ticker_exposure,
+            remaining_asset_class_exposure,
+        ]
         remaining_option_premium = max_position_value
         if is_option:
             remaining_option_premium = float(
@@ -4431,6 +4727,18 @@ class PaperTradingService:
             block_reasons.append("Demo cash capacity is exhausted.")
         if demo_account.get("max_ticker_exposure_value") is not None and remaining_ticker_exposure <= 0:
             block_reasons.append("Ticker exposure budget is exhausted.")
+        if asset_class_limit and remaining_asset_class_exposure <= 0:
+            block_reasons.append(f"Asset-class exposure budget is exhausted for {asset_class}.")
+        correlation_check = (
+            playbook.get("correlation_check")
+            if isinstance(playbook.get("correlation_check"), dict)
+            else {}
+        )
+        if correlation_check.get("blocked") is True and correlation_check.get("static_bucket_duplicate") is not True:
+            block_reasons.append(
+                "Quantitative correlation gate: "
+                + str(correlation_check.get("reason") or "candidate duplicates an existing return factor")
+            )
         if is_option and demo_account.get("remaining_option_premium_value") is not None and remaining_option_premium <= 0:
             block_reasons.append("Option premium budget is exhausted.")
         if int(demo_account.get("open_trade_slots") or 0) <= 0:
@@ -4465,6 +4773,9 @@ class PaperTradingService:
             "suggested_risk_pct": round((max_loss / float(demo_account.get("equity") or 1)) * 100, 2),
             "remaining_gross_capacity_value": round(remaining_gross, 2),
             "remaining_ticker_capacity_value": round(remaining_ticker_exposure, 2),
+            "remaining_asset_class_capacity_value": round(remaining_asset_class_exposure, 2),
+            "asset_class_limit": asset_class_limit,
+            "correlation_check": correlation_check,
             "risk_multiplier": risk_multiplier,
             "sizing_leverage": leverage,
             "contract_multiplier": contract_multiplier,
@@ -5088,6 +5399,52 @@ class PaperTradingService:
             "coverage_pct": round((captured_trades / len(closed_trades)) * 100, 1) if closed_trades else 0.0,
             "rows": rows,
             "policy": "Marktregime wird nur am Entry eingefroren; Auswertung ab 30 geschlossenen Trades je Regime belastbar.",
+        }
+
+    def _build_strategy_dimension_performance(self, closed_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        buckets: Dict[tuple[str, str], List[Dict[str, Any]]] = {}
+        for trade in closed_trades:
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            regime = ticket.get("entry_market_regime") if isinstance(ticket.get("entry_market_regime"), dict) else {}
+            appetite = regime.get("risk_appetite") if isinstance(regime.get("risk_appetite"), dict) else {}
+            score = float(trade.get("confidence_score") or ticket.get("confidence_score") or 0)
+            score_band = "90+" if score >= 90 else "78-89" if score >= 78 else "60-77" if score >= 60 else "<60"
+            source = str(
+                trade.get("entry_source_label")
+                or ticket.get("entry_source_label")
+                or ticket.get("source_label")
+                or "unknown"
+            )
+            values = {
+                "setup": str(trade.get("setup_type") or "unknown"),
+                "source": source,
+                "score_band": score_band,
+                "risk_bucket": self._paper_risk_bucket(trade),
+                "market_regime": str(appetite.get("label") or "unavailable"),
+            }
+            for dimension, label in values.items():
+                buckets.setdefault((dimension, label), []).append(trade)
+
+        rows: List[Dict[str, Any]] = []
+        for (dimension, label), trades in buckets.items():
+            performance = build_trade_performance(trades)
+            sample_size = int(performance.get("sample_size") or 0)
+            rows.append(
+                {
+                    "dimension": dimension,
+                    "label": label,
+                    "trades": sample_size,
+                    "performance": performance,
+                    "readiness": "usable" if sample_size >= 30 else "building" if sample_size >= 10 else "insufficient_sample",
+                    "minimum_usable_sample": 30,
+                }
+            )
+        rows.sort(key=lambda item: (str(item["dimension"]), -int(item["trades"]), str(item["label"])))
+        return {
+            "rows": rows,
+            "closed_trades": len(closed_trades),
+            "dimensions": ["setup", "market_regime", "source", "score_band", "risk_bucket"],
+            "policy": "Keine Strategie-Freigabe unter 30 geschlossenen Trades je Segment; Trefferquote allein reicht nicht.",
         }
 
     def _build_journal(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

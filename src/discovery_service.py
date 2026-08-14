@@ -14,6 +14,8 @@ from src.data_fetcher import DataFetcher
 from src.analyzer import StockAnalyzer
 
 class DiscoveryService:
+    _equity_candidate_cache: tuple[List[Dict[str, Any]], datetime] | None = None
+
     def __init__(self):
         # Sample universes for scanning
         self.tech_universe = ["NVDA", "AMD", "TSLA", "PLTR", "SMCI", "ARM", "CELH", "MSFT", "AAPL", "GOOGL", "META", "NFLX"]
@@ -34,6 +36,11 @@ class DiscoveryService:
             "PEP", "NFLX", "AMD", "TMUS", "INTC", "CSCO", "CMCSA", "AMAT", "QCOM", "ISRG",
             "MU", "TXN", "AMGN", "HON", "INTU", "BKNG", "SBUX", "VRTX", "MDLZ", "REGN",
             "PANW", "SNPS", "ASML", "LRCX", "ADI", "MELI", "CDNS", "KLAC", "PDD", "PYPL"
+        ]
+        self.paper_equity_universe = [
+            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "AVGO", "JPM",
+            "V", "LLY", "UNH", "XOM", "COST", "WMT", "CAT", "GE",
+            "PANW", "AMD", "NFLX", "KO", "PG", "JNJ", "ABBV", "CVX",
         ]
 
     def _moonshot_fallbacks(self) -> List[Dict[str, Any]]:
@@ -394,6 +401,75 @@ class DiscoveryService:
             results = [r for r in await asyncio.gather(*fallback_tasks) if r]
             
         return results
+
+    async def get_paper_equity_candidates(self) -> List[Dict[str, Any]]:
+        """Return a deterministic, diversified stock universe with observable quality and trend data.
+
+        This feed intentionally does not depend on insider or politician filings. Values are
+        cached for ten minutes and remain research snapshots rather than executable quotes.
+        """
+        import asyncio
+
+        cached = self.__class__._equity_candidate_cache
+        now = datetime.now()
+        if cached and (now - cached[1]).total_seconds() < 600:
+            return cached[0]
+
+        async def fetch_candidate(ticker: str) -> Optional[Dict[str, Any]]:
+            def fetch() -> Optional[Dict[str, Any]]:
+                try:
+                    stock = yf.Ticker(ticker)
+                    history = stock.history(period="6mo", interval="1d", auto_adjust=True)
+                    if history is None or history.empty or len(history) < 55:
+                        return None
+                    closes = history["Close"].dropna()
+                    volumes = history["Volume"].dropna()
+                    if len(closes) < 55:
+                        return None
+                    last = float(closes.iloc[-1])
+                    previous = float(closes.iloc[-2])
+                    close_20 = float(closes.iloc[-21])
+                    close_60 = float(closes.iloc[-61]) if len(closes) >= 61 else float(closes.iloc[0])
+                    sma_20 = float(closes.tail(20).mean())
+                    sma_50 = float(closes.tail(50).mean())
+                    daily_returns = closes.pct_change().dropna().tail(60)
+                    volatility = float(daily_returns.std() * (252 ** 0.5) * 100) if len(daily_returns) >= 20 else None
+                    recent_volume = float(volumes.tail(5).mean()) if len(volumes) >= 5 else 0.0
+                    base_volume = float(volumes.tail(25).head(20).mean()) if len(volumes) >= 25 else 0.0
+                    info = stock.info or {}
+                    return {
+                        "ticker": ticker,
+                        "name": info.get("longName") or info.get("shortName") or ticker,
+                        "sector": info.get("sector") or "Unknown",
+                        "market_cap": info.get("marketCap"),
+                        "price": last,
+                        "change_1d": ((last / previous) - 1.0) * 100 if previous else None,
+                        "change_1m": ((last / close_20) - 1.0) * 100 if close_20 else None,
+                        "change_3m": ((last / close_60) - 1.0) * 100 if close_60 else None,
+                        "above_sma20": last > sma_20,
+                        "above_sma50": last > sma_50,
+                        "volume_ratio": (recent_volume / base_volume) if base_volume > 0 else None,
+                        "volatility_annual_pct": volatility,
+                        "revenue_growth_pct": (
+                            float(info.get("revenueGrowth")) * 100 if isinstance(info.get("revenueGrowth"), (int, float)) else None
+                        ),
+                        "earnings_growth_pct": (
+                            float(info.get("earningsGrowth")) * 100 if isinstance(info.get("earningsGrowth"), (int, float)) else None
+                        ),
+                        "profit_margin_pct": (
+                            float(info.get("profitMargins")) * 100 if isinstance(info.get("profitMargins"), (int, float)) else None
+                        ),
+                        "source_label": "Yahoo Finance market/fundamental snapshot",
+                        "data_as_of": history.index[-1].isoformat() if hasattr(history.index[-1], "isoformat") else None,
+                    }
+                except Exception:
+                    return None
+
+            return await asyncio.to_thread(fetch)
+
+        rows = [row for row in await asyncio.gather(*(fetch_candidate(ticker) for ticker in self.paper_equity_universe)) if row]
+        self.__class__._equity_candidate_cache = (rows, now)
+        return rows
 
     def _score_future_star_news(self, news: List[Dict[str, Any]]) -> Dict[str, Any]:
         positive_terms = {

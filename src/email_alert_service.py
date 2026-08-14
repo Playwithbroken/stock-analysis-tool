@@ -345,6 +345,8 @@ class EmailAlertService:
                     "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
                     "account_performance": (demo_account or {}).get("performance") or {},
                     "account_capital_flow": (demo_account or {}).get("capital_flow") or {},
+                    "account_asset_class_limits": (demo_account or {}).get("asset_class_limits") or {},
+                    "account_cash_reserve_target": (demo_account or {}).get("cash_reserve_target_value"),
                     "trade_ticket": trade.get("trade_ticket") or selected_item.get("trade_ticket") or {},
                     "option_contract": ticket.get("option_contract") or selected_item.get("option_contract") or None,
                     "option_decision": ticket.get("option_decision") or selected_item.get("option_decision") or None,
@@ -572,6 +574,8 @@ class EmailAlertService:
                     "account_net_pnl_pct": (demo_account or {}).get("net_pnl_pct"),
                     "account_performance": (demo_account or {}).get("performance") or {},
                     "account_capital_flow": (demo_account or {}).get("capital_flow") or {},
+                    "account_asset_class_limits": (demo_account or {}).get("asset_class_limits") or {},
+                    "account_cash_reserve_target": (demo_account or {}).get("cash_reserve_target_value"),
                     "line": f"{trade.get('ticker')} Paper-Trade geschlossen.",
                     "source_label": "Paper-Trade-Exit",
                     "source_url": "",
@@ -4370,12 +4374,27 @@ class EmailAlertService:
         net_pnl = self._tg_signed_money(capital_flow.get("net_pnl_value", event.get("account_net_pnl_value")))
         net_pnl_pct = self._tg_pct(capital_flow.get("net_pnl_pct", event.get("account_net_pnl_pct")))
         performance_line = self._paper_performance_line(event.get("account_performance"))
+        allocation_line = self._paper_allocation_line(event)
         return (
             f"<b>Demo-Konto danach:</b> Equity {equity} | seit Start {net_pnl} ({net_pnl_pct})"
             f"\n<b>Verfügbar:</b> Cash {cash} | offen investiert {exposure}"
             f"\n<b>Geldfluss:</b> realisiert {realized} | offen {unrealized}"
+            f"{allocation_line}"
             f"{performance_line}"
         )
+
+    def _paper_allocation_line(self, event: Dict[str, Any]) -> str:
+        limits = event.get("account_asset_class_limits") if isinstance(event.get("account_asset_class_limits"), dict) else {}
+        if not limits:
+            return ""
+        parts: List[str] = []
+        for key, label in (("equity", "Aktien"), ("etf", "ETF"), ("crypto", "Krypto"), ("option", "Optionen")):
+            item = limits.get(key) if isinstance(limits.get(key), dict) else {}
+            parts.append(
+                f"{label} {float(item.get('used_pct') or 0):.1f}/{float(item.get('limit_pct') or 0):.0f}%"
+            )
+        reserve = self._tg_money(event.get("account_cash_reserve_target"))
+        return f"\n<b>Allokation:</b> {' | '.join(parts)} | Cashreserve-Ziel {reserve}"
 
     def _paper_performance_line(self, performance: Any) -> str:
         if not isinstance(performance, dict) or not performance:

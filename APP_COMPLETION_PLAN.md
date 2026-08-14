@@ -85,7 +85,7 @@ Abnahme:
 
 Ziel: Alle entscheidenden Funktionen sind mobil und am Desktop ohne versteckte Admin-Wege erreichbar.
 
-- [ ] Optionskarte zeigt denselben Kontrakt- und Datenqualitätsblock wie Telegram.
+- [x] Optionskarte zeigt denselben Kontrakt- und Datenqualitätsblock wie Telegram: Symbol, Richtung, Strike, Verfall, Bid/Ask, Spread, IV, Liquidität, Break-even, maximaler Prämienverlust, Quelle, Zeitstempel und ehrlicher Nicht-verifizierbar-Fallback.
 - [x] Paper-Trader zeigt Risikobuckets, quantitative Korrelationsblocker, Assetklassen-Limits, Cashreserve und verbleibende Kapazität direkt an jeder Kandidatenkarte.
 - [ ] Nachrichtenansicht trennt bestätigte Fakten, Interpretation und offene Unsicherheit visuell.
 - [ ] Leere, langsame und fehlerhafte Provider-Zustände für alle Hauptansichten gestalten.

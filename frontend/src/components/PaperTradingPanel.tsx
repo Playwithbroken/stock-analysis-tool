@@ -145,6 +145,79 @@ const entrySourceLabel = (item: any) => {
   return String(ticket.entry_source_label || item?.entry_source_label || "Paper-Autopilot");
 };
 
+function OptionContractEvidence({ item }: { item: any }) {
+  if (String(item?.asset_class || "").toLowerCase() !== "option") return null;
+  const contract = item?.option_contract && typeof item.option_contract === "object"
+    ? item.option_contract
+    : item?.trade_ticket?.option_contract && typeof item.trade_ticket.option_contract === "object"
+      ? item.trade_ticket.option_contract
+      : {};
+  const available = contract.status === "available";
+  const asOf = contract.data_as_of || item?.data_as_of;
+
+  if (!available) {
+    return (
+      <div data-testid="option-contract-evidence" className="mt-3 rounded-[1.1rem] border border-red-200 bg-red-50/90 p-3 text-xs text-red-900">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="font-extrabold uppercase tracking-[0.14em]">Optionsdaten nicht verifizierbar</div>
+          <span className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-red-700">
+            kein Kontrakt
+          </span>
+        </div>
+        <div className="mt-2 font-semibold leading-5">
+          Kein verifizierbarer Kontrakt-Snapshot ({String(contract.reason || "Optionskette nicht verfügbar").replace(/_/g, " ")}).
+          Die angezeigte Prämie ist nur eine Schätzung und keine ausführbare Quote.
+        </div>
+        <div className="mt-2 font-bold">Paper-Einstieg bleibt gesperrt, bis Strike, Verfall und eine beidseitige Quote belastbar vorliegen.</div>
+      </div>
+    );
+  }
+
+  const quoteQuality = String(contract.quote_quality || "delayed_snapshot_not_executable");
+  return (
+    <div data-testid="option-contract-evidence" className="mt-3 rounded-[1.1rem] border border-violet-200 bg-violet-50/85 p-3 text-xs text-violet-950">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-extrabold uppercase tracking-[0.14em]">Konkreter Optionskontrakt</div>
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-amber-800">
+          Delayed Research · nicht ausführbar
+        </span>
+      </div>
+      <div className="mt-2 break-all font-black text-violet-950">
+        {contract.contract_symbol || "Symbol offen"} · {String(contract.option_type || item.option_type || item.direction || "option").toUpperCase()}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
+        {[
+          ["Strike", priceOrNA(contract.strike)],
+          ["Verfall", contract.expiry || "N/A"],
+          ["Restlaufzeit", contract.days_to_expiry != null ? `${contract.days_to_expiry} Tage` : "N/A"],
+          ["Underlying", priceOrNA(contract.underlying_price || item.underlying_reference_price)],
+          ["Bid", priceOrNA(contract.bid)],
+          ["Ask", priceOrNA(contract.ask)],
+          ["Spread", unsignedPct(contract.spread_pct)],
+          ["Implizite Volatilität", unsignedPct(contract.implied_volatility_pct)],
+          ["Volumen", contract.volume ?? 0],
+          ["Open Interest", contract.open_interest ?? 0],
+          ["Moneyness", formatPct(contract.moneyness_pct)],
+          ["Break-even", priceOrNA(contract.break_even)],
+          ["Abstand Break-even", formatPct(contract.distance_to_break_even_pct)],
+          ["Max. Prämienverlust", contract.max_loss_per_contract != null ? `${priceOrNA(contract.max_loss_per_contract)} je Kontrakt · Quote-Währung` : "N/A"],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="min-w-0">
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.11em] text-violet-500">{label}</div>
+            <div className="mt-1 break-words font-black text-violet-950">{String(value)}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded-xl border border-violet-200 bg-white/70 px-3 py-2 leading-5 text-violet-800">
+        <div><span className="font-extrabold">Quelle:</span> {contract.source || "unbekannt"} · Datenstand {asOf ? new Date(asOf).toLocaleString("de-DE") : "offen"}</div>
+        <div><span className="font-extrabold">Datenqualität:</span> {quoteQuality.replace(/_/g, " ")} · keine verifizierte Broker-Ausführungsquote</div>
+        {contract.selection_basis ? <div><span className="font-extrabold">Auswahl:</span> {contract.selection_basis}</div> : null}
+      </div>
+      <div className="mt-2 font-bold text-red-700">Greeks nicht verifiziert · Echtgeld und automatische Ausführung gesperrt.</div>
+    </div>
+  );
+}
+
 export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperTradingPanelProps) {
   const [status, setStatus] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -2367,6 +2440,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     ))}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">{item.thesis}</p>
+                  <OptionContractEvidence item={item} />
                   {item.news_evidence ? (
                     <div className="mt-3 rounded-[1.1rem] border border-violet-200 bg-violet-50/80 p-3 text-xs leading-5 text-violet-950">
                       <div className="flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-violet-700">

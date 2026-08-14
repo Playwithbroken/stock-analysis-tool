@@ -61,7 +61,7 @@ Artefakte:
 
 ## 3) Was der Runner prüft
 
-- Viewports: `1366x768`, `1536x960`, `1920x1080`
+- Viewports: `390x844`, `768x1024`, `1366x768`, `1920x1080`
 - Navigation: `Analyzer`, `Markets`, `Portfolio`, `Dashboard`
 - Markets-Stresstest: `20x` Klick auf `Markets`, dabei kein unerwarteter Sprung nach Analyze
 - Analyzer-Ticker-Flow: `AAPL`, `PFE`, `BTC-USD`
@@ -103,6 +103,8 @@ Artefakte:
    - Market-Movers-Metadaten und Ticker liegen in getrennten Zeilen
    - Desk-Button verdeckt weder Karteninhalt noch Bottom-Navigation
    - Mobile World Map zeigt keine zusaetzliche Desktop-Sidebar, Timeline oder Replay-Doppelung
+
+Diese vier Viewports, der horizontale Overflow je Hauptansicht und die zugehörigen Screenshots laufen bereits automatisiert im Gate. Die manuelle Sichtprüfung bleibt eine zusätzliche Plausibilitätskontrolle.
 2. Dashboard:
    - Morning Brief zeigt entweder Top-Setups oder klar `insufficient signal`
 3. Markets:

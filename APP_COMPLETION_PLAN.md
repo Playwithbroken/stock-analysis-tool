@@ -90,7 +90,7 @@ Ziel: Alle entscheidenden Funktionen sind mobil und am Desktop ohne versteckte A
 - [x] Nachrichtenansicht trennt bestätigte Fakten, Interpretation und offene Unsicherheit als drei gleichzeitig sichtbare Blöcke; Quellenbasis, Publisher/Domain, Veröffentlichungszeit, Link- und Primärquellenstatus, Gegenargument, Bestätigung und Invalidierung bleiben explizit prüfbar.
 - [x] Leere, langsame und fehlerhafte Provider-Zustände sind für Dashboard, Analyzer, Markets, Portfolio und Paper-Trader vereinheitlicht; Teil-Ausfälle und lokale Fallbacks bleiben sichtbar und jeder Fehlerpfad hat einen gezielten Retry.
 - [x] Accessibility: global sichtbarer Tastaturfokus, Skip-Link, Reduced-Motion, aktive Navigation, semantische Tabs/Statusmeldungen sowie Fokusfang, Escape-Schließen und Fokus-Rückgabe für die kritischen Dialoge sind automatisiert und im Browser geprüft; zentrale Textfarben bestehen den WCAG-AA-Kontrastvertrag.
-- [ ] Visuelle QA für 390x844, 768x1024, 1366x768 und 1920x1080 automatisieren.
+- [x] Visuelle QA für 390x844, 768x1024, 1366x768 und 1920x1080 automatisieren: Playwright erzeugt je Größe und Hauptansicht Screenshots, prüft Horizontal-Overflow, Browser-/HTTP-Fehler und hält den exakten Viewport-Vertrag in der Release-Suite fest.
 
 Abnahme:
 

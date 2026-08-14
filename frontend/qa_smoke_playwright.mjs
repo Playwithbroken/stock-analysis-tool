@@ -15,8 +15,8 @@ const TICKERS = (process.env.QA_TICKERS || "AAPL,PFE,BTC-USD")
 const MARKETS_STRESS_COUNT = Number(process.env.QA_MARKETS_STRESS_COUNT || "20");
 const VIEWPORTS = [
   { name: "390x844", width: 390, height: 844 },
+  { name: "768x1024", width: 768, height: 1024 },
   { name: "1366x768", width: 1366, height: 768 },
-  { name: "1536x960", width: 1536, height: 960 },
   { name: "1920x1080", width: 1920, height: 1080 },
 ];
 
@@ -479,6 +479,7 @@ async function runViewportScenario(browser, viewport) {
       if (tab) {
         await tab.click();
         await page.waitForTimeout(1200);
+        await checkHorizontalOverflow(page, `${viewportName}/${target.name}`);
         await page.screenshot({ path: path.join(runDir, target.file), fullPage: true });
       } else {
         pushIssue({ kind: "ui", viewport: viewportName, text: `Tab not found: ${target.name}` });

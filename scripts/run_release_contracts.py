@@ -27,6 +27,7 @@ CONTRACT_TESTS = [
     "qa_tradier_option_provider.py",
     "qa_option_card_contract.py",
     "qa_leverage_end_to_end.py",
+    "qa_execution_cost_calibration.py",
     "qa_paper_entry_market_regime.py",
     "qa_paper_diversification.py",
     "qa_news_evidence_schema.py",

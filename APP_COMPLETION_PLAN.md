@@ -49,7 +49,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [x] Automatische Kauf-, Management- und Verkaufsmeldungen.
 - [x] Portfolio-Korrelation quantitativ mit sechs Monaten Tagesrenditen messen; extreme Korrelation blockiert erst ab dokumentierter Mindeststichprobe, statische Buckets bleiben zusätzlicher Sicherheitsgurt.
 - [x] Marktregime beim Einstieg unveränderlich speichern: Trend, Volatilitäts-Proxy, Zinsen, Dollar, Risikoappetit und Breiten-Proxy; Proxy-Methoden und fehlende Dimensionen bleiben sichtbar.
-- [ ] Slippage und Gebühren je Assetklasse regelmäßig gegen beobachtbare Spreads kalibrieren.
+- [x] Slippage und Gebühren je Assetklasse regelmäßig gegen beobachtbare Spreads kalibrieren: Das versionierte 90-Tage-Modell nutzt mindestens die halbe beobachtete Bid/Ask-Spanne pro Seite, trennt Gebühren, Slippage, Liquiditäts- und Altersaufschläge, zeigt Stichprobe/Fallback je Assetklasse und speichert die vollständige Kalibrierung unveränderlich im Entry-/Exit-Fill.
 - [x] Strategieauswertung nach Setup, Marktregime, Quelle, Scoreband und Risikobucket mit Trefferquote, Profit Factor, Erwartungswert, Drawdown und Stichprobenstatus anzeigen.
 - [ ] Mindestens 30 geschlossene Trades je freizugebender Strategie und mindestens 100 entscheidende Outcome-Prüfungen sammeln.
 - [x] Eine Strategie nur hochstufen, wenn mindestens 30 geschlossene Trades/klare Prüfungen, Trefferquote, Profit Factor, positive Erwartung und Drawdown gleichzeitig die dokumentierten Mindestwerte erfüllen.

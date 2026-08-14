@@ -285,6 +285,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
   const capitalFlow = demoAccount.capital_flow || {};
+  const executionCostCalibration = demoAccount.execution_cost_calibration || {};
+  const executionCostRows = executionCostCalibration.rows || [];
   const exposureProfile = demoAccount.exposure_profile || {};
   const exposureBuckets = exposureProfile.buckets || [];
   const assetClassLimits = Object.entries(demoAccount.asset_class_limits || {}) as Array<[string, any]>;
@@ -1005,6 +1007,43 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Realisiert" value={money(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value, currency)} tone={(Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) > 0 ? "good" : Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) < 0 ? "bad" : "default") as any} />
             <StatTile label="Netto-Ergebnis" value={`${money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / ${formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
           </div>
+          <div data-testid="execution-cost-calibration" className="mt-4 rounded-[1.4rem] border border-sky-200 bg-sky-50/65 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-700">Spread-, Slippage- und Gebührenkalibrierung</div>
+                <div className="mt-1 text-sm font-semibold leading-6 text-sky-950">
+                  Rollierende {executionCostCalibration.lookback_days || 90} Tage · mindestens die halbe beobachtete Bid/Ask-Spanne je Seite · Gebühren separat im Fill berücksichtigt.
+                </div>
+              </div>
+              <div className="rounded-full border border-sky-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-800">
+                {executionCostCalibration.calibrated_asset_classes || 0} / {executionCostRows.length || 4} kalibriert
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {executionCostRows.map((row: any) => (
+                <div key={row.asset_class} className="rounded-2xl border border-sky-200 bg-white/85 p-3 text-xs text-sky-950">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-extrabold uppercase tracking-[0.13em]">{row.asset_class}</div>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${row.status === "calibrated" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      {row.status === "calibrated" ? "kalibriert" : "vorläufig"}
+                    </span>
+                  </div>
+                  <div className="mt-2 font-semibold leading-5">
+                    Spread-Median {row.median_observed_spread_pct != null ? `${Number(row.median_observed_spread_pct).toFixed(2)}%` : "noch keine Quote"}
+                  </div>
+                  <div className="text-sky-700">
+                    Slippage {row.median_slippage_bps ?? row.policy_fallback_bps ?? "?"} bps · Gebühren {row.median_fee_bps ?? "Policy"} bps
+                  </div>
+                  <div className="mt-1 text-[10px] font-bold text-sky-600">
+                    {row.spread_samples || 0}/{row.minimum_spread_samples || 5} Spread-Beobachtungen
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 text-[10px] font-semibold leading-5 text-sky-700">
+              Modell {executionCostCalibration.model_version || "spread_calibration_v1"} · ohne ausreichende Stichprobe gilt weiterhin der konservative Assetklassen-Fallback.
+            </div>
+          </div>
           <div className="mt-4 rounded-[1.4rem] border border-black/8 bg-white/90 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -1380,7 +1419,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2 text-[11px] font-semibold leading-5 text-sky-900">
                         <span className="font-extrabold">Ausführung:</span>{" "}
                         Referenz {priceOrNA(entryExecution.reference_price)} → Fill {priceOrNA(entryExecution.fill_price)} ·{" "}
-                        {entryExecution.cost_bps ?? "?"} bps · Einstiegskosten {moneyOrNA(entryExecution.estimated_cost_value, currency)}
+                        {entryExecution.cost_bps ?? "?"} bps gesamt · Slippage {entryExecution.slippage_bps ?? "?"} bps · Gebühren {entryExecution.fee_equivalent_bps ?? "?"} bps · Einstiegskosten {moneyOrNA(entryExecution.estimated_cost_value, currency)}
                         {exitExecution ? (
                           <span className="block text-sky-800">
                             Verkauf jetzt geschätzt: Referenz {priceOrNA(exitExecution.reference_price)} → Fill {priceOrNA(exitExecution.fill_price)}

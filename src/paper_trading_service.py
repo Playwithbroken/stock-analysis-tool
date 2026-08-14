@@ -8,6 +8,7 @@ import socket
 import time
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from statistics import median
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 
@@ -891,6 +892,28 @@ class PaperTradingService:
             direction = playbook.get("direction") or direction
             underlying_price = float(execution_market.get("price") or 0)
             option_contract = playbook.get("option_contract") if isinstance(playbook.get("option_contract"), dict) else {}
+            option_execution_quote = (
+                playbook.get("leveraged_product")
+                if isinstance(playbook.get("leveraged_product"), dict) and playbook.get("leveraged_product")
+                else option_contract
+            )
+            is_validated_provider_product = bool(playbook.get("leveraged_product"))
+            option_spread_pct = self._tradier_number(option_execution_quote.get("spread_pct"), -1.0)
+            option_liquidity = (
+                "strong"
+                if option_spread_pct >= 0
+                and (
+                    (is_validated_provider_product and option_spread_pct <= 6)
+                    or (
+                        not is_validated_provider_product
+                        and option_spread_pct <= 10
+                        and int(self._tradier_number(option_execution_quote.get("open_interest"))) >= 100
+                    )
+                )
+                else "adequate"
+                if option_spread_pct >= 0 and option_spread_pct <= 25
+                else execution_market.get("liquidity_status") or "unknown"
+            )
             last_price = round(
                 float(
                     (playbook.get("leveraged_product") or {}).get("ask")
@@ -904,7 +927,17 @@ class PaperTradingService:
                 "reference_price": last_price,
                 "underlying_reference_price": underlying_price,
                 "data_as_of": execution_market.get("data_as_of"),
-                "market_data": execution_market,
+                "market_data": {
+                    **execution_market,
+                    "underlying_source": execution_market.get("source"),
+                    "source": option_execution_quote.get("source") or execution_market.get("source"),
+                    "contract_symbol": option_execution_quote.get("contract_symbol"),
+                    "bid": option_execution_quote.get("bid"),
+                    "ask": option_execution_quote.get("ask"),
+                    "spread_pct": option_execution_quote.get("spread_pct"),
+                    "liquidity_status": option_liquidity,
+                    "quote_side": "ask_for_conservative_entry",
+                },
             }
         else:
             execution_market = self._get_market_snapshot(playbook.get("ticker"))
@@ -4452,6 +4485,89 @@ class PaperTradingService:
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],
             "learning_feedback": self._build_learning_feedback(trades),
+            "execution_cost_calibration": self._build_execution_cost_calibration(trades),
+        }
+
+    def _build_execution_cost_calibration(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        try:
+            lookback_days = max(7, min(365, int(os.getenv("PAPER_EXECUTION_CALIBRATION_DAYS", "90"))))
+        except (TypeError, ValueError):
+            lookback_days = 90
+        try:
+            minimum_spread_samples = max(1, int(os.getenv("PAPER_EXECUTION_CALIBRATION_MIN_SAMPLES", "5")))
+        except (TypeError, ValueError):
+            minimum_spread_samples = 5
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        grouped: Dict[str, List[Dict[str, Any]]] = {asset: [] for asset in ("equity", "etf", "crypto", "option")}
+        for trade in trades:
+            asset = str(trade.get("asset_class") or "equity").lower()
+            if asset not in grouped:
+                continue
+            trade_time = self._as_utc_naive_datetime(trade.get("closed_at") or trade.get("opened_at"))
+            if trade_time is not None and trade_time.replace(tzinfo=timezone.utc) < cutoff:
+                continue
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            execution_model = ticket.get("execution_model") if isinstance(ticket.get("execution_model"), dict) else {}
+            for phase in ("entry", "exit"):
+                execution = execution_model.get(phase)
+                if not isinstance(execution, dict):
+                    continue
+                calibration = execution.get("calibration") if isinstance(execution.get("calibration"), dict) else {}
+                spread_pct = calibration.get("observed_spread_pct", execution.get("spread_pct"))
+                try:
+                    spread_value = float(spread_pct) if spread_pct not in (None, "") else None
+                except (TypeError, ValueError):
+                    spread_value = None
+                grouped[asset].append(
+                    {
+                        "spread_pct": spread_value,
+                        "slippage_bps": calibration.get("slippage_bps", execution.get("cost_bps")),
+                        "fee_bps": calibration.get("fee_equivalent_bps"),
+                        "total_cost_bps": calibration.get("total_cost_bps", execution.get("cost_bps")),
+                    }
+                )
+
+        def numeric_values(rows: List[Dict[str, Any]], key: str) -> List[float]:
+            values: List[float] = []
+            for row in rows:
+                try:
+                    value = row.get(key)
+                    if value not in (None, ""):
+                        values.append(float(value))
+                except (TypeError, ValueError):
+                    continue
+            return values
+
+        rows: List[Dict[str, Any]] = []
+        for asset, observations in grouped.items():
+            spreads = numeric_values(observations, "spread_pct")
+            slippage = numeric_values(observations, "slippage_bps")
+            fees = numeric_values(observations, "fee_bps")
+            totals = numeric_values(observations, "total_cost_bps")
+            fallback = self._execution_cost_profile(asset, {"liquidity_status": "strong"})
+            rows.append(
+                {
+                    "asset_class": asset,
+                    "status": "calibrated" if len(spreads) >= minimum_spread_samples else "provisional",
+                    "execution_samples": len(observations),
+                    "spread_samples": len(spreads),
+                    "minimum_spread_samples": minimum_spread_samples,
+                    "median_observed_spread_pct": round(median(spreads), 4) if spreads else None,
+                    "median_slippage_bps": round(median(slippage), 2) if slippage else None,
+                    "median_fee_bps": round(median(fees), 2) if fees else None,
+                    "median_total_cost_bps": round(median(totals), 2) if totals else None,
+                    "policy_fallback_bps": fallback.get("total_cost_bps"),
+                    "remaining_spread_samples": max(0, minimum_spread_samples - len(spreads)),
+                }
+            )
+        return {
+            "model_version": "spread_calibration_v1",
+            "lookback_days": lookback_days,
+            "minimum_spread_samples": minimum_spread_samples,
+            "calculated_at": datetime.now(timezone.utc).isoformat(),
+            "method": "Per-side cost uses at least half the observed bid/ask spread; fees and stale/liquidity surcharges remain separate and auditable.",
+            "rows": rows,
+            "calibrated_asset_classes": sum(1 for row in rows if row["status"] == "calibrated"),
         }
 
     def _build_trade_action_queue(self, open_trades: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -6181,6 +6297,16 @@ class PaperTradingService:
         }
 
     def _execution_cost_bps(self, asset_class: str, market_data: Dict[str, Any] | None = None) -> float:
+        return float(self._execution_cost_profile(asset_class, market_data).get("total_cost_bps") or 0)
+
+    def _execution_cost_profile(
+        self,
+        asset_class: str,
+        market_data: Dict[str, Any] | None = None,
+        reference_price: float = 0,
+        quantity: float = 0,
+        contract_multiplier: float = 1,
+    ) -> Dict[str, Any]:
         asset = str(asset_class or "equity").lower()
         market_data = market_data if isinstance(market_data, dict) else {}
         defaults = {
@@ -6199,15 +6325,80 @@ class PaperTradingService:
             base_bps = float(os.getenv(env_names.get(asset, "PAPER_EXECUTION_EQUITY_BPS"), str(defaults.get(asset, 12.0))))
         except (TypeError, ValueError):
             base_bps = defaults.get(asset, 12.0)
+        fee_defaults = {"equity": 1.0, "etf": 1.0, "crypto": 8.0, "option": 5.0}
+        fee_env_names = {
+            "equity": "PAPER_FEE_EQUITY_BPS",
+            "etf": "PAPER_FEE_ETF_BPS",
+            "crypto": "PAPER_FEE_CRYPTO_BPS",
+            "option": "PAPER_FEE_OPTION_BPS",
+        }
+        try:
+            variable_fee_bps = max(
+                0.0,
+                float(os.getenv(fee_env_names.get(asset, "PAPER_FEE_EQUITY_BPS"), str(fee_defaults.get(asset, 1.0)))),
+            )
+        except (TypeError, ValueError):
+            variable_fee_bps = fee_defaults.get(asset, 1.0)
+        try:
+            option_fee_per_contract = max(0.0, float(os.getenv("PAPER_FEE_OPTION_PER_CONTRACT", "0.65"))) if asset == "option" else 0.0
+        except (TypeError, ValueError):
+            option_fee_per_contract = 0.65 if asset == "option" else 0.0
         liquidity_multiplier = {
             "strong": 1.0,
             "adequate": 1.75,
             "unknown": 2.5,
             "thin": 4.0,
         }.get(str(market_data.get("liquidity_status") or "unknown").lower(), 2.5)
-        age_hours = float(market_data.get("age_hours") or 0)
+        try:
+            age_hours = max(0.0, float(market_data.get("age_hours") or 0))
+        except (TypeError, ValueError):
+            age_hours = 0.0
         stale_surcharge = 5.0 if age_hours > 24 else 0.0
-        return round(min(500.0, max(0.0, base_bps * liquidity_multiplier + stale_surcharge)), 2)
+        modeled_total_floor_bps = max(0.0, base_bps * liquidity_multiplier + stale_surcharge)
+
+        observed_spread_pct = None
+        try:
+            raw_spread = market_data.get("spread_pct")
+            if raw_spread not in (None, ""):
+                parsed_spread = float(raw_spread)
+                if 0 <= parsed_spread <= 100:
+                    observed_spread_pct = parsed_spread
+        except (TypeError, ValueError):
+            observed_spread_pct = None
+        observed_half_spread_bps = (observed_spread_pct * 100 / 2) if observed_spread_pct is not None else None
+
+        reference = max(0.0, float(reference_price or 0))
+        normalized_quantity = max(0.0, float(quantity or 0))
+        multiplier = max(0.0, float(contract_multiplier or 1))
+        notional = reference * normalized_quantity * multiplier
+        variable_fee_value = notional * (variable_fee_bps / 10_000)
+        fixed_fee_value = normalized_quantity * option_fee_per_contract
+        fee_value = variable_fee_value + fixed_fee_value
+        fee_equivalent_bps = (fee_value / notional) * 10_000 if notional > 0 else variable_fee_bps
+        modeled_slippage_floor_bps = max(0.0, modeled_total_floor_bps - fee_equivalent_bps)
+        slippage_bps = max(modeled_slippage_floor_bps, observed_half_spread_bps or 0.0)
+        cap_bps = 1500.0 if asset == "option" else 500.0
+        total_cost_bps = min(cap_bps, max(0.0, slippage_bps + fee_equivalent_bps))
+        if slippage_bps + fee_equivalent_bps > cap_bps:
+            slippage_bps = max(0.0, cap_bps - fee_equivalent_bps)
+        return {
+            "model_version": "spread_calibration_v1",
+            "asset_class": asset,
+            "base_assumption_bps": round(base_bps, 2),
+            "liquidity_multiplier": round(liquidity_multiplier, 2),
+            "stale_surcharge_bps": round(stale_surcharge, 2),
+            "observed_spread_pct": round(observed_spread_pct, 4) if observed_spread_pct is not None else None,
+            "observed_half_spread_bps": round(observed_half_spread_bps, 2) if observed_half_spread_bps is not None else None,
+            "slippage_bps": round(slippage_bps, 2),
+            "variable_fee_bps": round(variable_fee_bps, 2),
+            "option_fee_per_contract": round(option_fee_per_contract, 4),
+            "fee_equivalent_bps": round(fee_equivalent_bps, 2),
+            "estimated_fee_value": round(fee_value, 2),
+            "total_cost_bps": round(total_cost_bps, 2),
+            "calibration_source": "observed_bid_ask_spread" if observed_spread_pct is not None else "asset_class_policy_fallback",
+            "quote_source": market_data.get("source"),
+            "quote_data_as_of": market_data.get("data_as_of"),
+        }
 
     def _simulate_execution_fill(
         self,
@@ -6227,12 +6418,22 @@ class PaperTradingService:
         # Calls and puts in this paper model are long-premium positions.
         opens_with_buy = normalized_direction in {"long", "call", "put"}
         is_buy = opens_with_buy if normalized_phase == "entry" else not opens_with_buy
-        cost_bps = self._execution_cost_bps(asset_class, market_data)
+        profile = self._execution_cost_profile(
+            asset_class,
+            market_data,
+            reference_price=reference,
+            quantity=quantity,
+            contract_multiplier=contract_multiplier,
+        )
+        cost_bps = float(profile["total_cost_bps"])
         adjustment = cost_bps / 10_000
         fill_price = reference * (1 + adjustment if is_buy else 1 - adjustment)
         fill_price = round(max(0.0001, fill_price), 4)
         cost_per_unit = abs(fill_price - reference)
-        estimated_cost_value = cost_per_unit * max(0.0, float(quantity or 0)) * max(0.0, float(contract_multiplier or 1))
+        units = max(0.0, float(quantity or 0)) * max(0.0, float(contract_multiplier or 1))
+        estimated_cost_value = cost_per_unit * units
+        estimated_fee_value = float(profile.get("estimated_fee_value") or 0)
+        estimated_slippage_value = max(0.0, estimated_cost_value - estimated_fee_value)
         return {
             "phase": normalized_phase,
             "side": "buy" if is_buy else "sell",
@@ -6240,8 +6441,13 @@ class PaperTradingService:
             "reference_price": round(reference, 4),
             "fill_price": fill_price,
             "cost_bps": cost_bps,
+            "slippage_bps": profile.get("slippage_bps"),
+            "fee_equivalent_bps": profile.get("fee_equivalent_bps"),
             "cost_per_unit": round(cost_per_unit, 6),
             "estimated_cost_value": round(estimated_cost_value, 2),
+            "estimated_slippage_value": round(estimated_slippage_value, 2),
+            "estimated_fee_value": round(estimated_fee_value, 2),
+            "calibration": profile,
             "liquidity_status": (market_data or {}).get("liquidity_status") or "unknown",
             "data_as_of": (market_data or {}).get("data_as_of"),
             "market_source": (market_data or {}).get("source"),

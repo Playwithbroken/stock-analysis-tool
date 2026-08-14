@@ -4105,7 +4105,9 @@ class EmailAlertService:
         execution_line = (
             f"<b>Fill-Modell:</b> Referenz {self._tg_price(entry_execution.get('reference_price'))} → "
             f"Fill {self._tg_price(entry_execution.get('fill_price'))} | "
-            f"{self._tg_esc(str(entry_execution.get('cost_bps')))} bps | Kosten {self._tg_money(entry_execution.get('estimated_cost_value'))}"
+            f"{self._tg_esc(str(entry_execution.get('cost_bps')))} bps gesamt | "
+            f"Slippage {self._tg_esc(str(entry_execution.get('slippage_bps')))} bps | "
+            f"Gebühren {self._tg_esc(str(entry_execution.get('fee_equivalent_bps')))} bps | Kosten {self._tg_money(entry_execution.get('estimated_cost_value'))}"
             if entry_execution
             else ""
         )
@@ -4369,7 +4371,9 @@ class EmailAlertService:
         execution_line = (
             f"<b>Exit-Fill:</b> Referenz {self._tg_price(exit_execution.get('reference_price'))} → "
             f"Fill {self._tg_price(exit_execution.get('fill_price'))} | "
-            f"{self._tg_esc(str(exit_execution.get('cost_bps')))} bps | Kosten {self._tg_money(exit_execution.get('estimated_cost_value'))}"
+            f"{self._tg_esc(str(exit_execution.get('cost_bps')))} bps gesamt | "
+            f"Slippage {self._tg_esc(str(exit_execution.get('slippage_bps')))} bps | "
+            f"Gebühren {self._tg_esc(str(exit_execution.get('fee_equivalent_bps')))} bps | Kosten {self._tg_money(exit_execution.get('estimated_cost_value'))}"
             if exit_execution
             else ""
         )

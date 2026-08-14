@@ -1531,6 +1531,11 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
             "Critical market alert scan",
             lambda: get_email_alert_service().check_and_send_critical_market_alerts(False),
         )
+    if _env_enabled("DAILY_OVERVIEW_ENABLED", "false"):
+        await run_step(
+            "Daily overview delivery",
+            lambda: get_email_alert_service().send_scheduled_daily_overview(include_missed),
+        )
     await run_step(
         "Scheduled brief delivery",
         lambda: get_email_alert_service().send_scheduled_open_briefs(include_missed),

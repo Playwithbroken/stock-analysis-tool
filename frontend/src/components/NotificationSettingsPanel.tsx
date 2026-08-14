@@ -35,7 +35,18 @@ interface NotificationStatus {
     cooldown_hours: number;
     max_items: number;
   };
-  schedule?: { timezone: string; europe_open: string; us_open: string };
+  schedule?: {
+    timezone: string;
+    europe_open: string;
+    us_open: string;
+    daily_overview?: {
+      enabled: boolean;
+      time: string;
+      channel: string;
+      priority: string;
+      immediate_risk_alerts_independent: boolean;
+    };
+  };
 }
 
 const initialProfile: WorkspaceProfile = {
@@ -269,6 +280,19 @@ export default function NotificationSettingsPanel({
             </div>
             <div className="mt-1 text-xs text-slate-500">
               Europe {notificationStatus?.schedule?.europe_open || "--:--"} / US {notificationStatus?.schedule?.us_open || "--:--"}
+            </div>
+          </div>
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              Telegram-Tagesübersicht
+            </div>
+            <div className="mt-2 text-sm font-black text-slate-900">
+              {notificationStatus?.schedule?.daily_overview?.enabled
+                ? `Aktiv um ${notificationStatus.schedule.daily_overview.time}`
+                : "Optional / aus"}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              Reine Konto- und Lernstandsübersicht. Kauf-, Verkauf-, Management- und Risiko-Pushes bleiben sofort und unabhängig.
             </div>
           </div>
         </div>

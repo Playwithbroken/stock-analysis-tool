@@ -35,6 +35,7 @@ DEFAULT_US_OPEN_BRIEF_TIME = "15:10"
 DEFAULT_EUROPE_CLOSE_BRIEF_TIME = "17:30"
 DEFAULT_CLOSE_RECAP_TIME = "21:45"
 DEFAULT_US_CLOSE_BRIEF_TIME = "22:15"
+DEFAULT_DAILY_OVERVIEW_TIME = "20:30"
 
 
 @dataclass
@@ -51,6 +52,7 @@ class EmailAlertConfig:
     telegram_bot_token: str
     telegram_chat_id: str
     scheduled_briefs_enabled: bool
+    daily_overview_enabled: bool = False
 
 
 class EmailAlertService:
@@ -110,6 +112,8 @@ class EmailAlertService:
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
             scheduled_briefs_enabled=os.getenv("SCHEDULED_BRIEFS_ENABLED", "true").strip().lower()
             not in {"0", "false", "no", "off"},
+            daily_overview_enabled=os.getenv("DAILY_OVERVIEW_ENABLED", "false").strip().lower()
+            in {"1", "true", "yes", "on"},
         )
 
     def get_notification_status(self) -> Dict[str, Any]:
@@ -160,6 +164,17 @@ class EmailAlertService:
                 "close_recap": os.getenv("CLOSE_RECAP_TIME", DEFAULT_CLOSE_RECAP_TIME),
                 "on_time_window_minutes": self._brief_on_time_window_minutes(),
                 "delivery_grace_minutes": self._brief_delivery_grace_minutes(),
+                "daily_overview": {
+                    "enabled": config.daily_overview_enabled,
+                    "time": os.getenv("DAILY_OVERVIEW_TIME", DEFAULT_DAILY_OVERVIEW_TIME),
+                    "channel": "telegram",
+                    "priority": "summary_only",
+                    "immediate_risk_alerts_independent": True,
+                    "delivery_grace_minutes": self._safe_int_env(
+                        "DAILY_OVERVIEW_GRACE_MINUTES", 180, minimum=1
+                    ),
+                    "last_result": self.get_brief_job_status("daily-overview"),
+                },
             },
         }
 
@@ -1207,6 +1222,161 @@ class EmailAlertService:
             )
         self.portfolio_manager.set_app_setting("brief_scheduler_last_result", json.dumps(results[-5:]))
         return results
+
+    def send_scheduled_daily_overview(
+        self,
+        include_missed: bool = False,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """Send one optional local-data summary without competing with rich briefs."""
+        config = self.get_config()
+        job_key = "daily-overview"
+        if not config.daily_overview_enabled and not force:
+            result = {
+                "job": job_key,
+                "status": "disabled",
+                "message": "Die optionale Tagesuebersicht ist deaktiviert.",
+            }
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
+        event_key = f"{job_key}:{now.date().isoformat()}"
+        if event_key in self.portfolio_manager.get_sent_signal_event_keys():
+            result = {
+                "job": job_key,
+                "status": "deduplicated",
+                "event_key": event_key,
+                "message": "Die Tagesuebersicht wurde heute bereits zugestellt.",
+            }
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        scheduled_at = self._scheduled_datetime(
+            now, os.getenv("DAILY_OVERVIEW_TIME", DEFAULT_DAILY_OVERVIEW_TIME)
+        )
+        if not force:
+            if not self._schedule_day_matches(now):
+                result = {"job": job_key, "status": "skipped", "event_key": event_key}
+                self._set_brief_job_status(job_key, result)
+                return result
+            if scheduled_at is None:
+                result = {
+                    "job": job_key,
+                    "status": "failed",
+                    "event_key": event_key,
+                    "error": "invalid_schedule_time",
+                }
+                self._set_brief_job_status(job_key, result)
+                return result
+            delta_minutes = (now - scheduled_at).total_seconds() / 60
+            on_time = 0 <= delta_minutes < self._brief_on_time_window_minutes()
+            grace = self._safe_int_env("DAILY_OVERVIEW_GRACE_MINUTES", 180, minimum=1)
+            catchup = include_missed and 0 <= delta_minutes < grace
+            if not (on_time or catchup):
+                status = "missed" if delta_minutes >= grace else "idle"
+                result = {
+                    "job": job_key,
+                    "status": status,
+                    "event_key": event_key,
+                    "scheduled_at": scheduled_at.isoformat(),
+                }
+                self._set_brief_job_status(job_key, result)
+                return result
+
+        try:
+            self._validate_config(config)
+            events = self._build_daily_overview_events(now, event_key)
+            delivered = self._send_notifications(
+                config,
+                events,
+                subject="Geplante Tagesuebersicht: Paper-Konto und Lernstand",
+            )
+            if not delivered:
+                raise RuntimeError("Telegram hat keine Zustellung bestaetigt.")
+        except Exception as exc:
+            result = {
+                "job": job_key,
+                "status": "failed",
+                "event_key": event_key,
+                "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+                "error": str(exc),
+                "message": "Nicht als gesendet markiert; der naechste Lauf darf erneut versuchen.",
+            }
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        marker = {
+            "event_key": event_key,
+            "category": "daily_overview",
+            "line": "Geplante Telegram-Tagesuebersicht",
+        }
+        self.portfolio_manager.mark_signal_events_sent([marker])
+        result = {
+            "job": job_key,
+            "status": "sent",
+            "event_key": event_key,
+            "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+            "sent_at": now.isoformat(),
+            "message": "Tagesuebersicht zugestellt; Echtzeit-Risikoalarme bleiben unabhaengig.",
+        }
+        self._set_brief_job_status(job_key, result)
+        return result
+
+    def _build_daily_overview_events(self, now: datetime, event_key: str) -> List[Dict[str, Any]]:
+        trades = self.portfolio_manager.list_paper_trades(limit=1000)
+        outcomes = self.portfolio_manager.list_paper_trade_outcomes(limit=2000)
+        portfolios = self.portfolio_manager.get_portfolios()
+        today = now.date()
+
+        def local_date(value: Any) -> Any:
+            if not value:
+                return None
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                if parsed.tzinfo is not None:
+                    parsed = parsed.astimezone(now.tzinfo)
+                return parsed.date()
+            except (TypeError, ValueError):
+                return None
+
+        open_trades = [trade for trade in trades if str(trade.get("status") or "").lower() == "open"]
+        closed_today = [
+            trade
+            for trade in trades
+            if str(trade.get("status") or "").lower() == "closed"
+            and local_date(trade.get("closed_at")) == today
+        ]
+        realized_today = 0.0
+        for trade in closed_today:
+            entry = float(trade.get("entry_price") or 0)
+            exit_price = float(trade.get("closed_price") or 0)
+            quantity = float(trade.get("quantity") or 0)
+            multiplier = float(trade.get("contract_multiplier") or 1)
+            leverage = float(trade.get("leverage") or 1)
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            product = ticket.get("leveraged_product") if isinstance(ticket.get("leveraged_product"), dict) else {}
+            payout = 1.0 if product.get("leverage_is_embedded_in_product_price") is True else leverage
+            direction = -1.0 if str(trade.get("direction") or "long").lower() == "short" else 1.0
+            realized_today += (exit_price - entry) * quantity * multiplier * payout * direction
+
+        evaluated = [item for item in outcomes if str(item.get("status") or "").lower() == "evaluated"]
+        decisive = [item for item in evaluated if str(item.get("result") or "").lower() in {"hit", "miss"}]
+        pending = [
+            item for item in outcomes if str(item.get("status") or "").lower() in {"pending", "pending_data"}
+        ]
+        holding_count = sum(len(item.get("holdings") or []) for item in portfolios)
+        lines = [
+            "Geplante Zusammenfassung - keine neue Handelsentscheidung.",
+            f"Portfolios: {len(portfolios)} | echte Positionen: {holding_count}",
+            f"Paper-Konto: {len(open_trades)} offen | heute {len(closed_today)} geschlossen | realisiert {realized_today:+.2f}",
+            f"Lernstand: {len(evaluated)} ausgewertet | {len(decisive)} entscheidend | {len(pending)} offen",
+            "Kauf-, Verkauf-, Management- und Risiko-Pushes laufen sofort und unabhaengig von dieser Uebersicht.",
+        ]
+        return [
+            {"event_key": f"{event_key}:{index}", "category": "daily_overview", "line": line}
+            for index, line in enumerate(lines, start=1)
+        ]
 
     def get_brief_job_status(self, job_key: str) -> Dict[str, Any]:
         raw = self.portfolio_manager.get_app_setting(self._brief_status_key(job_key), "{}")
@@ -4840,6 +5010,8 @@ class EmailAlertService:
             return "[SETUP]"
         if category in {"scheduled_brief", "morning_brief", "session_list"}:
             return "[BRIEF]"
+        if category == "daily_overview":
+            return "[UEBERSICHT]"
         return "[INFO]"
 
     def _escape_markdown(self, text: str) -> str:

@@ -41,6 +41,7 @@ CONTRACT_TESTS = [
     "qa_morning_brief_classification.py",
     "qa_daily_overview_scheduler.py",
     "qa_visual_viewport_contract.py",
+    "qa_provider_observability.py",
 ]
 
 

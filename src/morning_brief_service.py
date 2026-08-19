@@ -16,6 +16,7 @@ from copy import deepcopy
 import json
 import os
 import re
+import time as perf_time
 
 import pandas as pd
 import requests
@@ -25,6 +26,7 @@ from src.data_fetcher import DataFetcher
 from src.storage import PortfolioManager
 from src.social_intelligence_service import SocialIntelligenceService
 from src.trading_signals_service import TradingSignalsService
+from src.provider_observability import record_provider_result
 
 try:
     import feedparser  # type: ignore
@@ -1164,8 +1166,10 @@ class MorningBriefService:
         return items
 
     def _collect_news(self, extra_tickers: List[str] | None = None, fast: bool = False) -> List[Dict[str, Any]]:
+        started = perf_time.perf_counter()
         items: List[Dict[str, Any]] = []
         seen_reports: set[tuple[str, str]] = set()
+        provider_errors = 0
 
         # 1. Collect from RSS feeds (real-time, highest priority)
         rss_items = self._collect_rss_news()
@@ -1188,7 +1192,11 @@ class MorningBriefService:
 
         per_ticker_limit = 2 if fast else 3
         for ticker in all_tickers:
-            news = DataFetcher(ticker).get_news()
+            try:
+                news = DataFetcher(ticker).get_news()
+            except Exception:
+                provider_errors += 1
+                continue
             for item in news[:per_ticker_limit]:
                 title = item.get("title") or ""
                 identity = self._news_identity(title)
@@ -1265,7 +1273,22 @@ class MorningBriefService:
                 item["region"],
             )
         )
-        return trusted_items[:16]
+        result = trusted_items[:16]
+        status = "ok" if result and provider_errors == 0 else "degraded"
+        error_code = None
+        if provider_errors:
+            error_code = "NEWS_PARTIAL_PROVIDER_FAILURE"
+        elif not result:
+            error_code = "NEWS_EMPTY_RESPONSE"
+        record_provider_result(
+            "news",
+            "rss_yfinance_aggregator",
+            "collect_news_fast" if fast else "collect_news",
+            status,
+            latency_ms=(perf_time.perf_counter() - started) * 1000,
+            error_code=error_code,
+        )
+        return result
 
     def _news_identity(self, title: str) -> str:
         text = re.sub(r"[^a-z0-9 ]+", " ", str(title or "").lower())

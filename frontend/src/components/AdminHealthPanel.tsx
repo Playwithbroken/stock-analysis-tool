@@ -9,7 +9,7 @@ interface AdminHealthPanelProps {
 function statusTone(status?: string) {
   const value = String(status || "").toLowerCase();
   if (["ok", "live", "ready", "sent", "sendable"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
-  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending", "disabled", "not_observed"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
   return "bg-red-500/10 text-red-700 border-red-500/20";
 }
 
@@ -335,6 +335,8 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const database = health?.database || {};
   const backup = health?.backup || {};
   const operationalAlerts = health?.operational_alerts || {};
+  const providerMetrics = health?.provider_metrics || {};
+  const providerServices = Object.values(providerMetrics.services || {}) as any[];
   const jobs = health?.schedule?.jobs || [];
   const schedule = health?.schedule || {};
   const scheduleSummary = health?.schedule?.summary || {};
@@ -648,6 +650,62 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
             </div>
           </div>
+
+          <section className="mb-5 rounded-[1.5rem] border border-black/8 bg-white/55 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  Provider-Metriken
+                </div>
+                <div className="mt-1 text-lg font-black text-slate-900">
+                  Quotes, News, Optionen und Telegram
+                </div>
+                <div className="mt-1 text-xs leading-5 text-slate-500">
+                  Einheitlicher Vertrag {providerMetrics.schema_version || "provider-metrics.v1"}: Erfolgsquote, Latenz und stabiler Fehlercode im rollierenden Prozessfenster.
+                </div>
+              </div>
+              <span className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                bis {providerMetrics.window_size_per_service ?? 200} Messungen je Dienst
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {providerServices.map((service: any) => {
+                const lastError = service.last_error || {};
+                const labelMap: Record<string, string> = {
+                  quote: "Kurse",
+                  news: "News",
+                  options: "Optionen",
+                  telegram: "Telegram",
+                };
+                return (
+                  <div key={service.service} className="min-w-0 rounded-[1.2rem] border border-black/8 bg-white/80 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-black text-slate-900">
+                        {labelMap[service.service] || service.service}
+                      </div>
+                      <span className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${statusTone(service.status)}`}>
+                        {service.status}
+                      </span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      <div>Erfolg <span className="font-extrabold text-slate-900">{service.success_rate_pct == null ? "offen" : `${service.success_rate_pct}%`}</span></div>
+                      <div>Versuche <span className="font-extrabold text-slate-900">{service.attempt_count ?? 0}</span></div>
+                      <div>Ø <span className="font-extrabold text-slate-900">{service.average_latency_ms == null ? "offen" : `${service.average_latency_ms}ms`}</span></div>
+                      <div>P95 <span className="font-extrabold text-slate-900">{service.p95_latency_ms == null ? "offen" : `${service.p95_latency_ms}ms`}</span></div>
+                    </div>
+                    <div className="mt-2 truncate text-[11px] text-slate-500" title={service.last_provider || ""}>
+                      {service.last_provider || "noch keine Messung"} / {service.last_operation || "–"}
+                    </div>
+                    {lastError.error_code ? (
+                      <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-4 text-amber-800">
+                        {lastError.error_code} / {fmtDate(lastError.occurred_at)}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-3">
             <div className={`min-w-0 rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8" : "border-black/8 bg-white/75"}`}>

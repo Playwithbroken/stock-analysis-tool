@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, List
 
 import requests
+
+from src.provider_observability import classify_provider_error, record_provider_result
 
 
 class TradierOptionDataProvider:
@@ -40,27 +43,64 @@ class TradierOptionDataProvider:
         return self.configured and self.environment == "production"
 
     def _get(self, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        started = time.perf_counter()
+        operation = path.rsplit("/", 1)[-1] or "request"
         if not self.configured:
-            raise RuntimeError("tradier_access_token_not_configured")
+            error = RuntimeError("tradier_access_token_not_configured")
+            record_provider_result(
+                "options",
+                "tradier",
+                operation,
+                "disabled",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                error_code=classify_provider_error("options", error=error),
+                error_type=error.__class__.__name__,
+            )
+            raise error
         try:
             timeout = max(2.0, min(30.0, float(os.getenv("TRADIER_TIMEOUT_SECONDS", "8"))))
         except (TypeError, ValueError):
             timeout = 8.0
-        response = requests.get(
-            f"{self.base_url}{path}",
-            params=params,
-            headers={
-                "Authorization": f"Bearer {self.access_token}",
-                "Accept": "application/json",
-                "User-Agent": "BrokerFreund-OptionsResearch/1.0",
-            },
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, dict):
-            raise ValueError("tradier_response_not_object")
-        return payload
+        response = None
+        try:
+            response = requests.get(
+                f"{self.base_url}{path}",
+                params=params,
+                headers={
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Accept": "application/json",
+                    "User-Agent": "BrokerFreund-OptionsResearch/1.0",
+                },
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("tradier_response_not_object")
+            record_provider_result(
+                "options",
+                "tradier",
+                operation,
+                "ok",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                http_status=response.status_code,
+            )
+            return payload
+        except Exception as exc:
+            http_status = response.status_code if response is not None else None
+            record_provider_result(
+                "options",
+                "tradier",
+                operation,
+                "error",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                error_code=classify_provider_error(
+                    "options", error=exc, http_status=http_status
+                ),
+                http_status=http_status,
+                error_type=exc.__class__.__name__,
+            )
+            raise
 
     @staticmethod
     def _as_list(value: Any) -> List[Any]:

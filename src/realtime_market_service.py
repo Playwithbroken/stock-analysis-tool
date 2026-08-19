@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from typing import Any, Dict, List
 
 from src.data_fetcher import DataFetcher
+from src.provider_observability import record_provider_result
 
 
 class RealtimeMarketService:
     MAX_SYMBOLS = 18
 
     def build_snapshot(self, symbols: List[str]) -> Dict[str, Any]:
+        started = time.perf_counter()
         cleaned: List[str] = []
         for symbol in symbols:
             normalized = (symbol or "").strip().upper()
@@ -38,13 +41,23 @@ class RealtimeMarketService:
         else:
             connection_state = "live"
 
-        return {
+        result = {
             "type": "realtime_snapshot",
             "generated_at": now.isoformat(),
             "connection_state": connection_state,
             "stale_seconds": stale_seconds,
             "quotes": quotes,
         }
+        metric_status = "ok" if connection_state == "live" else "degraded"
+        record_provider_result(
+            "quote",
+            "realtime_aggregator",
+            "build_snapshot",
+            metric_status,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code=None if metric_status == "ok" else "QUOTE_STALE_OR_EMPTY",
+        )
+        return result
 
     def _build_quote(self, symbol: str) -> Dict[str, Any] | None:
         try:

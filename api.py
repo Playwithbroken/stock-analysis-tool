@@ -49,6 +49,11 @@ from src.public_signal_service import PublicSignalService
 from src.advisory_service import advisory_profile_subset, build_portfolio_advisory_check, build_suitability_check
 from src.storage import DB_PATH, PortfolioManager, get_database_status, get_persistence_status
 from src.backup_service import DatabaseBackupService
+from src.provider_observability import (
+    classify_provider_error,
+    provider_metrics_snapshot,
+    record_provider_result,
+)
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -4967,6 +4972,7 @@ def _telegram_health_check() -> Dict[str, Any]:
     )
     if cached is not None:
         return cached
+    started = time.perf_counter()
     payload: Dict[str, Any] = {
         "enabled": config.telegram_enabled,
         "token_configured": bool(config.telegram_bot_token),
@@ -4979,6 +4985,14 @@ def _telegram_health_check() -> Dict[str, Any]:
         "next_step": None,
     }
     if not (config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id):
+        record_provider_result(
+            "telegram",
+            "telegram_bot_api",
+            "health_preflight",
+            "disabled",
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code="TELEGRAM_NOT_CONFIGURED",
+        )
         return _cache_set(cache_key, payload)
     try:
         response = requests.post(
@@ -5011,6 +5025,32 @@ def _telegram_health_check() -> Dict[str, Any]:
             "diagnosis": "telegram_network_error",
             "next_step": "Railway outbound network / Telegram API Erreichbarkeit pruefen.",
         })
+    record_provider_result(
+        "telegram",
+        "telegram_bot_api",
+        "health_preflight",
+        "ok" if payload.get("status") == "ok" else "error",
+        latency_ms=(time.perf_counter() - started) * 1000,
+        error_code=(
+            None
+            if payload.get("status") == "ok"
+            else classify_provider_error(
+                "telegram",
+                http_status=(
+                    int(error_code)
+                    if "error_code" in locals() and str(error_code).isdigit()
+                    else None
+                ),
+                detail=str(payload.get("diagnosis") or payload.get("error") or ""),
+            )
+        ),
+        http_status=(
+            int(error_code)
+            if "error_code" in locals() and str(error_code).isdigit()
+            else None
+        ),
+        error_type=str(payload.get("diagnosis") or "") or None,
+    )
     return _cache_set(cache_key, payload)
 
 
@@ -5024,25 +5064,98 @@ def _market_feed_health_check() -> Dict[str, Any]:
         return cached
 
     feeds: Dict[str, Any] = {}
+    started = time.perf_counter()
     try:
         aapl = DataFetcher("AAPL").get_price_data()
+        quote_status = "ok" if aapl.get("current_price") else "degraded"
         feeds["yfinance"] = {
-            "status": "ok" if aapl.get("current_price") else "degraded",
+            "status": quote_status,
             "sample": "AAPL",
             "price": aapl.get("current_price"),
         }
+        record_provider_result(
+            "quote",
+            "yfinance",
+            "health_quote",
+            quote_status,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code=None if quote_status == "ok" else "QUOTE_INVALID_RESPONSE",
+        )
     except Exception as exc:
         feeds["yfinance"] = {"status": "error", "error": exc.__class__.__name__}
+        record_provider_result(
+            "quote",
+            "yfinance",
+            "health_quote",
+            "error",
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code=classify_provider_error("quote", error=exc),
+            error_type=exc.__class__.__name__,
+        )
+    started = time.perf_counter()
     try:
         snapshot = get_realtime_market_service().build_snapshot(["AAPL"])
+        realtime_state = snapshot.get("connection_state") or "unknown"
         feeds["realtime"] = {
-            "status": snapshot.get("connection_state") or "unknown",
+            "status": realtime_state,
             "quotes": len(snapshot.get("quotes") or []),
             "stale_seconds": snapshot.get("stale_seconds") or {},
         }
     except Exception as exc:
         feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
+        record_provider_result(
+            "quote",
+            "realtime_aggregator",
+            "health_snapshot",
+            "error",
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code=classify_provider_error("quote", error=exc),
+            error_type=exc.__class__.__name__,
+        )
     return _cache_set(cache_key, feeds)
+
+
+def _news_feed_health_check() -> Dict[str, Any]:
+    cache_key = "health:news-feed"
+    cached = _cache_get(
+        cache_key,
+        _safe_int_env("HEALTH_NEWS_CACHE_TTL_SECONDS", 60, minimum=15),
+    )
+    if cached is not None:
+        return cached
+    started = time.perf_counter()
+    try:
+        brief = get_morning_brief_service().get_cached_or_last_brief() or {}
+        news_items = brief.get("top_news") or []
+        data_status = brief.get("data_status") or {}
+        sources = data_status.get("sources") or {}
+        status = "ok" if news_items else "degraded"
+        payload = {
+            "status": status,
+            "items": len(news_items),
+            "generated_at": brief.get("generated_at"),
+            "sources": sources,
+        }
+        record_provider_result(
+            "news",
+            "morning_brief",
+            "cached_news_snapshot",
+            status,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code=None if status == "ok" else "NEWS_EMPTY_RESPONSE",
+        )
+    except Exception as exc:
+        payload = {"status": "error", "error": exc.__class__.__name__}
+        record_provider_result(
+            "news",
+            "morning_brief",
+            "cached_news_snapshot",
+            "error",
+            latency_ms=(time.perf_counter() - started) * 1000,
+            error_code=classify_provider_error("news", error=exc),
+            error_type=exc.__class__.__name__,
+        )
+    return _cache_set(cache_key, payload)
 
 
 @app.get("/api/admin/health-center")
@@ -5149,11 +5262,13 @@ async def admin_health_center():
             "quality": brief_snapshot.get("quality") if brief_snapshot else None,
         }
     }
-    telegram, market_feed_status = await asyncio.gather(
+    telegram, market_feed_status, news_feed_status = await asyncio.gather(
         asyncio.to_thread(_telegram_health_check),
         asyncio.to_thread(_market_feed_health_check),
+        asyncio.to_thread(_news_feed_health_check),
     )
     data_feeds.update(market_feed_status)
+    data_feeds["news"] = news_feed_status
 
     try:
         learning_dashboard = get_forecast_learning_service().build_dashboard()
@@ -5436,6 +5551,7 @@ async def admin_health_center():
             "database": database_status,
             "backup": backup_status,
             "operational_alerts": operational_alerts,
+            "provider_metrics": provider_metrics_snapshot(),
             "schedule": {
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),

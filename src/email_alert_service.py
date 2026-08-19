@@ -15,6 +15,7 @@ import math
 import os
 import re
 import smtplib
+import time
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
@@ -26,6 +27,7 @@ from src.session_list_service import SessionListService
 from src.signal_score_service import SignalScoreService
 from src.storage import PortfolioManager
 from src.morning_brief_service import MorningBriefService
+from src.provider_observability import classify_provider_error, record_provider_result
 
 
 DEFAULT_MORNING_BRIEF_TIME = "08:30"
@@ -3184,6 +3186,8 @@ class EmailAlertService:
 
     def _tg_post(self, token: str, chat_id: str, text: str, disable_preview: bool = True) -> None:
         """Send a single Telegram message (HTML parse mode)."""
+        started = time.perf_counter()
+        response = None
         try:
             response = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
@@ -3210,8 +3214,28 @@ class EmailAlertService:
                     timeout=20,
                 )
             response.raise_for_status()
+            record_provider_result(
+                "telegram",
+                "telegram_bot_api",
+                "send_message",
+                "ok",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                http_status=response.status_code,
+            )
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
+            record_provider_result(
+                "telegram",
+                "telegram_bot_api",
+                "send_message",
+                "error",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                error_code=classify_provider_error(
+                    "telegram", error=exc, http_status=status
+                ),
+                http_status=status,
+                error_type=exc.__class__.__name__,
+            )
             if status == 404:
                 raise RuntimeError(
                     "Telegram rejected the bot token with 404. Check TELEGRAM_BOT_TOKEN in Railway; "
@@ -3233,6 +3257,17 @@ class EmailAlertService:
                     "Open Telegram, start the bot with /start, and if this is a group/channel add the bot "
                     "as a member/admin; then verify TELEGRAM_CHAT_ID points to that chat."
                 ) from exc
+            raise
+        except Exception as exc:
+            record_provider_result(
+                "telegram",
+                "telegram_bot_api",
+                "send_message",
+                "error",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                error_code=classify_provider_error("telegram", error=exc),
+                error_type=exc.__class__.__name__,
+            )
             raise
 
     def _telegram_preflight(self, config: EmailAlertConfig) -> None:

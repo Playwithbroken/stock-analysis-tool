@@ -44,6 +44,7 @@ CONTRACT_TESTS = [
     "qa_provider_observability.py",
     "qa_rollback_runbook.py",
     "qa_decision_scope_contract.py",
+    "qa_decision_audit.py",
 ]
 
 

@@ -2,6 +2,7 @@ import sqlite3
 import os
 import uuid
 import json
+import hashlib
 import tempfile
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -262,6 +263,26 @@ def init_db():
         FOREIGN KEY (forecast_id) REFERENCES signal_forecasts (id) ON DELETE CASCADE
     )
     ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS decision_audit_log (
+        id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        data_as_of TEXT,
+        source_status TEXT NOT NULL,
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        model_version TEXT NOT NULL,
+        rule_version TEXT NOT NULL,
+        user_action TEXT NOT NULL,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        previous_hash TEXT NOT NULL,
+        event_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_decision_audit_created ON decision_audit_log(created_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_decision_audit_subject ON decision_audit_log(subject, created_at DESC)')
     try:
         cursor.execute('ALTER TABLE holdings ADD COLUMN purchase_date TEXT')
     except sqlite3.OperationalError:
@@ -772,6 +793,7 @@ class PortfolioManager:
         import json
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        inserted_events = []
         for event in events:
             metadata = {
                 key: event.get(key)
@@ -800,8 +822,141 @@ class PortfolioManager:
                     json.dumps(metadata, ensure_ascii=True, default=str),
                 )
             )
+            if cursor.rowcount == 1:
+                inserted_events.append((event, metadata))
         conn.commit()
         conn.close()
+        for event, metadata in inserted_events:
+            self.record_decision_audit(
+                event_type="telegram_delivery",
+                subject=str(event.get("event_key") or event.get("title") or "telegram-event"),
+                decision=str(event.get("category") or "notify"),
+                data_as_of=event.get("data_as_of") or event.get("published_at"),
+                source_status=str(event.get("source_quality") or metadata.get("source_quality") or "not_provided"),
+                sources=[
+                    {
+                        "label": event.get("source_label") or metadata.get("source_label"),
+                        "url": event.get("source_url") or metadata.get("source_url"),
+                    }
+                ],
+                model_version=str(event.get("model_version") or event.get("schema_version") or "telegram-event.v1"),
+                rule_version=str(event.get("rule_version") or "telegram-delivery.v1"),
+                user_action="telegram_sent",
+                payload={"title": event.get("title"), "metadata": metadata},
+            )
+
+    def record_decision_audit(
+        self,
+        *,
+        event_type: str,
+        subject: str,
+        decision: str,
+        data_as_of: Optional[str],
+        source_status: str,
+        sources: List[Dict[str, Any]],
+        model_version: str,
+        rule_version: str,
+        user_action: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        created_at = datetime.now().isoformat()
+        audit_id = str(uuid.uuid4())
+        normalized_sources = [item for item in (sources or []) if isinstance(item, dict)]
+        sources_json = json.dumps(normalized_sources, ensure_ascii=True, sort_keys=True, default=str)
+        payload_json = json.dumps(payload or {}, ensure_ascii=True, sort_keys=True, default=str)
+        conn = _connect_db()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            previous_row = conn.execute(
+                'SELECT event_hash FROM decision_audit_log ORDER BY rowid DESC LIMIT 1'
+            ).fetchone()
+            previous_hash = str(previous_row[0]) if previous_row else "GENESIS"
+            hash_material = json.dumps(
+                {
+                    "id": audit_id,
+                    "event_type": str(event_type),
+                    "subject": str(subject),
+                    "decision": str(decision),
+                    "data_as_of": data_as_of,
+                    "source_status": str(source_status),
+                    "sources": normalized_sources,
+                    "model_version": str(model_version),
+                    "rule_version": str(rule_version),
+                    "user_action": str(user_action),
+                    "payload": payload or {},
+                    "previous_hash": previous_hash,
+                    "created_at": created_at,
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+            event_hash = hashlib.sha256(hash_material.encode("utf-8")).hexdigest()
+            conn.execute(
+                '''
+                INSERT INTO decision_audit_log (
+                    id, event_type, subject, decision, data_as_of, source_status,
+                    sources_json, model_version, rule_version, user_action,
+                    payload_json, previous_hash, event_hash, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    audit_id, str(event_type), str(subject), str(decision), data_as_of,
+                    str(source_status), sources_json, str(model_version), str(rule_version),
+                    str(user_action), payload_json, previous_hash, event_hash, created_at,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return {
+            "id": audit_id,
+            "schema": "decision-audit.v1",
+            "event_hash": event_hash,
+            "previous_hash": previous_hash,
+            "created_at": created_at,
+        }
+
+    def list_decision_audit(self, limit: int = 100) -> List[Dict[str, Any]]:
+        conn = _connect_db(row_factory=True)
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                'SELECT * FROM decision_audit_log ORDER BY rowid DESC LIMIT ?',
+                (max(1, min(500, int(limit))),),
+            ).fetchall()
+        ]
+        conn.close()
+        for row in rows:
+            row["sources"] = json.loads(row.pop("sources_json") or "[]")
+            row["payload"] = json.loads(row.pop("payload_json") or "{}")
+        return rows
+
+    def verify_decision_audit_chain(self) -> Dict[str, Any]:
+        conn = _connect_db(row_factory=True)
+        rows = [dict(row) for row in conn.execute('SELECT * FROM decision_audit_log ORDER BY rowid ASC').fetchall()]
+        conn.close()
+        previous_hash = "GENESIS"
+        for index, row in enumerate(rows):
+            sources = json.loads(row["sources_json"] or "[]")
+            payload = json.loads(row["payload_json"] or "{}")
+            material = json.dumps(
+                {
+                    "id": row["id"], "event_type": row["event_type"], "subject": row["subject"],
+                    "decision": row["decision"], "data_as_of": row["data_as_of"],
+                    "source_status": row["source_status"], "sources": sources,
+                    "model_version": row["model_version"], "rule_version": row["rule_version"],
+                    "user_action": row["user_action"], "payload": payload,
+                    "previous_hash": previous_hash, "created_at": row["created_at"],
+                },
+                ensure_ascii=True, sort_keys=True, separators=(",", ":"), default=str,
+            )
+            expected_hash = hashlib.sha256(material.encode("utf-8")).hexdigest()
+            if row["previous_hash"] != previous_hash or row["event_hash"] != expected_hash:
+                return {"status": "invalid", "valid": False, "entries": len(rows), "broken_index": index, "broken_id": row["id"]}
+            previous_hash = row["event_hash"]
+        return {"status": "ok", "valid": True, "entries": len(rows), "head_hash": previous_hash}
 
     def get_sent_signal_events(self, limit: int = 100) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(DB_PATH)

@@ -121,7 +121,7 @@ Ziel: Die App behauptet nicht, eine regulierte oder garantierte Anlageberatung z
 
 - [ ] Nutzungszweck, Datenrisiken, Verzögerungen, Interessenkonflikte und Haftungsgrenzen fachlich prüfen lassen.
 - [x] Paper-only, Research und mögliche Echtgeld-Kandidaten technisch und sprachlich strikt trennen.
-- [ ] Jede Empfehlung und Regeländerung mit Datenstand, Quellen, Version und Nutzeraktion auditierbar speichern.
+- [x] Jede Empfehlung und Regeländerung mit Datenstand, Quellen, Version und Nutzeraktion auditierbar speichern.
 - [ ] Vor Nutzung für Dritte ein passendes Compliance-/Datenschutzmodell rechtlich prüfen lassen.
 
 Abnahme:

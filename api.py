@@ -2335,6 +2335,83 @@ def convert_numpy_types(obj: Any) -> Any:
     return obj
 
 
+def _audit_sources(payload: Any, limit: int = 50) -> List[Dict[str, Any]]:
+    found: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def visit(value: Any) -> None:
+        if len(found) >= limit:
+            return
+        if isinstance(value, dict):
+            label = value.get("source_label") or value.get("source") or value.get("publisher")
+            url = value.get("source_url") or value.get("link") or value.get("url")
+            if label or url:
+                key = (str(label or ""), str(url or ""))
+                if key not in seen:
+                    seen.add(key)
+                    found.append({"label": label, "url": url})
+            for nested in value.values():
+                visit(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                visit(nested)
+
+    visit(payload)
+    return found
+
+
+def _audit_and_attach(
+    payload: Dict[str, Any],
+    *,
+    event_type: str,
+    subject: str,
+    decision: str,
+    data_as_of: Any,
+    source_status: str,
+    model_version: str,
+    rule_version: str,
+    user_action: str,
+    audit_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    result = copy.deepcopy(payload)
+    result["audit"] = get_portfolio_manager().record_decision_audit(
+        event_type=event_type,
+        subject=subject,
+        decision=decision,
+        data_as_of=str(data_as_of) if data_as_of not in (None, "") else None,
+        source_status=source_status,
+        sources=_audit_sources(audit_payload),
+        model_version=model_version,
+        rule_version=rule_version,
+        user_action=user_action,
+        payload=audit_payload,
+    )
+    return result
+
+
+def _audit_morning_brief(payload: Dict[str, Any], user_action: str) -> Dict[str, Any]:
+    quality = payload.get("quality") if isinstance(payload.get("quality"), dict) else {}
+    audit_payload = {
+        "headline": payload.get("headline"),
+        "quality": quality,
+        "top_news": payload.get("top_news") or [],
+        "trade_setups": payload.get("trade_setups") or [],
+        "decision_scope": payload.get("decision_scope"),
+    }
+    return _audit_and_attach(
+        payload,
+        event_type="recommendation_snapshot",
+        subject="morning-brief",
+        decision="research_brief",
+        data_as_of=payload.get("generated_at") or payload.get("data_as_of"),
+        source_status=str(quality.get("status") or quality.get("delivery_mode") or "unknown"),
+        model_version="morning-brief.v2",
+        rule_version="news-evidence-gate.v2",
+        user_action=user_action,
+        audit_payload=audit_payload,
+    )
+
+
 def serialize_analysis_result(result) -> Dict[str, Any]:
     """Serialize AnalysisResult to dict."""
     findings = []
@@ -2601,7 +2678,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
         for key, analysis in result.get("analyses", {}).items():
             analyses[key] = serialize_analysis_result(analysis)
         
-        return convert_numpy_types({
+        analysis_payload = {
             "ticker": data.get("ticker"),
             "decision_scope": research_scope(),
             "company_name": data.get("company_name"),
@@ -2626,7 +2703,30 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "valuation": result.get("valuation", Valuation.FAIRLY_VALUED).value,
             "total_score": result.get("total_score", 0),
             "verdict": analyzer.get_one_sentence_verdict()
-        })
+        }
+        audited_payload = _audit_and_attach(
+            analysis_payload,
+            event_type="recommendation_snapshot",
+            subject=str(data.get("ticker") or resolved_ticker),
+            decision=str((result.get("recommendation") or {}).get("action") or "HOLD"),
+            data_as_of=data.get("fetch_time"),
+            source_status=str(analysis_payload["data_quality"].get("price_source") or "unknown"),
+            model_version="stock-analyzer.v1",
+            rule_version="analysis-recommendation.v1",
+            user_action="analysis_requested",
+            audit_payload={
+                "ticker": data.get("ticker"),
+                "recommendation": result.get("recommendation"),
+                "total_score": result.get("total_score", 0),
+                "valuation": analysis_payload["valuation"],
+                "verdict": analysis_payload["verdict"],
+                "fetch_time": data.get("fetch_time"),
+                "data_quality": analysis_payload["data_quality"],
+                "news": data.get("news", []),
+                "decision_scope": analysis_payload["decision_scope"],
+            },
+        )
+        return convert_numpy_types(audited_payload)
         
     except HTTPException:
         raise
@@ -4383,7 +4483,22 @@ async def get_signal_score_settings():
 @app.post("/api/settings/signal-score")
 async def save_signal_score_settings(payload: Dict[str, Any]):
     try:
-        return convert_numpy_types(get_portfolio_manager().save_signal_score_settings(payload))
+        manager = get_portfolio_manager()
+        before = manager.get_signal_score_settings()
+        saved = manager.save_signal_score_settings(payload)
+        audit = manager.record_decision_audit(
+            event_type="rule_change",
+            subject="signal-score-settings",
+            decision="settings_updated",
+            data_as_of=datetime.now(timezone.utc).isoformat(),
+            source_status="internal_configuration",
+            sources=[],
+            model_version="signal-score.v1",
+            rule_version="signal-score-settings.v2",
+            user_action="signal_score_settings_saved",
+            payload={"before": before, "requested_change": payload, "after": saved},
+        )
+        return convert_numpy_types({**saved, "audit": audit})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -4590,13 +4705,14 @@ async def get_morning_brief(fast: bool = False):
         service = get_morning_brief_service()
     except Exception as exc:
         print(f"Morning brief service initialization fallback: {exc}")
-        return convert_numpy_types(attach_scope(_emergency_morning_brief("service_initialization"), research_scope()))
+        fallback = attach_scope(_emergency_morning_brief("service_initialization"), research_scope())
+        return convert_numpy_types(_audit_morning_brief(fallback, "brief_fallback_served"))
     try:
         if fast:
             fallback = _safe_morning_brief_fallback(service, "warming_up")
             quality = fallback.setdefault("quality", {})
             quality["cache_mode"] = "fast_cached"
-            return convert_numpy_types(attach_scope(fallback, research_scope()))
+            return convert_numpy_types(_audit_morning_brief(attach_scope(fallback, research_scope()), "fast_brief_requested"))
 
         cached = _cache_get("morning_brief:full", int(os.getenv("MORNING_BRIEF_HTTP_CACHE_TTL_SECONDS", "90")))
         if cached is not None:
@@ -4619,18 +4735,21 @@ async def get_morning_brief(fast: bool = False):
             )
         except asyncio.TimeoutError:
             fallback = _safe_morning_brief_fallback(service, "timeout", snapshot)
-            return convert_numpy_types(attach_scope(fallback, research_scope()))
+            return convert_numpy_types(_audit_morning_brief(attach_scope(fallback, research_scope()), "brief_timeout_fallback_served"))
         except Exception:
             fallback = _safe_morning_brief_fallback(service, "error", snapshot)
-            return convert_numpy_types(attach_scope(fallback, research_scope()))
+            return convert_numpy_types(_audit_morning_brief(attach_scope(fallback, research_scope()), "brief_error_fallback_served"))
 
         brief = _stamp_brief_freshness(brief)
         quality = brief.setdefault("quality", {})
         quality["delivery_mode"] = "generated"
         quality["refresh_state"] = "ready"
-        return convert_numpy_types(_cache_set("morning_brief:full", attach_scope(brief, research_scope())))
+        scoped_brief = attach_scope(brief, research_scope())
+        audited_brief = _audit_morning_brief(scoped_brief, "brief_generated")
+        return convert_numpy_types(_cache_set("morning_brief:full", audited_brief))
     except Exception:
-        return convert_numpy_types(attach_scope(_safe_morning_brief_fallback(service, "server_error"), research_scope()))
+        fallback = attach_scope(_safe_morning_brief_fallback(service, "server_error"), research_scope())
+        return convert_numpy_types(_audit_morning_brief(fallback, "brief_server_fallback_served"))
 
 
 @app.get("/api/market/trading-edge")
@@ -5161,6 +5280,21 @@ def _news_feed_health_check() -> Dict[str, Any]:
     return _cache_set(cache_key, payload)
 
 
+@app.get("/api/admin/decision-audit")
+async def get_decision_audit(limit: int = 100):
+    try:
+        manager = get_portfolio_manager()
+        return convert_numpy_types(
+            {
+                "schema": "decision-audit.v1",
+                "chain": manager.verify_decision_audit_chain(),
+                "entries": manager.list_decision_audit(limit=limit),
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/admin/health-center")
 async def admin_health_center():
     """Operational health for launch: delivery, scheduler and data feeds."""
@@ -5448,6 +5582,7 @@ async def admin_health_center():
         and paper_outcome_age_minutes is not None
         and paper_outcome_age_minutes > paper_outcome_stale_after
     )
+    decision_audit_status = get_portfolio_manager().verify_decision_audit_chain()
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -5501,6 +5636,8 @@ async def admin_health_center():
         problems.append("paper_outcomes_stale")
     if paper_outcome_pending >= paper_outcome_pending_warn:
         problems.append("paper_outcomes_backlog")
+    if decision_audit_status.get("valid") is not True:
+        problems.append("decision_audit_invalid")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (
@@ -5555,6 +5692,7 @@ async def admin_health_center():
             "backup": backup_status,
             "operational_alerts": operational_alerts,
             "provider_metrics": provider_metrics_snapshot(),
+            "decision_audit": decision_audit_status,
             "schedule": {
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),
@@ -5723,7 +5861,27 @@ async def get_paper_trading_dashboard():
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
         news_context = _get_paper_news_context(snapshot)
         dashboard = get_paper_trading_service().build_dashboard(scoreboard, settings, news_context)
-        return convert_numpy_types(attach_scope(dashboard, paper_scope()))
+        scoped_dashboard = attach_scope(dashboard, paper_scope())
+        audited_dashboard = _audit_and_attach(
+            scoped_dashboard,
+            event_type="recommendation_snapshot",
+            subject="paper-dashboard",
+            decision=str((dashboard.get("paper_autopilot_profile") or {}).get("recommendation_tone") or "paper_review"),
+            data_as_of=dashboard.get("generated_at"),
+            source_status=str((scoreboard.get("meta") or {}).get("status") or "mixed_sources"),
+            model_version="paper-dashboard.v2",
+            rule_version="paper-risk-and-selection.v2",
+            user_action="paper_dashboard_requested",
+            audit_payload={
+                "generated_at": dashboard.get("generated_at"),
+                "playbooks": dashboard.get("playbooks") or [],
+                "strategy_readiness": dashboard.get("strategy_readiness") or [],
+                "paper_autopilot_profile": dashboard.get("paper_autopilot_profile") or {},
+                "rules": dashboard.get("rules") or {},
+                "decision_scope": scoped_dashboard.get("decision_scope"),
+            },
+        )
+        return convert_numpy_types(audited_dashboard)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5844,10 +6002,24 @@ async def get_paper_autopilot_settings():
 async def save_paper_autopilot_settings(req: PaperAutopilotSettingsRequest):
     try:
         payload = {key: value for key, value in req.model_dump().items() if value is not None}
-        saved = get_portfolio_manager().save_paper_autopilot_settings(payload)
+        manager = get_portfolio_manager()
+        before = manager.get_paper_autopilot_settings()
+        saved = manager.save_paper_autopilot_settings(payload)
+        audit = manager.record_decision_audit(
+            event_type="rule_change",
+            subject="paper-autopilot-settings",
+            decision="settings_updated",
+            data_as_of=datetime.now(timezone.utc).isoformat(),
+            source_status="internal_configuration",
+            sources=[],
+            model_version="paper-autopilot.v2",
+            rule_version="paper-autopilot-settings.v2",
+            user_action="paper_autopilot_settings_saved",
+            payload={"before": before, "requested_change": payload, "after": saved},
+        )
         _cache_forget("signals:scoreboard")
         _cache_forget("search:suggestions")
-        return convert_numpy_types(saved)
+        return convert_numpy_types({**saved, "audit": audit})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

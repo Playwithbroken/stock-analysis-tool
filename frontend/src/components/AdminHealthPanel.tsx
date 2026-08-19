@@ -336,6 +336,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const backup = health?.backup || {};
   const operationalAlerts = health?.operational_alerts || {};
   const providerMetrics = health?.provider_metrics || {};
+  const decisionAudit = health?.decision_audit || {};
   const providerServices = Object.values(providerMetrics.services || {}) as any[];
   const jobs = health?.schedule?.jobs || [];
   const schedule = health?.schedule || {};
@@ -650,6 +651,21 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
             </div>
           </div>
+
+          <section data-testid="decision-audit-health" className={`mb-5 rounded-[1.5rem] border p-4 ${decisionAudit.valid === false ? "border-red-300 bg-red-50/80" : "border-emerald-200 bg-emerald-50/70"}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Entscheidungs-Audit</div>
+                <div className="mt-1 text-lg font-black text-slate-900">Hash-Kette {decisionAudit.valid === false ? "beschädigt" : "intakt"}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600">
+                  {decisionAudit.entries ?? 0} Snapshots · Empfehlungen, Quellenstand, Modell-/Regelversion und Nutzeraktion werden append-only gespeichert.
+                </div>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${decisionAudit.valid === false ? "border-red-300 bg-white text-red-800" : "border-emerald-300 bg-white text-emerald-800"}`}>
+                {decisionAudit.valid === false ? "ungültig" : "verifiziert"}
+              </span>
+            </div>
+          </section>
 
           <section className="mb-5 rounded-[1.5rem] border border-black/8 bg-white/55 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">

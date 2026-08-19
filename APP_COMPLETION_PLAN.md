@@ -107,7 +107,7 @@ Ziel: Ein Fehler wird erkannt, erklärt und ohne Datenverlust behoben.
 - [x] Automatisches tägliches konsistentes SQLite-Backup mit Retention plus wöchentlicher, nicht-destruktiver Restore-Test auf temporärer leerer Instanz; Health Center zeigt Alter, Fehler und letzten erfolgreichen Drill.
 - [x] Deduplizierter Betriebsalarm bei Scheduler-Fehlern, veralteten Kursdaten und nicht beschreibbarem Volume; Telegram-Ausfälle werden als nicht über denselben Kanal zustellbar im Health Center protokolliert. Für echte Out-of-band-Meldung bei komplettem App-/Telegram-Ausfall bleibt ein externer Uptime-Kanal erforderlich.
 - [x] Frontend- und Backend-Abhängigkeiten prüfen: `npm audit --audit-level=moderate` und `pip-audit -r requirements.txt` ohne bekannte Schwachstellen; vier gemeldete Frontend-Pakete wurden auf sichere kompatible Versionen aktualisiert.
-- [ ] Rollback-Runbook mit letztem guten Commit, Datenbankkompatibilität und maximaler Wiederanlaufzeit testen.
+- [x] Rollback-Runbook mit letztem guten Commit, Datenbankkompatibilität und maximaler Wiederanlaufzeit testen.
 
 Abnahme:
 

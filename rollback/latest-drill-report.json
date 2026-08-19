@@ -1,0 +1,18 @@
+{
+  "current_head": "c4141616cf8c465de2624bdbe85134f88b89592a",
+  "database_compatible": true,
+  "elapsed_seconds": 0.621,
+  "identity_preserved": true,
+  "last_known_good": "c4141616cf8c465de2624bdbe85134f88b89592a",
+  "production_mutated": false,
+  "quick_check_after": "ok",
+  "quick_check_before": "ok",
+  "row_counts_preserved": true,
+  "rto_seconds": 120.0,
+  "schema": "rollback-drill-report.v1",
+  "status": "passed",
+  "table_count": 10,
+  "tables_preserved": true,
+  "temporary_environment_removed": true,
+  "within_rto": true
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "rollback-target.v1",
+  "commit": "c4141616cf8c465de2624bdbe85134f88b89592a",
+  "verified_at": "2026-08-19",
+  "production_url": "https://web-production-8546b.up.railway.app",
+  "verified_asset": "index-YxSH3qLI.js",
+  "database_path": "/app/data/portfolios.db",
+  "volume_mount": "/app/data",
+  "production_rto_seconds": 600,
+  "local_drill_rto_seconds": 120
+}

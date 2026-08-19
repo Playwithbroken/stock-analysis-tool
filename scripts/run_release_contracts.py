@@ -42,6 +42,7 @@ CONTRACT_TESTS = [
     "qa_daily_overview_scheduler.py",
     "qa_visual_viewport_contract.py",
     "qa_provider_observability.py",
+    "qa_rollback_runbook.py",
 ]
 
 

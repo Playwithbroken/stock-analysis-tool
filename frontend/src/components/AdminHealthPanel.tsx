@@ -337,6 +337,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const operationalAlerts = health?.operational_alerts || {};
   const providerMetrics = health?.provider_metrics || {};
   const decisionAudit = health?.decision_audit || {};
+  const compliance = health?.compliance || {};
   const providerServices = Object.values(providerMetrics.services || {}) as any[];
   const jobs = health?.schedule?.jobs || [];
   const schedule = health?.schedule || {};
@@ -663,6 +664,22 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
               <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${decisionAudit.valid === false ? "border-red-300 bg-white text-red-800" : "border-emerald-300 bg-white text-emerald-800"}`}>
                 {decisionAudit.valid === false ? "ungültig" : "verifiziert"}
+              </span>
+            </div>
+          </section>
+
+          <section data-testid="compliance-release-gate" className={`mb-5 rounded-[1.5rem] border p-4 ${compliance.request_allowed === false ? "border-red-300 bg-red-50/80" : "border-sky-200 bg-sky-50/70"}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Release-Scope</div>
+                <div className="mt-1 text-lg font-black text-slate-900">{displayValue(compliance.distribution_mode || "personal")}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600">
+                  {compliance.external_use ? "Nutzung durch Dritte benötigt eine aktuelle externe Rechts-, Compliance- und Datenschutzfreigabe." : "Privater Einzelarbeitsbereich; keine Drittfreigabe behauptet."}
+                </div>
+                {(compliance.blockers || []).length ? <div className="mt-2 text-xs font-bold text-red-800">Blocker: {(compliance.blockers || []).join(" · ")}</div> : null}
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${compliance.request_allowed === false ? "border-red-300 bg-white text-red-800" : "border-sky-300 bg-white text-sky-800"}`}>
+                {compliance.external_use ? (compliance.external_release_allowed ? "extern freigegeben" : "extern gesperrt") : "privat"}
               </span>
             </div>
           </section>

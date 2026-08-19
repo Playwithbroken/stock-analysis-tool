@@ -55,6 +55,7 @@ from src.provider_observability import (
     record_provider_result,
 )
 from src.decision_scope import attach_scope, paper_scope, research_scope, scope_for_strategy_status
+from src.compliance_gate import get_compliance_status
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -1447,6 +1448,7 @@ async def require_single_user_auth(request: Request, call_next):
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/status",
+        "/api/compliance/status",
     }
     if not path.startswith("/api") or path in open_paths:
         return await call_next(request)
@@ -1464,6 +1466,21 @@ async def require_single_user_auth(request: Request, call_next):
         return JSONResponse(status_code=401, content={"detail": "Authentication required."})
 
     return await call_next(request)
+
+
+@app.middleware("http")
+async def require_external_compliance_approval(request: Request, call_next):
+    path = request.url.path
+    status = get_compliance_status()
+    if status.get("request_allowed") or path in {"/api/health", "/api/compliance/status"}:
+        return await call_next(request)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "External distribution is blocked until legal, compliance and privacy approval is documented.",
+            "compliance": status,
+        },
+    )
 
 async def _signal_alert_loop():
     interval_minutes = _scheduler_loop_interval_minutes()
@@ -2434,16 +2451,24 @@ async def health_check():
     """Health check endpoint."""
     persistence = get_persistence_status()
     persistence_ready = bool(persistence.get("persistence_ready"))
+    compliance = get_compliance_status()
+    ready = persistence_ready and bool(compliance.get("request_allowed"))
     return {
-        "status": "ok" if persistence_ready else "degraded",
+        "status": "ok" if ready else "degraded",
         "version": APP_VERSION,
-        "message": "Stock Analysis API is running" if persistence_ready else "API is running, but persistent storage is not configured",
+        "message": "Stock Analysis API is running" if ready else "API is running, but a release gate is not satisfied",
         "persistence": {
             "ready": persistence_ready,
             "volume_attached": bool(persistence.get("volume_attached")),
             "database_on_volume": bool(persistence.get("database_on_volume")),
         },
+        "compliance": compliance,
     }
+
+
+@app.get("/api/compliance/status")
+async def compliance_status():
+    return get_compliance_status()
 
 
 @app.get("/api/auth/status")
@@ -5583,6 +5608,7 @@ async def admin_health_center():
         and paper_outcome_age_minutes > paper_outcome_stale_after
     )
     decision_audit_status = get_portfolio_manager().verify_decision_audit_chain()
+    compliance_status = get_compliance_status()
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -5638,6 +5664,8 @@ async def admin_health_center():
         problems.append("paper_outcomes_backlog")
     if decision_audit_status.get("valid") is not True:
         problems.append("decision_audit_invalid")
+    if compliance_status.get("request_allowed") is not True:
+        problems.append("external_compliance_blocked")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (
@@ -5693,6 +5721,7 @@ async def admin_health_center():
             "operational_alerts": operational_alerts,
             "provider_metrics": provider_metrics_snapshot(),
             "decision_audit": decision_audit_status,
+            "compliance": compliance_status,
             "schedule": {
                 "enabled": notification_status.get("schedule", {}).get("enabled"),
                 "weekdays": os.getenv("BRIEF_SCHEDULE_WEEKDAYS", "mon,tue,wed,thu,fri"),

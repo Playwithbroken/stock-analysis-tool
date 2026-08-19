@@ -276,6 +276,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const autopilotProfile = data?.paper_autopilot_profile || {};
   const autoLearnStatus = data?.auto_learn_status || {};
   const strategyReadiness = data?.strategy_readiness || [];
+  const evidenceCampaign = data?.evidence_campaign || {};
   const optionReadiness = outcomeLearning.option_readiness || {};
   const learningSummary = outcomeLearning.learning_summary || {};
   const setupAdjustments = Object.values(outcomeLearning.setup_adjustments || {});
@@ -1843,6 +1844,32 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
             <div className="rounded-full border border-black/8 bg-white px-3 py-1 font-extrabold uppercase tracking-[0.14em] text-slate-600">
               {strategyReadiness.filter((item: any) => item.real_world_ready).length} prüfbereit
+            </div>
+          </div>
+          <div data-testid="paper-evidence-campaign" className="mt-4 rounded-[1.25rem] border border-violet-200 bg-violet-50/80 p-4 text-violet-950">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-extrabold uppercase tracking-[0.16em]">Echte Evidenzkampagne</div>
+              <div className="rounded-full border border-violet-200 bg-white px-3 py-1 font-black">
+                {evidenceCampaign.strategies_ready || 0}/{evidenceCampaign.strategy_count || strategyReadiness.length} Strategien reif
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-violet-200 bg-white/80 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-violet-500">Geschlossene Trades</div>
+                <div className="mt-1 text-xl font-black">{evidenceCampaign.closed_trades_total || 0}/{evidenceCampaign.required_closed_trades_total || 180}</div>
+              </div>
+              <div className="rounded-xl border border-violet-200 bg-white/80 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-violet-500">Entscheidende Outcomes</div>
+                <div className="mt-1 text-xl font-black">{evidenceCampaign.decisive_outcomes_total || 0}/{evidenceCampaign.global_outcome_target || 100}</div>
+              </div>
+              <div className="rounded-xl border border-violet-200 bg-white/80 p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-violet-500">Nächster Fokus</div>
+                <div className="mt-1 font-black">{evidenceCampaign.next_priority?.label || "Erste echte Stichprobe sammeln"}</div>
+                <div className="mt-1 text-violet-700">{evidenceCampaign.next_priority?.progress_pct || 0}% erreicht</div>
+              </div>
+            </div>
+            <div className="mt-3 font-semibold leading-5 text-violet-800">
+              {evidenceCampaign.policy || "Nur echte, zeitlich fällige Paper-Outcomes zählen; keine synthetischen Abschlüsse."}
             </div>
           </div>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">

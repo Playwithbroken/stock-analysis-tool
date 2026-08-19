@@ -52,6 +52,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [x] Slippage und Gebühren je Assetklasse regelmäßig gegen beobachtbare Spreads kalibrieren: Das versionierte 90-Tage-Modell nutzt mindestens die halbe beobachtete Bid/Ask-Spanne pro Seite, trennt Gebühren, Slippage, Liquiditäts- und Altersaufschläge, zeigt Stichprobe/Fallback je Assetklasse und speichert die vollständige Kalibrierung unveränderlich im Entry-/Exit-Fill.
 - [x] Strategieauswertung nach Setup, Marktregime, Quelle, Scoreband und Risikobucket mit Trefferquote, Profit Factor, Erwartungswert, Drawdown und Stichprobenstatus anzeigen.
 - [ ] Mindestens 30 geschlossene Trades je freizugebender Strategie und mindestens 100 entscheidende Outcome-Prüfungen sammeln.
+  Technische Evidenzkampagne misst sechs Strategien getrennt, priorisiert unterrepräsentierte Strategien nur unter bereits qualifizierten Paper-Kandidaten und zählt ausschließlich echte fällige Outcomes; der Punkt bleibt bis zur realen Stichprobe offen.
 - [x] Eine Strategie nur hochstufen, wenn mindestens 30 geschlossene Trades/klare Prüfungen, Trefferquote, Profit Factor, positive Erwartung und Drawdown gleichzeitig die dokumentierten Mindestwerte erfüllen.
 
 Abnahme:

@@ -1369,7 +1369,8 @@ class PortfolioManager:
                 t.asset_class,
                 t.direction,
                 t.setup_type,
-                t.opened_at
+                t.opened_at,
+                t.trade_ticket_json
             FROM paper_trade_outcomes o
             JOIN paper_trades t ON t.id = o.trade_id
             ORDER BY o.due_at DESC
@@ -1379,6 +1380,11 @@ class PortfolioManager:
         )
         rows = [dict(row) for row in cursor.fetchall()]
         conn.close()
+        for row in rows:
+            try:
+                row["trade_ticket"] = json.loads(row.pop("trade_ticket_json", "{}") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                row["trade_ticket"] = {}
         return rows
 
     def close_paper_trade(

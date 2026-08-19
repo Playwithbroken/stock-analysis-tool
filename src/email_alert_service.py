@@ -493,6 +493,7 @@ class EmailAlertService:
         demo_account: Dict[str, Any],
         open_trades: List[Dict[str, Any]],
         force: bool = False,
+        evidence_campaign: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         if not force and os.getenv("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
             return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
@@ -556,6 +557,7 @@ class EmailAlertService:
             "performance": demo_account.get("performance") or {},
             "capital_flow": demo_account.get("capital_flow") or {},
             "top_trades": top_trades,
+            "evidence_campaign": evidence_campaign or {},
             "line": f"Paper-Konto-Status: {status}",
             "source_label": "Paper-Konto-Monitor",
             "source_url": "",
@@ -4770,6 +4772,7 @@ class EmailAlertService:
         circuit_reasons = [self._tg_esc(str(item)) for item in (circuit.get("display_reasons") or circuit.get("reasons") or [])[:2]]
         cooldown_until = self._paper_trade_time(circuit.get("cooldown_until"))
         performance_line = self._paper_performance_line(event.get("performance"))
+        evidence_campaign = event.get("evidence_campaign") if isinstance(event.get("evidence_campaign"), dict) else {}
 
         lines = [
             f"<b>[PAPER KONTO] {status}</b>",
@@ -4784,6 +4787,21 @@ class EmailAlertService:
         ]
         if performance_line:
             lines.append(performance_line.lstrip())
+        if evidence_campaign:
+            next_priority = evidence_campaign.get("next_priority") if isinstance(evidence_campaign.get("next_priority"), dict) else {}
+            lines.append(
+                f"<b>Evidenzkampagne:</b> {self._tg_esc(str(evidence_campaign.get('strategies_ready') or 0))}/"
+                f"{self._tg_esc(str(evidence_campaign.get('strategy_count') or 0))} Strategien reif | "
+                f"geschlossen {self._tg_esc(str(evidence_campaign.get('closed_trades_total') or 0))}/"
+                f"{self._tg_esc(str(evidence_campaign.get('required_closed_trades_total') or 0))} | "
+                f"Outcomes {self._tg_esc(str(evidence_campaign.get('decisive_outcomes_total') or 0))}/"
+                f"{self._tg_esc(str(evidence_campaign.get('global_outcome_target') or 100))}"
+            )
+            if next_priority:
+                lines.append(
+                    f"<b>Nächster Evidenz-Fokus:</b> {self._tg_esc(str(next_priority.get('label') or next_priority.get('id') or 'Strategie'))} "
+                    f"({self._tg_esc(str(next_priority.get('progress_pct') or 0))}%)"
+                )
         if circuit_reasons:
             lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
         if cooldown_until:

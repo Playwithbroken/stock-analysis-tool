@@ -322,6 +322,7 @@ class PaperTradingService:
             trades,
             self.portfolio_manager.list_paper_trade_outcomes(limit=800),
         )
+        evidence_campaign = StrategyLibrary.build_evidence_campaign(strategy_readiness)
         sized_playbooks = [attach_scope(item, paper_scope()) for item in sized_playbooks]
         open_trades = [attach_scope(item, paper_scope()) for item in open_trades]
         closed_trades = [attach_scope(item, paper_scope()) for item in closed_trades]
@@ -341,6 +342,7 @@ class PaperTradingService:
             "playbooks": sized_playbooks,
             "strategy_library": StrategyLibrary.all(),
             "strategy_readiness": strategy_readiness,
+            "evidence_campaign": evidence_campaign,
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
             "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
@@ -1310,6 +1312,8 @@ class PaperTradingService:
             direction = "long" if item.get("action") == "buy" else "short"
             score = float(item.get("total_score") or 0)
             broad_equity = item.get("signal_type") == "broad_equity_quality_momentum"
+            market_cap = float((item.get("market_evidence") or {}).get("market_cap") or 0)
+            small_cap_candidate = bool(broad_equity and 0 < market_cap < 5_000_000_000)
             market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
@@ -1317,8 +1321,8 @@ class PaperTradingService:
                     "ticker": item.get("ticker"),
                     "asset_class": "equity",
                     "direction": direction,
-                    "setup_type": "equity_quality_momentum" if broad_equity else "insider_follow",
-                    "title": "Aktien-Qualität und Momentum" if broad_equity else "Insider follow-through",
+                    "setup_type": "small_cap_discovery" if small_cap_candidate else "equity_quality_momentum" if broad_equity else "insider_follow",
+                    "title": "Small-Cap Discovery" if small_cap_candidate else "Aktien-Qualität und Momentum" if broad_equity else "Insider follow-through",
                     "headline": item.get("headline"),
                     "source_label": item.get("source_label"),
                     "score": score,
@@ -1334,7 +1338,7 @@ class PaperTradingService:
                         f"Use only if price holds after filing delay of {item.get('delay_days') if item.get('delay_days') is not None else 'offen'} days."
                     ),
                     "tags": (
-                        ["equity", "quality", "momentum", "diversified scanner"]
+                        (["equity", "small cap", "discovery", "momentum"] if small_cap_candidate else ["equity", "quality", "momentum", "diversified scanner"])
                         if broad_equity
                         else ["long" if direction == "long" else "short", "official filing", "equity"]
                     ),
@@ -1885,6 +1889,15 @@ class PaperTradingService:
                 "asset_class": "equity",
                 "direction": direction,
                 "setup_type": "confirmed_news_event",
+                "strategy_id": (
+                    "earnings_guidance_reaction"
+                    if str(news.get("event_type") or "").lower() in {"earnings", "guidance", "revenue", "margin"}
+                    else "macro_event_edge"
+                    if str(news.get("event_type") or "").lower() in {
+                        "macro", "central_bank", "rates", "inflation", "energy", "policy", "sanction", "geopolitics"
+                    }
+                    else "momentum_follow_through"
+                ),
                 "title": "Bestätigtes Tier-1-Newsereignis",
                 "headline": title,
                 "source_label": news.get("publisher") or evidence.get("publisher"),
@@ -2562,7 +2575,11 @@ class PaperTradingService:
             "recommendation": readiness.get("recommendation") or "collect_first_trade",
             "real_world_ready": bool(readiness.get("real_world_ready")),
             "paper_trades": readiness.get("paper_trades") or 0,
+            "closed_trades": readiness.get("closed_trades") or 0,
             "decisive_checks": readiness.get("decisive_checks") or 0,
+            "closed_remaining": readiness.get("closed_remaining") or 0,
+            "decisive_remaining": readiness.get("decisive_remaining") or 0,
+            "evidence_progress_pct": readiness.get("evidence_progress_pct") or 0,
             "hit_rate": readiness.get("hit_rate") or 0,
             "profit_factor": performance.get("profit_factor"),
             "expectancy_value": performance.get("expectancy_value"),
@@ -2971,11 +2988,11 @@ class PaperTradingService:
             if str(demo_account.get("day_status") or "") == "protect_profit":
                 reasons.append("Paper account has profit-protection priority; new strict entries wait.")
                 aggressive_reasons.append("Paper account has profit-protection priority; aggressive learning waits.")
-            if int(demo_account.get("open_trade_slots") or 0) <= len(selected):
+            if int(demo_account.get("open_trade_slots") or 0) <= 0:
                 reasons.append("demo account open-trade slots exhausted")
-            if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration):
+            if int(demo_account.get("open_trade_slots") or 0) <= 0:
                 exploration_reasons.append("demo account open-trade slots exhausted")
-            if int(demo_account.get("open_trade_slots") or 0) <= len(selected) + len(exploration) + len(aggressive_exploration):
+            if int(demo_account.get("open_trade_slots") or 0) <= 0:
                 aggressive_reasons.append("demo account open-trade slots exhausted")
             if playbook.get("asset_class") == "option" and not aggressive_reasons:
                 aggressive_reasons.append("Optionskette muss vor aggressive Learning manuell geprüft werden")
@@ -2989,6 +3006,12 @@ class PaperTradingService:
                 "strategy_id": (playbook.get("strategy") or {}).get("id"),
                 "strategy_label": (playbook.get("strategy") or {}).get("label"),
                 "strategy_context": strategy_context,
+                "evidence_priority": {
+                    "progress_pct": float(strategy_context.get("evidence_progress_pct") or 0),
+                    "closed_remaining": int(strategy_context.get("closed_remaining") or 0),
+                    "decisive_remaining": int(strategy_context.get("decisive_remaining") or 0),
+                    "reason": "Unterrepräsentierte Strategie wird unter bereits qualifizierten Kandidaten bevorzugt.",
+                },
                 "score": score,
                 "auto_score_gap": round(max(0.0, min_score - score), 1),
                 "learning_score_gap": round(max(0.0, exploration_min_score - score), 1),
@@ -3072,8 +3095,12 @@ class PaperTradingService:
                 aggressive_row["risk_multiplier"] = aggressive_sizing.get("risk_multiplier")
                 aggressive_row["reasons"] = [f"aggressive learning mode: reduced risk x{aggressive_risk_multiplier:g}"]
                 aggressive_exploration.append(aggressive_row)
-            if len(selected) >= max_candidates:
-                break
+        selected.sort(key=self._evidence_priority_sort_key)
+        exploration.sort(key=self._evidence_priority_sort_key)
+        aggressive_exploration.sort(key=self._evidence_priority_sort_key)
+        available_slots = max(0, int(demo_account.get("open_trade_slots") or 0))
+        selection_limit = min(max_candidates, available_slots)
+        aggressive_limit = min(max(8, max_candidates), available_slots)
 
         return {
             "mode": "paper_autopilot_preview",
@@ -3082,9 +3109,9 @@ class PaperTradingService:
             "aggressive_learning_min_score": aggressive_min_score,
             "exploration_risk_multiplier": exploration_risk_multiplier,
             "aggressive_learning_risk_multiplier": aggressive_risk_multiplier,
-            "selected": selected,
-            "exploration": exploration[:max_candidates],
-            "aggressive_exploration": aggressive_exploration[: max(8, max_candidates)],
+            "selected": selected[:selection_limit],
+            "exploration": exploration[:selection_limit],
+            "aggressive_exploration": aggressive_exploration[:aggressive_limit],
             "rejected": rejected[:8],
             "rejected_count": len(rejected),
             "blocker_summary": self._summarize_auto_rejections(rejected),
@@ -3092,6 +3119,17 @@ class PaperTradingService:
             "settings": autopilot_settings,
             "policy": "Paper-only Auto-Auswahl. Strict-Modus priorisiert Qualität; Lernmodus nutzt kleineres Demo-Risiko zum Sammeln von Beweisen.",
         }
+
+    @staticmethod
+    def _evidence_priority_sort_key(candidate: Dict[str, Any]) -> tuple:
+        context = candidate.get("strategy_context") if isinstance(candidate.get("strategy_context"), dict) else {}
+        return (
+            bool(context.get("real_world_ready")),
+            float(context.get("evidence_progress_pct") or 0),
+            int(context.get("closed_trades") or 0),
+            -float(candidate.get("score") or 0),
+            str(candidate.get("ticker") or ""),
+        )
 
     def _build_interesting_now(
         self,

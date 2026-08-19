@@ -61,7 +61,7 @@ class StrategyLibrary:
             label="Momentum Follow-Through",
             horizon="days-weeks",
             asset_classes=["equity", "etf", "crypto"],
-            setup_types=["etf_momentum", "crypto_flow", "insider_follow", "political_copy_delay", "equity_quality_momentum"],
+            setup_types=["etf_momentum", "crypto_flow", "insider_follow", "political_copy_delay", "equity_quality_momentum", "confirmed_news_event"],
             objective="Trade strength only when price, volume and context confirm the signal.",
             quality_gates=[
                 "Relative strength is positive",
@@ -196,6 +196,11 @@ class StrategyLibrary:
 
     @classmethod
     def find_for_playbook(cls, playbook: Dict[str, Any]) -> Dict[str, Any]:
+        explicit_strategy_id = str(playbook.get("strategy_id") or "").strip()
+        if explicit_strategy_id:
+            explicit = next((item for item in cls.STRATEGIES if item.id == explicit_strategy_id), None)
+            if explicit is not None:
+                return cls._to_dict(explicit)
         setup_type = str(playbook.get("setup_type") or "")
         asset_class = str(playbook.get("asset_class") or "")
         for strategy in cls.STRATEGIES:
@@ -210,9 +215,8 @@ class StrategyLibrary:
     def build_readiness(cls, trades: List[Dict[str, Any]], outcomes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for strategy in cls.STRATEGIES:
-            setup_set = set(strategy.setup_types)
-            trade_rows = [item for item in trades if str(item.get("setup_type") or "") in setup_set]
-            outcome_rows = [item for item in outcomes if str(item.get("setup_type") or "") in setup_set]
+            trade_rows = [item for item in trades if cls._strategy_id_for_evidence(item) == strategy.id]
+            outcome_rows = [item for item in outcomes if cls._strategy_id_for_evidence(item) == strategy.id]
             decisive = [item for item in outcome_rows if item.get("result") in {"hit", "miss"}]
             hits = [item for item in decisive if item.get("result") == "hit"]
             misses = [item for item in decisive if item.get("result") == "miss"]
@@ -289,8 +293,15 @@ class StrategyLibrary:
                 {
                     **cls._to_dict(strategy),
                     "paper_trades": len(trade_rows),
+                    "closed_trades": len(closed),
                     "open_trades": len(open_rows),
                     "decisive_checks": len(decisive),
+                    "closed_remaining": max(0, strategy.min_paper_trades - len(closed)),
+                    "decisive_remaining": max(0, strategy.min_paper_trades - len(decisive)),
+                    "evidence_progress_pct": round(
+                        min(100.0, min(len(closed), len(decisive)) / max(1, strategy.min_paper_trades) * 100),
+                        1,
+                    ),
                     "hits": len(hits),
                     "misses": len(misses),
                     "hit_rate": hit_rate,
@@ -316,6 +327,60 @@ class StrategyLibrary:
                 }
             )
         return rows
+
+    @classmethod
+    def _strategy_id_for_evidence(cls, item: Dict[str, Any]) -> str:
+        explicit = str(item.get("strategy_id") or "").strip()
+        if explicit:
+            return explicit
+        ticket = item.get("trade_ticket") if isinstance(item.get("trade_ticket"), dict) else {}
+        ticket_strategy = str(ticket.get("strategy_id") or "").strip()
+        if ticket_strategy:
+            return ticket_strategy
+        return str(cls.find_for_playbook(item).get("id") or "")
+
+    @classmethod
+    def build_evidence_campaign(cls, readiness_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        rows = [item for item in readiness_rows if isinstance(item, dict)]
+        decisive_total = sum(int(item.get("decisive_checks") or 0) for item in rows)
+        closed_total = sum(int(item.get("closed_trades") or 0) for item in rows)
+        required_closed_total = sum(int(item.get("min_paper_trades") or 30) for item in rows)
+        global_outcome_target = 100
+        priorities = sorted(
+            [
+                {
+                    "id": item.get("id"),
+                    "label": item.get("label"),
+                    "closed_trades": int(item.get("closed_trades") or 0),
+                    "decisive_checks": int(item.get("decisive_checks") or 0),
+                    "required": int(item.get("min_paper_trades") or 30),
+                    "closed_remaining": int(item.get("closed_remaining") or 0),
+                    "decisive_remaining": int(item.get("decisive_remaining") or 0),
+                    "progress_pct": float(item.get("evidence_progress_pct") or 0),
+                    "status": item.get("status"),
+                    "real_world_ready": bool(item.get("real_world_ready")),
+                }
+                for item in rows
+            ],
+            key=lambda item: (item["real_world_ready"], item["progress_pct"], item["closed_trades"], str(item["id"])),
+        )
+        strategies_ready = sum(1 for item in rows if item.get("real_world_ready"))
+        return {
+            "schema": "paper-evidence-campaign.v1",
+            "strategy_count": len(rows),
+            "strategies_ready": strategies_ready,
+            "strategies_pending": max(0, len(rows) - strategies_ready),
+            "closed_trades_total": closed_total,
+            "required_closed_trades_total": required_closed_total,
+            "decisive_outcomes_total": decisive_total,
+            "global_outcome_target": global_outcome_target,
+            "global_outcomes_remaining": max(0, global_outcome_target - decisive_total),
+            "global_outcome_progress_pct": round(min(100.0, decisive_total / global_outcome_target * 100), 1),
+            "overall_ready": bool(rows) and strategies_ready == len(rows) and decisive_total >= global_outcome_target,
+            "priority_strategies": priorities,
+            "next_priority": priorities[0] if priorities else None,
+            "policy": "Nur echte, zeitlich fällige Paper-Outcomes zählen. Keine synthetischen Abschlüsse oder rückdatierten Beweise.",
+        }
 
     @staticmethod
     def _to_dict(strategy: StrategyDefinition) -> Dict[str, Any]:

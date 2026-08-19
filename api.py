@@ -1849,7 +1849,16 @@ def _send_paper_account_status_alerts() -> Dict[str, Any]:
         trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         demo_account = service._build_demo_account(trades, [])
-        return get_email_alert_service().send_paper_account_status_alert(demo_account, open_trades)
+        readiness = StrategyLibrary.build_readiness(
+            trades,
+            get_portfolio_manager().list_paper_trade_outcomes(limit=800),
+        )
+        evidence_campaign = StrategyLibrary.build_evidence_campaign(readiness)
+        return get_email_alert_service().send_paper_account_status_alert(
+            demo_account,
+            open_trades,
+            evidence_campaign=evidence_campaign,
+        )
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
 

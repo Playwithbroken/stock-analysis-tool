@@ -54,6 +54,7 @@ from src.provider_observability import (
     provider_metrics_snapshot,
     record_provider_result,
 )
+from src.decision_scope import attach_scope, paper_scope, research_scope, scope_for_strategy_status
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -2472,6 +2473,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             
             return {
                 "is_sector": True,
+                "decision_scope": research_scope(),
                 "sector_name": target_sector,
                 "status": sector_data['status'],
                 "strength": sector_data['strength'],
@@ -2601,6 +2603,7 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
         
         return convert_numpy_types({
             "ticker": data.get("ticker"),
+            "decision_scope": research_scope(),
             "company_name": data.get("company_name"),
             "fetch_time": data.get("fetch_time"),
             "price_data": data.get("price_data"),
@@ -4587,17 +4590,17 @@ async def get_morning_brief(fast: bool = False):
         service = get_morning_brief_service()
     except Exception as exc:
         print(f"Morning brief service initialization fallback: {exc}")
-        return convert_numpy_types(_emergency_morning_brief("service_initialization"))
+        return convert_numpy_types(attach_scope(_emergency_morning_brief("service_initialization"), research_scope()))
     try:
         if fast:
             fallback = _safe_morning_brief_fallback(service, "warming_up")
             quality = fallback.setdefault("quality", {})
             quality["cache_mode"] = "fast_cached"
-            return convert_numpy_types(fallback)
+            return convert_numpy_types(attach_scope(fallback, research_scope()))
 
         cached = _cache_get("morning_brief:full", int(os.getenv("MORNING_BRIEF_HTTP_CACHE_TTL_SECONDS", "90")))
         if cached is not None:
-            return convert_numpy_types(cached)
+            return convert_numpy_types(attach_scope(cached, research_scope()))
 
         items = get_portfolio_manager().get_signal_watch_items()
         try:
@@ -4616,18 +4619,18 @@ async def get_morning_brief(fast: bool = False):
             )
         except asyncio.TimeoutError:
             fallback = _safe_morning_brief_fallback(service, "timeout", snapshot)
-            return convert_numpy_types(fallback)
+            return convert_numpy_types(attach_scope(fallback, research_scope()))
         except Exception:
             fallback = _safe_morning_brief_fallback(service, "error", snapshot)
-            return convert_numpy_types(fallback)
+            return convert_numpy_types(attach_scope(fallback, research_scope()))
 
         brief = _stamp_brief_freshness(brief)
         quality = brief.setdefault("quality", {})
         quality["delivery_mode"] = "generated"
         quality["refresh_state"] = "ready"
-        return convert_numpy_types(_cache_set("morning_brief:full", brief))
+        return convert_numpy_types(_cache_set("morning_brief:full", attach_scope(brief, research_scope())))
     except Exception:
-        return convert_numpy_types(_safe_morning_brief_fallback(service, "server_error"))
+        return convert_numpy_types(attach_scope(_safe_morning_brief_fallback(service, "server_error"), research_scope()))
 
 
 @app.get("/api/market/trading-edge")
@@ -5720,7 +5723,7 @@ async def get_paper_trading_dashboard():
         scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
         news_context = _get_paper_news_context(snapshot)
         dashboard = get_paper_trading_service().build_dashboard(scoreboard, settings, news_context)
-        return convert_numpy_types(dashboard)
+        return convert_numpy_types(attach_scope(dashboard, paper_scope()))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5753,7 +5756,11 @@ async def get_strategy_library():
                 "status": "ok",
                 "generated_at": datetime.utcnow().isoformat(),
                 "strategies": StrategyLibrary.all(),
-                "readiness": StrategyLibrary.build_readiness(trades, outcomes),
+                "readiness": [
+                    attach_scope(row, scope_for_strategy_status(row.get("status")))
+                    for row in StrategyLibrary.build_readiness(trades, outcomes)
+                ],
+                "decision_scope": paper_scope(),
                 "policy": "Paper-Lernen zuerst. Echtgeld-Nutzung erfordert manuelle Prüfung und dokumentiertes Risiko.",
             }
         )
@@ -5771,7 +5778,7 @@ async def create_paper_trade(req: PaperTradeCreateRequest):
             _get_paper_news_context(snapshot),
         )
         _cache_forget("search:suggestions")
-        return convert_numpy_types(trade)
+        return convert_numpy_types(attach_scope(trade, paper_scope()))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5801,7 +5808,7 @@ async def create_paper_trade_from_playbook(req: PaperTradeFromPlaybookRequest):
             )
         except Exception as alert_error:
             trade["telegram_alerts"] = {"status": "error", "message": str(alert_error)}
-        return convert_numpy_types(trade)
+        return convert_numpy_types(attach_scope(trade, paper_scope()))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

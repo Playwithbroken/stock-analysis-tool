@@ -601,6 +601,13 @@ export default function AnalysisResult({
     <div className="analysis-result-layout grid gap-6 xl:grid-cols-[minmax(0,1fr)_19.5rem] 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:gap-8">
       <div className="min-w-0">
         <div className="space-y-6 pb-20">
+          <div data-testid="decision-scope-research" className="rounded-[1.35rem] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
+            <div className="font-extrabold uppercase tracking-[0.16em]">Research · keine Orderfreigabe</div>
+            <div className="mt-1 leading-6">
+              {data.decision_scope?.description || "Analyse- und Beobachtungsinformation; keine Order und keine Kauf- oder Verkaufsempfehlung."}
+              {" "}{data.decision_scope?.required_user_action || "Quellen, Datenstand und Risiko unabhängig prüfen."}
+            </div>
+          </div>
           {/* Header Info */}
           <div className="surface-panel analysis-hero overflow-hidden rounded-[2rem] p-5 sm:p-7">
             <div className="mb-5 flex flex-wrap items-center gap-2">

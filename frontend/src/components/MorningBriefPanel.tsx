@@ -638,6 +638,13 @@ export default function MorningBriefPanel({
 
   return (
     <div className="space-y-6">
+      <div data-testid="decision-scope-news" className="rounded-[1.35rem] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
+        <div className="font-extrabold uppercase tracking-[0.16em]">Research-News · getrennt von Paper-Trades</div>
+        <div className="mt-1 leading-6">
+          {brief.decision_scope?.description || "News, Einordnung und mögliche Marktfolgen sind Research und keine Orderfreigabe."}
+          {" "}Ein mögliches Setup muss zuerst alle Paper-Gates bestehen.
+        </div>
+      </div>
       <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_60%)]" />
         <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(22,28,36,0.06),transparent_72%)]" />

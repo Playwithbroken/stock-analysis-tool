@@ -626,6 +626,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
 
   return (
     <section className="space-y-6">
+      <div data-testid="decision-scope-paper" className="rounded-[1.35rem] border border-amber-300 bg-amber-50/95 px-4 py-3 text-sm text-amber-950">
+        <div className="font-extrabold uppercase tracking-[0.16em]">Paper-only · simuliertes Kapital</div>
+        <div className="mt-1 leading-6">
+          {data?.decision_scope?.description || "Simuliertes Lernen ohne Brokerorder oder Echtgeldwirkung."}
+          {" "}Kein Button in diesem Bereich darf eine Echtgeldorder erzeugen.
+        </div>
+      </div>
       <div className="surface-panel rounded-[2.5rem] p-6 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

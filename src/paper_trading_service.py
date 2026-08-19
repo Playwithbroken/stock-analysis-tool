@@ -17,6 +17,7 @@ import yfinance as yf
 
 from src.storage import PortfolioManager
 from src.strategy_library import StrategyLibrary
+from src.decision_scope import attach_scope, paper_scope, scope_for_strategy_status
 from src.performance_metrics import build_trade_performance
 from src.option_data_provider import TradierOptionDataProvider
 
@@ -321,6 +322,13 @@ class PaperTradingService:
             trades,
             self.portfolio_manager.list_paper_trade_outcomes(limit=800),
         )
+        sized_playbooks = [attach_scope(item, paper_scope()) for item in sized_playbooks]
+        open_trades = [attach_scope(item, paper_scope()) for item in open_trades]
+        closed_trades = [attach_scope(item, paper_scope()) for item in closed_trades]
+        strategy_readiness = [
+            attach_scope(item, scope_for_strategy_status(item.get("status")))
+            for item in strategy_readiness
+        ]
         auto_selection = self._build_auto_selection(
             sized_playbooks,
             trades,

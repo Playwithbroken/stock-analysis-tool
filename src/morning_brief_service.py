@@ -27,6 +27,7 @@ from src.storage import PortfolioManager
 from src.social_intelligence_service import SocialIntelligenceService
 from src.trading_signals_service import TradingSignalsService
 from src.provider_observability import record_provider_result
+from src.decision_scope import paper_scope, research_scope
 
 try:
     import feedparser  # type: ignore
@@ -1817,6 +1818,7 @@ class MorningBriefService:
                 "real_money_ready": False,
                 "causality_proven": False,
                 "precision_note": "Regelbasiertes Evidenz-Gate; keine Renditeprognose und kein Kausalitätsbeweis.",
+                "decision_scope": paper_scope() if status == "ready_for_paper_review" else research_scope(),
             }
         return enriched
 

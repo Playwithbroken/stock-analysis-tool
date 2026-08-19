@@ -120,7 +120,7 @@ Abnahme:
 Ziel: Die App behauptet nicht, eine regulierte oder garantierte Anlageberatung zu sein.
 
 - [ ] Nutzungszweck, Datenrisiken, Verzögerungen, Interessenkonflikte und Haftungsgrenzen fachlich prüfen lassen.
-- [ ] Paper-only, Research und mögliche Echtgeld-Kandidaten technisch und sprachlich strikt trennen.
+- [x] Paper-only, Research und mögliche Echtgeld-Kandidaten technisch und sprachlich strikt trennen.
 - [ ] Jede Empfehlung und Regeländerung mit Datenstand, Quellen, Version und Nutzeraktion auditierbar speichern.
 - [ ] Vor Nutzung für Dritte ein passendes Compliance-/Datenschutzmodell rechtlich prüfen lassen.
 

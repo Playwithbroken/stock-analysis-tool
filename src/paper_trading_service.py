@@ -375,6 +375,21 @@ class PaperTradingService:
                 auto_selection,
             ),
             "auto_selection": auto_selection,
+            "capital_rotation_policy": {
+                "schema": "paper-capital-rotation-policy.v1",
+                "cycle_order": [
+                    "source_revalidation",
+                    "managed_exits",
+                    "autopilot_selection",
+                    "management_alerts",
+                    "account_status",
+                ],
+                "policy": (
+                    "Planmaessige Exits werden vor der neuen Auswahl verarbeitet; "
+                    "freies Kapital darf nur bei erneut bestandenen Risiko-, Nachrichten- "
+                    "und Konzentrationspruefungen eingesetzt werden."
+                ),
+            },
             "auto_learn_status": self._build_auto_learn_status(),
         }
 
@@ -478,6 +493,44 @@ class PaperTradingService:
     def build_demo_account_snapshot(self) -> Dict[str, Any]:
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=300))
         return self._build_demo_account(trades, [])
+
+    @staticmethod
+    def build_capital_rotation_summary(
+        managed_exits: Dict[str, Any] | None,
+        autopilot_result: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        exits = managed_exits if isinstance(managed_exits, dict) else {}
+        autopilot = autopilot_result if isinstance(autopilot_result, dict) else {}
+        closed = [item for item in exits.get("closed") or [] if isinstance(item, dict)]
+        opened = [item for item in autopilot.get("opened") or [] if isinstance(item, dict)]
+        freed_count = len(closed)
+        opened_count = len(opened)
+        status = (
+            "rotated"
+            if freed_count and opened_count
+            else "capacity_freed"
+            if freed_count
+            else "new_evidence_position"
+            if opened_count
+            else "no_change"
+        )
+        return {
+            "schema": "paper-capital-rotation.v1",
+            "status": status,
+            "freed_trade_count": freed_count,
+            "opened_trade_count": opened_count,
+            "freed_tickers": [str(item.get("ticker") or "") for item in closed if item.get("ticker")],
+            "opened_tickers": [str(item.get("ticker") or "") for item in opened if item.get("ticker")],
+            "opened_strategy_ids": [
+                str(
+                    item.get("strategy_id")
+                    or ((item.get("trade_ticket") or {}).get("strategy_id") if isinstance(item.get("trade_ticket"), dict) else "")
+                    or ""
+                )
+                for item in opened
+            ],
+            "policy": "Exits werden vor neuen Paper-Entries verarbeitet. Grenzen bleiben unverändert; freies Kapital rotiert evidenzorientiert.",
+        }
 
     def _build_auto_learn_status(self) -> Dict[str, Any]:
         raw = self.portfolio_manager.get_app_setting("paper_learning_autopilot_last_run")

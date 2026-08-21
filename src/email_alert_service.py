@@ -495,6 +495,7 @@ class EmailAlertService:
         force: bool = False,
         evidence_campaign: Dict[str, Any] | None = None,
         strategy_candidate_coverage: List[Dict[str, Any]] | None = None,
+        capital_rotation: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         if not force and os.getenv("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
             return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
@@ -579,6 +580,7 @@ class EmailAlertService:
             "top_trades": top_trades,
             "evidence_campaign": evidence_campaign or {},
             "strategy_candidate_coverage": strategy_candidate_coverage or [],
+            "capital_rotation": capital_rotation or {},
             "line": f"Paper-Konto-Status: {status}",
             "source_label": "Paper-Konto-Monitor",
             "source_url": "",
@@ -4910,6 +4912,7 @@ class EmailAlertService:
         performance_line = self._paper_performance_line(event.get("performance"))
         evidence_campaign = event.get("evidence_campaign") if isinstance(event.get("evidence_campaign"), dict) else {}
         strategy_candidate_coverage = event.get("strategy_candidate_coverage") if isinstance(event.get("strategy_candidate_coverage"), list) else []
+        capital_rotation = event.get("capital_rotation") if isinstance(event.get("capital_rotation"), dict) else {}
 
         lines = [
             f"<b>[PAPER KONTO] {status}</b>",
@@ -4968,6 +4971,18 @@ class EmailAlertService:
             )
             if source_gaps:
                 lines.append(f"<b>Aktuelle Quellenlücken:</b> {' · '.join(source_gaps[:4])}")
+        if capital_rotation and capital_rotation.get("status") != "no_change":
+            freed = int(capital_rotation.get("freed_trade_count") or 0)
+            opened = int(capital_rotation.get("opened_trade_count") or 0)
+            freed_tickers = " · ".join(self._tg_esc(str(item)) for item in (capital_rotation.get("freed_tickers") or [])[:4])
+            opened_tickers = " · ".join(self._tg_esc(str(item)) for item in (capital_rotation.get("opened_tickers") or [])[:4])
+            lines.append(
+                f"<b>Kapitalrotation:</b> {freed} planmäßige Exits → {opened} neue Evidenzpositionen"
+            )
+            if freed_tickers:
+                lines.append(f"<b>Freigegeben:</b> {freed_tickers}")
+            if opened_tickers:
+                lines.append(f"<b>Neu eingesetzt:</b> {opened_tickers}")
         if circuit_reasons:
             lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
         if cooldown_until:

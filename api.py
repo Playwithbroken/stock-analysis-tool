@@ -1789,11 +1789,18 @@ async def _forecast_learning_loop():
                 if key not in {"checked_at", "paper_learning_alerts"}
             }
             paper_alert_result = paper_cycle.get("paper_learning_alerts") or {}
-            paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
             paper_news_source_revalidation = await asyncio.to_thread(_run_paper_news_source_revalidation)
-            paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
-            paper_account_status_alerts = await asyncio.to_thread(_send_paper_account_status_alerts)
             paper_managed_exits = await asyncio.to_thread(_run_paper_managed_exits)
+            paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
+            paper_capital_rotation = get_paper_trading_service().build_capital_rotation_summary(
+                paper_managed_exits,
+                paper_autopilot_result,
+            )
+            paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
+            paper_account_status_alerts = await asyncio.to_thread(
+                _send_paper_account_status_alerts,
+                paper_capital_rotation,
+            )
             get_portfolio_manager().set_app_setting(
                 "forecast_learning_last_result",
                 json.dumps(
@@ -1803,6 +1810,7 @@ async def _forecast_learning_loop():
                         "paper_trades": paper_result,
                         "paper_learning_alerts": paper_alert_result,
                         "paper_learning_autopilot": paper_autopilot_result,
+                        "paper_capital_rotation": paper_capital_rotation,
                         "paper_news_source_revalidation": paper_news_source_revalidation,
                         "paper_management_alerts": paper_management_alerts,
                         "paper_account_status_alerts": paper_account_status_alerts,
@@ -1841,7 +1849,9 @@ def _send_paper_trade_management_alerts() -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _send_paper_account_status_alerts() -> Dict[str, Any]:
+def _send_paper_account_status_alerts(
+    capital_rotation: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     if not _env_enabled("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true"):
         return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
     try:
@@ -1867,6 +1877,7 @@ def _send_paper_account_status_alerts() -> Dict[str, Any]:
             open_trades,
             evidence_campaign=evidence_campaign,
             strategy_candidate_coverage=strategy_candidate_coverage,
+            capital_rotation=capital_rotation,
         )
     except Exception as exc:
         return {"status": "error", "message": str(exc)}

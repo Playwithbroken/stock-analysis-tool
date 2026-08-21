@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 
@@ -202,10 +203,61 @@ def test_strategy_concentration_rotates_new_capital() -> None:
     )
 
 
+def test_exit_first_capital_rotation_cycle() -> None:
+    service = build_service(FakePortfolioManager())
+    summary = service.build_capital_rotation_summary(
+        {"closed": [{"ticker": "VTI"}, {"ticker": "VUG"}]},
+        {
+            "opened": [
+                {
+                    "ticker": "LUNR",
+                    "trade_ticket": {"strategy_id": "small_cap_future_star"},
+                }
+            ]
+        },
+    )
+    assert summary["status"] == "rotated"
+    assert summary["freed_trade_count"] == 2
+    assert summary["opened_trade_count"] == 1
+    assert summary["opened_strategy_ids"] == ["small_cap_future_star"]
+
+    alert_service = EmailAlertService.__new__(EmailAlertService)
+    rendered = alert_service._render_telegram_paper_account_status_alert(
+        {
+            "day_status": "monitor",
+            "risk_circuit": {},
+            "capital_rotation": summary,
+        }
+    )
+    assert "Kapitalrotation:</b> 2 planmäßige Exits → 1 neue Evidenzpositionen" in rendered
+    assert "Freigegeben:</b> VTI · VUG" in rendered
+    assert "Neu eingesetzt:</b> LUNR" in rendered
+
+    api_source = (Path(__file__).resolve().parent / "api.py").read_text(encoding="utf-8")
+    loop_source = api_source.split("async def _forecast_learning_loop():", 1)[1].split(
+        "def _run_paper_news_source_revalidation", 1
+    )[0]
+    assert loop_source.index("_run_paper_news_source_revalidation") < loop_source.index("_run_paper_managed_exits")
+    assert loop_source.index("_run_paper_managed_exits") < loop_source.index("_run_scheduled_paper_learning_autopilot")
+    assert loop_source.index("_run_scheduled_paper_learning_autopilot") < loop_source.index("_send_paper_account_status_alerts")
+
+    dashboard = service.build_dashboard({"stocks": [], "crypto": []})
+    rotation_policy = dashboard.get("capital_rotation_policy") or {}
+    assert rotation_policy.get("schema") == "paper-capital-rotation-policy.v1"
+    assert rotation_policy.get("cycle_order") == [
+        "source_revalidation",
+        "managed_exits",
+        "autopilot_selection",
+        "management_alerts",
+        "account_status",
+    ]
+
+
 if __name__ == "__main__":
     test_broad_equity_feed()
     test_asset_class_limits_and_cash_reserve()
     test_quantitative_correlation_gate()
     test_strategy_dimensions_and_telegram_allocation()
     test_strategy_concentration_rotates_new_capital()
+    test_exit_first_capital_rotation_cycle()
     print("qa_paper_diversification: ok")

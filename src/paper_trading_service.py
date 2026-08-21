@@ -666,6 +666,8 @@ class PaperTradingService:
             return "Re-Entry-Cooldown für denselben Lernfall aktiv"
         if "correlated paper risk bucket already open" in lower:
             return "korrelierte Risikogruppe ist bereits im Portfolio"
+        if "paper strategy concentration limit reached" in lower:
+            return "Strategie-Konzentrationslimit erreicht; nächstes freies Kapital rotiert in andere Evidenzbereiche"
         if "missing paper journal" in lower:
             return "fehlendes Paper-Journal"
         if "risk review" in lower:
@@ -2876,6 +2878,17 @@ class PaperTradingService:
             for trade in trades
             if trade.get("status") == "open"
         }
+        try:
+            max_open_per_strategy = max(1, int(os.getenv("PAPER_TRADING_MAX_OPEN_PER_STRATEGY", "4")))
+        except (TypeError, ValueError):
+            max_open_per_strategy = 4
+        open_strategy_counts: Dict[str, int] = {}
+        for trade in trades:
+            if trade.get("status") != "open":
+                continue
+            strategy_id = StrategyLibrary._strategy_id_for_evidence(trade)
+            if strategy_id:
+                open_strategy_counts[strategy_id] = open_strategy_counts.get(strategy_id, 0) + 1
         min_score = float(autopilot_settings.get("strict_min_score") or os.getenv("PAPER_TRADING_AUTO_MIN_SCORE", "88"))
         exploration_min_score = float(
             autopilot_settings.get("learning_min_score") or os.getenv("PAPER_TRADING_EXPLORATION_MIN_SCORE", "60")
@@ -2941,6 +2954,16 @@ class PaperTradingService:
                 for item in ticket_blockers
             )
             strategy_context = self._strategy_context_for_playbook(playbook, strategy_readiness or [])
+            strategy_id = str(strategy_context.get("id") or "")
+            open_for_strategy = int(open_strategy_counts.get(strategy_id, 0))
+            if strategy_id and open_for_strategy >= max_open_per_strategy:
+                concentration_reason = (
+                    f"paper strategy concentration limit reached: {open_for_strategy}/{max_open_per_strategy} "
+                    f"open for {strategy_id}"
+                )
+                reasons.append(concentration_reason)
+                exploration_reasons.append(concentration_reason)
+                aggressive_reasons.append(concentration_reason)
             hard_rule_reasons = [
                 str(item)
                 for item in playbook.get("do_not_trade_reasons", [])
@@ -3024,6 +3047,12 @@ class PaperTradingService:
                 "strategy_id": (playbook.get("strategy") or {}).get("id"),
                 "strategy_label": (playbook.get("strategy") or {}).get("label"),
                 "strategy_context": strategy_context,
+                "strategy_concentration": {
+                    "open_trades": open_for_strategy,
+                    "max_open_trades": max_open_per_strategy,
+                    "blocked": bool(strategy_id and open_for_strategy >= max_open_per_strategy),
+                    "policy": "Freies Paper-Kapital rotiert zu unterrepräsentierten Strategien; bestehende Trades werden nicht vorzeitig geschlossen.",
+                },
                 "evidence_priority": {
                     "progress_pct": float(strategy_context.get("evidence_progress_pct") or 0),
                     "closed_remaining": int(strategy_context.get("closed_remaining") or 0),
@@ -3134,6 +3163,11 @@ class PaperTradingService:
             "rejected_count": len(rejected),
             "blocker_summary": self._summarize_auto_rejections(rejected),
             "interesting_now": self._build_interesting_now(selected, exploration, aggressive_exploration, rejected),
+            "strategy_concentration": {
+                "max_open_per_strategy": max_open_per_strategy,
+                "open_counts": open_strategy_counts,
+                "policy": "Keine dominante Strategie darf neu befüllt werden, solange ihr Konzentrationslimit erreicht ist.",
+            },
             "settings": autopilot_settings,
             "policy": "Paper-only Auto-Auswahl. Strict-Modus priorisiert Qualität; Lernmodus nutzt kleineres Demo-Risiko zum Sammeln von Beweisen.",
         }
@@ -3223,6 +3257,7 @@ class PaperTradingService:
             blocker_text = " ".join(str(item).lower() for item in blockers)
             is_option = current_id == "defined_risk_options"
             capacity_blocked = any(term in blocker_text for term in capacity_terms)
+            concentration_blocked = "strategie-konzentrationslimit" in blocker_text
 
             if any_qualified:
                 status = "qualified_candidate"
@@ -3240,6 +3275,9 @@ class PaperTradingService:
             elif is_option:
                 status = "manual_review_required"
                 next_action = "Optionskette, Spread, Verfall und Maximalverlust manuell prüfen; weiterhin ausschließlich Paper."
+            elif concentration_blocked:
+                status = "concentration_blocked"
+                next_action = "Bestehende Strategiepositionen nach Plan auslaufen lassen; nächstes freies Kapital in fehlende Evidenzbereiche rotieren."
             elif capacity_blocked:
                 status = "capacity_blocked"
                 next_action = "Bestehende Trades nach Plan auslaufen oder schließen; Exposure-Grenze nicht erhöhen."

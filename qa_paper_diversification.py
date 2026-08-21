@@ -143,9 +143,69 @@ def test_strategy_dimensions_and_telegram_allocation() -> None:
     assert "Cashreserve-Ziel" in line
 
 
+def test_strategy_concentration_rotates_new_capital() -> None:
+    service = build_service(FakePortfolioManager())
+    demo_account = {
+        "equity": 500_000.0,
+        "risk_budget_per_trade_value": 1_750.0,
+        "remaining_risk_value": 15_000.0,
+        "max_position_value": 50_000.0,
+        "open_trade_slots": 4,
+        "day_status": "ok",
+        "learning_feedback": {},
+    }
+    playbook = {
+        "id": "etf-SCHD-long-concentration",
+        "ticker": "SCHD",
+        "asset_class": "etf",
+        "direction": "long",
+        "setup_type": "etf_momentum",
+        "strategy": {"id": "core_quality_compounder", "label": "Core Quality Compounder"},
+        "score": 90.0,
+        "reference_price": 25.0,
+        "risk_buffer_pct": 3.0,
+        "tradeable": True,
+        "do_not_trade_reasons": [],
+        "thesis": "Qualified core candidate.",
+        "decision_framework": {
+            "entry_trigger": "Trend confirms.",
+            "invalidation": "Trend breaks.",
+        },
+        "market_data": {
+            "price": 25.0,
+            "data_as_of": datetime.now(timezone.utc).isoformat(),
+            "freshness": "fresh",
+            "liquidity_status": "strong",
+        },
+        "data_as_of": datetime.now(timezone.utc).isoformat(),
+    }
+    sized = {**playbook, **service._suggest_demo_sizing(playbook, demo_account)}
+    sized["trade_ticket"] = service._build_trade_ticket(sized, demo_account)
+    existing = [
+        {
+            "id": f"core-{index}",
+            "ticker": f"ETF{index}",
+            "asset_class": "etf",
+            "setup_type": "etf_momentum",
+            "status": "open",
+        }
+        for index in range(4)
+    ]
+    selection = service._build_auto_selection([sized], existing, demo_account)
+    assert selection["selected"] == []
+    assert selection["exploration"] == []
+    assert selection["aggressive_exploration"] == []
+    assert selection["strategy_concentration"]["open_counts"]["core_quality_compounder"] == 4
+    assert any(
+        "Strategie-Konzentrationslimit" in reason
+        for reason in selection["rejected"][0]["aggressive_learning_block_display_reasons"]
+    )
+
+
 if __name__ == "__main__":
     test_broad_equity_feed()
     test_asset_class_limits_and_cash_reserve()
     test_quantitative_correlation_gate()
     test_strategy_dimensions_and_telegram_allocation()
+    test_strategy_concentration_rotates_new_capital()
     print("qa_paper_diversification: ok")

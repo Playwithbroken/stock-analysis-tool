@@ -121,6 +121,38 @@ def test_management_and_account_use_stateful_cooldowns():
     require(first["sent"] == 1 and duplicate["status"] == "cooldown", "account summary cooldown must block duplicate state")
 
 
+def test_evidence_milestones_trigger_monitor_summary_without_repetition():
+    service = build_service()
+    account = {
+        "day_status": "monitor",
+        "management_counts": {},
+        "risk_circuit": {"status": "ready", "reasons": []},
+        "trade_action_queue": {"status": "clear"},
+    }
+    campaign = {
+        "closed_trades_total": 7,
+        "decisive_outcomes_total": 20,
+        "strategies_ready": 0,
+        "next_priority": {"id": "macro_event_edge", "label": "Macro Event Edge"},
+        "zero_evidence_strategies": [
+            {"id": "macro_event_edge", "label": "Macro Event Edge"},
+            {"id": "defined_risk_options", "label": "Defined-Risk Calls / Puts"},
+        ],
+    }
+    first = service.send_paper_account_status_alert(account, [], evidence_campaign=campaign)
+    duplicate = service.send_paper_account_status_alert(account, [], evidence_campaign=campaign)
+    require(first.get("trigger") == "evidence_progress" and first.get("sent") == 1, "first real evidence snapshot must trigger Telegram")
+    require(duplicate.get("sent") == 0, "unchanged evidence snapshot must not repeat")
+
+    below_step = {**campaign, "closed_trades_total": 9, "decisive_outcomes_total": 29}
+    quiet = service.send_paper_account_status_alert(account, [], evidence_campaign=below_step)
+    require(quiet.get("sent") == 0, "sub-milestone evidence changes must stay quiet")
+
+    milestone = {**campaign, "closed_trades_total": 10, "decisive_outcomes_total": 30}
+    progressed = service.send_paper_account_status_alert(account, [], evidence_campaign=milestone)
+    require(progressed.get("trigger") == "evidence_progress" and progressed.get("sent") == 1, "material evidence milestone must trigger Telegram")
+
+
 def test_important_news_is_deduplicated_and_failed_delivery_is_retryable():
     event = {
         "title": "Official escalation near Red Sea shipping corridor",
@@ -173,6 +205,7 @@ def main():
     tests = [
         test_buy_and_sell_are_idempotent,
         test_management_and_account_use_stateful_cooldowns,
+        test_evidence_milestones_trigger_monitor_summary_without_repetition,
         test_important_news_is_deduplicated_and_failed_delivery_is_retryable,
     ]
     for test in tests:

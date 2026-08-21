@@ -1871,6 +1871,15 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <div className="mt-3 font-semibold leading-5 text-violet-800">
               {evidenceCampaign.policy || "Nur echte, zeitlich fällige Paper-Outcomes zählen; keine synthetischen Abschlüsse."}
             </div>
+            {(evidenceCampaign.zero_evidence_strategies || []).length > 0 && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 leading-5 text-amber-900">
+                <span className="font-black">Noch ohne echte Evidenz:</span>{" "}
+                {(evidenceCampaign.zero_evidence_strategies || [])
+                  .slice(0, 6)
+                  .map((item: any) => item.label || item.id)
+                  .join(" · ")}
+              </div>
+            )}
           </div>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             {strategyReadiness.slice(0, 6).map((item: any) => (

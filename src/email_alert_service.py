@@ -506,13 +506,16 @@ class EmailAlertService:
             "yes",
             "on",
         }
-        if not force and status not in actionable_statuses and not monitor_enabled:
+        evidence_progress_changed = self._paper_evidence_progress_changed(evidence_campaign)
+        if not force and status not in actionable_statuses and not monitor_enabled and not evidence_progress_changed:
             return {"status": "ok", "sent": 0, "message": f"Paper-Konto-Status ist {status}; kein Telegram nötig."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
-        if not force and not self._paper_account_status_can_send(demo_account):
+        if not force and not self._paper_account_status_can_send(demo_account, evidence_campaign):
             return {"status": "cooldown", "sent": 0, "message": "Paper-Konto-Status-Cooldown aktiv."}
+
+        evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
 
         ranked = sorted(
             open_trades or [],
@@ -537,7 +540,12 @@ class EmailAlertService:
             )
 
         event = {
-            "event_key": f"paper-account-status:{status}:{datetime.utcnow().date().isoformat()}",
+            "event_key": (
+                f"paper-account-status:{status}:{datetime.utcnow().date().isoformat()}:"
+                f"c{evidence_signature.get('closed_milestone', 0)}:"
+                f"o{evidence_signature.get('outcome_milestone', 0)}:"
+                f"r{evidence_signature.get('strategies_ready', 0)}"
+            ),
             "category": "paper_account_status",
             "title": f"Paper-Konto-Status: {status}",
             "day_status": status,
@@ -563,8 +571,13 @@ class EmailAlertService:
             "source_url": "",
         }
         self._send_notifications(config, [event], subject="Paper Account Status")
-        self._record_paper_account_status_delivery(demo_account)
-        return {"status": "ok", "sent": 1, "message": "Paper-Konto-Status-Telegram-Alert gesendet."}
+        self._record_paper_account_status_delivery(demo_account, evidence_campaign)
+        return {
+            "status": "ok",
+            "sent": 1,
+            "trigger": "evidence_progress" if evidence_progress_changed else "account_status",
+            "message": "Paper-Konto-Status-Telegram-Alert gesendet.",
+        }
 
     def send_paper_trade_closed_alerts(
         self,
@@ -2969,13 +2982,55 @@ class EmailAlertService:
             "wait": 4,
         }.get((grade or "").lower(), 5)
 
-    def _paper_account_status_can_send(self, demo_account: Dict[str, Any]) -> bool:
+    def _paper_evidence_progress_signature(self, evidence_campaign: Dict[str, Any] | None) -> Dict[str, Any]:
+        campaign = evidence_campaign if isinstance(evidence_campaign, dict) else {}
+        if not campaign:
+            return {}
+        closed_step = self._safe_int_env("PAPER_EVIDENCE_STATUS_CLOSED_STEP", 5, minimum=1)
+        outcome_step = self._safe_int_env("PAPER_EVIDENCE_STATUS_OUTCOME_STEP", 10, minimum=1)
+        next_priority = campaign.get("next_priority") if isinstance(campaign.get("next_priority"), dict) else {}
+        zero_rows = campaign.get("zero_evidence_strategies") if isinstance(campaign.get("zero_evidence_strategies"), list) else []
+        zero_ids = sorted(
+            str(item.get("id") or "")
+            for item in zero_rows
+            if isinstance(item, dict) and item.get("id")
+        )
+        closed_total = int(campaign.get("closed_trades_total") or 0)
+        outcome_total = int(campaign.get("decisive_outcomes_total") or 0)
+        return {
+            "closed_milestone": closed_total // closed_step,
+            "outcome_milestone": outcome_total // outcome_step,
+            "strategies_ready": int(campaign.get("strategies_ready") or 0),
+            "next_priority_id": str(next_priority.get("id") or ""),
+            "zero_evidence_strategy_ids": zero_ids,
+        }
+
+    def _paper_evidence_progress_changed(self, evidence_campaign: Dict[str, Any] | None) -> bool:
+        current = self._paper_evidence_progress_signature(evidence_campaign)
+        if not current:
+            return False
+        raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
+        try:
+            previous = json.loads(raw) if raw else {}
+        except Exception:
+            previous = {}
+        prior_signature = previous.get("evidence_progress_signature") if isinstance(previous, dict) else None
+        return current != prior_signature
+
+    def _paper_account_status_can_send(
+        self,
+        demo_account: Dict[str, Any],
+        evidence_campaign: Dict[str, Any] | None = None,
+    ) -> bool:
         status = str(demo_account.get("day_status") or "monitor")
         raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
         try:
             previous = json.loads(raw) if raw else {}
         except Exception:
             previous = {}
+        current_evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
+        if current_evidence_signature and current_evidence_signature != previous.get("evidence_progress_signature"):
+            return True
         if status != str(previous.get("day_status") or ""):
             return True
 
@@ -3021,7 +3076,11 @@ class EmailAlertService:
         now = datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
         return now >= sent_dt + timedelta(hours=cooldown_hours)
 
-    def _record_paper_account_status_delivery(self, demo_account: Dict[str, Any]) -> None:
+    def _record_paper_account_status_delivery(
+        self,
+        demo_account: Dict[str, Any],
+        evidence_campaign: Dict[str, Any] | None = None,
+    ) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
         risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
         payload = {
@@ -3037,6 +3096,9 @@ class EmailAlertService:
             "equity": demo_account.get("equity"),
             "net_pnl_value": demo_account.get("net_pnl_value"),
         }
+        evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
+        if evidence_signature:
+            payload["evidence_progress_signature"] = evidence_signature
         self.portfolio_manager.set_app_setting(self._paper_account_status_state_key(), json.dumps(payload))
 
     def _portfolio_tickers(self) -> set[str]:
@@ -4802,6 +4864,14 @@ class EmailAlertService:
                     f"<b>Nächster Evidenz-Fokus:</b> {self._tg_esc(str(next_priority.get('label') or next_priority.get('id') or 'Strategie'))} "
                     f"({self._tg_esc(str(next_priority.get('progress_pct') or 0))}%)"
                 )
+            zero_rows = evidence_campaign.get("zero_evidence_strategies") if isinstance(evidence_campaign.get("zero_evidence_strategies"), list) else []
+            zero_labels = [
+                self._tg_esc(str(item.get("label") or item.get("id") or "Strategie"))
+                for item in zero_rows[:4]
+                if isinstance(item, dict)
+            ]
+            if zero_labels:
+                lines.append(f"<b>Noch ohne Evidenz:</b> {' · '.join(zero_labels)}")
         if circuit_reasons:
             lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
         if cooldown_until:

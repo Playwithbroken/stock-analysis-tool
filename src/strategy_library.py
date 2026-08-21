@@ -365,6 +365,12 @@ class StrategyLibrary:
             key=lambda item: (item["real_world_ready"], item["progress_pct"], item["closed_trades"], str(item["id"])),
         )
         strategies_ready = sum(1 for item in rows if item.get("real_world_ready"))
+        zero_evidence = [
+            item
+            for item in priorities
+            if int(item.get("closed_trades") or 0) == 0
+            and int(item.get("decisive_checks") or 0) == 0
+        ]
         return {
             "schema": "paper-evidence-campaign.v1",
             "strategy_count": len(rows),
@@ -379,6 +385,8 @@ class StrategyLibrary:
             "overall_ready": bool(rows) and strategies_ready == len(rows) and decisive_total >= global_outcome_target,
             "priority_strategies": priorities,
             "next_priority": priorities[0] if priorities else None,
+            "zero_evidence_strategy_count": len(zero_evidence),
+            "zero_evidence_strategies": zero_evidence,
             "policy": "Nur echte, zeitlich fällige Paper-Outcomes zählen. Keine synthetischen Abschlüsse oder rückdatierten Beweise.",
         }
 

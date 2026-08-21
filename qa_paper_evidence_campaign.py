@@ -19,6 +19,7 @@ def main() -> int:
     require(campaign.get("strategy_count") == 6, failures, "campaign does not cover all six strategies")
     require(campaign.get("global_outcomes_remaining") == 100, failures, "global 100-outcome target missing")
     require(campaign.get("overall_ready") is False, failures, "empty evidence was marked ready")
+    require(campaign.get("zero_evidence_strategy_count") == 6, failures, "empty campaign must expose all zero-evidence strategies")
 
     trades = []
     outcomes = []
@@ -43,6 +44,7 @@ def main() -> int:
     require(full_campaign.get("decisive_outcomes_total") == 180, failures, "decisive-outcome total is wrong")
     require(full_campaign.get("strategies_ready") == 6, failures, "qualified strategies were not marked ready")
     require(full_campaign.get("overall_ready") is True, failures, "complete real evidence campaign was not ready")
+    require(full_campaign.get("zero_evidence_strategy_count") == 0, failures, "complete campaign still reports zero-evidence strategies")
 
     mappings = {
         "small_cap_discovery": "small_cap_future_star",
@@ -66,7 +68,7 @@ def main() -> int:
 
     source_contracts = {
         ROOT / "src" / "paper_trading_service.py": ["small_cap_discovery", "earnings_guidance_reaction", "macro_event_edge", "_evidence_priority_sort_key"],
-        ROOT / "src" / "email_alert_service.py": ["Evidenzkampagne:", "Nächster Evidenz-Fokus:"],
+        ROOT / "src" / "email_alert_service.py": ["Evidenzkampagne:", "Nächster Evidenz-Fokus:", "Noch ohne Evidenz:"],
         ROOT / "frontend" / "src" / "components" / "PaperTradingPanel.tsx": ["paper-evidence-campaign"],
     }
     for path, markers in source_contracts.items():

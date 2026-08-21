@@ -21,6 +21,8 @@ def main() -> int:
         "asyncio.wait_for",
         "asyncio.to_thread",
         "asyncio.gather",
+        "lambda: asyncio.run(get_signal_score_service().build_scoreboard",
+        "lambda: asyncio.run(get_session_list_service().build_session_lists",
         '"radar-bootstrap-status.v1"',
         '"status": "timeout"',
         "no synthetic scores were inserted",

@@ -4666,7 +4666,9 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
         if scoreboard_cached is not None
         else bounded(
             "scoreboard",
-            get_signal_score_service().build_scoreboard(snapshot, settings),
+            asyncio.to_thread(
+                lambda: asyncio.run(get_signal_score_service().build_scoreboard(snapshot, settings))
+            ),
             float(os.getenv("RADAR_SCOREBOARD_TIMEOUT_SECONDS", "10")),
             scoreboard_fallback,
         )
@@ -4679,7 +4681,9 @@ async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
     )
     session_task = bounded(
         "session_lists",
-        get_session_list_service().build_session_lists(snapshot),
+        asyncio.to_thread(
+            lambda: asyncio.run(get_session_list_service().build_session_lists(snapshot))
+        ),
         float(os.getenv("RADAR_SESSION_LIST_TIMEOUT_SECONDS", "8")),
         {
             "status": "partial",

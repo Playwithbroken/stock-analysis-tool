@@ -4881,19 +4881,25 @@ async def send_paper_account_status_now():
     """Manually send the current paper-account status to Telegram."""
     try:
         service = get_paper_trading_service()
-        trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
-        open_trades = [trade for trade in trades if trade.get("status") == "open"]
-        demo_account = service._build_demo_account(trades, [])
-        readiness = StrategyLibrary.build_readiness(
-            trades,
-            get_portfolio_manager().list_paper_trade_outcomes(limit=800),
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = get_public_signal_service().build_watchlist_snapshot(items)
+        settings = get_portfolio_manager().get_signal_score_settings()
+        scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
+        dashboard = service.build_dashboard(
+            scoreboard,
+            settings,
+            _get_paper_news_context(snapshot),
         )
-        evidence_campaign = StrategyLibrary.build_evidence_campaign(readiness)
+        open_trades = dashboard.get("open_trades") or []
+        demo_account = dashboard.get("demo_account") or {}
+        evidence_campaign = dashboard.get("evidence_campaign") or {}
+        strategy_candidate_coverage = dashboard.get("strategy_candidate_coverage") or []
         alert_result = get_email_alert_service().send_paper_account_status_alert(
             demo_account,
             open_trades,
             force=True,
             evidence_campaign=evidence_campaign,
+            strategy_candidate_coverage=strategy_candidate_coverage,
         )
         return convert_numpy_types(
             {
@@ -4909,6 +4915,7 @@ async def send_paper_account_status_now():
                     "performance": demo_account.get("performance") or {},
                 },
                 "evidence_campaign": evidence_campaign,
+                "strategy_candidate_coverage": strategy_candidate_coverage,
             }
         )
     except ValueError as e:

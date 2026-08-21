@@ -270,6 +270,12 @@ def test_exit_first_capital_rotation_cycle() -> None:
     assert loop_source.index("_run_paper_managed_exits") < loop_source.index("_run_scheduled_paper_learning_autopilot")
     assert loop_source.index("_run_scheduled_paper_learning_autopilot") < loop_source.index("_send_paper_account_status_alerts")
 
+    manual_status_source = api_source.split("async def send_paper_account_status_now():", 1)[1].split(
+        "@app.", 1
+    )[0]
+    assert "service.build_dashboard(" in manual_status_source
+    assert "strategy_candidate_coverage=strategy_candidate_coverage" in manual_status_source
+
     dashboard = service.build_dashboard({"stocks": [], "crypto": []})
     rotation_policy = dashboard.get("capital_rotation_policy") or {}
     assert rotation_policy.get("schema") == "paper-capital-rotation-policy.v1"

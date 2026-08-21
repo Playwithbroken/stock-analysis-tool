@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
 from copy import deepcopy
 import json
+import math
 import os
 import re
 import time as perf_time
@@ -291,9 +292,19 @@ class MorningBriefService:
         try:
             os.makedirs(os.path.dirname(self._snapshot_path), exist_ok=True)
             with open(self._snapshot_path, "w", encoding="utf-8") as fh:
-                json.dump(brief, fh, ensure_ascii=True)
+                json.dump(self._sanitize_non_finite(brief), fh, ensure_ascii=True, allow_nan=False)
         except Exception:
             pass
+
+    @classmethod
+    def _sanitize_non_finite(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: cls._sanitize_non_finite(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._sanitize_non_finite(item) for item in value]
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        return value
 
     def _load_persisted_snapshot(self) -> Dict[str, Any] | None:
         try:
@@ -329,7 +340,7 @@ class MorningBriefService:
             refreshed.get("google_news_extra") or []
         )
         refreshed["quality"] = self._build_quality_report(refreshed)
-        return self._merge_watchlist_impact(refreshed, watchlist_snapshot)
+        return self._sanitize_non_finite(self._merge_watchlist_impact(refreshed, watchlist_snapshot))
 
     def _refresh_cached_event_guidance(self, brief: Dict[str, Any]) -> Dict[str, Any]:
         refreshed = deepcopy(brief)
@@ -639,6 +650,7 @@ class MorningBriefService:
                 },
             },
         }
+        brief = self._sanitize_non_finite(brief)
         brief["quality"] = self._build_quality_report(brief)
         self._attach_playbook_context(brief)
         self._cache = brief
@@ -812,6 +824,7 @@ class MorningBriefService:
                 },
             },
         }
+        brief = self._sanitize_non_finite(brief)
         brief["quality"] = self._build_quality_report(brief)
         brief["quality"]["mode"] = "fast"
         self._attach_playbook_context(brief)
@@ -1056,9 +1069,22 @@ class MorningBriefService:
 
     def _collect_region(self, tickers: Sequence[tuple[str, str]], label: str, fast: bool = False) -> Dict[str, Any]:
         assets = self._collect_assets(tickers, fast=fast)
-        changes = [item["change_1d"] for item in assets if item.get("change_1d") is not None]
-        avg_change = sum(changes) / len(changes) if changes else 0
-        tone = "risk-on" if avg_change > 0.45 else "risk-off" if avg_change < -0.45 else "mixed"
+        changes = [
+            float(item["change_1d"])
+            for item in assets
+            if isinstance(item.get("change_1d"), (int, float))
+            and math.isfinite(float(item["change_1d"]))
+        ]
+        avg_change = sum(changes) / len(changes) if changes else None
+        tone = (
+            "unavailable"
+            if avg_change is None
+            else "risk-on"
+            if avg_change > 0.45
+            else "risk-off"
+            if avg_change < -0.45
+            else "mixed"
+        )
         return {
             "label": label,
             "tone": tone,
@@ -1075,9 +1101,9 @@ class MorningBriefService:
                 {
                     "ticker": ticker,
                     "label": label,
-                    "price": price.get("current_price"),
+                    "price": self._finite_number(price.get("current_price")),
                     "change_1d": self._estimate_change_1d(price),
-                    "change_1w": price.get("change_1w"),
+                    "change_1w": self._finite_number(price.get("change_1w")),
                 }
             )
         return assets
@@ -3839,13 +3865,13 @@ class MorningBriefService:
         )
 
         summary_points = [
-            f"Asia: {asia['tone']} with average move {asia['avg_change_1d']:+.2f}%.",
-            f"Europe: {europe['tone']} with average move {europe['avg_change_1d']:+.2f}%.",
-            f"US futures: {usa['tone']} with average move {usa['avg_change_1d']:+.2f}%.",
+            self._region_summary_line("Asia", asia),
+            self._region_summary_line("Europe", europe),
+            self._region_summary_line("US futures", usa),
         ]
-        if oil:
+        if oil and self._finite_number(oil.get("change_1d")) is not None:
             summary_points.append(f"Oil: {oil['change_1d']:+.2f}% overnight.")
-        if gold:
+        if gold and self._finite_number(gold.get("change_1d")) is not None:
             summary_points.append(f"Gold: {gold['change_1d']:+.2f}% overnight.")
         if event_layer:
             event = event_layer[0]
@@ -5042,13 +5068,21 @@ class MorningBriefService:
             return ""
 
     def _estimate_change_1d(self, price_data: Dict[str, Any]) -> float | None:
-        change_1d = price_data.get("change_1d")
-        if isinstance(change_1d, (int, float)):
-            return float(change_1d)
-        change_1w = price_data.get("change_1w")
-        if change_1w is None:
+        return self._finite_number(price_data.get("change_1d"))
+
+    @staticmethod
+    def _finite_number(value: Any) -> float | None:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None
-        return change_1w / 5
+        number = float(value)
+        return number if math.isfinite(number) else None
+
+    @classmethod
+    def _region_summary_line(cls, label: str, region: Dict[str, Any]) -> str:
+        average = cls._finite_number(region.get("avg_change_1d"))
+        if average is None:
+            return f"{label}: data unavailable; no finite 1-day move was reported."
+        return f"{label}: {region.get('tone') or 'mixed'} with average move {average:+.2f}%."
 
     def _contains_news_term(self, text: str, terms: Sequence[str]) -> bool:
         normalized = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()

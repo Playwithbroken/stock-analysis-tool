@@ -39,6 +39,7 @@ CONTRACT_TESTS = [
     "qa_macro_alert_quality.py",
     "qa_session_market_movers.py",
     "qa_morning_brief_classification.py",
+    "qa_morning_brief_numeric_integrity.py",
     "qa_daily_overview_scheduler.py",
     "qa_visual_viewport_contract.py",
     "qa_provider_observability.py",

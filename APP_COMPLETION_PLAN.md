@@ -54,6 +54,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [ ] Mindestens 30 geschlossene Trades je freizugebender Strategie und mindestens 100 entscheidende Outcome-Prüfungen sammeln.
   Technische Evidenzkampagne misst sechs Strategien getrennt, priorisiert unterrepräsentierte Strategien nur unter bereits qualifizierten Paper-Kandidaten und zählt ausschließlich echte fällige Outcomes; der Punkt bleibt bis zur realen Stichprobe offen.
 - [x] Eine Strategie nur hochstufen, wenn mindestens 30 geschlossene Trades/klare Prüfungen, Trefferquote, Profit Factor, positive Erwartung und Drawdown gleichzeitig die dokumentierten Mindestwerte erfüllen.
+- [x] Kapitalfreigabe-Fahrplan zeigt für offene Trades die nächste planmäßige Zeitprüfung, potenziell innerhalb von 72 Stunden frei werdendes Paper-Kapital und die danach priorisierte Evidenzstrategie; aktuelle Paper-Werte sind ausdrücklich keine garantierten Verkaufserlöse und alle Entry-Gates werden erneut geprüft.
 
 Abnahme:
 

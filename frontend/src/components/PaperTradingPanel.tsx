@@ -277,6 +277,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const autoLearnStatus = data?.auto_learn_status || {};
   const strategyReadiness = data?.strategy_readiness || [];
   const evidenceCampaign = data?.evidence_campaign || {};
+  const capitalReleaseForecast = data?.capital_release_forecast || {};
+  const capitalReleaseItems = capitalReleaseForecast.items || [];
   const strategyCandidateCoverage = data?.strategy_candidate_coverage || [];
   const optionReadiness = outcomeLearning.option_readiness || {};
   const learningSummary = outcomeLearning.learning_summary || {};
@@ -1881,6 +1883,40 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   .join(" · ")}
               </div>
             )}
+            <div data-testid="paper-capital-release-forecast" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/85 p-3 text-sky-950">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-black">Kapitalfreigabe-Fahrplan</div>
+                  <div className="mt-1 font-semibold leading-5 text-sky-800">
+                    {capitalReleaseForecast.next_review_at
+                      ? `Nächste planmäßige Zeitprüfung: ${new Date(capitalReleaseForecast.next_review_at).toLocaleString("de-DE")}`
+                      : "Derzeit ist keine planmäßige Zeitprüfung berechenbar."}
+                  </div>
+                </div>
+                <div className="rounded-full border border-sky-200 bg-white px-3 py-1 font-black">
+                  bis 72h: {capitalReleaseForecast.due_within_72h_count || 0} Trades / {money(capitalReleaseForecast.potential_release_within_72h_value, currency)}
+                </div>
+              </div>
+              {capitalReleaseItems.length > 0 ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {capitalReleaseItems.slice(0, 6).map((item: any) => (
+                    <div key={item.trade_id || `${item.ticker}-${item.review_at}`} className="rounded-xl border border-sky-200 bg-white/85 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black">{item.ticker}</span>
+                        <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-sky-700">
+                          {item.overdue ? "jetzt prüfen" : `${Math.ceil(Number(item.hours_remaining || 0) / 24)} Tage`}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sky-800">Potenzial {money(item.potential_release_value, currency)}</div>
+                      <div className="mt-1 truncate text-[10px] text-sky-600">{item.strategy_label || "Strategie offen"}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-3 font-semibold leading-5 text-sky-800">
+                Danach Priorität: {capitalReleaseForecast.next_evidence_priority?.label || "nächstes qualifiziertes Evidenz-Setup"}. Prognose, keine garantierte Freigabe: Quote sowie Risiko-, Quellen-, Qualitäts- und Konzentrationsgates werden erneut geprüft.
+              </div>
+            </div>
           </div>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             {strategyReadiness.slice(0, 6).map((item: any) => (

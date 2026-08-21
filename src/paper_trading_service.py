@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import json
 import ipaddress
+import math
 import re
 import socket
 import time
@@ -343,12 +344,17 @@ class PaperTradingService:
             strategy_readiness,
             demo_account,
         )
+        capital_release_forecast = self._build_capital_release_forecast(
+            open_trades,
+            evidence_campaign,
+        )
         return {
             "generated_at": datetime.utcnow().isoformat(),
             "playbooks": sized_playbooks,
             "strategy_library": StrategyLibrary.all(),
             "strategy_readiness": strategy_readiness,
             "evidence_campaign": evidence_campaign,
+            "capital_release_forecast": capital_release_forecast,
             "strategy_candidate_coverage": strategy_candidate_coverage,
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
@@ -392,6 +398,73 @@ class PaperTradingService:
                 ),
             },
             "auto_learn_status": self._build_auto_learn_status(),
+        }
+
+    def _build_capital_release_forecast(
+        self,
+        open_trades: List[Dict[str, Any]],
+        evidence_campaign: Dict[str, Any],
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        """Show when planned time exits may free paper capital without promising a fill."""
+        now_utc = now or datetime.now(timezone.utc)
+        now_naive = now_utc.astimezone(timezone.utc).replace(tzinfo=None) if now_utc.tzinfo else now_utc
+        scheduled: List[Dict[str, Any]] = []
+        unscheduled_count = 0
+
+        for trade in open_trades:
+            opened_at = self._as_utc_naive_datetime(trade.get("opened_at"))
+            max_holding_days = int(trade.get("max_holding_days") or 0)
+            if opened_at is None or max_holding_days <= 0:
+                unscheduled_count += 1
+                continue
+            review_at = opened_at + timedelta(days=max_holding_days)
+            hours_remaining = max(0.0, (review_at - now_naive).total_seconds() / 3600)
+            current_value_raw = trade.get("current_value")
+            if current_value_raw is None:
+                current_value_raw = trade.get("invested_value")
+            try:
+                current_value = float(current_value_raw)
+            except (TypeError, ValueError):
+                current_value = 0.0
+            if not math.isfinite(current_value) or current_value < 0:
+                current_value = 0.0
+            ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+            scheduled.append(
+                {
+                    "trade_id": trade.get("id"),
+                    "ticker": trade.get("ticker"),
+                    "asset_class": trade.get("asset_class"),
+                    "strategy_id": ticket.get("strategy_id"),
+                    "strategy_label": ticket.get("strategy_label"),
+                    "review_at": review_at.replace(tzinfo=timezone.utc).isoformat(),
+                    "hours_remaining": round(hours_remaining, 1),
+                    "overdue": review_at <= now_naive,
+                    "potential_release_value": round(current_value, 2),
+                    "basis": "current_paper_value_estimate",
+                }
+            )
+
+        scheduled.sort(key=lambda item: (item["review_at"], str(item.get("ticker") or "")))
+        due_within_72h = [item for item in scheduled if item["hours_remaining"] <= 72]
+        potential_72h = round(sum(item["potential_release_value"] for item in due_within_72h), 2)
+        next_priority = evidence_campaign.get("next_priority") if isinstance(evidence_campaign, dict) else None
+        return {
+            "schema": "paper-capital-release-forecast.v1",
+            "status": "due_now" if any(item["overdue"] for item in scheduled) else "scheduled" if scheduled else "not_scheduled",
+            "generated_at": now_naive.replace(tzinfo=timezone.utc).isoformat(),
+            "next_review_at": scheduled[0]["review_at"] if scheduled else None,
+            "scheduled_trade_count": len(scheduled),
+            "unscheduled_trade_count": unscheduled_count,
+            "due_within_72h_count": len(due_within_72h),
+            "potential_release_within_72h_value": potential_72h,
+            "next_evidence_priority": next_priority,
+            "items": scheduled,
+            "policy": (
+                "Forecast only: the amount uses the latest paper value and is not guaranteed. "
+                "A time review closes a trade only with a usable quote; released capital must pass all fresh "
+                "risk, source, quality and concentration gates before a new paper entry."
+            ),
         }
 
     def _build_autopilot_profile_summary(

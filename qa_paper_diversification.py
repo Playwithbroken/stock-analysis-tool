@@ -226,12 +226,41 @@ def test_exit_first_capital_rotation_cycle() -> None:
         {
             "day_status": "monitor",
             "risk_circuit": {},
+            "open_exposure_pct": 91.1,
+            "effective_max_gross_exposure_pct": 90.0,
+            "cash_reserve_gap_value": 5_500.0,
             "capital_rotation": summary,
+            "strategy_candidate_coverage": [
+                {
+                    "strategy_id": "small_cap_future_star",
+                    "strategy_label": "Small-Cap Future Star",
+                    "candidate_count": 2,
+                    "evidence_progress_pct": 0,
+                    "status": "capacity_blocked",
+                    "top_candidate": {"ticker": "LUNR", "score": 58.6},
+                    "blockers": ["maximale Gesamt-Exposure erreicht"],
+                },
+                {
+                    "strategy_id": "defined_risk_options",
+                    "strategy_label": "Defined-Risk Calls / Puts",
+                    "candidate_count": 6,
+                    "evidence_progress_pct": 0,
+                    "status": "manual_review_required",
+                    "top_candidate": {"ticker": "GLD", "score": 81.0},
+                    "blockers": ["Optionskette manuell prüfen"],
+                },
+            ],
         }
     )
     assert "Kapitalrotation:</b> 2 planmäßige Exits → 1 neue Evidenzpositionen" in rendered
     assert "Freigegeben:</b> VTI · VUG" in rendered
     assert "Neu eingesetzt:</b> LUNR" in rendered
+    assert "Exposure:</b> 91.10% / Limit 90.00%" in rendered
+    assert "Cashreserve-Lücke:</b>" in rendered
+    assert "5.500,00 EUR" in rendered
+    assert "Nächste Evidenzkandidaten:</b>" in rendered
+    assert "<code>LUNR</code> Small-Cap Future Star | Score 58.6" in rendered
+    assert rendered.index("<code>LUNR</code>") < rendered.index("<code>GLD</code>")
 
     api_source = (Path(__file__).resolve().parent / "api.py").read_text(encoding="utf-8")
     loop_source = api_source.split("async def _forecast_learning_loop():", 1)[1].split(

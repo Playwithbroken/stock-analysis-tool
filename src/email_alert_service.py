@@ -569,7 +569,11 @@ class EmailAlertService:
             "net_pnl_value": demo_account.get("net_pnl_value"),
             "net_pnl_pct": demo_account.get("net_pnl_pct"),
             "open_exposure_value": demo_account.get("open_exposure_value"),
+            "open_exposure_pct": demo_account.get("open_exposure_pct"),
+            "effective_max_gross_exposure_pct": demo_account.get("effective_max_gross_exposure_pct"),
             "cash_available_value": demo_account.get("cash_available_value"),
+            "cash_reserve_target_value": demo_account.get("cash_reserve_target_value"),
+            "cash_reserve_gap_value": demo_account.get("cash_reserve_gap_value"),
             "open_trade_count": demo_account.get("open_trade_count"),
             "closed_trade_count": demo_account.get("closed_trade_count"),
             "management_counts": demo_account.get("management_counts") or {},
@@ -4913,6 +4917,9 @@ class EmailAlertService:
         evidence_campaign = event.get("evidence_campaign") if isinstance(event.get("evidence_campaign"), dict) else {}
         strategy_candidate_coverage = event.get("strategy_candidate_coverage") if isinstance(event.get("strategy_candidate_coverage"), list) else []
         capital_rotation = event.get("capital_rotation") if isinstance(event.get("capital_rotation"), dict) else {}
+        exposure_pct = event.get("open_exposure_pct")
+        exposure_limit_pct = event.get("effective_max_gross_exposure_pct")
+        cash_reserve_gap = float(event.get("cash_reserve_gap_value") or 0)
 
         lines = [
             f"<b>[PAPER KONTO] {status}</b>",
@@ -4925,6 +4932,15 @@ class EmailAlertService:
             f"<b>Risk Circuit:</b> {circuit_status} | Drawdown {self._tg_pct(circuit.get('current_drawdown_pct')).lstrip('+')} / Limit {self._tg_pct(circuit.get('drawdown_limit_pct')).lstrip('+')}",
             f"<b>Heute:</b> {self._tg_signed_money(circuit.get('daily_realized_pnl_value'))} | Verlustserie {self._tg_esc(str(circuit.get('consecutive_losses') or 0))}",
         ]
+        if exposure_pct is not None and exposure_limit_pct is not None:
+            lines.append(
+                f"<b>Exposure:</b> {self._tg_pct(exposure_pct).lstrip('+')} / "
+                f"Limit {self._tg_pct(exposure_limit_pct).lstrip('+')}"
+            )
+        if cash_reserve_gap > 0:
+            lines.append(
+                f"<b>Cashreserve-Lücke:</b> {self._tg_money(cash_reserve_gap)} – kein neuer Entry bis Kapazität frei ist."
+            )
         if performance_line:
             lines.append(performance_line.lstrip())
         if evidence_campaign:
@@ -4971,6 +4987,32 @@ class EmailAlertService:
             )
             if source_gaps:
                 lines.append(f"<b>Aktuelle Quellenlücken:</b> {' · '.join(source_gaps[:4])}")
+            rotation_candidates = [
+                item
+                for item in strategy_candidate_coverage
+                if int(item.get("candidate_count") or 0) > 0
+                and float(item.get("evidence_progress_pct") or 0) <= 0
+                and isinstance(item.get("top_candidate"), dict)
+            ]
+            rotation_candidates.sort(
+                key=lambda item: (
+                    item.get("status") == "manual_review_required",
+                    -float((item.get("top_candidate") or {}).get("score") or 0),
+                    str(item.get("strategy_label") or ""),
+                )
+            )
+            if rotation_candidates:
+                lines.append("<b>Nächste Evidenzkandidaten:</b>")
+                for item in rotation_candidates[:2]:
+                    candidate = item.get("top_candidate") or {}
+                    blockers = [self._tg_esc(str(value)) for value in (item.get("blockers") or [])[:2]]
+                    blocker_text = " · ".join(blockers) or self._tg_esc(str(item.get("status") or "Prüfung offen"))
+                    lines.append(
+                        f"- <code>{self._tg_esc(str(candidate.get('ticker') or 'n/a'))}</code> "
+                        f"{self._tg_esc(str(item.get('strategy_label') or item.get('strategy_id') or 'Strategie'))} | "
+                        f"Score {self._tg_esc(str(candidate.get('score') if candidate.get('score') is not None else 'offen'))} | "
+                        f"{blocker_text}"
+                    )
         if capital_rotation and capital_rotation.get("status") != "no_change":
             freed = int(capital_rotation.get("freed_trade_count") or 0)
             opened = int(capital_rotation.get("opened_trade_count") or 0)

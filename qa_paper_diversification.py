@@ -292,6 +292,7 @@ def test_exit_first_capital_rotation_cycle() -> None:
         "management_alerts",
         "account_status",
     ]
+    assert rotation_policy.get("managed_exit_cooldown_override") is True
 
 
 if __name__ == "__main__":

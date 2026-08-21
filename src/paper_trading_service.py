@@ -384,6 +384,7 @@ class PaperTradingService:
                     "management_alerts",
                     "account_status",
                 ],
+                "managed_exit_cooldown_override": True,
                 "policy": (
                     "Planmaessige Exits werden vor der neuen Auswahl verarbeitet; "
                     "freies Kapital darf nur bei erneut bestandenen Risiko-, Nachrichten- "

@@ -9,6 +9,7 @@ CONTRACT_TESTS = [
     "qa_global_asset_api.py",
     "qa_search_resolution.py",
     "qa_search_dynamic_suggestions.py",
+    "qa_radar_bootstrap_resilience.py",
     "qa_discovery_resilience.py",
     "qa_auth_cookie_security.py",
     "qa_auth_lockout.py",

@@ -4593,29 +4593,162 @@ async def get_signal_history(limit: int = 100):
 
 
 async def build_radar_bootstrap(limit: int = 8) -> Dict[str, Any]:
+    started_at = time.perf_counter()
     cache_key = f"radar_bootstrap:{limit}"
     cached = _cache_get(cache_key, int(os.getenv("RADAR_BOOTSTRAP_CACHE_TTL_SECONDS", "180")))
     if cached is not None:
         return cached
 
     items = get_portfolio_manager().get_signal_watch_items()
-    snapshot = get_public_signal_service().build_watchlist_snapshot(items)
     settings = get_portfolio_manager().get_signal_score_settings()
-    scoreboard = await get_signal_score_service().build_scoreboard(snapshot, settings)
-    brief = get_morning_brief_service().get_brief_fast(snapshot)
+    component_status: Dict[str, Dict[str, Any]] = {}
 
-    return _cache_set(cache_key, {
+    async def bounded(name: str, awaitable: Any, timeout_seconds: float, fallback: Any) -> Any:
+        component_started = time.perf_counter()
+        try:
+            result = await asyncio.wait_for(awaitable, timeout=timeout_seconds)
+            component_status[name] = {
+                "status": "ready",
+                "latency_ms": round((time.perf_counter() - component_started) * 1000),
+            }
+            return result
+        except asyncio.TimeoutError:
+            component_status[name] = {
+                "status": "timeout",
+                "latency_ms": round((time.perf_counter() - component_started) * 1000),
+                "message": f"{name} exceeded the radar time budget; partial data returned.",
+            }
+            return fallback
+        except Exception as exc:
+            component_status[name] = {
+                "status": "error",
+                "latency_ms": round((time.perf_counter() - component_started) * 1000),
+                "message": str(exc)[:240],
+            }
+            return fallback
+
+    snapshot = _cache_get("signals:watchlist", int(os.getenv("RADAR_WATCHLIST_CACHE_TTL_SECONDS", "300")))
+    if snapshot is not None:
+        component_status["watchlist"] = {"status": "cached", "latency_ms": 0}
+    else:
+        snapshot = await bounded(
+            "watchlist",
+            asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
+            float(os.getenv("RADAR_WATCHLIST_TIMEOUT_SECONDS", "5")),
+            {
+                "items": items,
+                "ticker_signals": [],
+                "status": "partial",
+                "message": "Watchlist provider timed out; configured items returned without fresh enrichment.",
+            },
+        )
+        if component_status["watchlist"]["status"] == "ready":
+            _cache_set("signals:watchlist", snapshot)
+
+    scoreboard_cached = _cache_get(
+        "signals:scoreboard",
+        int(os.getenv("RADAR_SCOREBOARD_CACHE_TTL_SECONDS", "300")),
+    )
+    if scoreboard_cached is not None:
+        component_status["scoreboard"] = {"status": "cached", "latency_ms": 0}
+
+    scoreboard_fallback = {
+        "stocks": [],
+        "crypto": [],
+        "meta": {
+            "status": "partial",
+            "source": "radar_timeout_fallback",
+            "message": "Scoreboard time budget exceeded; no synthetic scores were inserted.",
+        },
+    }
+    scoreboard_task = (
+        asyncio.sleep(0, result=scoreboard_cached)
+        if scoreboard_cached is not None
+        else bounded(
+            "scoreboard",
+            get_signal_score_service().build_scoreboard(snapshot, settings),
+            float(os.getenv("RADAR_SCOREBOARD_TIMEOUT_SECONDS", "10")),
+            scoreboard_fallback,
+        )
+    )
+    brief_task = bounded(
+        "brief",
+        asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot),
+        float(os.getenv("RADAR_BRIEF_TIMEOUT_SECONDS", "8")),
+        get_morning_brief_service().build_empty_brief("radar_timeout"),
+    )
+    session_task = bounded(
+        "session_lists",
+        get_session_list_service().build_session_lists(snapshot),
+        float(os.getenv("RADAR_SESSION_LIST_TIMEOUT_SECONDS", "8")),
+        {
+            "status": "partial",
+            "message": "Session lists timed out; no fallback movers were invented.",
+            "regions": {},
+        },
+    )
+    intelligence_task = bounded(
+        "trading_intelligence",
+        asyncio.to_thread(get_trading_intelligence_service().build_snapshot, snapshot),
+        float(os.getenv("RADAR_INTELLIGENCE_TIMEOUT_SECONDS", "6")),
+        {"status": "partial", "message": "Trading intelligence timed out."},
+    )
+    learning_task = bounded(
+        "learning",
+        asyncio.to_thread(get_forecast_learning_service().build_dashboard),
+        float(os.getenv("RADAR_LEARNING_TIMEOUT_SECONDS", "5")),
+        {"status": "partial", "message": "Learning dashboard timed out."},
+    )
+
+    scoreboard, brief, session_lists, trading_intelligence, learning = await asyncio.gather(
+        scoreboard_task,
+        brief_task,
+        session_task,
+        intelligence_task,
+        learning_task,
+    )
+    if scoreboard_cached is None and component_status.get("scoreboard", {}).get("status") == "ready":
+        _cache_set("signals:scoreboard", scoreboard)
+
+    paper_dashboard = await bounded(
+        "paper_dashboard",
+        asyncio.to_thread(
+            get_paper_trading_service().build_dashboard,
+            scoreboard,
+            settings,
+            brief,
+        ),
+        float(os.getenv("RADAR_PAPER_DASHBOARD_TIMEOUT_SECONDS", "8")),
+        {
+            "status": "partial",
+            "playbooks": [],
+            "open_trades": [],
+            "message": "Paper dashboard timed out; no candidate or trade was fabricated.",
+        },
+    )
+    overall_status = (
+        "ready"
+        if all(item.get("status") in {"ready", "cached"} for item in component_status.values())
+        else "partial"
+    )
+    payload = {
         "watchlist": convert_numpy_types(snapshot),
         "history": convert_numpy_types(get_portfolio_manager().get_sent_signal_events(limit=limit)),
         "brief": convert_numpy_types(brief),
         "scoreboard": convert_numpy_types(scoreboard),
-        "session_lists": convert_numpy_types(await get_session_list_service().build_session_lists(snapshot)),
-        "paper_dashboard": convert_numpy_types(
-            get_paper_trading_service().build_dashboard(scoreboard, settings, brief)
-        ),
-        "trading_intelligence": convert_numpy_types(get_trading_intelligence_service().build_snapshot(snapshot)),
-        "learning": convert_numpy_types(get_forecast_learning_service().build_dashboard()),
-    })
+        "session_lists": convert_numpy_types(session_lists),
+        "paper_dashboard": convert_numpy_types(paper_dashboard),
+        "trading_intelligence": convert_numpy_types(trading_intelligence),
+        "learning": convert_numpy_types(learning),
+        "bootstrap_status": {
+            "schema": "radar-bootstrap-status.v1",
+            "status": overall_status,
+            "latency_ms": round((time.perf_counter() - started_at) * 1000),
+            "components": component_status,
+            "policy": "Bounded partial response; missing providers never create synthetic market or trade data.",
+        },
+    }
+    return _cache_set(cache_key, payload)
 
 
 @app.get("/api/radar/bootstrap")

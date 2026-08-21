@@ -153,6 +153,35 @@ def test_evidence_milestones_trigger_monitor_summary_without_repetition():
     require(progressed.get("trigger") == "evidence_progress" and progressed.get("sent") == 1, "material evidence milestone must trigger Telegram")
 
 
+def test_candidate_coverage_change_triggers_once():
+    service = build_service()
+    account = {
+        "day_status": "monitor",
+        "management_counts": {},
+        "risk_circuit": {"status": "ready", "reasons": []},
+        "trade_action_queue": {"status": "clear"},
+    }
+    source_gap = [{
+        "strategy_id": "small_cap_future_star",
+        "strategy_label": "Small-Cap Future Star",
+        "candidate_count": 0,
+        "qualified_counts": {"strict": 0, "learn": 0, "aggressive_learning": 0},
+        "status": "source_gap",
+    }]
+    first = service.send_paper_account_status_alert(account, [], strategy_candidate_coverage=source_gap)
+    duplicate = service.send_paper_account_status_alert(account, [], strategy_candidate_coverage=source_gap)
+    require(first.get("trigger") == "candidate_coverage" and first.get("sent") == 1, "first candidate coverage state must trigger Telegram")
+    require(duplicate.get("sent") == 0, "unchanged candidate coverage must not repeat")
+
+    candidate_found = [{
+        **source_gap[0],
+        "candidate_count": 2,
+        "status": "capacity_blocked",
+    }]
+    changed = service.send_paper_account_status_alert(account, [], strategy_candidate_coverage=candidate_found)
+    require(changed.get("trigger") == "candidate_coverage" and changed.get("sent") == 1, "source-gap to candidate transition must trigger Telegram")
+
+
 def test_important_news_is_deduplicated_and_failed_delivery_is_retryable():
     event = {
         "title": "Official escalation near Red Sea shipping corridor",
@@ -206,6 +235,7 @@ def main():
         test_buy_and_sell_are_idempotent,
         test_management_and_account_use_stateful_cooldowns,
         test_evidence_milestones_trigger_monitor_summary_without_repetition,
+        test_candidate_coverage_change_triggers_once,
         test_important_news_is_deduplicated_and_failed_delivery_is_retryable,
     ]
     for test in tests:

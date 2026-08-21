@@ -1854,10 +1854,19 @@ def _send_paper_account_status_alerts() -> Dict[str, Any]:
             get_portfolio_manager().list_paper_trade_outcomes(limit=800),
         )
         evidence_campaign = StrategyLibrary.build_evidence_campaign(readiness)
+        strategy_candidate_coverage: List[Dict[str, Any]] = []
+        raw_autopilot = get_portfolio_manager().get_app_setting("paper_learning_autopilot_last_run", "{}")
+        try:
+            autopilot_payload = json.loads(raw_autopilot or "{}")
+            if isinstance(autopilot_payload, dict) and isinstance(autopilot_payload.get("strategy_candidate_coverage"), list):
+                strategy_candidate_coverage = autopilot_payload.get("strategy_candidate_coverage") or []
+        except (TypeError, ValueError, json.JSONDecodeError):
+            strategy_candidate_coverage = []
         return get_email_alert_service().send_paper_account_status_alert(
             demo_account,
             open_trades,
             evidence_campaign=evidence_campaign,
+            strategy_candidate_coverage=strategy_candidate_coverage,
         )
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
@@ -5921,6 +5930,7 @@ async def get_paper_trading_dashboard():
                 "generated_at": dashboard.get("generated_at"),
                 "playbooks": dashboard.get("playbooks") or [],
                 "strategy_readiness": dashboard.get("strategy_readiness") or [],
+                "strategy_candidate_coverage": dashboard.get("strategy_candidate_coverage") or [],
                 "paper_autopilot_profile": dashboard.get("paper_autopilot_profile") or {},
                 "rules": dashboard.get("rules") or {},
                 "decision_scope": scoped_dashboard.get("decision_scope"),

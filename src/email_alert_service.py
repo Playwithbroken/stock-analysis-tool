@@ -494,6 +494,7 @@ class EmailAlertService:
         open_trades: List[Dict[str, Any]],
         force: bool = False,
         evidence_campaign: Dict[str, Any] | None = None,
+        strategy_candidate_coverage: List[Dict[str, Any]] | None = None,
     ) -> Dict[str, Any]:
         if not force and os.getenv("PAPER_ACCOUNT_STATUS_ALERTS_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
             return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
@@ -507,12 +508,23 @@ class EmailAlertService:
             "on",
         }
         evidence_progress_changed = self._paper_evidence_progress_changed(evidence_campaign)
-        if not force and status not in actionable_statuses and not monitor_enabled and not evidence_progress_changed:
+        candidate_coverage_changed = self._paper_candidate_coverage_changed(strategy_candidate_coverage)
+        if (
+            not force
+            and status not in actionable_statuses
+            and not monitor_enabled
+            and not evidence_progress_changed
+            and not candidate_coverage_changed
+        ):
             return {"status": "ok", "sent": 0, "message": f"Paper-Konto-Status ist {status}; kein Telegram nötig."}
 
         config = self.get_config()
         self._validate_telegram_config(config)
-        if not force and not self._paper_account_status_can_send(demo_account, evidence_campaign):
+        if not force and not self._paper_account_status_can_send(
+            demo_account,
+            evidence_campaign,
+            strategy_candidate_coverage,
+        ):
             return {"status": "cooldown", "sent": 0, "message": "Paper-Konto-Status-Cooldown aktiv."}
 
         evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
@@ -566,16 +578,27 @@ class EmailAlertService:
             "capital_flow": demo_account.get("capital_flow") or {},
             "top_trades": top_trades,
             "evidence_campaign": evidence_campaign or {},
+            "strategy_candidate_coverage": strategy_candidate_coverage or [],
             "line": f"Paper-Konto-Status: {status}",
             "source_label": "Paper-Konto-Monitor",
             "source_url": "",
         }
         self._send_notifications(config, [event], subject="Paper Account Status")
-        self._record_paper_account_status_delivery(demo_account, evidence_campaign)
+        self._record_paper_account_status_delivery(
+            demo_account,
+            evidence_campaign,
+            strategy_candidate_coverage,
+        )
         return {
             "status": "ok",
             "sent": 1,
-            "trigger": "evidence_progress" if evidence_progress_changed else "account_status",
+            "trigger": (
+                "evidence_progress"
+                if evidence_progress_changed
+                else "candidate_coverage"
+                if candidate_coverage_changed
+                else "account_status"
+            ),
             "message": "Paper-Konto-Status-Telegram-Alert gesendet.",
         }
 
@@ -3017,10 +3040,45 @@ class EmailAlertService:
         prior_signature = previous.get("evidence_progress_signature") if isinstance(previous, dict) else None
         return current != prior_signature
 
+    @staticmethod
+    def _paper_candidate_coverage_signature(
+        strategy_candidate_coverage: List[Dict[str, Any]] | None,
+    ) -> List[Dict[str, Any]]:
+        rows = strategy_candidate_coverage if isinstance(strategy_candidate_coverage, list) else []
+        signature = []
+        for item in rows:
+            if not isinstance(item, dict) or not item.get("strategy_id"):
+                continue
+            qualified = item.get("qualified_counts") if isinstance(item.get("qualified_counts"), dict) else {}
+            signature.append(
+                {
+                    "strategy_id": str(item.get("strategy_id")),
+                    "status": str(item.get("status") or "unknown"),
+                    "has_candidate": int(item.get("candidate_count") or 0) > 0,
+                    "has_qualified_candidate": any(int(value or 0) > 0 for value in qualified.values()),
+                }
+            )
+        return sorted(signature, key=lambda item: item["strategy_id"])
+
+    def _paper_candidate_coverage_changed(
+        self,
+        strategy_candidate_coverage: List[Dict[str, Any]] | None,
+    ) -> bool:
+        current = self._paper_candidate_coverage_signature(strategy_candidate_coverage)
+        if not current:
+            return False
+        raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
+        try:
+            previous = json.loads(raw) if raw else {}
+        except Exception:
+            previous = {}
+        return current != previous.get("candidate_coverage_signature")
+
     def _paper_account_status_can_send(
         self,
         demo_account: Dict[str, Any],
         evidence_campaign: Dict[str, Any] | None = None,
+        strategy_candidate_coverage: List[Dict[str, Any]] | None = None,
     ) -> bool:
         status = str(demo_account.get("day_status") or "monitor")
         raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
@@ -3030,6 +3088,9 @@ class EmailAlertService:
             previous = {}
         current_evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
         if current_evidence_signature and current_evidence_signature != previous.get("evidence_progress_signature"):
+            return True
+        current_coverage_signature = self._paper_candidate_coverage_signature(strategy_candidate_coverage)
+        if current_coverage_signature and current_coverage_signature != previous.get("candidate_coverage_signature"):
             return True
         if status != str(previous.get("day_status") or ""):
             return True
@@ -3080,9 +3141,15 @@ class EmailAlertService:
         self,
         demo_account: Dict[str, Any],
         evidence_campaign: Dict[str, Any] | None = None,
+        strategy_candidate_coverage: List[Dict[str, Any]] | None = None,
     ) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
         risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
+        raw_previous = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
+        try:
+            previous = json.loads(raw_previous) if raw_previous else {}
+        except Exception:
+            previous = {}
         payload = {
             "sent_at": now,
             "day_status": demo_account.get("day_status"),
@@ -3099,6 +3166,13 @@ class EmailAlertService:
         evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
         if evidence_signature:
             payload["evidence_progress_signature"] = evidence_signature
+        elif previous.get("evidence_progress_signature"):
+            payload["evidence_progress_signature"] = previous.get("evidence_progress_signature")
+        coverage_signature = self._paper_candidate_coverage_signature(strategy_candidate_coverage)
+        if coverage_signature:
+            payload["candidate_coverage_signature"] = coverage_signature
+        elif previous.get("candidate_coverage_signature"):
+            payload["candidate_coverage_signature"] = previous.get("candidate_coverage_signature")
         self.portfolio_manager.set_app_setting(self._paper_account_status_state_key(), json.dumps(payload))
 
     def _portfolio_tickers(self) -> set[str]:
@@ -4835,6 +4909,7 @@ class EmailAlertService:
         cooldown_until = self._paper_trade_time(circuit.get("cooldown_until"))
         performance_line = self._paper_performance_line(event.get("performance"))
         evidence_campaign = event.get("evidence_campaign") if isinstance(event.get("evidence_campaign"), dict) else {}
+        strategy_candidate_coverage = event.get("strategy_candidate_coverage") if isinstance(event.get("strategy_candidate_coverage"), list) else []
 
         lines = [
             f"<b>[PAPER KONTO] {status}</b>",
@@ -4872,6 +4947,27 @@ class EmailAlertService:
             ]
             if zero_labels:
                 lines.append(f"<b>Noch ohne Evidenz:</b> {' · '.join(zero_labels)}")
+        if strategy_candidate_coverage:
+            with_candidates = sum(1 for item in strategy_candidate_coverage if int(item.get("candidate_count") or 0) > 0)
+            qualified = sum(
+                1
+                for item in strategy_candidate_coverage
+                if any(
+                    int(value or 0) > 0
+                    for value in (item.get("qualified_counts") or {}).values()
+                )
+            )
+            source_gaps = [
+                self._tg_esc(str(item.get("strategy_label") or item.get("strategy_id") or "Strategie"))
+                for item in strategy_candidate_coverage
+                if item.get("status") == "source_gap"
+            ]
+            lines.append(
+                f"<b>Strategie-Scanner:</b> Kandidaten für {with_candidates}/{len(strategy_candidate_coverage)} Strategien | "
+                f"qualifiziert {qualified}/{len(strategy_candidate_coverage)}"
+            )
+            if source_gaps:
+                lines.append(f"<b>Aktuelle Quellenlücken:</b> {' · '.join(source_gaps[:4])}")
         if circuit_reasons:
             lines.append(f"<b>Warum pausiert:</b> {' / '.join(circuit_reasons)}")
         if cooldown_until:

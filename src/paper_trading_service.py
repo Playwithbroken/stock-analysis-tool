@@ -337,12 +337,19 @@ class PaperTradingService:
             strategy_readiness,
             autopilot_settings=autopilot_settings,
         )
+        strategy_candidate_coverage = self._build_strategy_candidate_coverage(
+            sized_playbooks,
+            auto_selection,
+            strategy_readiness,
+            demo_account,
+        )
         return {
             "generated_at": datetime.utcnow().isoformat(),
             "playbooks": sized_playbooks,
             "strategy_library": StrategyLibrary.all(),
             "strategy_readiness": strategy_readiness,
             "evidence_campaign": evidence_campaign,
+            "strategy_candidate_coverage": strategy_candidate_coverage,
             "open_trades": open_trades[:12],
             "closed_trades": closed_trades[:12],
             "stats": self._build_stats(trades, float(demo_account.get("starting_capital") or 0)),
@@ -547,6 +554,7 @@ class PaperTradingService:
                 "diversification_skipped": diversification_skipped,
                 "rejected_count": selection.get("rejected_count"),
                 "blocker_summary": blocker_summary,
+                "strategy_candidate_coverage": dashboard.get("strategy_candidate_coverage") or [],
                 "message": preview_message,
             }
 
@@ -612,6 +620,7 @@ class PaperTradingService:
             "errors": errors,
             "rejected_count": selection.get("rejected_count"),
             "blocker_summary": blocker_summary,
+            "strategy_candidate_coverage": dashboard.get("strategy_candidate_coverage") or [],
             "demo_account_after": self.build_demo_account_snapshot() if opened else dashboard.get("demo_account", {}),
             "message": execution_message,
         }
@@ -1306,7 +1315,16 @@ class PaperTradingService:
     ) -> List[Dict[str, Any]]:
         playbooks: List[Dict[str, Any]] = []
 
-        for item in scoreboard.get("equities", [])[:4]:
+        equity_candidates: List[Dict[str, Any]] = []
+        seen_equity_tickers: set[str] = set()
+        for item in [*scoreboard.get("equities", [])[:6], *scoreboard.get("small_cap_equities", [])[:8]]:
+            ticker = str(item.get("ticker") or "").upper().strip()
+            if not ticker or ticker in seen_equity_tickers:
+                continue
+            seen_equity_tickers.add(ticker)
+            equity_candidates.append(item)
+
+        for item in equity_candidates:
             if not item.get("ticker"):
                 continue
             direction = "long" if item.get("action") == "buy" else "short"
@@ -1439,7 +1457,7 @@ class PaperTradingService:
             item["tradeable"] = len(rule_state["blocked"]) == 0
             item["decision_framework"] = self._build_decision_framework(item)
 
-        return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:16]
+        return sorted(playbooks, key=lambda item: float(item.get("score") or 0), reverse=True)[:24]
 
     def _build_entry_market_regime(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Freeze the observable market state used when a Paper trade is opened.
@@ -3130,6 +3148,131 @@ class PaperTradingService:
             -float(candidate.get("score") or 0),
             str(candidate.get("ticker") or ""),
         )
+
+    def _build_strategy_candidate_coverage(
+        self,
+        playbooks: List[Dict[str, Any]],
+        auto_selection: Dict[str, Any],
+        strategy_readiness: List[Dict[str, Any]],
+        demo_account: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        pools = {
+            "strict": auto_selection.get("selected") or [],
+            "learn": auto_selection.get("exploration") or [],
+            "aggressive_learning": auto_selection.get("aggressive_exploration") or [],
+        }
+        rejected = auto_selection.get("rejected") or []
+        day_status = str(demo_account.get("day_status") or "monitor")
+        capacity_terms = (
+            "exposure",
+            "risikobudget",
+            "risk budget",
+            "cash",
+            "trade slots",
+            "open-trade slots",
+            "maximale anzahl offener",
+            "gesamt-exposure",
+        )
+
+        def strategy_id(item: Dict[str, Any]) -> str:
+            direct = str(item.get("strategy_id") or "").strip()
+            if direct:
+                return direct
+            strategy = item.get("strategy") if isinstance(item.get("strategy"), dict) else {}
+            return str(strategy.get("id") or StrategyLibrary.find_for_playbook(item).get("id") or "")
+
+        rows: List[Dict[str, Any]] = []
+        for readiness in strategy_readiness:
+            current_id = str(readiness.get("id") or "")
+            candidates = [item for item in playbooks if strategy_id(item) == current_id]
+            candidates.sort(key=lambda item: float(item.get("score") or 0), reverse=True)
+            qualified = {
+                mode: sum(1 for item in items if strategy_id(item) == current_id)
+                for mode, items in pools.items()
+            }
+            top = candidates[0] if candidates else None
+            rejection = None
+            if top:
+                rejection = next(
+                    (
+                        item
+                        for item in rejected
+                        if str(item.get("id") or "") == str(top.get("id") or "")
+                        or (
+                            str(item.get("ticker") or "") == str(top.get("ticker") or "")
+                            and str(item.get("setup_type") or "") == str(top.get("setup_type") or "")
+                        )
+                    ),
+                    None,
+                )
+            blockers = []
+            if isinstance(rejection, dict):
+                blockers = list(
+                    rejection.get("aggressive_learning_block_display_reasons")
+                    or rejection.get("learning_block_display_reasons")
+                    or rejection.get("display_reasons")
+                    or []
+                )
+            elif top:
+                blockers = [
+                    self._auto_rejection_display_reason(str(reason))
+                    for reason in [*(top.get("demo_block_reasons") or []), *(top.get("do_not_trade_reasons") or [])]
+                ]
+            blockers = self._dedupe_reason_list(blockers)[:4]
+            any_qualified = any(value > 0 for value in qualified.values())
+            blocker_text = " ".join(str(item).lower() for item in blockers)
+            is_option = current_id == "defined_risk_options"
+            capacity_blocked = any(term in blocker_text for term in capacity_terms)
+
+            if any_qualified:
+                status = "qualified_candidate"
+                next_action = "Qualifizierter Paper-Kandidat vorhanden; nur bei freiem Risiko- und Diversifikationsbudget eröffnen."
+            elif not candidates:
+                status = "source_gap"
+                if current_id == "earnings_guidance_reaction":
+                    next_action = "Auf echtes Earnings-/Guidance-Ereignis mit Primärdokument und bestätigter Preisreaktion warten."
+                elif current_id == "macro_event_edge":
+                    next_action = "Auf bestätigtes Tier-1-Makroereignis mit eindeutiger Asset-Reaktion warten."
+                elif current_id == "small_cap_future_star":
+                    next_action = "Small-Cap-Research-Universum weiter prüfen; nur Kandidaten mit belastbaren Fundamentaldaten zulassen."
+                else:
+                    next_action = "Noch kein Playbook aus aktuellen, ausreichend belastbaren Quellen."
+            elif is_option:
+                status = "manual_review_required"
+                next_action = "Optionskette, Spread, Verfall und Maximalverlust manuell prüfen; weiterhin ausschließlich Paper."
+            elif capacity_blocked:
+                status = "capacity_blocked"
+                next_action = "Bestehende Trades nach Plan auslaufen oder schließen; Exposure-Grenze nicht erhöhen."
+            else:
+                status = "quality_wait"
+                next_action = "Kandidat beobachten und erst nach vollständiger Qualitäts-, Markt- und Ticketbestätigung nutzen."
+
+            rows.append(
+                {
+                    "strategy_id": current_id,
+                    "strategy_label": readiness.get("label"),
+                    "evidence_progress_pct": readiness.get("evidence_progress_pct") or 0,
+                    "candidate_count": len(candidates),
+                    "qualified_counts": qualified,
+                    "status": status,
+                    "account_day_status": day_status,
+                    "top_candidate": (
+                        {
+                            "ticker": top.get("ticker"),
+                            "setup_type": top.get("setup_type"),
+                            "score": top.get("score"),
+                            "tradeable": top.get("tradeable") is True,
+                            "demo_tradeable": top.get("demo_tradeable") is True,
+                        }
+                        if top
+                        else None
+                    ),
+                    "blockers": blockers,
+                    "next_action": next_action,
+                    "policy": "Diagnose und Paper-Auswahl; keine Lockerung bestehender Qualitäts- oder Risikogrenzen.",
+                }
+            )
+        return rows
 
     def _build_interesting_now(
         self,

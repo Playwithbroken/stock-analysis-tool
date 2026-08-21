@@ -277,6 +277,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const autoLearnStatus = data?.auto_learn_status || {};
   const strategyReadiness = data?.strategy_readiness || [];
   const evidenceCampaign = data?.evidence_campaign || {};
+  const strategyCandidateCoverage = data?.strategy_candidate_coverage || [];
   const optionReadiness = outcomeLearning.option_readiness || {};
   const learningSummary = outcomeLearning.learning_summary || {};
   const setupAdjustments = Object.values(outcomeLearning.setup_adjustments || {});
@@ -1884,6 +1885,11 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             {strategyReadiness.slice(0, 6).map((item: any) => (
               <div key={item.id} className="rounded-[1.1rem] border border-black/8 bg-white/80 p-3">
+                {(() => {
+                  const coverage = strategyCandidateCoverage.find((row: any) => row.strategy_id === item.id) || {};
+                  const qualified = coverage.qualified_counts || {};
+                  return (
+                    <>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-black text-slate-900">{item.label}</div>
@@ -1960,12 +1966,30 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 text-slate-600">
                   Empfehlung: <span className="font-bold text-slate-900">{germanStatus(item.recommendation, "Beweise sammeln")}</span>
                 </div>
+                <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
+                  <div className="font-extrabold uppercase tracking-[0.12em]">Kandidaten-Abdeckung</div>
+                  <div className="mt-1">
+                    {coverage.candidate_count || 0} Playbooks · qualifiziert Strict {qualified.strict || 0}, Learn {qualified.learn || 0}, erweitert {qualified.aggressive_learning || 0}
+                  </div>
+                  {coverage.top_candidate && (
+                    <div className="mt-1 font-semibold">
+                      Bester Kandidat: {coverage.top_candidate.ticker} · Score {coverage.top_candidate.score ?? "offen"}
+                    </div>
+                  )}
+                  {!!coverage.blockers?.length && (
+                    <div className="mt-1 text-amber-800">Blocker: {coverage.blockers.slice(0, 2).join(" · ")}</div>
+                  )}
+                  {coverage.next_action && <div className="mt-1 text-sky-800">Nächster Schritt: {coverage.next_action}</div>}
+                </div>
                 {item.last_closed && (
                   <div className="mt-2 rounded-xl border border-black/8 bg-white px-3 py-2 text-slate-600">
                     Letzter Abschluss: <span className="font-bold text-slate-900">{item.last_closed.ticker}</span>{" "}
                     {formatPct(item.last_closed.realized_pnl_pct, 2, "0.00%")} · {item.last_closed.exit_reason || "Paper-Exit"}
                   </div>
                 )}
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>

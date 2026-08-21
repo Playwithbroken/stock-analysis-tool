@@ -51,6 +51,11 @@ class SignalScoreService:
             self.discovery_service.get_cryptos(),
         )
         market_equities = self._score_market_equities(equity_rows, weights)
+        small_cap_equities = [
+            item
+            for item in market_equities
+            if 0 < float((item.get("market_evidence") or {}).get("market_cap") or 0) < 5_000_000_000
+        ]
         equity_by_ticker: Dict[str, Dict[str, Any]] = {}
         for item in [*filing_equities, *market_equities]:
             ticker = str(item.get("ticker") or "").upper()
@@ -80,6 +85,7 @@ class SignalScoreService:
             "top_ideas": top_ideas,
             "equities": equities[:8],
             "market_equities": market_equities[:12],
+            "small_cap_equities": small_cap_equities[:8],
             "politics": politics[:8],
             "etfs": etfs[:8],
             "crypto": crypto[:8],
@@ -88,6 +94,7 @@ class SignalScoreService:
                 "status": "loaded" if market_equities else "unavailable",
                 "filing_candidates": len(filing_equities),
                 "broad_market_candidates": len(market_equities),
+                "small_cap_candidates": len(small_cap_equities),
                 "method": "deterministic diversified universe; 1d/1m/3m trend, moving averages, volume, volatility and available fundamentals",
                 "research_only": True,
             },

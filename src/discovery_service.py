@@ -42,6 +42,10 @@ class DiscoveryService:
             "V", "LLY", "UNH", "XOM", "COST", "WMT", "CAT", "GE",
             "PANW", "AMD", "NFLX", "KO", "PG", "JNJ", "ABBV", "CVX",
         ]
+        self.paper_small_cap_universe = [
+            "RKLB", "LUNR", "PATH", "OKLO", "S", "IONQ",
+            "RGTI", "ASTS", "HIMS", "ENVX", "JOBY", "ACHR",
+        ]
 
     def _moonshot_fallbacks(self) -> List[Dict[str, Any]]:
         """Stable fallback so the AI Chancen rail never renders empty."""
@@ -467,7 +471,8 @@ class DiscoveryService:
 
             return await asyncio.to_thread(fetch)
 
-        rows = [row for row in await asyncio.gather(*(fetch_candidate(ticker) for ticker in self.paper_equity_universe)) if row]
+        research_universe = list(dict.fromkeys([*self.paper_equity_universe, *self.paper_small_cap_universe]))
+        rows = [row for row in await asyncio.gather(*(fetch_candidate(ticker) for ticker in research_universe)) if row]
         self.__class__._equity_candidate_cache = (rows, now)
         return rows
 

@@ -1,6 +1,8 @@
+import asyncio
 from pathlib import Path
 
 from src.paper_trading_service import PaperTradingService
+from src.signal_score_service import SignalScoreService
 from src.strategy_library import StrategyLibrary
 
 
@@ -66,10 +68,88 @@ def main() -> int:
     ordered = sorted(candidates, key=PaperTradingService._evidence_priority_sort_key)
     require([row["ticker"] for row in ordered] == ["UNDER", "MID", "READY"], failures, "evidence priority ordering is wrong")
 
+    class DiscoveryStub:
+        async def get_paper_equity_candidates(self):
+            base = {
+                "price": 20.0,
+                "change_1m": 8.0,
+                "change_3m": 14.0,
+                "volume_ratio": 1.4,
+                "above_sma20": True,
+                "above_sma50": True,
+                "volatility_annual_pct": 42.0,
+                "revenue_growth_pct": 28.0,
+                "earnings_growth_pct": 12.0,
+                "profit_margin_pct": 6.0,
+                "source_label": "market snapshot",
+                "data_as_of": "2026-08-21T20:00:00+00:00",
+            }
+            return [
+                {**base, "ticker": "SMALL", "name": "Small Candidate", "sector": "Technology", "market_cap": 2_500_000_000},
+                {**base, "ticker": "LARGE", "name": "Large Candidate", "sector": "Technology", "market_cap": 250_000_000_000},
+            ]
+
+        async def get_etfs(self):
+            return []
+
+        async def get_cryptos(self):
+            return []
+
+    score_service = SignalScoreService()
+    score_service.discovery_service = DiscoveryStub()
+    scoreboard = asyncio.run(score_service.build_scoreboard({}))
+    require(
+        [item.get("ticker") for item in scoreboard.get("small_cap_equities") or []] == ["SMALL"],
+        failures,
+        "paper scoreboard does not expose the dedicated small-cap research lane",
+    )
+
+    coverage_service = PaperTradingService.__new__(PaperTradingService)
+    coverage = coverage_service._build_strategy_candidate_coverage(
+        [
+            {
+                "id": "small-SMALL-long",
+                "ticker": "SMALL",
+                "setup_type": "small_cap_discovery",
+                "strategy": {"id": "small_cap_future_star"},
+                "score": 72,
+                "tradeable": True,
+                "demo_tradeable": False,
+            }
+        ],
+        {
+            "selected": [],
+            "exploration": [],
+            "aggressive_exploration": [],
+            "rejected": [
+                {
+                    "id": "small-SMALL-long",
+                    "ticker": "SMALL",
+                    "setup_type": "small_cap_discovery",
+                    "strategy_id": "small_cap_future_star",
+                    "aggressive_learning_block_display_reasons": ["maximale Gesamt-Exposure erreicht"],
+                }
+            ],
+        },
+        empty_readiness,
+        {"day_status": "risk_review"},
+    )
+    coverage_by_id = {row.get("strategy_id"): row for row in coverage}
+    require(
+        coverage_by_id.get("small_cap_future_star", {}).get("status") == "capacity_blocked",
+        failures,
+        "small-cap coverage does not distinguish account capacity from missing candidates",
+    )
+    require(
+        coverage_by_id.get("earnings_guidance_reaction", {}).get("status") == "source_gap",
+        failures,
+        "earnings coverage does not expose a genuine source gap",
+    )
+
     source_contracts = {
-        ROOT / "src" / "paper_trading_service.py": ["small_cap_discovery", "earnings_guidance_reaction", "macro_event_edge", "_evidence_priority_sort_key"],
+        ROOT / "src" / "paper_trading_service.py": ["small_cap_discovery", "earnings_guidance_reaction", "macro_event_edge", "_evidence_priority_sort_key", "strategy_candidate_coverage"],
         ROOT / "src" / "email_alert_service.py": ["Evidenzkampagne:", "Nächster Evidenz-Fokus:", "Noch ohne Evidenz:"],
-        ROOT / "frontend" / "src" / "components" / "PaperTradingPanel.tsx": ["paper-evidence-campaign"],
+        ROOT / "frontend" / "src" / "components" / "PaperTradingPanel.tsx": ["paper-evidence-campaign", "Kandidaten-Abdeckung"],
     }
     for path, markers in source_contracts.items():
         source = path.read_text(encoding="utf-8")

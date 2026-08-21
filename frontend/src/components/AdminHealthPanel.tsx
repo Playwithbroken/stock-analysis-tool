@@ -332,6 +332,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const paperOutcomes = health?.paper_outcomes || {};
   const feeds = health?.data_feeds || {};
   const appInfo = health?.app || {};
+  const releaseInfo = appInfo.release || {};
   const database = health?.database || {};
   const backup = health?.backup || {};
   const operationalAlerts = health?.operational_alerts || {};
@@ -751,6 +752,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
               <div className="mt-2 text-xs leading-5 text-slate-500">
                 Env: {displayValue(appInfo.environment)} / Secure cookie: {appInfo.cookie_secure ? "ja" : "nein"}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Commit: <span className="font-extrabold text-slate-700">{displayValue(releaseInfo.commit_short)}</span>
+                {releaseInfo.branch ? ` / ${releaseInfo.branch}` : ""}
+              </div>
+              <div className="mt-1 truncate text-[11px] leading-5 text-slate-500" title={releaseInfo.deployment_id || ""}>
+                Laufzeit: {typeof releaseInfo.uptime_seconds === "number" ? `${Math.floor(releaseInfo.uptime_seconds / 3600)}h ${Math.floor((releaseInfo.uptime_seconds % 3600) / 60)}m` : "offen"}
+                {releaseInfo.region ? ` / ${releaseInfo.region}` : ""}
               </div>
             </div>
 

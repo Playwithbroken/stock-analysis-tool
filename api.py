@@ -63,6 +63,30 @@ import os
 load_dotenv()
 
 APP_VERSION = "0.9.0-beta.1"
+PROCESS_STARTED_AT = datetime.now(timezone.utc)
+PROCESS_STARTED_MONOTONIC = time.monotonic()
+
+
+def get_release_identity() -> Dict[str, Any]:
+    """Return a non-secret, reproducible identity for the running release."""
+    commit_sha = os.getenv("RAILWAY_GIT_COMMIT_SHA", "").strip() or None
+    deployment_id = os.getenv("RAILWAY_DEPLOYMENT_ID", "").strip() or None
+    replica_id = os.getenv("RAILWAY_REPLICA_ID", "").strip() or None
+    return {
+        "schema": "release-identity.v1",
+        "version": APP_VERSION,
+        "commit_sha": commit_sha,
+        "commit_short": commit_sha[:8] if commit_sha else None,
+        "branch": os.getenv("RAILWAY_GIT_BRANCH", "").strip() or None,
+        "deployment_id": deployment_id,
+        "replica_id": replica_id,
+        "region": os.getenv("RAILWAY_REPLICA_REGION", "").strip() or None,
+        "service": os.getenv("RAILWAY_SERVICE_NAME", "").strip() or None,
+        "environment": os.getenv("RAILWAY_ENVIRONMENT_NAME", "").strip() or os.getenv("APP_ENV", "development"),
+        "started_at": PROCESS_STARTED_AT.isoformat(),
+        "uptime_seconds": max(0, round(time.monotonic() - PROCESS_STARTED_MONOTONIC)),
+        "provider": "railway" if deployment_id or replica_id or commit_sha else "local",
+    }
 
 app = FastAPI(
     title="Stock Analysis API",
@@ -2495,6 +2519,7 @@ async def health_check():
     return {
         "status": "ok" if ready else "degraded",
         "version": APP_VERSION,
+        "release": get_release_identity(),
         "message": "Stock Analysis API is running" if ready else "API is running, but a release gate is not satisfied",
         "persistence": {
             "ready": persistence_ready,
@@ -5902,6 +5927,7 @@ async def admin_health_center():
             "app": {
                 "version": APP_VERSION,
                 "environment": os.getenv("APP_ENV", "development"),
+                "release": get_release_identity(),
                 "cookie_secure": use_secure_cookies(),
                 "allowed_origins": allowed_origins,
                 "auth_configured": bool(get_app_password() and get_session_secret()),

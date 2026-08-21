@@ -64,6 +64,13 @@ def main() -> int:
         os.environ["TELEGRAM_BOT_TOKEN"] = ""
         os.environ["TELEGRAM_CHAT_ID"] = ""
         os.environ["BROWSER_PUSH_ENABLED"] = "false"
+        os.environ["RAILWAY_GIT_COMMIT_SHA"] = "1234567890abcdef1234567890abcdef12345678"
+        os.environ["RAILWAY_GIT_BRANCH"] = "main"
+        os.environ["RAILWAY_DEPLOYMENT_ID"] = "deployment-test"
+        os.environ["RAILWAY_REPLICA_ID"] = "replica-test"
+        os.environ["RAILWAY_REPLICA_REGION"] = "europe-west4"
+        os.environ["RAILWAY_SERVICE_NAME"] = "broker-freund"
+        os.environ["RAILWAY_ENVIRONMENT_NAME"] = "production"
 
         from fastapi.testclient import TestClient
         import api
@@ -116,6 +123,13 @@ def main() -> int:
         require(app.get("version") == api.APP_VERSION, failures, "app.version mismatch")
         require(app.get("environment") == "production", failures, "app.environment mismatch")
         require(app.get("auth_configured") is True, failures, "app.auth_configured should be true")
+        release = app.get("release") or {}
+        require(release.get("schema") == "release-identity.v1", failures, "release identity schema mismatch")
+        require(release.get("commit_short") == "12345678", failures, "release commit_short mismatch")
+        require(release.get("deployment_id") == "deployment-test", failures, "release deployment_id mismatch")
+        require(release.get("replica_id") == "replica-test", failures, "release replica_id mismatch")
+        require(release.get("provider") == "railway", failures, "release provider mismatch")
+        require(isinstance(release.get("uptime_seconds"), int), failures, "release uptime_seconds must be an integer")
 
         database = payload.get("database") or {}
         for key in ["path", "exists", "writable", "quick_check"]:

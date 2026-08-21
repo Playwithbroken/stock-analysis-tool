@@ -60,10 +60,21 @@ def main() -> int:
         except ValueError:
             failures.append("/api/health returned invalid JSON")
     persistence = health_json.get("persistence") or {}
+    release = health_json.get("release") or {}
     require(health_json.get("status") == "ok", failures, f"health status is {health_json.get('status')!r}")
     require(persistence.get("ready") is True, failures, "persistence.ready is not true")
     require(persistence.get("volume_attached") is True, failures, "persistence.volume_attached is not true")
     require(persistence.get("database_on_volume") is True, failures, "persistence.database_on_volume is not true")
+    require(release.get("schema") == "release-identity.v1", failures, "release identity schema missing")
+    require(bool(release.get("commit_sha")), failures, "release commit SHA missing")
+    require(bool(release.get("deployment_id")), failures, "release deployment ID missing")
+    expected_commit = os.getenv("QA_EXPECTED_COMMIT", "").strip()
+    if expected_commit:
+        require(
+            str(release.get("commit_sha") or "").startswith(expected_commit),
+            failures,
+            f"live commit {release.get('commit_short')!r} does not match expected {expected_commit!r}",
+        )
 
     expected_security = {
         "x-content-type-options": "nosniff",
@@ -106,6 +117,7 @@ def main() -> int:
     print(f"live release smoke ok: {target}")
     print(
         f"version={health_json.get('version')} "
+        f"commit={release.get('commit_short')} "
         f"js={js_match.group(1) if js_match else 'n/a'} "
         f"css={css_match.group(1) if css_match else 'n/a'}"
     )

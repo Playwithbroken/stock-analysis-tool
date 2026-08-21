@@ -1,6 +1,6 @@
 # Broker Freund – Abschlussplan
 
-Stand: 14. August 2026
+Stand: 21. August 2026
 
 ## Ziel und klare Endbedingung
 
@@ -109,6 +109,7 @@ Ziel: Ein Fehler wird erkannt, erklärt und ohne Datenverlust behoben.
 - [x] Deduplizierter Betriebsalarm bei Scheduler-Fehlern, veralteten Kursdaten und nicht beschreibbarem Volume; Telegram-Ausfälle werden als nicht über denselben Kanal zustellbar im Health Center protokolliert. Für echte Out-of-band-Meldung bei komplettem App-/Telegram-Ausfall bleibt ein externer Uptime-Kanal erforderlich.
 - [x] Frontend- und Backend-Abhängigkeiten prüfen: `npm audit --audit-level=moderate` und `pip-audit -r requirements.txt` ohne bekannte Schwachstellen; vier gemeldete Frontend-Pakete wurden auf sichere kompatible Versionen aktualisiert.
 - [x] Rollback-Runbook mit letztem guten Commit, Datenbankkompatibilität und maximaler Wiederanlaufzeit testen.
+- [x] Release-Identität mit Commit, Deployment, Replica, Region, Prozessstart und Laufzeit in Health API und Health Center sichtbar machen; der Live-Smoke-Test kann den erwarteten Commit verbindlich prüfen.
 
 Abnahme:
 
@@ -141,12 +142,12 @@ Abnahme:
 
 ## Unmittelbar nächste Arbeitspakete
 
-1. `Options Contract Persistence`: gespeicherten Kontrakt vom Entry bis Exit verwenden.
-2. `Options Provider Gate`: Broker-/Marktdatenanbieter auswählen und ausführbare Quote getrennt vom Research-Snapshot anbinden.
-3. `Option Management`: P&L, Stop, Ziel und Zeitwert anhand des Kontrakts auswerten.
-4. `News Evidence Schema`: Primärquelle, Sekundärquelle, Fakten, Interpretation und Korrekturstatus vereinheitlichen.
-5. `Paper Evidence Dashboard`: Regime-, Bucket- und Strategieauswertung mit Mindeststichprobe.
-6. `Release Recovery Drill`: Backup und temporärer Restore sind automatisiert; als Nächstes externen Uptime-Kanal und Rollback praktisch testen.
+1. `Paper Evidence Campaign`: ausschließlich echte fällige Outcomes weiterführen, bis jede freizugebende Strategie mindestens 30 geschlossene Trades und die Kampagne mindestens 100 entscheidende Outcomes erreicht.
+2. `Production Soak`: denselben identifizierbaren Release sieben Tage ohne kritischen Fehler, Datenverlust, doppelte Kauf-/Verkaufsmeldung oder unbemerkten Scheduler-Ausfall betreiben.
+3. `External Uptime`: einen unabhängigen Kanal für kompletten App-/Telegram-Ausfall anbinden und den Alarmweg praktisch testen.
+4. `Independent Review`: Nutzungszweck, Datenrisiken, Verzögerungen, Interessenkonflikte und Haftungsgrenzen fachlich prüfen lassen.
+5. `Legal/Privacy Review`: vor Nutzung für Dritte Compliance- und Datenschutzmodell rechtlich freigeben lassen.
+6. `Release Tag`: erst nach Evidenz, Soak und erforderlichen externen Freigaben den geprüften Commit taggen; neue Funktionen danach ins Backlog verschieben.
 
 ## Pflichtprüfung für jeden Abschluss-Commit
 

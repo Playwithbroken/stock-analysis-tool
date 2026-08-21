@@ -1791,7 +1791,10 @@ async def _forecast_learning_loop():
             paper_alert_result = paper_cycle.get("paper_learning_alerts") or {}
             paper_news_source_revalidation = await asyncio.to_thread(_run_paper_news_source_revalidation)
             paper_managed_exits = await asyncio.to_thread(_run_paper_managed_exits)
-            paper_autopilot_result = await asyncio.to_thread(_run_scheduled_paper_learning_autopilot)
+            paper_autopilot_result = await asyncio.to_thread(
+                _run_scheduled_paper_learning_autopilot,
+                bool(paper_managed_exits.get("closed")),
+            )
             paper_capital_rotation = get_paper_trading_service().build_capital_rotation_summary(
                 paper_managed_exits,
                 paper_autopilot_result,
@@ -1901,7 +1904,9 @@ def _run_paper_managed_exits() -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
+def _run_scheduled_paper_learning_autopilot(
+    managed_exit_freed_capacity: bool = False,
+) -> Dict[str, Any]:
     if not _env_enabled("PAPER_TRADING_AUTO_LEARN_ENABLED", "true"):
         return {"status": "disabled", "message": "Paper auto-learn is disabled."}
 
@@ -1919,7 +1924,7 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
                 minimum=5,
             )
             next_allowed = last_run + timedelta(minutes=effective_cooldown)
-            if now < next_allowed:
+            if now < next_allowed and not managed_exit_freed_capacity:
                 return {
                     "status": "cooldown",
                     "checked_at": now.isoformat(),
@@ -1961,6 +1966,11 @@ def _run_scheduled_paper_learning_autopilot() -> Dict[str, Any]:
         payload = {
             "checked_at": now.isoformat(),
             "cooldown_minutes": cooldown_minutes,
+            "cooldown_bypassed_reason": (
+                "managed_exit_freed_capacity"
+                if managed_exit_freed_capacity
+                else None
+            ),
             **convert_numpy_types(result),
         }
         get_portfolio_manager().set_app_setting("paper_learning_autopilot_last_run", json.dumps(payload))

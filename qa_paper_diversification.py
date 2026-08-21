@@ -269,6 +269,12 @@ def test_exit_first_capital_rotation_cycle() -> None:
     assert loop_source.index("_run_paper_news_source_revalidation") < loop_source.index("_run_paper_managed_exits")
     assert loop_source.index("_run_paper_managed_exits") < loop_source.index("_run_scheduled_paper_learning_autopilot")
     assert loop_source.index("_run_scheduled_paper_learning_autopilot") < loop_source.index("_send_paper_account_status_alerts")
+    assert 'bool(paper_managed_exits.get("closed"))' in loop_source
+    autopilot_source = api_source.split("def _run_scheduled_paper_learning_autopilot(", 1)[1].split(
+        "def _safe_int_env", 1
+    )[0]
+    assert "if now < next_allowed and not managed_exit_freed_capacity:" in autopilot_source
+    assert '"managed_exit_freed_capacity"' in autopilot_source
 
     manual_status_source = api_source.split("async def send_paper_account_status_now():", 1)[1].split(
         "@app.", 1

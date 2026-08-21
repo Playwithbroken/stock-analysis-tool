@@ -3197,6 +3197,9 @@ class PaperTradingService:
         }
         rejected = auto_selection.get("rejected") or []
         day_status = str(demo_account.get("day_status") or "monitor")
+        concentration = auto_selection.get("strategy_concentration") if isinstance(auto_selection.get("strategy_concentration"), dict) else {}
+        concentration_limit = int(concentration.get("max_open_per_strategy") or 0)
+        concentration_counts = concentration.get("open_counts") if isinstance(concentration.get("open_counts"), dict) else {}
         capacity_terms = (
             "exposure",
             "risikobudget",
@@ -3257,7 +3260,16 @@ class PaperTradingService:
             blocker_text = " ".join(str(item).lower() for item in blockers)
             is_option = current_id == "defined_risk_options"
             capacity_blocked = any(term in blocker_text for term in capacity_terms)
-            concentration_blocked = "strategie-konzentrationslimit" in blocker_text
+            concentration_open = int(concentration_counts.get(current_id) or 0)
+            concentration_blocked = bool(
+                "strategie-konzentrationslimit" in blocker_text
+                or (concentration_limit > 0 and concentration_open >= concentration_limit)
+            )
+            if concentration_blocked and not any("Strategie-Konzentrationslimit" in str(item) for item in blockers):
+                blockers = [
+                    f"Strategie-Konzentrationslimit erreicht ({concentration_open}/{concentration_limit} offen)",
+                    *blockers,
+                ][:4]
 
             if any_qualified:
                 status = "qualified_candidate"
@@ -3294,6 +3306,11 @@ class PaperTradingService:
                     "qualified_counts": qualified,
                     "status": status,
                     "account_day_status": day_status,
+                    "strategy_concentration": {
+                        "open_trades": concentration_open,
+                        "max_open_trades": concentration_limit,
+                        "blocked": concentration_blocked,
+                    },
                     "top_candidate": (
                         {
                             "ticker": top.get("ticker"),

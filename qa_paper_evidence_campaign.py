@@ -121,6 +121,10 @@ def main() -> int:
             "selected": [],
             "exploration": [],
             "aggressive_exploration": [],
+            "strategy_concentration": {
+                "max_open_per_strategy": 4,
+                "open_counts": {"small_cap_future_star": 4},
+            },
             "rejected": [
                 {
                     "id": "small-SMALL-long",
@@ -136,9 +140,9 @@ def main() -> int:
     )
     coverage_by_id = {row.get("strategy_id"): row for row in coverage}
     require(
-        coverage_by_id.get("small_cap_future_star", {}).get("status") == "capacity_blocked",
+        coverage_by_id.get("small_cap_future_star", {}).get("status") == "concentration_blocked",
         failures,
-        "small-cap coverage does not distinguish account capacity from missing candidates",
+        "small-cap coverage does not distinguish strategy concentration from missing candidates",
     )
     require(
         coverage_by_id.get("earnings_guidance_reaction", {}).get("status") == "source_gap",

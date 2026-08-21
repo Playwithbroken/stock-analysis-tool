@@ -182,6 +182,34 @@ def test_candidate_coverage_change_triggers_once():
     require(changed.get("trigger") == "candidate_coverage" and changed.get("sent") == 1, "source-gap to candidate transition must trigger Telegram")
 
 
+def test_capital_rotation_bypasses_account_cooldown_once():
+    service = build_service()
+    account = {
+        "day_status": "risk_review",
+        "management_counts": {"review": 1},
+        "risk_circuit": {"status": "ready", "reasons": []},
+        "trade_action_queue": {"status": "review", "top_priority": {"ticker": "VUG"}},
+    }
+    baseline = service.send_paper_account_status_alert(account, [])
+    require(baseline.get("sent") == 1, "baseline account status must be delivered")
+
+    rotation = {
+        "status": "rotated",
+        "freed_trade_count": 1,
+        "opened_trade_count": 1,
+        "freed_tickers": ["VUG"],
+        "opened_tickers": ["LUNR"],
+    }
+    first = service.send_paper_account_status_alert(account, [], capital_rotation=rotation)
+    duplicate = service.send_paper_account_status_alert(account, [], capital_rotation=rotation)
+    require(first.get("trigger") == "capital_rotation" and first.get("sent") == 1, "material rotation must bypass account cooldown")
+    require(duplicate.get("status") == "cooldown" and duplicate.get("sent") == 0, "same rotation must not repeat")
+
+    next_rotation = {**rotation, "opened_tickers": ["RKLB"]}
+    changed = service.send_paper_account_status_alert(account, [], capital_rotation=next_rotation)
+    require(changed.get("trigger") == "capital_rotation" and changed.get("sent") == 1, "new rotation must trigger a new summary")
+
+
 def test_important_news_is_deduplicated_and_failed_delivery_is_retryable():
     event = {
         "title": "Official escalation near Red Sea shipping corridor",
@@ -236,6 +264,7 @@ def main():
         test_management_and_account_use_stateful_cooldowns,
         test_evidence_milestones_trigger_monitor_summary_without_repetition,
         test_candidate_coverage_change_triggers_once,
+        test_capital_rotation_bypasses_account_cooldown_once,
         test_important_news_is_deduplicated_and_failed_delivery_is_retryable,
     ]
     for test in tests:

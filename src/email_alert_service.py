@@ -510,12 +510,14 @@ class EmailAlertService:
         }
         evidence_progress_changed = self._paper_evidence_progress_changed(evidence_campaign)
         candidate_coverage_changed = self._paper_candidate_coverage_changed(strategy_candidate_coverage)
+        capital_rotation_changed = self._paper_capital_rotation_changed(capital_rotation)
         if (
             not force
             and status not in actionable_statuses
             and not monitor_enabled
             and not evidence_progress_changed
             and not candidate_coverage_changed
+            and not capital_rotation_changed
         ):
             return {"status": "ok", "sent": 0, "message": f"Paper-Konto-Status ist {status}; kein Telegram nötig."}
 
@@ -525,10 +527,17 @@ class EmailAlertService:
             demo_account,
             evidence_campaign,
             strategy_candidate_coverage,
+            capital_rotation,
         ):
             return {"status": "cooldown", "sent": 0, "message": "Paper-Konto-Status-Cooldown aktiv."}
 
         evidence_signature = self._paper_evidence_progress_signature(evidence_campaign)
+        rotation_signature = self._paper_capital_rotation_signature(capital_rotation)
+        rotation_key = (
+            hashlib.sha256(json.dumps(rotation_signature, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+            if rotation_signature
+            else "none"
+        )
 
         ranked = sorted(
             open_trades or [],
@@ -557,7 +566,8 @@ class EmailAlertService:
                 f"paper-account-status:{status}:{datetime.utcnow().date().isoformat()}:"
                 f"c{evidence_signature.get('closed_milestone', 0)}:"
                 f"o{evidence_signature.get('outcome_milestone', 0)}:"
-                f"r{evidence_signature.get('strategies_ready', 0)}"
+                f"r{evidence_signature.get('strategies_ready', 0)}:"
+                f"rotation-{rotation_key}"
             ),
             "category": "paper_account_status",
             "title": f"Paper-Konto-Status: {status}",
@@ -594,12 +604,15 @@ class EmailAlertService:
             demo_account,
             evidence_campaign,
             strategy_candidate_coverage,
+            capital_rotation,
         )
         return {
             "status": "ok",
             "sent": 1,
             "trigger": (
-                "evidence_progress"
+                "capital_rotation"
+                if capital_rotation_changed
+                else "evidence_progress"
                 if evidence_progress_changed
                 else "candidate_coverage"
                 if candidate_coverage_changed
@@ -3080,11 +3093,38 @@ class EmailAlertService:
             previous = {}
         return current != previous.get("candidate_coverage_signature")
 
+    @staticmethod
+    def _paper_capital_rotation_signature(capital_rotation: Dict[str, Any] | None) -> Dict[str, Any]:
+        rotation = capital_rotation if isinstance(capital_rotation, dict) else {}
+        if str(rotation.get("status") or "no_change") == "no_change":
+            return {}
+        freed = sorted({str(item).upper() for item in rotation.get("freed_tickers") or [] if item})
+        opened = sorted({str(item).upper() for item in rotation.get("opened_tickers") or [] if item})
+        return {
+            "status": str(rotation.get("status") or "unknown"),
+            "freed_trade_count": int(rotation.get("freed_trade_count") or 0),
+            "opened_trade_count": int(rotation.get("opened_trade_count") or 0),
+            "freed_tickers": freed,
+            "opened_tickers": opened,
+        }
+
+    def _paper_capital_rotation_changed(self, capital_rotation: Dict[str, Any] | None) -> bool:
+        current = self._paper_capital_rotation_signature(capital_rotation)
+        if not current:
+            return False
+        raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
+        try:
+            previous = json.loads(raw) if raw else {}
+        except Exception:
+            previous = {}
+        return current != previous.get("capital_rotation_signature")
+
     def _paper_account_status_can_send(
         self,
         demo_account: Dict[str, Any],
         evidence_campaign: Dict[str, Any] | None = None,
         strategy_candidate_coverage: List[Dict[str, Any]] | None = None,
+        capital_rotation: Dict[str, Any] | None = None,
     ) -> bool:
         status = str(demo_account.get("day_status") or "monitor")
         raw = self.portfolio_manager.get_app_setting(self._paper_account_status_state_key(), "{}")
@@ -3097,6 +3137,9 @@ class EmailAlertService:
             return True
         current_coverage_signature = self._paper_candidate_coverage_signature(strategy_candidate_coverage)
         if current_coverage_signature and current_coverage_signature != previous.get("candidate_coverage_signature"):
+            return True
+        current_rotation_signature = self._paper_capital_rotation_signature(capital_rotation)
+        if current_rotation_signature and current_rotation_signature != previous.get("capital_rotation_signature"):
             return True
         if status != str(previous.get("day_status") or ""):
             return True
@@ -3148,6 +3191,7 @@ class EmailAlertService:
         demo_account: Dict[str, Any],
         evidence_campaign: Dict[str, Any] | None = None,
         strategy_candidate_coverage: List[Dict[str, Any]] | None = None,
+        capital_rotation: Dict[str, Any] | None = None,
     ) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()
         risk_circuit = demo_account.get("risk_circuit") if isinstance(demo_account.get("risk_circuit"), dict) else {}
@@ -3179,6 +3223,11 @@ class EmailAlertService:
             payload["candidate_coverage_signature"] = coverage_signature
         elif previous.get("candidate_coverage_signature"):
             payload["candidate_coverage_signature"] = previous.get("candidate_coverage_signature")
+        rotation_signature = self._paper_capital_rotation_signature(capital_rotation)
+        if rotation_signature:
+            payload["capital_rotation_signature"] = rotation_signature
+        elif previous.get("capital_rotation_signature"):
+            payload["capital_rotation_signature"] = previous.get("capital_rotation_signature")
         self.portfolio_manager.set_app_setting(self._paper_account_status_state_key(), json.dumps(payload))
 
     def _portfolio_tickers(self) -> set[str]:

@@ -289,6 +289,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const rules = data?.rules || {};
   const demoAccount = data?.demo_account || {};
   const capitalFlow = demoAccount.capital_flow || {};
+  const periodPerformance = demoAccount.period_performance || data?.period_performance || {};
+  const periodPerformanceRows = periodPerformance.periods || [];
   const executionCostCalibration = demoAccount.execution_cost_calibration || {};
   const executionCostRows = executionCostCalibration.rows || [];
   const exposureProfile = demoAccount.exposure_profile || {};
@@ -1017,6 +1019,41 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Jetzt investiert" value={money(capitalFlow.open_exposure_value ?? demoAccount.open_exposure_value, currency)} />
             <StatTile label="Realisiert" value={money(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value, currency)} tone={(Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) > 0 ? "good" : Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) < 0 ? "bad" : "default") as any} />
             <StatTile label="Netto-Ergebnis" value={`${money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / ${formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
+          </div>
+          <div data-testid="paper-period-performance" className="mt-4 rounded-[1.4rem] border border-indigo-200 bg-indigo-50/70 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-indigo-700">Portfolio-Update</div>
+                <div className="mt-1 text-sm font-semibold leading-6 text-indigo-950">7 Tage, laufender Monat und laufendes Jahr – nur aus gespeicherten Konto-Snapshots.</div>
+              </div>
+              <div className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.13em] text-indigo-800">
+                {periodPerformance.snapshot_count || 0} Tages-Snapshots
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {periodPerformanceRows.map((period: any) => (
+                <div key={period.key} className="rounded-2xl border border-indigo-200 bg-white/90 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-black text-slate-950">{period.label}</div>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.11em] ${period.status === "ready" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      {period.status === "ready" ? "messbar" : "sammelt"}
+                    </span>
+                  </div>
+                  {period.status === "ready" ? (
+                    <>
+                      <div className={`mt-2 text-xl font-black ${Number(period.equity_change_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        {money(period.equity_change_value, currency)} / {formatPct(period.return_pct)}
+                      </div>
+                      <div className="mt-1 text-xs font-semibold text-slate-600">Realisiert {money(period.realized_pnl_value, currency)} · W/L {period.winner_count || 0}/{period.loser_count || 0}</div>
+                      <div className="mt-1 text-[10px] text-slate-500">Eröffnet {period.opened_trade_count || 0} · geschlossen {period.closed_trade_count || 0}</div>
+                    </>
+                  ) : (
+                    <div className="mt-2 text-xs font-semibold leading-5 text-amber-800">Historie wird gesammelt. Keine Rendite wird rückwirkend geschätzt.</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 text-[10px] font-semibold leading-5 text-indigo-700">{periodPerformance.policy || "Fehlende Perioden-Baselines bleiben ausdrücklich offen."}</div>
           </div>
           <div data-testid="execution-cost-calibration" className="mt-4 rounded-[1.4rem] border border-sky-200 bg-sky-50/65 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">

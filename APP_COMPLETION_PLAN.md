@@ -55,6 +55,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
   Technische Evidenzkampagne misst sechs Strategien getrennt, priorisiert unterrepräsentierte Strategien nur unter bereits qualifizierten Paper-Kandidaten und zählt ausschließlich echte fällige Outcomes; der Punkt bleibt bis zur realen Stichprobe offen.
 - [x] Eine Strategie nur hochstufen, wenn mindestens 30 geschlossene Trades/klare Prüfungen, Trefferquote, Profit Factor, positive Erwartung und Drawdown gleichzeitig die dokumentierten Mindestwerte erfüllen.
 - [x] Kapitalfreigabe-Fahrplan zeigt für offene Trades die nächste planmäßige Zeitprüfung, potenziell innerhalb von 72 Stunden frei werdendes Paper-Kapital und die danach priorisierte Evidenzstrategie; aktuelle Paper-Werte sind ausdrücklich keine garantierten Verkaufserlöse und alle Entry-Gates werden erneut geprüft.
+- [x] Wochen-, Monats- und Jahresupdate für das Paper-Portfolio basiert auf unveränderlichen täglichen Konto-Snapshots, trennt Equity-Veränderung von realisierten Trades und zeigt fehlende historische Baselines in App und Telegram ausdrücklich statt rückwirkend Renditen zu schätzen.
 
 Abnahme:
 

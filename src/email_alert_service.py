@@ -591,6 +591,7 @@ class EmailAlertService:
             "risk_circuit": demo_account.get("risk_circuit") or {},
             "performance": demo_account.get("performance") or {},
             "capital_flow": demo_account.get("capital_flow") or {},
+            "period_performance": demo_account.get("period_performance") or {},
             "top_trades": top_trades,
             "evidence_campaign": evidence_campaign or {},
             "strategy_candidate_coverage": strategy_candidate_coverage or [],
@@ -4963,6 +4964,7 @@ class EmailAlertService:
         circuit_reasons = [self._tg_esc(str(item)) for item in (circuit.get("display_reasons") or circuit.get("reasons") or [])[:2]]
         cooldown_until = self._paper_trade_time(circuit.get("cooldown_until"))
         performance_line = self._paper_performance_line(event.get("performance"))
+        period_performance = event.get("period_performance") if isinstance(event.get("period_performance"), dict) else {}
         evidence_campaign = event.get("evidence_campaign") if isinstance(event.get("evidence_campaign"), dict) else {}
         strategy_candidate_coverage = event.get("strategy_candidate_coverage") if isinstance(event.get("strategy_candidate_coverage"), list) else []
         capital_rotation = event.get("capital_rotation") if isinstance(event.get("capital_rotation"), dict) else {}
@@ -4992,6 +4994,17 @@ class EmailAlertService:
             )
         if performance_line:
             lines.append(performance_line.lstrip())
+        for period in (period_performance.get("periods") or [])[:3]:
+            label = self._tg_esc(str(period.get("label") or period.get("key") or "Periode"))
+            if period.get("status") == "ready":
+                lines.append(
+                    f"<b>{label}:</b> {self._tg_signed_money(period.get('equity_change_value'))} "
+                    f"({self._tg_pct(period.get('return_pct'))}) | realisiert "
+                    f"{self._tg_signed_money(period.get('realized_pnl_value'))} | "
+                    f"W/L {self._tg_esc(str(period.get('winner_count') or 0))}/{self._tg_esc(str(period.get('loser_count') or 0))}"
+                )
+            else:
+                lines.append(f"<b>{label}:</b> Historie wird gesammelt; keine Rendite rückwirkend geschätzt.")
         if evidence_campaign:
             next_priority = evidence_campaign.get("next_priority") if isinstance(evidence_campaign.get("next_priority"), dict) else {}
             lines.append(

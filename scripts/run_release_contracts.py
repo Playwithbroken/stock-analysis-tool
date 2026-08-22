@@ -50,6 +50,7 @@ CONTRACT_TESTS = [
     "qa_compliance_release_gate.py",
     "qa_paper_evidence_campaign.py",
     "qa_capital_release_forecast.py",
+    "qa_paper_period_performance.py",
 ]
 
 

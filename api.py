@@ -1886,6 +1886,7 @@ def _send_paper_account_status_alerts(
         trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         demo_account = service._build_demo_account(trades, [])
+        service._attach_period_performance(demo_account, trades)
         readiness = StrategyLibrary.build_readiness(
             trades,
             get_portfolio_manager().list_paper_trade_outcomes(limit=800),

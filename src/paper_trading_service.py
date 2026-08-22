@@ -79,6 +79,8 @@ COMMODITY_LEVERAGE_PROXIES = [
 
 
 class PaperTradingService:
+    ACCOUNT_SNAPSHOT_SETTING_KEY = "paper_account_daily_snapshots_v1"
+
     def __init__(self, portfolio_manager: PortfolioManager) -> None:
         self.portfolio_manager = portfolio_manager
         self._correlation_cache: Dict[str, Any] = {}
@@ -315,6 +317,7 @@ class PaperTradingService:
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
+        self._attach_period_performance(demo_account, trades)
         self._attach_quantitative_correlation(playbooks, open_trades, demo_account)
         sized_playbooks = self._attach_demo_sizing(playbooks, demo_account, rules)
         autopilot_settings = self.portfolio_manager.get_paper_autopilot_settings()
@@ -467,6 +470,165 @@ class PaperTradingService:
             ),
         }
 
+    def _attach_period_performance(
+        self,
+        demo_account: Dict[str, Any],
+        trades: List[Dict[str, Any]],
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        snapshots = self._record_daily_account_snapshot(demo_account, now=now)
+        report = self._build_period_performance(demo_account, trades, snapshots, now=now)
+        demo_account["period_performance"] = report
+        return report
+
+    def _record_daily_account_snapshot(
+        self,
+        demo_account: Dict[str, Any],
+        now: datetime | None = None,
+    ) -> List[Dict[str, Any]]:
+        get_setting = getattr(self.portfolio_manager, "get_app_setting", None)
+        set_setting = getattr(self.portfolio_manager, "set_app_setting", None)
+        if not callable(get_setting) or not callable(set_setting):
+            return []
+        now_utc = now or datetime.now(timezone.utc)
+        if now_utc.tzinfo is None:
+            now_utc = now_utc.replace(tzinfo=timezone.utc)
+        else:
+            now_utc = now_utc.astimezone(timezone.utc)
+        try:
+            timezone_name = os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")
+            from zoneinfo import ZoneInfo
+
+            local_date = now_utc.astimezone(ZoneInfo(timezone_name)).date().isoformat()
+        except Exception:
+            timezone_name = "UTC"
+            local_date = now_utc.date().isoformat()
+        try:
+            raw = get_setting(self.ACCOUNT_SNAPSHOT_SETTING_KEY, "[]")
+            parsed = json.loads(raw or "[]")
+            snapshots = [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+        except (TypeError, ValueError, json.JSONDecodeError):
+            snapshots = []
+        if any(str(item.get("local_date") or "") == local_date for item in snapshots):
+            return snapshots[-450:]
+
+        capital_flow = demo_account.get("capital_flow") if isinstance(demo_account.get("capital_flow"), dict) else {}
+        snapshot = {
+            "schema": "paper-account-daily-snapshot.v1",
+            "captured_at": now_utc.isoformat(),
+            "local_date": local_date,
+            "timezone": timezone_name,
+            "equity_value": round(float(capital_flow.get("equity_value", demo_account.get("equity")) or 0), 2),
+            "realized_pnl_value": round(float(capital_flow.get("realized_pnl_value") or 0), 2),
+            "unrealized_pnl_value": round(float(capital_flow.get("unrealized_pnl_value") or 0), 2),
+            "cash_available_value": round(float(capital_flow.get("cash_available_value") or 0), 2),
+            "open_exposure_value": round(float(capital_flow.get("open_exposure_value") or 0), 2),
+            "open_trade_count": int(capital_flow.get("open_trade_count") or 0),
+            "closed_trade_count": int(capital_flow.get("closed_trade_count") or 0),
+            "exposure_by_asset_class": demo_account.get("exposure_by_asset_class") or {},
+        }
+        snapshots = (snapshots + [snapshot])[-450:]
+        try:
+            set_setting(self.ACCOUNT_SNAPSHOT_SETTING_KEY, json.dumps(snapshots, ensure_ascii=False))
+        except Exception:
+            pass
+        return snapshots
+
+    def _build_period_performance(
+        self,
+        demo_account: Dict[str, Any],
+        trades: List[Dict[str, Any]],
+        snapshots: List[Dict[str, Any]],
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        now_utc = now or datetime.now(timezone.utc)
+        if now_utc.tzinfo is None:
+            now_utc = now_utc.replace(tzinfo=timezone.utc)
+        else:
+            now_utc = now_utc.astimezone(timezone.utc)
+        current_equity = float(demo_account.get("equity") or 0)
+        starts = [
+            ("week", "7 Tage", now_utc - timedelta(days=7)),
+            ("month", "Monat", now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)),
+            ("year", "Jahr", now_utc.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)),
+        ]
+        valid_snapshots = sorted(
+            [item for item in snapshots if self._as_utc_naive_datetime(item.get("captured_at"))],
+            key=lambda item: str(item.get("captured_at") or ""),
+        )
+        periods: List[Dict[str, Any]] = []
+        for key, label, start_at in starts:
+            start_naive = start_at.astimezone(timezone.utc).replace(tzinfo=None)
+            baseline = next(
+                (
+                    item
+                    for item in reversed(valid_snapshots)
+                    if (self._as_utc_naive_datetime(item.get("captured_at")) or datetime.max) <= start_naive
+                ),
+                None,
+            )
+            baseline_at = self._as_utc_naive_datetime(baseline.get("captured_at")) if baseline else None
+            baseline_age_hours = (
+                max(0.0, (start_naive - baseline_at).total_seconds() / 3600)
+                if baseline_at
+                else None
+            )
+            baseline_usable = bool(baseline and baseline_age_hours is not None and baseline_age_hours <= 48)
+            opened = [
+                trade for trade in trades
+                if (self._as_utc_naive_datetime(trade.get("opened_at")) or datetime.min) >= start_naive
+            ]
+            closed = [
+                trade for trade in trades
+                if trade.get("status") == "closed"
+                and (self._as_utc_naive_datetime(trade.get("closed_at")) or datetime.min) >= start_naive
+            ]
+            winners = [trade for trade in closed if float(trade.get("realized_pnl_value") or 0) > 0]
+            losers = [trade for trade in closed if float(trade.get("realized_pnl_value") or 0) < 0]
+            realized = round(sum(float(trade.get("realized_pnl_value") or 0) for trade in closed), 2)
+            baseline_equity = float(baseline.get("equity_value") or 0) if baseline_usable else 0.0
+            equity_change = round(current_equity - baseline_equity, 2) if baseline_usable and baseline_equity > 0 else None
+            return_pct = round((equity_change / baseline_equity) * 100, 2) if equity_change is not None else None
+            best = max(closed, key=lambda trade: float(trade.get("realized_pnl_value") or 0), default=None)
+            worst = min(closed, key=lambda trade: float(trade.get("realized_pnl_value") or 0), default=None)
+            periods.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "status": "ready" if baseline_usable and baseline_equity > 0 else "collecting",
+                    "start_at": start_at.isoformat(),
+                    "baseline_at": baseline.get("captured_at") if baseline_usable else None,
+                    "baseline_age_hours": round(baseline_age_hours, 1) if baseline_age_hours is not None else None,
+                    "baseline_equity_value": round(baseline_equity, 2) if baseline_usable else None,
+                    "current_equity_value": round(current_equity, 2),
+                    "equity_change_value": equity_change,
+                    "return_pct": return_pct,
+                    "realized_pnl_value": realized,
+                    "opened_trade_count": len(opened),
+                    "closed_trade_count": len(closed),
+                    "winner_count": len(winners),
+                    "loser_count": len(losers),
+                    "best_trade": {"ticker": best.get("ticker"), "pnl_value": best.get("realized_pnl_value")} if best else None,
+                    "worst_trade": {"ticker": worst.get("ticker"), "pnl_value": worst.get("realized_pnl_value")} if worst else None,
+                    "precision_note": (
+                        "Equity-Veraenderung zwischen zwei echten taeglichen Paper-Snapshots."
+                        if baseline_usable
+                        else "Kein ausreichend zeitnaher Snapshot am oder vor dem Periodenstart; keine Rendite wird rueckwirkend geschaetzt."
+                    ),
+                }
+            )
+        return {
+            "schema": "paper-period-performance.v1",
+            "generated_at": now_utc.isoformat(),
+            "history_started_at": valid_snapshots[0].get("captured_at") if valid_snapshots else None,
+            "snapshot_count": len(valid_snapshots),
+            "periods": periods,
+            "policy": (
+                "7-Tage-, Monats- und Jahresrenditen werden nur aus gespeicherten Paper-Konto-Snapshots berechnet. "
+                "Realisierte Trades innerhalb der Periode werden separat ausgewiesen; fehlende Baselines bleiben offen."
+            ),
+        }
+
     def _build_autopilot_profile_summary(
         self,
         autopilot_settings: Dict[str, Any],
@@ -566,7 +728,9 @@ class PaperTradingService:
 
     def build_demo_account_snapshot(self) -> Dict[str, Any]:
         trades = self._enrich_trades(self.portfolio_manager.list_paper_trades(limit=300))
-        return self._build_demo_account(trades, [])
+        demo_account = self._build_demo_account(trades, [])
+        self._attach_period_performance(demo_account, trades)
+        return demo_account
 
     @staticmethod
     def build_capital_rotation_summary(

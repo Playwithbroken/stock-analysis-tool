@@ -1583,6 +1583,14 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
             "Daily overview delivery",
             lambda: get_email_alert_service().send_scheduled_daily_overview(include_missed),
         )
+    if _env_enabled("PAPER_PERIOD_UPDATES_ENABLED", "true"):
+        await run_step(
+            "Paper portfolio period update",
+            lambda: get_email_alert_service().send_scheduled_paper_period_update(
+                lambda: get_paper_trading_service().build_demo_account_snapshot(),
+                include_missed,
+            ),
+        )
     await run_step(
         "Scheduled brief delivery",
         lambda: get_email_alert_service().send_scheduled_open_briefs(include_missed),

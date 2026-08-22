@@ -46,6 +46,14 @@ interface NotificationStatus {
       priority: string;
       immediate_risk_alerts_independent: boolean;
     };
+    paper_period_updates?: {
+      enabled: boolean;
+      time: string;
+      weekly_day: string;
+      monthly: string;
+      yearly: string;
+      channel: string;
+    };
   };
 }
 
@@ -293,6 +301,19 @@ export default function NotificationSettingsPanel({
             </div>
             <div className="mt-1 text-xs leading-5 text-slate-500">
               Reine Konto- und Lernstandsübersicht. Kauf-, Verkauf-, Management- und Risiko-Pushes bleiben sofort und unabhängig.
+            </div>
+          </div>
+          <div className="rounded-[1.4rem] border border-indigo-200 bg-indigo-50/70 p-4">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-indigo-700">
+              Portfolio-Periodenupdates
+            </div>
+            <div className="mt-2 text-sm font-black text-indigo-950">
+              {notificationStatus?.schedule?.paper_period_updates?.enabled
+                ? `Aktiv um ${notificationStatus.schedule.paper_period_updates.time}`
+                : "Aus"}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-indigo-800">
+              Woche am Freitag · Monat am letzten Kalendertag · Jahr am 31. Dezember. Jede abgeschlossene Periode wird über Telegram nur einmal versendet.
             </div>
           </div>
         </div>

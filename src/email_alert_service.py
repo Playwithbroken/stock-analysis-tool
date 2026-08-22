@@ -38,6 +38,7 @@ DEFAULT_EUROPE_CLOSE_BRIEF_TIME = "17:30"
 DEFAULT_CLOSE_RECAP_TIME = "21:45"
 DEFAULT_US_CLOSE_BRIEF_TIME = "22:15"
 DEFAULT_DAILY_OVERVIEW_TIME = "20:30"
+DEFAULT_PAPER_PERIOD_UPDATE_TIME = "22:30"
 
 
 @dataclass
@@ -176,6 +177,16 @@ class EmailAlertService:
                         "DAILY_OVERVIEW_GRACE_MINUTES", 180, minimum=1
                     ),
                     "last_result": self.get_brief_job_status("daily-overview"),
+                },
+                "paper_period_updates": {
+                    "enabled": os.getenv("PAPER_PERIOD_UPDATES_ENABLED", "true").strip().lower()
+                    not in {"0", "false", "no", "off"},
+                    "time": os.getenv("PAPER_PERIOD_UPDATE_TIME", DEFAULT_PAPER_PERIOD_UPDATE_TIME),
+                    "weekly_day": os.getenv("PAPER_WEEKLY_UPDATE_WEEKDAY", "fri").strip().lower(),
+                    "monthly": "last_calendar_day",
+                    "yearly": "last_calendar_day",
+                    "channel": "telegram",
+                    "last_result": self.get_brief_job_status("paper-period-update"),
                 },
             },
         }
@@ -1475,6 +1486,140 @@ class EmailAlertService:
         }
         self._set_brief_job_status(job_key, payload)
         return payload
+
+    def send_scheduled_paper_period_update(
+        self,
+        report_builder: Any,
+        include_missed: bool = False,
+        force: bool = False,
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        """Send one deduplicated Telegram summary for due week/month/year periods."""
+        job_key = "paper-period-update"
+        disabled = os.getenv("PAPER_PERIOD_UPDATES_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}
+        if disabled and not force:
+            result = {"job": job_key, "status": "disabled", "message": "Paper-Periodenupdates sind deaktiviert."}
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        tz = ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))
+        current = now or datetime.now(tz)
+        current = current.replace(tzinfo=tz) if current.tzinfo is None else current.astimezone(tz)
+        weekday_names = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+        weekly_day = weekday_names.get(os.getenv("PAPER_WEEKLY_UPDATE_WEEKDAY", "fri").strip().lower(), 4)
+
+        def due_periods(day: datetime) -> List[str]:
+            tomorrow = day + timedelta(days=1)
+            due: List[str] = []
+            if day.weekday() == weekly_day:
+                due.append("week")
+            if tomorrow.month != day.month:
+                due.append("month")
+            if tomorrow.year != day.year:
+                due.append("year")
+            return due
+
+        schedule_day = current
+        due = ["week", "month", "year"] if force else due_periods(schedule_day)
+        if not due and include_missed:
+            previous = current - timedelta(days=1)
+            previous_due = due_periods(previous)
+            if previous_due:
+                schedule_day = previous
+                due = previous_due
+        if not due:
+            result = {"job": job_key, "status": "idle", "message": "Kein Wochen-, Monats- oder Jahresabschluss ist faellig."}
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        scheduled_at = self._scheduled_datetime(
+            schedule_day,
+            os.getenv("PAPER_PERIOD_UPDATE_TIME", DEFAULT_PAPER_PERIOD_UPDATE_TIME),
+        )
+        if scheduled_at is None:
+            result = {"job": job_key, "status": "failed", "error": "invalid_schedule_time"}
+            self._set_brief_job_status(job_key, result)
+            return result
+        if not force:
+            delta_minutes = (current - scheduled_at).total_seconds() / 60
+            on_time = 0 <= delta_minutes < self._brief_on_time_window_minutes()
+            grace = self._safe_int_env("PAPER_PERIOD_UPDATE_GRACE_MINUTES", 360, minimum=1)
+            catchup = include_missed and 0 <= delta_minutes < grace
+            if not (on_time or catchup):
+                result = {
+                    "job": job_key,
+                    "status": "missed" if delta_minutes >= grace else "idle",
+                    "scheduled_at": scheduled_at.isoformat(),
+                }
+                self._set_brief_job_status(job_key, result)
+                return result
+
+        iso_year, iso_week, _ = schedule_day.isocalendar()
+        period_ids = {
+            "week": f"{iso_year}-W{iso_week:02d}",
+            "month": schedule_day.strftime("%Y-%m"),
+            "year": schedule_day.strftime("%Y"),
+        }
+        signature = "+".join(f"{key}:{period_ids[key]}" for key in due)
+        event_key = f"{job_key}:{signature}"
+        if event_key in self.portfolio_manager.get_sent_signal_event_keys():
+            result = {"job": job_key, "status": "deduplicated", "event_key": event_key}
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        try:
+            demo_account = report_builder()
+            report = demo_account.get("period_performance") if isinstance(demo_account, dict) else {}
+            report = report if isinstance(report, dict) else {}
+            rows_by_key = {
+                str(row.get("key")): row
+                for row in (report.get("periods") or [])
+                if isinstance(row, dict)
+            }
+            rows = [rows_by_key[key] for key in due if key in rows_by_key]
+            if len(rows) != len(due):
+                raise RuntimeError("Periodenbericht ist unvollstaendig; keine Teilmeldung wird versendet.")
+            event = {
+                "event_key": event_key,
+                "category": "paper_period_update",
+                "line": "Paper-Portfolio Periodenupdate",
+                "period_ids": {key: period_ids[key] for key in due},
+                "periods": rows,
+                "snapshot_count": report.get("snapshot_count"),
+                "history_started_at": report.get("history_started_at"),
+                "equity": demo_account.get("equity"),
+                "currency": demo_account.get("currency") or "EUR",
+                "policy": report.get("policy"),
+            }
+            config = self.get_config()
+            self._validate_config(config)
+            delivered = self._send_notifications(config, [event], subject="Paper-Portfolio: Periodenupdate")
+            if not delivered:
+                raise RuntimeError("Telegram hat keine Zustellung bestaetigt.")
+        except Exception as exc:
+            result = {
+                "job": job_key,
+                "status": "failed",
+                "event_key": event_key,
+                "scheduled_at": scheduled_at.isoformat(),
+                "error": str(exc),
+                "message": "Nicht als gesendet markiert; der naechste Lauf darf erneut versuchen.",
+            }
+            self._set_brief_job_status(job_key, result)
+            return result
+
+        self.portfolio_manager.mark_signal_events_sent([event])
+        result = {
+            "job": job_key,
+            "status": "sent",
+            "event_key": event_key,
+            "periods": due,
+            "scheduled_at": scheduled_at.isoformat(),
+            "sent_at": current.isoformat(),
+            "message": "Paper-Portfolio-Periodenupdate einmalig zugestellt.",
+        }
+        self._set_brief_job_status(job_key, result)
+        return result
 
     def _brief_status_key(self, job_key: str) -> str:
         safe_key = re.sub(r"[^a-zA-Z0-9:_-]+", "_", str(job_key or "unknown"))
@@ -4374,6 +4519,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_account_status_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "paper_period_update":
+                lines.append(self._render_telegram_paper_period_update(event))
+                lines.append("")
+                continue
             if event.get("category") == "paper_trade_closed":
                 lines.append(self._render_telegram_paper_trade_closed_alert(event))
                 lines.append("")
@@ -5122,6 +5271,46 @@ class EmailAlertService:
                 lines.append(f"  Warum: {summary}")
                 lines.append(f"  Nächste Prüfung: {next_check}")
         lines.append("<b>Modus:</b> Nur 500k-Demo-Lernen. Keine automatische Echtgeld-Ausführung.")
+        return "\n".join(lines)
+
+    def _render_telegram_paper_period_update(self, event: Dict[str, Any]) -> str:
+        period_ids = event.get("period_ids") if isinstance(event.get("period_ids"), dict) else {}
+        title = " + ".join(str(value) for value in period_ids.values()) or "Periodenupdate"
+        lines = [
+            f"<b>[PAPER PORTFOLIO] {self._tg_esc(title)}</b>",
+            f"<b>Equity jetzt:</b> {self._tg_money(event.get('equity'))}",
+            f"<b>Datenbasis:</b> {self._tg_esc(str(event.get('snapshot_count') or 0))} unveränderliche Tages-Snapshots",
+        ]
+        for period in (event.get("periods") or []):
+            label = self._tg_esc(str(period.get("label") or period.get("key") or "Periode"))
+            activity = (
+                f"eröffnet {self._tg_esc(str(period.get('opened_trade_count') or 0))} | "
+                f"geschlossen {self._tg_esc(str(period.get('closed_trade_count') or 0))} | "
+                f"W/L {self._tg_esc(str(period.get('winner_count') or 0))}/{self._tg_esc(str(period.get('loser_count') or 0))}"
+            )
+            if period.get("status") == "ready":
+                lines.extend(
+                    [
+                        f"<b>{label}:</b> {self._tg_signed_money(period.get('equity_change_value'))} ({self._tg_pct(period.get('return_pct'))})",
+                        f"<b>{label} realisiert:</b> {self._tg_signed_money(period.get('realized_pnl_value'))} | {activity}",
+                    ]
+                )
+            else:
+                lines.extend(
+                    [
+                        f"<b>{label}:</b> Rendite noch nicht messbar; Baseline fehlt oder ist zu alt.",
+                        f"<b>{label} Aktivität:</b> realisiert {self._tg_signed_money(period.get('realized_pnl_value'))} | {activity}",
+                    ]
+                )
+            best = period.get("best_trade") if isinstance(period.get("best_trade"), dict) else {}
+            worst = period.get("worst_trade") if isinstance(period.get("worst_trade"), dict) else {}
+            if best or worst:
+                lines.append(
+                    f"<b>{label} Extremwerte:</b> bester {self._tg_esc(str(best.get('ticker') or 'offen'))} "
+                    f"{self._tg_signed_money(best.get('pnl_value'))} | schlechtester "
+                    f"{self._tg_esc(str(worst.get('ticker') or 'offen'))} {self._tg_signed_money(worst.get('pnl_value'))}"
+                )
+        lines.append("<b>Einordnung:</b> Paper-only. Keine Rendite wird aus fehlenden historischen Kursen rückwirkend erfunden.")
         return "\n".join(lines)
 
     def _render_telegram_paper_learning_alert(self, event: Dict[str, Any]) -> str:

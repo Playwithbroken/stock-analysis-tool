@@ -51,6 +51,7 @@ CONTRACT_TESTS = [
     "qa_paper_evidence_campaign.py",
     "qa_capital_release_forecast.py",
     "qa_paper_period_performance.py",
+    "qa_paper_period_update_scheduler.py",
 ]
 
 

@@ -114,6 +114,7 @@ Ziel: Ein Fehler wird erkannt, erklärt und ohne Datenverlust behoben.
 - [x] Frontend- und Backend-Abhängigkeiten prüfen: `npm audit --audit-level=moderate` und `pip-audit -r requirements.txt` ohne bekannte Schwachstellen; vier gemeldete Frontend-Pakete wurden auf sichere kompatible Versionen aktualisiert.
 - [x] Rollback-Runbook mit letztem guten Commit, Datenbankkompatibilität und maximaler Wiederanlaufzeit testen.
 - [x] Release-Identität mit Commit, Deployment, Replica, Region, Prozessstart und Laufzeit in Health API und Health Center sichtbar machen; der Live-Smoke-Test kann den erwarteten Commit verbindlich prüfen.
+- [x] Persistenten 7-Tage-Production-Soak an Commit, Deployment und Datenbank-ID binden; Scheduler-Ticks prüfen automatisch Persistenz, Scheduler, Backup/Restore, Telegram und doppelte Kauf-/Verkaufs-Events, Fehler bleiben bis zum nächsten Deployment sichtbar.
 
 Abnahme:
 

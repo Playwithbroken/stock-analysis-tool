@@ -106,6 +106,7 @@ def main() -> int:
             "database",
             "backup",
             "operational_alerts",
+            "production_soak",
             "schedule",
             "learning",
             "paper_autopilot",
@@ -118,6 +119,9 @@ def main() -> int:
 
         require(payload.get("status") in {"ok", "degraded"}, failures, "invalid health status")
         require(isinstance(payload.get("problems"), list), failures, "problems must be a list")
+        soak = payload.get("production_soak") or {}
+        require(soak.get("schema") == "production-soak.v1", failures, "production soak schema mismatch")
+        require(soak.get("status") in {"not_observed", "collecting", "passed", "failed"}, failures, "production soak status mismatch")
 
         app = payload.get("app") or {}
         require(app.get("version") == api.APP_VERSION, failures, "app.version mismatch")

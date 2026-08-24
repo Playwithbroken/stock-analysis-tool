@@ -56,6 +56,7 @@ from src.provider_observability import (
 )
 from src.decision_scope import attach_scope, paper_scope, research_scope, scope_for_strategy_status
 from src.compliance_gate import get_compliance_status
+from src.production_soak_service import read_production_soak, record_production_soak
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -1524,17 +1525,20 @@ async def _signal_alert_loop():
                 datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),
             )
             get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", "")
+            get_portfolio_manager().set_app_setting("brief_scheduler_loop_error_at", "")
         except asyncio.TimeoutError:
             message = f"Scheduler tick timed out after {tick_timeout_seconds}s"
             print(f"Signal alert loop error: {message}")
             try:
                 get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", message)
+                get_portfolio_manager().set_app_setting("brief_scheduler_loop_error_at", datetime.now(timezone.utc).isoformat())
             except Exception:
                 pass
         except Exception as e:
             print(f"Signal alert loop error: {e}")
             try:
                 get_portfolio_manager().set_app_setting("brief_scheduler_loop_error", str(e))
+                get_portfolio_manager().set_app_setting("brief_scheduler_loop_error_at", datetime.now(timezone.utc).isoformat())
             except Exception:
                 pass
         interval_minutes = _scheduler_loop_interval_minutes()
@@ -1599,6 +1603,7 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
         await run_step("Daily database backup", _run_backup_cycle)
     if _env_enabled("OPERATIONAL_ALERTS_ENABLED", "true"):
         await run_step("Operational health alerts", _run_operational_alert_cycle)
+    await run_step("Production soak observation", _record_production_soak_observation)
 
 
 def _setting_datetime(key: str) -> datetime | None:
@@ -1656,6 +1661,29 @@ def _run_backup_cycle(force_backup: bool = False, force_restore_test: bool = Fal
             manager.set_app_setting("database_restore_test_last_error", message)
         result.update({"status": "error", "error": message})
         raise
+
+
+def _record_production_soak_observation() -> Dict[str, Any]:
+    """Persist one automatic stability observation for the exact live deployment."""
+    manager = get_portfolio_manager()
+    loop_error_at = _setting_datetime("brief_scheduler_loop_error_at")
+    current_process_loop_error = (
+        manager.get_app_setting("brief_scheduler_loop_error")
+        if loop_error_at and loop_error_at >= PROCESS_STARTED_AT
+        else None
+    )
+    return record_production_soak(
+        manager,
+        release=get_release_identity(),
+        database=get_database_status(),
+        notification_status=get_email_alert_service().get_notification_status(),
+        scheduler_error=current_process_loop_error,
+        scheduler_step_error=manager.get_app_setting("brief_scheduler_last_step_error"),
+        backup_error=manager.get_app_setting("database_backup_last_error"),
+        restore_error=manager.get_app_setting("database_restore_test_last_error"),
+        provider_metrics=provider_metrics_snapshot(),
+        sent_events=manager.get_sent_signal_events(limit=5000),
+    )
 
 
 def _run_operational_alert_cycle() -> Dict[str, Any]:
@@ -5556,6 +5584,7 @@ async def admin_health_center():
         tz_name = "Europe/Berlin"
     now_local = datetime.now(tz)
     notification_status = get_email_alert_service().get_notification_status()
+    production_soak = read_production_soak(get_portfolio_manager(), now_utc.replace(tzinfo=timezone.utc))
     database_status = get_database_status()
     backup_status = get_database_backup_service().status()
     backup_status.update(
@@ -5945,6 +5974,7 @@ async def admin_health_center():
             "backup": backup_status,
             "operational_alerts": operational_alerts,
             "provider_metrics": provider_metrics_snapshot(),
+            "production_soak": production_soak,
             "decision_audit": decision_audit_status,
             "compliance": compliance_status,
             "schedule": {

@@ -8,8 +8,8 @@ interface AdminHealthPanelProps {
 
 function statusTone(status?: string) {
   const value = String(status || "").toLowerCase();
-  if (["ok", "live", "ready", "sent", "sendable"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
-  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending", "disabled", "not_observed"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+  if (["ok", "live", "ready", "sent", "sendable", "passed"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
+  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending", "disabled", "not_observed", "collecting"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
   return "bg-red-500/10 text-red-700 border-red-500/20";
 }
 
@@ -335,6 +335,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
   const releaseInfo = appInfo.release || {};
   const database = health?.database || {};
   const backup = health?.backup || {};
+  const productionSoak = health?.production_soak || {};
   const operationalAlerts = health?.operational_alerts || {};
   const providerMetrics = health?.provider_metrics || {};
   const decisionAudit = health?.decision_audit || {};
@@ -741,7 +742,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
           </section>
 
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2 xl:grid-cols-4">
             <div className={`min-w-0 rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8" : "border-black/8 bg-white/75"}`}>
               <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">App Release</div>
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -761,6 +762,32 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 Laufzeit: {typeof releaseInfo.uptime_seconds === "number" ? `${Math.floor(releaseInfo.uptime_seconds / 3600)}h ${Math.floor((releaseInfo.uptime_seconds % 3600) / 60)}m` : "offen"}
                 {releaseInfo.region ? ` / ${releaseInfo.region}` : ""}
               </div>
+            </div>
+
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${productionSoak.status === "passed" ? "border-emerald-500/20 bg-emerald-500/8" : productionSoak.status === "failed" ? "border-red-500/25 bg-red-500/8" : "border-amber-500/20 bg-amber-500/8"}`}>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">7-Tage Production Soak</div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="text-lg font-black text-slate-900">
+                  {productionSoak.status === "passed" ? "Abnahme erreicht" : productionSoak.status === "failed" ? "Neu starten" : `${productionSoak.remaining_hours ?? 168}h verbleibend`}
+                </div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(productionSoak.status)}`}>
+                  {productionSoak.status || "not_observed"}
+                </span>
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Seit {fmtDate(productionSoak.started_at)} / frühestens {fmtDate(productionSoak.eligible_at)}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                {productionSoak.observation_count ?? 0} Prüfungen an {productionSoak.observed_days ?? 0} Tagen / Commit {productionSoak.release_commit ? String(productionSoak.release_commit).slice(0, 8) : "offen"}
+              </div>
+              <div className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                {productionSoak.message || "Der Scheduler startet die Beobachtung automatisch."}
+              </div>
+              {productionSoak.incidents?.length ? (
+                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs font-semibold leading-5 text-red-800">
+                  {productionSoak.incidents[productionSoak.incidents.length - 1]?.code}: {productionSoak.incidents[productionSoak.incidents.length - 1]?.detail}
+                </div>
+              ) : null}
             </div>
 
             <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">

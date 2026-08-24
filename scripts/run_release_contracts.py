@@ -14,6 +14,7 @@ CONTRACT_TESTS = [
     "qa_auth_cookie_security.py",
     "qa_auth_lockout.py",
     "qa_health_center_contract.py",
+    "qa_production_soak.py",
     "qa_backup_endpoint.py",
     "qa_backup_restore_recovery.py",
     "qa_operational_alerts.py",

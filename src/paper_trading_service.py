@@ -4753,7 +4753,7 @@ class PaperTradingService:
         now: datetime | None = None,
     ) -> Dict[str, Any]:
         def closed_sort_value(trade: Dict[str, Any]) -> float:
-            value = self._parse_datetime(trade.get("closed_at"))
+            value = self._as_utc_naive_datetime(trade.get("closed_at"))
             return value.timestamp() if value else 0.0
 
         ordered = sorted(
@@ -4776,7 +4776,8 @@ class PaperTradingService:
         )
         max_drawdown_pct = max(max_drawdown_pct, current_drawdown_pct)
 
-        now = now or datetime.now()
+        now = now or datetime.now(timezone.utc)
+        now_utc_naive = self._as_utc_naive_datetime(now) or datetime.utcnow()
         daily_realized_pnl = 0.0
         recent_closed = sorted(
             closed_trades,
@@ -4784,9 +4785,9 @@ class PaperTradingService:
             reverse=True,
         )
         for trade in recent_closed:
-            closed_at = self._parse_datetime(trade.get("closed_at"))
-            closed_day = closed_at.astimezone().date() if closed_at and closed_at.tzinfo else closed_at.date() if closed_at else None
-            if closed_day == now.date():
+            closed_at = self._as_utc_naive_datetime(trade.get("closed_at"))
+            closed_day = closed_at.date() if closed_at else None
+            if closed_day == now_utc_naive.date():
                 daily_realized_pnl += float(trade.get("realized_pnl_value") or 0)
 
         consecutive_losses = 0
@@ -4796,13 +4797,13 @@ class PaperTradingService:
                 consecutive_losses += 1
             else:
                 break
-        latest_closed_at = self._parse_datetime(recent_closed[0].get("closed_at")) if recent_closed else None
+        latest_closed_at = self._as_utc_naive_datetime(recent_closed[0].get("closed_at")) if recent_closed else None
         cooldown_until = (
             latest_closed_at + timedelta(hours=float(config["loss_streak_cooldown_hours"]))
             if latest_closed_at
             else None
         )
-        compare_now = self._as_utc_naive_datetime(now) or datetime.now()
+        compare_now = now_utc_naive
         streak_recovery_active = consecutive_losses >= int(config["max_consecutive_losses"])
         streak_cooldown_active = bool(
             streak_recovery_active
@@ -4845,7 +4846,7 @@ class PaperTradingService:
             "drawdown_limit_pct": float(config["max_drawdown_pct"]),
             "consecutive_losses": consecutive_losses,
             "max_consecutive_losses": int(config["max_consecutive_losses"]),
-            "cooldown_until": cooldown_until.isoformat() if streak_cooldown_active and cooldown_until else None,
+            "cooldown_until": cooldown_until.replace(tzinfo=timezone.utc).isoformat() if streak_cooldown_active and cooldown_until else None,
             "streak_recovery_active": streak_recovery_active,
             "recovery_condition": "one_profitable_closed_trade" if streak_recovery_active else None,
             "recovery_message": (

@@ -39,6 +39,7 @@ def test_loss_streak_pauses_then_restarts_at_reduced_risk() -> None:
     assert paused["streak_recovery_active"] is True
     assert paused["risk_multiplier"] == 0.25
     assert paused["cooldown_until"] is not None
+    assert paused["cooldown_until"].endswith("+00:00")
 
     old_losses = [
         {**trade, "closed_at": (now - timedelta(hours=50 - index)).isoformat()}

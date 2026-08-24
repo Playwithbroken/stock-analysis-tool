@@ -4737,6 +4737,10 @@ class PaperTradingService:
             "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", 12.0, minimum=0.5),
             "max_consecutive_losses": env_int("PAPER_TRADING_MAX_CONSECUTIVE_LOSSES", 3, minimum=1),
             "loss_streak_cooldown_hours": env_float("PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS", 24.0, minimum=1.0),
+            "post_loss_streak_risk_multiplier": min(
+                1.0,
+                env_float("PAPER_TRADING_POST_LOSS_STREAK_RISK_MULTIPLIER", 0.25, minimum=0.01),
+            ),
             "mode": "paper_learning_only",
         }
 
@@ -4746,6 +4750,7 @@ class PaperTradingService:
         current_equity: float,
         starting_capital: float,
         config: Dict[str, Any],
+        now: datetime | None = None,
     ) -> Dict[str, Any]:
         def closed_sort_value(trade: Dict[str, Any]) -> float:
             value = self._parse_datetime(trade.get("closed_at"))
@@ -4771,7 +4776,7 @@ class PaperTradingService:
         )
         max_drawdown_pct = max(max_drawdown_pct, current_drawdown_pct)
 
-        now = datetime.now()
+        now = now or datetime.now()
         daily_realized_pnl = 0.0
         recent_closed = sorted(
             closed_trades,
@@ -4797,9 +4802,10 @@ class PaperTradingService:
             if latest_closed_at
             else None
         )
-        compare_now = datetime.now(cooldown_until.tzinfo) if cooldown_until and cooldown_until.tzinfo else now
+        compare_now = self._as_utc_naive_datetime(now) or datetime.now()
+        streak_recovery_active = consecutive_losses >= int(config["max_consecutive_losses"])
         streak_cooldown_active = bool(
-            consecutive_losses >= int(config["max_consecutive_losses"])
+            streak_recovery_active
             and cooldown_until
             and cooldown_until > compare_now
         )
@@ -4811,6 +4817,14 @@ class PaperTradingService:
         if streak_cooldown_active:
             reasons.append("Paper loss streak cooldown is active.")
         drawdown_reduced = current_drawdown_pct >= float(config["max_drawdown_pct"])
+        post_streak_multiplier = min(
+            1.0,
+            max(0.01, float(config.get("post_loss_streak_risk_multiplier") or 0.25)),
+        )
+        risk_multiplier = min(
+            0.25 if drawdown_reduced else 1.0,
+            post_streak_multiplier if streak_recovery_active else 1.0,
+        )
         display_reasons = [
             "Tagesverlust-Limit erreicht; heute keine neuen Paper-Entries."
             if reason == "Daily paper loss limit reached."
@@ -4821,7 +4835,7 @@ class PaperTradingService:
         ]
         return {
             "active": bool(reasons),
-            "status": "paused" if reasons else "reduced_risk" if drawdown_reduced else "ready",
+            "status": "paused" if reasons else "reduced_risk" if drawdown_reduced or streak_recovery_active else "ready",
             "reasons": reasons,
             "display_reasons": display_reasons,
             "daily_realized_pnl_value": round(daily_realized_pnl, 2),
@@ -4832,7 +4846,14 @@ class PaperTradingService:
             "consecutive_losses": consecutive_losses,
             "max_consecutive_losses": int(config["max_consecutive_losses"]),
             "cooldown_until": cooldown_until.isoformat() if streak_cooldown_active and cooldown_until else None,
-            "risk_multiplier": 0.25 if drawdown_reduced else 1.0,
+            "streak_recovery_active": streak_recovery_active,
+            "recovery_condition": "one_profitable_closed_trade" if streak_recovery_active else None,
+            "recovery_message": (
+                f"Kontrollierter Wiederanlauf mit {risk_multiplier * 100:.0f}% Risiko, bis ein profitabel geschlossener Paper-Trade die Verlustserie beendet."
+                if streak_recovery_active
+                else None
+            ),
+            "risk_multiplier": round(risk_multiplier, 4),
         }
 
     def _build_demo_account(self, trades: List[Dict[str, Any]], playbooks: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -4919,6 +4940,9 @@ class PaperTradingService:
         elif management_counts.get("protect"):
             day_status = "protect_profit"
             day_action = "Gewinnschutz bei Gewinnern nahe am Ziel prüfen."
+        elif risk_circuit.get("streak_recovery_active"):
+            day_status = "controlled_restart"
+            day_action = "Nur kontrollierte Paper-Entries mit 25 % Risiko; erst ein profitabler Abschluss beendet den Wiederanlauf."
         elif open_trades:
             day_status = "monitor"
             day_action = "Aktuellen Paper-Plan halten; keine Änderung ohne Trigger oder Invalidierung."
@@ -5016,6 +5040,7 @@ class PaperTradingService:
                 "Gesamt-, Ticker- und Options-Exposure werden vor jedem Auto-Entry neu berechnet.",
                 f"Mindestens {float(config['min_cash_reserve_pct']):g}% Cashreserve und Assetklassen-Limits verhindern einseitige Vollinvestition.",
                 "Im Risiko-Review bleiben betroffene Ticker und neues Krypto-Risiko gesperrt; unabhängige Setups laufen höchstens mit halbem Risiko.",
+                "Nach einer Verlustserie bleibt das Risiko auch nach dem Cooldown bei 25 %, bis ein profitabler Abschluss den kontrollierten Wiederanlauf beendet.",
                 "Calls und Puts bleiben Paper-only, bis Optionskette, IV, Strike, Laufzeit und Spread geprüft sind.",
                 "Echtgeld-Nutzung erfordert manuelle Prüfung, Suitability-Check und aktuelle Marktvalidierung.",
             ],

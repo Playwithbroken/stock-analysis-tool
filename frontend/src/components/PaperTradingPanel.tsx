@@ -1204,11 +1204,16 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   {riskCircuit.active
                     ? "Neue Paper-Entries pausiert"
                     : riskCircuit.status === "reduced_risk"
-                      ? "Drawdown-Modus: nur 25 % Risiko"
+                      ? riskCircuit.streak_recovery_active
+                        ? `Kontrollierter Wiederanlauf: nur ${Math.round(Number(riskCircuit.risk_multiplier || 0.25) * 100)} % Risiko`
+                        : `Drawdown-Modus: nur ${Math.round(Number(riskCircuit.risk_multiplier || 0.25) * 100)} % Risiko`
                       : "Risikobudget freigegeben"}
                 </div>
                 {(riskCircuit.display_reasons || riskCircuit.reasons)?.length ? (
                   <div className="mt-2 text-sm font-semibold leading-6">{(riskCircuit.display_reasons || riskCircuit.reasons).join(" / ")}</div>
+                ) : null}
+                {riskCircuit.streak_recovery_active && riskCircuit.recovery_message ? (
+                  <div className="mt-2 text-sm font-semibold leading-6">{riskCircuit.recovery_message}</div>
                 ) : null}
               </div>
               <div className="rounded-full border border-current/15 bg-white/60 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]">

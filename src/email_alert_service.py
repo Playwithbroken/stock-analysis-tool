@@ -512,7 +512,7 @@ class EmailAlertService:
             return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
 
         status = str(demo_account.get("day_status") or "monitor")
-        actionable_statuses = {"action_required", "risk_review", "risk_halt", "protect_profit"}
+        actionable_statuses = {"action_required", "risk_review", "risk_halt", "controlled_restart", "protect_profit"}
         monitor_enabled = os.getenv("PAPER_ACCOUNT_STATUS_ALERT_MONITOR_ENABLED", "false").strip().lower() in {
             "1",
             "true",
@@ -5112,6 +5112,7 @@ class EmailAlertService:
         circuit_status = self._tg_esc(str(circuit.get("status") or "ready").upper())
         circuit_reasons = [self._tg_esc(str(item)) for item in (circuit.get("display_reasons") or circuit.get("reasons") or [])[:2]]
         cooldown_until = self._paper_trade_time(circuit.get("cooldown_until"))
+        recovery_message = self._tg_esc(str(circuit.get("recovery_message") or ""))[:420]
         performance_line = self._paper_performance_line(event.get("performance"))
         period_performance = event.get("period_performance") if isinstance(event.get("period_performance"), dict) else {}
         evidence_campaign = event.get("evidence_campaign") if isinstance(event.get("evidence_campaign"), dict) else {}
@@ -5132,6 +5133,11 @@ class EmailAlertService:
             f"<b>Risk Circuit:</b> {circuit_status} | Drawdown {self._tg_pct(circuit.get('current_drawdown_pct')).lstrip('+')} / Limit {self._tg_pct(circuit.get('drawdown_limit_pct')).lstrip('+')}",
             f"<b>Heute:</b> {self._tg_signed_money(circuit.get('daily_realized_pnl_value'))} | Verlustserie {self._tg_esc(str(circuit.get('consecutive_losses') or 0))}",
         ]
+        if circuit.get("streak_recovery_active"):
+            lines.append(
+                f"<b>Kontrollierter Wiederanlauf:</b> Risiko {self._tg_pct(float(circuit.get('risk_multiplier') or 0) * 100).lstrip('+')}"
+                + (f" | {recovery_message}" if recovery_message else " | bis zum nächsten profitablen Abschluss")
+            )
         if exposure_pct is not None and exposure_limit_pct is not None:
             lines.append(
                 f"<b>Exposure:</b> {self._tg_pct(exposure_pct).lstrip('+')} / "

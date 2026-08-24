@@ -57,6 +57,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [x] Kapitalfreigabe-Fahrplan zeigt für offene Trades die nächste planmäßige Zeitprüfung, potenziell innerhalb von 72 Stunden frei werdendes Paper-Kapital und die danach priorisierte Evidenzstrategie; aktuelle Paper-Werte sind ausdrücklich keine garantierten Verkaufserlöse und alle Entry-Gates werden erneut geprüft.
 - [x] Wochen-, Monats- und Jahresupdate für das Paper-Portfolio basiert auf unveränderlichen täglichen Konto-Snapshots, trennt Equity-Veränderung von realisierten Trades und zeigt fehlende historische Baselines in App und Telegram ausdrücklich statt rückwirkend Renditen zu schätzen.
 - [x] Eigene Telegram-Periodenjobs senden den Wochenabschluss freitags sowie Monats- und Jahresabschluss am letzten Kalendertag nach Börsenschluss; kombinierte Abschlüsse werden einmalig zugestellt, fehlgeschlagene Zustellungen bleiben wiederholbar.
+- [x] Nach einer Verlustserie pausiert der Paper-Trader 24 Stunden und startet danach höchstens mit 25 % Risiko neu; erst ein profitabel geschlossener Trade beendet den kontrollierten Wiederanlauf, sichtbar in App und Telegram.
 
 Abnahme:
 

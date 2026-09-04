@@ -916,6 +916,16 @@ export default function EdgeDashboardPanel({
                       ) : null}
                     </div>
                   ) : null}
+                  {setup.liquidity_zones?.zone_label && setup.liquidity_zones.zone_label !== "Neutral" ? (
+                    <div className="mt-1 flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
+                      <span>{setup.liquidity_zones.zone_label}</span>
+                    </div>
+                  ) : null}
+                  {setup.mtf_alignment?.badge ? (
+                    <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                      🧭 MTF: <span className="font-bold text-slate-800 dark:text-slate-200">{setup.mtf_alignment.badge}</span>
+                    </div>
+                  ) : null}
 
                   {setup.earnings_info ? (
                     <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] font-bold text-amber-900 dark:text-amber-300">

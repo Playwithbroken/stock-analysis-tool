@@ -252,6 +252,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     put_wall?: number;
     earnings_avwap?: number;
     ytd_avwap?: number;
+    fvg_low?: number;
+    fvg_high?: number;
   } | null>(null);
   const [retryCounter, setRetryCounter] = useState(0);
   const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
@@ -269,12 +271,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       fetchJsonWithRetry<any>(`/api/trading/volume-profile/${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
       fetchJsonWithRetry<any>(`/api/trading/gex/${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
       fetchJsonWithRetry<any>(`/api/trading/avwap?ticker=${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
-    ]).then(([vpRes, gexRes, avwapRes]) => {
+      fetchJsonWithRetry<any>(`/api/trading/liquidity-zones?ticker=${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
+    ]).then(([vpRes, gexRes, avwapRes, lzRes]) => {
       if (!active) return;
       const vp = vpRes.status === "fulfilled" ? vpRes.value : null;
       const gex = gexRes.status === "fulfilled" ? gexRes.value : null;
       const avwap = avwapRes.status === "fulfilled" ? avwapRes.value : null;
-      if (vp || gex || avwap) {
+      const lz = lzRes.status === "fulfilled" ? lzRes.value : null;
+      if (vp || gex || avwap || lz) {
         setEdgeOverlay({
           poc: typeof vp?.poc_price === "number" ? vp.poc_price : undefined,
           vah: typeof vp?.vah_price === "number" ? vp.vah_price : undefined,
@@ -283,6 +287,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           put_wall: typeof gex?.put_wall === "number" ? gex.put_wall : undefined,
           earnings_avwap: typeof avwap?.earnings?.avwap === "number" ? avwap.earnings.avwap : undefined,
           ytd_avwap: typeof avwap?.ytd?.avwap === "number" ? avwap.ytd.avwap : undefined,
+          fvg_low: typeof lz?.nearest_bullish_fvg?.gap_low === "number" ? lz.nearest_bullish_fvg.gap_low : undefined,
+          fvg_high: typeof lz?.nearest_bullish_fvg?.gap_high === "number" ? lz.nearest_bullish_fvg.gap_high : undefined,
         });
       }
     });
@@ -578,6 +584,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         edgeOverlay.put_wall,
         edgeOverlay.earnings_avwap,
         edgeOverlay.ytd_avwap,
+        edgeOverlay.fvg_low,
+        edgeOverlay.fvg_high,
       ].filter(
         (v): v is number => typeof v === "number" && v > 0 && Math.abs(v - min) / min < 0.40
       );
@@ -1073,6 +1081,24 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                           strokeWidth={1.4}
                           strokeDasharray="3 3"
                           label={{ value: `YTD AVWAP: $${edgeOverlay.ytd_avwap}`, fill: "#06b6d4", fontSize: 9, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.fvg_high ? (
+                        <ReferenceLine
+                          y={edgeOverlay.fvg_high}
+                          stroke="#10b981"
+                          strokeWidth={1.2}
+                          strokeDasharray="2 2"
+                          label={{ value: `FVG Top: $${edgeOverlay.fvg_high}`, fill: "#10b981", fontSize: 9, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.fvg_low ? (
+                        <ReferenceLine
+                          y={edgeOverlay.fvg_low}
+                          stroke="#10b981"
+                          strokeWidth={1.2}
+                          strokeDasharray="2 2"
+                          label={{ value: `FVG Demand: $${edgeOverlay.fvg_low}`, fill: "#10b981", fontSize: 9, position: "insideRight" }}
                         />
                       ) : null}
                     </>

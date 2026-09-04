@@ -26,6 +26,8 @@ from src.market_regime_service import MarketRegimeService
 from src.relative_strength_service import RelativeStrengthService
 from src.anchored_vwap_service import AnchoredVWAPService
 from src.whale_flow_service import WhaleFlowService
+from src.liquidity_zone_service import LiquidityZoneService
+from src.multi_timeframe_service import MultiTimeframeService
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,8 @@ class AsymmetricTradeService:
         relative_strength_service: Optional[RelativeStrengthService] = None,
         anchored_vwap_service: Optional[AnchoredVWAPService] = None,
         whale_flow_service: Optional[WhaleFlowService] = None,
+        liquidity_zone_service: Optional[LiquidityZoneService] = None,
+        multi_timeframe_service: Optional[MultiTimeframeService] = None,
     ) -> None:
         self.options_service = options_service or OptionsEdgeService()
         self.volume_service = volume_service or VolumeProfileService()
@@ -51,6 +55,8 @@ class AsymmetricTradeService:
         self.rs_service = relative_strength_service or RelativeStrengthService()
         self.avwap_service = anchored_vwap_service or AnchoredVWAPService()
         self.whale_service = whale_flow_service or WhaleFlowService()
+        self.liquidity_service = liquidity_zone_service or LiquidityZoneService()
+        self.mtf_service = multi_timeframe_service or MultiTimeframeService()
 
     def generate_trade_setup(
         self,
@@ -109,6 +115,22 @@ class AsymmetricTradeService:
                     whale_data = self.whale_service.analyze_whale_flow(symbol)
                 except Exception:
                     whale_data = None
+
+            # 7. Fetch Smart Money Liquidity Zones (FVG & Order Blocks)
+            fvg_data = None
+            if self.liquidity_service:
+                try:
+                    fvg_data = self.liquidity_service.analyze_zones(symbol)
+                except Exception:
+                    fvg_data = None
+
+            # 8. Fetch Multi-Timeframe Alignment
+            mtf_data = None
+            if self.mtf_service:
+                try:
+                    mtf_data = self.mtf_service.analyze_mtf_alignment(symbol)
+                except Exception:
+                    mtf_data = None
 
             poc = vp.get("poc_price", spot) if vp else spot
             vah = vp.get("vah_price", spot * 1.03) if vp else spot * 1.03
@@ -254,6 +276,24 @@ class AsymmetricTradeService:
                     confluence_score -= 15
                     confluence_factors.append("⚠️ Institutionelle Distribution erkannt (Verkauf in Hype)")
 
+            # Smart Money Liquidity Zones (FVG & Order Block) Confluence
+            if fvg_data:
+                if fvg_data.get("in_demand_zone"):
+                    confluence_score += fvg_data.get("confluence_bonus", 10)
+                    confluence_factors.append(fvg_data.get("zone_label", "Im Smart-Money-Demand-Bereich"))
+                elif fvg_data.get("confluence_bonus", 0) > 0:
+                    confluence_score += fvg_data.get("confluence_bonus", 4)
+                    confluence_factors.append("Nahe Fair Value Gap Support")
+
+            # Multi-Timeframe Alignment Confluence
+            if mtf_data:
+                mtf_bonus = mtf_data.get("confluence_bonus", 0)
+                confluence_score += mtf_bonus
+                if mtf_bonus > 0:
+                    confluence_factors.append(f"MTF-Trend-Synchronisation ({mtf_data.get('badge')})")
+                elif mtf_bonus < 0:
+                    confluence_factors.append(f"⚠️ {mtf_data.get('badge')}")
+
             # Earnings Proximity Shield
             earnings_info = self._check_earnings_proximity(t)
             if earnings_info:
@@ -275,6 +315,7 @@ class AsymmetricTradeService:
                 grade_title = "Selektiv handeln"
 
             # 6. Chart Overlay Level Bundle (for PriceChart / Visuals)
+            nearest_fvg = fvg_data.get("nearest_bullish_fvg") if fvg_data else None
             chart_overlay_levels = {
                 "poc": poc,
                 "vah": vah,
@@ -283,6 +324,8 @@ class AsymmetricTradeService:
                 "put_wall": put_wall,
                 "ytd_avwap": avwap_data.get("ytd", {}).get("avwap") if avwap_data and avwap_data.get("ytd") else None,
                 "earnings_avwap": avwap_data.get("earnings", {}).get("avwap") if avwap_data and avwap_data.get("earnings") else None,
+                "fvg_low": nearest_fvg.get("gap_low") if nearest_fvg else None,
+                "fvg_high": nearest_fvg.get("gap_high") if nearest_fvg else None,
                 "entry": entry_price,
                 "invalidation": invalidation_price,
                 "target_1": target_1,
@@ -377,6 +420,8 @@ class AsymmetricTradeService:
                 "relative_strength": rs_data,
                 "anchored_vwap": avwap_data,
                 "whale_flow": whale_data,
+                "liquidity_zones": fvg_data,
+                "mtf_alignment": mtf_data,
                 "telegram_html": tg_html,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }

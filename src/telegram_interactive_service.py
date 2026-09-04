@@ -44,6 +44,8 @@ class TelegramInteractiveService:
         portfolio_heat_service: Optional[Any] = None,
         anchored_vwap_service: Optional[Any] = None,
         whale_flow_service: Optional[Any] = None,
+        liquidity_zone_service: Optional[Any] = None,
+        multi_timeframe_service: Optional[Any] = None,
         trading_signals_service: Optional[Any] = None,
         alert_service: Optional[Any] = None,
         portfolio_manager: Optional[Any] = None,
@@ -61,6 +63,8 @@ class TelegramInteractiveService:
         self.heat_service = portfolio_heat_service
         self.avwap_service = anchored_vwap_service
         self.whale_service = whale_flow_service
+        self.liquidity_service = liquidity_zone_service
+        self.mtf_service = multi_timeframe_service
         self.signals_service = trading_signals_service
         self.alert_service = alert_service
         self.portfolio_manager = portfolio_manager
@@ -172,6 +176,18 @@ class TelegramInteractiveService:
             res = self._cmd_whale([ticker])
             self.send_message(chat_id, res)
 
+        elif cb.startswith("fvg:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Smart Money Zonen für {ticker}...")
+            res = self._cmd_fvg([ticker])
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("mtf:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"MTF-Sync für {ticker}...")
+            res = self._cmd_mtf([ticker])
+            self.send_message(chat_id, res)
+
         elif cb.startswith("track:"):
             ticker = cb.split(":", 1)[1].upper()
             if self.asymmetric_service and self.lifecycle_service:
@@ -250,6 +266,10 @@ class TelegramInteractiveService:
                 return self._cmd_avwap(args)
             elif cmd == "/whale":
                 return self._cmd_whale(args)
+            elif cmd in ("/fvg", "/zones"):
+                return self._cmd_fvg(args)
+            elif cmd == "/mtf":
+                return self._cmd_mtf(args)
             elif cmd in ("/track", "/trades"):
                 return self._cmd_track()
             elif cmd == "/heat":
@@ -277,6 +297,8 @@ class TelegramInteractiveService:
             "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL) (z.B. <code>/levels AAPL</code>)\n"
             "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Earnings, Swing-Low) (z.B. <code>/avwap MSFT</code>)\n"
             "• <code>/whale [TICKER]</code> – Whale Flow & Dark Pool Absorption Detector\n"
+            "• <code>/fvg TICKER</code> – Smart Money Fair Value Gaps & Order Blocks\n"
+            "• <code>/mtf TICKER</code> – Multi-Timeframe Trend & Momentum Alignment (1D, 1H, 15M)\n"
             "• <code>/regime</code> – SPY/QQQ Trend & VIX Risiko-Status\n"
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
             "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n"
@@ -297,6 +319,10 @@ class TelegramInteractiveService:
                 [
                     {"text": "⚓ AVWAP", "callback_data": f"avwap:{ticker}"},
                     {"text": "🐋 Whale Flow", "callback_data": f"whale:{ticker}"},
+                ],
+                [
+                    {"text": "🕳️ FVG & Zonen", "callback_data": f"fvg:{ticker}"},
+                    {"text": "🧭 MTF Sync", "callback_data": f"mtf:{ticker}"},
                 ],
                 [
                     {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
@@ -513,6 +539,28 @@ class TelegramInteractiveService:
             badge = a["badge"]
             lines.append(f"• <b>{sym}</b>: <b>{ratio:.1f}x</b> Volumen {badge}")
         return "\n".join(lines)
+
+    def _cmd_fvg(self, args: List[str]) -> str:
+        if not args:
+            return "ℹ️ Bitte einen Ticker angeben: z.B. <code>/fvg NVDA</code> oder <code>/fvg AAPL</code>"
+        ticker = args[0].upper().strip()
+        if not self.liquidity_service:
+            return "⚠️ Liquidity Zone Service nicht initialisiert."
+        data = self.liquidity_service.analyze_zones(ticker)
+        if not data:
+            return f"❌ Konnte keine Smart Money Zonen für <b>{ticker}</b> berechnen."
+        return self.liquidity_service.format_telegram_fvg_card(data)
+
+    def _cmd_mtf(self, args: List[str]) -> str:
+        if not args:
+            return "ℹ️ Bitte einen Ticker angeben: z.B. <code>/mtf NVDA</code> oder <code>/mtf TSLA</code>"
+        ticker = args[0].upper().strip()
+        if not self.mtf_service:
+            return "⚠️ Multi-Timeframe Service nicht initialisiert."
+        data = self.mtf_service.analyze_mtf_alignment(ticker)
+        if not data:
+            return f"❌ Konnte keine Multi-Timeframe Synchronisation für <b>{ticker}</b> berechnen."
+        return self.mtf_service.format_telegram_mtf_card(data)
 
     def _cmd_scan(self) -> str:
         if not self.signals_service or not self.alert_service:

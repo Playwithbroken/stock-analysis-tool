@@ -53,6 +53,8 @@ from src.telegram_interactive_service import TelegramInteractiveService
 from src.portfolio_heat_service import PortfolioHeatService
 from src.anchored_vwap_service import AnchoredVWAPService
 from src.whale_flow_service import WhaleFlowService
+from src.liquidity_zone_service import LiquidityZoneService
+from src.multi_timeframe_service import MultiTimeframeService
 from src.realtime_market_service import RealtimeMarketService
 from src.integrations.market_data.alpaca import AlpacaMarketDataAdapter, AlpacaStreamConfig
 from src.public_signal_service import PublicSignalService
@@ -192,6 +194,8 @@ _trade_lifecycle_service = None
 _portfolio_heat_service = None
 _anchored_vwap_service = None
 _whale_flow_service = None
+_liquidity_zone_service = None
+_multi_timeframe_service = None
 _telegram_interactive_service = None
 _telegram_bot_task = None
 _realtime_market_service = None
@@ -1490,7 +1494,12 @@ def get_trading_signals_service():
 def get_asymmetric_trade_service():
     global _asymmetric_trade_service
     if _asymmetric_trade_service is None:
-        _asymmetric_trade_service = AsymmetricTradeService()
+        _asymmetric_trade_service = AsymmetricTradeService(
+            anchored_vwap_service=get_anchored_vwap_service(),
+            whale_flow_service=get_whale_flow_service(),
+            liquidity_zone_service=get_liquidity_zone_service(),
+            multi_timeframe_service=get_multi_timeframe_service(),
+        )
     return _asymmetric_trade_service
 
 def get_relative_strength_service():
@@ -1523,6 +1532,18 @@ def get_whale_flow_service():
         _whale_flow_service = WhaleFlowService()
     return _whale_flow_service
 
+def get_liquidity_zone_service():
+    global _liquidity_zone_service
+    if _liquidity_zone_service is None:
+        _liquidity_zone_service = LiquidityZoneService()
+    return _liquidity_zone_service
+
+def get_multi_timeframe_service():
+    global _multi_timeframe_service
+    if _multi_timeframe_service is None:
+        _multi_timeframe_service = MultiTimeframeService()
+    return _multi_timeframe_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1539,6 +1560,8 @@ def get_telegram_interactive_service():
             portfolio_heat_service=get_portfolio_heat_service(),
             anchored_vwap_service=get_anchored_vwap_service(),
             whale_flow_service=get_whale_flow_service(),
+            liquidity_zone_service=get_liquidity_zone_service(),
+            multi_timeframe_service=get_multi_timeframe_service(),
             trading_signals_service=get_trading_signals_service(),
             alert_service=get_email_alert_service(),
             portfolio_manager=get_portfolio_manager(),
@@ -7422,6 +7445,42 @@ async def get_trading_whale_flow(ticker: Optional[str] = None):
         watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
         anomalies = await asyncio.to_thread(service.scan_watchlist_whale_flows, watchlist)
         return convert_numpy_types({"anomalies": anomalies, "count": len(anomalies)})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/liquidity-zones")
+async def get_trading_liquidity_zones(ticker: str):
+    """Calculates Fair Value Gaps (FVG) and Order Blocks for a ticker."""
+    try:
+        sym = (ticker or "").strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        service = get_liquidity_zone_service()
+        data = await asyncio.to_thread(service.analyze_zones, sym)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"No liquidity zones found for {sym}")
+        return convert_numpy_types(data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/mtf-alignment")
+async def get_trading_mtf_alignment(ticker: str):
+    """Evaluates multi-timeframe trend and momentum alignment (1D, 1H, 15M)."""
+    try:
+        sym = (ticker or "").strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        service = get_multi_timeframe_service()
+        data = await asyncio.to_thread(service.analyze_mtf_alignment, sym)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"No MTF alignment data for {sym}")
+        return convert_numpy_types(data)
     except HTTPException:
         raise
     except Exception as e:

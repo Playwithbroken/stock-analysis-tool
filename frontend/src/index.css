@@ -471,8 +471,8 @@ h3 {
 }
 
 .broker-chat-fab {
-  right: max(-0.35rem, env(safe-area-inset-right));
-  bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 0.55rem);
+  right: max(1.25rem, env(safe-area-inset-right));
+  bottom: calc(var(--mobile-tabbar-height) + var(--mobile-tabbar-bottom) + 0.75rem);
 }
 
 .mobile-dossier-copy {
@@ -642,16 +642,10 @@ h3 {
   }
 
   .broker-chat-fab {
-    right: -0.25rem !important;
-    height: 2.5rem !important;
-    width: 2.5rem !important;
-    border-radius: 0.9rem !important;
-  }
-
-  .broker-chat-fab > div:nth-child(2) {
-    height: 1.8rem !important;
-    width: 1.8rem !important;
-    border-radius: 0.7rem !important;
+    right: 2rem !important;
+    bottom: 2rem !important;
+    height: auto !important;
+    width: auto !important;
   }
 }
 
@@ -1666,17 +1660,17 @@ h3 {
   }
 
   .broker-chat-fab {
-    right: max(-0.35rem, env(safe-area-inset-right));
-    height: 2rem !important;
-    width: 2rem !important;
-    border-radius: 0.78rem !important;
-    opacity: 0.72;
+    right: max(0.85rem, env(safe-area-inset-right));
+    height: 2.75rem !important;
+    width: 2.75rem !important;
+    border-radius: 0.95rem !important;
+    opacity: 0.95;
   }
 
   .broker-chat-fab > div:nth-child(2) {
-    height: 1.6rem !important;
-    width: 1.6rem !important;
-    border-radius: 0.62rem !important;
+    height: 2rem !important;
+    width: 2rem !important;
+    border-radius: 0.75rem !important;
   }
 }
 

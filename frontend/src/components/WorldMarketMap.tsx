@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import worldMapSvgRaw from "../assets/world-map-wikimedia.svg?raw";
+import worldMapSvgUrl from "../assets/world-map-wikimedia.svg?url";
 import { localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
+import { Bell, Layers3, ListFilter, MapPinned } from "lucide-react";
 
 // Lazy-load world map SVG — keeps initial bundle ~280KB smaller
 type CountryTone = "red" | "amber" | "blue" | "green" | "slate";
@@ -129,6 +130,7 @@ interface WorldMarketMapProps {
   regions: RegionSummary[];
   selectedRegion: string;
   onSelectRegion: (regionLabel: string) => void;
+  dataCurrent?: boolean;
   news?: MapNewsItem[];
   eventLayer?: MapNewsItem[];
   eventPings?: EventPingItem[];
@@ -369,6 +371,12 @@ function regionFlag(label: string) {
   return "GL";
 }
 
+function regionDisplayLabel(label: string) {
+  if (label === "Asia") return "Asien";
+  if (label === "Europe") return "Europa";
+  return label;
+}
+
 function textToneClass(tone: string) {
   if (tone === "risk-on") return "text-emerald-700";
   if (tone === "risk-off") return "text-red-700";
@@ -452,20 +460,52 @@ function buildCountryHighlights(items: GeoEvent[]) {
   return highlights;
 }
 
-function buildInlineWorldMapSvg(highlights: Map<string, CountryTone>) {
-  let svg = worldMapSvgRaw
-    .replace(/<\?xml[^>]*>\s*/i, "")
-    .replace(/<!DOCTYPE[^>]*>\s*/i, "")
-    .replace(
-      "<svg ",
-      '<svg role="img" aria-label="Macro event world map" class="world-map-inline" viewBox="0 0 1404.7773 600.81262" preserveAspectRatio="xMidYMid meet" ',
-    );
+let worldMapSvgPromise: Promise<string> | null = null;
+
+function loadWorldMapBaseSvg() {
+  if (!worldMapSvgPromise) {
+    worldMapSvgPromise = fetch(worldMapSvgUrl, { cache: "force-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`World map asset failed with status ${response.status}`);
+        return response.text();
+      })
+      .then((rawSvg) => rawSvg
+        .replace(/<\?xml[^>]*>\s*/i, "")
+        .replace(/<!DOCTYPE[^>]*>\s*/i, "")
+        .replace(
+          "<svg ",
+          '<svg role="img" aria-label="Weltkarte mit Makroereignissen" class="world-map-inline" viewBox="0 0 1404.7773 600.81262" preserveAspectRatio="xMidYMid meet" ',
+        ))
+      .catch((error) => {
+        worldMapSvgPromise = null;
+        throw error;
+      });
+  }
+  return worldMapSvgPromise;
+}
+
+const WORLD_MAP_SVG_CACHE = new Map<string, string>();
+
+function buildInlineWorldMapSvg(baseSvg: string, highlights: Map<string, CountryTone>) {
+  const signature = [...highlights.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, tone]) => `${id}:${tone}`)
+    .join("|");
+  const cached = WORLD_MAP_SVG_CACHE.get(signature);
+  if (cached) return cached;
+
+  let svg = baseSvg;
 
   highlights.forEach((tone, id) => {
     const className = `macro-country-highlight ${countryHighlightClass(tone)}`;
     const pattern = new RegExp(`<g id="${id}"(?![^>]*macro-country-highlight)([^>]*)>`, "i");
     svg = svg.replace(pattern, `<g id="${id}" class="${className}"$1>`);
   });
+  WORLD_MAP_SVG_CACHE.set(signature, svg);
+  if (WORLD_MAP_SVG_CACHE.size > 12) {
+    const oldestKey = WORLD_MAP_SVG_CACHE.keys().next().value;
+    if (oldestKey !== undefined) WORLD_MAP_SVG_CACHE.delete(oldestKey);
+  }
   return svg;
 }
 
@@ -474,7 +514,43 @@ function InlineWorldMap({
 }: {
   highlights: Map<string, CountryTone>;
 }) {
-  const svg = useMemo(() => buildInlineWorldMapSvg(highlights), [highlights]);
+  const [baseSvg, setBaseSvg] = useState<string | null>(null);
+  const [assetFailed, setAssetFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadWorldMapBaseSvg()
+      .then((svg) => {
+        if (!cancelled) setBaseSvg(svg);
+      })
+      .catch(() => {
+        if (!cancelled) setAssetFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const svg = useMemo(
+    () => (baseSvg ? buildInlineWorldMapSvg(baseSvg, highlights) : ""),
+    [baseSvg, highlights],
+  );
+
+  if (!svg) {
+    return (
+      <div
+        className="world-map-inline-wrap absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.08),transparent_68%)]"
+        role="img"
+        aria-label={assetFailed ? "Weltkarte konnte nicht geladen werden" : "Weltkarte wird geladen"}
+        aria-busy={!assetFailed}
+      >
+        <span className="sr-only">
+          {assetFailed ? "Weltkarte konnte nicht geladen werden" : "Weltkarte wird geladen"}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       className="world-map-inline-wrap absolute inset-0"
@@ -580,9 +656,9 @@ function placeOutcomeTone(action?: string) {
 
 function placeOutcomeLabel(action?: string) {
   if (action === "long") return "Chance";
-  if (action === "short") return "Risk";
-  if (action === "hedge") return "Protect";
-  return "Watch";
+  if (action === "short") return "Risiko";
+  if (action === "hedge") return "Absichern";
+  return "Beobachten";
 }
 
 function describeEventVariant(event: GeoEvent | null) {
@@ -591,31 +667,31 @@ function describeEventVariant(event: GeoEvent | null) {
   const eventType = (event.event_type || "").toLowerCase();
 
   if (eventType === "conflict") {
-    if (/(iran|tehran|israel|gaza|lebanon|beirut|red sea)/.test(title)) return "Middle East conflict";
-    if (/(ukraine|kyiv|russia|moscow)/.test(title)) return "Eastern Europe conflict";
-    if (/(taiwan|china sea|korea)/.test(title)) return "Asia-Pacific conflict";
-    return "Global conflict";
+    if (/(iran|tehran|israel|gaza|lebanon|beirut|red sea)/.test(title)) return "Nahost-Konflikt";
+    if (/(ukraine|kyiv|russia|moscow)/.test(title)) return "Osteuropa-Konflikt";
+    if (/(taiwan|china sea|korea)/.test(title)) return "Asien-Pazifik-Konflikt";
+    return "Globaler Konflikt";
   }
   if (eventType === "energy") {
-    if (/(opec|saudi|gulf|middle east|brent|crude)/.test(title)) return "Oil supply shock";
-    if (/(gas|lng|pipeline)/.test(title)) return "Gas and transport stress";
-    return "Energy repricing";
+    if (/(opec|saudi|gulf|middle east|brent|crude)/.test(title)) return "Öl-Angebotsschock";
+    if (/(gas|lng|pipeline)/.test(title)) return "Gas- und Transportstress";
+    return "Neubewertung Energie";
   }
   if (eventType === "election") {
-    if (/(hungary|budapest|europe|eu|parliament)/.test(title)) return "European election";
-    if (/(usa|u.s.|washington|president)/.test(title)) return "US election";
-    return "Political vote";
+    if (/(hungary|budapest|europe|eu|parliament)/.test(title)) return "Europäische Wahl";
+    if (/(usa|u.s.|washington|president)/.test(title)) return "US-Wahl";
+    return "Politische Abstimmung";
   }
   if (eventType === "policy") {
-    if (/(tariff|trade|sanction)/.test(title)) return "Trade and sanctions";
-    if (/(regulation|policy)/.test(title)) return "Policy regime shift";
-    return "Policy shock";
+    if (/(tariff|trade|sanction)/.test(title)) return "Handel und Sanktionen";
+    if (/(regulation|policy)/.test(title)) return "Regimewechsel Regulierung";
+    return "Politischer Schock";
   }
   if (eventType === "disaster") {
-    return "Natural disaster";
+    return "Naturkatastrophe";
   }
   if (eventType === "central_bank") {
-    return "Central bank shift";
+    return "Zentralbankwechsel";
   }
   return event.markerLabel;
 }
@@ -664,7 +740,7 @@ function buildHedgeIdeas(event: GeoEvent | null) {
     .filter((item) => item?.ticker)
     .map((item) => ({
       ticker: String(item.ticker).toUpperCase(),
-      label: item.label || "Portfolio hedge",
+      label: item.label || "Portfolioabsicherung",
     }));
   if (portfolioIdeas.length) return portfolioIdeas.slice(0, 4);
 
@@ -680,32 +756,32 @@ function buildHedgeIdeas(event: GeoEvent | null) {
   };
 
   if (eventType === "conflict" || action === "hedge") {
-    add("GLD", "Gold hedge");
-    add("XLE", "Energy cushion");
-    add("TLT", "Rates hedge");
+    add("GLD", "Goldabsicherung");
+    add("XLE", "Energiepuffer");
+    add("TLT", "Zinsabsicherung");
   }
   if (eventType === "energy" || sectors.some((item) => item.includes("energy"))) {
-    add("XLE", "Energy leaders");
-    add("USO", "Oil follow-through");
+    add("XLE", "Energieführer");
+    add("USO", "Öl-Folgebewegung");
   }
   if (eventType === "central_bank") {
-    add("TLT", "Duration watch");
-    add("UUP", "Dollar hedge");
-    add("QQQ", "Growth reaction");
+    add("TLT", "Duration beobachten");
+    add("UUP", "Dollarabsicherung");
+    add("QQQ", "Wachstumsreaktion");
   }
   if (eventType === "election" || eventType === "policy") {
-    add("XLI", "Industrials");
-    add("ITA", "Defense");
-    add("XLF", "Banks");
+    add("XLI", "Industrie");
+    add("ITA", "Verteidigung");
+    add("XLF", "Banken");
   }
   if (eventType === "disaster") {
-    add("GLD", "Shock hedge");
-    add("DBA", "Commodity stress");
+    add("GLD", "Schockabsicherung");
+    add("DBA", "Rohstoffstress");
   }
-  if (assets.includes("GLD")) add("GLD", "Gold hedge");
-  if (assets.includes("TLT")) add("TLT", "Duration hedge");
-  if (assets.includes("XLE")) add("XLE", "Energy hedge");
-  if (assets.includes("SPY")) add("SPY", "Index reaction");
+  if (assets.includes("GLD")) add("GLD", "Goldabsicherung");
+  if (assets.includes("TLT")) add("TLT", "Durationabsicherung");
+  if (assets.includes("XLE")) add("XLE", "Energieabsicherung");
+  if (assets.includes("SPY")) add("SPY", "Indexreaktion");
 
   return Array.from(ideas.values()).slice(0, 4);
 }
@@ -906,7 +982,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
     return finalAnchors.map((anchor, index) => ({
       ...item,
       geoKey: `${item.title || "conflict"}-${index}`,
-      markerLabel: "Conflict",
+      markerLabel: "Konflikt",
       markerTone: "red",
       markerIcon: "WAR",
       pulse,
@@ -916,10 +992,10 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
       markerPosition: anchor,
     }));
   }
-  if (/(fed|ecb|boj|central bank|rate|yield)/.test(haystack)) {
+  if (/(fed|ecb|boj|central[_ -]?bank|rate|yield)/.test(haystack)) {
     return [{
       ...item,
-      markerLabel: "Central Bank",
+      markerLabel: "Zentralbank",
       markerTone: "blue",
       markerIcon: "CB",
       pulse,
@@ -932,7 +1008,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   if (/(oil|opec|crude|gas|energy)/.test(haystack)) {
     return [{
       ...item,
-      markerLabel: "Energy",
+      markerLabel: "Energie",
       markerTone: "amber",
       markerIcon: "OIL",
       pulse: item.impact !== "low",
@@ -945,7 +1021,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   if (/(election|vote|ballot|president|prime minister|parliament|coalition|campaign)/.test(haystack)) {
     return [{
       ...item,
-      markerLabel: "Election",
+      markerLabel: "Wahl",
       markerTone: "blue",
       markerIcon: "VOTE",
       pulse,
@@ -958,7 +1034,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   if (/(earthquake|wildfire|flood|storm|hurricane|typhoon|tsunami|drought|disaster)/.test(haystack)) {
     return [{
       ...item,
-      markerLabel: "Disaster",
+      markerLabel: "Katastrophe",
       markerTone: "red",
       markerIcon: "NAT",
       pulse,
@@ -971,7 +1047,7 @@ function classifyGeoEvents(item: MapNewsItem): GeoEvent[] {
   if (/(tariff|sanction|trade|policy|regulation)/.test(haystack)) {
     return [{
       ...item,
-      markerLabel: "Policy",
+      markerLabel: "Politik",
       markerTone: "slate",
       markerIcon: "POL",
       pulse,
@@ -1002,7 +1078,7 @@ function buildTimeline(regions: RegionSummary[], activeRegionNews: MapNewsItem[]
             : "cross-asset confirmation needed");
       return {
         key: label,
-        stage: index === 0 ? "Asia close" : index === 1 ? "Europe handoff" : "US open",
+        stage: index === 0 ? "Asien-Schluss" : index === 1 ? "Europa-Übergang" : "US-Eröffnung",
         label,
         tone: region.tone,
         move: region.avg_change_1d,
@@ -1015,6 +1091,7 @@ export default function WorldMarketMap({
   regions,
   selectedRegion,
   onSelectRegion,
+  dataCurrent = true,
   news = [],
   eventLayer = [],
   eventPings = [],
@@ -1038,6 +1115,7 @@ export default function WorldMarketMap({
   const [mapView, setMapView] = useState<MapViewState>({ zoom: 1, x: 0, y: 0 });
   const [isMapDragging, setIsMapDragging] = useState(false);
   const mapPointerRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const drawerPreviousFocusRef = useRef<HTMLElement | null>(null);
   const mapDragRef = useRef<{ x: number; y: number; view: MapViewState } | null>(null);
   const mapPinchRef = useRef<{ distance: number; view: MapViewState } | null>(null);
   const mapZoom = mapView.zoom;
@@ -1141,6 +1219,25 @@ export default function WorldMarketMap({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [resetMapView]);
+  useEffect(() => {
+    if (!impactDrawerOpen) return;
+    drawerPreviousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>("#map-impact-dialog button")?.focus();
+    });
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setImpactDrawerOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+      drawerPreviousFocusRef.current?.focus();
+    };
+  }, [impactDrawerOpen]);
   const activeRegion =
     regions.find((region) => region.label === selectedRegion) || regions[0] || null;
   const displayRegion = activeRegion;
@@ -1296,8 +1393,8 @@ export default function WorldMarketMap({
       return {
         ...item,
         adjustedStyle: {
-          left: `calc(${item.markerPosition.left} + ${baseOffset.x + orbit.x}px)`,
-          top: `calc(${item.markerPosition.top} + ${baseOffset.y + orbit.y + stackLift}px)`,
+          left: `clamp(2rem, calc(${item.markerPosition.left} + ${baseOffset.x + orbit.x}px), calc(100% - 4rem))`,
+          top: `clamp(2rem, calc(${item.markerPosition.top} + ${baseOffset.y + orbit.y + stackLift}px), calc(100% - 3rem))`,
         },
       };
     });
@@ -1492,7 +1589,7 @@ export default function WorldMarketMap({
       if (impacted?.summary) {
         lines.push(`${focusTicker}: ${impacted.summary}`);
       } else if (activeRegion?.assets?.some((asset) => asset.ticker?.toUpperCase() === focusTicker.toUpperCase())) {
-        lines.push(`${focusTicker}: direkt mit ${activeRegion.label} verknuepft und damit exposed to den aktiven Makro-Block.`);
+        lines.push(`${focusTicker}: direkt mit ${regionDisplayLabel(activeRegion.label)} verknüpft und damit dem aktiven Makroblock ausgesetzt.`);
       }
     }
     if (regionalContrarian[0]?.ticker && regionalContrarian[0]?.reason) {
@@ -1552,13 +1649,13 @@ export default function WorldMarketMap({
             label: region.label,
             top: `calc(${pos.y}% - 4.8rem)`,
             left: `calc(${pos.x}% - 1.2rem)`,
-            avgChange: formatPct(region.avg_change_1d),
+            avgChange: dataCurrent ? formatPct(region.avg_change_1d) : "—",
             assetLabel: leadAsset?.label || "Macro basket",
             assetTicker: leadAsset?.ticker || "MIX",
             tone: region.tone,
           };
         }),
-    [regions],
+    [dataCurrent, regions],
   );
 
   return (
@@ -1568,8 +1665,21 @@ export default function WorldMarketMap({
       <div className="relative space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
-              Weltmarktkarte
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+                Weltmarktkarte
+              </div>
+              <span
+                role="status"
+                aria-label={dataCurrent ? "Aktuelle Regionaldaten" : "Ersatzansicht ohne aktuelle Regionaldaten"}
+                className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${
+                  dataCurrent
+                    ? "border-emerald-500/15 bg-emerald-500/8 text-emerald-700"
+                    : "border-amber-500/20 bg-amber-500/10 text-amber-800"
+                }`}
+              >
+                {dataCurrent ? "Regionaldaten aktuell" : "Ersatzansicht · Werte ausstehend"}
+              </span>
             </div>
             <h3 className="mt-2 text-3xl text-slate-900 sm:text-4xl">Globale Marktbewegungen über Nacht</h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
@@ -1577,24 +1687,27 @@ export default function WorldMarketMap({
               in einer kompakten Makro-Ansicht.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Weltmarktregion auswählen">
             {regions.map((region) => (
               <button
                 key={region.label}
+                type="button"
                 onClick={() => onSelectRegion(region.label)}
-                className={`rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] transition-all ${
+                aria-pressed={selectedRegion === region.label}
+                aria-label={`${regionDisplayLabel(region.label)} auswählen`}
+                className={`min-h-10 rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] transition-all ${
                   selectedRegion === region.label
                     ? "bg-[var(--accent)] text-white shadow-[0_16px_34px_rgba(15,118,110,0.18)]"
                     : "border border-black/8 bg-white/70 text-slate-500"
                 }`}
               >
-                {region.label}
+                {regionDisplayLabel(region.label)}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="map-filter-strip flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap sm:overflow-visible sm:pb-0" role="group" aria-label="Ereignistyp filtern" tabIndex={0}>
           {[
             { key: "all", label: "Alle" },
             { key: "WAR", label: "Krieg" },
@@ -1606,8 +1719,10 @@ export default function WorldMarketMap({
           ].map((item) => (
             <button
               key={item.key}
+              type="button"
               onClick={() => setActiveFilter(item.key as EventFilter)}
-              className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+              aria-pressed={activeFilter === item.key}
+              className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                 activeFilter === item.key
                   ? "bg-[#101114] text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)]"
                   : "border border-black/8 bg-white/70 text-slate-500"
@@ -1618,8 +1733,8 @@ export default function WorldMarketMap({
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-black/8 bg-white/70 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 rounded-[1.2rem] border border-black/8 bg-white/70 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+          <div className="map-control-strip flex w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0" role="group" aria-label="Ereignisse sortieren" tabIndex={0}>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
               Sortierung
             </div>
@@ -1630,8 +1745,10 @@ export default function WorldMarketMap({
             ].map((item) => (
               <button
                 key={item.key}
+                type="button"
                 onClick={() => setSortMode(item.key as EventSort)}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                aria-pressed={sortMode === item.key}
+                className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                   sortMode === item.key
                     ? "bg-[var(--accent)] text-white"
                     : "border border-black/8 bg-white text-slate-500"
@@ -1650,7 +1767,7 @@ export default function WorldMarketMap({
               {mapSignalSummary.actionable} aktive Setups
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="map-control-strip flex w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0" role="group" aria-label="Kartenzeitraum und Ebenen" tabIndex={0}>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
               Zeitraum
             </div>
@@ -1661,8 +1778,10 @@ export default function WorldMarketMap({
             ].map((item) => (
               <button
                 key={item.key}
+                type="button"
                 onClick={() => setTimeLens(item.key as TimeLens)}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                aria-pressed={timeLens === item.key}
+                className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                   timeLens === item.key
                     ? "bg-[var(--accent)] text-white"
                     : "border border-black/8 bg-white text-slate-500"
@@ -1679,8 +1798,10 @@ export default function WorldMarketMap({
             ].map((item) => (
               <button
                 key={item.key}
+                type="button"
                 onClick={() => item.set(!item.value)}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+                aria-pressed={item.value}
+                className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                   item.value
                     ? "bg-[#101114] text-white"
                     : "border border-black/8 bg-white text-slate-500"
@@ -1718,10 +1839,11 @@ export default function WorldMarketMap({
             <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
             <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
               <InlineWorldMap highlights={countryHighlights} />
-              {positionedGeoSignals.slice(0, 12).map((item, index) => (
+              {showEventLayer && positionedGeoSignals.slice(0, 12).map((item, index) => (
                 <button
                   key={item.geoKey || `${item.title}-${index}`}
                   type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => {
                     setPinnedEventIndex(index);
                     setImpactDrawerOpen(true);
@@ -1730,7 +1852,7 @@ export default function WorldMarketMap({
                     item.markerTone,
                   )} ${pinnedEventIndex === index ? "ring-2 ring-white/90" : ""}`}
                   style={item.adjustedStyle}
-                  aria-label={`Open ${item.title}`}
+                  aria-label={`${item.title} öffnen`}
                 >
                   {item.pulse ? (
                     <span
@@ -1755,9 +1877,10 @@ export default function WorldMarketMap({
                 <button
                   key={item.label}
                   type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={item.action}
                   className="h-8 min-w-8 rounded-full px-2 text-[10px] font-black text-slate-600 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-                  aria-label={`Map zoom ${item.label}`}
+                  aria-label={`Kartenzoom ${item.label}`}
                 >
                   {item.label}
                 </button>
@@ -1818,10 +1941,10 @@ export default function WorldMarketMap({
                 }`}
               >
                 <span className="block truncate text-[9px] font-extrabold uppercase tracking-[0.1em]">
-                  {regionFlag(region.label)} {region.label}
+                  {regionFlag(region.label)} {regionDisplayLabel(region.label)}
                 </span>
                 <span className="mt-0.5 block text-[10px] font-black">
-                  {formatPct(region.avg_change_1d)}
+                  {dataCurrent ? formatPct(region.avg_change_1d) : "—"}
                 </span>
               </button>
             ))}
@@ -1843,7 +1966,7 @@ export default function WorldMarketMap({
                   {activeGeoEvent.markerIcon}
                 </span>
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
-                  Trade impact
+                  Handelswirkung
                 </span>
               </div>
               <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900">
@@ -1884,13 +2007,25 @@ export default function WorldMarketMap({
             </div>
 
             <div className="absolute left-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
-              {["grid", "layer", "filter", "alert"].map((icon) => (
+              {[
+                { key: "regions", label: "Regionenkarten", value: showRegionCards, set: setShowRegionCards, Icon: MapPinned },
+                { key: "legend", label: "Legende", value: showLegend, set: setShowLegend, Icon: ListFilter },
+                { key: "events", label: "Ereignisebene", value: showEventLayer, set: setShowEventLayer, Icon: Layers3 },
+                { key: "alert", label: "Live-Alarm", value: showLiveAlert, set: setShowLiveAlert, Icon: Bell },
+              ].map((item) => (
                 <button
-                  key={icon}
+                  key={item.key}
                   type="button"
-                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 bg-white text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => item.set(!item.value)}
+                  aria-label={item.label}
+                  aria-pressed={item.value}
+                  title={item.label}
+                  className={`flex h-8 w-8 items-center justify-center rounded-[0.7rem] border text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] ${
+                    item.value ? "border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)]" : "border-black/8 bg-white"
+                  }`}
                 >
-                  {icon.slice(0, 1)}
+                  <item.Icon size={15} aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -1904,9 +2039,10 @@ export default function WorldMarketMap({
                 <button
                   key={item.label}
                   type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={item.action}
                   className="h-8 w-8 rounded-[0.7rem] border border-black/8 bg-white text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-                  aria-label={`Map zoom ${item.label}`}
+                  aria-label={`Kartenzoom ${item.label}`}
                 >
                   {item.label}
                 </button>
@@ -1931,7 +2067,7 @@ export default function WorldMarketMap({
                           {regionFlag(card.label)}
                         </span>
                         <div className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
-                          {card.label}
+                          {regionDisplayLabel(card.label)}
                         </div>
                       </div>
                       <span className={`text-[11px] font-black ${textToneClass(card.tone)}`}>
@@ -1948,12 +2084,12 @@ export default function WorldMarketMap({
             {showLegend ? (
             <div className="absolute bottom-4 left-4 z-30 hidden max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] sm:flex">
               {[
-                { icon: "WAR", label: "Conflict", tone: "red" as const },
-                { icon: "CB", label: "Central Bank", tone: "blue" as const },
-                { icon: "OIL", label: "Energy", tone: "amber" as const },
-                { icon: "VOTE", label: "Election", tone: "blue" as const },
-                { icon: "NAT", label: "Disaster", tone: "red" as const },
-                { icon: "POL", label: "Policy", tone: "slate" as const },
+                { icon: "WAR", label: "Konflikt", tone: "red" as const },
+                { icon: "CB", label: "Zentralbank", tone: "blue" as const },
+                { icon: "OIL", label: "Energie", tone: "amber" as const },
+                { icon: "VOTE", label: "Wahl", tone: "blue" as const },
+                { icon: "NAT", label: "Katastrophe", tone: "red" as const },
+                { icon: "POL", label: "Politik", tone: "slate" as const },
               ].map((item) => (
                 <div key={item.icon} className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${markerClass(item.tone)}`}>
@@ -1969,7 +2105,7 @@ export default function WorldMarketMap({
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.28),rgba(15,23,42,0))] lg:block" />
 
             {activeGeoEvent ? (
-              <div className="absolute left-4 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/8 bg-white/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)] sm:block">
+              <div className="map-event-focus absolute left-20 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/8 bg-white/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)] sm:block">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                     Focus
@@ -2030,9 +2166,11 @@ export default function WorldMarketMap({
             ) : null}
 
             <div className="world-map-interactive-layer pointer-events-none absolute inset-0" style={mapContentStyle}>
-            {positionedGeoSignals.map((item, index) => (
-              <a
+            {showEventLayer && positionedGeoSignals.map((item, index) => (
+              <button
                 key={item.geoKey || `${item.title}-${index}`}
+                type="button"
+                onPointerDown={(event) => event.stopPropagation()}
                 className={`pointer-events-auto absolute z-10 group transition-opacity ${
                   isRegionFocusMatch(activeRegion?.label, item) &&
                   (!selectedGeoPlace || item.geoPlace === selectedGeoPlace)
@@ -2040,10 +2178,8 @@ export default function WorldMarketMap({
                     : "opacity-25 hover:opacity-70"
                 }`}
                 style={item.adjustedStyle}
-                href={item.link}
-                target="_blank"
-                rel="noreferrer"
                 title={item.title}
+                aria-label={`${item.title} öffnen`}
                 onMouseEnter={() => setHoveredEventIndex(index)}
                 onMouseLeave={() => setHoveredEventIndex(null)}
                 onFocus={() => setHoveredEventIndex(index)}
@@ -2111,7 +2247,7 @@ export default function WorldMarketMap({
                     ) : null}
                   </div>
                 </div>
-              </a>
+              </button>
             ))}
             </div>
 
@@ -2164,7 +2300,7 @@ export default function WorldMarketMap({
                   }}
                   className="mt-3 rounded-full border border-black/8 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
                 >
-                  Trade impact
+                  Handelswirkung
                 </button>
               </a>
             ) : null}
@@ -2205,7 +2341,7 @@ export default function WorldMarketMap({
                     onClick={() => setImpactDrawerOpen(true)}
                     className="mt-3 rounded-full border border-black/8 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
                   >
-                    Trade impact
+                    Handelswirkung
                   </button>
                 </div>
               ) : null}
@@ -2260,7 +2396,7 @@ export default function WorldMarketMap({
                       Regionsfokus
                     </div>
                     <div className="mt-2 text-xl font-black text-slate-900">
-                      {displayRegion.label}
+                      {regionDisplayLabel(displayRegion.label)}
                     </div>
                   </div>
                   <div
@@ -2270,7 +2406,7 @@ export default function WorldMarketMap({
                   </div>
                 </div>
                 <div className={`mt-3 text-2xl font-black ${textToneClass(displayRegion.tone)}`}>
-                  {formatPct(displayRegion.avg_change_1d)}
+                  {dataCurrent ? formatPct(displayRegion.avg_change_1d) : "—"}
                 </div>
                 {regionDrilldown.zones.length ? (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -2387,7 +2523,7 @@ export default function WorldMarketMap({
                     Regionsdetails
                   </div>
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
-                    {displayRegion.label}
+                    {regionDisplayLabel(displayRegion.label)}
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
@@ -2512,7 +2648,7 @@ export default function WorldMarketMap({
                     ))
                   ) : (
                     <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
-                      Keine dominanten Regionsdetails für {displayRegion.label} im aktuellen Filter.
+                      Keine dominanten Regionsdetails für {regionDisplayLabel(displayRegion.label)} im aktuellen Filter.
                     </div>
                   )}
                 </div>
@@ -2551,7 +2687,7 @@ export default function WorldMarketMap({
                     {tradeImpactCards.map((card) => (
                       <div key={card.label} className="rounded-[0.95rem] border border-black/8 bg-white/80 px-3 py-2">
                         <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                          {card.label}
+                          {regionDisplayLabel(card.label)}
                         </div>
                         <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
                           {card.value}
@@ -2796,13 +2932,13 @@ export default function WorldMarketMap({
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
-                  New <span className="font-bold text-slate-900">{eventTempo.developing}</span>
+                  Neu <span className="font-bold text-slate-900">{eventTempo.developing}</span>
                 </div>
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
-                  Active <span className="font-bold text-slate-900">{eventTempo.active}</span>
+                  Aktiv <span className="font-bold text-slate-900">{eventTempo.active}</span>
                 </div>
                 <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
-                  Fading <span className="font-bold text-slate-900">{eventTempo.fading}</span>
+                  Abklingend <span className="font-bold text-slate-900">{eventTempo.fading}</span>
                 </div>
               </div>
               <div className="mt-4 space-y-3">
@@ -2958,10 +3094,10 @@ export default function WorldMarketMap({
             <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                  Contrarian Radar
+                  Kontra-Radar
                 </div>
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
-                  media fade
+                  Medienabkühlung
                 </div>
               </div>
               <div className="mt-4 space-y-3">
@@ -3027,7 +3163,7 @@ export default function WorldMarketMap({
         <div className="hidden rounded-[1.6rem] border border-black/8 bg-white/80 p-4 sm:block">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-              Event Replay
+              Ereignisverlauf
             </div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
               {timeLens} lens
@@ -3100,20 +3236,20 @@ export default function WorldMarketMap({
             onClick={() => setImpactDrawerOpen(false)}
             className="fixed inset-0 z-[70] bg-black/18 backdrop-blur-[1px] lg:hidden"
           />
-          <div className="fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-[71] max-h-[min(78dvh,42rem)] overflow-y-auto rounded-[1.6rem] border border-black/8 bg-[rgba(250,248,244,0.98)] p-4 shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl lg:hidden">
+          <div id="map-impact-dialog" role="dialog" aria-modal="true" aria-labelledby="map-impact-title" className="world-map-impact-drawer fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-[71] max-h-[min(78dvh,42rem)] overflow-y-auto rounded-[1.6rem] border border-black/8 bg-[rgba(250,248,244,0.98)] p-4 shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl lg:hidden">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
                   Markt-Auswirkung
                 </div>
-                <div className="mt-1 text-base font-black text-slate-900">
+                <div id="map-impact-title" className="mt-1 text-base font-black text-slate-900">
                   {activeVariantLabel || activeGeoEvent.markerLabel}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setImpactDrawerOpen(false)}
-                className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
+                className="min-h-10 rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
               >
                 Schließen
               </button>
@@ -3129,7 +3265,7 @@ export default function WorldMarketMap({
                   {tradeImpactCards.map((card) => (
                     <div key={card.label} className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3">
                       <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                        {card.label}
+                        {regionDisplayLabel(card.label)}
                       </div>
                       <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
                         {card.value}

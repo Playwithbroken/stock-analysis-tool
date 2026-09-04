@@ -90,6 +90,9 @@ class DiscoveryService:
                 "total_assets": None,
                 "category": "US Large Blend",
                 "trend_context": "Fallback core ETF; provider data temporarily unavailable.",
+                "source": None,
+                "data_as_of": None,
+                "fallback": True,
             },
             {
                 "ticker": "QQQ",
@@ -100,6 +103,9 @@ class DiscoveryService:
                 "total_assets": None,
                 "category": "US Growth",
                 "trend_context": "Fallback Nasdaq ETF; verify live quote before action.",
+                "source": None,
+                "data_as_of": None,
+                "fallback": True,
             },
             {
                 "ticker": "SCHD",
@@ -110,6 +116,9 @@ class DiscoveryService:
                 "total_assets": None,
                 "category": "Dividend",
                 "trend_context": "Fallback dividend ETF; use as watch item only.",
+                "source": None,
+                "data_as_of": None,
+                "fallback": True,
             },
         ]
 
@@ -204,7 +213,10 @@ class DiscoveryService:
                     "change_1d": change_1d,
                     "change_1w": p.get("change_1w"),
                     "change_1m": p.get("change_1m"),
-                    "trend_context": "Market momentum"
+                    "trend_context": "Market momentum",
+                    "source": "yahoo_finance",
+                    "data_as_of": datetime.utcnow().isoformat(),
+                    "fallback": False,
                 }
             
             loop = asyncio.get_event_loop()
@@ -652,7 +664,9 @@ class DiscoveryService:
 
     async def get_etfs(self) -> List[Dict[str, Any]]:
         """Fetch popular ETFs with TER and assets info."""
-        pool = random.sample(self.etf_universe, min(len(self.etf_universe), 12))
+        # Paper candidates must be reproducible. Provider results may change, the
+        # scanned universe and ordering must not change randomly between runs.
+        pool = self.etf_universe[:12]
         async def fetch_etf_data(ticker):
             try:
                 def fetch():
@@ -667,7 +681,10 @@ class DiscoveryService:
                         "ter": fund.get("expense_ratio"),
                         "total_assets": fund.get("total_assets"),
                         "category": fund.get("category"),
-                        "trend_context": f"Kategorie: {fund.get('category', 'Global')}"
+                        "trend_context": f"Kategorie: {fund.get('category', 'Global')}",
+                        "source": "yahoo_finance",
+                        "data_as_of": datetime.utcnow().isoformat(),
+                        "fallback": False,
                     }
                 import asyncio
                 loop = asyncio.get_event_loop()
@@ -690,9 +707,9 @@ class DiscoveryService:
                         return {
                             "ticker": ticker,
                             "name": f.info.get("longName", ticker),
-                            "yield": y * 100,
-                            "payout_ratio": (div.get("payout_ratio") or 0) * 100,
-                            "score": 95 if y > 0.03 else 80
+                            "yield": y,
+                            "payout_ratio": div.get("payout_ratio_pct") or 0,
+                            "score": 95 if y > 3 else 80
                         }
                     return None
                 loop = asyncio.get_event_loop()

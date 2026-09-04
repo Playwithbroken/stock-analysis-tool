@@ -6,6 +6,7 @@ Performs technical, fundamental, and risk analysis on stock data.
 from typing import Dict, Any, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
+from src.financial_units import normalize_dividend_yield_pct
 
 
 class Rating(Enum):
@@ -1048,10 +1049,11 @@ class StockAnalyzer:
         
         # Dividend
         div_yield = fund.get("dividend_yield")
-        if div_yield is not None and div_yield > 0.02:
+        div_yield_pct = normalize_dividend_yield_pct(div_yield)
+        if div_yield_pct is not None and div_yield_pct > 2:
             findings.append({
                 "metric": "Dividend Income",
-                "value": f"{div_yield*100:.2f}% yield",
+                "value": f"{div_yield_pct:.2f}% yield",
                 "rating": Rating.POSITIVE,
                 "interpretation": "Provides income while waiting"
             })

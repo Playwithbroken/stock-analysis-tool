@@ -52,7 +52,7 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
     return (
       <div className="surface-panel flex h-[300px] items-center justify-center rounded-[2rem] p-6">
         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-          Calculating Cashflow
+          Dividenden werden berechnet
         </div>
       </div>
     );
@@ -62,7 +62,7 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
     return (
       <div className="surface-panel flex h-[300px] items-center justify-center rounded-[2rem] p-6">
         <div className="text-center text-xs font-bold text-red-700">
-          {typeof data.error === "string" ? data.error : "Unable to load dividend data."}
+          {typeof data.error === "string" ? data.error : "Dividendendaten konnten nicht geladen werden."}
         </div>
       </div>
     );
@@ -81,7 +81,7 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
           <div className="mb-1 flex items-center gap-2 text-slate-500">
             <DollarSign size={16} className="text-emerald-600" />
             <span className="text-sm font-medium uppercase tracking-[0.18em]">
-              Dividend Dashboard
+              Dividendenübersicht
             </span>
           </div>
           <div className="flex items-baseline gap-3">
@@ -89,14 +89,14 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
               {formatPrice(data?.yearly_total || 0)}
             </div>
             <div className="rounded bg-emerald-500/10 px-2 py-0.5 text-sm font-bold text-emerald-700">
-              {data?.yield_on_cost.toFixed(2)}% Yield
+              {data?.yield_on_cost.toFixed(2)}% Rendite auf Einstand
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
           <div className="flex items-center gap-1">
-            <Calendar size={14} /> Monthly Projection
+            <Calendar size={14} /> Monatliche Prognose
           </div>
         </div>
       </div>
@@ -149,7 +149,7 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
       <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/8 pt-4">
         <div>
           <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-            Average Monthly
+            Monatsdurchschnitt
           </div>
           <div className="font-medium text-slate-900">
             {formatPrice((data?.yearly_total || 0) / 12)}
@@ -159,7 +159,7 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
           <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
             Status
           </div>
-          <div className="font-medium text-[var(--accent)]">Auto-Harvesting Active</div>
+          <div className="font-medium text-[var(--accent)]">Dividendenübersicht aktiv</div>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ interface RealtimeQuote {
   headline?: string | null;
   publisher?: string | null;
   updated_at?: string;
+  streaming?: boolean;
 }
 
 interface RealtimePayload {

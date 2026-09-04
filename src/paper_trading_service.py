@@ -21,6 +21,9 @@ from src.strategy_library import StrategyLibrary
 from src.decision_scope import attach_scope, paper_scope, scope_for_strategy_status
 from src.performance_metrics import build_trade_performance
 from src.option_data_provider import TradierOptionDataProvider
+from src.paper_learning_service import PaperLearningService
+from src.fast_paper_safety_service import FastPaperSafetyService
+from src.market_quality_service import MarketQualityService
 
 DEFAULT_PAPER_OUTCOME_HORIZONS_HOURS = (1, 24, 72, 168)
 
@@ -83,7 +86,15 @@ class PaperTradingService:
 
     def __init__(self, portfolio_manager: PortfolioManager) -> None:
         self.portfolio_manager = portfolio_manager
+        self.paper_learning = PaperLearningService(portfolio_manager)
         self._correlation_cache: Dict[str, Any] = {}
+
+    def _paper_learning_service(self) -> PaperLearningService:
+        service = getattr(self, "paper_learning", None)
+        if service is None:
+            service = PaperLearningService(self.portfolio_manager)
+            self.paper_learning = service
+        return service
 
     @staticmethod
     def _is_safe_public_news_url(url: str) -> bool:
@@ -315,6 +326,7 @@ class PaperTradingService:
         playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         self._apply_news_evidence_learning(playbooks, news_evidence_performance)
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
+        self._paper_learning_service().apply_active_rules(playbooks)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
         self._attach_period_performance(demo_account, trades)
@@ -373,6 +385,7 @@ class PaperTradingService:
             "journal": self._build_journal(trades),
             "outcomes": self._build_outcome_dashboard(),
             "outcome_learning": outcome_learning,
+            "learning_v2": self._paper_learning_service().build_dashboard(),
             "rules": rules,
             "demo_account": demo_account,
             "paper_autopilot_settings": autopilot_settings,
@@ -1018,6 +1031,12 @@ class PaperTradingService:
             raise ValueError("Leveraged paper trades must come from a quality-gated playbook.")
         enriched_payload = dict(payload)
         ticket = dict(payload.get("trade_ticket") or {}) if isinstance(payload.get("trade_ticket"), dict) else {}
+        fast_quality = self._enforce_fast_paper_entry_gate(
+            enriched_payload.get("ticker"), enriched_payload.get("asset_class") or "equity"
+        )
+        if fast_quality:
+            enriched_payload["entry_price"] = fast_quality["midpoint"]
+            ticket["market_quality_gate"] = fast_quality
         ticket.setdefault("schema_version", "1.1")
         ticket["entry_market_regime"] = self._build_entry_market_regime(market_context or {})
         enriched_payload["trade_ticket"] = ticket
@@ -1039,6 +1058,38 @@ class PaperTradingService:
             account,
         )
         self._validate_requested_trade_capacity(enriched_payload, account, manual_candidate.get("correlation_check") or {})
+        manual_playbook = {
+            **enriched_payload,
+            "reference_price": enriched_payload.get("entry_price"),
+            "suggested_quantity": enriched_payload.get("quantity"),
+            "suggested_notional_value": float(enriched_payload.get("entry_price") or 0) * float(enriched_payload.get("quantity") or 0),
+            "suggested_max_loss_value": (
+                abs(float(enriched_payload.get("entry_price") or 0) - float(enriched_payload.get("stop_price") or 0))
+                * float(enriched_payload.get("quantity") or 0)
+                if enriched_payload.get("stop_price") not in (None, "")
+                else None
+            ),
+            "demo_tradeable": True,
+            "correlation_check": manual_candidate.get("correlation_check") or {},
+            "decision_framework": {
+                "entry_trigger": str(enriched_payload.get("notes") or "Manual paper entry"),
+                "invalidation": str(enriched_payload.get("thesis") or ""),
+            },
+            "market_data": {
+                "source": "manual_paper_entry",
+                "data_as_of": datetime.now(timezone.utc).isoformat(),
+                "price": enriched_payload.get("entry_price"),
+                "liquidity_status": "unknown",
+            },
+            "data_as_of": datetime.now(timezone.utc).isoformat(),
+            "entry_market_regime": ticket.get("entry_market_regime") or {},
+        }
+        manual_playbook = self._attach_paper_benchmark(manual_playbook, manual_playbook.get("market_data"))
+        normalized_ticket = self._build_trade_ticket(manual_playbook, account)
+        ticket = {**normalized_ticket, **ticket}
+        if "learning_feature_snapshot" not in ticket:
+            ticket["learning_feature_snapshot"] = PaperLearningService.build_feature_snapshot(manual_playbook, ticket)
+        enriched_payload["trade_ticket"] = ticket
         trade = self.portfolio_manager.create_paper_trade(enriched_payload)
         self._schedule_trade_outcomes(trade)
         return self._enrich_trade(trade)
@@ -1058,6 +1109,52 @@ class PaperTradingService:
         requested = quantity * entry_price * multiplier * leverage
         if requested <= 0:
             return
+        direction = str(payload.get("direction") or "long").lower()
+        if direction == "short":
+            synthetic_crypto = asset_class == "crypto"
+            if synthetic_crypto and account.get("synthetic_crypto_shorts_enabled") is not True:
+                raise ValueError("Synthetic crypto shorts are disabled in the paper-learning model.")
+            if asset_class not in {"equity", "etf", "crypto"}:
+                raise ValueError("Direct paper shorts are limited to equities, ETFs and synthetic crypto.")
+            if not synthetic_crypto and abs(quantity - int(quantity)) > 1e-9:
+                raise ValueError("Fractional short sales are not supported.")
+            stop_price = float(payload.get("stop_price") or 0)
+            if stop_price <= entry_price:
+                raise ValueError("A paper short requires a protective stop above the entry price.")
+            short_capacities = {
+                "short position": float(
+                    account.get("max_crypto_short_position_value")
+                    if synthetic_crypto
+                    else account.get("max_short_position_value")
+                    or 0
+                ),
+                "total short exposure": float(
+                    account.get("remaining_crypto_short_exposure_value")
+                    if synthetic_crypto
+                    else account.get("remaining_short_exposure_value")
+                    or 0
+                ),
+            }
+            short_exceeded = [label for label, capacity in short_capacities.items() if requested > capacity + 0.01]
+            if short_exceeded:
+                raise ValueError(
+                    f"Requested paper short notional {requested:.2f} exceeds " + ", ".join(short_exceeded) + "."
+                )
+            requested_short_risk = (stop_price - entry_price) * quantity * multiplier * leverage
+            short_risk_budget = min(
+                float(account.get("remaining_risk_value") or 0),
+                float(account.get("risk_budget_per_trade_value") or 0)
+                * float(
+                    account.get("crypto_short_risk_multiplier")
+                    if synthetic_crypto
+                    else account.get("short_risk_multiplier")
+                    or 0.75
+                ),
+            )
+            if requested_short_risk > short_risk_budget + 0.01:
+                raise ValueError(
+                    f"Requested paper short risk {requested_short_risk:.2f} exceeds {short_risk_budget:.2f}."
+                )
         limits = account.get("asset_class_limits") if isinstance(account.get("asset_class_limits"), dict) else {}
         class_limit = limits.get(asset_class) if isinstance(limits.get(asset_class), dict) else {}
         ticker_used = float((account.get("exposure_by_ticker") or {}).get(ticker) or 0)
@@ -1101,6 +1198,7 @@ class PaperTradingService:
         playbooks = self._build_playbooks(scoreboard, rules, outcome_learning, news_context)
         self._apply_news_evidence_learning(playbooks, news_evidence_performance)
         self._apply_news_shadow_learning(playbooks, news_shadow_lab)
+        self._paper_learning_service().apply_active_rules(playbooks)
         self._refresh_playbook_decision_state(playbooks, rules)
         demo_account = self._build_demo_account(trades, playbooks)
         self._attach_quantitative_correlation(
@@ -1112,6 +1210,11 @@ class PaperTradingService:
         playbook = next((item for item in playbooks if item.get("id") == playbook_id), None)
         if not playbook:
             raise ValueError("Playbook not found.")
+        fast_quality = self._enforce_fast_paper_entry_gate(
+            playbook.get("ticker"), playbook.get("asset_class") or "equity"
+        )
+        if fast_quality:
+            playbook = {**playbook, "market_quality_gate": fast_quality}
         if str(playbook.get("setup_type") or "") == "confirmed_news_event":
             news_entry_errors = self._confirmed_news_entry_errors(playbook)
             if news_entry_errors:
@@ -1265,6 +1368,7 @@ class PaperTradingService:
             }
         if last_price <= 0:
             raise ValueError("No valid market price available for this playbook.")
+        playbook = self._attach_paper_benchmark(playbook, execution_market)
         entry_reference_price = last_price
         entry_execution = self._simulate_execution_fill(
             reference_price=entry_reference_price,
@@ -1417,12 +1521,14 @@ class PaperTradingService:
             except Exception as exc:
                 errors.append(f"{item.get('ticker') or outcome_id}: {exc}")
 
+        learning_v2 = self._paper_learning_service().refresh_learning_state()
         return {
             "status": "ok" if not errors else "partial",
             "due": len(due_items),
             "evaluated": evaluated,
             "pending_data": pending_data,
             "errors": errors[:5],
+            "learning_v2": learning_v2,
         }
 
     def close_trade(
@@ -1497,6 +1603,7 @@ class PaperTradingService:
         )
         if not closed:
             raise PaperTradeAlreadyClosedError("Trade was already closed by another process.")
+        self._paper_learning_service().refresh_learning_state()
         return self._enrich_trade(closed)
 
     def close_trades_on_management_exits(self, limit: int = 50) -> Dict[str, Any]:
@@ -1655,6 +1762,11 @@ class PaperTradingService:
                     ),
                     "market_evidence": item.get("market_evidence") if broad_equity else None,
                     "data_quality": item.get("data_quality") if broad_equity else None,
+                    "asset_evidence": {
+                        **(item.get("market_evidence") or {}),
+                        "data_quality": item.get("data_quality"),
+                        "source": item.get("source_label"),
+                    },
                     **market_fields,
                 }
             )
@@ -1707,6 +1819,7 @@ class PaperTradingService:
                     "max_holding_days": 14,
                     "thesis": "Liquid ETF with decent quality and momentum profile. Favor clean continuation over narrative chasing.",
                     "tags": ["etf", "momentum", "long"],
+                    "asset_evidence": item.get("asset_evidence") or {},
                     **market_fields,
                 }
             )
@@ -1714,23 +1827,34 @@ class PaperTradingService:
         for item in scoreboard.get("crypto", [])[:4]:
             if not item.get("ticker"):
                 continue
+            direction = str(item.get("directional_bias") or "long").lower()
+            if direction == "short" and os.getenv(
+                "PAPER_TRADING_SYNTHETIC_CRYPTO_SHORTS_ENABLED", "true"
+            ).strip().lower() not in {"1", "true", "yes", "on"}:
+                direction = "long"
             market_fields = self._market_reference_fields(item.get("ticker"))
             playbooks.append(
                 {
-                    "id": f"crypto-{item.get('ticker')}-long",
+                    "id": f"crypto-{item.get('ticker')}-{direction}",
                     "ticker": item.get("ticker"),
                     "asset_class": "crypto",
-                    "direction": "long",
+                    "direction": direction,
                     "setup_type": "crypto_flow",
-                    "title": "Crypto flow momentum",
+                    "title": "Synthetic crypto downside momentum" if direction == "short" else "Crypto flow momentum",
                     "headline": item.get("headline"),
                     "source_label": item.get("source_label"),
                     "score": item.get("total_score"),
                     "risk_buffer_pct": 5.5,
                     "reward_buffer_pct": 11.0,
                     "max_holding_days": 7,
-                    "thesis": "Flow-driven crypto setup. Keep leverage conservative and size by volatility, not conviction alone.",
-                    "tags": ["crypto", "momentum", "long"],
+                    "thesis": (
+                        "Synthetic local paper short: persistent downside flow must continue; funding cost and 24/7 gap risk are charged."
+                        if direction == "short"
+                        else "Flow-driven crypto setup. Keep leverage conservative and size by volatility, not conviction alone."
+                    ),
+                    "tags": ["crypto", "momentum", direction, "synthetic-paper"] if direction == "short" else ["crypto", "momentum", "long"],
+                    "synthetic_short": direction == "short",
+                    "asset_evidence": item.get("asset_evidence") or {},
                     **market_fields,
                 }
             )
@@ -2515,6 +2639,9 @@ class PaperTradingService:
         if max_holding_days > 0:
             horizons.append(max_holding_days * 24)
         unique_horizons = sorted({int(hour) for hour in horizons if int(hour) > 0})
+        ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+        snapshot = ticket.get("learning_feature_snapshot") if isinstance(ticket.get("learning_feature_snapshot"), dict) else {}
+        benchmark = snapshot.get("benchmark") if isinstance(snapshot.get("benchmark"), dict) else {}
         outcomes = [
             {
                 "id": f"{trade_id}_{hours}h",
@@ -2526,12 +2653,95 @@ class PaperTradingService:
                 "checked_at": None,
                 "check_price": None,
                 "performance_pct": None,
+                "benchmark_symbol": benchmark.get("symbol"),
+                "benchmark_entry_price": benchmark.get("entry_price"),
+                "benchmark_check_price": None,
+                "benchmark_return_pct": None,
+                "active_return_pct": None,
                 "notes": None,
                 "error_tag": None,
             }
             for hours in unique_horizons
         ]
         return self.portfolio_manager.upsert_paper_trade_outcomes(trade_id, outcomes)
+
+    @staticmethod
+    def _paper_benchmark_identity(ticker: str, asset_class: str) -> tuple[Optional[str], str]:
+        symbol = str(ticker or "").upper()
+        kind = str(asset_class or "equity").lower()
+        if kind == "option":
+            return None, "options_require_delta_adjusted_benchmark_not_available"
+        if kind == "crypto":
+            return "BTC-USD", "crypto_relative_to_bitcoin"
+        if symbol.endswith(".DE"):
+            return "^GDAXI", "german_equity_relative_to_dax"
+        if symbol.endswith(".L"):
+            return "^FTSE", "uk_equity_relative_to_ftse_100"
+        if symbol.endswith(".T"):
+            return "^N225", "japanese_equity_relative_to_nikkei_225"
+        if kind == "etf" and symbol in {"TLT", "IEF", "SHY", "BND", "AGG"}:
+            return "AGG", "bond_etf_relative_to_us_aggregate_bonds"
+        if kind == "etf" and symbol in {"GLD", "IAU"}:
+            return "GLD", "gold_etf_relative_to_gold_proxy"
+        return "SPY", "us_risk_asset_relative_to_sp_500"
+
+    def _attach_paper_benchmark(
+        self,
+        playbook: Dict[str, Any],
+        instrument_market: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        ticker = str(playbook.get("ticker") or playbook.get("instrument") or "").upper()
+        asset_class = str(playbook.get("asset_class") or "equity").lower()
+        benchmark_symbol, basis = self._paper_benchmark_identity(ticker, asset_class)
+        if not benchmark_symbol:
+            return {
+                **playbook,
+                "benchmark_data": {
+                    "status": "unavailable",
+                    "symbol": None,
+                    "entry_price": None,
+                    "basis": basis,
+                    "missing_values_are_not_imputed": True,
+                },
+            }
+        market = (
+            instrument_market
+            if benchmark_symbol == ticker and isinstance(instrument_market, dict)
+            else self._get_market_snapshot(benchmark_symbol)
+        )
+        price = PaperLearningService._safe_float((market or {}).get("price"))
+        return {
+            **playbook,
+            "benchmark_data": {
+                "status": "available" if price is not None and price > 0 else "unavailable",
+                "symbol": benchmark_symbol,
+                "entry_price": round(price, 6) if price is not None and price > 0 else None,
+                "basis": basis,
+                "source": (market or {}).get("source"),
+                "data_as_of": (market or {}).get("data_as_of"),
+                "missing_values_are_not_imputed": True,
+            },
+        }
+
+    def _paper_benchmark_outcome(self, item: Dict[str, Any], favorable_return_pct: float) -> Dict[str, Any]:
+        benchmark_symbol = str(item.get("benchmark_symbol") or "").upper()
+        benchmark_entry = PaperLearningService._safe_float(item.get("benchmark_entry_price"))
+        if not benchmark_symbol or benchmark_entry is None or benchmark_entry <= 0:
+            return {}
+        market = self._get_market_snapshot(benchmark_symbol)
+        benchmark_check = PaperLearningService._safe_float((market or {}).get("price"))
+        if benchmark_check is None or benchmark_check <= 0:
+            return {}
+        raw_benchmark_return = ((benchmark_check / benchmark_entry) - 1.0) * 100.0
+        direction = str(item.get("direction") or "long").lower()
+        directional_benchmark_return = -raw_benchmark_return if direction in {"short", "put"} else raw_benchmark_return
+        return {
+            "benchmark_symbol": benchmark_symbol,
+            "benchmark_entry_price": round(benchmark_entry, 6),
+            "benchmark_check_price": round(benchmark_check, 6),
+            "benchmark_return_pct": round(directional_benchmark_return, 3),
+            "active_return_pct": round(float(favorable_return_pct) - directional_benchmark_return, 3),
+        }
 
     def _evaluate_outcome_item(self, item: Dict[str, Any], checked_at: str) -> Dict[str, Any]:
         asset_class = str(item.get("asset_class") or "equity")
@@ -2615,12 +2825,14 @@ class PaperTradingService:
         raw_move = ((current_price / entry) - 1) * 100
         favorable = -raw_move if direction == "short" else raw_move
         result, error_tag, notes = self._score_paper_outcome(favorable, item)
+        benchmark_outcome = self._paper_benchmark_outcome(item, favorable)
         return {
             "status": "evaluated",
             "result": result,
             "checked_at": checked_at,
             "check_price": current_price,
             "performance_pct": round(favorable, 2),
+            **benchmark_outcome,
             "notes": f"{notes}{execution_note}",
             "error_tag": error_tag,
         }
@@ -3413,10 +3625,15 @@ class PaperTradingService:
                 aggressive_row = dict(row)
                 aggressive_row["learning_mode"] = True
                 aggressive_row["aggressive_learning_mode"] = True
+                conviction_risk_multiplier, conviction_tier = self._conviction_risk_multiplier(
+                    playbook,
+                    demo_account,
+                    aggressive_risk_multiplier,
+                )
                 aggressive_sizing = self._suggest_demo_sizing(
                     {**playbook, "tradeable": True, "do_not_trade_reasons": []},
                     demo_account,
-                    risk_multiplier_override=aggressive_risk_multiplier,
+                    risk_multiplier_override=conviction_risk_multiplier,
                 )
                 aggressive_row.update(
                     {
@@ -3431,7 +3648,10 @@ class PaperTradingService:
                     }
                 )
                 aggressive_row["risk_multiplier"] = aggressive_sizing.get("risk_multiplier")
-                aggressive_row["reasons"] = [f"aggressive learning mode: reduced risk x{aggressive_risk_multiplier:g}"]
+                aggressive_row["conviction_tier"] = conviction_tier
+                aggressive_row["reasons"] = [
+                    f"aggressive learning mode: {conviction_tier} conviction risk x{conviction_risk_multiplier:g}"
+                ]
                 aggressive_exploration.append(aggressive_row)
         selected.sort(key=self._evidence_priority_sort_key)
         exploration.sort(key=self._evidence_priority_sort_key)
@@ -4693,11 +4913,45 @@ class PaperTradingService:
                 "long": sum(1 for trade in trades if trade.get("direction") == "long"),
                 "short": sum(1 for trade in trades if trade.get("direction") == "short"),
             },
+            "directional_performance": {
+                "long": build_trade_performance([trade for trade in closed if trade.get("direction") == "long"]),
+                "short": build_trade_performance([trade for trade in closed if trade.get("direction") == "short"]),
+            },
             "loss_count": len(losers),
             "performance": performance,
         }
 
     def _demo_account_config(self) -> Dict[str, Any]:
+        profile = os.getenv("PAPER_CAPITAL_PROFILE", "conviction").strip().lower()
+        if profile not in {"balanced", "conviction"}:
+            profile = "conviction"
+        profile_defaults = {
+            "balanced": {
+                "risk_per_trade_pct": 0.35,
+                "max_open_risk_pct": 3.0,
+                "max_position_pct": 10.0,
+                "max_gross_exposure_pct": 60.0,
+                "min_cash_reserve_pct": 20.0,
+                "max_ticker_exposure_pct": 12.0,
+                "target_gross_exposure_pct": 45.0,
+                "max_open_trades": 12,
+                "daily_loss_limit_pct": 1.0,
+                "max_drawdown_pct": 8.0,
+            },
+            "conviction": {
+                "risk_per_trade_pct": 0.75,
+                "max_open_risk_pct": 6.0,
+                "max_position_pct": 20.0,
+                "max_gross_exposure_pct": 90.0,
+                "min_cash_reserve_pct": 10.0,
+                "max_ticker_exposure_pct": 25.0,
+                "target_gross_exposure_pct": 75.0,
+                "max_open_trades": 16,
+                "daily_loss_limit_pct": 1.5,
+                "max_drawdown_pct": 12.0,
+            },
+        }[profile]
+
         def env_float(name: str, default: float, minimum: float = 0.0) -> float:
             try:
                 value = float(os.getenv(name, str(default)).strip())
@@ -4713,14 +4967,65 @@ class PaperTradingService:
             return max(minimum, value)
 
         return {
+            "capital_profile": profile,
             "starting_capital": env_float("PAPER_TRADING_STARTING_CAPITAL", 500_000.0, minimum=1_000.0),
             "currency": os.getenv("PAPER_TRADING_CURRENCY", "EUR").strip().upper() or "EUR",
-            "risk_per_trade_pct": env_float("PAPER_TRADING_RISK_PER_TRADE_PCT", 0.75, minimum=0.01),
-            "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", 6.0, minimum=0.1),
-            "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", 20.0, minimum=0.1),
-            "max_gross_exposure_pct": env_float("PAPER_TRADING_MAX_GROSS_EXPOSURE_PCT", 100.0, minimum=1.0),
-            "min_cash_reserve_pct": min(40.0, env_float("PAPER_TRADING_MIN_CASH_RESERVE_PCT", 10.0, minimum=0.0)),
-            "max_ticker_exposure_pct": env_float("PAPER_TRADING_MAX_TICKER_EXPOSURE_PCT", 25.0, minimum=0.1),
+            "risk_per_trade_pct": env_float("PAPER_TRADING_RISK_PER_TRADE_PCT", profile_defaults["risk_per_trade_pct"], minimum=0.01),
+            "max_open_risk_pct": env_float("PAPER_TRADING_MAX_OPEN_RISK_PCT", profile_defaults["max_open_risk_pct"], minimum=0.1),
+            "max_position_pct": env_float("PAPER_TRADING_MAX_POSITION_PCT", profile_defaults["max_position_pct"], minimum=0.1),
+            "max_gross_exposure_pct": env_float("PAPER_TRADING_MAX_GROSS_EXPOSURE_PCT", profile_defaults["max_gross_exposure_pct"], minimum=1.0),
+            "min_cash_reserve_pct": min(40.0, env_float("PAPER_TRADING_MIN_CASH_RESERVE_PCT", profile_defaults["min_cash_reserve_pct"], minimum=0.0)),
+            "max_ticker_exposure_pct": env_float("PAPER_TRADING_MAX_TICKER_EXPOSURE_PCT", profile_defaults["max_ticker_exposure_pct"], minimum=0.1),
+            "short_risk_multiplier": min(
+                1.0,
+                env_float("PAPER_TRADING_SHORT_RISK_MULTIPLIER", 0.75, minimum=0.01),
+            ),
+            "max_short_position_pct": min(
+                100.0,
+                env_float("PAPER_TRADING_MAX_SHORT_POSITION_PCT", 12.0, minimum=0.1),
+            ),
+            "max_total_short_exposure_pct": min(
+                100.0,
+                env_float("PAPER_TRADING_MAX_TOTAL_SHORT_EXPOSURE_PCT", 30.0, minimum=0.1),
+            ),
+            "synthetic_crypto_shorts_enabled": os.getenv(
+                "PAPER_TRADING_SYNTHETIC_CRYPTO_SHORTS_ENABLED", "true"
+            ).strip().lower() in {"1", "true", "yes", "on"},
+            "crypto_short_risk_multiplier": min(
+                1.0,
+                env_float("PAPER_TRADING_CRYPTO_SHORT_RISK_MULTIPLIER", 0.50, minimum=0.01),
+            ),
+            "max_crypto_short_position_pct": min(
+                100.0,
+                env_float("PAPER_TRADING_MAX_CRYPTO_SHORT_POSITION_PCT", 5.0, minimum=0.1),
+            ),
+            "max_total_crypto_short_exposure_pct": min(
+                100.0,
+                env_float("PAPER_TRADING_MAX_TOTAL_CRYPTO_SHORT_EXPOSURE_PCT", 10.0, minimum=0.1),
+            ),
+            "crypto_short_funding_bps_per_day": env_float(
+                "PAPER_TRADING_CRYPTO_SHORT_FUNDING_BPS_PER_DAY", 5.0, minimum=0.0
+            ),
+            "target_gross_exposure_pct": min(
+                100.0,
+                env_float("PAPER_TRADING_TARGET_GROSS_EXPOSURE_PCT", profile_defaults["target_gross_exposure_pct"], minimum=0.0),
+            ),
+            "high_conviction_min_score": min(
+                99.0,
+                env_float("PAPER_TRADING_HIGH_CONVICTION_MIN_SCORE", 90.0, minimum=50.0),
+            ),
+            "medium_conviction_min_score": min(
+                98.0,
+                env_float("PAPER_TRADING_MEDIUM_CONVICTION_MIN_SCORE", 80.0, minimum=40.0),
+            ),
+            "high_conviction_risk_multiplier": min(
+                1.0,
+                env_float("PAPER_TRADING_HIGH_CONVICTION_RISK_MULTIPLIER", 1.0, minimum=0.01),
+            ),
+            "medium_conviction_risk_multiplier": min(
+                1.0,
+                env_float("PAPER_TRADING_MEDIUM_CONVICTION_RISK_MULTIPLIER", 0.80, minimum=0.01),
+            ),
             "max_equity_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_EQUITY_EXPOSURE_PCT", 45.0, minimum=0.1)),
             "max_etf_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_ETF_EXPOSURE_PCT", 45.0, minimum=0.1)),
             "max_crypto_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_CRYPTO_EXPOSURE_PCT", 12.0, minimum=0.1)),
@@ -4732,9 +5037,9 @@ class PaperTradingService:
                 1.0,
                 env_float("PAPER_TRADING_RISK_REVIEW_NEW_TRADE_MULTIPLIER", 0.50, minimum=0.01),
             ),
-            "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", 12, minimum=1),
-            "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", 1.5, minimum=0.1),
-            "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", 12.0, minimum=0.5),
+            "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", int(profile_defaults["max_open_trades"]), minimum=1),
+            "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", profile_defaults["daily_loss_limit_pct"], minimum=0.1),
+            "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", profile_defaults["max_drawdown_pct"], minimum=0.5),
             "max_consecutive_losses": env_int("PAPER_TRADING_MAX_CONSECUTIVE_LOSSES", 3, minimum=1),
             "loss_streak_cooldown_hours": env_float("PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS", 24.0, minimum=1.0),
             "post_loss_streak_risk_multiplier": min(
@@ -4889,6 +5194,24 @@ class PaperTradingService:
             sum(float(trade.get("invested_value") or 0) for trade in open_trades if trade.get("asset_class") == "option"),
             2,
         )
+        short_exposure_value = round(
+            sum(
+                float(trade.get("invested_value") or 0)
+                for trade in open_trades
+                if str(trade.get("direction") or "").lower() == "short"
+                and str(trade.get("asset_class") or "").lower() in {"equity", "etf"}
+            ),
+            2,
+        )
+        crypto_short_exposure_value = round(
+            sum(
+                float(trade.get("invested_value") or 0)
+                for trade in open_trades
+                if str(trade.get("direction") or "").lower() == "short"
+                and str(trade.get("asset_class") or "").lower() == "crypto"
+            ),
+            2,
+        )
         net_pnl_value = round(realized_value + unrealized_value, 2)
         net_pnl_pct = round((net_pnl_value / starting_capital) * 100, 2) if starting_capital > 0 else 0
         cash_available_value = round(max(0.0, equity - open_exposure_value), 2)
@@ -4958,7 +5281,30 @@ class PaperTradingService:
             max(0.0, 100.0 - float(config["min_cash_reserve_pct"])),
         )
         max_gross_exposure_value = round(equity * (effective_max_gross_exposure_pct / 100), 2)
+        target_gross_exposure_pct = min(
+            effective_max_gross_exposure_pct,
+            float(config["target_gross_exposure_pct"]),
+        )
+        target_gross_exposure_value = round(equity * (target_gross_exposure_pct / 100), 2)
+        deployment_gap_value = round(max(0.0, target_gross_exposure_value - open_exposure_value), 2)
+        deployment_status = (
+            "at_capacity"
+            if open_exposure_value >= max_gross_exposure_value - 0.01
+            else "target_reached"
+            if open_exposure_value >= target_gross_exposure_value - 0.01
+            else "deploy_on_qualified_signals"
+        )
         max_ticker_exposure_value = round(equity * (float(config["max_ticker_exposure_pct"]) / 100), 2)
+        max_short_position_value = round(equity * (float(config["max_short_position_pct"]) / 100), 2)
+        max_total_short_exposure_value = round(equity * (float(config["max_total_short_exposure_pct"]) / 100), 2)
+        remaining_short_exposure_value = round(max(0.0, max_total_short_exposure_value - short_exposure_value), 2)
+        max_crypto_short_position_value = round(equity * (float(config["max_crypto_short_position_pct"]) / 100), 2)
+        max_total_crypto_short_exposure_value = round(
+            equity * (float(config["max_total_crypto_short_exposure_pct"]) / 100), 2
+        )
+        remaining_crypto_short_exposure_value = round(
+            max(0.0, max_total_crypto_short_exposure_value - crypto_short_exposure_value), 2
+        )
         max_option_premium_value = round(equity * (float(config["max_option_premium_pct"]) / 100), 2)
         max_open_option_premium_value = round(equity * (float(config["max_open_option_premium_pct"]) / 100), 2)
         option_risk_budget = round(equity * (float(config["risk_per_option_trade_pct"]) / 100), 2)
@@ -5029,7 +5375,45 @@ class PaperTradingService:
             "max_position_value": max_position_value,
             "max_gross_exposure_value": max_gross_exposure_value,
             "remaining_gross_exposure_value": remaining_gross_exposure,
+            "capital_deployment": {
+                "profile": config["capital_profile"],
+                "status": deployment_status,
+                "target_gross_exposure_pct": target_gross_exposure_pct,
+                "target_gross_exposure_value": target_gross_exposure_value,
+                "current_gross_exposure_pct": round((open_exposure_value / equity) * 100, 2) if equity > 0 else 0.0,
+                "current_gross_exposure_value": open_exposure_value,
+                "deployment_gap_value": deployment_gap_value,
+                "policy": "Kapital nur bis zum Ziel auffüllen, wenn unabhängige Kandidaten alle Signal-, Daten- und Risikogates bestehen.",
+            },
             "max_ticker_exposure_value": max_ticker_exposure_value,
+            "short_exposure": {
+                "open_value": short_exposure_value,
+                "open_pct": round((short_exposure_value / equity) * 100, 2) if equity > 0 else 0.0,
+                "max_position_value": max_short_position_value,
+                "max_total_value": max_total_short_exposure_value,
+                "remaining_value": remaining_short_exposure_value,
+                "risk_multiplier": float(config["short_risk_multiplier"]),
+                "crypto_short_allowed": False,
+                "paper_only": True,
+            },
+            "max_short_position_value": max_short_position_value,
+            "max_total_short_exposure_value": max_total_short_exposure_value,
+            "remaining_short_exposure_value": remaining_short_exposure_value,
+            "synthetic_crypto_short_exposure": {
+                "enabled": bool(config["synthetic_crypto_shorts_enabled"]),
+                "open_value": crypto_short_exposure_value,
+                "open_pct": round((crypto_short_exposure_value / equity) * 100, 2) if equity > 0 else 0.0,
+                "max_position_value": max_crypto_short_position_value,
+                "max_total_value": max_total_crypto_short_exposure_value,
+                "remaining_value": remaining_crypto_short_exposure_value,
+                "risk_multiplier": float(config["crypto_short_risk_multiplier"]),
+                "funding_bps_per_day": float(config["crypto_short_funding_bps_per_day"]),
+                "execution_mode": "local_synthetic_paper_only",
+                "broker_routable": False,
+            },
+            "max_crypto_short_position_value": max_crypto_short_position_value,
+            "max_total_crypto_short_exposure_value": max_total_crypto_short_exposure_value,
+            "remaining_crypto_short_exposure_value": remaining_crypto_short_exposure_value,
             "max_option_premium_value": max_option_premium_value,
             "max_open_option_premium_value": max_open_option_premium_value,
             "remaining_option_premium_value": remaining_option_premium,
@@ -5039,6 +5423,9 @@ class PaperTradingService:
                 "Nur Demo-Lernkonto; keine automatische Echtgeld-Ausführung.",
                 "Jede Idee braucht These, Trigger, Stop, Ziel und Nachtrade-Journal.",
                 "Gesamt-, Ticker- und Options-Exposure werden vor jedem Auto-Entry neu berechnet.",
+                "Aktien-/ETF-Shorts und synthetische lokale Crypto-Shorts haben getrennte Limits; Stop oberhalb des Entries ist zwingend.",
+                "Crypto-Shorts sind niemals Broker-routbar und enthalten simulierte tägliche Funding-Kosten.",
+                f"{str(config['capital_profile']).title()}-Profil: starke Signale dürfen mehr Paper-Kapital nutzen; fehlende Qualität wird nie durch größere Positionen ersetzt.",
                 f"Mindestens {float(config['min_cash_reserve_pct']):g}% Cashreserve und Assetklassen-Limits verhindern einseitige Vollinvestition.",
                 "Im Risiko-Review bleiben betroffene Ticker und neues Krypto-Risiko gesperrt; unabhängige Setups laufen höchstens mit halbem Risiko.",
                 "Nach einer Verlustserie bleibt das Risiko auch nach dem Cooldown bei 25 %, bis ein profitabler Abschluss den kontrollierten Wiederanlauf beendet.",
@@ -5499,12 +5886,28 @@ class PaperTradingService:
             status = "paper_ready"
         else:
             status = "watch"
-        return {
+        ticket = {
             "schema_version": "1.1",
             "ticket_id": str(playbook.get("id") or f"{ticker}-{direction}"),
             "instrument": ticker,
             "asset_class": asset_class,
             "direction": direction,
+            "execution_mode": (
+                "local_synthetic_crypto_short"
+                if asset_class == "crypto" and direction == "short"
+                else "local_paper_simulation"
+            ),
+            "broker_routable": not (asset_class == "crypto" and direction == "short"),
+            "synthetic_short_cost_model": (
+                {
+                    "funding_bps_per_day": float(demo_account.get("crypto_short_funding_bps_per_day") or 5.0),
+                    "accrual": "continuous_by_elapsed_hours",
+                    "weekends": True,
+                    "paper_only": True,
+                }
+                if asset_class == "crypto" and direction == "short"
+                else None
+            ),
             "status": status,
             "paper_ready": paper_ready,
             "real_money_ready": False,
@@ -5546,6 +5949,8 @@ class PaperTradingService:
             "news_evidence": playbook.get("news_evidence") or None,
             "data_as_of": data_as_of or None,
             "market_data": market_data or None,
+            "market_quality_gate": deepcopy(playbook.get("market_quality_gate") or market_data.get("quality_gate") or {}),
+            "benchmark_data": deepcopy(playbook.get("benchmark_data") or {}),
             "execution_model": execution_model or None,
             "leverage_product_type": playbook.get("leverage_product_type") or None,
             "underlying_asset": playbook.get("underlying_asset") or None,
@@ -5564,6 +5969,26 @@ class PaperTradingService:
             },
             "policy": "Paper-only decision framework. Manual review and independent real-world validation required.",
         }
+        ticket["learning_feature_snapshot"] = PaperLearningService.build_feature_snapshot(playbook, ticket)
+        return ticket
+
+    @staticmethod
+    def _conviction_risk_multiplier(
+        playbook: Dict[str, Any],
+        demo_account: Dict[str, Any],
+        base_multiplier: float,
+    ) -> tuple[float, str]:
+        base = min(1.0, max(0.01, float(base_multiplier or 0.01)))
+        if str(demo_account.get("capital_profile") or "balanced") != "conviction":
+            return base, "standard"
+        score = float(playbook.get("score") or 0)
+        high_score = float(demo_account.get("high_conviction_min_score") or 90)
+        medium_score = min(high_score, float(demo_account.get("medium_conviction_min_score") or 80))
+        if score >= high_score:
+            return max(base, float(demo_account.get("high_conviction_risk_multiplier") or 1.0)), "high"
+        if score >= medium_score:
+            return max(base, float(demo_account.get("medium_conviction_risk_multiplier") or 0.80)), "medium"
+        return base, "exploratory"
 
     def _suggest_demo_sizing(
         self,
@@ -5606,6 +6031,8 @@ class PaperTradingService:
         )
         ticker = str(playbook.get("ticker") or "").upper()
         asset_class = str(playbook.get("asset_class") or "equity").lower()
+        direction = str(playbook.get("direction") or "long").lower()
+        is_short = direction == "short"
         exposure_by_ticker = (
             demo_account.get("exposure_by_ticker")
             if isinstance(demo_account.get("exposure_by_ticker"), dict)
@@ -5636,6 +6063,25 @@ class PaperTradingService:
             remaining_ticker_exposure,
             remaining_asset_class_exposure,
         ]
+        remaining_short_exposure = float(
+            demo_account.get("remaining_crypto_short_exposure_value")
+            if is_short and asset_class == "crypto" and demo_account.get("remaining_crypto_short_exposure_value") is not None
+            else demo_account.get("remaining_short_exposure_value")
+            if demo_account.get("remaining_short_exposure_value") is not None
+            else max_position_value
+        )
+        if is_short:
+            capacity_limits.extend(
+                [
+                    float(
+                        demo_account.get("max_crypto_short_position_value")
+                        if asset_class == "crypto"
+                        else demo_account.get("max_short_position_value")
+                        or max_position_value
+                    ),
+                    remaining_short_exposure,
+                ]
+            )
         remaining_option_premium = max_position_value
         if is_option:
             remaining_option_premium = float(
@@ -5663,6 +6109,25 @@ class PaperTradingService:
                 risk_multiplier *= min(1.0, max(0.01, float(risk_multiplier_override)))
             except (TypeError, ValueError):
                 pass
+        learning_risk_cap = playbook.get("learning_rule_risk_multiplier_cap")
+        if learning_risk_cap is not None:
+            try:
+                risk_multiplier = min(risk_multiplier, min(1.0, max(0.01, float(learning_risk_cap))))
+            except (TypeError, ValueError):
+                pass
+        if is_short:
+            risk_multiplier *= min(
+                1.0,
+                max(
+                    0.01,
+                    float(
+                        demo_account.get("crypto_short_risk_multiplier")
+                        if asset_class == "crypto"
+                        else demo_account.get("short_risk_multiplier")
+                        or 0.75
+                    ),
+                ),
+            )
         risk_budget *= risk_multiplier
         block_reasons: List[str] = []
         learning_feedback = demo_account.get("learning_feedback")
@@ -5693,6 +6158,10 @@ class PaperTradingService:
             block_reasons.append("Ticker exposure budget is exhausted.")
         if asset_class_limit and remaining_asset_class_exposure <= 0:
             block_reasons.append(f"Asset-class exposure budget is exhausted for {asset_class}.")
+        if is_short and asset_class == "crypto" and demo_account.get("synthetic_crypto_shorts_enabled") is not True:
+            block_reasons.append("Synthetische Crypto-Shorts sind deaktiviert.")
+        if is_short and remaining_short_exposure <= 0:
+            block_reasons.append("Short exposure budget is exhausted.")
         correlation_check = (
             playbook.get("correlation_check")
             if isinstance(playbook.get("correlation_check"), dict)
@@ -5724,6 +6193,8 @@ class PaperTradingService:
         quantity = max(0.0, min(quantity_by_risk, quantity_by_position))
         if is_option:
             quantity = float(int(quantity))
+        elif is_short and asset_class in {"equity", "etf"}:
+            quantity = float(int(quantity))
         if quantity < 0.0001:
             block_reasons.append("Vorgeschlagene Menge ist zu klein für das konfigurierte Risikobudget.")
 
@@ -5738,6 +6209,9 @@ class PaperTradingService:
             "remaining_gross_capacity_value": round(remaining_gross, 2),
             "remaining_ticker_capacity_value": round(remaining_ticker_exposure, 2),
             "remaining_asset_class_capacity_value": round(remaining_asset_class_exposure, 2),
+            "remaining_short_capacity_value": round(remaining_short_exposure, 2) if is_short else None,
+            "short_position": is_short,
+            "synthetic_crypto_short": is_short and asset_class == "crypto",
             "asset_class_limit": asset_class_limit,
             "correlation_check": correlation_check,
             "risk_multiplier": risk_multiplier,
@@ -6222,6 +6696,7 @@ class PaperTradingService:
     ) -> None:
         """Recompute every score-sensitive gate after learning changes a playbook."""
         for item in playbooks:
+            item["minimum_trade_score"] = float(rules.get("min_score_for_new_trade") or 78)
             rule_state = self._get_do_not_trade_state(item, rules)
             item["do_not_trade_reasons"] = rule_state["blocked"]
             item["leverage_warnings"] = rule_state["leverage"]
@@ -6453,6 +6928,38 @@ class PaperTradingService:
         )
         return enriched
 
+    def _synthetic_crypto_short_cost(self, trade: Dict[str, Any], invested_value: float) -> Dict[str, Any]:
+        is_synthetic = (
+            str(trade.get("asset_class") or "").lower() == "crypto"
+            and str(trade.get("direction") or "").lower() == "short"
+        )
+        if not is_synthetic or invested_value <= 0:
+            return {"applied": False, "cost_value": 0.0, "cost_pct": 0.0}
+        ticket = trade.get("trade_ticket") if isinstance(trade.get("trade_ticket"), dict) else {}
+        model = ticket.get("synthetic_short_cost_model") if isinstance(ticket.get("synthetic_short_cost_model"), dict) else {}
+        try:
+            bps_per_day = max(
+                0.0,
+                float(model.get("funding_bps_per_day") or os.getenv("PAPER_TRADING_CRYPTO_SHORT_FUNDING_BPS_PER_DAY", "5")),
+            )
+        except (TypeError, ValueError):
+            bps_per_day = 5.0
+        opened = self._as_utc_naive_datetime(trade.get("opened_at"))
+        ended = self._as_utc_naive_datetime(trade.get("closed_at")) or datetime.now(timezone.utc).replace(tzinfo=None)
+        elapsed_hours = max(0.0, (ended - opened).total_seconds() / 3600) if opened else 0.0
+        cost_pct = (bps_per_day / 100.0) * (elapsed_hours / 24.0)
+        cost_value = invested_value * (cost_pct / 100.0)
+        return {
+            "applied": True,
+            "model": "synthetic_continuous_funding",
+            "bps_per_day": round(bps_per_day, 4),
+            "elapsed_hours": round(elapsed_hours, 3),
+            "cost_value": round(cost_value, 2),
+            "cost_pct": round(cost_pct, 4),
+            "weekends_included": True,
+            "broker_fill": False,
+        }
+
     def _enrich_trade(self, trade: Dict[str, Any]) -> Dict[str, Any]:
         row = dict(trade)
         entry = float(row.get("entry_price") or 0)
@@ -6506,11 +7013,18 @@ class PaperTradingService:
         invested_value = round(entry * quantity * payout_multiplier * contract_multiplier, 2)
         row["invested_value"] = invested_value
         row["position_notional_value"] = invested_value
+        synthetic_short_cost = self._synthetic_crypto_short_cost(row, invested_value)
+        row["synthetic_short_cost"] = synthetic_short_cost
+        funding_cost_value = float(synthetic_short_cost.get("cost_value") or 0)
+        funding_cost_pct = float(synthetic_short_cost.get("cost_pct") or 0)
 
         if row.get("status") == "closed":
             exit_price = float(row.get("closed_price") or 0)
             pnl_pct = self._calc_return_pct(entry, exit_price, direction_multiplier, payout_multiplier)
             pnl_value = round(((exit_price - entry) * quantity * direction_multiplier * payout_multiplier * contract_multiplier), 2)
+            if pnl_pct is not None:
+                pnl_pct = round(pnl_pct - funding_cost_pct, 2)
+            pnl_value = round(pnl_value - funding_cost_value, 2)
             row["realized_pnl_pct"] = pnl_pct
             row["realized_pnl_value"] = pnl_value
             row["unrealized_pnl_pct"] = None
@@ -6526,6 +7040,10 @@ class PaperTradingService:
                 if current_price is not None
                 else None
             )
+            if pnl_pct is not None:
+                pnl_pct = round(pnl_pct - funding_cost_pct, 2)
+            if pnl_value is not None:
+                pnl_value = round(pnl_value - funding_cost_value, 2)
             row["unrealized_pnl_pct"] = pnl_pct
             row["unrealized_pnl_value"] = pnl_value
             row["realized_pnl_pct"] = None
@@ -6815,8 +7333,13 @@ class PaperTradingService:
         if playbook.get("setup_type") == "political_copy_delay":
             if score < min_trade_score + 2:
                 blocked.append(f"Politisches Delay-Setup braucht stärkere Bestätigung über {min_trade_score + 2:.0f}.")
-        if playbook.get("asset_class") == "crypto" and playbook.get("direction") == "short":
-            blocked.append("Crypto-Short-Playbooks sind im aktuellen Modell deaktiviert.")
+        if (
+            playbook.get("asset_class") == "crypto"
+            and playbook.get("direction") == "short"
+            and os.getenv("PAPER_TRADING_SYNTHETIC_CRYPTO_SHORTS_ENABLED", "true").strip().lower()
+            not in {"1", "true", "yes", "on"}
+        ):
+            blocked.append("Synthetische Crypto-Short-Playbooks sind per Konfiguration deaktiviert.")
         if playbook.get("asset_class") == "crypto" and bool(rules.get("block_crypto_leverage", True)):
             leverage_rules.append("Crypto-Hebel ist im aktuellen Regelwerk geblockt.")
         if score < min_leverage_score:
@@ -7033,6 +7556,22 @@ class PaperTradingService:
             blockers.append("market_liquidity_too_thin")
         return self._dedupe_reason_list(blockers)
 
+    def _enforce_fast_paper_entry_gate(
+        self,
+        ticker: Any,
+        asset_class: Any,
+    ) -> Dict[str, Any] | None:
+        if os.getenv("FAST_PAPER_ENABLED", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+            return None
+        FastPaperSafetyService(self.portfolio_manager).enforce_not_paused()
+        report = MarketQualityService().evaluate_latest(str(ticker or ""), str(asset_class or "equity"))
+        if report.get("trade_allowed") is not True:
+            raise ValueError(
+                "Fast-paper market quality gate blocks this entry: "
+                + ", ".join(report.get("blockers") or ["unknown_market_quality_error"])
+            )
+        return report
+
     def _get_market_snapshot(
         self,
         ticker: Optional[str],
@@ -7043,6 +7582,36 @@ class PaperTradingService:
     ) -> Dict[str, Any]:
         if not ticker:
             return {}
+        if os.getenv("FAST_PAPER_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+            report = MarketQualityService().evaluate_latest(
+                str(ticker),
+                "crypto" if str(ticker).upper().endswith(("-USD", "/USD")) else "equity",
+            )
+            if report.get("trade_allowed") is not True:
+                return {
+                    "status": "blocked",
+                    "price": None,
+                    "data_as_of": report.get("provider_timestamp"),
+                    "source": report.get("provider"),
+                    "feed": report.get("feed"),
+                    "freshness": "stale" if "stream_quote_stale" in (report.get("blockers") or []) else "invalid",
+                    "liquidity_status": "unknown",
+                    "quality_gate": report,
+                }
+            return {
+                "status": "available",
+                "price": report.get("midpoint"),
+                "bid": report.get("bid"),
+                "ask": report.get("ask"),
+                "spread_pct": round(float(report.get("spread_bps") or 0) / 100, 4),
+                "data_as_of": report.get("provider_timestamp"),
+                "received_at": report.get("received_at"),
+                "source": report.get("provider"),
+                "feed": report.get("feed"),
+                "freshness": "fresh",
+                "liquidity_status": "stream_validated",
+                "quality_gate": report,
+            }
         try:
             hist, interval = self._load_market_history(ticker)
             if hist is None or hist.empty:

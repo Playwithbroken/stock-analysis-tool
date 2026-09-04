@@ -450,6 +450,10 @@ function buildDefaultSuggestions(): Record<string, string[]> {
   };
 }
 
+const DEFAULT_SUGGESTION_CACHE_TTL_MS = 90_000;
+let cachedDefaultSuggestionGroups: Record<string, string[]> | null = null;
+let cachedDefaultSuggestionLoadedAt = 0;
+
 function buildDirectSearchSuggestion(query: string): Record<string, string[]> {
   const value = normalizeTickerInput(query);
   return value.length >= 2 ? { "Direkt suchen": [value] } : {};
@@ -527,7 +531,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
   const searchRequestRef = useRef(0);
   const suggestionAbortRef = useRef<AbortController | null>(null);
   const defaultSuggestionAbortRef = useRef<AbortController | null>(null);
-  const defaultSuggestionLoadedAtRef = useRef(0);
+  const submitAbortRef = useRef<AbortController | null>(null);
   const latestQueryRef = useRef("");
 
   const flatSuggestions = useMemo(
@@ -586,19 +590,24 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
   const refreshDefaultSuggestions = useCallback((force = false) => {
     const now = Date.now();
-    if (!force && now - defaultSuggestionLoadedAtRef.current < 90_000) return;
+    if (!force && cachedDefaultSuggestionGroups && now - cachedDefaultSuggestionLoadedAt < DEFAULT_SUGGESTION_CACHE_TTL_MS) {
+      setDefaultSuggestionGroups(cachedDefaultSuggestionGroups);
+      if (!latestQueryRef.current.trim()) setSuggestions(cachedDefaultSuggestionGroups);
+      return;
+    }
     defaultSuggestionAbortRef.current?.abort();
     const controller = new AbortController();
     defaultSuggestionAbortRef.current = controller;
     fetchJsonWithRetry<unknown>("/api/search/suggestions", { signal: controller.signal }, {
-      retries: 2,
+      retries: 0,
       retryDelayMs: 900,
       timeoutMs: 2500,
     })
       .then((data) => {
         const normalized = normalizeSuggestionGroups(data);
         if (!controller.signal.aborted && Object.keys(normalized).length > 0) {
-          defaultSuggestionLoadedAtRef.current = Date.now();
+          cachedDefaultSuggestionGroups = normalized;
+          cachedDefaultSuggestionLoadedAt = Date.now();
           setDefaultSuggestionGroups(normalized);
         }
         if (!controller.signal.aborted && !latestQueryRef.current.trim() && Object.keys(normalized).length > 0) {
@@ -610,8 +619,11 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
 
   // Load default suggestions on mount
   useEffect(() => {
-    refreshDefaultSuggestions(true);
-    return () => defaultSuggestionAbortRef.current?.abort();
+    refreshDefaultSuggestions();
+    return () => {
+      defaultSuggestionAbortRef.current?.abort();
+      submitAbortRef.current?.abort();
+    };
   }, [refreshDefaultSuggestions]);
 
   // Debounced live search
@@ -669,7 +681,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
               setSuggestions(buildDirectSearchSuggestion(trimmedQuery));
             }
           });
-      }, 90);
+      }, 180);
     } else if (trimmedQuery.length === 0) {
       suggestionAbortRef.current?.abort();
       setSuggestions(defaultSuggestionGroups);
@@ -713,6 +725,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
     e.preventDefault();
     const raw = query.trim();
     if (!raw) return;
+    submitAbortRef.current?.abort();
     setShowDropdown(false);
     setGhostText("");
 
@@ -734,10 +747,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         handleQuickSelect(localMatches[0]);
         return;
       }
+      const submitController = new AbortController();
+      submitAbortRef.current = submitController;
       try {
         const resolved = await fetchJsonWithRetry<any>(
           `/api/search/resolve?q=${encodeURIComponent(raw)}`,
-          undefined,
+          { signal: submitController.signal },
           { retries: 1, retryDelayMs: 300, timeoutMs: 4500 },
         );
         const bestTicker = resolved?.ticker || resolved?.normalized;
@@ -776,7 +791,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       try {
         const data = await fetchJsonWithRetry<any>(
           `/api/search/suggestions?q=${encodeURIComponent(raw)}`,
-          undefined,
+          { signal: submitController.signal },
           { retries: 1, retryDelayMs: 300 },
         );
         const bestTicker = data?.Ticker?.[0] || extractTicker(data?.Matches?.[0] || "");
@@ -792,7 +807,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
       try {
         const direct = await fetchJsonWithRetry<any[]>(
           `/api/search?q=${encodeURIComponent(raw)}`,
-          undefined,
+          { signal: submitController.signal },
           { retries: 1, retryDelayMs: 300 },
         );
         const bestTicker = direct?.[0]?.ticker;
@@ -937,7 +952,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
+        <div className="search-quick-strip no-scrollbar mt-3 flex items-center gap-2 overflow-x-auto px-1 pb-1">
           {quickSuggestions.map((item) => {
             const typeLabel = suggestionTypes[item.ticker] || assetTypeLabel(item.ticker);
             return (
@@ -945,13 +960,13 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                 key={`${item.category}-${item.ticker}`}
                 type="button"
                 onClick={() => handleQuickSelect(item.value)}
-                className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
+                className="search-quick-chip inline-flex shrink-0 items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
               >
                 <span className="font-black text-slate-800">{item.ticker}</span>
                 <span className="rounded-full border border-black/8 bg-white px-1.5 py-0.5 text-[8px] font-extrabold tracking-[0.12em] text-slate-500">
                   {typeLabel}
                 </span>
-                <span className="max-w-24 truncate text-[9px] font-extrabold tracking-[0.12em] text-slate-400 sm:max-w-36">
+                <span className="hidden text-[9px] font-extrabold tracking-[0.1em] text-slate-400 sm:inline">
                   {item.category}
                 </span>
               </button>

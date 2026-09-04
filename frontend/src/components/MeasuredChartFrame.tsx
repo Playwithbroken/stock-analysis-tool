@@ -28,10 +28,10 @@ export default function MeasuredChartFrame({
 
     let raf1 = 0;
     let raf2 = 0;
-    let lastW = 0;
-    let lastH = 0;
-
     const measure = () => {
+      // A newer resize (including hiding the panel) supersedes pending work.
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       const rect = node.getBoundingClientRect();
       const w = Math.floor(rect.width);
       const h = Math.floor(Math.max(rect.height, minHeight));
@@ -42,11 +42,9 @@ export default function MeasuredChartFrame({
       // Double RAF: ensures layout has fully settled before exposing children
       raf1 = requestAnimationFrame(() => {
         raf2 = requestAnimationFrame(() => {
-          if (w !== lastW || h !== lastH) {
-            lastW = w;
-            lastH = h;
-            setSize({ w, h });
-          }
+          // Compare with rendered state: after hiding, identical dimensions
+          // still need to restore the chart from its null/fallback state.
+          setSize(previous => previous?.w === w && previous.h === h ? previous : { w, h });
         });
       });
     };

@@ -15,7 +15,26 @@ export default defineConfig({
       workbox: {
         // HTML must come from NetworkFirst below. Precaching index.html lets an
         // old worker serve an old app shell before it can activate its update.
-        globIgnores: ['**/index.html'],
+        globIgnores: [
+          '**/index.html',
+          // Lazy screens stay runtime-cached after first use. Precaching them
+          // all during service-worker install competes with the visible page
+          // on mobile networks and defeats route-level code splitting.
+          '**/WorldMarketMap-*.js',
+          '**/MorningBriefPanel-*.js',
+          '**/EdgeDashboardPanel-*.js',
+          '**/AnalysisResult-*.js',
+          '**/DiscoveryPanel-*.js',
+          '**/PortfolioView-*.js',
+          '**/BrokerChat-*.js',
+          '**/OnboardingWizard-*.js',
+          '**/AddHoldingModal-*.js',
+          '**/vendor-charts-*.js',
+          '**/world-map-wikimedia-*.svg',
+          '**/jspdf*.js',
+          '**/html2canvas*.js',
+          '**/purify*.js',
+        ],
         navigateFallback: null,
         cleanupOutdatedCaches: true,
         clientsClaim: true,

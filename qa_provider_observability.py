@@ -119,6 +119,9 @@ def test_realtime_quote_path_records_actual_snapshot():
         "symbol": symbol,
         "price": 100.0,
         "updated_at": "2099-01-01T00:00:00+00:00",
+        "source": "alpaca",
+        "feed": "iex",
+        "streaming": True,
     }
     snapshot = service.build_snapshot(["AAPL"])
     require(snapshot["connection_state"] == "live", "quote fixture should be live")

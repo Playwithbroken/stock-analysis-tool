@@ -10,6 +10,7 @@ import type { Holding, Portfolio } from "./hooks/usePortfolios";
 import { CurrencyProvider, useCurrency } from "./context/CurrencyContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import useRealtimeFeed from "./hooks/useRealtimeFeed";
+import useMarketMovers from "./hooks/useMarketMovers";
 import { fetchJsonWithRetry } from "./lib/api";
 import { normalizeGeoRegions } from "./lib/geoRegions";
 import {
@@ -127,9 +128,9 @@ type Tab = "dashboard" | "analyze" | "discovery" | "portfolio";
 type MoversWindow = "1d" | "1w" | "1m";
 
 const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
-  { id: "dashboard", label: "Dashboard", short: "Home" },
-  { id: "analyze", label: "Analyzer", short: "Analyze" },
-  { id: "discovery", label: "Markets", short: "Markets" },
+  { id: "dashboard", label: "Übersicht", short: "Übersicht" },
+  { id: "analyze", label: "Analyse", short: "Analyse" },
+  { id: "discovery", label: "Märkte", short: "Märkte" },
   { id: "portfolio", label: "Portfolio", short: "Portfolio" },
 ];
 
@@ -146,8 +147,47 @@ function scheduleIdle(task: () => void, timeout = 1500) {
       }
     };
   }
-  const timer = window.setTimeout(task, Math.min(timeout, 1000));
+  // Browsers without requestIdleCallback should still respect the caller's
+  // intended delay. Starting every "idle" request after one second creates a
+  // network/CPU spike exactly while the user is trying to interact with the UI.
+  const timer = window.setTimeout(task, timeout);
   return () => window.clearTimeout(timer);
+}
+
+const ANALYSIS_CACHE_TTL_MS = 2 * 60 * 1000;
+const ANALYSIS_CACHE_MAX = 12;
+const analysisResponseCache = new Map<string, { payload: AnalysisData; cachedAt: number }>();
+
+function getCachedAnalysis(ticker: string) {
+  const key = ticker.trim().toUpperCase();
+  const cached = analysisResponseCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.cachedAt >= ANALYSIS_CACHE_TTL_MS) {
+    analysisResponseCache.delete(key);
+    return null;
+  }
+  return cached.payload;
+}
+
+function cacheAnalysis(ticker: string, payload: AnalysisData) {
+  const key = ticker.trim().toUpperCase();
+  analysisResponseCache.delete(key);
+  analysisResponseCache.set(key, { payload, cachedAt: Date.now() });
+  if (analysisResponseCache.size > ANALYSIS_CACHE_MAX) {
+    const oldestKey = analysisResponseCache.keys().next().value;
+    if (oldestKey !== undefined) analysisResponseCache.delete(oldestKey);
+  }
+}
+
+function scheduleIdleAfter(task: () => void, delay: number, idleTimeout = 1500) {
+  let cancelIdle = () => {};
+  const timer = window.setTimeout(() => {
+    cancelIdle = scheduleIdle(task, idleTimeout);
+  }, delay);
+  return () => {
+    window.clearTimeout(timer);
+    cancelIdle();
+  };
 }
 
 function wait(ms: number) {
@@ -169,22 +209,21 @@ function shouldReduceBackgroundWork() {
 let lazyScreensPreloadStarted = false;
 
 function preloadLazyScreens() {
-  if (lazyScreensPreloadStarted || shouldReduceBackgroundWork()) return;
+  if (lazyScreensPreloadStarted || isPageHidden() || shouldReduceBackgroundWork()) return;
   lazyScreensPreloadStarted = true;
+  // Dashboard chunks are loaded by the active dashboard itself. Only warm the
+  // likely next destinations, staggered so a low-end phone stays responsive.
   const loaders = [
     () => import("./components/AnalysisResult"),
-    () => import("./components/WorldMarketMap"),
-    () => import("./components/MorningBriefPanel"),
-    () => import("./components/EdgeDashboardPanel"),
-    () => import("./components/PortfolioView"),
     () => import("./components/DiscoveryPanel"),
+    () => import("./components/PortfolioView"),
     () => import("./components/BrokerChat"),
   ];
   loaders.forEach((loader, index) => {
     window.setTimeout(() => {
       if (isPageHidden()) return;
       void loader().catch(() => undefined);
-    }, 450 * index);
+    }, 900 * index);
   });
 }
 
@@ -504,9 +543,10 @@ function AppContent() {
   });
   const [authStatus, setAuthStatus] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [tapeMovers, setTapeMovers] = useState<TapeMover[]>([]);
   const [marketMoversWindow, setMarketMoversWindow] = useState<MoversWindow>("1w");
+  const { items: tapeMovers, status: marketMoversStatus, retry: retryMarketMovers } = useMarketMovers(marketMoversWindow, auth.authenticated, marketMoversToTape);
   const [globalBrief, setGlobalBrief] = useState<any>(null);
+  const [regionalSnapshot, setRegionalSnapshot] = useState<any>(null);
   const [globalBriefStatus, setGlobalBriefStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [briefReloadTick, setBriefReloadTick] = useState(0);
   const [signalScoreContext, setSignalScoreContext] = useState<any>(null);
@@ -645,13 +685,6 @@ function AppContent() {
   );
 
   useEffect(() => {
-    if (!auth.authenticated || marketMoversWindow !== "1w") return;
-    const seededMovers = marketMoversToTape(globalBrief?.market_movers, 6);
-    if (!seededMovers.length) return;
-    setTapeMovers((current) => (current.length ? current : seededMovers));
-  }, [auth.authenticated, globalBrief, marketMoversWindow]);
-
-  useEffect(() => {
     if (!auth.authenticated) return;
 
     let cancelled = false;
@@ -673,42 +706,13 @@ function AppContent() {
       }
     };
 
-    const loadMovers = async () => {
-      try {
-        const [gainers, losers] = await Promise.all([
-          fetchJsonWithRetry<any[]>(`/api/discovery/gainers?window=${marketMoversWindow}`, undefined, {
-            retries: 0,
-            retryDelayMs: 250,
-            timeoutMs: 4500,
-          }),
-          fetchJsonWithRetry<any[]>(`/api/discovery/losers?window=${marketMoversWindow}`, undefined, {
-            retries: 0,
-            retryDelayMs: 250,
-            timeoutMs: 4500,
-          }),
-        ]);
-
-        if (cancelled) return;
-
-        setTapeMovers(marketMoversToTape({ gainers, losers }, 6));
-      } catch {
-        if (!cancelled) {
-          setTapeMovers((current) => current);
-        }
-      }
-    };
-
-    const initialMoversTimer = window.setTimeout(loadMovers, marketMoversWindow === "1w" ? 1800 : 0);
     loadWatchlist();
-    const interval = window.setInterval(loadMovers, 60000);
     const watchlistInterval = window.setInterval(loadWatchlist, 90000);
     return () => {
       cancelled = true;
-      window.clearTimeout(initialMoversTimer);
-      window.clearInterval(interval);
       window.clearInterval(watchlistInterval);
     };
-  }, [auth.authenticated, marketMoversWindow]);
+  }, [auth.authenticated]);
 
   useEffect(() => {
     if (!auth.authenticated) return;
@@ -728,7 +732,7 @@ function AppContent() {
         }
       }
     };
-    const cancelIdle = scheduleIdle(loadSignalContext, 3500);
+    const cancelIdle = scheduleIdleAfter(loadSignalContext, 1200);
     const interval = window.setInterval(loadSignalContext, 120000);
     return () => {
       cancelled = true;
@@ -757,7 +761,7 @@ function AppContent() {
         }
       }
     };
-    const cancelIdle = scheduleIdle(loadLearningContext, 5000);
+    const cancelIdle = scheduleIdleAfter(loadLearningContext, 3500);
     const interval = window.setInterval(loadLearningContext, 180000);
     return () => {
       cancelled = true;
@@ -769,12 +773,10 @@ function AppContent() {
   useEffect(() => {
     if (!auth.authenticated) return;
     let cancelled = false;
+    const controller = new AbortController();
 
     const warmBackgroundData = async () => {
-      if (isPageHidden() || shouldReduceBackgroundWork()) {
-        preloadLazyScreens();
-        return;
-      }
+      if (isPageHidden() || shouldReduceBackgroundWork()) return;
       const ticker = analysis?.ticker?.toUpperCase();
       const historyPath = ticker
         ? `/api/history/${encodeURIComponent(ticker)}?period=1mo&interval=1d`
@@ -788,7 +790,7 @@ function AppContent() {
 
       for (const path of paths) {
         if (cancelled || isPageHidden()) break;
-        await fetchJsonWithRetry<any>(path, undefined, {
+        await fetchJsonWithRetry<any>(path, { signal: controller.signal }, {
           retries: 0,
           retryDelayMs: 250,
           timeoutMs: 9000,
@@ -803,7 +805,7 @@ function AppContent() {
       void warmBackgroundData();
     };
 
-    const cancelIdle = scheduleIdle(warmVisibleData, 8000);
+    const cancelIdle = scheduleIdleAfter(warmVisibleData, 6500);
 
     const interval = window.setInterval(() => {
       if (!isPageHidden()) {
@@ -813,16 +815,46 @@ function AppContent() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       cancelIdle();
       window.clearInterval(interval);
     };
-  }, [auth.authenticated, analysis?.ticker, marketMoversWindow]);
+  }, [auth.authenticated, analysis?.ticker]);
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+    let cancelled = false;
+
+    const loadRegions = async () => {
+      try {
+        const payload = await fetchJsonWithRetry<any>("/api/market/regions", undefined, {
+          retries: 1,
+          retryDelayMs: 500,
+          timeoutMs: 7000,
+        });
+        if (!cancelled) {
+          setRegionalSnapshot(payload);
+          setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.asia?.label || "Europe");
+        }
+      } catch {
+        if (!cancelled) setRegionalSnapshot(null);
+      }
+    };
+
+    void loadRegions();
+    const interval = window.setInterval(loadRegions, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated, briefReloadTick]);
 
   useEffect(() => {
     if (!auth.authenticated) return;
 
     let cancelled = false;
     let retryTimeout: number | undefined;
+    let retryDelayMs = 12000;
 
     const loadGlobalBrief = async () => {
       let displayableBriefLoaded = false;
@@ -866,6 +898,7 @@ function AppContent() {
           }
           displayableBriefLoaded = displayableBriefLoaded || fullBriefDisplayable;
           currentBriefLoaded = currentBriefLoaded || fullBriefCurrent;
+          if (currentBriefLoaded) retryDelayMs = 12000;
           setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "error");
         }
       } catch {
@@ -876,7 +909,12 @@ function AppContent() {
         window.clearTimeout(timeoutGuard);
         if (!cancelled && briefRequestIdRef.current === requestId && !currentBriefLoaded) {
           window.clearTimeout(retryTimeout);
-          retryTimeout = window.setTimeout(loadGlobalBrief, 12000);
+          const delay = retryDelayMs;
+          retryDelayMs = Math.min(retryDelayMs * 2, 60000);
+          retryTimeout = window.setTimeout(() => {
+            if (isPageHidden() || !navigator.onLine) return;
+            void loadGlobalBrief();
+          }, delay);
         }
       }
     };
@@ -910,7 +948,7 @@ function AppContent() {
         if (!cancelled) setTradingEdgeLoading(false);
       }
     };
-    const cancelIdle = scheduleIdle(loadEdge, 6000);
+    const cancelIdle = scheduleIdleAfter(loadEdge, 5000);
     const interval = window.setInterval(loadEdge, 300000);
     return () => {
       cancelled = true;
@@ -939,19 +977,20 @@ function AppContent() {
 
     const checkAuth = async () => {
       try {
-        await refreshAuth(checkAttempt === 0 ? 6000 : 20000);
+        await refreshAuth(checkAttempt === 0 ? 12000 : 20000);
         if (!cancelled) setAuthStatus("");
       } catch {
         if (cancelled) return;
         checkAttempt += 1;
+        const reconnecting = checkAttempt < 2;
         setAuth({
-          loading: false,
+          loading: reconnecting,
           authenticated: false,
           configured: false,
           profile: null,
         });
         setAuthStatus("Server wird noch verbunden. Der Zugang wird automatisch erneut geprüft.");
-        retryTimeout = window.setTimeout(checkAuth, 12000);
+        retryTimeout = window.setTimeout(checkAuth, reconnecting ? 2500 : 12000);
       }
     };
 
@@ -1102,7 +1141,7 @@ function AppContent() {
     }
   };
 
-  const handleSearch = async (ticker: string) => {
+  const handleSearch = async (ticker: string, forceRefresh = false) => {
     const requestId = searchRequestIdRef.current + 1;
     searchRequestIdRef.current = requestId;
     searchAbortRef.current?.abort();
@@ -1123,12 +1162,18 @@ function AppContent() {
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId || !searchTicker) return;
       setLastRequestedTicker(searchTicker);
       setPendingAnalysisTicker(searchTicker);
+      const cached = forceRefresh ? null : getCachedAnalysis(searchTicker);
+      if (cached) {
+        setAnalysis(cached);
+        return;
+      }
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
         { signal: controller.signal },
         { retries: 0, retryDelayMs: 400, timeoutMs: 45000 },
       );
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
+      cacheAnalysis(searchTicker, data as AnalysisData);
       setAnalysis(data);
     } catch (err) {
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
@@ -1157,6 +1202,10 @@ function AppContent() {
       discoveryAnalyzeEnabledAtRef.current = Date.now() + 2800;
     }
     setActiveTab(tab);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+    });
   };
 
   const handleInstallApp = async () => {
@@ -1168,7 +1217,11 @@ function AppContent() {
   };
 
   if (auth.loading) {
-    return <div className="min-h-screen"><LoadingState label="Arbeitsbereich wird verbunden..." /></div>;
+    return (
+      <div className="min-h-screen">
+        <LoadingState label={authStatus || "Arbeitsbereich wird verbunden..."} />
+      </div>
+    );
   }
 
   if (!auth.authenticated) {
@@ -1182,7 +1235,7 @@ function AppContent() {
   }
 
   const showHero = activeTab === "analyze" && !analysis && !loading;
-  const geoRegions = normalizeGeoRegions(decisionBrief?.regions);
+  const geoRegions = normalizeGeoRegions(regionalSnapshot?.regions || decisionBrief?.regions);
   const onboardingDone = Boolean(auth.profile?.onboarding_done);
   const onboardingDismissedAtRaw = localStorage.getItem(ONBOARDING_DISMISSED_AT_KEY);
   const onboardingDismissedAt = onboardingDismissedAtRaw ? Number(onboardingDismissedAtRaw) : 0;
@@ -1195,6 +1248,12 @@ function AppContent() {
   const activeNavItem = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
   const headerStatusLabel = headerRealtimeConnected ? headerConnectionState : headerTransportMode;
   const briefDecisionCurrent = isBriefDecisionCurrent(globalBrief);
+  const hasCurrentGeoData =
+    Boolean(regionalSnapshot?.quality?.current) ||
+    (briefDecisionCurrent &&
+      Object.values(decisionBrief?.regions || {}).some(
+        (region: any) => Array.isArray(region?.assets) && region.assets.length > 0,
+      ));
   const macroRegimeLabel = localizeMarketRegime(decisionBrief?.macro_regime);
   const briefCommandStats = [
     ["Setups", decisionBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
@@ -1230,7 +1289,7 @@ function AppContent() {
         normalizeGermanDisplayText(decisionBrief?.trade_setups?.[0]?.thesis) ||
         normalizeGermanDisplayText(decisionBrief?.watchlist_impact?.[0]?.reason) ||
         normalizeGermanDisplayText(decisionBrief?.product_catalysts?.[0]?.title) ||
-        "Nur starke Signale werden in Analyzer/Markets vertieft.",
+        "Nur starke Signale werden in Analyse und Märkte vertieft.",
       tone: "border-sky-500/18 bg-sky-500/8 text-sky-800",
     },
     {
@@ -1260,35 +1319,55 @@ function AppContent() {
       </div>
     </div>
   );
-  const moversTape = tapeMovers.length ? (
-    <div className="ticker-marquee-wrap header-movers-tape rounded-[1.15rem] border border-white/55 bg-white/46 px-2 py-1.5 sm:px-3">
+  const moversTape = (
+    <div className="ticker-marquee-wrap header-movers-tape rounded-[1.15rem] border border-black/8 bg-white/52 px-2 py-1.5 shadow-[0_8px_24px_rgba(17,24,39,0.035)] sm:px-3">
       <div className="header-movers-meta flex items-center justify-between gap-3 px-1">
-        <div className="text-[10px] font-extrabold uppercase leading-none tracking-[0.18em] text-slate-500">
-          Marktbewegungen
+        <div className="flex min-w-0 items-baseline gap-2.5">
+          <div className="text-xs font-semibold leading-none text-slate-600">
+            Marktbewegungen
+          </div>
+          <div className="hidden truncate text-[10px] font-semibold leading-none text-slate-400 sm:block">
+            Gewinner &amp; Verlierer
+          </div>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2">
-          <div className="rounded-full border border-black/8 bg-white/65 p-0.5">
+          <div className="hidden text-[9px] font-bold uppercase leading-none tracking-[0.14em] text-slate-400 lg:block">
+            Zeitraum
+          </div>
+          <div className="header-movers-periods flex rounded-full border border-black/8 bg-white/65 p-0.5" role="group" aria-label="Zeitraum der Marktbewegungen">
             {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
               <button
                 key={window}
                 type="button"
                 onClick={() => setMarketMoversWindow(window)}
                 aria-pressed={marketMoversWindow === window}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] transition-colors ${
+                aria-label={`${({ "1d": "1 Tag", "1w": "1 Woche", "1m": "1 Monat" })[window]}: Marktbewegungen anzeigen`}
+                className={`min-h-10 min-w-10 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] transition-colors sm:min-h-8 ${
                   marketMoversWindow === window
                     ? "bg-[#101114] text-white"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                {window.toUpperCase()}
+                {window === "1d" ? "1T" : window.toUpperCase()}
               </button>
             ))}
           </div>
-          <div className="hidden text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-slate-400 xl:block">
-            Gewinner, Verlierer ({marketMoversWindow.toUpperCase()})
-          </div>
         </div>
       </div>
+      <div className="header-movers-scroll" role="region" aria-label="Gewinner und Verlierer" aria-busy={marketMoversStatus === "loading"} tabIndex={0}>
+      {marketMoversStatus !== "ready" ? (
+        <div className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 px-1 py-1 text-xs text-slate-600">
+          <span role="status">
+            {marketMoversStatus === "loading" ? "Marktbewegungen werden geladen…"
+              : marketMoversStatus === "empty" ? "Keine Marktbewegungen für diesen Zeitraum verfügbar."
+              : marketMoversStatus === "stale" ? "Gespeicherte Werte dieses Zeitraums – Aktualisierung fehlgeschlagen."
+              : "Marktbewegungen konnten für diesen Zeitraum nicht geladen werden."}
+          </span>
+          {marketMoversStatus !== "loading" ? (
+            <button type="button" onClick={retryMarketMovers} className="min-h-8 rounded-lg border border-black/10 px-2 font-semibold" aria-label="Marktbewegungen erneut laden">Erneut laden</button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="ticker-marquee-track">
         {[...tapeMovers, ...tapeMovers].map((item, index) => {
           const isWinner = item.side === "winner";
@@ -1296,7 +1375,8 @@ function AppContent() {
           return (
             <div
               key={`${item.side}-${item.symbol}-${index}`}
-              className="ticker-marquee-chip"
+              className={`ticker-marquee-chip ${index >= tapeMovers.length ? "ticker-marquee-duplicate" : ""}`}
+              aria-hidden={index >= tapeMovers.length ? true : undefined}
             >
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
@@ -1329,14 +1409,15 @@ function AppContent() {
           );
         })}
       </div>
+      </div>
     </div>
-  ) : null;
+  );
   const mobileMarketTape = (
     <section className="mobile-market-tape lg:hidden">
       <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.06)] backdrop-blur-xl">
         {favoriteTape}
         {activeTab === "dashboard" && moversTape ? (
-          <div className="mt-2 max-h-[6.4rem] overflow-hidden">
+          <div className="mt-2">
             {moversTape}
           </div>
         ) : null}
@@ -1348,7 +1429,7 @@ function AppContent() {
     <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
       <a href="#main-content" className="skip-link">Zum Hauptinhalt springen</a>
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
-        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] lg:hidden">
+        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] xl:hidden">
           <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#101114] text-white">
@@ -1419,7 +1500,7 @@ function AppContent() {
           </div>
         </div>
 
-        <div className="layout-shell hidden px-3 pb-2 pt-2 lg:block sm:px-6 xl:px-8 2xl:px-10">
+        <div className="layout-shell hidden px-3 pb-2 pt-2 xl:block sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header app-shell-header-compact rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
             <div className="grid items-center gap-3 lg:grid-cols-[minmax(12rem,1fr)_auto_max-content]">
               <div className="flex min-w-0 items-center gap-3">
@@ -1524,7 +1605,7 @@ function AppContent() {
                 </button>
               </div>
             </div>
-            <div className="desktop-market-strip mt-2">
+            <div className="desktop-market-strip mt-1.5">
               <div className="desktop-favorite-tape min-w-0">{favoriteTape}</div>
               {moversTape ? <div className="desktop-movers-tape min-w-0">{moversTape}</div> : null}
             </div>
@@ -1595,13 +1676,13 @@ function AppContent() {
                     setActiveTab("analyze");
                     handleSearch(ticker);
                   }}
-                  onOpenPortfolio={() => setActiveTab("portfolio")}
-                  onOpenMarkets={() => setActiveTab("discovery")}
+                  onOpenPortfolio={() => selectTab("portfolio")}
+                  onOpenMarkets={() => selectTab("discovery")}
                 />
               </Suspense>
             </ErrorBoundary>
 
-            <section className="surface-panel dashboard-command-panel dashboard-guide-panel rounded-[1.5rem] p-4 sm:p-5">
+            <section className="surface-panel dashboard-command-panel dashboard-guide-panel hidden rounded-[1.5rem] p-4 sm:block sm:p-5">
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                 <div className="min-w-0">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
@@ -1611,8 +1692,8 @@ function AppContent() {
                     Erst Entscheidung, dann Marktbild, dann Details.
                   </h2>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    Das Dashboard ist die kurze Zusammenfassung. Tiefe Listen liegen in Markets,
-                    einzelne Werte im Analyzer und Positionen im Portfolio.
+                    Die Übersicht fasst Entscheidungen zusammen. Tiefe Listen liegen im Bereich Märkte,
+                    einzelne Werte in Analyse und Positionen im Portfolio.
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <div className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
@@ -1702,52 +1783,51 @@ function AppContent() {
               <span>Marktbild links, Briefing rechts</span>
             </div>
             <div className="dashboard-intel-grid">
-                {geoRegions.length ? (
+                <div id="world-market-map" className="dashboard-map-slot scroll-mt-24">
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
-                      <div className="dashboard-map-slot">
-                        <WorldMarketMap
-                          regions={geoRegions}
-                          selectedRegion={selectedGeoRegion}
-                          onSelectRegion={setSelectedGeoRegion}
-                          news={decisionBrief?.top_news || []}
-                          eventLayer={decisionBrief?.event_layer || []}
-                          eventPings={decisionBrief?.event_pings || []}
-                          watchlistImpact={decisionBrief?.watchlist_impact || []}
-                          contrarianSignals={decisionBrief?.contrarian_signals || []}
-                          openingTimeline={decisionBrief?.opening_timeline || []}
-                          onAnalyze={(t) => {
-                            setActiveTab("analyze");
-                            handleSearch(t);
-                          }}
-                          focusTicker={analysis?.ticker}
+                      <div className="space-y-3">
+                      {!geoRegions.length ? (
+                        <ProviderStatePanel
+                          view="dashboard-map"
+                          state={
+                            globalBriefStatus === "error"
+                              ? "error"
+                              : globalBriefStatus === "ready"
+                                ? "empty"
+                                : globalBriefSlow
+                                  ? "slow"
+                                  : "loading"
+                          }
+                          title={globalBriefStatus === "ready" ? "Keine belastbaren Regionen im aktuellen Brief" : "Weltkarten-Daten sind noch nicht belastbar"}
+                          description="Die Karte und ihre Werkzeuge bleiben verfügbar. Unbestätigte Ersatzwerte werden nicht als live dargestellt."
+                          source="Morning Brief"
+                          onRetry={() => setBriefReloadTick((prev) => prev + 1)}
+                          retryLabel="Feed neu laden"
+                          compact
                         />
+                      ) : null}
+                      <WorldMarketMap
+                        regions={geoRegions}
+                        selectedRegion={selectedGeoRegion}
+                        onSelectRegion={setSelectedGeoRegion}
+                        dataCurrent={hasCurrentGeoData}
+                        news={decisionBrief?.top_news || []}
+                        eventLayer={decisionBrief?.event_layer || []}
+                        eventPings={decisionBrief?.event_pings || []}
+                        watchlistImpact={decisionBrief?.watchlist_impact || []}
+                        contrarianSignals={decisionBrief?.contrarian_signals || []}
+                        openingTimeline={decisionBrief?.opening_timeline || []}
+                        onAnalyze={(t) => {
+                          selectTab("analyze");
+                          handleSearch(t);
+                        }}
+                        focusTicker={analysis?.ticker}
+                      />
                       </div>
                     </Suspense>
                   </ErrorBoundary>
-                ) : (
-                  <ProviderStatePanel
-                    view="dashboard-map"
-                    state={
-                      globalBriefStatus === "error"
-                        ? "error"
-                        : globalBriefStatus === "ready"
-                          ? "empty"
-                          : globalBriefSlow
-                            ? "slow"
-                            : "loading"
-                    }
-                    title={globalBriefStatus === "ready" ? "Keine belastbaren Regionen im aktuellen Brief" : "Weltkarten-Daten sind noch nicht belastbar"}
-                    description={
-                      globalBriefStatus === "ready"
-                        ? "Der Provider hat geantwortet, aber keine ausreichend vollständigen Regionsdaten geliefert. Es werden keine Ersatzwerte als live dargestellt."
-                        : "Der Morning-Brief-Provider antwortet langsam oder unvollständig. Bereits geladene Bereiche bleiben nutzbar."
-                    }
-                    source="Morning Brief"
-                    onRetry={() => setBriefReloadTick((prev) => prev + 1)}
-                    retryLabel="Feed neu laden"
-                  />
-                )}
+                </div>
                 {decisionBrief ? (
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingState />}>
@@ -1827,7 +1907,7 @@ function AppContent() {
                   title="Analyse konnte nicht vollständig geladen werden"
                   description={error}
                   source={lastRequestedTicker || "Analyse-Provider"}
-                  onRetry={lastRequestedTicker ? () => void handleSearch(lastRequestedTicker) : undefined}
+                  onRetry={lastRequestedTicker ? () => void handleSearch(lastRequestedTicker, true) : undefined}
                   retryLabel="Analyse erneut starten"
                 />
               </div>
@@ -1865,8 +1945,8 @@ function AppContent() {
                       {
                         title: "Öffentliche Signale",
                         body: "Berkshire, Kongress und weitere öffentliche Meldungen mit sichtbarer Verzögerung.",
-                        cta: "Markets öffnen",
-                        action: () => setActiveTab("discovery" as Tab),
+                        cta: "Märkte öffnen",
+                        action: () => selectTab("discovery"),
                       },
                       {
                         title: "Klare Einordnung",
@@ -1880,7 +1960,7 @@ function AppContent() {
                         title: "Privater Zugang",
                         body: "Geschützter Einzelzugang mit Sitzung und abgesicherten Triggern.",
                         cta: "Portfolio öffnen",
-                        action: () => setActiveTab("portfolio" as Tab),
+                        action: () => selectTab("portfolio"),
                       },
                     ].map((item) => (
                       <button
@@ -1916,13 +1996,13 @@ function AppContent() {
                       },
                       {
                         copy: "2. Live-Kurs, Score-Kontext und Risikoprofil prüfen.",
-                        cta: "Markets öffnen",
-                        action: () => setActiveTab("discovery" as Tab),
+                        cta: "Märkte öffnen",
+                        action: () => selectTab("discovery"),
                       },
                       {
                         copy: "3. Nur bei bestätigtem Setup zu Paper-Trading oder Signalen wechseln.",
                         cta: "Portfolio öffnen",
-                        action: () => setActiveTab("portfolio" as Tab),
+                        action: () => selectTab("portfolio"),
                       },
                     ].map((item) => (
                       <button
@@ -2027,7 +2107,7 @@ function AppContent() {
         )}
       </main>
 
-      <nav className="mobile-tabbar fixed inset-x-2 z-50 mx-auto w-auto max-w-md rounded-[1.35rem] p-1.5 lg:hidden">
+      <nav aria-label="Hauptnavigation" className="mobile-tabbar fixed inset-x-2 z-50 mx-auto w-auto max-w-md rounded-[1.35rem] p-1.5 xl:hidden">
         <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button

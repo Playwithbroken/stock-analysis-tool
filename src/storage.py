@@ -4,7 +4,7 @@ import uuid
 import json
 import hashlib
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 from src.advisory_service import merge_workspace_profile
@@ -84,6 +84,17 @@ def get_database_status() -> Dict[str, Any]:
                 'forecasts': 'signal_forecasts',
                 'forecast_outcomes': 'signal_forecast_outcomes',
                 'deliveries': 'sent_signal_events',
+                'paper_learning_attributions': 'paper_learning_attributions',
+                'paper_learning_hypotheses': 'paper_learning_hypotheses',
+                'paper_learning_rules': 'paper_learning_rules',
+                'paper_learning_rule_history': 'paper_learning_rule_history',
+                'paper_learning_runs': 'paper_learning_runs',
+                'market_events': 'market_events',
+                'news_events': 'news_events',
+                'broker_orders': 'broker_orders',
+                'broker_order_events': 'broker_order_events',
+                'latency_samples': 'latency_samples',
+                'integration_incidents': 'integration_incidents',
             }.items():
                 cursor.execute(f'SELECT COUNT(*) FROM {table}')
                 counts[label] = int((cursor.fetchone() or [0])[0] or 0)
@@ -218,6 +229,11 @@ def init_db():
         checked_at TEXT,
         check_price REAL,
         performance_pct REAL,
+        benchmark_symbol TEXT,
+        benchmark_entry_price REAL,
+        benchmark_check_price REAL,
+        benchmark_return_pct REAL,
+        active_return_pct REAL,
         notes TEXT,
         error_tag TEXT,
         UNIQUE(trade_id, horizon_hours),
@@ -283,6 +299,287 @@ def init_db():
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_decision_audit_created ON decision_audit_log(created_at DESC)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_decision_audit_subject ON decision_audit_log(subject, created_at DESC)')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_learning_attributions (
+        trade_id TEXT PRIMARY KEY,
+        schema_version TEXT NOT NULL,
+        outcome_quality TEXT NOT NULL,
+        process_quality TEXT NOT NULL,
+        primary_error TEXT,
+        secondary_errors_json TEXT NOT NULL DEFAULT '[]',
+        metrics_json TEXT NOT NULL DEFAULT '{}',
+        evidence_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (trade_id) REFERENCES paper_trades (id) ON DELETE CASCADE
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_learning_hypotheses (
+        id TEXT PRIMARY KEY,
+        fingerprint TEXT NOT NULL UNIQUE,
+        strategy_id TEXT,
+        segment_json TEXT NOT NULL DEFAULT '{}',
+        statement TEXT NOT NULL,
+        evidence_json TEXT NOT NULL DEFAULT '{}',
+        proposed_rule_json TEXT NOT NULL DEFAULT '{}',
+        uncertainty TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_learning_runs (
+        run_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        checked_at TEXT,
+        duration_ms REAL,
+        result_json TEXT NOT NULL DEFAULT '{}',
+        error_type TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_learning_rules (
+        id TEXT PRIMARY KEY,
+        hypothesis_id TEXT,
+        version INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        rule_json TEXT NOT NULL DEFAULT '{}',
+        baseline_json TEXT NOT NULL DEFAULT '{}',
+        evaluation_json TEXT NOT NULL DEFAULT '{}',
+        started_at TEXT,
+        ended_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(hypothesis_id, version),
+        FOREIGN KEY (hypothesis_id) REFERENCES paper_learning_hypotheses (id) ON DELETE SET NULL
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS paper_learning_rule_history (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        from_status TEXT,
+        to_status TEXT,
+        before_json TEXT NOT NULL DEFAULT '{}',
+        after_json TEXT NOT NULL DEFAULT '{}',
+        reason TEXT NOT NULL,
+        audit_event_id TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (rule_id) REFERENCES paper_learning_rules (id) ON DELETE CASCADE
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_paper_learning_hypothesis_status ON paper_learning_hypotheses(status, updated_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_paper_learning_rule_status ON paper_learning_rules(status, updated_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_paper_learning_rule_history_rule ON paper_learning_rule_history(rule_id, created_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_paper_learning_rule_history_created ON paper_learning_rule_history(created_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_paper_learning_run_started ON paper_learning_runs(started_at DESC)')
+
+    # Provider-neutral, append-only evidence for real-time market and broker integrations.
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS market_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        feed TEXT NOT NULL,
+        asset_class TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        exchange TEXT,
+        provider_timestamp TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        normalized_at TEXT NOT NULL,
+        sequence INTEGER,
+        bid REAL,
+        ask REAL,
+        last REAL,
+        size REAL,
+        quality_json TEXT NOT NULL DEFAULT '{}',
+        source_payload_hash TEXT,
+        source_payload_json TEXT NOT NULL DEFAULT '{}',
+        UNIQUE(provider, event_id)
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_market_events_symbol_time ON market_events(symbol, received_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_market_events_provider_time ON market_events(provider, received_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_market_events_type_time ON market_events(event_type, received_at DESC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS news_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        publisher TEXT NOT NULL,
+        headline TEXT NOT NULL,
+        source_url TEXT NOT NULL,
+        published_at TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        normalized_at TEXT NOT NULL,
+        symbols_json TEXT NOT NULL DEFAULT '[]',
+        version INTEGER NOT NULL DEFAULT 1,
+        correction_status TEXT NOT NULL DEFAULT 'original',
+        source_payload_hash TEXT,
+        source_payload_json TEXT NOT NULL DEFAULT '{}',
+        UNIQUE(provider, event_id, version)
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_events_published ON news_events(published_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_events_provider_time ON news_events(provider, received_at DESC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS signal_decisions (
+        id TEXT PRIMARY KEY,
+        symbol TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        execution_mode TEXT NOT NULL,
+        signal_version TEXT NOT NULL,
+        rule_version TEXT NOT NULL,
+        risk_snapshot_id TEXT,
+        input_event_ids_json TEXT NOT NULL DEFAULT '[]',
+        data_age_ms REAL,
+        rejection_reasons_json TEXT NOT NULL DEFAULT '[]',
+        decision_payload_json TEXT NOT NULL DEFAULT '{}',
+        decision_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_decisions_symbol_time ON signal_decisions(symbol, decision_at DESC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS broker_orders (
+        client_order_id TEXT PRIMARY KEY,
+        broker_order_id TEXT,
+        provider TEXT NOT NULL,
+        account_mode TEXT NOT NULL CHECK(account_mode = 'paper'),
+        account_id_hash TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL,
+        order_type TEXT NOT NULL,
+        time_in_force TEXT NOT NULL,
+        requested_quantity REAL NOT NULL,
+        limit_price REAL,
+        stop_price REAL,
+        status TEXT NOT NULL,
+        request_hash TEXT NOT NULL UNIQUE,
+        signal_decision_id TEXT,
+        submitted_at TEXT,
+        filled_quantity REAL NOT NULL DEFAULT 0,
+        filled_avg_price REAL,
+        last_event_at TEXT,
+        request_id TEXT,
+        raw_order_json TEXT NOT NULL DEFAULT '{}',
+        updated_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (signal_decision_id) REFERENCES signal_decisions (id) ON DELETE SET NULL
+    )
+    ''')
+    cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_orders_provider_id ON broker_orders(provider, broker_order_id) WHERE broker_order_id IS NOT NULL')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_broker_orders_status_time ON broker_orders(status, updated_at DESC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS broker_order_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        client_order_id TEXT NOT NULL,
+        broker_order_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        account_mode TEXT NOT NULL CHECK(account_mode = 'paper'),
+        symbol TEXT NOT NULL,
+        provider_timestamp TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        filled_quantity REAL NOT NULL DEFAULT 0,
+        fill_price REAL,
+        reason TEXT,
+        source_payload_hash TEXT,
+        source_payload_json TEXT NOT NULL DEFAULT '{}',
+        UNIQUE(provider, event_id),
+        FOREIGN KEY (client_order_id) REFERENCES broker_orders (client_order_id) ON DELETE CASCADE
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_broker_order_events_order_time ON broker_order_events(client_order_id, received_at ASC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS broker_positions_snapshots (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        account_mode TEXT NOT NULL CHECK(account_mode = 'paper'),
+        account_id_hash TEXT NOT NULL,
+        positions_json TEXT NOT NULL DEFAULT '[]',
+        cash REAL,
+        equity REAL,
+        local_state_hash TEXT,
+        broker_state_hash TEXT NOT NULL,
+        reconciliation_status TEXT NOT NULL,
+        orders_json TEXT NOT NULL DEFAULT '[]',
+        differences_json TEXT NOT NULL DEFAULT '[]',
+        captured_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_broker_positions_time ON broker_positions_snapshots(provider, captured_at DESC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS latency_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        correlation_id TEXT,
+        provider TEXT NOT NULL,
+        service TEXT NOT NULL,
+        segment TEXT NOT NULL,
+        latency_ms REAL NOT NULL,
+        status TEXT NOT NULL,
+        symbol TEXT,
+        observed_at TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}'
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_latency_samples_segment_time ON latency_samples(segment, observed_at DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_latency_samples_provider_time ON latency_samples(provider, observed_at DESC)')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS integration_incidents (
+        id TEXT PRIMARY KEY,
+        provider TEXT,
+        component TEXT NOT NULL,
+        incident_type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        status TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        details_json TEXT NOT NULL DEFAULT '{}',
+        opened_at TEXT NOT NULL,
+        resolved_at TEXT,
+        updated_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_incidents_status_time ON integration_incidents(status, opened_at DESC)')
+    for broker_order_column, broker_order_type in (
+        ("filled_quantity", "REAL NOT NULL DEFAULT 0"),
+        ("filled_avg_price", "REAL"),
+        ("last_event_at", "TEXT"),
+        ("request_id", "TEXT"),
+        ("raw_order_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ):
+        try:
+            cursor.execute(f"ALTER TABLE broker_orders ADD COLUMN {broker_order_column} {broker_order_type}")
+        except sqlite3.OperationalError:
+            pass
+    for snapshot_column, snapshot_type in (
+        ("orders_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("differences_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ):
+        try:
+            cursor.execute(f"ALTER TABLE broker_positions_snapshots ADD COLUMN {snapshot_column} {snapshot_type}")
+        except sqlite3.OperationalError:
+            pass
     try:
         cursor.execute('ALTER TABLE holdings ADD COLUMN purchase_date TEXT')
     except sqlite3.OperationalError:
@@ -319,6 +616,17 @@ def init_db():
         cursor.execute('ALTER TABLE paper_trades ADD COLUMN error_tag TEXT')
     except sqlite3.OperationalError:
         pass
+    for benchmark_column, benchmark_type in (
+        ("benchmark_symbol", "TEXT"),
+        ("benchmark_entry_price", "REAL"),
+        ("benchmark_check_price", "REAL"),
+        ("benchmark_return_pct", "REAL"),
+        ("active_return_pct", "REAL"),
+    ):
+        try:
+            cursor.execute(f"ALTER TABLE paper_trade_outcomes ADD COLUMN {benchmark_column} {benchmark_type}")
+        except sqlite3.OperationalError:
+            pass
     try:
         cursor.execute("ALTER TABLE paper_trades ADD COLUMN trade_ticket_json TEXT NOT NULL DEFAULT '{}'")
     except sqlite3.OperationalError:
@@ -786,6 +1094,150 @@ class PortfolioManager:
         rows = cursor.fetchall()
         conn.close()
         return {row[0] for row in rows}
+
+    def claim_signal_event_delivery(
+        self,
+        event: Dict[str, Any],
+        lease_seconds: int = 900,
+    ) -> Optional[str]:
+        """Atomically reserve an event key before an external notification is sent.
+
+        A lease prevents parallel scheduler threads or replicas from delivering the
+        same event. Expired claims can be recovered after a crashed worker.
+        """
+        event_key = str(event.get('event_key') or '').strip()
+        if not event_key:
+            raise ValueError('event_key is required')
+        now = datetime.now()
+        claim_id = str(uuid.uuid4())
+        claim_metadata = {
+            'delivery_state': 'sending',
+            'delivery_claim_id': claim_id,
+            'delivery_claimed_at': now.isoformat(),
+            'delivery_claim_expires_at': (now + timedelta(seconds=max(60, int(lease_seconds)))).isoformat(),
+        }
+        conn = _connect_db()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute(
+                'SELECT metadata_json FROM sent_signal_events WHERE event_key = ?',
+                (event_key,),
+            ).fetchone()
+            if row is not None:
+                try:
+                    metadata = json.loads(row[0] or '{}')
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    metadata = {}
+                expires_raw = str(metadata.get('delivery_claim_expires_at') or '')
+                try:
+                    expires_at = datetime.fromisoformat(expires_raw)
+                except (TypeError, ValueError):
+                    expires_at = None
+                if metadata.get('delivery_state') != 'sending' or not expires_at or expires_at > now:
+                    conn.rollback()
+                    return None
+                conn.execute(
+                    '''UPDATE sent_signal_events
+                       SET category = ?, title = ?, sent_at = ?, metadata_json = ?
+                       WHERE event_key = ?''',
+                    (
+                        str(event.get('category') or 'notification_claim'),
+                        str(event.get('title') or event.get('line') or event_key)[:500],
+                        now.isoformat(),
+                        json.dumps(claim_metadata, ensure_ascii=True),
+                        event_key,
+                    ),
+                )
+            else:
+                conn.execute(
+                    '''INSERT INTO sent_signal_events
+                       (event_key, category, title, sent_at, metadata_json)
+                       VALUES (?, ?, ?, ?, ?)''',
+                    (
+                        event_key,
+                        str(event.get('category') or 'notification_claim'),
+                        str(event.get('title') or event.get('line') or event_key)[:500],
+                        now.isoformat(),
+                        json.dumps(claim_metadata, ensure_ascii=True),
+                    ),
+                )
+            conn.commit()
+            return claim_id
+        finally:
+            conn.close()
+
+    def complete_signal_event_delivery(
+        self,
+        event: Dict[str, Any],
+        claim_id: str,
+    ) -> bool:
+        """Turn a matching in-flight claim into a permanent sent marker."""
+        event_key = str(event.get('event_key') or '').strip()
+        conn = _connect_db()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute(
+                'SELECT metadata_json FROM sent_signal_events WHERE event_key = ?',
+                (event_key,),
+            ).fetchone()
+            if row is None:
+                conn.rollback()
+                return False
+            try:
+                current = json.loads(row[0] or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                current = {}
+            if current.get('delivery_state') != 'sending' or current.get('delivery_claim_id') != claim_id:
+                conn.rollback()
+                return False
+            metadata = {
+                'delivery_state': 'sent',
+                'delivery_claim_id': claim_id,
+                'delivery_completed_at': datetime.now().isoformat(),
+                'period_ids': event.get('period_ids'),
+                'snapshot_count': event.get('snapshot_count'),
+            }
+            conn.execute(
+                '''UPDATE sent_signal_events
+                   SET category = ?, title = ?, sent_at = ?, metadata_json = ?
+                   WHERE event_key = ?''',
+                (
+                    str(event.get('category') or 'notification'),
+                    str(event.get('title') or event.get('line') or event_key)[:500],
+                    datetime.now().isoformat(),
+                    json.dumps(metadata, ensure_ascii=True, default=str),
+                    event_key,
+                ),
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def release_signal_event_delivery(self, event_key: str, claim_id: str) -> bool:
+        """Release only the caller's in-flight claim after a failed delivery."""
+        conn = _connect_db()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute(
+                'SELECT metadata_json FROM sent_signal_events WHERE event_key = ?',
+                (str(event_key),),
+            ).fetchone()
+            if row is None:
+                conn.rollback()
+                return False
+            try:
+                current = json.loads(row[0] or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                current = {}
+            if current.get('delivery_state') != 'sending' or current.get('delivery_claim_id') != claim_id:
+                conn.rollback()
+                return False
+            conn.execute('DELETE FROM sent_signal_events WHERE event_key = ?', (str(event_key),))
+            conn.commit()
+            return True
+        finally:
+            conn.close()
 
     def mark_signal_events_sent(self, events: List[Dict[str, Any]]):
         if not events:
@@ -1280,8 +1732,10 @@ class PortfolioManager:
                 '''
                 INSERT OR IGNORE INTO paper_trade_outcomes (
                     id, trade_id, horizon_hours, due_at, status, result,
-                    checked_at, check_price, performance_pct, notes, error_tag
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    checked_at, check_price, performance_pct, benchmark_symbol,
+                    benchmark_entry_price, benchmark_check_price, benchmark_return_pct,
+                    active_return_pct, notes, error_tag
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 (
                     outcome.get("id"),
@@ -1293,6 +1747,11 @@ class PortfolioManager:
                     outcome.get("checked_at"),
                     outcome.get("check_price"),
                     outcome.get("performance_pct"),
+                    outcome.get("benchmark_symbol"),
+                    outcome.get("benchmark_entry_price"),
+                    outcome.get("benchmark_check_price"),
+                    outcome.get("benchmark_return_pct"),
+                    outcome.get("active_return_pct"),
                     outcome.get("notes"),
                     outcome.get("error_tag"),
                 ),
@@ -1345,7 +1804,11 @@ class PortfolioManager:
         return rows
 
     def update_paper_trade_outcome(self, outcome_id: str, updates: Dict[str, Any]) -> None:
-        allowed = {"status", "result", "checked_at", "check_price", "performance_pct", "notes", "error_tag"}
+        allowed = {
+            "status", "result", "checked_at", "check_price", "performance_pct",
+            "benchmark_symbol", "benchmark_entry_price", "benchmark_check_price",
+            "benchmark_return_pct", "active_return_pct", "notes", "error_tag",
+        }
         clean = {key: value for key, value in (updates or {}).items() if key in allowed}
         if not clean:
             return
@@ -1418,6 +1881,14 @@ class PortfolioManager:
                 merged_ticket = json.loads(existing["trade_ticket_json"] or "{}")
             except (TypeError, ValueError, json.JSONDecodeError):
                 merged_ticket = {}
+        try:
+            existing_ticket = json.loads(existing["trade_ticket_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            existing_ticket = {}
+        immutable_snapshot = existing_ticket.get("learning_feature_snapshot")
+        if immutable_snapshot is not None and merged_ticket.get("learning_feature_snapshot") != immutable_snapshot:
+            conn.close()
+            raise ValueError("learning_feature_snapshot is immutable after paper entry")
         cursor.execute(
             '''
             UPDATE paper_trades
@@ -1467,6 +1938,19 @@ class PortfolioManager:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         where = "id = ? AND status = 'open'" if open_only else "id = ?"
+        existing_row = cursor.execute(
+            "SELECT trade_ticket_json FROM paper_trades WHERE id = ?",
+            (trade_id,),
+        ).fetchone()
+        if existing_row:
+            try:
+                existing_ticket = json.loads(existing_row[0] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                existing_ticket = {}
+            immutable_snapshot = existing_ticket.get("learning_feature_snapshot")
+            if immutable_snapshot is not None and trade_ticket.get("learning_feature_snapshot") != immutable_snapshot:
+                conn.close()
+                raise ValueError("learning_feature_snapshot is immutable after paper entry")
         cursor.execute(
             f"UPDATE paper_trades SET trade_ticket_json = ? WHERE {where}",
             (json.dumps(trade_ticket, ensure_ascii=True, default=str), trade_id),
@@ -1487,6 +1971,375 @@ class PortfolioManager:
         except (TypeError, ValueError, json.JSONDecodeError):
             updated["trade_ticket"] = {}
         return updated
+
+    def upsert_paper_learning_run(self, run: Dict[str, Any]) -> Dict[str, Any]:
+        run_id = str(run.get("run_id") or "").strip()
+        if not run_id:
+            raise ValueError("paper learning run_id is required")
+        now = datetime.now().isoformat()
+        conn = _connect_db()
+        conn.execute(
+            '''
+            INSERT INTO paper_learning_runs (
+                run_id, status, started_at, checked_at, duration_ms, result_json,
+                error_type, error, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(run_id) DO UPDATE SET
+                status = excluded.status,
+                checked_at = excluded.checked_at,
+                duration_ms = excluded.duration_ms,
+                result_json = excluded.result_json,
+                error_type = excluded.error_type,
+                error = excluded.error,
+                updated_at = excluded.updated_at
+            ''',
+            (
+                run_id,
+                str(run.get("status") or "unknown"),
+                str(run.get("started_at") or now),
+                run.get("checked_at"),
+                run.get("duration_ms"),
+                json.dumps(run, ensure_ascii=True, default=str),
+                run.get("error_type"),
+                str(run.get("error") or "")[:1000] or None,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return {**run, "updated_at": now}
+
+    def list_paper_learning_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        conn = _connect_db(row_factory=True)
+        rows = [dict(row) for row in conn.execute(
+            "SELECT * FROM paper_learning_runs ORDER BY started_at DESC LIMIT ?",
+            (max(1, min(500, int(limit))),),
+        ).fetchall()]
+        conn.close()
+        for row in rows:
+            try:
+                result = json.loads(row.pop("result_json") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                result = {}
+            row["result"] = result
+        return rows
+
+    def upsert_paper_learning_attribution(self, attribution: Dict[str, Any]) -> Dict[str, Any]:
+        trade_id = str(attribution.get("trade_id") or "").strip()
+        if not trade_id:
+            raise ValueError("trade_id is required for paper learning attribution")
+        now = datetime.now().isoformat()
+        conn = _connect_db()
+        conn.execute(
+            '''
+            INSERT INTO paper_learning_attributions (
+                trade_id, schema_version, outcome_quality, process_quality, primary_error,
+                secondary_errors_json, metrics_json, evidence_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(trade_id) DO UPDATE SET
+                schema_version = excluded.schema_version,
+                outcome_quality = excluded.outcome_quality,
+                process_quality = excluded.process_quality,
+                primary_error = excluded.primary_error,
+                secondary_errors_json = excluded.secondary_errors_json,
+                metrics_json = excluded.metrics_json,
+                evidence_json = excluded.evidence_json,
+                updated_at = excluded.updated_at
+            ''',
+            (
+                trade_id,
+                str(attribution.get("schema_version") or "paper-learning-attribution.v2"),
+                str(attribution.get("outcome_quality") or "insufficient_evidence"),
+                str(attribution.get("process_quality") or "insufficient_evidence"),
+                attribution.get("primary_error"),
+                json.dumps(attribution.get("secondary_errors") or [], ensure_ascii=True, default=str),
+                json.dumps(attribution.get("metrics") or {}, ensure_ascii=True, default=str),
+                json.dumps(attribution.get("evidence") or {}, ensure_ascii=True, default=str),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return {**attribution, "created_at": attribution.get("created_at") or now, "updated_at": now}
+
+    def list_paper_learning_attributions(self, limit: int = 500) -> List[Dict[str, Any]]:
+        conn = _connect_db(row_factory=True)
+        rows = [dict(row) for row in conn.execute(
+            '''
+            SELECT a.*, t.ticker, t.asset_class, t.direction, t.setup_type, t.opened_at, t.closed_at
+            FROM paper_learning_attributions a
+            JOIN paper_trades t ON t.id = a.trade_id
+            ORDER BY a.updated_at DESC LIMIT ?
+            ''',
+            (max(1, min(2000, int(limit))),),
+        ).fetchall()]
+        conn.close()
+        for row in rows:
+            row["secondary_errors"] = json.loads(row.pop("secondary_errors_json") or "[]")
+            row["metrics"] = json.loads(row.pop("metrics_json") or "{}")
+            row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+        return rows
+
+    def upsert_paper_learning_hypothesis(self, hypothesis: Dict[str, Any]) -> Dict[str, Any]:
+        fingerprint = str(hypothesis.get("fingerprint") or "").strip()
+        if not fingerprint:
+            raise ValueError("hypothesis fingerprint is required")
+        now = datetime.now().isoformat()
+        hypothesis_id = str(hypothesis.get("id") or f"plh_{fingerprint[:24]}")
+        evidence_payload = {
+            **(hypothesis.get("evidence") or {}),
+            "hypothesis_metadata": {
+                "expected_effect": hypothesis.get("expected_effect"),
+                "alternative_explanation": hypothesis.get("alternative_explanation"),
+                "possible_downside": hypothesis.get("possible_downside"),
+                "minimum_future_test_trades": hypothesis.get("minimum_future_test_trades"),
+                "expires_at": hypothesis.get("expires_at"),
+            },
+        }
+        conn = _connect_db()
+        conn.execute(
+            '''
+            INSERT INTO paper_learning_hypotheses (
+                id, fingerprint, strategy_id, segment_json, statement, evidence_json,
+                proposed_rule_json, uncertainty, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(fingerprint) DO UPDATE SET
+                strategy_id = excluded.strategy_id,
+                segment_json = excluded.segment_json,
+                statement = excluded.statement,
+                evidence_json = excluded.evidence_json,
+                proposed_rule_json = excluded.proposed_rule_json,
+                uncertainty = excluded.uncertainty,
+                updated_at = excluded.updated_at
+            ''',
+            (
+                hypothesis_id, fingerprint, hypothesis.get("strategy_id"),
+                json.dumps(hypothesis.get("segment") or {}, ensure_ascii=True, default=str),
+                str(hypothesis.get("statement") or "Paper pattern requires review."),
+                json.dumps(evidence_payload, ensure_ascii=True, default=str),
+                json.dumps(hypothesis.get("proposed_rule") or {}, ensure_ascii=True, default=str),
+                str(hypothesis.get("uncertainty") or "high"),
+                str(hypothesis.get("status") or "proposed"), now, now,
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM paper_learning_hypotheses WHERE fingerprint = ?", (fingerprint,)).fetchone()
+        conn.close()
+        return {**hypothesis, "id": row[0] if row else hypothesis_id, "updated_at": now}
+
+    def list_paper_learning_hypotheses(self, limit: int = 200) -> List[Dict[str, Any]]:
+        conn = _connect_db(row_factory=True)
+        rows = [dict(row) for row in conn.execute(
+            "SELECT * FROM paper_learning_hypotheses ORDER BY updated_at DESC LIMIT ?",
+            (max(1, min(1000, int(limit))),),
+        ).fetchall()]
+        conn.close()
+        for row in rows:
+            row["segment"] = json.loads(row.pop("segment_json") or "{}")
+            row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+            row["proposed_rule"] = json.loads(row.pop("proposed_rule_json") or "{}")
+            metadata = row["evidence"].get("hypothesis_metadata")
+            if isinstance(metadata, dict):
+                for key in (
+                    "expected_effect",
+                    "alternative_explanation",
+                    "possible_downside",
+                    "minimum_future_test_trades",
+                    "expires_at",
+                ):
+                    row[key] = metadata.get(key)
+        return rows
+
+    def ensure_paper_learning_shadow_rule(self, hypothesis: Dict[str, Any]) -> Dict[str, Any]:
+        hypothesis_id = str(hypothesis.get("id") or "").strip()
+        if not hypothesis_id:
+            raise ValueError("hypothesis id is required")
+        conn = _connect_db(row_factory=True)
+        existing = conn.execute(
+            "SELECT * FROM paper_learning_rules WHERE hypothesis_id = ? ORDER BY version DESC LIMIT 1",
+            (hypothesis_id,),
+        ).fetchone()
+        if existing:
+            conn.close()
+            row = dict(existing)
+            row["rule"] = json.loads(row.pop("rule_json") or "{}")
+            row["baseline"] = json.loads(row.pop("baseline_json") or "{}")
+            row["evaluation"] = json.loads(row.pop("evaluation_json") or "{}")
+            return row
+        now = datetime.now(timezone.utc).isoformat()
+        rule_id = f"plr_{uuid.uuid4().hex[:24]}"
+        conn.execute(
+            '''
+            INSERT INTO paper_learning_rules (
+                id, hypothesis_id, version, status, rule_json, baseline_json,
+                evaluation_json, started_at, ended_at, created_at, updated_at
+            ) VALUES (?, ?, 1, 'shadow', ?, ?, '{}', ?, NULL, ?, ?)
+            ''',
+            (
+                rule_id, hypothesis_id,
+                json.dumps(hypothesis.get("proposed_rule") or {}, ensure_ascii=True, default=str),
+                json.dumps(hypothesis.get("evidence") or {}, ensure_ascii=True, default=str),
+                now, now, now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return {"id": rule_id, "hypothesis_id": hypothesis_id, "version": 1, "status": "shadow", "rule": hypothesis.get("proposed_rule") or {}, "started_at": now}
+
+    def list_paper_learning_rules(self, limit: int = 200) -> List[Dict[str, Any]]:
+        conn = _connect_db(row_factory=True)
+        rows = [dict(row) for row in conn.execute(
+            "SELECT * FROM paper_learning_rules ORDER BY updated_at DESC LIMIT ?",
+            (max(1, min(1000, int(limit))),),
+        ).fetchall()]
+        conn.close()
+        for row in rows:
+            row["rule"] = json.loads(row.pop("rule_json") or "{}")
+            row["baseline"] = json.loads(row.pop("baseline_json") or "{}")
+            row["evaluation"] = json.loads(row.pop("evaluation_json") or "{}")
+        return rows
+
+    def create_paper_learning_rule_version(self, source_rule_id: str) -> Dict[str, Any]:
+        conn = _connect_db(row_factory=True)
+        source = conn.execute(
+            "SELECT * FROM paper_learning_rules WHERE id = ?",
+            (str(source_rule_id),),
+        ).fetchone()
+        if not source:
+            conn.close()
+            raise ValueError("source paper learning rule not found")
+        source_row = dict(source)
+        hypothesis_id = source_row.get("hypothesis_id")
+        version_row = conn.execute(
+            "SELECT MAX(version) FROM paper_learning_rules WHERE hypothesis_id = ?",
+            (hypothesis_id,),
+        ).fetchone()
+        version = int((version_row or [0])[0] or 0) + 1
+        now = datetime.now(timezone.utc).isoformat()
+        rule_id = f"plr_{uuid.uuid4().hex[:24]}"
+        conn.execute(
+            '''
+            INSERT INTO paper_learning_rules (
+                id, hypothesis_id, version, status, rule_json, baseline_json,
+                evaluation_json, started_at, ended_at, created_at, updated_at
+            ) VALUES (?, ?, ?, 'shadow', ?, ?, '{}', ?, NULL, ?, ?)
+            ''',
+            (
+                rule_id,
+                hypothesis_id,
+                version,
+                source_row.get("rule_json") or "{}",
+                source_row.get("baseline_json") or "{}",
+                now,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        created = next((item for item in self.list_paper_learning_rules(limit=1000) if item.get("id") == rule_id), None)
+        if not created:
+            raise RuntimeError("new paper learning rule version could not be loaded")
+        return created
+
+    def update_paper_learning_rule_status(
+        self,
+        rule_id: str,
+        status: str,
+        evaluation: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        allowed = {"shadow", "eligible_for_paper_review", "active_paper", "paused", "rejected", "rolled_back"}
+        if status not in allowed:
+            raise ValueError("invalid paper learning rule status")
+        now = datetime.now().isoformat()
+        ended_at = now if status in {"paused", "rejected", "rolled_back"} else None
+        conn = _connect_db()
+        cursor = conn.execute(
+            '''
+            UPDATE paper_learning_rules
+            SET status = ?, evaluation_json = ?, ended_at = ?, updated_at = ?
+            WHERE id = ?
+            ''',
+            (status, json.dumps(evaluation or {}, ensure_ascii=True, default=str), ended_at, now, rule_id),
+        )
+        conn.commit()
+        conn.close()
+        if cursor.rowcount <= 0:
+            return None
+        return next((item for item in self.list_paper_learning_rules(limit=1000) if item.get("id") == rule_id), None)
+
+    def record_paper_learning_rule_history(
+        self,
+        rule_id: str,
+        action: str,
+        before: Dict[str, Any],
+        after: Dict[str, Any],
+        reason: str,
+        audit_event_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        history_id = f"plrh_{uuid.uuid4().hex[:24]}"
+        created_at = datetime.now(timezone.utc).isoformat()
+        row = {
+            "id": history_id,
+            "rule_id": str(rule_id),
+            "action": str(action),
+            "from_status": before.get("status"),
+            "to_status": after.get("status"),
+            "before": before,
+            "after": after,
+            "reason": str(reason),
+            "audit_event_id": audit_event_id,
+            "created_at": created_at,
+        }
+        conn = _connect_db()
+        conn.execute(
+            '''
+            INSERT INTO paper_learning_rule_history (
+                id, rule_id, action, from_status, to_status, before_json,
+                after_json, reason, audit_event_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                history_id,
+                str(rule_id),
+                str(action),
+                before.get("status"),
+                after.get("status"),
+                json.dumps(before, ensure_ascii=True, default=str),
+                json.dumps(after, ensure_ascii=True, default=str),
+                str(reason),
+                audit_event_id,
+                created_at,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return row
+
+    def list_paper_learning_rule_history(
+        self,
+        rule_id: Optional[str] = None,
+        limit: int = 200,
+    ) -> List[Dict[str, Any]]:
+        conn = _connect_db(row_factory=True)
+        if rule_id:
+            rows = conn.execute(
+                "SELECT * FROM paper_learning_rule_history WHERE rule_id = ? ORDER BY created_at DESC LIMIT ?",
+                (str(rule_id), max(1, min(1000, int(limit)))),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM paper_learning_rule_history ORDER BY created_at DESC LIMIT ?",
+                (max(1, min(1000, int(limit))),),
+            ).fetchall()
+        conn.close()
+        result = [dict(row) for row in rows]
+        for row in result:
+            row["before"] = json.loads(row.pop("before_json") or "{}")
+            row["after"] = json.loads(row.pop("after_json") or "{}")
+        return result
 
     def list_price_alerts(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(DB_PATH)

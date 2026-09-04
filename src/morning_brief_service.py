@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Sequence
 from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor
 import json
 import math
 import os
@@ -1093,20 +1094,55 @@ class MorningBriefService:
         }
 
     def _collect_assets(self, tickers: Sequence[tuple[str, str]], fast: bool = False) -> List[Dict[str, Any]]:
-        assets = []
-        for ticker, label in tickers:
+        def collect(item: tuple[str, str]) -> Dict[str, Any]:
+            ticker, label = item
             fetcher = DataFetcher(ticker)
             price = fetcher.get_price_data_fast() if fast else fetcher.get_price_data()
-            assets.append(
-                {
-                    "ticker": ticker,
-                    "label": label,
-                    "price": self._finite_number(price.get("current_price")),
-                    "change_1d": self._estimate_change_1d(price),
-                    "change_1w": self._finite_number(price.get("change_1w")),
-                }
-            )
-        return assets
+            return {
+                "ticker": ticker,
+                "label": label,
+                "price": self._finite_number(price.get("current_price")),
+                "change_1d": self._estimate_change_1d(price),
+                "change_1w": self._finite_number(price.get("change_1w")),
+            }
+
+        if fast and len(tickers) > 1:
+            with ThreadPoolExecutor(max_workers=min(6, len(tickers))) as executor:
+                return list(executor.map(collect, tickers))
+        return [collect(item) for item in tickers]
+
+    def get_regional_snapshot_fast(self) -> Dict[str, Any]:
+        """Fetch only regional index data, independently from news and signal providers."""
+
+        started_at = perf_time.perf_counter()
+        region_specs = {
+            "asia": (self.ASIA, "Asia"),
+            "europe": (self.EUROPE, "Europe"),
+            "usa": (self.USA, "USA"),
+        }
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                key: executor.submit(self._collect_region, tickers, label, True)
+                for key, (tickers, label) in region_specs.items()
+            }
+            regions = {key: future.result() for key, future in futures.items()}
+
+        missing = [
+            key
+            for key, region in regions.items()
+            if not any(self._finite_number(asset.get("change_1d")) is not None for asset in region.get("assets") or [])
+        ]
+        return self._sanitize_non_finite({
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "regions": regions,
+            "quality": {
+                "current": not missing,
+                "status": "ready" if not missing else "partial",
+                "missing_regions": missing,
+                "source": "regional_chart",
+                "latency_ms": round((perf_time.perf_counter() - started_at) * 1000),
+            },
+        })
 
     def _collect_rss_news(self) -> List[Dict[str, Any]]:
         """Fetch fresh headlines from free RSS feeds (Reuters, CNBC, MarketWatch, etc.)"""

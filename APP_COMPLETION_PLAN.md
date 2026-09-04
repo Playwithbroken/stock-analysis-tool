@@ -58,6 +58,7 @@ Ziel: Das große Demo-Portfolio produziert verwertbare Erkenntnisse, keine Aktiv
 - [x] Wochen-, Monats- und Jahresupdate für das Paper-Portfolio basiert auf unveränderlichen täglichen Konto-Snapshots, trennt Equity-Veränderung von realisierten Trades und zeigt fehlende historische Baselines in App und Telegram ausdrücklich statt rückwirkend Renditen zu schätzen.
 - [x] Eigene Telegram-Periodenjobs senden den Wochenabschluss freitags sowie Monats- und Jahresabschluss am letzten Kalendertag nach Börsenschluss; kombinierte Abschlüsse werden einmalig zugestellt, fehlgeschlagene Zustellungen bleiben wiederholbar.
 - [x] Nach einer Verlustserie pausiert der Paper-Trader 24 Stunden und startet danach höchstens mit 25 % Risiko neu; erst ein profitabel geschlossener Trade beendet den kontrollierten Wiederanlauf, sichtbar in App und Telegram.
+- [x] Learning Engine v2 speichert fuer neue Paper-Trades unveraenderliche Feature-Snapshots, trennt Prozess- und Ergebnisqualitaet, attribuiert wiederkehrende Fehler und testet neue Regeln ausschliesslich als zukuenftige, versionierte Shadow-Regeln mit Audit und Rollback-Grenze.
 
 Abnahme:
 

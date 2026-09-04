@@ -42,6 +42,30 @@ interface PortfolioAnalysis {
   };
 }
 
+const PORTFOLIO_ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000;
+const PORTFOLIO_ANALYSIS_CACHE_MAX = 8;
+const portfolioAnalysisCache = new Map<string, { payload: PortfolioAnalysis; cachedAt: number }>();
+
+function portfolioAnalysisKey(portfolio: Portfolio) {
+  const holdings = [...portfolio.holdings]
+    .map((holding) => ({
+      ticker: holding.ticker.trim().toUpperCase(),
+      shares: holding.shares,
+      buyPrice: holding.buyPrice,
+      purchaseDate: holding.purchaseDate || "",
+    }))
+    .sort((a, b) => a.ticker.localeCompare(b.ticker));
+  return JSON.stringify({ id: portfolio.id, holdings });
+}
+
+function cachePortfolioAnalysis(key: string, payload: PortfolioAnalysis) {
+  portfolioAnalysisCache.set(key, { payload, cachedAt: Date.now() });
+  if (portfolioAnalysisCache.size > PORTFOLIO_ANALYSIS_CACHE_MAX) {
+    const oldestKey = portfolioAnalysisCache.keys().next().value;
+    if (oldestKey !== undefined) portfolioAnalysisCache.delete(oldestKey);
+  }
+}
+
 interface PriceAlert {
   id: string;
   symbol: string;
@@ -50,6 +74,23 @@ interface PriceAlert {
   enabled: boolean;
   cooldown_minutes: number;
   last_triggered_at?: string | null;
+}
+
+interface ScalableIntegrationStatus {
+  enabled: boolean;
+  cli_installed: boolean;
+  read_only: boolean;
+  status: "never_synced" | "ok" | "error" | string;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  position_count?: number;
+  managed_portfolio_id?: string;
+  auto_sync_enabled?: boolean;
+  auto_sync_interval_minutes?: number;
+  next_sync_due_at?: string | null;
+  snapshot_stale?: boolean;
 }
 
 interface AdvisoryProfile {
@@ -209,6 +250,9 @@ export default function PortfolioView({
   const [createPortfolioError, setCreatePortfolioError] = useState<string | null>(null);
   const [createPortfolioNotice, setCreatePortfolioNotice] = useState<string | null>(null);
   const [refreshingPortfolios, setRefreshingPortfolios] = useState(false);
+  const [scalableStatus, setScalableStatus] = useState<ScalableIntegrationStatus | null>(null);
+  const [scalableSyncing, setScalableSyncing] = useState(false);
+  const [scalableNotice, setScalableNotice] = useState("");
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [newAlertSymbol, setNewAlertSymbol] = useState("");
@@ -230,6 +274,8 @@ export default function PortfolioView({
   const currentPortfolio = Array.isArray(portfolios)
     ? portfolios.find((p) => p.id === selectedPortfolio)
     : undefined;
+  const isScalableManagedPortfolio =
+    !!currentPortfolio && currentPortfolio.id === scalableStatus?.managed_portfolio_id;
   const isEditingHolding = (ticker?: string) => !!ticker && editingHoldingTicker === ticker;
 
   useEffect(() => {
@@ -248,7 +294,11 @@ export default function PortfolioView({
       const portfolio = portfolios.find((p) => p.id === selectedPortfolio);
       if (portfolio && portfolio.holdings && portfolio.holdings.length > 0) {
         analyzePortfolio(portfolio);
-        fetchPortfolioVerdict(selectedPortfolio);
+        if (portfolio.id !== "scalable-capital-read-only") {
+          fetchPortfolioVerdict(selectedPortfolio);
+        } else {
+          setPortfolioVerdict(null);
+        }
       } else {
         setAnalysis(null);
         setPortfolioVerdict(null);
@@ -258,6 +308,47 @@ export default function PortfolioView({
       setPortfolioVerdict(null);
     }
   }, [selectedPortfolio, portfolios]);
+
+  const fetchScalableStatus = async () => {
+    try {
+      const response = await fetch("/api/integrations/scalable/status", { credentials: "same-origin" });
+      if (!response.ok) return;
+      setScalableStatus(await response.json());
+    } catch {
+      // This optional integration must never make the local portfolio unavailable.
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchScalableStatus, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const syncScalablePortfolio = async () => {
+    setScalableSyncing(true);
+    setScalableNotice("Scalable-Positionen werden gelesen und mit der Brokerübersicht abgeglichen …");
+    try {
+      const response = await fetch("/api/integrations/scalable/sync", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = payload?.detail;
+        throw new Error(detail?.message || detail || `Scalable-Sync fehlgeschlagen (${response.status})`);
+      }
+      await fetchScalableStatus();
+      await onRefresh();
+      const managedId = payload?.status?.managed_portfolio_id || scalableStatus?.managed_portfolio_id;
+      if (managedId) setSelectedPortfolio(String(managedId));
+      setScalableNotice("Scalable-Portfolio wurde read-only synchronisiert und geprüft.");
+    } catch (error) {
+      setScalableNotice(error instanceof Error ? error.message : "Scalable-Sync fehlgeschlagen.");
+      await fetchScalableStatus();
+    } finally {
+      setScalableSyncing(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -276,11 +367,15 @@ export default function PortfolioView({
         if (!cancelled) setAlertsLoading(false);
       }
     };
-    loadAlerts();
-    const interval = window.setInterval(loadAlerts, 30000);
+    let interval: number | undefined;
+    const timer = window.setTimeout(() => {
+      void loadAlerts();
+      interval = window.setInterval(loadAlerts, 30000);
+    }, 700);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
+      if (interval !== undefined) window.clearInterval(interval);
     };
   }, []);
 
@@ -319,9 +414,10 @@ export default function PortfolioView({
         if (!cancelled) setPaperDashboardLoading(false);
       }
     };
-    loadPaperDashboard();
+    const timer = window.setTimeout(loadPaperDashboard, 1800);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -370,9 +466,10 @@ export default function PortfolioView({
         if (!cancelled) setAdvisoryProfile(null);
       }
     };
-    loadAdvisoryProfile();
+    const timer = window.setTimeout(loadAdvisoryProfile, 2400);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -440,8 +537,16 @@ export default function PortfolioView({
     }
   };
 
-  const analyzePortfolio = async (portfolio: Portfolio) => {
+  const analyzePortfolio = async (portfolio: Portfolio, forceRefresh = false) => {
     if (portfolio.holdings.length === 0) return;
+
+    const cacheKey = portfolioAnalysisKey(portfolio);
+    const cached = portfolioAnalysisCache.get(cacheKey);
+    if (!forceRefresh && cached && Date.now() - cached.cachedAt < PORTFOLIO_ANALYSIS_CACHE_TTL_MS) {
+      setAnalysis(cached.payload);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -449,6 +554,7 @@ export default function PortfolioView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          portfolio_id: portfolio.id,
           holdings: portfolio.holdings.map((h) => ({
             ticker: h.ticker,
             shares: h.shares,
@@ -459,7 +565,8 @@ export default function PortfolioView({
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as PortfolioAnalysis;
+        cachePortfolioAnalysis(cacheKey, data);
         setAnalysis(data);
       }
     } catch {
@@ -713,7 +820,7 @@ export default function PortfolioView({
             >
               Neues Portfolio
             </button>
-            {currentPortfolio && (
+            {currentPortfolio && !isScalableManagedPortfolio && (
               <button
                 onClick={() => setShowAddHoldingModal(true)}
                 className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
@@ -723,6 +830,46 @@ export default function PortfolioView({
             )}
           </div>
         </div>
+
+        {scalableStatus && (
+          <div className="mt-6 flex flex-col gap-4 rounded-[1.5rem] border border-sky-200 bg-sky-50/80 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-800">
+                <ShieldCheck className="h-4 w-4" />
+                Scalable Capital · Read-only
+              </div>
+              <div className="mt-2 text-sm font-bold text-slate-800">
+                {!scalableStatus.enabled
+                  ? "Integration ist vorbereitet, aber serverseitig noch nicht aktiviert."
+                  : !scalableStatus.cli_installed
+                    ? "Offizielle Scalable CLI wurde auf dem Server noch nicht gefunden."
+                    : scalableStatus.status === "ok"
+                      ? scalableStatus.snapshot_stale
+                        ? `${scalableStatus.position_count || 0} Positionen vorhanden · Snapshot ist überfällig.`
+                        : `${scalableStatus.position_count || 0} Positionen geprüft synchronisiert.`
+                      : scalableStatus.error_message || "Bereit für den ersten sicheren Abgleich."}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-600">
+                {scalableStatus.last_success_at
+                  ? `Letzter gültiger Stand: ${new Date(scalableStatus.last_success_at).toLocaleString()}${
+                      scalableStatus.auto_sync_enabled
+                        ? ` · automatisch alle ${scalableStatus.auto_sync_interval_minutes || 15} Minuten`
+                        : ""
+                    }`
+                  : "Keine Orders, Sparpläne oder Änderungen – ausschließlich Portfolio-Lesedaten."}
+              </div>
+              {scalableNotice && <div className="mt-2 text-xs font-bold text-sky-900">{scalableNotice}</div>}
+            </div>
+            <button
+              onClick={syncScalablePortfolio}
+              disabled={!scalableStatus.enabled || !scalableStatus.cli_installed || scalableSyncing}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-sky-700 px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
+              {scalableSyncing ? "Prüfe …" : "Scalable synchronisieren"}
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
@@ -782,7 +929,7 @@ export default function PortfolioView({
 
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => currentPortfolio && analyzePortfolio(currentPortfolio)}
+                  onClick={() => currentPortfolio && analyzePortfolio(currentPortfolio, true)}
                   disabled={loading || currentPortfolio.holdings.length === 0}
                   className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
                 >
@@ -800,7 +947,7 @@ export default function PortfolioView({
                     CSV exportieren
                   </span>
                 </button>
-                <button
+                {!isScalableManagedPortfolio && <button
                   onClick={() => {
                     if (confirm("Dieses Portfolio wirklich löschen?")) {
                       onDeletePortfolio(currentPortfolio.id);
@@ -813,7 +960,7 @@ export default function PortfolioView({
                     <Trash2 size={14} />
                     Löschen
                   </span>
-                </button>
+                </button>}
               </div>
             </div>
 
@@ -1120,16 +1267,29 @@ export default function PortfolioView({
           {analysis && analysis.holdings.length > 0 ? (
             <>
               <div className="grid gap-6 lg:grid-cols-2">
-                <PortfolioPerformance portfolioId={selectedPortfolio!} />
+                {isScalableManagedPortfolio ? (
+                  <section className="surface-panel rounded-[2rem] border border-sky-200 bg-sky-50/70 p-6">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-800">
+                      Verifizierter Broker-Snapshot
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-700">
+                      Aktueller Wert und FIFO-Einstand stammen direkt aus dem abgeglichenen Scalable-Snapshot.
+                      Eine historische Kurve wird erst angezeigt, wenn Scalable dafür vollständig vergleichbare
+                      Zeitreihen liefert.
+                    </p>
+                  </section>
+                ) : (
+                  <PortfolioPerformance portfolioId={selectedPortfolio!} />
+                )}
                 <PortfolioHeatmap holdings={analysis.holdings} />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
-                <DividendDashboard portfolioId={selectedPortfolio!} />
+                {!isScalableManagedPortfolio && <DividendDashboard portfolioId={selectedPortfolio!} />}
                 <RiskCorrelationMatrix portfolioId={selectedPortfolio!} />
               </div>
 
-              {selectedPortfolio && (
+              {selectedPortfolio && !isScalableManagedPortfolio && (
                 <AssetSuggestions
                   portfolioId={selectedPortfolio}
                   onAdd={(ticker: string) => {
@@ -1555,12 +1715,12 @@ export default function PortfolioView({
                 >
                   CSV exportieren
                 </button>
-                <button
+                {!isScalableManagedPortfolio && <button
                   onClick={() => setShowAddHoldingModal(true)}
                   className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
                 >
                   Aktie hinzufügen
-                </button>
+                </button>}
               </div>
             </section>
           )}

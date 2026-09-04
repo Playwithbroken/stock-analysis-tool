@@ -97,7 +97,7 @@ export default function PortfolioHeatmap({ holdings }: PortfolioHeatmapProps) {
     <div className="surface-panel rounded-[2rem] p-6">
       <h3 className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
         <span className="h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse" />
-        Capital Allocation Heatmap
+        Heatmap der Kapitalverteilung
       </h3>
 
       <MeasuredChartFrame
@@ -119,8 +119,8 @@ export default function PortfolioHeatmap({ holdings }: PortfolioHeatmapProps) {
       </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-        <span>Allocation distribution</span>
-        <span>{data.length} Assets</span>
+        <span>Verteilung der Positionen</span>
+        <span>{data.length} Werte</span>
       </div>
     </div>
   );

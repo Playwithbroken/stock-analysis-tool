@@ -46,6 +46,7 @@ def main() -> int:
         api._market_feed_health_check = lambda: {
             "yfinance": {"status": "error"},
             "realtime": {"status": "disconnected", "stale_seconds": {"AAPL": 3600}},
+            "realtime_required": False,
         }
         api.get_database_status = lambda: {
             "writable": False,
@@ -59,9 +60,12 @@ def main() -> int:
 
         first = api._run_operational_alert_cycle()
         second = api._run_operational_alert_cycle()
+        third = api._run_operational_alert_cycle()
         first_codes = {item.get("code") for item in first.get("issues", [])}
+        third_codes = {item.get("code") for item in third.get("issues", [])}
         require("scheduler_error" in first_codes, failures, "scheduler error was not detected")
-        require("market_quotes_stale" in first_codes, failures, "stale quote/provider error was not detected")
+        require("market_quotes_stale" not in first_codes, failures, "single provider failure must not alert")
+        require("market_quotes_stale" in third_codes, failures, "confirmed quote/provider error was not detected")
         require("database_not_writable" in first_codes, failures, "unwritable database/volume was not detected")
         require(len(telegram_calls) == 3, failures, "operational alerts were not deduplicated on the second cycle")
         require(all(item.get("status") == "deduplicated" for item in second.get("deliveries", [])), failures, "second cycle should be deduplicated")
@@ -71,6 +75,7 @@ def main() -> int:
         api._market_feed_health_check = lambda: {
             "yfinance": {"status": "ok"},
             "realtime": {"status": "ok", "stale_seconds": {"AAPL": 0}},
+            "realtime_required": False,
         }
         api.get_database_status = lambda: {
             "writable": True,

@@ -1,4 +1,7 @@
 import os
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -14,12 +17,39 @@ class MemoryManager:
     def __init__(self):
         self.sent = set()
         self.settings = {}
+        self.claims = {}
+        self.lock = threading.Lock()
 
     def get_sent_signal_event_keys(self):
         return set(self.sent)
 
     def mark_signal_events_sent(self, events):
         self.sent.update(str(item["event_key"]) for item in events)
+
+    def claim_signal_event_delivery(self, event, lease_seconds=900):
+        event_key = str(event["event_key"])
+        with self.lock:
+            if event_key in self.sent or event_key in self.claims:
+                return None
+            claim_id = f"claim-{len(self.claims) + 1}"
+            self.claims[event_key] = claim_id
+            return claim_id
+
+    def complete_signal_event_delivery(self, event, claim_id):
+        event_key = str(event["event_key"])
+        with self.lock:
+            if self.claims.get(event_key) != claim_id:
+                return False
+            self.claims.pop(event_key, None)
+            self.sent.add(event_key)
+            return True
+
+    def release_signal_event_delivery(self, event_key, claim_id):
+        with self.lock:
+            if self.claims.get(event_key) != claim_id:
+                return False
+            self.claims.pop(event_key, None)
+            return True
 
     def get_app_setting(self, key, default=None):
         return self.settings.get(key, default)
@@ -135,6 +165,25 @@ def main() -> int:
         failed = retry.send_scheduled_paper_period_update(report_builder, now=friday)
         sent = retry.send_scheduled_paper_period_update(report_builder, now=friday)
         require(failed["status"] == "failed" and sent["status"] == "sent", "failed period update must retry")
+
+        concurrent = build_service()
+        started = threading.Barrier(7)
+
+        def slow_delivery(current, events, subject):
+            concurrent.deliveries.append({"subject": subject, "events": events})
+            time.sleep(0.1)
+            return True
+
+        concurrent._send_notifications = slow_delivery
+
+        def run_parallel():
+            started.wait()
+            return concurrent.send_scheduled_paper_period_update(report_builder, now=friday)
+
+        with ThreadPoolExecutor(max_workers=7) as pool:
+            results = list(pool.map(lambda _: run_parallel(), range(7)))
+        require(sum(item["status"] == "sent" for item in results) == 1, "parallel runs must send once")
+        require(len(concurrent.deliveries) == 1, "parallel period update reached Telegram more than once")
 
         api_source = (ROOT / "api.py").read_text(encoding="utf-8")
         require('"Paper portfolio period update"' in api_source, "period update missing from scheduler")

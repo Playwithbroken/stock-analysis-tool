@@ -17,6 +17,15 @@ import {
 import { Calendar, Clock, TrendingUp } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
 import { fetchJsonWithRetry } from "../lib/api";
+import {
+  calculateChartChangePct,
+  describeChartFeed,
+  formatChartAxisDate,
+  formatChartTooltipDate,
+  parseChartNumber,
+  resolveChartPointIndex,
+  resolveChartTooltipPoint,
+} from "../lib/chartTooltip";
 import MeasuredChartFrame from "./MeasuredChartFrame";
 import useRealtimeFeed from "../hooks/useRealtimeFeed";
 
@@ -63,19 +72,19 @@ interface IndicatorSeries {
 }
 
 const PERIODS = [
-  { id: "1d", label: "1D", interval: "5m" },
-  { id: "5d", label: "5D", interval: "15m" },
-  { id: "1mo", label: "1M", interval: "1d" },
-  { id: "1y", label: "1Y", interval: "1wk" },
-  { id: "5y", label: "5Y", interval: "1mo" },
-  { id: "max", label: "MAX", interval: "1mo" },
+  { id: "1d", label: "1T", title: "1 Tag", interval: "5m" },
+  { id: "5d", label: "5T", title: "5 Tage", interval: "15m" },
+  { id: "1mo", label: "1M", title: "1 Monat", interval: "1d" },
+  { id: "1y", label: "1J", title: "1 Jahr", interval: "1wk" },
+  { id: "5y", label: "5J", title: "5 Jahre", interval: "1mo" },
+  { id: "max", label: "MAX", title: "Gesamter Zeitraum", interval: "1mo" },
 ];
 
 type HistoryState = "loading" | "ready" | "stale" | "snapshot" | "unavailable";
 
 const HISTORY_STATUS_LABELS: Record<HistoryState, string> = {
   loading: "lädt",
-  ready: "Live-Historie",
+  ready: "Historie geladen",
   stale: "gespeicherte Historie",
   snapshot: "Snapshot-Fallback",
   unavailable: "nicht verfügbar",
@@ -91,21 +100,19 @@ const friendlyRealtimeError = (error: string) => {
 
 const dataStatusLabel = (
   historyState: HistoryState,
-  connectionState: "live" | "degraded" | "snapshot",
-  transportMode: "ws" | "snapshot",
+  feedStatus: string,
 ) => {
   if (historyState === "unavailable") return "Kursdaten aktuell nicht verfügbar";
   if (historyState === "snapshot") return "Snapshot-Fallback aktiv";
-  if (historyState === "stale") return "Gespeicherte Historie aktiv, Provider wird erneut versucht";
-  if (connectionState === "degraded") return "Live-Feed verzögert, Chart bleibt nutzbar";
-  if (connectionState === "snapshot" || transportMode === "snapshot") return "Snapshot-Feed aktiv";
-  return "Live-Daten aktiv";
+  if (historyState === "stale") return "Gespeicherte Historie aktiv";
+  return `${feedStatus}, Historie separat`;
 };
 
 const friendlyHistoryReason = (reason?: string) => {
   if (!reason) return "";
   if (reason === "provider_unavailable_using_last_good_history") return "Provider langsam, letzter guter Kursverlauf aktiv";
   if (reason === "provider_timeout") return "Datenprovider antwortet zu langsam";
+  if (reason === "no_history_available") return "Für diesen Zeitraum sind aktuell keine historischen Kurse verfügbar. Der Live-Kurs bleibt davon unabhängig.";
   if (reason === "no_history_or_snapshot_available") return "Weder Historie noch Snapshot liefern gerade Daten";
   return reason.replaceAll("_", " ");
 };
@@ -211,11 +218,24 @@ const computeMacdHistogram = (prices: number[]): Array<number | null> => {
 export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const { formatPrice } = useCurrency();
   const [data, setData] = useState<HistoryItem[]>([]);
+  const [discardedPoints, setDiscardedPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [fetchErrorMessage, setFetchErrorMessage] = useState<string>("");
   const [period, setPeriod] = useState(PERIODS[2]);
-  const [stats, setStats] = useState({ change: 0, changePct: 0 });
+  const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
+  const [tooltipSuppressed, setTooltipSuppressed] = useState(false);
+  const [touchSelection, setTouchSelection] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(hover: none)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(hover: none)");
+    const updateInputMode = () => setTouchSelection(query.matches);
+    updateInputMode();
+    query.addEventListener("change", updateInputMode);
+    return () => query.removeEventListener("change", updateInputMode);
+  }, []);
+  const [loadedHistoryKey, setLoadedHistoryKey] = useState("");
   const [showRSI, setShowRSI] = useState(false);
   const [showMACD, setShowMACD] = useState(false);
   const [showSMA, setShowSMA] = useState(true);
@@ -227,7 +247,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const [historyState, setHistoryState] = useState<HistoryState>("loading");
   const [historyMeta, setHistoryMeta] = useState<HistoryPayload["meta"] | null>(null);
   const tickerSymbol = ticker.toUpperCase();
-  const { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError } = useRealtimeFeed([ticker], true);
+  const { quotes, connected, connectionState, staleSeconds, transportMode, lastError } = useRealtimeFeed([ticker], true);
   const realtimeQuote = quotes[tickerSymbol];
 
   const requestIdRef = useRef(0);
@@ -257,7 +277,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     return () => {
       window.clearTimeout(timeoutGuard);
     };
-  }, [loading, fetchError, tickerSymbol, period.id]);
+  }, [loading, fetchError, tickerSymbol, period.id, retryCounter]);
 
   useEffect(() => {
     const requestId = requestIdRef.current + 1;
@@ -273,6 +293,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       setFetchErrorMessage("");
       setData([]);
       setHistoryMeta(null);
+      setDiscardedPoints(0);
       setIndicators(emptyIndicators());
 
       try {
@@ -288,36 +309,44 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
 
         const normalizeHistory = (raw: any[]): HistoryItem[] =>
           (raw || [])
-            .map((item) => {
-              const priceNum = Number(item?.price);
-              const volumeNum = Number(item?.volume);
-              return {
-                time: String(item?.time ?? ""),
-                full_date: item?.full_date ? String(item.full_date) : undefined,
+            .flatMap((item): HistoryItem[] => {
+              const priceNum = parseChartNumber(item?.price);
+              const time = typeof item?.time === "string" ? item.time.trim() : "";
+              if (priceNum === null || !time) return [];
+              const volumeNum = parseChartNumber(item?.volume);
+              return [{
+                time,
+                full_date: typeof item?.full_date === "string" ? item.full_date : undefined,
                 price: priceNum,
-                volume: Number.isFinite(volumeNum) ? volumeNum : 0,
-              } as HistoryItem;
-            })
-            .filter((item) => item.time && Number.isFinite(item.price));
+                volume: volumeNum ?? 0,
+              }];
+            });
 
         const historyRequests = [
           `/api/history/${tickerSymbol}?period=${period.id}&interval=${period.interval}`,
-          `/api/history/${tickerSymbol}?period=1mo&interval=1d`,
         ];
 
         let normalized: HistoryItem[] = [];
+        let rejectedCount = 0;
         let responseMeta: HistoryPayload["meta"] | null = null;
         let lastRequestError: unknown = null;
-        let usedSnapshotFallback = false;
         for (const url of historyRequests) {
           try {
             const histData = await fetchJsonWithRetry<HistoryItem[] | HistoryPayload>(
               url,
               { signal: controller.signal },
-              { retries: 0, retryDelayMs: 250, timeoutMs: 3500 },
+              { retries: 0, retryDelayMs: 250, timeoutMs: 10000 },
             );
             const unpacked = unpackHistoryPayload(histData);
+            if (
+              unpacked.meta?.mode === "snapshot" ||
+              (unpacked.meta?.period && unpacked.meta.period !== period.id) ||
+              (unpacked.meta?.interval && unpacked.meta.interval !== period.interval)
+            ) {
+              throw new Error("Die Datenquelle liefert keine passende Historie für diesen Zeitraum. Bitte erneut laden.");
+            }
             normalized = normalizeHistory(unpacked.items);
+            rejectedCount = unpacked.items.length - normalized.length;
             responseMeta = unpacked.meta;
             if (normalized.length > 0) break;
           } catch (error) {
@@ -325,48 +354,10 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           }
         }
 
-        if (normalized.length === 0 && lastRequestError) {
-          try {
-            const snapshot = await fetchJsonWithRetry<any>(
-              `/api/realtime/snapshot?symbols=${encodeURIComponent(tickerSymbol)}`,
-              { signal: controller.signal },
-              { retries: 0, retryDelayMs: 250, timeoutMs: 2500 },
-            );
-            const quote = Array.isArray(snapshot?.quotes)
-              ? snapshot.quotes.find((item: any) => String(item?.symbol || "").toUpperCase() === tickerSymbol)
-              : null;
-            const fallbackPrice = Number(quote?.price);
-            if (Number.isFinite(fallbackPrice)) {
-              const now = Date.now();
-              const fallbackVolume = Number(quote?.volume ?? 0) || 0;
-              normalized = Array.from({ length: 5 }, (_, idx) => {
-                const stamp = new Date(now - (4 - idx) * 15 * 60 * 1000);
-                return {
-                  time: stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                  full_date: stamp.toISOString(),
-                  price: fallbackPrice,
-                  volume: fallbackVolume,
-                };
-              });
-              usedSnapshotFallback = true;
-              responseMeta = {
-                mode: "snapshot",
-                stale: true,
-                source: "realtime_snapshot",
-                period: "snapshot",
-                interval: "snapshot",
-                points: normalized.length,
-              };
-            }
-          } catch {
-            // ignore and throw original history error
-          }
-          if (normalized.length === 0) {
-            throw lastRequestError;
-          }
-        }
+        if (normalized.length === 0 && lastRequestError) throw lastRequestError;
 
-        if (requestIdRef.current !== requestId) return;
+        if (controller.signal.aborted || requestIdRef.current !== requestId) return;
+        setDiscardedPoints(rejectedCount);
         normalized = normalized.map((item) => ({
           ...item,
           full_date: item.full_date || item.time,
@@ -387,26 +378,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }
 
         setData(normalized);
+        setLoadedHistoryKey(`${tickerSymbol}:${period.id}`);
         setHistoryMeta(responseMeta);
-        if (usedSnapshotFallback || responseMeta?.mode === "snapshot") {
-          setHistoryState("snapshot");
-        } else if (responseMeta?.stale || responseMeta?.mode === "fallback") {
+        if (responseMeta?.stale || responseMeta?.mode === "fallback") {
           setHistoryState("stale");
         } else {
           setHistoryState("ready");
         }
-        if (normalized.length > 1) {
-          const first = normalized[0].price;
-          const last = normalized[normalized.length - 1].price;
-          const change = last - first;
-          const changePct = first !== 0 ? (change / first) * 100 : 0;
-          setStats({ change, changePct });
-          onStatsUpdateRef.current?.({ change, changePct }, period.label);
-        } else {
-          setStats({ change: 0, changePct: 0 });
-          onStatsUpdateRef.current?.({ change: 0, changePct: 0 }, period.label);
-        }
-
         const prices = normalized.map((item) => item.price);
         const volumes = normalized.map((item) => item.volume || 0);
         const sma20 = rollingAverage(prices, 20);
@@ -476,15 +454,10 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   }, [tickerSymbol, period, retryCounter]);
 
   const chartData = useMemo(() => {
-    const livePrice =
-      realtimeQuote?.symbol?.toUpperCase() === tickerSymbol && Number.isFinite(realtimeQuote?.price)
-        ? Number(realtimeQuote.price)
-        : null;
     return data.map((entry, idx) => {
-      const isLast = idx === data.length - 1;
       return {
         ...entry,
-        price: isLast && livePrice != null ? livePrice : entry.price,
+        _chartIndex: idx,
         _rsi: indicators.rsi[idx],
         _macd: indicators.macd[idx],
         _sma20: indicators.sma20[idx],
@@ -496,7 +469,73 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         _volume: entry.volume || 0,
       };
     });
-  }, [data, indicators, realtimeQuote, tickerSymbol]);
+  }, [data, indicators]);
+
+  // Snapshot updated_at can be a retrieval time, not the price's market time.
+  // Keep the quote separate rather than relabeling a historical observation.
+  const feedPrice = realtimeQuote?.symbol?.toUpperCase() === tickerSymbol &&
+    Number.isFinite(realtimeQuote?.price) && realtimeQuote.price > 0
+    ? realtimeQuote.price : null;
+  const feedStatus = describeChartFeed({
+    connected: connected && feedPrice !== null,
+    connectionState,
+    transportMode,
+    streaming: realtimeQuote?.streaming,
+  });
+
+  const stats = useMemo(() => {
+    if (chartData.length < 2) return { change: 0, changePct: 0 };
+    const first = chartData[0].price;
+    const last = chartData[chartData.length - 1].price;
+    return { change: last - first, changePct: calculateChartChangePct(first, last) ?? 0 };
+  }, [chartData]);
+
+  useEffect(() => {
+    if (!loading && !fetchError && chartData.length && loadedHistoryKey === `${tickerSymbol}:${period.id}`) {
+      onStatsUpdateRef.current?.(stats, period.label);
+    }
+  }, [stats, loading, fetchError, chartData.length, loadedHistoryKey, tickerSymbol, period.id, period.label]);
+
+  useEffect(() => {
+    setInspectedIndex(null);
+    setTooltipSuppressed(false);
+  }, [data, period.id, tickerSymbol]);
+
+  const inspectFromControls = useCallback((index: number) => {
+    // A click tooltip belongs to the chart's last tap, not the slider's new point.
+    setTooltipSuppressed(true);
+    setInspectedIndex(index);
+  }, []);
+
+  const displayedIndex = chartData.length
+    ? Math.min(inspectedIndex ?? chartData.length - 1, chartData.length - 1)
+    : 0;
+  const inspectedPoint = chartData[displayedIndex] || null;
+  const latestChartPrice = chartData.at(-1)?.price;
+  const inspectedChangePct = inspectedPoint
+    ? calculateChartChangePct(inspectedPoint.price, latestChartPrice)
+    : null;
+  const historicalPriceLabel =
+    period.interval === "1mo" ? "Monatskurs" : period.interval === "1wk" ? "Wochenkurs" : "Kurs";
+  const inspectChartPoint = useCallback(
+    (state: any) => {
+      const activeIndex = resolveChartPointIndex(state?.activeTooltipIndex, chartData.length);
+      if (activeIndex !== null) {
+        setTooltipSuppressed(false);
+        setInspectedIndex(activeIndex);
+        return;
+      }
+      const point = resolveChartTooltipPoint(state?.activePayload);
+      if (!point) return;
+      const pointKey = point.full_date || point.time;
+      const nextIndex = chartData.findIndex((item) => (item.full_date || item.time) === pointKey);
+      if (nextIndex >= 0) {
+        setTooltipSuppressed(false);
+        setInspectedIndex(nextIndex);
+      }
+    },
+    [chartData],
+  );
 
   const isPositive = stats.changePct >= 0;
   const subPanels = [showVolume, showRSI, showMACD].filter(Boolean).length;
@@ -535,48 +574,62 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700", help: INDICATOR_HELP.Volume },
     { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700", help: INDICATOR_HELP.VWAP },
   ];
-  const activeIndicatorHelp = indicatorToggles.filter((toggle) => toggle.active).slice(0, 3);
+  const activeIndicatorHelp = indicatorToggles.filter((toggle) => toggle.active);
 
   const CustomTooltip = useCallback(
     ({ active, payload }: any) => {
-      if (active && payload && payload.length) {
-        const d = payload[0].payload;
+      const d = active ? resolveChartTooltipPoint(payload) : null;
+      if (d) {
+        const changeToLatest = calculateChartChangePct(d.price, latestChartPrice);
         return (
-          <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
-            <p className="mb-1 text-xs text-slate-500">{d.full_date || d.time}</p>
-            <p className="text-lg font-bold text-slate-900">{formatPrice(d.price)}</p>
-            {d._volume > 0 ? (
-              <p className="mt-1 text-[10px] text-slate-500">
-                Vol: {Number(d._volume).toLocaleString()}
+          <div className="min-w-36 rounded-xl border border-black/10 bg-white/96 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.16)] dark:border-white/15 dark:bg-slate-950/96">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              Datum / Zeit
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              {formatChartTooltipDate(d, period.id)}
+            </p>
+            <p className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              {historicalPriceLabel}
+            </p>
+            <p className="mt-0.5 text-lg font-black text-slate-950 dark:text-white">{formatPrice(d.price)}</p>
+            {changeToLatest != null ? (
+              <p className={`mt-1 text-[10px] font-bold ${changeToLatest >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                Änderung bis zum letzten Kurspunkt {changeToLatest >= 0 ? "+" : ""}{changeToLatest.toLocaleString("de-DE", { maximumFractionDigits: 2 })}% · ohne Div.
+              </p>
+            ) : null}
+            {Number(d._volume) > 0 ? (
+              <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                Volumen: {Number(d._volume).toLocaleString("de-DE")}
               </p>
             ) : null}
             {d._rsi != null && showRSI ? (
-              <p className="mt-1 text-[10px] text-amber-600">RSI: {d._rsi.toFixed(1)}</p>
+              <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">RSI: {d._rsi.toFixed(1)}</p>
             ) : null}
             {d._macd != null && showMACD ? (
-              <p className="mt-1 text-[10px] text-sky-600">MACD: {d._macd.toFixed(3)}</p>
+              <p className="mt-1 text-[10px] text-sky-600 dark:text-sky-400">MACD: {d._macd.toFixed(3)}</p>
             ) : null}
           </div>
         );
       }
       return null;
     },
-    [formatPrice, showMACD, showRSI],
+    [formatPrice, historicalPriceLabel, latestChartPrice, period.id, showMACD, showRSI],
   );
 
   return (
-    <div className="analysis-primary-panel surface-panel rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6">
-      <div className="mb-5 flex flex-col justify-between gap-4 md:mb-8 md:flex-row md:items-center">
+    <div className="price-chart analysis-primary-panel surface-panel rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6">
+      <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:flex-wrap md:items-center">
         <div>
           <div className="mb-1 flex flex-wrap items-center gap-2 text-slate-500">
             <TrendingUp size={16} className={isPositive ? "text-emerald-600" : "text-red-600"} />
             <span className="text-sm font-semibold">Kursverlauf ({period.label})</span>
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
-                connected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"
+                feedStatus === "Live-Feed" ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"
               }`}
             >
-              {connected ? "Live" : transportMode === "snapshot" ? "Snapshot" : "Abfrage"}
+              {feedStatus}
             </span>
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
@@ -596,41 +649,74 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           </div>
           <div className="flex items-baseline gap-3">
             <div className={`text-xl font-bold ${isPositive ? "text-emerald-700" : "text-red-700"}`}>
-              {isPositive ? "+" : ""}
-              {stats.changePct.toFixed(2)}%
+              {loading || fetchError ? "—" : `${isPositive ? "+" : ""}${stats.changePct.toFixed(2)}%`}
             </div>
-            <div className="text-sm text-slate-500">
+            {!loading && !fetchError ? <div className="text-sm text-slate-500">
               ({isPositive ? "+" : ""}
               {formatPrice(stats.change)})
-            </div>
+            </div> : null}
           </div>
+          {feedPrice !== null ? (
+            <div role="group" aria-label="Separater Feed-Kurs" className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-slate-500">
+              <span>Letzter Feed-Kurs</span>
+              <span className="font-semibold text-slate-700">{formatPrice(feedPrice)}</span>
+              <span className="text-[11px]">Separat von der Historie</span>
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-black/8 bg-white/80 p-1 no-scrollbar">
+        <div
+          className="chart-period-selector grid w-full max-w-full grid-cols-6 items-center gap-0.5 rounded-xl border border-black/8 bg-white/80 p-1 sm:flex sm:w-auto sm:gap-1"
+          role="group"
+          aria-label="Zeitraum für den Kursverlauf"
+        >
           {PERIODS.map((p) => (
             <button
               key={p.id}
-              onClick={() => setPeriod(p)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition-all sm:px-4 ${
+              type="button"
+              aria-label={`${p.title} im Kursverlauf anzeigen`}
+              aria-pressed={period.id === p.id}
+              title={p.title}
+              onClick={() => {
+                setInspectedIndex(null);
+                if (period.id === p.id) {
+                  setRetryCounter((current) => current + 1);
+                  return;
+                }
+                setPeriod(p);
+              }}
+              className={`relative min-h-10 min-w-0 shrink-0 touch-manipulation rounded-lg px-1 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 sm:min-w-11 sm:px-4 ${
                 period.id === p.id
                   ? "bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(15,118,110,0.18)]"
                   : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900"
               }`}
             >
-              {p.label}
+              <span className="inline-flex items-center gap-1.5">
+                {p.label}
+                {loading && period.id === p.id ? (
+                  <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 animate-pulse rounded-full bg-current opacity-80" aria-hidden="true" />
+                ) : null}
+              </span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap">
+      <div
+        className="chart-indicator-controls relative mb-4 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap"
+        role="group"
+        aria-label="Technische Indikatoren"
+      >
         {indicatorToggles.map((toggle) => (
           <button
             key={toggle.label}
+            type="button"
             onClick={() => toggle.setActive((prev) => !prev)}
             title={toggle.help}
             aria-label={`${toggle.label}: ${toggle.help}`}
-            className={`group relative shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all ${
+            aria-pressed={toggle.active}
+            data-indicator={toggle.label}
+            className={`chart-indicator-toggle group flex min-h-10 min-w-0 touch-manipulation items-center justify-center rounded-lg border px-1.5 py-2 text-[10px] font-bold uppercase tracking-[0.06em] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 sm:w-auto sm:shrink-0 sm:px-3 sm:tracking-[0.12em] ${
               toggle.active ? toggle.activeTone : "border-black/8 bg-white/80 text-slate-500"
             }`}
           >
@@ -640,7 +726,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 ?
               </span>
             </span>
-            <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-64 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-visible:block group-focus-visible:opacity-100 sm:left-1/2 sm:-translate-x-1/2">
+            <span aria-hidden="true" className="indicator-hover-help pointer-events-none rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 shadow-[0_16px_34px_rgba(15,23,42,0.14)]">
               <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
                 {toggle.label}
               </span>
@@ -650,20 +736,142 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         ))}
       </div>
       {activeIndicatorHelp.length ? (
-        <div className="mb-4 hidden gap-2 sm:grid sm:grid-cols-2 xl:grid-cols-3">
-          {activeIndicatorHelp.map((toggle) => (
-            <div
-              key={toggle.label}
-              className="rounded-[0.9rem] border border-black/8 bg-white/68 px-3 py-2 text-[11px] leading-5 text-slate-600"
-            >
-              <span className="mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">
-                {toggle.label}
+        <>
+          <details className="indicator-mobile-help mb-4 rounded-[0.9rem] border border-black/8 bg-white/68 sm:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.13em] text-slate-700">
+              <span>Aktive Indikatoren erklären</span>
+              <span className="rounded-full bg-black/[0.05] px-2 py-1 text-[10px] text-slate-500">
+                {activeIndicatorHelp.length}
               </span>
-              {toggle.help}
+            </summary>
+            <div className="grid gap-2 border-t border-black/8 p-2.5">
+              {activeIndicatorHelp.map((toggle) => (
+                <div
+                  key={toggle.label}
+                  className="indicator-help-card rounded-[0.8rem] border border-black/8 bg-white/68 px-3 py-2.5 text-[11px] leading-5 text-slate-600"
+                >
+                  <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">
+                    {toggle.label}
+                  </span>
+                  {toggle.help}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </details>
+
+          <div className="mb-4 hidden gap-2 sm:grid sm:grid-cols-2 xl:grid-cols-3">
+            {activeIndicatorHelp.slice(0, 3).map((toggle) => (
+              <div
+                key={toggle.label}
+                className="indicator-help-card rounded-[0.9rem] border border-black/8 bg-white/68 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600"
+              >
+                <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">
+                  {toggle.label}
+                </span>
+                {toggle.help}
+              </div>
+            ))}
+          </div>
+          {activeIndicatorHelp.length > 3 ? (
+            <details className="indicator-mobile-help indicator-extra-help mb-4 hidden rounded-[0.9rem] border border-black/8 bg-white/68 sm:block">
+              <summary className="min-h-11 cursor-pointer px-3.5 py-3 text-xs font-semibold text-slate-700">
+                Weitere {activeIndicatorHelp.length - 3} Indikatoren erklären
+              </summary>
+              <div className="grid gap-2 border-t border-black/8 p-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                {activeIndicatorHelp.slice(3).map((toggle) => (
+                  <div key={toggle.label} className="indicator-help-card rounded-[0.8rem] border border-black/8 bg-white/68 px-3 py-2.5 text-[11px] leading-5 text-slate-600">
+                    <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">{toggle.label}</span>
+                    {toggle.help}
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </>
       ) : null}
+
+      <div className="mb-3 rounded-[1rem] border border-black/8 bg-white/72 px-3 py-2.5 dark:border-white/10 dark:bg-slate-950/55">
+        <div className="flex flex-wrap items-center justify-between gap-2" aria-live="polite">
+          <div>
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+              Historischer Kurspunkt
+            </div>
+            <div className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              {inspectedPoint ? formatChartTooltipDate(inspectedPoint, period.id) : "Keine Kursdaten"}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              {historicalPriceLabel}
+            </div>
+            <div className="mt-0.5 text-base font-black text-slate-950 dark:text-white">
+              {inspectedPoint ? formatPrice(inspectedPoint.price) : "—"}
+            </div>
+            {inspectedChangePct != null ? (
+              <div className={`mt-0.5 text-[10px] font-extrabold ${inspectedChangePct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                Änderung bis zum letzten Kurspunkt {inspectedChangePct >= 0 ? "+" : ""}{inspectedChangePct.toLocaleString("de-DE", { maximumFractionDigits: 2 })}% · ohne Div.
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => inspectFromControls(Math.max(0, displayedIndex - 1))}
+            disabled={!chartData.length || displayedIndex <= 0}
+            className="min-h-9 shrink-0 rounded-lg border border-black/8 bg-white px-2.5 text-[10px] font-extrabold text-slate-600 disabled:opacity-35 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+            aria-label="Einen Kurspunkt früher"
+          >
+            ← Früher
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, chartData.length - 1)}
+            step={1}
+            value={displayedIndex}
+            disabled={!chartData.length}
+            onChange={(event) => inspectFromControls(Number(event.target.value))}
+            aria-label={`Historischen Kurspunkt für ${period.label} auswählen`}
+            aria-valuetext={
+              inspectedPoint
+                ? `${formatChartTooltipDate(inspectedPoint, period.id)}, ${formatPrice(inspectedPoint.price)}`
+                : "Keine Kursdaten"
+            }
+            className="h-9 min-w-0 flex-1 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-40"
+          />
+          <button
+            type="button"
+            onClick={() => inspectFromControls(Math.min(chartData.length - 1, displayedIndex + 1))}
+            disabled={!chartData.length || displayedIndex >= chartData.length - 1}
+            className="min-h-9 shrink-0 rounded-lg border border-black/8 bg-white px-2.5 text-[10px] font-extrabold text-slate-600 disabled:opacity-35 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+            aria-label="Einen Kurspunkt später"
+          >
+            Später →
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">
+          <button
+            type="button"
+            onClick={() => inspectFromControls(0)}
+            disabled={!chartData.length || displayedIndex === 0}
+            className="rounded-md px-1.5 py-1 text-left transition-colors hover:bg-black/[0.04] hover:text-[var(--accent)] disabled:pointer-events-none disabled:opacity-45"
+            aria-label="Zum ersten historischen Kurspunkt springen"
+          >
+            Start · {chartData[0] ? formatChartTooltipDate(chartData[0], period.id) : "—"}
+          </button>
+          <span className="hidden text-center sm:inline">Wischen, tippen oder über den Chart fahren</span>
+          <button
+            type="button"
+            onClick={() => inspectFromControls(Math.max(0, chartData.length - 1))}
+            disabled={!chartData.length || displayedIndex === chartData.length - 1}
+            className="rounded-md px-1.5 py-1 text-right transition-colors hover:bg-black/[0.04] hover:text-[var(--accent)] disabled:pointer-events-none disabled:opacity-45"
+            aria-label="Zum neuesten Kurspunkt springen"
+          >
+            Letzter Punkt · {chartData.at(-1) ? formatChartTooltipDate(chartData.at(-1)!, period.id) : "—"}
+          </button>
+        </div>
+      </div>
 
       <MeasuredChartFrame
         className={`w-full ${subPanels > 0 ? "h-[430px] sm:h-[520px]" : "h-[280px] sm:h-[320px]"}`}
@@ -711,17 +919,36 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           <div className="flex h-full w-full flex-col gap-2">
             <div style={{ height: mainHeightPx }} className="min-h-[200px]">
               <ResponsiveContainer width={size.w} height={mainHeightPx} minWidth={0} minHeight={180}>
-                <AreaChart data={chartData} margin={{ top: 8, right: 24, bottom: 0, left: 8 }}>
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 8, right: 24, bottom: 0, left: 8 }}
+                  onMouseMove={inspectChartPoint}
+                  onClick={inspectChartPoint}
+                >
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={isPositive ? "#0f766e" : "#dc2626"} stopOpacity={0.22} />
-                      <stop offset="95%" stopColor={isPositive ? "#0f766e" : "#dc2626"} stopOpacity={0} />
+                      <stop offset="5%" stopColor={isPositive ? "var(--chart-up)" : "var(--chart-down)"} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={isPositive ? "var(--chart-up)" : "var(--chart-down)"} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.08)" vertical={false} />
-                  <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: "#7c848f", fontSize: 10 }} minTickGap={30} />
+                  <XAxis dataKey="_chartIndex" tickFormatter={(index) => formatChartAxisDate(chartData[Number(index)], period.id)} interval="preserveStartEnd" axisLine={false} tickLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} minTickGap={30} />
                   <YAxis hide domain={["auto", "auto"]} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: "rgba(22,28,36,0.2)", strokeWidth: 1 }} />
+                  {inspectedPoint ? (
+                    <ReferenceLine
+                      x={displayedIndex}
+                      stroke="var(--chart-marker)"
+                      strokeDasharray="3 3"
+                    />
+                  ) : null}
+                  <Tooltip
+                    active={tooltipSuppressed ? false : undefined}
+                    trigger={touchSelection ? "click" : "hover"}
+                    content={<CustomTooltip />}
+                    cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1.2 }}
+                    allowEscapeViewBox={{ x: false, y: true }}
+                    wrapperStyle={{ zIndex: 40, pointerEvents: "none" }}
+                  />
                   {showBollinger ? (
                     <>
                       <Line type="monotone" dataKey="_bbUpper" stroke="#c026d3" strokeOpacity={0.6} strokeWidth={1.2} dot={false} />
@@ -738,7 +965,17 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   {showVWAP ? (
                     <Line type="monotone" dataKey="_vwap" stroke="#0891b2" strokeWidth={1.4} strokeOpacity={0.9} dot={false} />
                   ) : null}
-                  <Area type="monotone" dataKey="price" stroke={isPositive ? "#0f766e" : "#dc2626"} strokeWidth={2.4} fillOpacity={1} fill="url(#colorPrice)" animationDuration={850} />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    name="Kurs"
+                    stroke={isPositive ? "var(--chart-up)" : "var(--chart-down)"}
+                    strokeWidth={2.4}
+                    fillOpacity={1}
+                    fill="url(#colorPrice)"
+                    activeDot={{ r: 4.5, strokeWidth: 2, stroke: "#ffffff" }}
+                    animationDuration={850}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -748,7 +985,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 <ResponsiveContainer width={size.w} height={subHeightPx} minWidth={0} minHeight={74}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
-                    <XAxis dataKey="time" hide />
+                    <XAxis dataKey="_chartIndex" hide />
                     <YAxis hide />
                     <Bar dataKey="_volume" animationDuration={550}>
                       {chartData.map((entry, idx) => (
@@ -771,7 +1008,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 <ResponsiveContainer width={size.w} height={subHeightPx} minWidth={0} minHeight={74}>
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
-                    <XAxis dataKey="time" hide />
+                    <XAxis dataKey="_chartIndex" hide />
                     <YAxis domain={[0, 100]} hide />
                     <ReferenceLine y={70} stroke="#dc2626" strokeDasharray="4 4" strokeOpacity={0.5} />
                     <ReferenceLine y={30} stroke="#0f766e" strokeDasharray="4 4" strokeOpacity={0.5} />
@@ -794,7 +1031,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 <ResponsiveContainer width={size.w} height={subHeightPx} minWidth={0} minHeight={74}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.06)" vertical={false} />
-                    <XAxis dataKey="time" hide />
+                    <XAxis dataKey="_chartIndex" hide />
                     <YAxis hide />
                     <ReferenceLine y={0} stroke="rgba(22,28,36,0.15)" />
                     <Bar dataKey="_macd" animationDuration={600}>
@@ -822,15 +1059,19 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         }}
       </MeasuredChartFrame>
 
+      {discardedPoints > 0 && data.length > 0 ? (
+        <p role="status" className="mt-3 text-xs text-slate-600">
+          {discardedPoints} ungültige Kurspunkte ausgelassen. Die Linie verbindet die verbleibenden, unveränderten Kurspunkte.
+        </p>
+      ) : null}
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <div className="flex items-center gap-1">
           <Clock size={10} />
-          {period.id === "1d" ? "Intraday-Minutendaten" : "Historische Marktdaten"}
+          {({ "5m": "5-Minuten-Kurse", "15m": "15-Minuten-Kurse", "1d": "Tageskurse", "1wk": "Wochenkurse", "1mo": "Monatskurse" } as Record<string, string>)[period.interval]}
         </div>
         <div>
-          {connected && lastUpdated
-            ? `Aktualisiert ${new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-            : "YFinance-Engine v2.0"}
+          Quelle: {displayMetaValue(historyMeta?.source, "nicht angegeben")}
         </div>
       </div>
       {shouldShowDataStatus ? (
@@ -841,8 +1082,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               : "border-amber-500/20 bg-amber-500/10 text-amber-700"
           }`}
         >
-          Datenstatus: {dataStatusLabel(historyState, connectionState, transportMode)}.
-          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} / Feed: {transportMode === "ws" ? "live" : "Snapshot"}
+          Datenstatus: {dataStatusLabel(historyState, feedStatus)}.
+          {" "}Chart: {HISTORY_STATUS_LABELS[historyState]} / Feed: {feedStatus}
           {typeof staleForTicker === "number" && staleForTicker > 5 ? ` / verzögert ${staleForTicker}s` : ""}
           {realtimeFallbackNote ? ` / ${realtimeFallbackNote}` : ""}
           {displayedRealtimeError ? ` / ${friendlyRealtimeError(displayedRealtimeError)}` : ""}
@@ -854,7 +1095,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
           {historyMeta.requested_period && historyMeta.requested_period !== historyMeta.period
             ? ` / angefragt ${historyMeta.requested_period}/${displayMetaValue(historyMeta.requested_interval)}`
             : ""}
-          {typeof historyMeta.points === "number" ? ` / ${historyMeta.points} Punkte` : ""}
+          {` / ${data.length} Punkte`}
           {historyMeta.fallback_reason ? ` / ${friendlyHistoryReason(historyMeta.fallback_reason)}` : ""}
         </div>
       ) : null}

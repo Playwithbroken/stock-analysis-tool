@@ -1,0 +1,101 @@
+- generic [ref=f1e45]:
+  - link "Zum Hauptinhalt springen" [ref=f1e46] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e47]:
+    - generic [ref=f1e49]:
+      - generic [ref=f1e50]:
+        - generic [ref=f1e55]:
+          - generic [ref=f1e56]: Broker Freund
+          - generic [ref=f1e57]: Marktintelligenz-Terminal
+        - generic [ref=f1e58]:
+          - button "Übersicht" [ref=f1e59]
+          - button "Analyse" [ref=f1e60]
+          - button "Märkte" [ref=f1e61]
+          - button "Portfolio" [ref=f1e62]
+        - generic [ref=f1e63]:
+          - generic [ref=f1e64]:
+            - button "Währung auf USD wechseln" [pressed] [ref=f1e65]: USD
+            - button "Währung auf EUR wechseln" [ref=f1e66]: EUR
+          - button "Darstellung wechseln" [ref=f1e67]
+          - button "Installieren" [ref=f1e70]
+          - generic [ref=f1e71]: Maurice
+          - button "Status" [ref=f1e72]
+          - button "Sperren" [ref=f1e73]
+      - generic [ref=f1e77]:
+        - generic [ref=f1e78]: Watchlist / Portfolio snapshot
+        - generic [ref=f1e79]:
+          - text: PFE
+          - generic [ref=f1e80]: 28,34 $
+          - text: +1.30%
+  - main [active] [ref=f1e81]:
+    - generic [ref=f1e1009]:
+      - generic [ref=f1e1011]:
+        - generic [ref=f1e1017]:
+          - generic [ref=f1e1018]: Globale Suche
+          - textbox "Aktie, ETF oder Kryptowährung suchen" [ref=f1e1020]:
+            - /placeholder: AAPL, NVDA, ASML, BTC-USD
+        - button "Analyse" [disabled] [ref=f1e1021]
+      - generic [ref=f1e1025]:
+        - button "NVDA Aktie Jetzt interessant" [ref=f1e1026]:
+          - generic [ref=f1e1027]: NVDA
+          - generic [ref=f1e1028]: Aktie
+          - generic [ref=f1e1029]: Jetzt interessant
+        - button "AAPL Aktie Jetzt interessant" [ref=f1e1030]:
+          - generic [ref=f1e1031]: AAPL
+          - generic [ref=f1e1032]: Aktie
+          - generic [ref=f1e1033]: Jetzt interessant
+        - button "HOOD Aktie Jetzt interessant" [ref=f1e1034]:
+          - generic [ref=f1e1035]: HOOD
+          - generic [ref=f1e1036]: Aktie
+          - generic [ref=f1e1037]: Jetzt interessant
+        - button "NKE Aktie Jetzt interessant" [ref=f1e1038]:
+          - generic [ref=f1e1039]: NKE
+          - generic [ref=f1e1040]: Aktie
+          - generic [ref=f1e1041]: Jetzt interessant
+        - button "PLTR Aktie Jetzt interessant" [ref=f1e1042]:
+          - generic [ref=f1e1043]: PLTR
+          - generic [ref=f1e1044]: Aktie
+          - generic [ref=f1e1045]: Jetzt interessant
+      - generic [ref=f1e1046]:
+        - generic [ref=f1e1047]:
+          - generic [ref=f1e1048]: Schnelleingabe
+          - generic [ref=f1e1049]: Tippe einen Namen oder Ticker – Tab vervollständigt automatisch.
+        - generic [ref=f1e1050]: Bereit
+    - generic [ref=f1e1051]:
+      - generic [ref=f1e1052]:
+        - generic [ref=f1e1053]: Analyse-Start
+        - heading "Erst suchen, dann Analyse, Signale und Handlungsrahmen gemeinsam prüfen." [level=3] [ref=f1e1054]
+        - generic [ref=f1e1055]:
+          - button "Öffentliche Signale Berkshire, Kongress und weitere öffentliche Meldungen mit sichtbarer Verzögerung. Märkte öffnen" [ref=f1e1056]:
+            - generic [ref=f1e1057]: Öffentliche Signale
+            - paragraph [ref=f1e1058]: Berkshire, Kongress und weitere öffentliche Meldungen mit sichtbarer Verzögerung.
+            - generic [ref=f1e1059]: Märkte öffnen
+          - button "Klare Einordnung Ruhigere Scores und klare Priorisierung von Risiko, Bewertung und Momentum. Analyse starten" [ref=f1e1060]:
+            - generic [ref=f1e1061]: Klare Einordnung
+            - paragraph [ref=f1e1062]: Ruhigere Scores und klare Priorisierung von Risiko, Bewertung und Momentum.
+            - generic [ref=f1e1063]: Analyse starten
+          - button "Privater Zugang Geschützter Einzelzugang mit Sitzung und abgesicherten Triggern. Portfolio öffnen" [ref=f1e1064]:
+            - generic [ref=f1e1065]: Privater Zugang
+            - paragraph [ref=f1e1066]: Geschützter Einzelzugang mit Sitzung und abgesicherten Triggern.
+            - generic [ref=f1e1067]: Portfolio öffnen
+      - generic [ref=f1e1068]:
+        - generic [ref=f1e1069]: Arbeitsablauf
+        - generic [ref=f1e1070]:
+          - button "1. Aktie, ETF oder Kryptowährung suchen. Suche fokussieren" [ref=f1e1071]:
+            - generic [ref=f1e1072]: 1. Aktie, ETF oder Kryptowährung suchen.
+            - generic [ref=f1e1073]: Suche fokussieren
+          - button "2. Live-Kurs, Score-Kontext und Risikoprofil prüfen. Märkte öffnen" [ref=f1e1074]:
+            - generic [ref=f1e1075]: 2. Live-Kurs, Score-Kontext und Risikoprofil prüfen.
+            - generic [ref=f1e1076]: Märkte öffnen
+          - button "3. Nur bei bestätigtem Setup zu Paper-Trading oder Signalen wechseln. Portfolio öffnen" [ref=f1e1077]:
+            - generic [ref=f1e1078]: 3. Nur bei bestätigtem Setup zu Paper-Trading oder Signalen wechseln.
+            - generic [ref=f1e1079]: Portfolio öffnen
+  - contentinfo [ref=f1e318]:
+    - generic [ref=f1e319]: Broker Freund 0.9.0-beta.1 Beta. Privater Einzelarbeitsbereich. Informationen sind ein Entscheidungsrahmen, keine Gewinnzusage.
+  - button "Broker Freund Desk öffnen" [ref=f1e320]:
+    - generic:
+      - generic:
+        - generic: Broker Freund
+        - generic: Desk
+      - generic: Desk öffnen
+      - generic: Signale, Nachrichten, Makro- und Crowd-Kontext, ohne den Arbeitsbereich zu verdecken.

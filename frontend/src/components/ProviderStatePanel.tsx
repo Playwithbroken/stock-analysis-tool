@@ -77,7 +77,7 @@ export default function ProviderStatePanel({
       data-provider-state={state}
       role={state === "error" ? "alert" : "status"}
       aria-live={state === "error" ? "assertive" : "polite"}
-      className={`min-w-0 rounded-[1.5rem] border ${compact ? "p-4" : "p-5 sm:p-6"} ${meta.tone}`}
+      className={`provider-state-panel min-w-0 rounded-[1.5rem] border ${compact ? "p-4" : "p-5 sm:p-6"} ${meta.tone}`}
     >
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">

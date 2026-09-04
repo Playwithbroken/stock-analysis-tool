@@ -5,6 +5,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_TESTS = [
+    "qa_financial_units_contract.py",
+    "qa_regional_snapshot_contract.py",
+    "qa_chart_history_contract.py",
     "qa_analyzer_resolution.py",
     "qa_global_asset_api.py",
     "qa_search_resolution.py",
@@ -25,6 +28,7 @@ CONTRACT_TESTS = [
     "qa_advisory_profile.py",
     "qa_paper_demo_account.py",
     "qa_paper_learning_alerts.py",
+    "qa_paper_learning_v2.py",
     "qa_paper_loss_streak_recovery.py",
     "qa_option_contract_alerts.py",
     "qa_tradier_option_provider.py",

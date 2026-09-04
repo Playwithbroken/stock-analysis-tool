@@ -18,6 +18,20 @@ APP_BACKUP_RETENTION_COUNT=14
 APP_RESTORE_TEST_INTERVAL_DAYS=7
 OPERATIONAL_ALERTS_ENABLED=true
 
+# Optional Scalable Capital read-only integration. Enable only after the official
+# CLI binary was verified, installed and personally logged in with --local-read-only.
+SCALABLE_INTEGRATION_ENABLED=false
+SCALABLE_AUTO_SYNC_ENABLED=true
+SCALABLE_AUTO_SYNC_INTERVAL_MINUTES=15
+SCALABLE_AUTO_SYNC_START_DELAY_SECONDS=60
+SCALABLE_CLI_PATH=/app/data/scalable-cli/bin/sc
+SCALABLE_CLI_SHA256=<sha256-of-verified-official-binary>
+XDG_CONFIG_HOME=/app/data/scalable-cli/xdg/config
+XDG_DATA_HOME=/app/data/scalable-cli/xdg/data
+XDG_STATE_HOME=/app/data/scalable-cli/xdg/state
+XDG_CACHE_HOME=/app/data/scalable-cli/xdg/cache
+SCALABLE_RECONCILIATION_TOLERANCE_EUR=0.05
+
 SIGNAL_ALERTS_ENABLED=true
 
 TELEGRAM_ALERTS_ENABLED=true
@@ -41,6 +55,7 @@ Notes:
 - For a private single-user setup, keep the app behind the local access code and use a strong `APP_SESSION_SECRET`.
 - Briefings und Alerts laufen in dieser Beta nur ueber Telegram. SMTP/E-Mail und Browser-Push fuer Briefings bleiben aus.
 - `TRADIER_ENVIRONMENT=production` nutzt bei einem berechtigten Brokerage-Konto Echtzeit-Optionsmarktdaten; `sandbox` ist verzoegert. Broker Freund greift nur lesend auf Marktdaten zu, sendet keine Orders und garantiert keinen Fill.
+- Die Scalable CLI muss im laufenden Linux-Service aus den offiziellen Releases installiert und vor dem Login verifiziert werden. OAuth-Login immer persoenlich mit `sc login --local-read-only`; die `XDG_*_HOME`-Verzeichnisse muessen auf dem geschuetzten persistenten Volume liegen. Erst nach einem erfolgreichen `sc whoami` und gesetztem Binary-Hash `SCALABLE_INTEGRATION_ENABLED=true` aktivieren.
 
 ## Persistente SQLite auf Railway (Volume)
 

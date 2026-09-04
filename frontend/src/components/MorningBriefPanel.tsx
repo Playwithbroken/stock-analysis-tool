@@ -1,6 +1,7 @@
 ﻿import React, { useMemo, useState } from "react";
 import WorldMarketMap from "./WorldMarketMap";
 import { normalizeGeoRegions } from "../lib/geoRegions";
+import { isBriefDecisionCurrent } from "../lib/briefSafety";
 
 interface MorningBriefPanelProps {
   brief: any;
@@ -534,6 +535,11 @@ export default function MorningBriefPanel({
   const sourceStates = quality?.sources && typeof quality.sources === "object" ? quality.sources : {};
 
   const regions = normalizeGeoRegions(brief.regions);
+  const hasCurrentRegionData =
+    isBriefDecisionCurrent(brief) &&
+    Object.values(brief.regions || {}).some(
+      (region: any) => Array.isArray(region?.assets) && region.assets.length > 0,
+    );
 
   const [selectedRegion, setSelectedRegion] = useState<string>(
     brief.regions?.europe?.label || regions[0]?.label || "USA",
@@ -888,6 +894,7 @@ export default function MorningBriefPanel({
           regions={regions}
           selectedRegion={selectedRegion}
           onSelectRegion={setSelectedRegion}
+          dataCurrent={hasCurrentRegionData}
           news={brief.top_news || []}
           eventLayer={brief.event_layer || []}
           eventPings={brief.event_pings || []}

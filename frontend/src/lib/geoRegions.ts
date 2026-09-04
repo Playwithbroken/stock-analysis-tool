@@ -48,7 +48,9 @@ export function normalizeGeoRegions(regions: unknown): GeoRegionSummary[] {
     return {
       ...fallback,
       ...source,
-      label: source.label || fallback.label,
+      // Region labels are stable internal keys used by map anchors, filters and selection.
+      // Provider-localized labels (for example "Asien") must not break those contracts.
+      label: fallback.label,
       tone: source.tone || fallback.tone,
       avg_change_1d: Number.isFinite(change) ? change : fallback.avg_change_1d,
       assets,

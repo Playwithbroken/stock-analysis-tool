@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import PaperLearningV2Panel from "./PaperLearningV2Panel";
 
 interface PaperTradingPanelProps {
   data: any;
@@ -713,6 +714,13 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           </div>
         </div>
+
+        <PaperLearningV2Panel
+          data={data?.learning_v2}
+          onEvaluate={evaluateOutcomes}
+          onRefresh={onRefresh}
+          evaluating={busyId === "evaluate-outcomes"}
+        />
 
         <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
           <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-4">

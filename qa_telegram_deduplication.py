@@ -110,6 +110,22 @@ def test_management_and_account_use_stateful_cooldowns():
     duplicate = service.send_paper_trade_management_alerts([trade])
     require(first["sent"] == 1 and duplicate["sent"] == 0, "management cooldown must block duplicate state")
 
+    soft_flip = {
+        **trade,
+        "management_plan": {"status": "near_target", "decision_grade": "protect", "action": "hold_review"},
+    }
+    quiet_flip = service.send_paper_trade_management_alerts([soft_flip])
+    require(quiet_flip["sent"] == 0, "soft management oscillation must remain inside the digest cooldown")
+
+    hard_exit = {
+        **trade,
+        "management_plan": {"status": "target_hit", "decision_grade": "exit", "action": "close"},
+    }
+    immediate = service.send_paper_trade_management_alerts([hard_exit])
+    repeated_exit = service.send_paper_trade_management_alerts([hard_exit])
+    require(immediate["sent"] == 1, "hard target event must bypass the soft digest cooldown")
+    require(repeated_exit["sent"] == 0, "unchanged hard event must not repeat")
+
     account = {
         "day_status": "risk_review",
         "management_counts": {"review": 1},
@@ -275,3 +291,5 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

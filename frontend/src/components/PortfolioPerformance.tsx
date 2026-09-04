@@ -25,8 +25,8 @@ interface PortfolioPerformanceProps {
 const PERIODS = [
   { id: "1d", label: "1D" },
   { id: "1mo", label: "1M" },
-  { id: "1y", label: "1Y" },
-  { id: "max", label: "MAX" },
+  { id: "1y", label: "1J" },
+  { id: "max", label: "GESAMT" },
 ];
 
 const toFiniteNumber = (value: unknown): number | null => {
@@ -96,7 +96,7 @@ export default function PortfolioPerformance({
             {formatPrice(payload[0].value)}
           </p>
           <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
-            Market Value
+            Marktwert
           </div>
         </div>
       );
@@ -114,7 +114,7 @@ export default function PortfolioPerformance({
               className={isPositive ? "text-emerald-600" : "text-red-600"}
             />
             <span className="text-sm font-medium uppercase tracking-[0.18em]">
-              Portfolio Performance
+              Portfolioentwicklung
             </span>
           </div>
           <div className="flex items-baseline gap-3">
@@ -156,7 +156,7 @@ export default function PortfolioPerformance({
           <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
             <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-              Calculating NAV
+              Portfoliowert wird berechnet
             </span>
           </div>
         }
@@ -165,7 +165,7 @@ export default function PortfolioPerformance({
           <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
             <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-              Calculating NAV
+              Portfoliowert wird berechnet
             </span>
           </div>
         ) : data.length > 0 ? (
@@ -206,14 +206,14 @@ export default function PortfolioPerformance({
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl border border-dashed border-black/8 bg-white/70 text-slate-500">
             <TrendingUp size={32} className="mb-2 opacity-20" />
-            <p className="text-sm font-medium">Add holdings to track performance</p>
+            <p className="text-sm font-medium">Positionen hinzufügen, um die Entwicklung zu verfolgen</p>
           </div>
         )}
       </MeasuredChartFrame>
 
       <div className="mt-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         <Clock size={10} />
-        Aggregated Portfolio Intelligence
+        Zusammengeführte Portfolioanalyse
       </div>
     </div>
   );

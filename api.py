@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, Any, List, Optional
+from concurrent.futures import ThreadPoolExecutor
 import copy
 import difflib
 import json
@@ -44,10 +45,15 @@ from src.forecast_learning_service import ForecastLearningService
 from src.signal_score_service import SignalScoreService
 from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
+from src.trading_signals_service import TradingSignalsService
+from src.asymmetric_trade_service import AsymmetricTradeService
 from src.realtime_market_service import RealtimeMarketService
+from src.integrations.market_data.alpaca import AlpacaMarketDataAdapter, AlpacaStreamConfig
 from src.public_signal_service import PublicSignalService
 from src.advisory_service import advisory_profile_subset, build_portfolio_advisory_check, build_suitability_check
 from src.storage import DB_PATH, PortfolioManager, get_database_status, get_persistence_status
+from src.scalable_integration_service import ScalableIntegrationError, ScalableIntegrationService
+from src.scalable_decision_service import ScalableDecisionService
 from src.backup_service import DatabaseBackupService
 from src.provider_observability import (
     classify_provider_error,
@@ -57,6 +63,22 @@ from src.provider_observability import (
 from src.decision_scope import attach_scope, paper_scope, research_scope, scope_for_strategy_status
 from src.compliance_gate import get_compliance_status
 from src.production_soak_service import read_production_soak, record_production_soak
+from src.fast_paper_safety_service import FastPaperSafetyService
+from src.latency_monitor_service import LatencyMonitorService
+from src.financial_units import normalize_dividend_yield_pct, ratio_to_pct
+from src.market_quality_service import MarketQualityService
+from src.broker_order_store import BrokerOrderStore
+from src.broker_reconciliation_service import (
+    BrokerReconciliationBlockedError,
+    BrokerReconciliationService,
+)
+from src.integrations.brokers.base import BrokerOrderRequest
+from src.integrations.brokers.alpaca_paper import (
+    AlpacaPaperBrokerAdapter,
+    AlpacaPaperBrokerError,
+    AlpacaPaperConfig,
+    BrokerSubmissionUncertainError,
+)
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -94,6 +116,8 @@ app = FastAPI(
     description="Professional stock market analysis tool",
     version=APP_VERSION,
 )
+
+_HISTORY_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="history-priority")
 
 # Enable CORS for frontend
 allowed_origins = [
@@ -155,11 +179,21 @@ _signal_score_service = None
 _session_list_service = None
 _paper_trading_service = None
 _trading_intelligence_service = None
+_trading_signals_service = None
+_asymmetric_trade_service = None
 _realtime_market_service = None
 _forecast_learning_service = None
 _forecast_learning_task = None
 _push_service = None
 _database_backup_service = None
+_scalable_integration_service = None
+_scalable_sync_task = None
+_alpaca_stream_adapter = None
+_alpaca_stream_task = None
+_market_safety_task = None
+_alpaca_paper_broker_adapter = None
+_alpaca_paper_broker_task = None
+_broker_reconciliation_task = None
 SESSION_COOKIE_NAME = "brokerfreund_session"
 _RESPONSE_CACHE: Dict[str, tuple[datetime, Any]] = {}
 TRADING_EDGE_CACHE_KEY = "trading_edge:dashboard"
@@ -170,6 +204,13 @@ def get_database_backup_service() -> DatabaseBackupService:
     if _database_backup_service is None:
         _database_backup_service = DatabaseBackupService(DB_PATH)
     return _database_backup_service
+
+
+def get_scalable_integration_service() -> ScalableIntegrationService:
+    global _scalable_integration_service
+    if _scalable_integration_service is None:
+        _scalable_integration_service = ScalableIntegrationService(DB_PATH)
+    return _scalable_integration_service
 
 
 def _cache_get(key: str, ttl_seconds: int) -> Any | None:
@@ -1220,9 +1261,9 @@ def _format_ratio_pct(value: Optional[float]) -> str:
 def _format_dividend_yield(value: Optional[float]) -> str:
     if value is None:
         return "n/a"
-    # yfinance is inconsistent across symbols: some feeds return 0.036,
-    # others return 3.6. Treat >20% as suspicious but keep the value visible.
-    pct = value * 100 if 0 <= value <= 0.2 else value
+    pct = normalize_dividend_yield_pct(value)
+    if pct is None:
+        return "n/a"
     return f"{pct:+.1f}%"
 
 
@@ -1243,6 +1284,7 @@ def _build_business_quality_checks(data: Dict[str, Any]) -> Dict[str, Any]:
     fcf_margin = _safe_float(latest_annual.get("fcf_margin"))
     dividend_yield = _safe_float(fundamentals.get("dividend_yield"))
     payout_ratio = _safe_float(fundamentals.get("payout_ratio"))
+    payout_ratio_pct = ratio_to_pct(payout_ratio)
     free_cashflow = _safe_float(fundamentals.get("free_cashflow") or latest_annual.get("free_cashflow"))
     eps_surprise = _safe_float(latest_earnings.get("eps_surprise_pct"))
 
@@ -1267,9 +1309,9 @@ def _build_business_quality_checks(data: Dict[str, Any]) -> Dict[str, Any]:
     if dividend_yield is not None and dividend_yield > 0:
         dividend_status = "solid"
         dividend_reasons.append(f"Yield {_format_dividend_yield(dividend_yield)}")
-        if payout_ratio is not None:
-            dividend_reasons.append(f"Payout {_format_ratio_pct(payout_ratio)}")
-            if payout_ratio > 0.8:
+        if payout_ratio_pct is not None:
+            dividend_reasons.append(f"Payout {payout_ratio_pct:+.1f}%")
+            if payout_ratio_pct > 80:
                 dividend_status = "watch"
         if free_cashflow is not None and free_cashflow <= 0:
             dividend_status = "risk"
@@ -1426,6 +1468,18 @@ def get_paper_trading_service():
         _paper_trading_service = PaperTradingService(get_portfolio_manager())
     return _paper_trading_service
 
+def get_trading_signals_service():
+    global _trading_signals_service
+    if _trading_signals_service is None:
+        _trading_signals_service = TradingSignalsService()
+    return _trading_signals_service
+
+def get_asymmetric_trade_service():
+    global _asymmetric_trade_service
+    if _asymmetric_trade_service is None:
+        _asymmetric_trade_service = AsymmetricTradeService()
+    return _asymmetric_trade_service
+
 
 def _get_paper_news_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     """Reuse a recent brief or build a fast one without making news a hard dependency."""
@@ -1441,6 +1495,109 @@ def _get_paper_news_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         return {}
 
+
+async def _refresh_scalable_readonly_context() -> Dict[str, Any]:
+    """Refresh optional broker context without invalidating a reconciled holdings snapshot."""
+    service = get_scalable_integration_service()
+    timeout_seconds = _safe_int_env("SCALABLE_CONTEXT_REFRESH_TIMEOUT_SECONDS", 120, minimum=30)
+    result: Dict[str, Any] = {"read_only": True}
+    for key, refresh in (
+        ("market_context", service.refresh_market_context),
+        ("transactions", service.refresh_transactions),
+    ):
+        try:
+            result[key] = await asyncio.wait_for(asyncio.to_thread(refresh), timeout=timeout_seconds)
+        except asyncio.TimeoutError:
+            result[key] = {"status": "error", "error_code": "refresh_timeout"}
+        except ScalableIntegrationError as exc:
+            result[key] = {"status": "error", "error_code": exc.code}
+        except Exception as exc:
+            result[key] = {"status": "error", "error_type": exc.__class__.__name__}
+    return result
+
+
+async def _build_scalable_decision_report() -> Dict[str, Any]:
+    """Build a fresh, evidence-gated read-only report after a reconciled sync."""
+    timeout_seconds = _safe_int_env("SCALABLE_DECISION_TIMEOUT_SECONDS", 120, minimum=30)
+    analysis = await asyncio.wait_for(
+        asyncio.to_thread(get_scalable_integration_service().portfolio_analysis),
+        timeout=timeout_seconds,
+    )
+    items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
+    watched_tickers = {
+        str(item.get("value") or "").strip().upper()
+        for item in items
+        if str(item.get("kind") or "").strip().lower() == "ticker"
+    }
+    for holding in analysis.get("holdings") or []:
+        ticker = str(holding.get("ticker") or "").strip().upper()
+        if ticker and ticker not in watched_tickers:
+            items.append({"kind": "ticker", "value": ticker, "source": "scalable_read_only"})
+            watched_tickers.add(ticker)
+    snapshot = await asyncio.wait_for(
+        asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
+        timeout=timeout_seconds,
+    )
+    settings = await asyncio.to_thread(get_portfolio_manager().get_signal_score_settings)
+    scoreboard = await asyncio.wait_for(
+        get_signal_score_service().build_scoreboard(snapshot, settings),
+        timeout=timeout_seconds,
+    )
+    news_context = await asyncio.to_thread(_get_paper_news_context, snapshot)
+    paper_dashboard = await asyncio.wait_for(
+        asyncio.to_thread(
+            get_paper_trading_service().build_dashboard,
+            scoreboard,
+            settings,
+            news_context,
+        ),
+        timeout=timeout_seconds,
+    )
+    report = ScalableDecisionService().build(analysis, paper_dashboard)
+    previous_raw = await asyncio.to_thread(
+        get_portfolio_manager().get_app_setting,
+        "scalable_decision_report_v1",
+        "",
+    )
+    try:
+        previous_report = json.loads(previous_raw) if previous_raw else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        previous_report = {}
+    if report.get("fingerprint") != previous_report.get("fingerprint") or not previous_report.get("audit"):
+        report["audit"] = await asyncio.to_thread(
+            get_portfolio_manager().record_decision_audit,
+            event_type="scalable_decision_report",
+            subject="scalable-capital-read-only",
+            decision="portfolio_actions_and_research_ideas",
+            data_as_of=report.get("portfolio_as_of"),
+            source_status="reconciled_read_only",
+            sources=[],
+            model_version=str(report.get("schema") or "scalable-telegram-decisions.v1"),
+            rule_version="scalable-decision-gates.v2",
+            user_action="decision_report_changed",
+            payload={
+                "fingerprint": report.get("fingerprint"),
+                "decisions": report.get("decisions") or [],
+                "ideas": report.get("ideas") or [],
+            },
+        )
+    await asyncio.to_thread(
+        get_portfolio_manager().set_app_setting,
+        "scalable_decision_report_v1",
+        json.dumps(report, ensure_ascii=False),
+    )
+    return report
+
+
+async def _send_scalable_decision_report(*, force: bool = False) -> Dict[str, Any]:
+    report = await _build_scalable_decision_report()
+    delivery = await asyncio.to_thread(
+        get_email_alert_service().send_scalable_decision_report,
+        report,
+        force=force,
+    )
+    return {"report": report, "telegram": delivery}
+
 def get_trading_intelligence_service():
     global _trading_intelligence_service
     if _trading_intelligence_service is None:
@@ -1452,6 +1609,62 @@ def get_realtime_market_service():
     if _realtime_market_service is None:
         _realtime_market_service = RealtimeMarketService()
     return _realtime_market_service
+
+
+def get_alpaca_stream_adapter() -> AlpacaMarketDataAdapter:
+    global _alpaca_stream_adapter
+    if _alpaca_stream_adapter is None:
+        _alpaca_stream_adapter = AlpacaMarketDataAdapter(AlpacaStreamConfig.from_env())
+    return _alpaca_stream_adapter
+
+
+def _alpaca_stream_health() -> Dict[str, Any]:
+    try:
+        return get_alpaca_stream_adapter().health()
+    except Exception as exc:
+        return {
+            "provider": "alpaca",
+            "enabled": _env_enabled("ALPACA_MARKET_DATA_ENABLED", "false"),
+            "state": "configuration_error",
+            "error_type": exc.__class__.__name__,
+            "message": str(exc),
+            "credentials_present": bool(
+                os.getenv("ALPACA_API_KEY_ID", "").strip()
+                and os.getenv("ALPACA_API_SECRET_KEY", "").strip()
+            ),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+def get_alpaca_paper_broker_adapter() -> AlpacaPaperBrokerAdapter:
+    global _alpaca_paper_broker_adapter
+    if _alpaca_paper_broker_adapter is None:
+        _alpaca_paper_broker_adapter = AlpacaPaperBrokerAdapter(AlpacaPaperConfig.from_env())
+    return _alpaca_paper_broker_adapter
+
+
+def _alpaca_paper_broker_health() -> Dict[str, Any]:
+    try:
+        return get_alpaca_paper_broker_adapter().health()
+    except Exception as exc:
+        return {
+            "provider": "alpaca",
+            "account_mode": "paper",
+            "paper_only": True,
+            "enabled": _env_enabled("ALPACA_PAPER_ENABLED", "false"),
+            "state": "configuration_error",
+            "error_type": exc.__class__.__name__,
+            "message": str(exc),
+            "credentials_present": bool(
+                (os.getenv("ALPACA_PAPER_API_KEY_ID", "").strip() or os.getenv("APCA_API_KEY_ID", "").strip())
+                and (os.getenv("ALPACA_PAPER_API_SECRET_KEY", "").strip() or os.getenv("APCA_API_SECRET_KEY", "").strip())
+            ),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+def get_broker_reconciliation_service() -> BrokerReconciliationService:
+    return BrokerReconciliationService(get_alpaca_paper_broker_adapter())
 
 def get_push_service():
     global _push_service
@@ -1728,11 +1941,26 @@ def _run_operational_alert_cycle() -> Dict[str, Any]:
     stale_limit = _safe_int_env("OPERATIONAL_QUOTE_STALE_SECONDS", 900, minimum=60)
     realtime_state = str(realtime.get("status") or "unknown").lower()
     quotes_stale = bool(stale_values and max(stale_values) > stale_limit)
-    if yfinance.get("status") != "ok" or realtime_state in {"error", "degraded", "disconnected", "failed"} or quotes_stale:
+    realtime_required = bool(feed_health.get("realtime_required"))
+    realtime_problem = realtime_required and realtime_state in {"error", "degraded", "disconnected", "failed"}
+    feed_problem = yfinance.get("status") != "ok" or realtime_problem or quotes_stale
+    try:
+        previous_feed_failures = int(manager.get_app_setting("operational_market_feed_failure_streak", "0") or 0)
+    except (TypeError, ValueError):
+        previous_feed_failures = 0
+    feed_failure_streak = previous_feed_failures + 1 if feed_problem else 0
+    manager.set_app_setting("operational_market_feed_failure_streak", str(feed_failure_streak))
+    confirmation_checks = _safe_int_env("OPERATIONAL_MARKET_FEED_CONFIRMATION_CHECKS", 3, minimum=1)
+    if feed_problem and feed_failure_streak >= confirmation_checks:
+        max_stale_label = f"{max(stale_values):.0f}s" if stale_values else "n/a"
         issues.append({
             "code": "market_quotes_stale",
             "title": "Kursdaten fehlerhaft oder veraltet",
-            "detail": f"yfinance={yfinance.get('status')}; realtime={realtime_state}; max_stale={max(stale_values) if stale_values else 'n/a'}s",
+            "detail": (
+                f"yfinance={yfinance.get('status')}; realtime={realtime_state}; "
+                f"realtime_required={str(realtime_required).lower()}; max_stale={max_stale_label}; "
+                f"confirmed={feed_failure_streak}/{confirmation_checks}"
+            ),
             "action": "Keine neuen Paper-Trades freigeben; Provider und Kurszeitstempel pruefen.",
         })
 
@@ -1762,6 +1990,12 @@ def _run_operational_alert_cycle() -> Dict[str, Any]:
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "issues": issues,
         "deliveries": deliveries,
+        "market_feed_confirmation": {
+            "problem_now": feed_problem,
+            "failure_streak": feed_failure_streak,
+            "required_checks": confirmation_checks,
+            "realtime_required": realtime_required,
+        },
     }
     manager.set_app_setting("operational_alerts_last_result", json.dumps(payload))
     return payload
@@ -2074,7 +2308,7 @@ def _remember_finished_task_error(setting_key: str, task: Any) -> None:
 
 
 def _ensure_background_tasks() -> None:
-    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task, _scalable_sync_task, _alpaca_stream_task, _market_safety_task, _alpaca_paper_broker_task, _broker_reconciliation_task
 
     alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
     scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
@@ -2099,6 +2333,66 @@ def _ensure_background_tasks() -> None:
         _remember_finished_task_error("forecast_learning_loop_error", _forecast_learning_task)
         _forecast_learning_task = asyncio.create_task(_forecast_learning_loop())
 
+    if _env_enabled("SCALABLE_INTEGRATION_ENABLED", "false") and _env_enabled("SCALABLE_AUTO_SYNC_ENABLED", "true"):
+        if _scalable_sync_task is None or _scalable_sync_task.done():
+            _remember_finished_task_error("scalable_auto_sync_task_error", _scalable_sync_task)
+            _scalable_sync_task = asyncio.create_task(_scalable_auto_sync_loop())
+
+    if _env_enabled("ALPACA_MARKET_DATA_ENABLED", "false"):
+        if _alpaca_stream_task is None or _alpaca_stream_task.done():
+            _remember_finished_task_error("alpaca_stream_task_error", _alpaca_stream_task)
+            try:
+                _alpaca_stream_task = asyncio.create_task(get_alpaca_stream_adapter().run())
+            except Exception as exc:
+                get_portfolio_manager().set_app_setting("alpaca_stream_task_error", str(exc))
+
+    if _env_enabled("FAST_PAPER_ENABLED", "false"):
+        if _market_safety_task is None or _market_safety_task.done():
+            _remember_finished_task_error("market_safety_task_error", _market_safety_task)
+            _market_safety_task = asyncio.create_task(_market_safety_loop())
+
+    if _env_enabled("ALPACA_PAPER_ENABLED", "false"):
+        if _alpaca_paper_broker_task is None or _alpaca_paper_broker_task.done():
+            _remember_finished_task_error("alpaca_paper_broker_task_error", _alpaca_paper_broker_task)
+            try:
+                _alpaca_paper_broker_task = asyncio.create_task(get_alpaca_paper_broker_adapter().run())
+            except Exception as exc:
+                get_portfolio_manager().set_app_setting("alpaca_paper_broker_task_error", str(exc))
+        if _broker_reconciliation_task is None or _broker_reconciliation_task.done():
+            _remember_finished_task_error("broker_reconciliation_task_error", _broker_reconciliation_task)
+            _broker_reconciliation_task = asyncio.create_task(_broker_reconciliation_loop())
+
+
+async def _market_safety_loop() -> None:
+    await asyncio.sleep(1)
+    while True:
+        try:
+            FastPaperSafetyService(get_portfolio_manager()).monitor_stream(_alpaca_stream_health())
+        except Exception as exc:
+            get_portfolio_manager().set_app_setting("market_safety_loop_error", str(exc))
+        await asyncio.sleep(_safe_int_env("MARKET_SAFETY_INTERVAL_SECONDS", 2, minimum=1))
+
+
+async def _broker_reconciliation_loop() -> None:
+    await asyncio.sleep(_safe_int_env("BROKER_RECONCILIATION_START_DELAY_SECONDS", 5, minimum=1))
+    while True:
+        try:
+            await asyncio.to_thread(get_broker_reconciliation_service().reconcile)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            get_portfolio_manager().set_app_setting(
+                "broker_reconciliation_last_error",
+                json.dumps(
+                    {
+                        "type": exc.__class__.__name__,
+                        "message": str(exc),
+                        "at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ),
+            )
+        await asyncio.sleep(_safe_int_env("BROKER_RECONCILIATION_INTERVAL_SECONDS", 30, minimum=10))
+
 
 async def _background_task_watchdog_loop():
     await asyncio.sleep(30)
@@ -2117,6 +2411,30 @@ async def _background_task_watchdog_loop():
             except Exception:
                 pass
         await asyncio.sleep(_safe_int_env("BACKGROUND_TASK_WATCHDOG_INTERVAL_SECONDS", 60, minimum=15))
+
+
+async def _scalable_auto_sync_loop():
+    await asyncio.sleep(_safe_int_env("SCALABLE_AUTO_SYNC_START_DELAY_SECONDS", 60, minimum=15))
+    while True:
+        try:
+            timeout_seconds = _safe_int_env("SCALABLE_AUTO_SYNC_TIMEOUT_SECONDS", 90, minimum=30)
+            await asyncio.wait_for(
+                asyncio.to_thread(get_scalable_integration_service().sync),
+                timeout=timeout_seconds,
+            )
+            await _refresh_scalable_readonly_context()
+            if os.getenv("SCALABLE_TELEGRAM_DECISIONS_ENABLED", "true").strip().lower() not in {
+                "0", "false", "no", "off"
+            }:
+                await _send_scalable_decision_report()
+        except asyncio.TimeoutError:
+            print("Scalable auto-sync warning: timeout")
+        except ScalableIntegrationError as exc:
+            print(f"Scalable auto-sync warning: {exc.code}")
+        except Exception as exc:
+            print(f"Scalable auto-sync warning: {exc.__class__.__name__}")
+        interval_minutes = _safe_int_env("SCALABLE_AUTO_SYNC_INTERVAL_MINUTES", 15, minimum=5)
+        await asyncio.sleep(interval_minutes * 60)
 
 
 async def _warm_brief_once() -> Dict[str, Any]:
@@ -2226,6 +2544,24 @@ async def startup_event():
     if _background_task_watchdog_task is None or _background_task_watchdog_task.done():
         _background_task_watchdog_task = asyncio.create_task(_background_task_watchdog_loop())
 
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _alpaca_stream_task, _alpaca_paper_broker_task, _broker_reconciliation_task
+    if _alpaca_stream_adapter is not None:
+        await _alpaca_stream_adapter.close()
+    if _alpaca_stream_task is not None and not _alpaca_stream_task.done():
+        _alpaca_stream_task.cancel()
+        await asyncio.gather(_alpaca_stream_task, return_exceptions=True)
+    if _alpaca_paper_broker_adapter is not None:
+        await _alpaca_paper_broker_adapter.close()
+    if _alpaca_paper_broker_task is not None and not _alpaca_paper_broker_task.done():
+        _alpaca_paper_broker_task.cancel()
+        await asyncio.gather(_alpaca_paper_broker_task, return_exceptions=True)
+    if _broker_reconciliation_task is not None and not _broker_reconciliation_task.done():
+        _broker_reconciliation_task.cancel()
+        await asyncio.gather(_broker_reconciliation_task, return_exceptions=True)
+
 # Response Models
 class AnalysisResponse(BaseModel):
     ticker: str
@@ -2255,6 +2591,7 @@ class PortfolioHolding(BaseModel):
 
 class PortfolioRequest(BaseModel):
     holdings: List[PortfolioHolding]
+    portfolio_id: Optional[str] = None
 
 class CreatePortfolioRequest(BaseModel):
     name: str
@@ -2386,6 +2723,20 @@ class PaperTradeFromPlaybookRequest(BaseModel):
     product_data: Dict[str, Any] = Field(default_factory=dict)
 
 
+class BrokerPaperOrderRequest(BaseModel):
+    client_order_id: str = Field(min_length=8, max_length=128)
+    symbol: str = Field(min_length=1, max_length=32)
+    asset_class: str = Field(default="equity", pattern="^(equity|etf)$")
+    quantity: float = Field(gt=0)
+    side: str = Field(pattern="^(buy|sell)$")
+    order_type: str = Field(default="market", pattern="^(market|limit|stop|stop_limit)$")
+    time_in_force: str = Field(default="day", pattern="^(day|gtc|opg|cls|ioc|fok)$")
+    limit_price: Optional[float] = Field(default=None, gt=0)
+    stop_price: Optional[float] = Field(default=None, gt=0)
+    extended_hours: bool = False
+    signal_decision_id: Optional[str] = None
+
+
 class LeverageProductValidationRequest(BaseModel):
     product_data: Dict[str, Any] = Field(default_factory=dict)
 
@@ -2418,6 +2769,18 @@ class PaperTradeJournalRequest(BaseModel):
     notes: Optional[str] = None
     exit_reason: Optional[str] = None
     lessons_learned: Optional[str] = None
+
+
+class PaperLearningRuleActionRequest(BaseModel):
+    action: str = Field(pattern="^(pause|reject|rollback|activate_paper|restart_shadow)$")
+    reason: str = Field(min_length=8, max_length=1000)
+
+
+class SendEdgeSetupTelegramRequest(BaseModel):
+    ticker: Optional[str] = None
+    force: bool = False
+    portfolio_capital: Optional[float] = 50000.0
+    risk_budget_pct: Optional[float] = 0.75
 
 
 def rating_to_string(rating: Rating) -> str:
@@ -2886,20 +3249,19 @@ async def get_basic_analysis(ticker: str):
 async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
     """
     Get historical price data for a ticker.
-    Runs the blocking yfinance call in a thread executor with a 20-second timeout
+    Runs the blocking history call in a thread executor with an 8-second timeout
     so it never hangs the event loop indefinitely.
     """
     normalized_ticker = ticker.upper().strip()
-    cache_key = f"history:{normalized_ticker}:{period}:{interval}"
-    last_good_key = f"history:lastgood:{normalized_ticker}:{period}:{interval}"
+    # Versioned keys exclude older cross-period and synthetic snapshot entries.
+    cache_key = f"history:v2:{normalized_ticker}:{period}:{interval}"
+    last_good_key = f"history:v2:lastgood:{normalized_ticker}:{period}:{interval}"
     cached = _cache_get(cache_key, int(os.getenv("HISTORY_CACHE_TTL_SECONDS", "180")))
     if cached is not None:
         return convert_numpy_types(cached)
 
     attempts: List[tuple[str, str]] = [
         (period, interval),
-        ("1mo", "1d"),
-        ("5d", "15m"),
     ]
     seen_attempts = set()
     last_error: Optional[Exception] = None
@@ -2915,7 +3277,10 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             return fetcher.get_history(period=fetch_period, interval=fetch_interval)
 
         try:
-            history = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=12.0)
+            history = await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(_HISTORY_EXECUTOR, _fetch),
+                timeout=8.0,
+            )
             if history:
                 mode = "live" if (try_period, try_interval) == (period, interval) else "fallback"
                 payload = {
@@ -2941,51 +3306,6 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             last_error = e
             continue
 
-    # Snapshot fallback: return one synthetic datapoint instead of hard failure.
-    try:
-        snapshot = await asyncio.wait_for(
-            asyncio.to_thread(get_realtime_market_service().build_snapshot, [normalized_ticker]),
-            timeout=4.0,
-        )
-        quotes = snapshot.get("quotes", [])
-        quote = next(
-            (item for item in quotes if str(item.get("symbol", "")).upper() == normalized_ticker),
-            None,
-        )
-        price = float(quote.get("price")) if quote and quote.get("price") is not None else None
-        if price is not None:
-            now = datetime.now()
-            fallback_history = []
-            for offset in range(4, -1, -1):
-                ts = now - timedelta(minutes=offset * 15)
-                fallback_history.append(
-                    {
-                        "time": ts.strftime("%H:%M"),
-                        "full_date": ts.isoformat(),
-                        "price": price,
-                        "volume": float(quote.get("volume") or 0),
-                        "source": "snapshot_fallback",
-                    }
-                )
-            payload = {
-                    "items": fallback_history,
-                    "meta": {
-                        "symbol": normalized_ticker,
-                        "mode": "snapshot",
-                        "stale": True,
-                        "source": "realtime_snapshot",
-                        "period": "snapshot",
-                        "interval": "snapshot",
-                        "points": len(fallback_history),
-                        "requested_period": period,
-                        "requested_interval": interval,
-                    },
-                }
-            _cache_set(last_good_key, payload)
-            return convert_numpy_types(_cache_set(cache_key, payload))
-    except Exception:
-        pass
-
     stale = _cache_get_stale(
         last_good_key,
         _safe_int_env("HISTORY_STALE_CACHE_TTL_SECONDS", 86400, minimum=300),
@@ -3000,12 +3320,12 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             meta["fallback_reason"] = "provider_unavailable_using_last_good_history"
         except Exception:
             pass
-        return convert_numpy_types(_cache_set(cache_key, stale))
+        return convert_numpy_types(stale)
 
     unavailable_reason = (
         "provider_timeout"
         if isinstance(last_error, asyncio.TimeoutError)
-        else "no_history_or_snapshot_available"
+        else "no_history_available"
     )
     payload = {
         "items": [],
@@ -3023,7 +3343,8 @@ async def get_history(ticker: str, period: str = "1mo", interval: str = "1d") ->
             "error": "Kursverlauf aktuell nicht verfuegbar. Retry oder anderen Zeitraum nutzen.",
         },
     }
-    return convert_numpy_types(_cache_set(cache_key, payload))
+    # Do not cache an outage: an explicit retry should contact the provider again.
+    return convert_numpy_types(payload)
 
 
 @app.get("/api/quick/{ticker}")
@@ -3060,9 +3381,110 @@ async def get_portfolios():
     return convert_numpy_types(portfolios)
 
 
+@app.get("/api/integrations/scalable/status")
+async def scalable_integration_status(check_session: bool = False):
+    """Return redacted integration health; broker identity and tokens never leave the CLI."""
+    service = get_scalable_integration_service()
+    return await asyncio.to_thread(service.status, check_session=check_session)
+
+
+@app.get("/api/integrations/scalable/snapshot")
+async def scalable_integration_snapshot():
+    """Return the last reconciled, normalized read-only broker snapshot."""
+    return await asyncio.to_thread(get_scalable_integration_service().snapshot)
+
+
+@app.get("/api/integrations/scalable/market-context")
+async def scalable_market_context():
+    """Return cached quotes, security news and hashed recent transactions."""
+    return await asyncio.to_thread(get_scalable_integration_service().market_context_snapshot)
+
+
+@app.post("/api/integrations/scalable/market-context/refresh")
+async def refresh_scalable_market_context():
+    """Refresh the optional read-only quote, news and transaction context."""
+    return await _refresh_scalable_readonly_context()
+
+
+@app.get("/api/integrations/scalable/transaction-feedback")
+async def scalable_transaction_feedback():
+    """Measure whether read-only broker transactions followed preceding audited signals."""
+    return await asyncio.to_thread(get_scalable_integration_service().transaction_feedback)
+
+
+@app.get("/api/integrations/scalable/decisions")
+async def scalable_decisions(fresh: bool = False):
+    """Return the last decision report or rebuild it without sending Telegram."""
+    if fresh:
+        return await _build_scalable_decision_report()
+    raw = await asyncio.to_thread(
+        get_portfolio_manager().get_app_setting,
+        "scalable_decision_report_v1",
+        "",
+    )
+    if raw:
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    raise HTTPException(status_code=404, detail="Noch kein Scalable-Entscheidungsreport vorhanden.")
+
+
+@app.post("/api/integrations/scalable/sync")
+async def sync_scalable_portfolio():
+    """Synchronize holdings, then best-effort read-only market and transaction context."""
+    try:
+        synced = await asyncio.to_thread(get_scalable_integration_service().sync)
+        result = dict(synced)
+        result["readonly_context"] = await _refresh_scalable_readonly_context()
+        if os.getenv("SCALABLE_TELEGRAM_DECISIONS_ENABLED", "true").strip().lower() not in {
+            "0", "false", "no", "off"
+        }:
+            try:
+                decision_result = await _send_scalable_decision_report()
+                result["decision_report"] = decision_result["report"]
+                result["telegram_decisions"] = decision_result["telegram"]
+            except Exception as exc:
+                # The reconciled broker snapshot remains valid even when signal
+                # enrichment or Telegram is temporarily unavailable.
+                result["telegram_decisions"] = {
+                    "status": "error",
+                    "sent": 0,
+                    "error_type": exc.__class__.__name__,
+                }
+        return result
+    except ScalableIntegrationError as exc:
+        status_code = 503 if exc.code in {
+            "integration_disabled",
+            "cli_not_installed",
+            "cli_unavailable",
+            "cli_timeout",
+        } else 409
+        if exc.code in {"no_session", "refresh_relogin_required", "device_locked"}:
+            status_code = 401
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.public_message, "details": exc.details},
+        )
+
+
+@app.post("/api/integrations/scalable/decisions/send")
+async def send_scalable_decisions(force: bool = False):
+    """Rebuild and send the current read-only decision report; unchanged reports deduplicate."""
+    try:
+        return await _send_scalable_decision_report(force=force)
+    except ScalableIntegrationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": exc.public_message, "details": exc.details},
+        )
+
+
 @app.get("/api/portfolio/{p_id}/verdict")
 async def get_portfolio_verdict(p_id: str):
     """Generate an AI verdict for the entire portfolio."""
+    if get_scalable_integration_service().is_managed_portfolio(p_id):
+        return {"verdict": None, "source": "scalable_cli_reconciled"}
     try:
         portfolios = get_portfolio_manager().get_portfolios()
         portfolio = next((p for p in portfolios if p['id'] == p_id), None)
@@ -4081,11 +4503,15 @@ async def create_portfolio(req: CreatePortfolioRequest):
 
 @app.delete("/api/portfolios/{p_id}")
 async def delete_portfolio(p_id: str):
+    if get_scalable_integration_service().is_managed_portfolio(p_id):
+        raise HTTPException(status_code=409, detail="Scalable-Portfolio wird ausschließlich durch Read-only-Sync verwaltet.")
     get_portfolio_manager().delete_portfolio(p_id)
     return {"status": "deleted"}
 
 @app.post("/api/portfolios/{p_id}/holdings")
 async def add_holding(p_id: str, req: AddHoldingRequest):
+    if get_scalable_integration_service().is_managed_portfolio(p_id):
+        raise HTTPException(status_code=409, detail="Scalable-Positionen können nur synchronisiert werden.")
     try:
         saved = get_portfolio_manager().add_holding(p_id, req.ticker, req.shares, req.buy_price, req.purchase_date)
     except ValueError as exc:
@@ -4096,6 +4522,8 @@ async def add_holding(p_id: str, req: AddHoldingRequest):
 
 @app.patch("/api/portfolios/{p_id}/holdings/{ticker}")
 async def update_holding(p_id: str, ticker: str, req: UpdateHoldingRequest):
+    if get_scalable_integration_service().is_managed_portfolio(p_id):
+        raise HTTPException(status_code=409, detail="Scalable-Positionen können nur synchronisiert werden.")
     updated = get_portfolio_manager().update_holding(
         p_id,
         ticker,
@@ -4109,6 +4537,8 @@ async def update_holding(p_id: str, ticker: str, req: UpdateHoldingRequest):
 
 @app.delete("/api/portfolios/{p_id}/holdings/{ticker}")
 async def remove_holding(p_id: str, ticker: str):
+    if get_scalable_integration_service().is_managed_portfolio(p_id):
+        raise HTTPException(status_code=409, detail="Scalable-Positionen können nur synchronisiert werden.")
     get_portfolio_manager().remove_holding(p_id, ticker)
     return {"status": "removed"}
 
@@ -4125,6 +4555,10 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
         Portfolio analysis including total value, performance, and individual stock analyses
     """
     try:
+        if get_scalable_integration_service().is_managed_portfolio(request.portfolio_id or ""):
+            return convert_numpy_types(
+                await asyncio.to_thread(get_scalable_integration_service().portfolio_analysis)
+            )
         holdings_data = []
         total_value = 0
         total_cost = 0
@@ -4962,6 +5396,31 @@ def _safe_morning_brief_fallback(
     return fallback
 
 
+@app.get("/api/market/regions")
+async def get_market_regions():
+    """Independent low-latency regional indices for the world map."""
+    cached = _cache_get("market:regions", 45)
+    if cached is not None:
+        return convert_numpy_types(cached)
+    try:
+        payload = await asyncio.wait_for(
+            asyncio.to_thread(get_morning_brief_service().get_regional_snapshot_fast),
+            timeout=6.0,
+        )
+        return convert_numpy_types(_cache_set("market:regions", payload))
+    except Exception:
+        return convert_numpy_types({
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "regions": {},
+            "quality": {
+                "current": False,
+                "status": "unavailable",
+                "missing_regions": ["asia", "europe", "usa"],
+                "source": "regional_chart",
+            },
+        })
+
+
 @app.get("/api/market/morning-brief")
 async def get_morning_brief(fast: bool = False):
     try:
@@ -5491,26 +5950,36 @@ def _market_feed_health_check() -> Dict[str, Any]:
             error_code=classify_provider_error("quote", error=exc),
             error_type=exc.__class__.__name__,
         )
-    started = time.perf_counter()
-    try:
-        snapshot = get_realtime_market_service().build_snapshot(["AAPL"])
-        realtime_state = snapshot.get("connection_state") or "unknown"
+    realtime_required = _env_enabled("ALPACA_MARKET_DATA_ENABLED", "false")
+    feeds["realtime_required"] = realtime_required
+    if not realtime_required:
         feeds["realtime"] = {
-            "status": realtime_state,
-            "quotes": len(snapshot.get("quotes") or []),
-            "stale_seconds": snapshot.get("stale_seconds") or {},
+            "status": "disabled",
+            "reason": "alpaca_market_data_not_enabled",
+            "quotes": 0,
+            "stale_seconds": {},
         }
-    except Exception as exc:
-        feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
-        record_provider_result(
-            "quote",
-            "realtime_aggregator",
-            "health_snapshot",
-            "error",
-            latency_ms=(time.perf_counter() - started) * 1000,
-            error_code=classify_provider_error("quote", error=exc),
-            error_type=exc.__class__.__name__,
-        )
+    else:
+        started = time.perf_counter()
+        try:
+            snapshot = get_realtime_market_service().build_snapshot(["AAPL"])
+            realtime_state = snapshot.get("connection_state") or "unknown"
+            feeds["realtime"] = {
+                "status": realtime_state,
+                "quotes": len(snapshot.get("quotes") or []),
+                "stale_seconds": snapshot.get("stale_seconds") or {},
+            }
+        except Exception as exc:
+            feeds["realtime"] = {"status": "error", "error": exc.__class__.__name__}
+            record_provider_result(
+                "quote",
+                "realtime_aggregator",
+                "health_snapshot",
+                "error",
+                latency_ms=(time.perf_counter() - started) * 1000,
+                error_code=classify_provider_error("quote", error=exc),
+                error_type=exc.__class__.__name__,
+            )
     return _cache_set(cache_key, feeds)
 
 
@@ -5703,6 +6172,47 @@ async def admin_health_center():
     except Exception as exc:
         learning_dashboard = {"summary": {}}
         data_feeds["forecast_learning"] = {"status": "error", "error": exc.__class__.__name__}
+    try:
+        paper_learning_v2_dashboard = get_paper_trading_service().paper_learning.build_dashboard()
+        raw_paper_learning_v2 = get_portfolio_manager().get_app_setting("paper_learning_v2_last_result", "{}")
+        paper_learning_v2_last = json.loads(raw_paper_learning_v2 or "{}")
+        if not isinstance(paper_learning_v2_last, dict):
+            paper_learning_v2_last = {}
+        paper_learning_v2_operations = paper_learning_v2_dashboard.get("operations") or {}
+        paper_learning_v2_age = (paper_learning_v2_operations.get("last_run") or {}).get("age_minutes")
+        paper_learning_v2_stale_after = _safe_int_env("PAPER_LEARNING_V2_STALE_AFTER_MINUTES", 360, minimum=30)
+        paper_learning_v2_stale = bool(
+            paper_learning_v2_age is not None
+            and int(paper_learning_v2_age) > paper_learning_v2_stale_after
+        )
+        paper_learning_v2_run_status = str(paper_learning_v2_last.get("status") or "not_started")
+        data_feeds["paper_learning_v2"] = {
+            "status": (
+                "error"
+                if paper_learning_v2_run_status == "error"
+                else "stuck"
+                if paper_learning_v2_run_status == "running" and paper_learning_v2_stale
+                else "stale"
+                if paper_learning_v2_stale
+                else paper_learning_v2_run_status
+                if paper_learning_v2_run_status in {"running", "not_started"}
+                else "ok"
+            ),
+            "summary": paper_learning_v2_dashboard.get("summary") or {},
+            "operations": paper_learning_v2_operations,
+            "last_result": paper_learning_v2_last,
+            "age_minutes": paper_learning_v2_age,
+            "stale": paper_learning_v2_stale,
+            "stale_after_minutes": paper_learning_v2_stale_after,
+            "last_error": get_portfolio_manager().get_app_setting("paper_learning_v2_last_error", ""),
+            "paper_only": True,
+        }
+    except Exception as exc:
+        paper_learning_v2_dashboard = {"summary": {}, "hypotheses": [], "rules": []}
+        paper_learning_v2_last = {"status": "error", "error": str(exc)}
+        paper_learning_v2_run_status = "error"
+        paper_learning_v2_stale = False
+        data_feeds["paper_learning_v2"] = {"status": "error", "error": exc.__class__.__name__}
 
     scheduler_last_checked_at = get_portfolio_manager().get_app_setting("brief_scheduler_last_checked_at")
     scheduler_loop_seen_at = get_portfolio_manager().get_app_setting("brief_scheduler_loop_seen_at")
@@ -5862,6 +6372,8 @@ async def admin_health_center():
     )
     decision_audit_status = get_portfolio_manager().verify_decision_audit_chain()
     compliance_status = get_compliance_status()
+    alpaca_paper_broker_health = _alpaca_paper_broker_health()
+    broker_reconciliation_status = BrokerReconciliationService().status()
     problems = []
     if telegram.get("status") != "ok":
         problems.append("telegram")
@@ -5915,10 +6427,20 @@ async def admin_health_center():
         problems.append("paper_outcomes_stale")
     if paper_outcome_pending >= paper_outcome_pending_warn:
         problems.append("paper_outcomes_backlog")
+    if paper_learning_v2_run_status == "error":
+        problems.append("paper_learning_v2_error")
+    if data_feeds.get("paper_learning_v2", {}).get("status") == "stuck":
+        problems.append("paper_learning_v2_stuck")
+    elif paper_learning_v2_stale:
+        problems.append("paper_learning_v2_stale")
+    if paper_autopilot_enabled and paper_learning_v2_run_status == "not_started":
+        problems.append("paper_learning_v2_not_seen")
     if decision_audit_status.get("valid") is not True:
         problems.append("decision_audit_invalid")
     if compliance_status.get("request_allowed") is not True:
         problems.append("external_compliance_blocked")
+    if alpaca_paper_broker_health.get("enabled") is True and broker_reconciliation_status.get("trade_allowed") is not True:
+        problems.append("broker_reconciliation_blocked")
     overall = "ok" if not problems else "degraded"
     next_job = next(
         (
@@ -5974,6 +6496,13 @@ async def admin_health_center():
             "backup": backup_status,
             "operational_alerts": operational_alerts,
             "provider_metrics": provider_metrics_snapshot(),
+            "alpaca_stream": _alpaca_stream_health(),
+            "alpaca_paper_broker": alpaca_paper_broker_health,
+            "broker_reconciliation": broker_reconciliation_status,
+            "fast_paper_safety": FastPaperSafetyService(get_portfolio_manager()).status(),
+            "latency_monitor": LatencyMonitorService().snapshot(
+                window_minutes=_safe_int_env("LATENCY_MONITOR_WINDOW_MINUTES", 60, minimum=1)
+            ),
             "production_soak": production_soak,
             "decision_audit": decision_audit_status,
             "compliance": compliance_status,
@@ -6011,6 +6540,7 @@ async def admin_health_center():
                 "jobs": schedule_jobs,
             },
             "learning": learning_dashboard,
+            "paper_learning_v2": paper_learning_v2_dashboard,
             "paper_autopilot": {
                 "enabled": paper_autopilot_enabled,
                 "loop_enabled": forecast_loop_enabled,
@@ -6178,6 +6708,61 @@ async def evaluate_paper_trade_outcomes():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/trading/paper-learning-v2")
+async def get_paper_learning_v2_dashboard():
+    try:
+        payload = get_paper_trading_service().paper_learning.build_dashboard()
+        return convert_numpy_types(attach_scope(payload, paper_scope()))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/paper-learning-v2/trades/{trade_id}")
+async def get_paper_learning_v2_trade_detail(trade_id: str):
+    try:
+        payload = get_paper_trading_service().paper_learning.build_trade_detail(trade_id)
+        return convert_numpy_types(attach_scope(payload, paper_scope()))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/paper-learning-v2/refresh")
+async def refresh_paper_learning_v2():
+    try:
+        result = await asyncio.to_thread(get_paper_trading_service().paper_learning.refresh_learning_state)
+        return convert_numpy_types(attach_scope(result, paper_scope()))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/paper-learning-v2/rules/{rule_id}/rollback-preview")
+async def preview_paper_learning_v2_rule_rollback(rule_id: str):
+    try:
+        result = get_paper_trading_service().paper_learning.rollback_preview(rule_id)
+        return convert_numpy_types(attach_scope(result, paper_scope()))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/paper-learning-v2/rules/{rule_id}/action")
+async def review_paper_learning_v2_rule(rule_id: str, req: PaperLearningRuleActionRequest):
+    try:
+        result = get_paper_trading_service().paper_learning.review_rule(
+            rule_id,
+            req.action,
+            req.reason or "",
+        )
+        return convert_numpy_types(attach_scope(result, paper_scope()))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/trading/intelligence")
 async def get_trading_intelligence():
     try:
@@ -6209,6 +6794,139 @@ async def get_strategy_library():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/broker-paper/status")
+async def get_broker_paper_status():
+    reconciliation = BrokerReconciliationService().status()
+    return convert_numpy_types(
+        {
+            "broker": _alpaca_paper_broker_health(),
+            "reconciliation": reconciliation,
+            "fast_paper_safety": FastPaperSafetyService(get_portfolio_manager()).status(),
+            "paper_only": True,
+            "real_money_enabled": False,
+        }
+    )
+
+
+@app.post("/api/trading/broker-paper/reconcile")
+async def reconcile_broker_paper():
+    try:
+        result = await asyncio.to_thread(get_broker_reconciliation_service().reconcile)
+        return convert_numpy_types(result)
+    except (AlpacaPaperBrokerError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.get("/api/trading/broker-paper/orders")
+async def list_broker_paper_orders(limit: int = 100):
+    return convert_numpy_types(
+        {
+            "orders": BrokerOrderStore().list_orders(limit=limit),
+            "paper_only": True,
+        }
+    )
+
+
+@app.post("/api/trading/broker-paper/orders")
+async def submit_broker_paper_order(req: BrokerPaperOrderRequest):
+    safety = FastPaperSafetyService(get_portfolio_manager())
+    safety_status = safety.status()
+    if safety_status.get("enabled") is not True:
+        raise HTTPException(status_code=409, detail="FAST_PAPER_ENABLED must be true for broker-paper orders.")
+    try:
+        safety.enforce_not_paused()
+        get_broker_reconciliation_service().enforce_reconciled()
+        quality = await asyncio.to_thread(
+            MarketQualityService().evaluate_latest,
+            req.symbol,
+            req.asset_class,
+        )
+        if quality.get("trade_allowed") is not True:
+            raise HTTPException(
+                status_code=409,
+                detail="Broker-paper market quality gate: "
+                + ", ".join(quality.get("blockers") or ["unknown_market_quality_error"]),
+            )
+        short_sale_gate = None
+        if req.side == "sell":
+            short_sale_gate = await asyncio.to_thread(
+                get_alpaca_paper_broker_adapter().assess_short_sale,
+                symbol=req.symbol,
+                quantity=req.quantity,
+                reference_price=float(quality.get("midpoint") or 0),
+            )
+            if short_sale_gate.get("allowed") is not True:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Broker-paper short gate: "
+                    + ", ".join(short_sale_gate.get("reasons") or ["short_not_allowed"]),
+                )
+        order_request = BrokerOrderRequest(
+            client_order_id=req.client_order_id,
+            symbol=req.symbol,
+            quantity=str(req.quantity),
+            side=req.side,
+            order_type=req.order_type,
+            time_in_force=req.time_in_force,
+            limit_price=str(req.limit_price) if req.limit_price is not None else None,
+            stop_price=str(req.stop_price) if req.stop_price is not None else None,
+            extended_hours=req.extended_hours,
+            signal_decision_id=req.signal_decision_id,
+        )
+        order = await asyncio.to_thread(get_alpaca_paper_broker_adapter().submit_order, order_request)
+        return convert_numpy_types(
+            {
+                "order": order,
+                "market_quality_gate": quality,
+                "short_sale_gate": short_sale_gate,
+                "paper_only": True,
+                "real_money_enabled": False,
+            }
+        )
+    except HTTPException:
+        raise
+    except BrokerSubmissionUncertainError as exc:
+        stored = BrokerOrderStore().get(req.client_order_id)
+        return JSONResponse(
+            status_code=202,
+            content=convert_numpy_types(
+                {
+                    "status": "submission_uncertain",
+                    "message": str(exc),
+                    "order": stored,
+                    "automatic_resubmission_blocked": True,
+                    "paper_only": True,
+                }
+            ),
+        )
+    except (AlpacaPaperBrokerError, BrokerReconciliationBlockedError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/api/trading/broker-paper/orders/{broker_order_id}/cancel")
+async def cancel_broker_paper_order(broker_order_id: str):
+    try:
+        result = await asyncio.to_thread(
+            get_alpaca_paper_broker_adapter().cancel_order,
+            broker_order_id,
+        )
+        return convert_numpy_types(result)
+    except (AlpacaPaperBrokerError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/api/trading/broker-paper/orders/by-client/{client_order_id}/refresh")
+async def refresh_broker_paper_order(client_order_id: str):
+    try:
+        order = await asyncio.to_thread(
+            get_alpaca_paper_broker_adapter().get_order_by_client_id,
+            client_order_id,
+        )
+        return convert_numpy_types({"order": order, "paper_only": True})
+    except (AlpacaPaperBrokerError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 @app.post("/api/trading/paper-trades")
 async def create_paper_trade(req: PaperTradeCreateRequest):
@@ -6374,6 +7092,123 @@ async def update_paper_trade_journal(trade_id: str, req: PaperTradeJournalReques
             lessons_learned=req.lessons_learned,
         )
         return convert_numpy_types(trade)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/gex/{ticker}")
+async def get_trading_gex(ticker: str):
+    """Returns Options Market Maker Gamma Exposure (GEX), Call/Put Walls, and Zero-Gamma Level."""
+    try:
+        service = get_trading_signals_service()
+        result = await asyncio.to_thread(service.get_gex_profile, ticker)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"No options GEX data available for {ticker}")
+        return convert_numpy_types(result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/volume-profile/{ticker}")
+async def get_trading_volume_profile(ticker: str, period: str = "1mo", interval: str = "30m"):
+    """Returns Volume Profile, Point of Control (POC), Value Area (VAH/VAL), and Low Volume Nodes."""
+    try:
+        service = get_trading_signals_service()
+        result = await asyncio.to_thread(service.volume_profile.compute_volume_profile, ticker, period, interval)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"No volume profile data available for {ticker}")
+        return convert_numpy_types(result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/asymmetric-setups")
+async def get_asymmetric_trade_setups(limit: int = 6):
+    """Returns top asymmetric trade setups with minimum 2.5:1 R:R, structural invalidation, and sizing."""
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        service = get_trading_signals_service()
+        setups = await asyncio.to_thread(service.get_asymmetric_setups, watchlist, limit=limit)
+        return convert_numpy_types({"setups": setups, "count": len(setups)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/telegram/send-edge-setup")
+async def send_trading_edge_setup_telegram(req: SendEdgeSetupTelegramRequest):
+    """Dispatches a high-conviction trade setup card directly to the user's smartphone via Telegram."""
+    try:
+        service = get_trading_signals_service()
+        ticker = (req.ticker or "").strip().upper()
+
+        ticket = None
+        if ticker:
+            ticket = await asyncio.to_thread(
+                service.asymmetric_service.generate_trade_setup,
+                ticker,
+                req.portfolio_capital or 50000.0,
+                req.risk_budget_pct or 0.75,
+            )
+        else:
+            items = get_portfolio_manager().get_signal_watch_items()
+            watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+            setups = await asyncio.to_thread(
+                service.get_asymmetric_setups,
+                watchlist,
+                req.portfolio_capital or 50000.0,
+                req.risk_budget_pct or 0.75,
+                1,
+            )
+            if setups:
+                ticket = setups[0]
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="No suitable asymmetric trade setup found.")
+
+        alert_result = await asyncio.to_thread(
+            get_email_alert_service().send_trading_edge_setup_alert,
+            ticket,
+            req.force,
+        )
+        return convert_numpy_types({
+            "status": "ok",
+            "alert_result": alert_result,
+            "ticket": ticket,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/backtest")
+async def run_strategy_backtest(
+    ticker: str = "SPY",
+    strategy: str = "volume_breakout",
+    period: str = "2y",
+    target_r: float = 2.5,
+):
+    """Runs a historical backtest for a strategy on the specified ticker."""
+    from src.backtest_engine import BacktestEngine
+    try:
+        engine = BacktestEngine()
+        res = await asyncio.to_thread(
+            engine.backtest_strategy,
+            ticker=ticker,
+            strategy=strategy,
+            period=period,
+            target_r=target_r,
+        )
+        if not res:
+            raise HTTPException(status_code=404, detail=f"Insufficient data for backtest of {ticker}")
+        return convert_numpy_types(res)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

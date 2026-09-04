@@ -93,6 +93,7 @@ const formatTer = (value: unknown) => {
 
 const emptyTicker = "Offen";
 const emptyName = "Daten werden geladen oder aktuell nicht belastbar.";
+const PRIMARY_DISCOVERY_FEED_COUNT = 4;
 
 const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw }) => {
   const { formatPrice } = useCurrency();
@@ -173,18 +174,21 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     let deferredTimer: number | null = null;
+    let secondaryDeferredTimer: number | null = null;
     const fetchAll = async () => {
       setLoading(true);
       setPrimaryFailureCount(0);
 
       const safeFetch = <T,>(url: string) =>
-        withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }), 6500);
+        fetchJsonWithRetry<T>(url, { signal: controller.signal }, {
+          retries: 0,
+          timeoutMs: 6500,
+        });
 
       const primaryResults = await Promise.allSettled([
         safeFetch<StarAssets>("/api/discovery/stars"),
-        safeFetch<PublicSignalsData>("/api/discovery/public-signals"),
-        safeFetch<SignalWatchlistData>("/api/signals/watchlist"),
         safeFetch<DiscoveryStock[]>("/api/discovery/trending"),
         safeFetch<DiscoveryStock[]>("/api/discovery/gainers"),
         safeFetch<DiscoveryStock[]>("/api/discovery/losers"),
@@ -192,49 +196,85 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
 
       if (cancelled) return;
 
-      const val = <T,>(r: PromiseSettledResult<T | null>, fallback: T): T =>
-        r.status === "fulfilled" && r.value != null ? r.value : fallback;
-
-      const [s, ps, sw, t, g, l] = primaryResults;
+      const [s, t, g, l] = primaryResults;
       setPrimaryFailureCount(
         primaryResults.filter((result) => result.status === "rejected" || result.value == null).length,
       );
 
-      setStars(val(s, null));
-      setPublicSignals(val(ps, null));
-      setSignalWatchlist(val(sw, null));
-      setTrending(val(t, []));
-      setGainers(val(g, []));
-      setLosers(val(l, []));
+      setStars(s.status === "fulfilled" ? s.value : null);
+      setTrending(t.status === "fulfilled" ? t.value : []);
+      setGainers(g.status === "fulfilled" ? g.value : []);
+      setLosers(l.status === "fulfilled" ? l.value : []);
       setLoading(false);
 
       deferredTimer = window.setTimeout(async () => {
         const deferredFetch = <T,>(url: string) =>
-          withTimeout(fetchJsonWithRetry<T>(url, undefined, { retries: 1, retryDelayMs: 800 }), 9000);
+          fetchJsonWithRetry<T>(url, { signal: controller.signal }, {
+            retries: 0,
+            timeoutMs: 9000,
+          });
         const deferredResults = await Promise.allSettled([
           deferredFetch<DiscoveryStock[]>("/api/discovery/rebounds"),
-          deferredFetch<DiscoveryStock[]>("/api/discovery/small-caps"),
           deferredFetch<DiscoveryStock[]>("/api/discovery/future-stars"),
-          deferredFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
-          deferredFetch<DiscoveryStock[]>("/api/discovery/commodities"),
           deferredFetch<any[]>("/api/discovery/etfs"),
         ]);
         if (cancelled) return;
-        const [r, sc, fs, cur, com, e] = deferredResults;
-        setRebounds(val(r, []));
-        setSmallCaps(val(sc, []));
-        setFutureStars(val(fs, []));
-        setCryptos(val(cur, []));
-        setCommodities(val(com, []));
-        setEtfs(val(e, []));
-      }, 900);
+        const [r, fs, e] = deferredResults;
+        setRebounds(r.status === "fulfilled" ? r.value : []);
+        setFutureStars(fs.status === "fulfilled" ? fs.value : []);
+        setEtfs(e.status === "fulfilled" ? e.value : []);
+
+        secondaryDeferredTimer = window.setTimeout(async () => {
+          const secondaryResults = await Promise.allSettled([
+            deferredFetch<DiscoveryStock[]>("/api/discovery/small-caps"),
+            deferredFetch<DiscoveryStock[]>("/api/discovery/cryptos"),
+            deferredFetch<DiscoveryStock[]>("/api/discovery/commodities"),
+          ]);
+          if (cancelled) return;
+          const [sc, cur, com] = secondaryResults;
+          setSmallCaps(sc.status === "fulfilled" ? sc.value : []);
+          setCryptos(cur.status === "fulfilled" ? cur.value : []);
+          setCommodities(com.status === "fulfilled" ? com.value : []);
+        }, 700);
+      }, 1400);
     };
-    fetchAll();
+    void fetchAll();
     return () => {
       cancelled = true;
+      controller.abort();
       if (deferredTimer !== null) window.clearTimeout(deferredTimer);
+      if (secondaryDeferredTimer !== null) window.clearTimeout(secondaryDeferredTimer);
     };
   }, [providerReloadTick]);
+
+  useEffect(() => {
+    if (activeTab !== "signals" || (publicSignals && signalWatchlist)) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadSignals = async () => {
+      const results = await Promise.allSettled([
+        fetchJsonWithRetry<PublicSignalsData>("/api/discovery/public-signals", { signal: controller.signal }, {
+          retries: 0,
+          timeoutMs: 7000,
+        }),
+        fetchJsonWithRetry<SignalWatchlistData>("/api/signals/watchlist", { signal: controller.signal }, {
+          retries: 0,
+          timeoutMs: 7000,
+        }),
+      ]);
+      if (cancelled) return;
+      const [signalsResult, watchlistResult] = results;
+      if (signalsResult.status === "fulfilled") setPublicSignals(signalsResult.value);
+      if (watchlistResult.status === "fulfilled") setSignalWatchlist(watchlistResult.value);
+    };
+
+    void loadSignals();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [activeTab]);
 
   const refreshAiScanners = async (force = false) => {
     if (!force && (aiLoadedRef.current || aiLoading)) return;
@@ -495,7 +535,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
           view="markets"
           state="degraded"
           title="Ein Teil der Marktquellen ist verzögert"
-          description={`${primaryFailureCount} von 6 primären Feeds haben keine Daten geliefert. Die sichtbaren Kandidaten stammen nur aus den erfolgreich beantworteten Quellen.`}
+          description={`${primaryFailureCount} von ${PRIMARY_DISCOVERY_FEED_COUNT} primären Feeds haben keine Daten geliefert. Die sichtbaren Kandidaten stammen nur aus den erfolgreich beantworteten Quellen.`}
           source="Discovery-Provider"
           onRetry={() => setProviderReloadTick((current) => current + 1)}
           retryLabel="Fehlende Feeds neu laden"

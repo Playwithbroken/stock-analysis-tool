@@ -31,6 +31,10 @@ try:
 except Exception:  # pragma: no cover
     yf = None  # type: ignore
 
+from src.options_edge_service import OptionsEdgeService
+from src.volume_profile_service import VolumeProfileService
+from src.asymmetric_trade_service import AsymmetricTradeService
+
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -61,6 +65,17 @@ class TradingSignalsService:
     _c_premarket: _Cache = _Cache()
     _c_sectors: _Cache = _Cache()
     _c_yield: _Cache = _Cache()
+    _c_gex: Dict[str, _Cache] = {}
+    _c_vp: Dict[str, _Cache] = {}
+    _c_asymmetric: _Cache = _Cache()
+
+    def __init__(self) -> None:
+        self.options_edge = OptionsEdgeService()
+        self.volume_profile = VolumeProfileService()
+        self.asymmetric_service = AsymmetricTradeService(
+            options_service=self.options_edge,
+            volume_service=self.volume_profile,
+        )
 
     TTL_SHORT = 600       # 10 min
     TTL_MED = 3600        # 1 h
@@ -336,6 +351,63 @@ class TradingSignalsService:
         self._c_yield = _Cache(time.time(), out)
         return out
 
+    # ---------- 9. Gamma Exposure (GEX) ----------
+    def get_gex_profile(self, ticker: str) -> Optional[Dict[str, Any]]:
+        cached = self._c_gex.get(ticker)
+        if cached and time.time() - cached.ts < self.TTL_SHORT:
+            return cached.data
+        res = self.options_edge.analyze_gex(ticker)
+        if res:
+            self._c_gex[ticker] = _Cache(time.time(), res)
+        return res
+
+    # ---------- 10. Volume Profile (POC, VAH, VAL) ----------
+    def get_volume_profile(self, ticker: str) -> Optional[Dict[str, Any]]:
+        cached = self._c_vp.get(ticker)
+        if cached and time.time() - cached.ts < self.TTL_SHORT:
+            return cached.data
+        res = self.volume_profile.compute_volume_profile(ticker)
+        if res:
+            self._c_vp[ticker] = _Cache(time.time(), res)
+        return res
+
+    # ---------- 11. Asymmetric Trade Setups (2.5:1+ R:R) ----------
+    def get_asymmetric_setups(
+        self,
+        watchlist: List[str],
+        portfolio_capital: float = 50000.0,
+        risk_budget_pct: float = 0.75,
+        limit: int = 4,
+    ) -> List[Dict[str, Any]]:
+        cached = self._c_asymmetric
+        if cached.data and time.time() - cached.ts < self.TTL_SHORT:
+            return cached.data[:limit]
+
+        candidates = [tk for tk in watchlist if tk and not tk.startswith("^")][:8]
+        # Always ensure key market leaders are represented if watchlist is small
+        defaults = ["NVDA", "AAPL", "MSFT", "TSLA", "SPY", "QQQ"]
+        for d in defaults:
+            if d not in candidates and len(candidates) < 8:
+                candidates.append(d)
+
+        setups: List[Dict[str, Any]] = []
+        for tk in candidates:
+            try:
+                setup = self.asymmetric_service.generate_trade_setup(
+                    ticker=tk,
+                    portfolio_capital=portfolio_capital,
+                    risk_budget_pct=risk_budget_pct,
+                )
+                if setup and setup.get("risk_reward_ratio", 0) >= 2.0:
+                    setups.append(setup)
+            except Exception as e:
+                logger.debug("setup generation for %s failed: %s", tk, e)
+                continue
+
+        setups.sort(key=lambda s: float(s.get("risk_reward_ratio") or 0), reverse=True)
+        self._c_asymmetric = _Cache(time.time(), setups)
+        return setups[:limit]
+
     # ---------- Aggregator ----------
     def get_full_edge_pack(self, watchlist: List[str]) -> Dict[str, Any]:
         """Build the entire trading edge payload in one call."""
@@ -358,6 +430,23 @@ class TradingSignalsService:
             if a and a["actions"]:
                 analyst.append(a)
 
+        # GEX profiles for top watchlist / market leaders
+        gex_profiles = []
+        for tk in watchlist[:4]:
+            g = self.get_gex_profile(tk)
+            if g:
+                gex_profiles.append(g)
+
+        # Volume profiles for top watchlist / market leaders
+        volume_profiles = []
+        for tk in watchlist[:4]:
+            vp = self.get_volume_profile(tk)
+            if vp:
+                volume_profiles.append(vp)
+
+        # Asymmetric setups with min 2.5:1 R:R
+        asymmetric_setups = self.get_asymmetric_setups(watchlist, limit=4)
+
         return {
             "squeeze": squeeze[:5],
             "insider": self.get_insider_trades(limit=6),
@@ -367,4 +456,7 @@ class TradingSignalsService:
             "premarket": self.get_premarket_movers(watchlist, limit=5),
             "sectors": self.get_sector_rotation(),
             "yield_curve": self.get_yield_curve(),
+            "gex_profiles": gex_profiles,
+            "volume_profiles": volume_profiles,
+            "asymmetric_setups": asymmetric_setups,
         }

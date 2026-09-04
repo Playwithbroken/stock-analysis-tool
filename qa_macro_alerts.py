@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.email_alert_service import EmailAlertService
 
 
@@ -41,6 +43,10 @@ def test_macro_alert_gate():
             "action": "hedge",
         },
         "publisher": "Reuters",
+        "source_status": "confirmed",
+        "source_url": "https://example.test/ukraine-energy",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "source_evidence": {"url": "https://example.test/ukraine-energy", "link_verified": True, "quality": "tier_1"},
     }
     normalized = service._normalize_macro_alert_event(event, 82)
     assert normalized is not None
@@ -74,6 +80,10 @@ def test_macro_alert_bucket_dedupe_blocks_reworded_headline():
             "action": "hedge",
         },
         "publisher": "Reuters",
+        "source_status": "confirmed",
+        "source_url": "https://example.test/ukraine-energy-1",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "source_evidence": {"url": "https://example.test/ukraine-energy-1", "link_verified": True, "quality": "tier_1"},
     }
     second = {
         "title": "Europe futures slip as Ukraine escalation keeps energy risk elevated",
@@ -88,6 +98,10 @@ def test_macro_alert_bucket_dedupe_blocks_reworded_headline():
             "action": "hedge",
         },
         "publisher": "Reuters",
+        "source_status": "confirmed",
+        "source_url": "https://example.test/ukraine-energy-2",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "source_evidence": {"url": "https://example.test/ukraine-energy-2", "link_verified": True, "quality": "tier_1"},
     }
     normalized_first = service._normalize_macro_alert_event(first, 82)
     normalized_second = service._normalize_macro_alert_event(second, 82)
@@ -100,7 +114,7 @@ def test_macro_alert_bucket_dedupe_blocks_reworded_headline():
     assert service._macro_alert_can_send(normalized_second) is False
 
     score_upgraded = dict(normalized_second)
-    score_upgraded["impact_score"] = 97
+    score_upgraded["impact_score"] = 104
     score_upgraded["severity"] = "high"
     assert service._macro_alert_can_send(score_upgraded) is True
 
@@ -156,3 +170,5 @@ if __name__ == "__main__":
     test_incomplete_macro_alert_is_blocked()
     test_immediate_non_macro_alerts_require_combined_quality()
     print("macro alert QA ok")
+
+

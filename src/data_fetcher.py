@@ -6,10 +6,13 @@ Fetches market data, fundamentals, and news for stock analysis.
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
+from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
+from src.financial_units import normalize_dividend_yield_pct, ratio_to_pct, relative_change_pct
 
 
 class DataFetcher:
@@ -120,8 +123,8 @@ class DataFetcher:
                 "change_1y": safe_pct_change(0),
                 "high_52w": self.info.get("fiftyTwoWeekHigh"),
                 "low_52w": self.info.get("fiftyTwoWeekLow"),
-                "from_52w_high": ((current_price / self.info.get("fiftyTwoWeekHigh", current_price)) - 1) * 100 if current_price else None,
-                "from_52w_low": ((current_price / self.info.get("fiftyTwoWeekLow", current_price)) - 1) * 100 if current_price else None,
+                "from_52w_high": relative_change_pct(current_price, self.info.get("fiftyTwoWeekHigh")),
+                "from_52w_low": relative_change_pct(current_price, self.info.get("fiftyTwoWeekLow")),
             }
         except Exception as e:
             return {"error": str(e)}
@@ -135,6 +138,56 @@ class DataFetcher:
                 value, cached_at = DataFetcher._global_cache[cache_key]
                 if (now - cached_at).total_seconds() < DataFetcher._cache_ttl:
                     return value
+
+            chart_url = (
+                "https://query1.finance.yahoo.com/v8/finance/chart/"
+                f"{quote(self.ticker, safe='')}?range=6mo&interval=1d"
+            )
+            response = requests.get(
+                chart_url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=4,
+            )
+            response.raise_for_status()
+            result = ((response.json().get("chart") or {}).get("result") or [None])[0] or {}
+            raw_closes = (((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or [])
+            closes = [
+                float(item)
+                for item in raw_closes
+                if item is not None and math.isfinite(float(item))
+            ]
+            if not closes:
+                raise ValueError("No chart prices available")
+
+            current_price = closes[-1]
+
+            def safe_chart_change(offset: int) -> Optional[float]:
+                if len(closes) < abs(offset):
+                    return None
+                reference = closes[offset]
+                return relative_change_pct(current_price, reference)
+
+            value = {
+                "current_price": current_price,
+                "currency": (result.get("meta") or {}).get("currency") or "USD",
+                "change_1d": safe_chart_change(-2),
+                "change_1w": safe_chart_change(-6),
+                "change_1m": safe_chart_change(-22),
+                "change_6m": safe_chart_change(0),
+                "change_1y": None,
+                "high_52w": None,
+                "low_52w": None,
+                "from_52w_high": None,
+                "from_52w_low": None,
+            }
+            DataFetcher._global_cache[cache_key] = (value, now)
+            return value
+        except Exception:
+            pass
+
+        try:
+            now = datetime.now()
+            cache_key = f"fast_price_{self.ticker}"
             hist = self.stock.history(period="6mo", interval="1d", auto_adjust=False)
             if hist.empty:
                 return {"error": "No price data available"}
@@ -469,6 +522,9 @@ class DataFetcher:
                 "target_high": info.get("targetHighPrice"),
                 "target_low": info.get("targetLowPrice"),
                 "target_mean": info.get("targetMeanPrice"),
+                # Stable API alias used by newer frontend clients. Keep
+                # target_mean for analyzer/backward compatibility.
+                "target_mean_price": info.get("targetMeanPrice"),
                 "target_median": info.get("targetMedianPrice"),
                 "recommendation": info.get("recommendationKey"),
                 "recommendation_mean": info.get("recommendationMean"),
@@ -699,6 +755,7 @@ class DataFetcher:
             info = self.info
             dividend_rate = info.get("dividendRate")
             dividend_yield = info.get("dividendYield")
+            payout_ratio = info.get("payoutRatio")
             series = getattr(self.stock, "dividends", None)
             last_payment = None
             trailing_total = None
@@ -713,7 +770,9 @@ class DataFetcher:
 
             return {
                 "dividend_rate": float(dividend_rate) if dividend_rate not in (None, "") else None,
-                "dividend_yield": float(dividend_yield) * 100 if dividend_yield not in (None, "") else None,
+                "dividend_yield": normalize_dividend_yield_pct(dividend_yield),
+                "payout_ratio": float(payout_ratio) if payout_ratio not in (None, "") else None,
+                "payout_ratio_pct": ratio_to_pct(payout_ratio),
                 "last_payment": last_payment,
                 "trailing_12m_total": trailing_total,
             }
@@ -721,17 +780,54 @@ class DataFetcher:
             return {"error": str(e), "dividend_rate": None, "dividend_yield": None}
 
     def get_history(self, period: str = "1mo", interval: str = "1d") -> list:
-        """Get historical price data."""
-        fallback_windows = [
-            (period, interval),
-            ("5d", "15m"),
-            ("1mo", "1d"),
-            ("1y", "1wk"),
-        ]
-        fallback_windows = list(dict.fromkeys(fallback_windows))
+        """Get the requested history; provider fallback must not change its range."""
+        fallback_windows = [(period, interval)]
 
         last_error: Optional[Exception] = None
         for current_period, current_interval in fallback_windows:
+            try:
+                chart_url = (
+                    "https://query1.finance.yahoo.com/v8/finance/chart/"
+                    f"{quote(self.ticker, safe='')}"
+                )
+                response = requests.get(
+                    chart_url,
+                    params={"range": current_period, "interval": current_interval},
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=6,
+                )
+                response.raise_for_status()
+                result = ((response.json().get("chart") or {}).get("result") or [None])[0] or {}
+                timestamps = result.get("timestamp") or []
+                quote_data = (((result.get("indicators") or {}).get("quote") or [{}])[0])
+                closes = quote_data.get("close") or []
+                volumes = quote_data.get("volume") or []
+                is_intraday = (
+                    current_interval.endswith("h")
+                    or (current_interval.endswith("m") and not current_interval.endswith("mo"))
+                )
+                result_items = []
+                for idx, timestamp in enumerate(timestamps):
+                    close_value = closes[idx] if idx < len(closes) else None
+                    if close_value is None or not math.isfinite(float(close_value)):
+                        continue
+                    ts_value = pd.Timestamp(timestamp, unit="s", tz="UTC")
+                    volume_value = volumes[idx] if idx < len(volumes) else 0
+                    if volume_value is None or not math.isfinite(float(volume_value)):
+                        volume_value = 0
+                    result_items.append(
+                        {
+                            "time": ts_value.strftime("%H:%M") if is_intraday else ts_value.strftime("%Y-%m-%d"),
+                            "full_date": ts_value.isoformat(),
+                            "price": float(close_value),
+                            "volume": float(volume_value),
+                        }
+                    )
+                if result_items:
+                    return result_items
+            except Exception as exc:
+                last_error = exc
+
             try:
                 hist = self.stock.history(period=current_period, interval=current_interval, auto_adjust=False)
                 if hist.empty:
@@ -742,7 +838,10 @@ class DataFetcher:
                 if ts_col not in hist.columns:
                     ts_col = hist.columns[0]
 
-                is_intraday = any(token in current_interval.lower() for token in ["m", "h"])
+                is_intraday = (
+                    current_interval.endswith("h")
+                    or (current_interval.endswith("m") and not current_interval.endswith("mo"))
+                )
                 result = []
                 for _, row in hist.iterrows():
                     ts_value = row.get(ts_col)

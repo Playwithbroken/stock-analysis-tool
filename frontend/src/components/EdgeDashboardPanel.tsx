@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, ArrowRight, Ban, BarChart3, CheckCircle2, Eye, ShieldAlert, Target, TrendingUp } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, Ban, BarChart3, CheckCircle2, Eye, Globe2, Send, ShieldAlert, Smartphone, Target, TrendingUp, Zap } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Portfolio } from "../hooks/usePortfolios";
 import { localizeLearningMessage, localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
@@ -337,6 +337,30 @@ export default function EdgeDashboardPanel({
   const suitabilityKey = rows.map((row) => `${row.key}:${row.ticker}:${row.tone}:${row.score ?? "n/a"}`).join("|");
   const [suitabilityByKey, setSuitabilityByKey] = useState<Record<string, SuitabilitySummary>>({});
   const [suitabilityLoading, setSuitabilityLoading] = useState(false);
+  const [sendingTelegramTicker, setSendingTelegramTicker] = useState<string | null>(null);
+  const [telegramStatusMessage, setTelegramStatusMessage] = useState<string | null>(null);
+
+  async function handleSendEdgeTelegram(ticker: string) {
+    setSendingTelegramTicker(ticker);
+    setTelegramStatusMessage(null);
+    try {
+      const res = await fetch("/api/trading/telegram/send-edge-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker, force: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTelegramStatusMessage(`✅ Setup für ${ticker} erfolgreich an dein Smartphone (Telegram) gesendet!`);
+      } else {
+        setTelegramStatusMessage(`❌ Fehler: ${data.detail || "Senden fehlgeschlagen"}`);
+      }
+    } catch (err: any) {
+      setTelegramStatusMessage(`❌ Netzwerkfehler: ${err.message}`);
+    } finally {
+      setSendingTelegramTicker(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -536,7 +560,7 @@ export default function EdgeDashboardPanel({
           <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
             Edge Dashboard
           </div>
-          <h2 className="mt-2 text-2xl text-slate-950 sm:text-3xl">
+          <h2 className="font-serif mt-2 text-2xl text-slate-950 sm:text-3xl">
             Was jetzt handeln, beobachten oder meiden?
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -545,12 +569,18 @@ export default function EdgeDashboardPanel({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <a
+            href="#world-market-map"
+            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/10 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-800"
+          >
+            <Globe2 size={14} /> Weltkarte
+          </a>
           <button
             type="button"
             onClick={onOpenMarkets}
             className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/10 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-800"
           >
-            <TrendingUp size={14} /> Markets
+            <TrendingUp size={14} /> Märkte
           </button>
           <button
             type="button"
@@ -574,7 +604,7 @@ export default function EdgeDashboardPanel({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
@@ -590,7 +620,7 @@ export default function EdgeDashboardPanel({
         })}
       </div>
 
-      <div className="mt-4 rounded-[1.25rem] border border-[var(--accent)]/18 bg-[linear-gradient(135deg,rgba(20,184,166,0.11),rgba(255,255,255,0.76))] p-4">
+      <div className="mt-4 hidden rounded-[1.25rem] border border-[var(--accent)]/18 bg-[linear-gradient(135deg,rgba(20,184,166,0.11),rgba(255,255,255,0.76))] p-4 sm:block">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
@@ -619,7 +649,7 @@ export default function EdgeDashboardPanel({
         </div>
       </div>
 
-      <div className="mt-4 rounded-[1.35rem] border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/6">
+      <div className="mt-4 hidden rounded-[1.35rem] border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/6 sm:block">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
@@ -686,7 +716,113 @@ export default function EdgeDashboardPanel({
         )}
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-3">
+      {/* INSTITUTIONAL TRADING EDGE: GEX, VOLUME PROFILE & ASYMMETRIC SETUPS */}
+      {tradingEdge?.asymmetric_setups?.length ? (
+        <div className="mt-5 rounded-[1.35rem] border border-[var(--accent)]/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.06),rgba(255,255,255,0.85))] p-5 shadow-sm dark:bg-slate-950/60">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700">
+                <Zap size={16} />
+              </span>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
+                  Institutionelle Trading Edge
+                </div>
+                <div className="text-base font-black text-slate-950 dark:text-white">
+                  Asymmetrische Setups &middot; Min. 2.5:1 R:R &middot; GEX &middot; Volume Profile
+                </div>
+              </div>
+            </div>
+            <div className="text-xs font-semibold text-slate-500">
+              Struktureller Stop &middot; Feste 0.75% Kontorisiko-Kalibrierung
+            </div>
+          </div>
+
+          {telegramStatusMessage ? (
+            <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-900">
+              {telegramStatusMessage}
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {tradingEdge.asymmetric_setups.map((setup: any) => (
+              <div
+                key={setup.ticker}
+                className="flex flex-col justify-between rounded-[1.2rem] border border-black/8 bg-white/90 p-4 shadow-sm transition hover:border-[var(--accent)]/50 dark:border-white/10 dark:bg-slate-900/70"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onAnalyzeTicker(setup.ticker)}
+                        className="text-lg font-black tracking-tight text-slate-950 transition hover:text-[var(--accent)] dark:text-white"
+                      >
+                        {setup.ticker}
+                      </button>
+                      <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                        {setup.setup_name}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-black text-emerald-800">
+                        R:R {setup.risk_reward_ratio}:1
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                    {setup.catalyst_description}
+                  </p>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5 text-[11px] font-semibold text-slate-700 dark:bg-white/5 dark:text-slate-300">
+                    <div>
+                      <span className="text-slate-400">Einstieg:</span> <span className="font-bold text-slate-900 dark:text-white">${setup.entry_price}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Hard Stop:</span> <span className="font-bold text-red-600">${setup.invalidation_price}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Ziel 1 (2R):</span> <span className="font-bold text-emerald-700">${setup.target_1}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Ziel 2 (3.5R+):</span> <span className="font-bold text-emerald-700">${setup.target_2}</span>
+                    </div>
+                  </div>
+
+                  {setup.options_gex ? (
+                    <div className="mt-2 text-[10px] font-semibold text-slate-500">
+                      GEX: <span className="font-bold text-slate-700 dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
+                    </div>
+                  ) : null}
+                  {setup.volume_profile ? (
+                    <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                      Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-black/5 pt-3 dark:border-white/5">
+                  <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                    Sizing: <span className="text-slate-950 dark:text-white">{setup.recommended_shares} Stk</span> (~{setup.total_position_capital?.toLocaleString()}€)
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSendEdgeTelegram(setup.ticker)}
+                    disabled={sendingTelegramTicker === setup.ticker}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <Smartphone size={13} />
+                    {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="edge-decision-strip mt-5 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700">
             <CheckCircle2 size={15} /> Handeln

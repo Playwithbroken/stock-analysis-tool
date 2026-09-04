@@ -1,0 +1,37 @@
+- generic [ref=e6]:
+  - generic [ref=e7]:
+    - generic [ref=e11]:
+      - generic [ref=e12]: Privater Arbeitsbereich
+      - heading "Marktinformationen, geschützt in deinem privaten Arbeitsbereich." [level=1] [ref=e13]
+      - paragraph [ref=e14]: "Die App ist für den privaten Einzelbetrieb abgesichert: Zugangscode, geschützte API, kontrollierte Herkunftsfreigaben und keine offenen Alarm-Endpunkte."
+    - generic [ref=e15]:
+      - generic [ref=e16]: API hinter Session-Cookie
+      - generic [ref=e17]: Zugriffe auf erlaubte Domains begrenzt
+      - generic [ref=e18]: Alarme und Einstellungen geschützt
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]: Signale zuerst
+        - generic [ref=e22]: Morning Briefing, Watchlist und Echtzeitdaten direkt im Startpfad.
+      - generic [ref=e23]:
+        - generic [ref=e24]: Privat
+        - generic [ref=e25]: Nur dein Arbeitsbereich, keine offene Mehrbenutzerfläche.
+      - generic [ref=e26]:
+        - generic [ref=e27]: Handlungsbereit
+        - generic [ref=e28]: Score, Paper-Trading und Sitzungslisten in einem Ablauf.
+  - generic [ref=e29]:
+    - generic [ref=e30]: Zugang
+    - generic [ref=e31]: Zugangscode eingeben
+    - paragraph [ref=e32]: Nur mit lokaler Session wird die App geladen.
+    - generic [ref=e33]:
+      - textbox "6-stelliger Zugangscode" [ref=e34]
+      - generic [ref=e35]:
+        - checkbox "Auf diesem Gerät angemeldet bleiben (7 Tage)" [checked] [ref=e36]
+        - text: Auf diesem Gerät angemeldet bleiben (7 Tage)
+      - button "Entsperren" [ref=e37]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Zugangsmodell
+        - generic [ref=e41]: Ein privater Zugangscode
+      - generic [ref=e42]:
+        - generic [ref=e43]: Plattform
+        - generic [ref=e44]: Für Web und Smartphone

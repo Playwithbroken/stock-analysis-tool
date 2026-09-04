@@ -329,6 +329,15 @@ class SignalScoreService:
                     "total_score": total,
                     "detail": f"TER {ter:.2f}% / {item.get('category') or 'ETF'}",
                     "change": change,
+                    "asset_evidence": {
+                        "source": item.get("source"),
+                        "data_as_of": item.get("data_as_of"),
+                        "fallback": bool(item.get("fallback")),
+                        "category": item.get("category"),
+                        "expense_ratio": item.get("ter"),
+                        "total_assets": item.get("total_assets"),
+                        "change_1w_pct": item.get("change"),
+                    },
                 }
             )
         return sorted(scored, key=lambda item: item["total_score"], reverse=True)
@@ -337,10 +346,15 @@ class SignalScoreService:
         scored = []
         for item in items:
             change = float(item.get("change") or 0)
-            momentum = max(15, min(95, 50 + change * 8))
+            long_momentum = max(15, min(95, 50 + change * 8))
+            short_momentum = max(15, min(95, 50 - change * 8))
             source_quality = 62
             risk_adjustment = 72 if item.get("ticker") in {"BTC-USD", "ETH-USD"} else 48
-            total = self._weighted_total(source_quality, momentum, risk_adjustment, weights)
+            long_total = self._weighted_total(source_quality, long_momentum, risk_adjustment, weights)
+            short_total = self._weighted_total(source_quality, short_momentum, risk_adjustment, weights)
+            directional_bias = "short" if change <= -1.0 else "long"
+            momentum = short_momentum if directional_bias == "short" else long_momentum
+            total = short_total if directional_bias == "short" else long_total
             scored.append(
                 {
                     "ticker": item.get("ticker"),
@@ -350,8 +364,19 @@ class SignalScoreService:
                     "timing_quality": momentum,
                     "conviction_score": risk_adjustment,
                     "total_score": total,
+                    "long_score": long_total,
+                    "short_score": short_total,
+                    "directional_bias": directional_bias,
                     "detail": item.get("trend_context") or "crypto flow",
                     "change": change,
+                    "asset_evidence": {
+                        "source": item.get("source"),
+                        "data_as_of": item.get("data_as_of"),
+                        "fallback": bool(item.get("fallback")),
+                        "trading_pair": item.get("ticker"),
+                        "change_1w_pct": item.get("change"),
+                        "price": item.get("price"),
+                    },
                 }
             )
         return sorted(scored, key=lambda item: item["total_score"], reverse=True)

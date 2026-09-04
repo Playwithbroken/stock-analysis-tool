@@ -238,8 +238,16 @@ export default function AnalysisResult({
   const quarterlyRevenueYoY = financialTrends?.quarterly_revenue_yoy;
   const analystData = data.analyst_data || {};
   const shortInterest = data.short_interest || {};
+  const shortInterestPct =
+    shortInterest?.short_percent_float == null
+      ? null
+      : Math.abs(Number(shortInterest.short_percent_float)) <= 1
+        ? Number(shortInterest.short_percent_float) * 100
+        : Number(shortInterest.short_percent_float);
   const currentPrice = Number(liveQuote?.price ?? price_data?.current_price ?? 0);
-  const targetMeanPrice = Number(analystData?.target_mean_price ?? analystData?.targetMeanPrice ?? 0);
+  const targetMeanPrice = Number(
+    analystData?.target_mean ?? analystData?.target_mean_price ?? analystData?.targetMeanPrice ?? 0,
+  );
   const analystUpside =
     currentPrice > 0 && targetMeanPrice > 0 ? ((targetMeanPrice / currentPrice) - 1) * 100 : null;
   const netDebt = latestAnnual?.net_debt;
@@ -338,7 +346,7 @@ export default function AnalysisResult({
     financialTrends?.revenue_yoy != null && financialTrends.revenue_yoy < 0 ? "Jahresumsatz rückläufig." : null,
     fundamentals?.earnings_growth != null && fundamentals.earnings_growth < 0 ? "Gewinnwachstum negativ." : null,
     latestEarnings?.status === "miss" ? "Letzte Earnings lagen unter Erwartung." : null,
-    shortInterest?.short_percent_float != null && shortInterest.short_percent_float > 8
+    shortInterestPct != null && shortInterestPct > 8
       ? "Eine erhöhte Leerverkaufsquote kann die Volatilität treiben."
       : null,
   ].filter(Boolean);

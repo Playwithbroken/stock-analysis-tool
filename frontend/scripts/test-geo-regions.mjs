@@ -41,6 +41,13 @@ try {
   assert.equal(partial[0].label, "Asia");
   assert.equal(partial[2].label, "USA");
 
+  const localized = normalizeGeoRegions({
+    asia: { label: "Asien", tone: "risk-on", avg_change_1d: 0.8, assets: [] },
+    europe: { label: "Europa", tone: "mixed", avg_change_1d: 0.1, assets: [] },
+  });
+  assert.deepEqual(localized.map((region) => region.label), ["Asia", "Europe", "USA"]);
+  assert.equal(localized[0].avg_change_1d, 0.8);
+
   const malformed = normalizeGeoRegions({
     asia: [],
     europe: { avg_change_1d: "not-a-number", assets: [] },

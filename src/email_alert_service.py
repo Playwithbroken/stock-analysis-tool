@@ -5,7 +5,7 @@ Email alert service for signal watchlists.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from html import escape, unescape
@@ -232,7 +232,7 @@ class EmailAlertService:
         if not events:
             return {"status": "ok", "sent": 0, "message": "No critical market alerts."}
 
-        selected_events = events[: self._safe_int_env("CRITICAL_MARKET_ALERT_MAX_ITEMS", 5, minimum=1)]
+        selected_events = events[: self._safe_int_env("CRITICAL_MARKET_ALERT_MAX_ITEMS", 3, minimum=1)]
         self._send_notifications(config, selected_events, subject="Sofort-Alert: Wichtige Marktinformation")
         self.portfolio_manager.mark_signal_events_sent(selected_events)
         self._record_macro_alert_delivery(selected_events)
@@ -270,6 +270,147 @@ class EmailAlertService:
         self._send_notifications(config, [event], subject="Broker Freund: Betriebsalarm")
         self.portfolio_manager.mark_signal_events_sent([event])
         return {"status": "ok", "sent": 1, "event_key": event["event_key"]}
+
+    def send_scalable_decision_report(
+        self,
+        report: Dict[str, Any],
+        *,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """Send one changed-state Scalable portfolio report to Telegram."""
+        if report.get("status") != "ok" or report.get("schema") != "scalable-telegram-decisions.v1":
+            return {"status": "blocked", "sent": 0, "message": "Kein gültiger Scalable-Entscheidungsreport."}
+        fingerprint = str(report.get("fingerprint") or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+            return {"status": "blocked", "sent": 0, "message": "Entscheidungs-Fingerprint fehlt."}
+        event_key = f"scalable-decisions:{fingerprint}"
+        if not force and event_key in self.portfolio_manager.get_sent_signal_event_keys():
+            return {"status": "deduplicated", "sent": 0, "event_key": event_key}
+
+        lines = [
+            f"Stand: {report.get('portfolio_as_of') or 'nicht verfügbar'}",
+            f"Depotwert: {self._money(report.get('portfolio_value'), report.get('currency') or 'EUR')}",
+            "",
+            "DEPOT",
+        ]
+        decisions = report.get("decisions") or []
+        if not decisions:
+            lines.append("Keine synchronisierten Positionen.")
+        for row in decisions[:14]:
+            pnl = self._number_label(row.get("gain_loss_pct"), "%")
+            score = f" | Score {float(row.get('score')):.0f}" if row.get("score") is not None else ""
+            execution = self._scalable_execution_label(row.get("execution_status"))
+            lines.append(
+                f"{row.get('ticker') or '?'} — {self._scalable_action_label(row.get('action'))}"
+                f" | Ausführung: {execution} | P/L {pnl}{score}"
+            )
+            if row.get("action") != "HALTEN":
+                reason = next(iter(row.get("reasons") or []), "")
+                if reason:
+                    lines.append(f"  Warum: {reason}")
+                if row.get("trigger"):
+                    lines.append(f"  Trigger: {row['trigger']}")
+                if row.get("invalidation"):
+                    lines.append(f"  Ungültig wenn: {row['invalidation']}")
+        if len(decisions) > 14:
+            lines.append(f"… plus {len(decisions) - 14} weitere Positionen im vollständigen App-Report.")
+
+        lines.extend(["", "NEUE IDEEN (noch nicht im Depot)"])
+        ideas = report.get("ideas") or []
+        if not ideas:
+            lines.append("Aktuell erfüllt keine neue Idee alle strikten Paper-Gates.")
+        for row in ideas[:3]:
+            lines.append(
+                f"{row.get('ticker') or '?'} — {self._scalable_action_label(row.get('action'))}"
+                f" | {self._scalable_execution_label(row.get('execution_status'))}"
+                f" | Score {float(row.get('score') or 0):.0f}"
+            )
+            lines.append(f"  Trigger: {row.get('trigger') or 'fehlt'}")
+            lines.append(f"  Stop/Invalidierung: {row.get('invalidation') or 'fehlt'}")
+            if row.get("suggested_notional_value"):
+                lines.append(
+                    f"  Paper-Größe: {self._money(row.get('suggested_notional_value'), report.get('currency') or 'EUR')}"
+                    f" | max. Verlust {self._money(row.get('suggested_max_loss_value'), report.get('currency') or 'EUR')}"
+                )
+        lines.extend(["", "Read-only: keine Broker-Order. Jede Aktion zuerst manuell prüfen."])
+        event = {
+            "event_key": event_key,
+            "category": "scalable_decisions",
+            "title": "Scalable Depot-Check",
+            "line": "\n".join(lines),
+        }
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        self._send_notifications(config, [event], subject="Scalable: Halten, Reduzieren, Kaufen")
+        self.portfolio_manager.mark_signal_events_sent([event])
+        self.portfolio_manager.set_app_setting(
+            "scalable_telegram_decision_state_v1",
+            json.dumps({"fingerprint": fingerprint, "sent_at": datetime.now(timezone.utc).isoformat()}),
+        )
+        return {"status": "ok", "sent": 1, "event_key": event_key, "fingerprint": fingerprint}
+
+    def send_trading_edge_setup_alert(self, ticket: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
+        """Send a structured, high-conviction Trading Edge setup directly to Telegram."""
+        ticker = str(ticket.get("ticker") or "").upper()
+        if not ticker:
+            return {"status": "blocked", "sent": 0, "message": "Ticker fehlt im Setup-Ticket."}
+        setup_name = str(ticket.get("setup_name") or "Edge Setup").replace(" ", "_")
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        event_key = f"trading_edge:{ticker}:{setup_name}:{date_str}"
+        if not force and event_key in self.portfolio_manager.get_sent_signal_event_keys():
+            return {"status": "deduplicated", "sent": 0, "event_key": event_key}
+
+        text = ticket.get("telegram_html") or ""
+        if not text:
+            return {"status": "blocked", "sent": 0, "message": "telegram_html fehlt im Ticket."}
+
+        event = {
+            "event_key": event_key,
+            "category": "trading_edge",
+            "title": f"Trading Edge: {ticker}",
+            "line": text,
+        }
+        config = self.get_config()
+        self._validate_telegram_config(config)
+        self._send_notifications(config, [event], subject=f"Broker Freund Edge: {ticker}")
+        self.portfolio_manager.mark_signal_events_sent([event])
+        return {"status": "ok", "sent": 1, "ticker": ticker, "event_key": event_key}
+
+    @staticmethod
+    def _scalable_action_label(value: Any) -> str:
+        return {
+            "HALTEN": "HALTEN",
+            "MARKT_GESCHLOSSEN": "MARKT GESCHLOSSEN – NÄCHSTEN HANDELSSTART PRÜFEN",
+            "DATEN_PRUEFEN": "DATEN PRÜFEN",
+            "AUFSTOCKEN_PRUEFEN": "AUFSTOCKEN PRÜFEN",
+            "REDUZIEREN_PRUEFEN": "REDUZIEREN PRÜFEN",
+            "VERKAUFEN_PRUEFEN": "VERKAUFEN PRÜFEN",
+            "KAUF_PRUEFEN": "KAUF PRÜFEN",
+            "SHORT_PRUEFEN": "SHORT PRÜFEN",
+        }.get(str(value or ""), str(value or "PRÜFEN").replace("_", " "))
+
+    @staticmethod
+    def _scalable_execution_label(value: Any) -> str:
+        return {
+            "PRUEFBAR": "JETZT PRÜFBAR",
+            "MARKT_GESCHLOSSEN": "MARKT GESCHLOSSEN",
+            "KURS_VERALTET": "KURS VERALTET – NICHT AUSFÜHREN",
+            "LIVE_KURS_PRUEFEN": "LIVE-KURS VORHER PRÜFEN",
+        }.get(str(value or ""), "NICHT BESTÄTIGT")
+
+    @staticmethod
+    def _number_label(value: Any, suffix: str = "") -> str:
+        try:
+            return f"{float(value):+.1f}{suffix}"
+        except (TypeError, ValueError):
+            return "n/a"
+
+    @staticmethod
+    def _money(value: Any, currency: str) -> str:
+        try:
+            return f"{float(value):,.2f} {currency}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (TypeError, ValueError):
+            return f"n/a {currency}"
 
     def send_test_email(self) -> Dict[str, Any]:
         """Backward-compatible endpoint name; delivery is Telegram-only."""
@@ -438,6 +579,7 @@ class EmailAlertService:
             "news_momentum_stalled",
             "news_source_invalidated",
         }
+        immediate_statuses = {"stop_hit", "target_hit", "holding_period_expired", "news_reaction_failed", "news_source_invalidated"}
         events: List[Dict[str, Any]] = []
         for trade in open_trades:
             management = trade.get("management_plan") or {}
@@ -474,6 +616,8 @@ class EmailAlertService:
                     "risk_distance_pct": management.get("risk_distance_pct"),
                     "target_progress_pct": management.get("target_progress_pct"),
                     "management_status": status,
+                    "priority": 0 if status in immediate_statuses else 20,
+                    "delivery_mode": "immediate" if status in immediate_statuses else "digest",
                     "management_action": management.get("action"),
                     "decision_grade": management.get("decision_grade"),
                     "next_check": management.get("next_check"),
@@ -494,10 +638,14 @@ class EmailAlertService:
         if not events:
             return {"status": "ok", "sent": 0, "message": "Keine neuen Paper-Management-Alerts."}
 
-        self._send_notifications(config, events[:5], subject="Paper Trade Management")
-        self.portfolio_manager.mark_signal_events_sent(events[:5])
-        self._record_paper_trade_management_deliveries(events[:5])
-        return {"status": "ok", "sent": len(events[:5]), "message": "Paper-Management-Telegram-Alerts gesendet."}
+        selected_events = sorted(
+            events,
+            key=lambda item: (int(item.get("priority")) if item.get("priority") is not None else 99, str(item.get("ticker") or "")),
+        )[:5]
+        self._send_notifications(config, selected_events, subject="Paper Trade Management")
+        self.portfolio_manager.mark_signal_events_sent(selected_events)
+        self._record_paper_trade_management_deliveries(selected_events)
+        return {"status": "ok", "sent": len(selected_events), "message": "Paper-Management-Telegram-Alerts gesendet."}
 
     def send_paper_account_status_alert(
         self,
@@ -1562,11 +1710,7 @@ class EmailAlertService:
         }
         signature = "+".join(f"{key}:{period_ids[key]}" for key in due)
         event_key = f"{job_key}:{signature}"
-        if event_key in self.portfolio_manager.get_sent_signal_event_keys():
-            result = {"job": job_key, "status": "deduplicated", "event_key": event_key}
-            self._set_brief_job_status(job_key, result)
-            return result
-
+        claim_id: str | None = None
         try:
             demo_account = report_builder()
             report = demo_account.get("period_performance") if isinstance(demo_account, dict) else {}
@@ -1591,12 +1735,25 @@ class EmailAlertService:
                 "currency": demo_account.get("currency") or "EUR",
                 "policy": report.get("policy"),
             }
+            claim_id = self.portfolio_manager.claim_signal_event_delivery(
+                event,
+                lease_seconds=self._safe_int_env("PAPER_PERIOD_DELIVERY_CLAIM_SECONDS", 900, minimum=60),
+            )
+            if not claim_id:
+                result = {"job": job_key, "status": "deduplicated", "event_key": event_key}
+                self._set_brief_job_status(job_key, result)
+                return result
             config = self.get_config()
             self._validate_config(config)
             delivered = self._send_notifications(config, [event], subject="Paper-Portfolio: Periodenupdate")
             if not delivered:
                 raise RuntimeError("Telegram hat keine Zustellung bestaetigt.")
         except Exception as exc:
+            if claim_id:
+                try:
+                    self.portfolio_manager.release_signal_event_delivery(event_key, claim_id)
+                except Exception:
+                    pass
             result = {
                 "job": job_key,
                 "status": "failed",
@@ -1608,7 +1765,17 @@ class EmailAlertService:
             self._set_brief_job_status(job_key, result)
             return result
 
-        self.portfolio_manager.mark_signal_events_sent([event])
+        if not self.portfolio_manager.complete_signal_event_delivery(event, claim_id):
+            result = {
+                "job": job_key,
+                "status": "failed",
+                "event_key": event_key,
+                "scheduled_at": scheduled_at.isoformat(),
+                "error": "delivery_claim_completion_failed",
+                "message": "Telegram wurde zugestellt; Claim bleibt bis zur manuellen Prüfung gesperrt.",
+            }
+            self._set_brief_job_status(job_key, result)
+            return result
         result = {
             "job": job_key,
             "status": "sent",
@@ -3037,7 +3204,8 @@ class EmailAlertService:
         identities = self._macro_alert_identities(event)
         if not identities:
             return False
-        cooldown_hours = self._safe_int_env("MACRO_ALERT_COOLDOWN_HOURS", 3, minimum=1)
+        cooldown_hours = self._safe_int_env("MACRO_ALERT_COOLDOWN_HOURS", 12, minimum=1)
+        score_escalation = self._safe_int_env("MACRO_ALERT_SCORE_ESCALATION_DELTA", 15, minimum=5)
         current_score = float(event.get("impact_score") or 0)
         current_severity_rank = self._macro_alert_severity_rank(str(event.get("severity") or ""))
         blocked = False
@@ -3051,7 +3219,7 @@ class EmailAlertService:
             previous_severity_rank = self._macro_alert_severity_rank(str(previous.get("severity") or ""))
             if current_severity_rank > previous_severity_rank:
                 continue
-            if current_score >= previous_score + 8:
+            if current_score >= previous_score + score_escalation:
                 continue
             sent_at = previous.get("sent_at")
             if not sent_at:
@@ -3120,7 +3288,11 @@ class EmailAlertService:
 
         status = str(management.get("status") or "")
         grade = str(management.get("decision_grade") or "")
-        if status != str(previous.get("status") or "") or grade != str(previous.get("decision_grade") or ""):
+        previous_status = str(previous.get("status") or "")
+        immediate_statuses = {"stop_hit", "target_hit", "holding_period_expired", "news_reaction_failed", "news_source_invalidated"}
+        if status in immediate_statuses:
+            return status != previous_status
+        if not previous:
             return True
 
         try:
@@ -3130,9 +3302,6 @@ class EmailAlertService:
         except (TypeError, ValueError):
             pnl_delta = 0
         material_pnl_delta = self._safe_int_env("PAPER_TRADE_MANAGEMENT_PNL_DELTA_PCT", 3, minimum=1)
-        if pnl_delta >= material_pnl_delta:
-            return True
-
         sent_at = previous.get("sent_at")
         if not sent_at:
             return True
@@ -3140,9 +3309,16 @@ class EmailAlertService:
             sent_dt = datetime.fromisoformat(str(sent_at))
         except Exception:
             return True
-        cooldown_hours = self._safe_int_env("PAPER_TRADE_MANAGEMENT_ALERT_COOLDOWN_HOURS", 4, minimum=1)
         now = datetime.now(sent_dt.tzinfo or ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
-        return now >= sent_dt + timedelta(hours=cooldown_hours)
+        soft_cooldown_hours = self._safe_int_env("PAPER_TRADE_MANAGEMENT_SOFT_COOLDOWN_HOURS", 8, minimum=1)
+        repeat_hours = self._safe_int_env("PAPER_TRADE_MANAGEMENT_REPEAT_HOURS", 24, minimum=4)
+        if now < sent_dt + timedelta(hours=soft_cooldown_hours):
+            return False
+        if status != previous_status or grade != str(previous.get("decision_grade") or ""):
+            return True
+        if pnl_delta >= material_pnl_delta:
+            return True
+        return now >= sent_dt + timedelta(hours=repeat_hours)
 
     def _record_paper_trade_management_deliveries(self, events: List[Dict[str, Any]]) -> None:
         now = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat()

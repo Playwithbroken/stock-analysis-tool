@@ -66,6 +66,20 @@ try {
     localizeAnalysisText("High volatility stock - suitable for risk-tolerant investors"),
     "Hohe Volatilität – nur für risikotolerante Anleger geeignet",
   );
+  assert.equal(
+    localizeAnalysisText("Solid fundamentals with some positive aspects"),
+    "Solide Fundamentaldaten mit einigen positiven Aspekten",
+  );
+  assert.equal(
+    localizeAnalysisText("Earnings quality is mixed or in line; do not upgrade without price confirmation."),
+    "Die Ergebnisqualität ist gemischt oder erwartungsgemäß; ohne Kursbestätigung nicht höher einstufen.",
+  );
+  assert.equal(
+    localizeAnalysisText("Negative news sentiment - monitor closely (Verified alerts present)"),
+    "Negative Nachrichtenstimmung – eng beobachten, verifizierte Warnmeldungen liegen vor",
+  );
+  assert.equal(localizeAnalysisText("Exceptional growth potential identified"), "Außergewöhnliches Wachstumspotenzial erkannt");
+  assert.equal(localizeAnalysisText("No rebound setup detected"), "Kein belastbares Erholungsszenario erkannt");
   assert.equal(localizeAnalysisText("Identified 1 significant risk factors"), "1 wesentlicher Risikofaktor erkannt");
   assert.equal(localizeAnalysisText("Identified 4 positive factors"), "4 positive Faktoren erkannt");
   assert.equal(localizeAnalysisText("12,500 Shares"), "12.500 Aktien");

@@ -207,9 +207,12 @@ def main() -> int:
             require(key in paper_outcomes.get("summary", {}), failures, f"paper_outcomes.summary missing {key!r}")
 
         feeds = payload.get("data_feeds") or {}
-        for key in ["morning_brief", "yfinance", "realtime", "forecast_learning"]:
+        for key in ["morning_brief", "yfinance", "realtime", "forecast_learning", "paper_learning_v2"]:
             require(key in feeds, failures, f"data_feeds missing {key!r}")
             require(isinstance(feeds.get(key), dict), failures, f"data_feeds.{key} must be an object")
+        paper_learning_feed = feeds.get("paper_learning_v2") or {}
+        for key in ["status", "last_result", "stale", "stale_after_minutes", "paper_only"]:
+            require(key in paper_learning_feed, failures, f"paper_learning_v2 feed missing {key!r}")
 
         rendered = json.dumps(payload, sort_keys=True)
         require(access_password not in rendered, failures, "health center leaked access password")

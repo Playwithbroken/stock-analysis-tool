@@ -845,6 +845,20 @@ export default function EdgeDashboardPanel({
                       Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
                     </div>
                   ) : null}
+
+                  {setup.earnings_info ? (
+                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] font-bold text-amber-900 dark:text-amber-300">
+                      {setup.earnings_info.warning}
+                    </div>
+                  ) : null}
+
+                  {setup.trade_management ? (
+                    <div className="mt-2 rounded-lg bg-slate-50 p-2 text-[10px] text-slate-600 dark:bg-white/5 dark:text-slate-300">
+                      <div className="font-bold text-slate-900 dark:text-white">Trailing-Stop Disziplin:</div>
+                      <div>• <strong>2.0R Ziel:</strong> {setup.trade_management.target_1_action}</div>
+                      <div>• <strong>3.5R+ Ziel:</strong> {setup.trade_management.target_2_action}</div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-black/5 pt-3 dark:border-white/5">

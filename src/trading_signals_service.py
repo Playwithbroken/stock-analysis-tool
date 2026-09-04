@@ -403,6 +403,53 @@ class TradingSignalsService:
         self._c_asymmetric = _Cache(time.time(), setups)
         return setups[:limit]
 
+    def scan_and_dispatch_edge_alerts(
+        self,
+        alert_service: Any,
+        watchlist: Optional[List[str]] = None,
+        min_grade: tuple = ("A+", "A"),
+        limit: int = 4,
+    ) -> Dict[str, Any]:
+        """
+        Background scanner: evaluates setups across watchlist and dispatches
+        high-conviction (Grade A+/A) trade cards to Telegram with deduplication.
+        """
+        if not alert_service:
+            return {"status": "skipped", "reason": "No alert service provided"}
+
+        tickers = list(watchlist or ["NVDA", "AAPL", "MSFT", "TSLA", "META", "AMZN", "GOOGL"])
+        setups = self.get_asymmetric_setups(tickers, limit=limit * 2)
+
+        dispatched = []
+        deduped = []
+        skipped = []
+
+        for setup in setups:
+            grade = setup.get("grade")
+            score = setup.get("confluence_score", 0)
+            ticker = setup.get("ticker")
+
+            if grade not in min_grade and score < 70:
+                skipped.append(ticker)
+                continue
+
+            # Dispatch via alert service (force=False ensures 1-push-per-day deduplication)
+            res = alert_service.send_trading_edge_setup_alert(setup, force=False)
+            if res.get("status") == "ok":
+                dispatched.append(ticker)
+            elif res.get("status") == "deduplicated":
+                deduped.append(ticker)
+            else:
+                skipped.append(ticker)
+
+        return {
+            "status": "ok",
+            "scanned_count": len(setups),
+            "dispatched": dispatched,
+            "deduplicated": deduped,
+            "skipped": skipped,
+        }
+
     # ---------- Aggregator ----------
     def get_full_edge_pack(self, watchlist: List[str]) -> Dict[str, Any]:
         """Build the entire trading edge payload in one call."""

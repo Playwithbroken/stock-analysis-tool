@@ -1816,6 +1816,8 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
         await run_step("Daily database backup", _run_backup_cycle)
     if _env_enabled("OPERATIONAL_ALERTS_ENABLED", "true"):
         await run_step("Operational health alerts", _run_operational_alert_cycle)
+    if _env_enabled("EDGE_SCANNER_ALERTS_ENABLED", "true"):
+        await run_step("Trading edge auto-scanner", _run_trading_edge_scanner_cycle)
     await run_step("Production soak observation", _record_production_soak_observation)
 
 
@@ -1830,6 +1832,58 @@ def _setting_datetime(key: str) -> datetime | None:
         return value.astimezone(timezone.utc)
     except (TypeError, ValueError):
         return None
+
+
+def _run_trading_edge_scanner_cycle() -> Dict[str, Any]:
+    """
+    Automated background cycle:
+      1. Checks Macro Regime Shift (VIX spike or flip to RISK_OFF) and notifies via Telegram.
+      2. Scans watchlist for Grade A+/A asymmetric setups and dispatches them directly to Telegram.
+    """
+    manager = get_portfolio_manager()
+    alert_service = get_email_alert_service()
+    signals_service = get_trading_signals_service()
+
+    # 1. Macro Regime Check & Shift Alert
+    try:
+        regime = signals_service.get_market_regime()
+        stance = regime.get("stance", "RISK_ON")
+        vix_val = regime.get("vix", {}).get("value", 16.0)
+        prev_stance = manager.get_app_setting("edge_last_macro_stance") or "RISK_ON"
+
+        if stance == "RISK_OFF" and prev_stance != "RISK_OFF":
+            date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            event_key = f"macro_regime_shift:RISK_OFF:{date_str}"
+            if event_key not in manager.get_sent_signal_event_keys():
+                msg = (
+                    f"🚨 <b>MARKT-REGIME ALARM: RISK-OFF AKTIV</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Der CBOE Volatilitätsindex (VIX) steht bei <b>{vix_val}</b>.\n"
+                    f"Die Marktbreite (SPY/QQQ) ist im Abwärtstrend.\n\n"
+                    f"💡 <b>Handlungsempfehlung:</b>\n"
+                    f"• Keine neuen Ausbrüche kaufen (erhöhte Fehlausbruch-Gefahr)\n"
+                    f"• Bestehende Longs eng absichern oder 50% Teilgewinne mitnehmen\n"
+                    f"• Positionsgrößen bei Neugeschäften auf max. 50% reduzieren."
+                )
+                config = alert_service.get_config()
+                alert_service._validate_telegram_config(config)
+                event = {"event_key": event_key, "category": "macro_regime", "title": "Markt-Regime: RISK-OFF", "line": msg}
+                alert_service._send_notifications(config, [event], subject="Broker Freund Alarm: RISK-OFF")
+                manager.mark_signal_events_sent([event])
+
+        manager.set_app_setting("edge_last_macro_stance", stance)
+    except Exception as e:
+        print(f"Macro regime shift check error: {e}")
+
+    # 2. Watchlist Setups Auto-Scan & Dispatch
+    try:
+        items = manager.get_signal_watch_items()
+        watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        res = signals_service.scan_and_dispatch_edge_alerts(alert_service, watchlist=watchlist, min_grade=("A+", "A"))
+        return res
+    except Exception as exc:
+        print(f"Trading edge auto-scanner failed: {exc}")
+        return {"status": "error", "error": str(exc)}
 
 
 def _run_backup_cycle(force_backup: bool = False, force_restore_test: bool = False) -> Dict[str, Any]:
@@ -7193,6 +7247,16 @@ async def send_trading_edge_setup_telegram(req: SendEdgeSetupTelegramRequest):
         })
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/scanner/run-now")
+async def trigger_trading_edge_scanner_now():
+    """Immediately runs the background edge scanner cycle and dispatches due Grade A+/A setups."""
+    try:
+        result = await asyncio.to_thread(_run_trading_edge_scanner_cycle)
+        return convert_numpy_types(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

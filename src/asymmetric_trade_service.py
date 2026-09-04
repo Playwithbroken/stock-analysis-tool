@@ -181,6 +181,12 @@ class AsymmetricTradeService:
                 confluence_score -= 20
                 confluence_factors.append("⚠️ Makro-Gegenwind (Markt im Risk-Off Modus)")
 
+            # Earnings Proximity Shield
+            earnings_info = self._check_earnings_proximity(t)
+            if earnings_info:
+                confluence_score -= 15
+                confluence_factors.append(earnings_info["warning"])
+
             confluence_score = max(10, min(100, confluence_score))
             if confluence_score >= 85:
                 grade = "A+"
@@ -208,7 +214,22 @@ class AsymmetricTradeService:
                 "target_2": target_2,
             }
 
-            # 7. Format Smartphone Telegram Card
+            # 7. Trade Management Guidance
+            trade_management = {
+                "target_1_action": f"Bei ${target_1:.2f} (2.0R): 50% Teilgewinn sichern, Hard Stop auf Breakeven (${entry_price:.2f}) nachziehen.",
+                "target_2_action": f"Bei ${target_2:.2f} (3.5R+): Restposition glattstellen oder Trailing Stop unter 9 EMA führen.",
+                "earnings_shield": earnings_info.get("warning") if earnings_info else "Keine Quartalszahlen in den nächsten 5 Tagen.",
+            }
+
+            mgmt_text = (
+                f"📋 <b>Trade Management & Trailing Stop:</b>\n"
+                f"• <b>Ziel 1 (${target_1:.2f}):</b> 50% Teilgewinn & Stop auf Breakeven\n"
+                f"• <b>Ziel 2 (${target_2:.2f}):</b> Rest glattstellen oder per 9 EMA Trailing-Stop\n"
+            )
+            if earnings_info:
+                mgmt_text += f"\n{earnings_info['warning']}\n"
+
+            # 8. Format Smartphone Telegram Card
             gex_summary = "N/A (keine US-Optionen)"
             if gex:
                 gex_summary = f"{gex.get('regime_label', 'Neutral')} | Call Wall: ${call_wall:.2f} | Put Wall: ${put_wall:.2f}"
@@ -231,6 +252,7 @@ class AsymmetricTradeService:
                 f"🎯 <b>Ziel 1 (2.0R):</b> ${target_1:.2f} (50% Teilgewinn)\n"
                 f"🚀 <b>Ziel 2 (3.5R+):</b> ${target_2:.2f} (Runner / Call Wall)\n"
                 f"⚖️ <b>Risk/Reward-Ratio:</b> <b>{risk_reward_ratio:.1f} : 1</b>\n\n"
+                f"{mgmt_text}\n"
                 f"📱 <b>Position Sizing ({actual_risk_pct:.2f}% Kontorisiko):</b>\n"
                 f"• <b>Stückzahl:</b> <b>{recommended_shares}</b> Aktien\n"
                 f"• <b>Kapitalbedarf:</b> ~{total_position_capital:,.2f} EUR\n"
@@ -260,6 +282,8 @@ class AsymmetricTradeService:
                 "portfolio_risk_pct": actual_risk_pct,
                 "portfolio_capital_basis": portfolio_capital,
                 "chart_overlay_levels": chart_overlay_levels,
+                "trade_management": trade_management,
+                "earnings_info": earnings_info,
                 "volume_profile": {
                     "poc": poc,
                     "vah": vah,
@@ -283,3 +307,43 @@ class AsymmetricTradeService:
         except Exception as exc:
             logger.error("Failed to generate trade setup for %s: %s", symbol, exc)
             return None
+
+    def _check_earnings_proximity(self, ticker_obj: Any, max_days_warning: int = 5) -> Optional[Dict[str, Any]]:
+        """Checks if earnings are scheduled within max_days_warning days."""
+        try:
+            cal = getattr(ticker_obj, "calendar", None)
+            if not cal:
+                return None
+            earnings_dates = None
+            if isinstance(cal, dict):
+                earnings_dates = cal.get("Earnings Date")
+            elif hasattr(cal, "get"):
+                earnings_dates = cal.get("Earnings Date")
+
+            if not earnings_dates:
+                return None
+            if not isinstance(earnings_dates, (list, tuple)):
+                earnings_dates = [earnings_dates]
+
+            today = datetime.now(timezone.utc).date()
+            for ed in earnings_dates:
+                if hasattr(ed, "date"):
+                    ed_date = ed.date()
+                elif isinstance(ed, type(today)):
+                    ed_date = ed
+                else:
+                    continue
+
+                diff_days = (ed_date - today).days
+                if 0 <= diff_days <= max_days_warning:
+                    return {
+                        "days_until_earnings": diff_days,
+                        "earnings_date": ed_date.isoformat(),
+                        "warning": (
+                            f"⚠️ Quartalszahlen in {diff_days} Tagen ({ed_date.isoformat()}): "
+                            "Hohes Übernacht-Gap- und IV-Crush-Risiko! Vor den Zahlen schließen oder halbieren."
+                        ),
+                    }
+        except Exception as e:
+            logger.debug("Earnings proximity check error: %s", e)
+        return None

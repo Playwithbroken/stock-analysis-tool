@@ -599,7 +599,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               aria-selected={activeTab === tab.id}
               className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all sm:px-6 ${
                 activeTab === tab.id
-                  ? "bg-[var(--accent)] text-white shadow-[0_10px_30px_rgba(15,118,110,0.18)]"
+                  ? "bg-[var(--accent)] text-white shadow-[0_6px_16px_rgba(0,0,0,0.12)]"
                   : "text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]"
               }`}
             >

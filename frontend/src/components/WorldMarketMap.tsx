@@ -1696,7 +1696,7 @@ export default function WorldMarketMap({
                 aria-label={`${regionDisplayLabel(region.label)} auswählen`}
                 className={`min-h-10 rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] transition-all ${
                   selectedRegion === region.label
-                    ? "bg-[var(--accent)] text-white shadow-[0_16px_34px_rgba(15,118,110,0.18)]"
+                    ? "bg-[var(--accent)] text-white shadow-[0_8px_20px_rgba(0,0,0,0.12)]"
                     : "border border-black/8 bg-white/70 text-slate-500"
                 }`}
               >

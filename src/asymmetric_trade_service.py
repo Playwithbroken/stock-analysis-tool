@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from src.options_edge_service import OptionsEdgeService
 from src.volume_profile_service import VolumeProfileService
 from src.market_regime_service import MarketRegimeService
+from src.relative_strength_service import RelativeStrengthService
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,12 @@ class AsymmetricTradeService:
         options_service: Optional[OptionsEdgeService] = None,
         volume_service: Optional[VolumeProfileService] = None,
         regime_service: Optional[MarketRegimeService] = None,
+        relative_strength_service: Optional[RelativeStrengthService] = None,
     ) -> None:
         self.options_service = options_service or OptionsEdgeService()
         self.volume_service = volume_service or VolumeProfileService()
         self.regime_service = regime_service or MarketRegimeService()
+        self.rs_service = relative_strength_service or RelativeStrengthService()
 
     def generate_trade_setup(
         self,
@@ -77,6 +80,13 @@ class AsymmetricTradeService:
             gex = self.options_service.analyze_gex(symbol, spot_override=spot)
             # 3. Fetch Macro Regime
             macro = self.regime_service.get_market_regime()
+            # 4. Fetch Relative Strength vs SPY
+            rs_data = None
+            if self.rs_service and symbol != "SPY":
+                try:
+                    rs_data = self.rs_service.compute_relative_strength(symbol, benchmark="SPY")
+                except Exception:
+                    rs_data = None
 
             poc = vp.get("poc_price", spot) if vp else spot
             vah = vp.get("vah_price", spot * 1.03) if vp else spot * 1.03
@@ -180,6 +190,20 @@ class AsymmetricTradeService:
             elif regime_stance == "RISK_OFF":
                 confluence_score -= 20
                 confluence_factors.append("⚠️ Makro-Gegenwind (Markt im Risk-Off Modus)")
+
+            # Relative Strength Confluence vs SPY
+            if rs_data:
+                mansfield = rs_data.get("mansfield_rs", 0.0)
+                alpha_1m = rs_data.get("alpha_1m", 0.0)
+                if mansfield >= 5.0 and alpha_1m > 0:
+                    confluence_score += 10
+                    confluence_factors.append(f"Starke Relative Stärke vs. SPY (Mansfield RS: {mansfield:+.1f}%, Alpha: {alpha_1m:+.1f}%)")
+                elif mansfield > 0:
+                    confluence_score += 5
+                    confluence_factors.append(f"Positive Relative Stärke vs. SPY ({mansfield:+.1f}%)")
+                elif mansfield <= -5.0:
+                    confluence_score -= 10
+                    confluence_factors.append(f"⚠️ Schwächer als der Markt (Mansfield RS: {mansfield:+.1f}%)")
 
             # Earnings Proximity Shield
             earnings_info = self._check_earnings_proximity(t)
@@ -299,6 +323,7 @@ class AsymmetricTradeService:
                     "stance": regime_stance,
                     "vix": macro.get("vix", {}).get("value"),
                 },
+                "relative_strength": rs_data,
                 "telegram_html": tg_html,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }

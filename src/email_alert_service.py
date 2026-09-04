@@ -374,6 +374,15 @@ class EmailAlertService:
         self._validate_telegram_config(config)
         self._send_notifications(config, [event], subject=f"Broker Freund Edge: {ticker}")
         self.portfolio_manager.mark_signal_events_sent([event])
+        try:
+            if getattr(self, "trade_lifecycle_service", None):
+                self.trade_lifecycle_service.register_trade(ticket)
+            else:
+                from src.trade_lifecycle_service import TradeLifecycleService
+                self.trade_lifecycle_service = TradeLifecycleService(self.portfolio_manager)
+                self.trade_lifecycle_service.register_trade(ticket)
+        except Exception as lifecycle_exc:
+            logger.debug("Failed to register trade with lifecycle service: %s", lifecycle_exc)
         return {"status": "ok", "sent": 1, "ticker": ticker, "event_key": event_key}
 
     @staticmethod

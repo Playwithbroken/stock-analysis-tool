@@ -47,6 +47,9 @@ from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
 from src.trading_signals_service import TradingSignalsService
 from src.asymmetric_trade_service import AsymmetricTradeService
+from src.relative_strength_service import RelativeStrengthService
+from src.trade_lifecycle_service import TradeLifecycleService
+from src.telegram_interactive_service import TelegramInteractiveService
 from src.realtime_market_service import RealtimeMarketService
 from src.integrations.market_data.alpaca import AlpacaMarketDataAdapter, AlpacaStreamConfig
 from src.public_signal_service import PublicSignalService
@@ -181,6 +184,10 @@ _paper_trading_service = None
 _trading_intelligence_service = None
 _trading_signals_service = None
 _asymmetric_trade_service = None
+_relative_strength_service = None
+_trade_lifecycle_service = None
+_telegram_interactive_service = None
+_telegram_bot_task = None
 _realtime_market_service = None
 _forecast_learning_service = None
 _forecast_learning_task = None
@@ -1480,6 +1487,37 @@ def get_asymmetric_trade_service():
         _asymmetric_trade_service = AsymmetricTradeService()
     return _asymmetric_trade_service
 
+def get_relative_strength_service():
+    global _relative_strength_service
+    if _relative_strength_service is None:
+        _relative_strength_service = RelativeStrengthService()
+    return _relative_strength_service
+
+def get_trade_lifecycle_service():
+    global _trade_lifecycle_service
+    if _trade_lifecycle_service is None:
+        _trade_lifecycle_service = TradeLifecycleService(get_portfolio_manager())
+    return _trade_lifecycle_service
+
+def get_telegram_interactive_service():
+    global _telegram_interactive_service
+    if _telegram_interactive_service is None:
+        cfg = get_email_alert_service().get_config()
+        _telegram_interactive_service = TelegramInteractiveService(
+            bot_token=cfg.telegram_bot_token,
+            allowed_chat_ids=cfg.telegram_chat_id,
+            asymmetric_trade_service=get_asymmetric_trade_service(),
+            options_edge_service=getattr(get_asymmetric_trade_service(), "options_service", None),
+            volume_profile_service=getattr(get_asymmetric_trade_service(), "volume_service", None),
+            market_regime_service=getattr(get_asymmetric_trade_service(), "regime_service", None),
+            relative_strength_service=get_relative_strength_service(),
+            trade_lifecycle_service=get_trade_lifecycle_service(),
+            trading_signals_service=get_trading_signals_service(),
+            alert_service=get_email_alert_service(),
+            portfolio_manager=get_portfolio_manager(),
+        )
+    return _telegram_interactive_service
+
 
 def _get_paper_news_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     """Reuse a recent brief or build a fast one without making news a hard dependency."""
@@ -1818,6 +1856,11 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
         await run_step("Operational health alerts", _run_operational_alert_cycle)
     if _env_enabled("EDGE_SCANNER_ALERTS_ENABLED", "true"):
         await run_step("Trading edge auto-scanner", _run_trading_edge_scanner_cycle)
+    if _env_enabled("TRADE_LIFECYCLE_ENABLED", "true"):
+        await run_step(
+            "Trade lifecycle & trailing stops",
+            lambda: get_trade_lifecycle_service().evaluate_active_trades(get_email_alert_service()),
+        )
     await run_step("Production soak observation", _record_production_soak_observation)
 
 
@@ -2362,7 +2405,7 @@ def _remember_finished_task_error(setting_key: str, task: Any) -> None:
 
 
 def _ensure_background_tasks() -> None:
-    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task, _scalable_sync_task, _alpaca_stream_task, _market_safety_task, _alpaca_paper_broker_task, _broker_reconciliation_task
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task, _scalable_sync_task, _alpaca_stream_task, _market_safety_task, _alpaca_paper_broker_task, _broker_reconciliation_task, _telegram_bot_task
 
     alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
     scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
@@ -2415,6 +2458,14 @@ def _ensure_background_tasks() -> None:
         if _broker_reconciliation_task is None or _broker_reconciliation_task.done():
             _remember_finished_task_error("broker_reconciliation_task_error", _broker_reconciliation_task)
             _broker_reconciliation_task = asyncio.create_task(_broker_reconciliation_loop())
+
+    # Interactive 2-Way Telegram Bot Loop
+    if _env_enabled("TELEGRAM_INTERACTIVE_BOT_ENABLED", "true"):
+        tg_cfg = get_email_alert_service().get_config()
+        if tg_cfg.telegram_enabled and tg_cfg.telegram_bot_token and tg_cfg.telegram_chat_id:
+            if _telegram_bot_task is None or _telegram_bot_task.done():
+                _remember_finished_task_error("telegram_bot_task_error", _telegram_bot_task)
+                _telegram_bot_task = asyncio.create_task(get_telegram_interactive_service().run_listener_loop())
 
 
 async def _market_safety_loop() -> None:
@@ -7257,6 +7308,42 @@ async def trigger_trading_edge_scanner_now():
     try:
         result = await asyncio.to_thread(_run_trading_edge_scanner_cycle)
         return convert_numpy_types(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/relative-strength")
+async def get_trading_relative_strength(benchmark: str = "SPY"):
+    """Returns Mansfield Relative Strength and Alpha for the watchlist vs SPY."""
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        service = get_relative_strength_service()
+        leaders = await asyncio.to_thread(service.scan_relative_strength, watchlist, benchmark=benchmark)
+        return convert_numpy_types({"benchmark": benchmark, "leaders": leaders, "count": len(leaders)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/active-trades")
+async def get_trading_active_trades():
+    """Returns active monitored trade setups and trailing stops."""
+    try:
+        service = get_trade_lifecycle_service()
+        trades = service.get_active_trades()
+        return convert_numpy_types({"trades": trades, "count": len(trades)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/lifecycle/evaluate-now")
+async def evaluate_trading_lifecycle_now():
+    """Immediately triggers price checks on active setups for Target 1, Target 2 and Trailing Stops."""
+    try:
+        service = get_trade_lifecycle_service()
+        alert_svc = get_email_alert_service()
+        res = await asyncio.to_thread(service.evaluate_active_trades, alert_svc)
+        return convert_numpy_types(res)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

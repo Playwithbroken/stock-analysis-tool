@@ -1256,11 +1256,11 @@ function AppContent() {
       ));
   const macroRegimeLabel = localizeMarketRegime(decisionBrief?.macro_regime);
   const briefCommandStats = [
-    ["Setups", decisionBrief?.trade_setups?.length || 0, "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"],
-    ["Ereignisse", decisionBrief?.event_pings?.length || 0, "border-amber-500/20 bg-amber-500/10 text-amber-700"],
-    ["Kongress", decisionBrief?.congress_watch?.length || 0, "border-sky-500/20 bg-sky-500/10 text-sky-700"],
-    ["Quartalszahlen", decisionBrief?.earnings_calendar?.length || 0, "border-indigo-500/20 bg-indigo-500/10 text-indigo-700"],
-    ["Produkte", decisionBrief?.product_catalysts?.length || 0, "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700"],
+    ["Setups", decisionBrief?.trade_setups?.length || 0, "border-black/6 bg-slate-100/80 text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"],
+    ["Ereignisse", decisionBrief?.event_pings?.length || 0, "border-black/6 bg-slate-100/80 text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"],
+    ["Kongress", decisionBrief?.congress_watch?.length || 0, "border-black/6 bg-slate-100/80 text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"],
+    ["Quartalszahlen", decisionBrief?.earnings_calendar?.length || 0, "border-black/6 bg-slate-100/80 text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"],
+    ["Produkte", decisionBrief?.product_catalysts?.length || 0, "border-black/6 bg-slate-100/80 text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"],
   ];
   const dashboardPriorityCards = [
     {
@@ -1276,7 +1276,7 @@ function AppContent() {
           : decisionBrief?.macro_regime
           ? `Regime: ${macroRegimeLabel}`
           : "Die Datenquelle lädt Setups, Ereignisse und Portfolio-Bezug.",
-      tone: "border-emerald-500/18 bg-emerald-500/8 text-emerald-800",
+      tone: "border-black/6 bg-white/80 text-slate-900 shadow-xs dark:border-white/10 dark:bg-white/5 dark:text-white",
     },
     {
       label: "Nächste Prüfung",
@@ -1290,7 +1290,7 @@ function AppContent() {
         normalizeGermanDisplayText(decisionBrief?.watchlist_impact?.[0]?.reason) ||
         normalizeGermanDisplayText(decisionBrief?.product_catalysts?.[0]?.title) ||
         "Nur starke Signale werden in Analyse und Märkte vertieft.",
-      tone: "border-sky-500/18 bg-sky-500/8 text-sky-800",
+      tone: "border-black/6 bg-white/80 text-slate-900 shadow-xs dark:border-white/10 dark:bg-white/5 dark:text-white",
     },
     {
       label: "Risiko",
@@ -1302,7 +1302,7 @@ function AppContent() {
         normalizeGermanDisplayText(decisionBrief?.event_pings?.[0]?.summary) ||
         normalizeGermanDisplayText(decisionBrief?.opening_read?.summary) ||
         "Bei unklaren Daten erst beobachten, dann handeln.",
-      tone: "border-amber-500/18 bg-amber-500/8 text-amber-800",
+      tone: "border-black/6 bg-white/80 text-slate-900 shadow-xs dark:border-white/10 dark:bg-white/5 dark:text-white",
     },
   ];
   const favoriteTape = (
@@ -1434,7 +1434,7 @@ function AppContent() {
                 <div className="truncate text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
                   Broker Freund
                 </div>
-                <div className="truncate text-[14px] font-black leading-tight text-slate-950">
+                <div className="truncate text-[14px] font-semibold leading-tight text-slate-950 dark:text-white">
                   {activeNavItem.label}
                 </div>
               </div>
@@ -1753,7 +1753,7 @@ function AppContent() {
                       onClick={() => setIsChatOpen(true)}
                       className="rounded-full bg-[#101114] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
                     >
-                      Buddy fragen
+                      Broker Freund
                     </button>
                   </div>
                   <div className="mt-3 grid grid-cols-5 gap-2">
@@ -1780,7 +1780,7 @@ function AppContent() {
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-70">
                     {item.label}
                   </div>
-                  <div className="mt-2 line-clamp-1 text-base font-black text-slate-950 dark:text-white">
+                  <div className="mt-2 line-clamp-1 text-base font-semibold text-slate-950 dark:text-white">
                     {String(item.title).slice(0, 96)}
                   </div>
                   <div className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">

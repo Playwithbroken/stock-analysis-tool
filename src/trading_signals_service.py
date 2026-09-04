@@ -34,6 +34,7 @@ except Exception:  # pragma: no cover
 from src.options_edge_service import OptionsEdgeService
 from src.volume_profile_service import VolumeProfileService
 from src.asymmetric_trade_service import AsymmetricTradeService
+from src.market_regime_service import MarketRegimeService
 
 
 _HEADERS = {
@@ -72,9 +73,11 @@ class TradingSignalsService:
     def __init__(self) -> None:
         self.options_edge = OptionsEdgeService()
         self.volume_profile = VolumeProfileService()
+        self.regime_service = MarketRegimeService()
         self.asymmetric_service = AsymmetricTradeService(
             options_service=self.options_edge,
             volume_service=self.volume_profile,
+            regime_service=self.regime_service,
         )
 
     TTL_SHORT = 600       # 10 min
@@ -252,19 +255,11 @@ class TradingSignalsService:
         if self._c_regime.data and time.time() - self._c_regime.ts < self.TTL_SHORT:
             return self._c_regime.data
         out: Dict[str, Any] = {}
-        # VIX
         try:
-            if yf:
-                vix = yf.Ticker("^VIX").history(period="5d")
-                last = float(vix["Close"].iloc[-1])
-                prev = float(vix["Close"].iloc[-2]) if len(vix) >= 2 else last
-                out["vix"] = {
-                    "value": round(last, 2),
-                    "change": round(last - prev, 2),
-                    "regime": "low" if last < 15 else "normal" if last < 22 else "elevated" if last < 30 else "panic",
-                }
+            macro = self.regime_service.get_market_regime()
+            out.update(macro)
         except Exception as e:
-            logger.debug("vix: %s", e)
+            logger.debug("market_regime error: %s", e)
         # Crypto Fear & Greed
         try:
             r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)

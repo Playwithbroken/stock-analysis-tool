@@ -4,10 +4,12 @@ Asymmetric Trade Service — High Conviction Setups with Institutional Confluenc
 Combines:
   1. Market Maker Gamma Exposure (GEX)
   2. Auction Market Theory (Volume Profile POC / VAH / VAL)
-  3. Post-Earnings Announcement Drift (PEAD) & Squeeze mechanics
+  3. Macro Market & Volatility Regime (SPY, QQQ, VIX filter)
   4. Mathematical Asymmetric Risk-Reward: Min 2.5:1 R:R, structural invalidation
-  5. Exact Portfolio Risk Sizing: fixed 0.75%–1.0% account risk ticket
-  6. Smartphone Telegram Card Formatter
+  5. Deterministic Confluence Scoring (0-100 pts) & Grading (A+, A, B)
+  6. Exact Portfolio Risk Sizing: fixed 0.75%–1.0% account risk ticket
+  7. Visual Chart Overlay Coordinate Bundle
+  8. Smartphone Telegram Card Formatter
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from src.options_edge_service import OptionsEdgeService
 from src.volume_profile_service import VolumeProfileService
+from src.market_regime_service import MarketRegimeService
 
 logger = logging.getLogger(__name__)
 
@@ -29,36 +32,16 @@ except Exception:  # pragma: no cover
     yf = None  # type: ignore
 
 
-@dataclass
-class TradeSetupTicket:
-    ticker: str
-    setup_name: str
-    catalyst_description: str
-    direction: str  # "LONG" or "SHORT"
-    entry_price: float
-    invalidation_price: float  # Structural Hard Stop
-    target_1: float           # 2.0 R
-    target_2: float           # 3.5 R (or Call/Put Wall)
-    risk_per_share: float
-    reward_per_share: float
-    risk_reward_ratio: float
-    recommended_shares: int
-    total_position_capital: float
-    portfolio_risk_pct: float
-    portfolio_capital_basis: float
-    institutional_confluence: Dict[str, Any]
-    telegram_html: str
-    created_at: str
-
-
 class AsymmetricTradeService:
     def __init__(
         self,
         options_service: Optional[OptionsEdgeService] = None,
         volume_service: Optional[VolumeProfileService] = None,
+        regime_service: Optional[MarketRegimeService] = None,
     ) -> None:
         self.options_service = options_service or OptionsEdgeService()
         self.volume_service = volume_service or VolumeProfileService()
+        self.regime_service = regime_service or MarketRegimeService()
 
     def generate_trade_setup(
         self,
@@ -69,7 +52,7 @@ class AsymmetricTradeService:
     ) -> Optional[Dict[str, Any]]:
         """
         Generates a high-conviction trade setup card combining GEX, Volume Profile,
-        and mathematical 2.5+:1 R:R invalidation levels.
+        Macro Regime, and mathematical 2.5+:1 R:R invalidation levels.
         """
         symbol = ticker.strip().upper()
         if not yf:
@@ -92,34 +75,33 @@ class AsymmetricTradeService:
             vp = self.volume_service.compute_volume_profile(symbol, period="1mo", interval="30m")
             # 2. Fetch GEX (if available, e.g. for US optionable equities)
             gex = self.options_service.analyze_gex(symbol, spot_override=spot)
+            # 3. Fetch Macro Regime
+            macro = self.regime_service.get_market_regime()
 
             poc = vp.get("poc_price", spot) if vp else spot
             vah = vp.get("vah_price", spot * 1.03) if vp else spot * 1.03
             val = vp.get("val_price", spot * 0.97) if vp else spot * 0.97
             market_loc = vp.get("market_location", "inside_value_area") if vp else "inside_value_area"
 
-            # 3. Determine Setup Pattern & Confluence
             direction = "LONG"
             setup_name = "Volume Profile Value Rebound"
             catalyst = catalyst_override or "Auction Value Area Support & Institutional Accumulation"
 
-            # Check GEX confluence
             call_wall = gex.get("call_wall") if gex else None
             put_wall = gex.get("put_wall") if gex else None
             gex_regime = gex.get("regime", "neutral") if gex else "neutral"
 
             # Structural Invalidation logic:
-            # For LONG: Stop MUST sit below structural support (VAL or POC or recent swing low)
-            # Never an arbitrary fixed percentage.
+            # Stop MUST sit below structural support (VAL or POC or retested VAH)
             if market_loc == "above_value_area":
                 setup_name = "Value Area High (VAH) Breakout & Expansion"
                 catalyst = catalyst_override or "Bullish Value Acceptance > VAH with Volume Expansion"
-                invalidation_price = round(vah * 0.985, 2)  # slightly below VAH retest
+                invalidation_price = round(vah * 0.985, 2)
                 entry_price = round(spot, 2)
             elif market_loc == "inside_value_area" and spot <= poc:
                 setup_name = "Value Area Low (VAL) Mean Reversion"
                 catalyst = catalyst_override or "Support test at Value Area Low (VAL) rotating back to POC"
-                invalidation_price = round(val * 0.98, 2)  # below VAL bracket
+                invalidation_price = round(val * 0.98, 2)
                 entry_price = round(spot, 2)
             else:
                 setup_name = "Point of Control (POC) Structural Continuation"
@@ -127,14 +109,12 @@ class AsymmetricTradeService:
                 invalidation_price = round(min(val, poc * 0.965), 2)
                 entry_price = round(spot, 2)
 
-            # Ensure invalidation is strictly below entry
             if invalidation_price >= entry_price:
                 invalidation_price = round(entry_price * 0.95, 2)
 
             risk_per_share = round(entry_price - invalidation_price, 2)
-            # Guard against tiny or huge risk
-            min_risk = entry_price * 0.015  # min 1.5% stop distance to avoid noise stop-outs
-            max_risk = entry_price * 0.075  # max 7.5% stop distance
+            min_risk = entry_price * 0.015
+            max_risk = entry_price * 0.075
             if risk_per_share < min_risk:
                 invalidation_price = round(entry_price - min_risk, 2)
                 risk_per_share = round(entry_price - invalidation_price, 2)
@@ -146,7 +126,6 @@ class AsymmetricTradeService:
             target_1 = round(entry_price + (2.0 * risk_per_share), 2)
             target_2 = round(entry_price + (3.5 * risk_per_share), 2)
 
-            # If Call Wall is higher than Target 1, align Target 2 towards Call Wall
             if call_wall and call_wall > target_1:
                 target_2 = max(target_2, round(call_wall, 2))
 
@@ -156,7 +135,6 @@ class AsymmetricTradeService:
             # 4. Position Sizing
             max_risk_amount = portfolio_capital * (risk_budget_pct / 100.0)
             recommended_shares = max(1, int(max_risk_amount / risk_per_share))
-            # Cap position capital to 20% of portfolio
             max_capital_allowed = portfolio_capital * 0.20
             if (recommended_shares * entry_price) > max_capital_allowed:
                 recommended_shares = max(1, int(max_capital_allowed / entry_price))
@@ -165,19 +143,87 @@ class AsymmetricTradeService:
             actual_risk_amount = round(recommended_shares * risk_per_share, 2)
             actual_risk_pct = round((actual_risk_amount / portfolio_capital) * 100.0, 2)
 
-            # 5. Format Smartphone Telegram Card
+            # 5. Confluence Scoring & Grading (0 - 100 pts)
+            confluence_score = 50
+            confluence_factors: List[str] = []
+
+            # Volume Profile Confluence
+            if market_loc in ["inside_value_area", "above_value_area"]:
+                confluence_score += 10
+                confluence_factors.append("Struktur-Support im Volume Profile")
+            if abs(spot - val) / spot < 0.035 or abs(spot - poc) / spot < 0.025:
+                confluence_score += 15
+                confluence_factors.append("Direkter Test von Key-Liquidität (VAL/POC)")
+
+            # Options GEX Confluence
+            if gex:
+                if gex_regime == "positive_gamma":
+                    confluence_score += 15
+                    confluence_factors.append("Positives Gamma (Market Maker dämpfen Abverkäufe)")
+                if put_wall and abs(spot - put_wall) / spot < 0.05:
+                    confluence_score += 10
+                    confluence_factors.append("Put Wall Support (Institutioneller Boden)")
+
+            # Risk/Reward Asymmetry
+            if risk_reward_ratio >= 3.5:
+                confluence_score += 15
+                confluence_factors.append(f"Hohe Asymmetrie ({risk_reward_ratio:.1f}:1 R:R)")
+            elif risk_reward_ratio >= 2.8:
+                confluence_score += 10
+                confluence_factors.append(f"Solide Asymmetrie ({risk_reward_ratio:.1f}:1 R:R)")
+
+            # Macro Market Confluence
+            regime_stance = macro.get("stance", "RISK_ON")
+            if regime_stance == "RISK_ON":
+                confluence_score += 10
+                confluence_factors.append("Makro-Rückenwind (SPY/QQQ stabil, VIX niedrig)")
+            elif regime_stance == "RISK_OFF":
+                confluence_score -= 20
+                confluence_factors.append("⚠️ Makro-Gegenwind (Markt im Risk-Off Modus)")
+
+            confluence_score = max(10, min(100, confluence_score))
+            if confluence_score >= 85:
+                grade = "A+"
+                grade_badge = "💎 Grade A+"
+                grade_title = "Elite Institutional Confluence"
+            elif confluence_score >= 70:
+                grade = "A"
+                grade_badge = "⭐ Grade A"
+                grade_title = "Starker Edge Trade"
+            else:
+                grade = "B"
+                grade_badge = "🔹 Grade B"
+                grade_title = "Selektiv handeln"
+
+            # 6. Chart Overlay Level Bundle (for PriceChart / Visuals)
+            chart_overlay_levels = {
+                "poc": poc,
+                "vah": vah,
+                "val": val,
+                "call_wall": call_wall,
+                "put_wall": put_wall,
+                "entry": entry_price,
+                "invalidation": invalidation_price,
+                "target_1": target_1,
+                "target_2": target_2,
+            }
+
+            # 7. Format Smartphone Telegram Card
             gex_summary = "N/A (keine US-Optionen)"
             if gex:
                 gex_summary = f"{gex.get('regime_label', 'Neutral')} | Call Wall: ${call_wall:.2f} | Put Wall: ${put_wall:.2f}"
 
             vp_summary = f"POC: ${poc:.2f} | VAH: ${vah:.2f} | VAL: ${val:.2f} ({vp.get('location_label', 'Neutral') if vp else 'N/A'})"
+            factors_text = "\n".join([f"  ✓ {f}" for f in confluence_factors])
 
             tg_html = (
-                f"🎯 <b>TRADING EDGE SETUP: {symbol}</b>\n"
+                f"🎯 <b>TRADING EDGE SETUP: {symbol}</b> ({grade_badge})\n"
                 f"<b>Typ:</b> {setup_name}\n"
+                f"<b>Score:</b> {confluence_score}/100 ({grade_title})\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"💡 <b>Katalysator & Logik:</b>\n{catalyst}\n\n"
-                f"📊 <b>Institutionelle Konfluenz:</b>\n"
+                f"📊 <b>Konfluenz-Faktoren:</b>\n{factors_text}\n\n"
+                f"📈 <b>Institutionelle Level:</b>\n"
                 f"• <b>Volume Profile:</b> {vp_summary}\n"
                 f"• <b>Optionen GEX:</b> {gex_summary}\n\n"
                 f"⚡ <b>Einstieg:</b> ${entry_price:.2f}\n"
@@ -196,6 +242,11 @@ class AsymmetricTradeService:
                 "setup_name": setup_name,
                 "catalyst_description": catalyst,
                 "direction": direction,
+                "grade": grade,
+                "grade_badge": grade_badge,
+                "grade_title": grade_title,
+                "confluence_score": confluence_score,
+                "confluence_factors": confluence_factors,
                 "entry_price": entry_price,
                 "invalidation_price": invalidation_price,
                 "target_1": target_1,
@@ -208,6 +259,7 @@ class AsymmetricTradeService:
                 "actual_risk_amount": actual_risk_amount,
                 "portfolio_risk_pct": actual_risk_pct,
                 "portfolio_capital_basis": portfolio_capital,
+                "chart_overlay_levels": chart_overlay_levels,
                 "volume_profile": {
                     "poc": poc,
                     "vah": vah,
@@ -219,6 +271,10 @@ class AsymmetricTradeService:
                     "call_wall": call_wall,
                     "put_wall": put_wall,
                 } if gex else None,
+                "macro_regime": {
+                    "stance": regime_stance,
+                    "vix": macro.get("vix", {}).get("value"),
+                },
                 "telegram_html": tg_html,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }

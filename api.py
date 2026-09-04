@@ -7126,6 +7126,17 @@ async def get_trading_volume_profile(ticker: str, period: str = "1mo", interval:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/trading/market-regime")
+async def get_trading_market_regime():
+    """Returns macro market regime combining SPY, QQQ and VIX volatility stance."""
+    try:
+        service = get_trading_signals_service()
+        regime = await asyncio.to_thread(service.get_market_regime)
+        return convert_numpy_types(regime)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/trading/asymmetric-setups")
 async def get_asymmetric_trade_setups(limit: int = 6):
     """Returns top asymmetric trade setups with minimum 2.5:1 R:R, structural invalidation, and sizing."""

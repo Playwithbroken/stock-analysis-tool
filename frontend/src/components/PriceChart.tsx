@@ -131,6 +131,7 @@ const INDICATOR_HELP: Record<string, string> = {
   Bollinger: "Bollinger-Bänder zeigen die normale Schwankungsbreite. Ausbrüche können Momentum oder Übertreibung markieren.",
   Volume: "Volumen zeigt die Handelsaktivität. Bewegungen mit hohem Volumen sind belastbarer als dünne Bewegungen.",
   VWAP: "VWAP ist der volumengewichtete Durchschnittspreis. Intraday dient er oft als Referenz, ob Käufer oder Verkäufer die Kontrolle haben.",
+  EdgeLevels: "Institutionelle Edge Level: Volume Profile POC (gelb), VAH/VAL (grün/rot) und Options GEX Call/Put Walls.",
 };
 
 const emptyIndicators = (): IndicatorSeries => ({
@@ -242,11 +243,47 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const [showBollinger, setShowBollinger] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
   const [showVWAP, setShowVWAP] = useState(false);
+  const [showEdgeLevels, setShowEdgeLevels] = useState(false);
+  const [edgeOverlay, setEdgeOverlay] = useState<{
+    poc?: number;
+    vah?: number;
+    val?: number;
+    call_wall?: number;
+    put_wall?: number;
+  } | null>(null);
   const [retryCounter, setRetryCounter] = useState(0);
   const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
   const [historyState, setHistoryState] = useState<HistoryState>("loading");
   const [historyMeta, setHistoryMeta] = useState<HistoryPayload["meta"] | null>(null);
   const tickerSymbol = ticker.toUpperCase();
+
+  useEffect(() => {
+    if (!showEdgeLevels || !tickerSymbol) {
+      setEdgeOverlay(null);
+      return;
+    }
+    let active = true;
+    Promise.allSettled([
+      fetchJsonWithRetry<any>(`/api/trading/volume-profile/${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
+      fetchJsonWithRetry<any>(`/api/trading/gex/${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
+    ]).then(([vpRes, gexRes]) => {
+      if (!active) return;
+      const vp = vpRes.status === "fulfilled" ? vpRes.value : null;
+      const gex = gexRes.status === "fulfilled" ? gexRes.value : null;
+      if (vp || gex) {
+        setEdgeOverlay({
+          poc: typeof vp?.poc_price === "number" ? vp.poc_price : undefined,
+          vah: typeof vp?.vah_price === "number" ? vp.vah_price : undefined,
+          val: typeof vp?.val_price === "number" ? vp.val_price : undefined,
+          call_wall: typeof gex?.call_wall === "number" ? gex.call_wall : undefined,
+          put_wall: typeof gex?.put_wall === "number" ? gex.put_wall : undefined,
+        });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [showEdgeLevels, tickerSymbol]);
   const { quotes, connected, connectionState, staleSeconds, transportMode, lastError } = useRealtimeFeed([ticker], true);
   const realtimeQuote = quotes[tickerSymbol];
 
@@ -515,6 +552,30 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
   const inspectedChangePct = inspectedPoint
     ? calculateChartChangePct(inspectedPoint.price, latestChartPrice)
     : null;
+  const yDomain = useMemo(() => {
+    if (!chartData || chartData.length === 0) return ["auto", "auto"];
+    let min = Infinity;
+    let max = -Infinity;
+    for (const pt of chartData) {
+      if (typeof pt.price === "number") {
+        if (pt.price < min) min = pt.price;
+        if (pt.price > max) max = pt.price;
+      }
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return ["auto", "auto"];
+    if (showEdgeLevels && edgeOverlay) {
+      const levels = [edgeOverlay.poc, edgeOverlay.vah, edgeOverlay.val, edgeOverlay.call_wall, edgeOverlay.put_wall].filter(
+        (v): v is number => typeof v === "number" && v > 0 && Math.abs(v - min) / min < 0.40
+      );
+      for (const lvl of levels) {
+        if (lvl < min) min = lvl;
+        if (lvl > max) max = lvl;
+      }
+    }
+    const pad = (max - min) * 0.05 || 1;
+    return [Math.max(0, min - pad), max + pad];
+  }, [chartData, showEdgeLevels, edgeOverlay]);
+
   const historicalPriceLabel =
     period.interval === "1mo" ? "Monatskurs" : period.interval === "1wk" ? "Wochenkurs" : "Kurs";
   const inspectChartPoint = useCallback(
@@ -573,6 +634,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700", help: INDICATOR_HELP.Bollinger },
     { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700", help: INDICATOR_HELP.Volume },
     { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700", help: INDICATOR_HELP.VWAP },
+    { label: "⚡ Edge", active: showEdgeLevels, setActive: setShowEdgeLevels, activeTone: "border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-300 font-bold", help: INDICATOR_HELP.EdgeLevels },
   ];
   const activeIndicatorHelp = indicatorToggles.filter((toggle) => toggle.active);
 
@@ -933,7 +995,56 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,28,36,0.08)" vertical={false} />
                   <XAxis dataKey="_chartIndex" tickFormatter={(index) => formatChartAxisDate(chartData[Number(index)], period.id)} interval="preserveStartEnd" axisLine={false} tickLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} minTickGap={30} />
-                  <YAxis hide domain={["auto", "auto"]} />
+                  <YAxis hide domain={yDomain} />
+                  {showEdgeLevels && edgeOverlay ? (
+                    <>
+                      {edgeOverlay.poc ? (
+                        <ReferenceLine
+                          y={edgeOverlay.poc}
+                          stroke="#d97706"
+                          strokeWidth={1.8}
+                          strokeDasharray="4 4"
+                          label={{ value: `POC: $${edgeOverlay.poc}`, fill: "#d97706", fontSize: 10, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.vah ? (
+                        <ReferenceLine
+                          y={edgeOverlay.vah}
+                          stroke="#059669"
+                          strokeWidth={1.2}
+                          strokeDasharray="2 2"
+                          label={{ value: `VAH: $${edgeOverlay.vah}`, fill: "#059669", fontSize: 9, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.val ? (
+                        <ReferenceLine
+                          y={edgeOverlay.val}
+                          stroke="#dc2626"
+                          strokeWidth={1.2}
+                          strokeDasharray="2 2"
+                          label={{ value: `VAL: $${edgeOverlay.val}`, fill: "#dc2626", fontSize: 9, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.call_wall ? (
+                        <ReferenceLine
+                          y={edgeOverlay.call_wall}
+                          stroke="#7c3aed"
+                          strokeWidth={1.6}
+                          strokeDasharray="5 3"
+                          label={{ value: `Call Wall: $${edgeOverlay.call_wall}`, fill: "#7c3aed", fontSize: 10, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.put_wall ? (
+                        <ReferenceLine
+                          y={edgeOverlay.put_wall}
+                          stroke="#2563eb"
+                          strokeWidth={1.6}
+                          strokeDasharray="5 3"
+                          label={{ value: `Put Wall: $${edgeOverlay.put_wall}`, fill: "#2563eb", fontSize: 10, position: "insideRight" }}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
                   {inspectedPoint ? (
                     <ReferenceLine
                       x={displayedIndex}

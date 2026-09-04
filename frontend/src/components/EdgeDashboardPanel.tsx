@@ -744,6 +744,32 @@ export default function EdgeDashboardPanel({
             </div>
           ) : null}
 
+          {tradingEdge?.regime?.stance ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/5 bg-white/80 p-3 text-xs shadow-xs dark:border-white/10 dark:bg-slate-900/60">
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${
+                  tradingEdge.regime.stance === "RISK_ON" ? "bg-emerald-500 animate-pulse" :
+                  tradingEdge.regime.stance === "CAUTIOUS" ? "bg-amber-500" : "bg-red-500"
+                }`} />
+                <span className="font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Marktumfeld: {tradingEdge.regime.stance === "RISK_ON" ? "🟢 Risk-On (Ideale Long-Bedingungen)" :
+                                 tradingEdge.regime.stance === "CAUTIOUS" ? "🟡 Neutral / Selektiv" : "🔴 Risk-Off (Defensiv)"}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                {tradingEdge.regime.vix ? (
+                  <span>VIX: <strong className="text-slate-900 dark:text-white">{tradingEdge.regime.vix.value}</strong></span>
+                ) : null}
+                {tradingEdge.regime.spy ? (
+                  <span>SPY: <strong className="text-slate-900 dark:text-white">${tradingEdge.regime.spy.price}</strong> ({tradingEdge.regime.spy.trend})</span>
+                ) : null}
+                {tradingEdge.regime.qqq ? (
+                  <span>QQQ: <strong className="text-slate-900 dark:text-white">${tradingEdge.regime.qqq.price}</strong> ({tradingEdge.regime.qqq.trend})</span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             {tradingEdge.asymmetric_setups.map((setup: any) => (
               <div
@@ -760,6 +786,15 @@ export default function EdgeDashboardPanel({
                       >
                         {setup.ticker}
                       </button>
+                      {setup.grade_badge ? (
+                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                          setup.grade === "A+" ? "border border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" :
+                          setup.grade === "A" ? "border border-blue-500/40 bg-blue-500/15 text-blue-800 dark:text-blue-300" :
+                          "border border-slate-400/40 bg-slate-400/15 text-slate-700 dark:text-slate-300"
+                        }`}>
+                          {setup.grade_badge} ({setup.confluence_score}/100)
+                        </span>
+                      ) : null}
                       <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
                         {setup.setup_name}
                       </span>
@@ -774,6 +809,16 @@ export default function EdgeDashboardPanel({
                   <p className="mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
                     {setup.catalyst_description}
                   </p>
+
+                  {setup.confluence_factors?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {setup.confluence_factors.map((f: string, idx: number) => (
+                        <span key={idx} className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-700 dark:bg-white/10 dark:text-slate-300">
+                          ✓ {f}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
 
                   <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5 text-[11px] font-semibold text-slate-700 dark:bg-white/5 dark:text-slate-300">
                     <div>
@@ -806,15 +851,24 @@ export default function EdgeDashboardPanel({
                   <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
                     Sizing: <span className="text-slate-950 dark:text-white">{setup.recommended_shares} Stk</span> (~{setup.total_position_capital?.toLocaleString()}€)
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSendEdgeTelegram(setup.ticker)}
-                    disabled={sendingTelegramTicker === setup.ticker}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    <Smartphone size={13} />
-                    {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onAnalyzeTicker(setup.ticker)}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200"
+                    >
+                      Chart
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendEdgeTelegram(setup.ticker)}
+                      disabled={sendingTelegramTicker === setup.ticker}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      <Smartphone size={13} />
+                      {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

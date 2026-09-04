@@ -50,6 +50,7 @@ from src.asymmetric_trade_service import AsymmetricTradeService
 from src.relative_strength_service import RelativeStrengthService
 from src.trade_lifecycle_service import TradeLifecycleService
 from src.telegram_interactive_service import TelegramInteractiveService
+from src.portfolio_heat_service import PortfolioHeatService
 from src.realtime_market_service import RealtimeMarketService
 from src.integrations.market_data.alpaca import AlpacaMarketDataAdapter, AlpacaStreamConfig
 from src.public_signal_service import PublicSignalService
@@ -186,6 +187,7 @@ _trading_signals_service = None
 _asymmetric_trade_service = None
 _relative_strength_service = None
 _trade_lifecycle_service = None
+_portfolio_heat_service = None
 _telegram_interactive_service = None
 _telegram_bot_task = None
 _realtime_market_service = None
@@ -1499,6 +1501,12 @@ def get_trade_lifecycle_service():
         _trade_lifecycle_service = TradeLifecycleService(get_portfolio_manager())
     return _trade_lifecycle_service
 
+def get_portfolio_heat_service():
+    global _portfolio_heat_service
+    if _portfolio_heat_service is None:
+        _portfolio_heat_service = PortfolioHeatService()
+    return _portfolio_heat_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1512,6 +1520,7 @@ def get_telegram_interactive_service():
             market_regime_service=getattr(get_asymmetric_trade_service(), "regime_service", None),
             relative_strength_service=get_relative_strength_service(),
             trade_lifecycle_service=get_trade_lifecycle_service(),
+            portfolio_heat_service=get_portfolio_heat_service(),
             trading_signals_service=get_trading_signals_service(),
             alert_service=get_email_alert_service(),
             portfolio_manager=get_portfolio_manager(),
@@ -7344,6 +7353,19 @@ async def evaluate_trading_lifecycle_now():
         alert_svc = get_email_alert_service()
         res = await asyncio.to_thread(service.evaluate_active_trades, alert_svc)
         return convert_numpy_types(res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/portfolio-heat")
+async def get_trading_portfolio_heat(portfolio_capital: float = 50000.0):
+    """Calculates total portfolio risk (heat) and cross-correlation clusters."""
+    try:
+        lifecycle_svc = get_trade_lifecycle_service()
+        trades = lifecycle_svc.get_active_trades()
+        heat_svc = get_portfolio_heat_service()
+        report = await asyncio.to_thread(heat_svc.evaluate_portfolio_heat, trades, portfolio_capital)
+        return convert_numpy_types(report)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

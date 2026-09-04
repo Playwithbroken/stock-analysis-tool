@@ -362,6 +362,61 @@ export default function EdgeDashboardPanel({
     }
   }
 
+  const [activeTrades, setActiveTrades] = useState<any[]>([]);
+  const [rsLeaders, setRsLeaders] = useState<any[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+
+  async function loadActiveTradesAndRS() {
+    try {
+      const [tRes, rsRes] = await Promise.all([
+        fetch("/api/trading/active-trades"),
+        fetch("/api/trading/relative-strength?benchmark=SPY"),
+      ]);
+      if (tRes.ok) {
+        const data = await tRes.json();
+        setActiveTrades(data.trades || []);
+      }
+      if (rsRes.ok) {
+        const data = await rsRes.json();
+        setRsLeaders(data.leaders || []);
+      }
+    } catch {
+      // optional
+    }
+  }
+
+  async function handleTriggerScanner() {
+    setIsScanning(true);
+    setScanResult(null);
+    try {
+      const res = await fetch("/api/trading/scanner/run-now", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        const disp = (data.edge_alerts?.dispatched || []).join(", ");
+        setScanResult(disp ? `🎯 Neue Setups gepusht: ${disp}` : "✅ Scan beendet. Watchlist ist aktuell.");
+        loadActiveTradesAndRS();
+      } else {
+        setScanResult("❌ Scan fehlgeschlagen");
+      }
+    } catch (e: any) {
+      setScanResult(`❌ Fehler: ${e.message}`);
+    } finally {
+      setIsScanning(false);
+    }
+  }
+
+  async function handleEvaluateLifecycle() {
+    try {
+      await fetch("/api/trading/lifecycle/evaluate-now", { method: "POST" });
+      loadActiveTradesAndRS();
+    } catch {}
+  }
+
+  useEffect(() => {
+    loadActiveTradesAndRS();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const checkRows = rows.filter((row) => row.ticker).slice(0, 8);
@@ -889,6 +944,174 @@ export default function EdgeDashboardPanel({
           </div>
         </div>
       ) : null}
+
+      {/* LIVE TRADE LIFECYCLE & TRAILING STOP TRACKER */}
+      {activeTrades.length > 0 ? (
+        <div className="mt-5 rounded-[1.35rem] border border-blue-500/25 bg-[linear-gradient(135deg,rgba(59,130,246,0.06),rgba(255,255,255,0.85))] p-5 shadow-sm dark:bg-slate-950/60">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                <Target size={16} />
+              </span>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">
+                  Live Trade-Lifecycle & Trailing Stops
+                </div>
+                <div className="text-base font-black text-slate-950 dark:text-white">
+                  Aktive Positionen &middot; Automatische Gewinnmitnahmen &middot; Breakeven-Schutz
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleEvaluateLifecycle}
+              className="inline-flex items-center gap-1.5 self-start rounded-lg border border-blue-500/30 bg-white/80 px-3 py-1.5 text-xs font-bold text-blue-700 shadow-2xs transition hover:bg-blue-50 dark:bg-slate-900 dark:text-blue-300"
+            >
+              <Activity size={13} />
+              Jetzt Prüfen
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {activeTrades.map((t) => {
+              const entry = Number(t.entry_price) || 0;
+              const last = Number(t.last_price) || entry;
+              const t1 = Number(t.target_1) || 0;
+              const t2 = Number(t.target_2) || 0;
+              const stop = Number(t.trailing_stop) || Number(t.invalidation_price) || 0;
+              const risk = Number(t.risk_per_share) || (entry - stop) || 1;
+              const rMult = risk > 0 ? ((last - entry) / risk).toFixed(1) : "0.0";
+              const isT1Hit = t.status === "TARGET_1_HIT";
+
+              // Progress towards Target 1 (0 to 100%)
+              const progressT1 = Math.max(0, Math.min(100, Math.round(((last - entry) / (t1 - entry || 1)) * 100)));
+
+              return (
+                <div key={t.ticker} className="rounded-xl border border-black/8 bg-white/90 p-3.5 shadow-2xs dark:border-white/10 dark:bg-slate-900/80">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-slate-900 dark:text-white">{t.ticker}</span>
+                      <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[9px] font-black text-blue-700 dark:text-blue-300">
+                        {t.grade_badge || "Grade A"}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-black ${Number(rMult) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                      {Number(rMult) >= 0 ? `+${rMult}R` : `${rMult}R`}
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 flex items-baseline justify-between text-xs">
+                    <span className="text-slate-500">Kurs: <b className="text-slate-900 dark:text-white">${last.toFixed(2)}</b></span>
+                    <span className="text-slate-500">Einstieg: ${entry.toFixed(2)}</span>
+                  </div>
+
+                  {/* Progress bar to Target 1 */}
+                  <div className="mt-2">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                      <span>Ziel 1: ${t1.toFixed(2)}</span>
+                      <span>{progressT1}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${isT1Hit ? "bg-emerald-500" : "bg-blue-500"}`}
+                        style={{ width: `${progressT1}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-2.5 text-[11px] dark:border-white/5">
+                    <span className={`rounded-md px-2 py-0.5 font-bold ${
+                      isT1Hit
+                        ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                    }`}>
+                      {isT1Hit ? `🟢 BE Stop: $${stop.toFixed(2)}` : `🛡️ Stop: $${stop.toFixed(2)}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onAnalyzeTicker(t.ticker)}
+                      className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Chart &rarr;
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {/* RELATIVE STRENGTH (RS VS SPY) LEADERBOARD & WATCHLIST SCANNER */}
+      <div className="mt-5 rounded-[1.35rem] border border-black/8 bg-white/75 p-5 shadow-2xs dark:border-white/10 dark:bg-slate-900/60">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400">
+              <TrendingUp size={16} />
+            </span>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
+                Institutional Alpha &amp; Accumulation
+              </div>
+              <div className="text-base font-black text-slate-950 dark:text-white">
+                Relative Stärke vs. S&amp;P 500 (Mansfield RS Leaders)
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTriggerScanner}
+              disabled={isScanning}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900"
+            >
+              <Zap size={13} />
+              {isScanning ? "Scannt Watchlist..." : "Watchlist jetzt scannen"}
+            </button>
+          </div>
+        </div>
+
+        {scanResult ? (
+          <div className="mt-3 rounded-xl border border-black/10 bg-slate-50 p-2.5 text-xs font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+            {scanResult}
+          </div>
+        ) : null}
+
+        {rsLeaders.length > 0 ? (
+          <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            {rsLeaders.slice(0, 8).map((leader, i) => (
+              <div
+                key={leader.ticker}
+                onClick={() => onAnalyzeTicker(leader.ticker)}
+                className="cursor-pointer rounded-xl border border-black/6 bg-white/90 p-3 transition hover:border-amber-400/50 hover:shadow-sm dark:border-white/8 dark:bg-slate-950/40"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-slate-400">#{i + 1}</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">{leader.ticker}</span>
+                  </div>
+                  <span className={`text-xs font-black ${leader.mansfield_rs >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                    {leader.mansfield_rs >= 0 ? `+${leader.mansfield_rs.toFixed(1)}%` : `${leader.mansfield_rs.toFixed(1)}%`} RS
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                  <span>Alpha 1M: <b>{leader.alpha_1m >= 0 ? `+${leader.alpha_1m.toFixed(1)}%` : `${leader.alpha_1m.toFixed(1)}%`}</b></span>
+                  <span>{leader.badge}</span>
+                </div>
+                {leader.divergent_strength ? (
+                  <div className="mt-1.5 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-black text-amber-800 dark:text-amber-300">
+                    ⚡ Stark trotz Markt
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 text-xs font-semibold text-slate-500">
+            Relative-Stärke-Daten werden beim nächsten Scan automatisch aktualisiert.
+          </div>
+        )}
+      </div>
 
       <div className="edge-decision-strip mt-5 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3">

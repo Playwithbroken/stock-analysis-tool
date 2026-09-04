@@ -1,5 +1,5 @@
 """
-Telegram Interactive Service — 2-Way Conversational Edge Trading Bot
+Telegram Interactive Service — 2-Way Conversational Edge Trading Bot & Inline Keyboard Engine
 
 Enables the user to control Broker Freund directly from their smartphone via Telegram:
   • /help /start: Overview of commands
@@ -9,9 +9,12 @@ Enables the user to control Broker Freund directly from their smartphone via Tel
   • /regime: Macro Market Regime (SPY, QQQ, VIX & Stance)
   • /rs: Relative Strength leaders vs SPY (Mansfield RS / Alpha)
   • /track /trades: Live active setups & Trailing-Stop monitor
+  • /heat: Portfolio Heat & Cross-Correlation Shield
   • /scan: Trigger immediate watchlist scan
 
-Security: Only messages originating from the configured TELEGRAM_CHAT_ID are processed.
+Interactive UI:
+  • InlineKeyboardMarkup buttons attached to alerts & setups for one-tap actions
+  • Callback query listener for instant smartphone responses
 """
 from __future__ import annotations
 
@@ -38,6 +41,7 @@ class TelegramInteractiveService:
         market_regime_service: Optional[Any] = None,
         relative_strength_service: Optional[Any] = None,
         trade_lifecycle_service: Optional[Any] = None,
+        portfolio_heat_service: Optional[Any] = None,
         trading_signals_service: Optional[Any] = None,
         alert_service: Optional[Any] = None,
         portfolio_manager: Optional[Any] = None,
@@ -52,6 +56,7 @@ class TelegramInteractiveService:
         self.regime_service = market_regime_service
         self.rs_service = relative_strength_service
         self.lifecycle_service = trade_lifecycle_service
+        self.heat_service = portfolio_heat_service
         self.signals_service = trading_signals_service
         self.alert_service = alert_service
         self.portfolio_manager = portfolio_manager
@@ -65,24 +70,32 @@ class TelegramInteractiveService:
             return False
         return str(chat_id).strip() in self.allowed_chat_ids
 
-    def send_message(self, chat_id: str, text: str, disable_preview: bool = True) -> bool:
+    def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        disable_preview: bool = True,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """Sends an HTML formatted message back to the user via Telegram."""
         if not self.bot_token:
             return False
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-        payload = {
+        payload: Dict[str, Any] = {
             "chat_id": chat_id,
             "text": text[:4096],
             "parse_mode": "HTML",
             "disable_web_page_preview": disable_preview,
         }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+
         try:
             res = requests.post(url, json=payload, timeout=15)
             if res.status_code == 400:
                 # Fallback to plain text if HTML tags were unclosed/malformed
-                plain = html.unescape(text)
-                # Strip basic tags
                 import re
+                plain = html.unescape(text)
                 plain = re.sub(r"<[^>]*>", "", plain)[:4096]
                 payload["text"] = plain
                 payload.pop("parse_mode", None)
@@ -92,6 +105,100 @@ class TelegramInteractiveService:
         except Exception as exc:
             logger.error("Failed to send Telegram message to %s: %s", chat_id, exc)
             return False
+
+    def answer_callback_query(
+        self,
+        callback_query_id: str,
+        text: Optional[str] = None,
+        show_alert: bool = False,
+    ) -> bool:
+        """Answers a Telegram callback query to dismiss the loading spinner."""
+        if not self.bot_token or not callback_query_id:
+            return False
+        url = f"https://api.telegram.org/bot{self.bot_token}/answerCallbackQuery"
+        payload: Dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text[:200]
+        if show_alert:
+            payload["show_alert"] = True
+
+        try:
+            res = requests.post(url, json=payload, timeout=10)
+            return res.ok
+        except Exception as exc:
+            logger.debug("Failed to answer callback query: %s", exc)
+            return False
+
+    def handle_callback_query(
+        self,
+        chat_id: str,
+        callback_data: str,
+        callback_query_id: str,
+    ) -> None:
+        """
+        Handles user tap on an inline keyboard button.
+        """
+        if not self.is_authorized(chat_id):
+            self.answer_callback_query(callback_query_id, "⛔ Nicht autorisiert.", show_alert=True)
+            return
+
+        cb = callback_data.strip()
+
+        if cb.startswith("gex:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"GEX für {ticker} wird geladen...")
+            res = self._cmd_gex([ticker])
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("levels:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Volume Profile für {ticker}...")
+            res = self._cmd_levels([ticker])
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("track:"):
+            ticker = cb.split(":", 1)[1].upper()
+            if self.asymmetric_service and self.lifecycle_service:
+                setup = self.asymmetric_service.generate_trade_setup(ticker)
+                if setup:
+                    self.lifecycle_service.register_trade(setup)
+                    self.answer_callback_query(
+                        callback_query_id, f"✅ {ticker} wird jetzt live überwacht!", show_alert=True
+                    )
+                    confirm_text = (
+                        f"🎯 <b>LIVE-TRACKING AKTIVIERT: {ticker}</b>\n"
+                        f"Ziel 1 (${setup['target_1']:.2f}) und Invalidation (${setup['invalidation_price']:.2f}) "
+                        f"werden kontinuierlich überwacht."
+                    )
+                    self.send_message(chat_id, confirm_text)
+                else:
+                    self.answer_callback_query(callback_query_id, "Fehler beim Laden des Setups.")
+            else:
+                self.answer_callback_query(callback_query_id, "Lifecycle Service nicht verfügbar.")
+
+        elif cb == "heat":
+            self.answer_callback_query(callback_query_id, "Portfolio Heat wird berechnet...")
+            res = self._cmd_heat()
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("be:"):
+            ticker = cb.split(":", 1)[1].upper()
+            if self.lifecycle_service:
+                trades = self.lifecycle_service.get_active_trades()
+                matched = next((t for t in trades if t.get("ticker") == ticker), None)
+                if matched:
+                    matched["trailing_stop"] = matched["entry_price"]
+                    self.lifecycle_service._save_trades()
+                    self.answer_callback_query(
+                        callback_query_id, f"🛡️ Stop für {ticker} auf Breakeven gesetzt!", show_alert=True
+                    )
+                    self.send_message(chat_id, f"🛡️ Stop-Loss für <b>{ticker}</b> wurde auf Breakeven (${matched['entry_price']:.2f}) nachgezogen.")
+                else:
+                    self.answer_callback_query(callback_query_id, f"Trade {ticker} nicht gefunden.")
+            else:
+                self.answer_callback_query(callback_query_id, "Lifecycle Service nicht aktiv.")
+        else:
+            self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
     def handle_command(self, chat_id: str, text: str) -> str:
         """
@@ -107,14 +214,14 @@ class TelegramInteractiveService:
         if not parts:
             return self._cmd_help()
 
-        cmd = parts[0].lower().split("@")[0]  # strip bot username if present, e.g. /edge@MyBot
+        cmd = parts[0].lower().split("@")[0]
         args = parts[1:]
 
         try:
             if cmd in ("/start", "/help"):
                 return self._cmd_help()
             elif cmd == "/edge":
-                return self._cmd_edge(args)
+                return self._cmd_edge(args, chat_id=chat_id)
             elif cmd == "/gex":
                 return self._cmd_gex(args)
             elif cmd == "/levels":
@@ -125,6 +232,8 @@ class TelegramInteractiveService:
                 return self._cmd_relative_strength()
             elif cmd in ("/track", "/trades"):
                 return self._cmd_track()
+            elif cmd == "/heat":
+                return self._cmd_heat()
             elif cmd == "/scan":
                 return self._cmd_scan()
             else:
@@ -143,18 +252,34 @@ class TelegramInteractiveService:
             "Dein institutioneller Trading-Begleiter direkt am Smartphone.\n\n"
             "⚡ <b>Verfügbare Befehle:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop & Zielen\n"
-            "• <code>/edge TICKER</code> – Ad-hoc Setup für Aktie (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
             "• <code>/gex TICKER</code> – Gamma Exposure & Market Maker Regime (z.B. <code>/gex TSLA</code>)\n"
             "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL) (z.B. <code>/levels AAPL</code>)\n"
             "• <code>/regime</code> – SPY/QQQ Trend & VIX Risiko-Status\n"
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
             "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n"
+            "• <code>/heat</code> – Portfolio Heat & Korrelations-Shield\n"
             "• <code>/scan</code> – Watchlist-Scan sofort manuell ausführen\n"
             "• <code>/help</code> – Diese Übersicht anzeigen\n\n"
             "💡 <i>Tipp: Tippe einfach auf einen blau hinterlegten Befehl oben zum Ausführen.</i>"
         )
 
-    def _cmd_edge(self, args: List[str]) -> str:
+    def _build_inline_keyboard(self, ticker: str) -> Dict[str, Any]:
+        """Generates interactive one-tap action buttons for a ticker."""
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
+                    {"text": "📊 Volume Profile", "callback_data": f"levels:{ticker}"},
+                ],
+                [
+                    {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
+                    {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
+                ],
+            ]
+        }
+
+    def _cmd_edge(self, args: List[str], chat_id: Optional[str] = None) -> str:
         if not self.asymmetric_service:
             return "⚠️ Asymmetric Trade Service ist nicht geladen."
 
@@ -165,11 +290,11 @@ class TelegramInteractiveService:
             if not setup:
                 return f"❌ Konnte kein Setup für <b>{ticker}</b> berechnen (Kursdaten unvollständig oder nicht handelbar)."
 
-            # Automatically register for live tracking if Grade A or higher
             if self.lifecycle_service and setup.get("confluence_score", 0) >= 65:
                 self.lifecycle_service.register_trade(setup)
 
-            return setup.get("telegram_html") or f"Setup für {ticker} berechnet."
+            resp_text = setup.get("telegram_html") or f"Setup für {ticker} berechnet."
+            return resp_text
 
         # Case 2: Scan for top setups across watchlist
         watchlist = self._get_watchlist_tickers()
@@ -189,12 +314,10 @@ class TelegramInteractiveService:
                 "Disziplin bewahren und auf saubere Bestätigungen warten!"
             )
 
-        # Register top setups in lifecycle tracker
         if self.lifecycle_service:
             for s in setups:
                 self.lifecycle_service.register_trade(s)
 
-        # Return the best setup in full detail, and summarize any others
         best = setups[0]
         result = best.get("telegram_html") or ""
 
@@ -320,6 +443,13 @@ class TelegramInteractiveService:
             return "⚠️ Trade Lifecycle Service nicht initialisiert."
         return self.lifecycle_service.format_telegram_trades_list()
 
+    def _cmd_heat(self) -> str:
+        if not self.heat_service:
+            return "⚠️ Portfolio Heat Service nicht initialisiert."
+        active = self.lifecycle_service.get_active_trades() if self.lifecycle_service else []
+        heat = self.heat_service.evaluate_portfolio_heat(active, portfolio_capital=50000.0)
+        return self.heat_service.format_telegram_heat_card(heat)
+
     def _cmd_scan(self) -> str:
         if not self.signals_service or not self.alert_service:
             return "⚠️ Scanner oder Alert Service nicht initialisiert."
@@ -362,7 +492,7 @@ class TelegramInteractiveService:
     async def run_listener_loop(self) -> None:
         """
         Asynchronous long-polling loop for Telegram getUpdates.
-        Runs continuously in background of api.py.
+        Listens for both text slash-commands and interactive inline-button callbacks.
         """
         if not self.bot_token or not self.allowed_chat_ids:
             logger.info("Telegram interactive bot listener skipped: missing token or chat ID.")
@@ -394,7 +524,7 @@ class TelegramInteractiveService:
         except Exception as exc:
             logger.debug("Initial getUpdates sync warning: %s", exc)
 
-        logger.info("Telegram interactive bot listener started. Listening for commands...")
+        logger.info("Telegram interactive bot listener started. Listening for commands & callbacks...")
 
         # 3. Continuous Long Polling Loop
         while self._is_running:
@@ -418,6 +548,18 @@ class TelegramInteractiveService:
                         if up_id > self._last_update_id:
                             self._last_update_id = up_id
 
+                        # Handle Inline Keyboard Callback Queries
+                        cq = update.get("callback_query")
+                        if cq and isinstance(cq, dict):
+                            cq_id = str(cq.get("id") or "")
+                            from_user = cq.get("from") or {}
+                            chat_id = str(from_user.get("id") or "")
+                            data = str(cq.get("data") or "")
+                            logger.info("Received Telegram callback '%s' from chat_id=%s", data, chat_id)
+                            self.handle_callback_query(chat_id, data, cq_id)
+                            continue
+
+                        # Handle Standard Message Slash Commands
                         msg = update.get("message")
                         if not msg or not isinstance(msg, dict):
                             continue
@@ -431,10 +573,17 @@ class TelegramInteractiveService:
 
                         logger.info("Received Telegram command '%s' from chat_id=%s", text, chat_id)
                         response_text = self.handle_command(chat_id, text)
-                        self.send_message(chat_id, response_text)
+                        if response_text:
+                            reply_markup = None
+                            if text.startswith("/edge"):
+                                parts = text.split()
+                                tk = parts[1].upper() if len(parts) > 1 else ""
+                                if tk:
+                                    reply_markup = self._build_inline_keyboard(tk)
+                            self.send_message(chat_id, response_text, reply_markup=reply_markup)
 
                 elif poll_res.status_code == 409:
-                    # Another instance is polling (e.g., during zero-downtime deploy reload)
+                    # Another instance is polling
                     await asyncio.sleep(5)
                 else:
                     await asyncio.sleep(2)

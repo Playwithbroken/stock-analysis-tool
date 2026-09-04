@@ -900,6 +900,22 @@ export default function EdgeDashboardPanel({
                       Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
                     </div>
                   ) : null}
+                  {setup.anchored_vwap ? (
+                    <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                      ⚓ AVWAP: {setup.anchored_vwap.ytd ? `YTD $${setup.anchored_vwap.ytd}` : ""}
+                      {setup.anchored_vwap.earnings ? ` · Earnings $${setup.anchored_vwap.earnings}` : ""}
+                    </div>
+                  ) : null}
+                  {setup.whale_flow?.badge ? (
+                    <div className="mt-1 flex items-center gap-1.5 rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-800 dark:bg-purple-500/20 dark:text-purple-300">
+                      <span>{setup.whale_flow.badge}</span>
+                      {setup.whale_flow.volume_ratio ? (
+                        <span className="font-extrabold text-purple-900 dark:text-purple-200">
+                          ({setup.whale_flow.volume_ratio}x Vol)
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {setup.earnings_info ? (
                     <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] font-bold text-amber-900 dark:text-amber-300">

@@ -250,6 +250,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     val?: number;
     call_wall?: number;
     put_wall?: number;
+    earnings_avwap?: number;
+    ytd_avwap?: number;
   } | null>(null);
   const [retryCounter, setRetryCounter] = useState(0);
   const [indicators, setIndicators] = useState<IndicatorSeries>(emptyIndicators());
@@ -266,17 +268,21 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     Promise.allSettled([
       fetchJsonWithRetry<any>(`/api/trading/volume-profile/${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
       fetchJsonWithRetry<any>(`/api/trading/gex/${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
-    ]).then(([vpRes, gexRes]) => {
+      fetchJsonWithRetry<any>(`/api/trading/avwap?ticker=${tickerSymbol}`, {}, { retries: 0, timeoutMs: 5000 }),
+    ]).then(([vpRes, gexRes, avwapRes]) => {
       if (!active) return;
       const vp = vpRes.status === "fulfilled" ? vpRes.value : null;
       const gex = gexRes.status === "fulfilled" ? gexRes.value : null;
-      if (vp || gex) {
+      const avwap = avwapRes.status === "fulfilled" ? avwapRes.value : null;
+      if (vp || gex || avwap) {
         setEdgeOverlay({
           poc: typeof vp?.poc_price === "number" ? vp.poc_price : undefined,
           vah: typeof vp?.vah_price === "number" ? vp.vah_price : undefined,
           val: typeof vp?.val_price === "number" ? vp.val_price : undefined,
           call_wall: typeof gex?.call_wall === "number" ? gex.call_wall : undefined,
           put_wall: typeof gex?.put_wall === "number" ? gex.put_wall : undefined,
+          earnings_avwap: typeof avwap?.earnings?.avwap === "number" ? avwap.earnings.avwap : undefined,
+          ytd_avwap: typeof avwap?.ytd?.avwap === "number" ? avwap.ytd.avwap : undefined,
         });
       }
     });
@@ -564,7 +570,15 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     }
     if (!Number.isFinite(min) || !Number.isFinite(max)) return ["auto", "auto"];
     if (showEdgeLevels && edgeOverlay) {
-      const levels = [edgeOverlay.poc, edgeOverlay.vah, edgeOverlay.val, edgeOverlay.call_wall, edgeOverlay.put_wall].filter(
+      const levels = [
+        edgeOverlay.poc,
+        edgeOverlay.vah,
+        edgeOverlay.val,
+        edgeOverlay.call_wall,
+        edgeOverlay.put_wall,
+        edgeOverlay.earnings_avwap,
+        edgeOverlay.ytd_avwap,
+      ].filter(
         (v): v is number => typeof v === "number" && v > 0 && Math.abs(v - min) / min < 0.40
       );
       for (const lvl of levels) {
@@ -1041,6 +1055,24 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                           strokeWidth={1.6}
                           strokeDasharray="5 3"
                           label={{ value: `Put Wall: $${edgeOverlay.put_wall}`, fill: "#2563eb", fontSize: 10, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.earnings_avwap ? (
+                        <ReferenceLine
+                          y={edgeOverlay.earnings_avwap}
+                          stroke="#8b5cf6"
+                          strokeWidth={1.4}
+                          strokeDasharray="4 4"
+                          label={{ value: `Earnings AVWAP: $${edgeOverlay.earnings_avwap}`, fill: "#8b5cf6", fontSize: 9, position: "insideRight" }}
+                        />
+                      ) : null}
+                      {edgeOverlay.ytd_avwap ? (
+                        <ReferenceLine
+                          y={edgeOverlay.ytd_avwap}
+                          stroke="#06b6d4"
+                          strokeWidth={1.4}
+                          strokeDasharray="3 3"
+                          label={{ value: `YTD AVWAP: $${edgeOverlay.ytd_avwap}`, fill: "#06b6d4", fontSize: 9, position: "insideRight" }}
                         />
                       ) : null}
                     </>

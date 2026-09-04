@@ -51,6 +51,8 @@ from src.relative_strength_service import RelativeStrengthService
 from src.trade_lifecycle_service import TradeLifecycleService
 from src.telegram_interactive_service import TelegramInteractiveService
 from src.portfolio_heat_service import PortfolioHeatService
+from src.anchored_vwap_service import AnchoredVWAPService
+from src.whale_flow_service import WhaleFlowService
 from src.realtime_market_service import RealtimeMarketService
 from src.integrations.market_data.alpaca import AlpacaMarketDataAdapter, AlpacaStreamConfig
 from src.public_signal_service import PublicSignalService
@@ -188,6 +190,8 @@ _asymmetric_trade_service = None
 _relative_strength_service = None
 _trade_lifecycle_service = None
 _portfolio_heat_service = None
+_anchored_vwap_service = None
+_whale_flow_service = None
 _telegram_interactive_service = None
 _telegram_bot_task = None
 _realtime_market_service = None
@@ -1507,6 +1511,18 @@ def get_portfolio_heat_service():
         _portfolio_heat_service = PortfolioHeatService()
     return _portfolio_heat_service
 
+def get_anchored_vwap_service():
+    global _anchored_vwap_service
+    if _anchored_vwap_service is None:
+        _anchored_vwap_service = AnchoredVWAPService()
+    return _anchored_vwap_service
+
+def get_whale_flow_service():
+    global _whale_flow_service
+    if _whale_flow_service is None:
+        _whale_flow_service = WhaleFlowService()
+    return _whale_flow_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1521,6 +1537,8 @@ def get_telegram_interactive_service():
             relative_strength_service=get_relative_strength_service(),
             trade_lifecycle_service=get_trade_lifecycle_service(),
             portfolio_heat_service=get_portfolio_heat_service(),
+            anchored_vwap_service=get_anchored_vwap_service(),
+            whale_flow_service=get_whale_flow_service(),
             trading_signals_service=get_trading_signals_service(),
             alert_service=get_email_alert_service(),
             portfolio_manager=get_portfolio_manager(),
@@ -7366,6 +7384,46 @@ async def get_trading_portfolio_heat(portfolio_capital: float = 50000.0):
         heat_svc = get_portfolio_heat_service()
         report = await asyncio.to_thread(heat_svc.evaluate_portfolio_heat, trades, portfolio_capital)
         return convert_numpy_types(report)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/avwap")
+async def get_trading_anchored_vwap(ticker: str):
+    """Calculates YTD, Earnings, Monthly, and Swing Low Anchored VWAPs for a ticker."""
+    try:
+        sym = (ticker or "").strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        service = get_anchored_vwap_service()
+        data = await asyncio.to_thread(service.compute_anchored_vwaps, sym)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"No AVWAP data available for {sym}")
+        return convert_numpy_types(data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/whale-flow")
+async def get_trading_whale_flow(ticker: Optional[str] = None):
+    """Analyzes volume spikes, absorption and institutional expansion for ticker or watchlist."""
+    try:
+        service = get_whale_flow_service()
+        if ticker:
+            sym = ticker.strip().upper()
+            data = await asyncio.to_thread(service.analyze_whale_flow, sym)
+            if not data:
+                raise HTTPException(status_code=404, detail=f"No volume flow data for {sym}")
+            return convert_numpy_types(data)
+
+        items = get_portfolio_manager().get_signal_watch_items()
+        watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        anomalies = await asyncio.to_thread(service.scan_watchlist_whale_flows, watchlist)
+        return convert_numpy_types({"anomalies": anomalies, "count": len(anomalies)})
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

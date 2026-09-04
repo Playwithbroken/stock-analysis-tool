@@ -24,6 +24,8 @@ from src.options_edge_service import OptionsEdgeService
 from src.volume_profile_service import VolumeProfileService
 from src.market_regime_service import MarketRegimeService
 from src.relative_strength_service import RelativeStrengthService
+from src.anchored_vwap_service import AnchoredVWAPService
+from src.whale_flow_service import WhaleFlowService
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +42,15 @@ class AsymmetricTradeService:
         volume_service: Optional[VolumeProfileService] = None,
         regime_service: Optional[MarketRegimeService] = None,
         relative_strength_service: Optional[RelativeStrengthService] = None,
+        anchored_vwap_service: Optional[AnchoredVWAPService] = None,
+        whale_flow_service: Optional[WhaleFlowService] = None,
     ) -> None:
         self.options_service = options_service or OptionsEdgeService()
         self.volume_service = volume_service or VolumeProfileService()
         self.regime_service = regime_service or MarketRegimeService()
         self.rs_service = relative_strength_service or RelativeStrengthService()
+        self.avwap_service = anchored_vwap_service or AnchoredVWAPService()
+        self.whale_service = whale_flow_service or WhaleFlowService()
 
     def generate_trade_setup(
         self,
@@ -87,6 +93,22 @@ class AsymmetricTradeService:
                     rs_data = self.rs_service.compute_relative_strength(symbol, benchmark="SPY")
                 except Exception:
                     rs_data = None
+
+            # 5. Fetch Anchored VWAPs
+            avwap_data = None
+            if self.avwap_service:
+                try:
+                    avwap_data = self.avwap_service.compute_anchored_vwaps(symbol)
+                except Exception:
+                    avwap_data = None
+
+            # 6. Fetch Whale Flow Activity
+            whale_data = None
+            if self.whale_service:
+                try:
+                    whale_data = self.whale_service.analyze_whale_flow(symbol)
+                except Exception:
+                    whale_data = None
 
             poc = vp.get("poc_price", spot) if vp else spot
             vah = vp.get("vah_price", spot * 1.03) if vp else spot * 1.03
@@ -205,6 +227,33 @@ class AsymmetricTradeService:
                     confluence_score -= 10
                     confluence_factors.append(f"⚠️ Schwächer als der Markt (Mansfield RS: {mansfield:+.1f}%)")
 
+            # Anchored VWAP Confluence
+            if avwap_data:
+                retests = avwap_data.get("retests", [])
+                if retests:
+                    confluence_score += 10
+                    confluence_factors.append(f"Retest von institutionellem {retests[0]}")
+                elif avwap_data.get("institutional_bias") == "BULLISH_ACCEPTANCE":
+                    confluence_score += 5
+                    confluence_factors.append("Kurs oberhalb YTD & Earnings AVWAP (Fonds im Gewinn)")
+                elif avwap_data.get("institutional_bias") == "BEARISH_PRESSURE":
+                    confluence_score -= 10
+                    confluence_factors.append("⚠️ Unterhalb YTD & Earnings AVWAP (Verkaufsdruck)")
+
+            # Whale Flow / Dark Pool Confluence
+            if whale_data and whale_data.get("is_whale_activity"):
+                w_pat = whale_data.get("pattern")
+                w_ratio = whale_data.get("volume_ratio", 1.0)
+                if w_pat == "ACCUMULATION_ABSORPTION":
+                    confluence_score += 12
+                    confluence_factors.append(f"Whale-Absorption ({w_ratio:.1f}x Volumen am Support absorbiert)")
+                elif w_pat == "INSTITUTIONAL_EXPANSION":
+                    confluence_score += 10
+                    confluence_factors.append(f"Institutioneller Volumenausbruch ({w_ratio:.1f}x Volumen)")
+                elif w_pat == "DISTRIBUTION_EXHAUSTION":
+                    confluence_score -= 15
+                    confluence_factors.append("⚠️ Institutionelle Distribution erkannt (Verkauf in Hype)")
+
             # Earnings Proximity Shield
             earnings_info = self._check_earnings_proximity(t)
             if earnings_info:
@@ -232,6 +281,8 @@ class AsymmetricTradeService:
                 "val": val,
                 "call_wall": call_wall,
                 "put_wall": put_wall,
+                "ytd_avwap": avwap_data.get("ytd", {}).get("avwap") if avwap_data and avwap_data.get("ytd") else None,
+                "earnings_avwap": avwap_data.get("earnings", {}).get("avwap") if avwap_data and avwap_data.get("earnings") else None,
                 "entry": entry_price,
                 "invalidation": invalidation_price,
                 "target_1": target_1,
@@ -324,6 +375,8 @@ class AsymmetricTradeService:
                     "vix": macro.get("vix", {}).get("value"),
                 },
                 "relative_strength": rs_data,
+                "anchored_vwap": avwap_data,
+                "whale_flow": whale_data,
                 "telegram_html": tg_html,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }

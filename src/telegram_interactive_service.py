@@ -42,6 +42,8 @@ class TelegramInteractiveService:
         relative_strength_service: Optional[Any] = None,
         trade_lifecycle_service: Optional[Any] = None,
         portfolio_heat_service: Optional[Any] = None,
+        anchored_vwap_service: Optional[Any] = None,
+        whale_flow_service: Optional[Any] = None,
         trading_signals_service: Optional[Any] = None,
         alert_service: Optional[Any] = None,
         portfolio_manager: Optional[Any] = None,
@@ -57,6 +59,8 @@ class TelegramInteractiveService:
         self.rs_service = relative_strength_service
         self.lifecycle_service = trade_lifecycle_service
         self.heat_service = portfolio_heat_service
+        self.avwap_service = anchored_vwap_service
+        self.whale_service = whale_flow_service
         self.signals_service = trading_signals_service
         self.alert_service = alert_service
         self.portfolio_manager = portfolio_manager
@@ -156,6 +160,18 @@ class TelegramInteractiveService:
             res = self._cmd_levels([ticker])
             self.send_message(chat_id, res)
 
+        elif cb.startswith("avwap:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"AVWAP für {ticker} wird berechnet...")
+            res = self._cmd_avwap([ticker])
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("whale:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Whale Flow für {ticker}...")
+            res = self._cmd_whale([ticker])
+            self.send_message(chat_id, res)
+
         elif cb.startswith("track:"):
             ticker = cb.split(":", 1)[1].upper()
             if self.asymmetric_service and self.lifecycle_service:
@@ -230,6 +246,10 @@ class TelegramInteractiveService:
                 return self._cmd_regime()
             elif cmd == "/rs":
                 return self._cmd_relative_strength()
+            elif cmd == "/avwap":
+                return self._cmd_avwap(args)
+            elif cmd == "/whale":
+                return self._cmd_whale(args)
             elif cmd in ("/track", "/trades"):
                 return self._cmd_track()
             elif cmd == "/heat":
@@ -255,6 +275,8 @@ class TelegramInteractiveService:
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
             "• <code>/gex TICKER</code> – Gamma Exposure & Market Maker Regime (z.B. <code>/gex TSLA</code>)\n"
             "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL) (z.B. <code>/levels AAPL</code>)\n"
+            "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Earnings, Swing-Low) (z.B. <code>/avwap MSFT</code>)\n"
+            "• <code>/whale [TICKER]</code> – Whale Flow & Dark Pool Absorption Detector\n"
             "• <code>/regime</code> – SPY/QQQ Trend & VIX Risiko-Status\n"
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
             "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n"
@@ -271,6 +293,10 @@ class TelegramInteractiveService:
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
                     {"text": "📊 Volume Profile", "callback_data": f"levels:{ticker}"},
+                ],
+                [
+                    {"text": "⚓ AVWAP", "callback_data": f"avwap:{ticker}"},
+                    {"text": "🐋 Whale Flow", "callback_data": f"whale:{ticker}"},
                 ],
                 [
                     {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
@@ -449,6 +475,44 @@ class TelegramInteractiveService:
         active = self.lifecycle_service.get_active_trades() if self.lifecycle_service else []
         heat = self.heat_service.evaluate_portfolio_heat(active, portfolio_capital=50000.0)
         return self.heat_service.format_telegram_heat_card(heat)
+
+    def _cmd_avwap(self, args: List[str]) -> str:
+        if not args:
+            return "ℹ️ Bitte einen Ticker angeben: z.B. <code>/avwap NVDA</code> oder <code>/avwap AAPL</code>"
+        ticker = args[0].upper().strip()
+        if not self.avwap_service:
+            return "⚠️ Anchored VWAP Service nicht initialisiert."
+        data = self.avwap_service.compute_anchored_vwaps(ticker)
+        if not data:
+            return f"❌ Konnte keine AVWAP-Daten für <b>{ticker}</b> berechnen."
+        return self.avwap_service.format_telegram_avwap_card(data)
+
+    def _cmd_whale(self, args: List[str]) -> str:
+        if not self.whale_service:
+            return "⚠️ Whale Flow Service nicht initialisiert."
+        if args:
+            ticker = args[0].upper().strip()
+            data = self.whale_service.analyze_whale_flow(ticker)
+            if not data:
+                return f"❌ Konnte keine Whale-Daten für <b>{ticker}</b> berechnen."
+            return self.whale_service.format_telegram_whale_card(data)
+
+        # Scan watchlist
+        watchlist = self._get_watchlist_tickers()
+        anomalies = self.whale_service.scan_watchlist_whale_flows(watchlist)
+        if not anomalies:
+            return "ℹ️ <b>Keine abnormalen Whale-Volumenspitzen (>2.2x)</b> aktuell auf der Watchlist."
+        lines = [
+            "🐋 <b>AKTUELLE WHALE-VOLUMEN-ANOMALIEN</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "<i>Großinvestoren-Aktivität auf der Watchlist:</i>\n",
+        ]
+        for a in anomalies[:6]:
+            sym = a["ticker"]
+            ratio = a["volume_ratio"]
+            badge = a["badge"]
+            lines.append(f"• <b>{sym}</b>: <b>{ratio:.1f}x</b> Volumen {badge}")
+        return "\n".join(lines)
 
     def _cmd_scan(self) -> str:
         if not self.signals_service or not self.alert_service:

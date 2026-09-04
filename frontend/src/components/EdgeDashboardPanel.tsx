@@ -362,6 +362,35 @@ export default function EdgeDashboardPanel({
     }
   }
 
+  const [openingPaperTicker, setOpeningPaperTicker] = useState<string | null>(null);
+
+  async function handleOpenEdgePaperTrade(ticker: string) {
+    setOpeningPaperTicker(ticker);
+    setTelegramStatusMessage(null);
+    try {
+      const res = await fetch("/api/trading/open-edge-paper-trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.status === "already_open") {
+          setTelegramStatusMessage(`ℹ️ ${data.message || `Trade für ${ticker} ist bereits im Demokonto aktiv.`}`);
+        } else {
+          setTelegramStatusMessage(`✅ ${data.message || `Paper Trade für ${ticker} erfolgreich eröffnet!`}`);
+          loadActiveTradesAndRS();
+        }
+      } else {
+        setTelegramStatusMessage(`❌ Fehler: ${data.detail || "Eröffnung fehlgeschlagen"}`);
+      }
+    } catch (err: any) {
+      setTelegramStatusMessage(`❌ Netzwerkfehler: ${err.message}`);
+    } finally {
+      setOpeningPaperTicker(null);
+    }
+  }
+
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
   const [rsLeaders, setRsLeaders] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -953,6 +982,16 @@ export default function EdgeDashboardPanel({
                       className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                     >
                       Chart
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdgePaperTrade(setup.ticker)}
+                      disabled={openingPaperTicker === setup.ticker}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      title="Als Paper Trade im Demokonto eröffnen"
+                    >
+                      <TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" />
+                      {openingPaperTicker === setup.ticker ? "Eröffne..." : "Paper Trade"}
                     </button>
                     <button
                       type="button"

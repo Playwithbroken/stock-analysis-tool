@@ -1973,6 +1973,49 @@ def _run_trading_edge_scanner_cycle() -> Dict[str, Any]:
         items = manager.get_signal_watch_items()
         watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
         res = signals_service.scan_and_dispatch_edge_alerts(alert_service, watchlist=watchlist, min_grade=("A+", "A"))
+
+        # 3. Automatic Paper-Trader Bridge: Auto-open Grade A+ setups in Demo Account
+        auto_opened_paper_trades = []
+        try:
+            paper_svc = get_paper_trading_service()
+            existing_open = {
+                str(t.get("ticker") or "").upper()
+                for t in paper_svc._enrich_trades(manager.list_paper_trades(limit=150))
+                if t.get("status") == "open"
+            }
+            # For each newly dispatched setup
+            for ticker in res.get("dispatched", []):
+                if ticker not in existing_open:
+                    acc_snap = paper_svc.build_demo_account_snapshot()
+                    avail_cash = float(acc_snap.get("cash") or 50000.0)
+                    ticket = signals_service.asymmetric_service.generate_trade_setup(
+                        ticker, portfolio_capital=avail_cash, risk_budget_pct=0.75
+                    )
+                    if ticket and ticket.get("grade") in ("A+", "A"):
+                        qty = float(ticket.get("recommended_shares") or 1)
+                        trade_payload = {
+                            "ticker": ticker,
+                            "asset_class": "equity",
+                            "direction": "long",
+                            "setup_type": f"institutional_edge_{ticket.get('setup_name', 'continuation').lower().replace(' ', '_')}",
+                            "entry_price": float(ticket.get("entry_price") or 0.0),
+                            "stop_price": float(ticket.get("invalidation_price") or 0.0),
+                            "target_price": float(ticket.get("target_1") or 0.0),
+                            "quantity": qty,
+                            "confidence_score": float(ticket.get("confluence_score") or 95.0),
+                            "thesis": f"{ticket.get('catalyst_description', '')} | Konfluenz: {', '.join(ticket.get('confluence_factors', []))} | R:R {ticket.get('risk_reward_ratio')}:1",
+                            "notes": f"{ticket.get('grade_badge', '💎 Grade A+')} | Auto-Edge-Scanner | POC ${ticket.get('volume_profile', {}).get('poc')}",
+                        }
+                        try:
+                            paper_svc.create_trade_from_payload(trade_payload, _get_paper_news_context(None))
+                            auto_opened_paper_trades.append(ticker)
+                            existing_open.add(ticker)
+                        except Exception as open_err:
+                            print(f"Auto paper trade open error for {ticker}: {open_err}")
+            res["auto_opened_paper_trades"] = auto_opened_paper_trades
+        except Exception as e:
+            print(f"Auto paper trade bridging error: {e}")
+
         return res
     except Exception as exc:
         print(f"Trading edge auto-scanner failed: {exc}")
@@ -2936,6 +2979,12 @@ class SendEdgeSetupTelegramRequest(BaseModel):
     force: bool = False
     portfolio_capital: Optional[float] = 50000.0
     risk_budget_pct: Optional[float] = 0.75
+
+
+class OpenEdgePaperTradeRequest(BaseModel):
+    ticker: str
+    quantity: Optional[float] = None
+    force: bool = False
 
 
 def rating_to_string(rating: Rating) -> str:
@@ -7344,6 +7393,102 @@ async def send_trading_edge_setup_telegram(req: SendEdgeSetupTelegramRequest):
         return convert_numpy_types({
             "status": "ok",
             "alert_result": alert_result,
+            "ticket": ticket,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/open-edge-paper-trade")
+async def open_edge_paper_trade(req: OpenEdgePaperTradeRequest):
+    """
+    Opens an official Paper Trade from a high-conviction Grade A+/A setup.
+    - Sized according to Demo Account cash and 0.75% risk model.
+    - Configured with structural invalidation stop and Target 1 (2.0R).
+    - Linked to TradeLifecycleService for trailing stop & breakeven management.
+    """
+    try:
+        ticker = (req.ticker or "").strip().upper()
+        if not ticker:
+            raise HTTPException(status_code=400, detail="Ticker ist erforderlich.")
+
+        service = get_trading_signals_service()
+        paper_service = get_paper_trading_service()
+        manager = get_portfolio_manager()
+
+        # Check if trade is already open
+        if not req.force:
+            existing = [
+                t for t in paper_service._enrich_trades(manager.list_paper_trades(limit=150))
+                if str(t.get("ticker") or "").upper() == ticker and t.get("status") == "open"
+            ]
+            if existing:
+                return convert_numpy_types({
+                    "status": "already_open",
+                    "message": f"Ein offener Paper Trade für {ticker} ist bereits im Demokonto aktiv.",
+                    "trade": attach_scope(existing[0], paper_scope()),
+                })
+
+        # Sizing according to available demo cash
+        account_snap = paper_service.build_demo_account_snapshot()
+        avail_cash = float(account_snap.get("cash") or 50000.0)
+        risk_budget = 0.75
+
+        ticket = await asyncio.to_thread(
+            service.asymmetric_service.generate_trade_setup,
+            ticker,
+            avail_cash,
+            risk_budget,
+        )
+        if not ticket:
+            raise HTTPException(status_code=404, detail=f"Kein asymmetrisches Setup für {ticker} berechenbar.")
+
+        entry_price = float(ticket.get("entry_price") or 0.0)
+        stop_price = float(ticket.get("invalidation_price") or 0.0)
+        target_price = float(ticket.get("target_1") or 0.0)
+        rec_shares = float(ticket.get("recommended_shares") or 1)
+        qty = float(req.quantity) if req.quantity and req.quantity > 0 else rec_shares
+
+        trade_payload = {
+            "ticker": ticker,
+            "asset_class": "equity",
+            "direction": "long",
+            "setup_type": f"institutional_edge_{ticket.get('setup_name', 'continuation').lower().replace(' ', '_')}",
+            "entry_price": entry_price,
+            "stop_price": stop_price,
+            "target_price": target_price,
+            "quantity": qty,
+            "confidence_score": float(ticket.get("confluence_score") or 90.0),
+            "thesis": f"{ticket.get('catalyst_description', '')} | Konfluenz: {', '.join(ticket.get('confluence_factors', []))} | R:R {ticket.get('risk_reward_ratio')}:1",
+            "notes": f"{ticket.get('grade_badge', 'Grade A')} | POC ${ticket.get('volume_profile', {}).get('poc')} | GEX {ticket.get('options_gex', {}).get('regime')} | Ziel 2: ${ticket.get('target_2')}",
+        }
+
+        trade = await asyncio.to_thread(
+            paper_service.create_trade_from_payload,
+            trade_payload,
+            _get_paper_news_context(None),
+        )
+
+        # Register in TradeLifecycleService for trailing stop & breakeven monitoring
+        try:
+            alert_service = get_email_alert_service()
+            if getattr(alert_service, "trade_lifecycle_service", None):
+                alert_service.trade_lifecycle_service.register_trade(ticket)
+            else:
+                from src.trade_lifecycle_service import TradeLifecycleService
+                alert_service.trade_lifecycle_service = TradeLifecycleService(manager)
+                alert_service.trade_lifecycle_service.register_trade(ticket)
+        except Exception as lifecycle_err:
+            print(f"Failed to register with lifecycle service: {lifecycle_err}")
+
+        _cache_forget("search:suggestions")
+
+        return convert_numpy_types({
+            "status": "ok",
+            "message": f"Paper Trade für {ticker} ({int(qty)} Stk @ ${entry_price:.2f}) eröffnet.",
+            "trade": attach_scope(trade, paper_scope()),
             "ticket": ticket,
         })
     except HTTPException:

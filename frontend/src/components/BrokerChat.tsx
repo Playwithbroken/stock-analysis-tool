@@ -411,7 +411,7 @@ export default function BrokerChat({
         ? `Priorisiere ${contextLabel} nur bei bestaetigtem Trigger.`
         : "Suche nach frischem Trigger, bevor du Momentum jagst.",
       tone:
-        "border-emerald-200/80 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(255,255,255,0.92))]",
+        "border-black/6 bg-white/80 dark:bg-white/5",
     },
     {
       label: "Risk",
@@ -419,7 +419,7 @@ export default function BrokerChat({
       detail:
         "Groesse klein halten, solange Newsflow oder Open-Richtung nicht sauber bestaetigt sind.",
       tone:
-        "border-amber-200/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.09),rgba(255,255,255,0.92))]",
+        "border-black/6 bg-white/80 dark:bg-white/5",
     },
     {
       label: "Hedge",
@@ -428,7 +428,7 @@ export default function BrokerChat({
         ? `Pruefe Hedge-Ideen gegen ${contextLabel}, falls das Setup kippt.`
         : "GLD, UUP oder TLT nur dann aktivieren, wenn Risiko wirklich hochzieht.",
       tone:
-        "border-sky-200/80 bg-[linear-gradient(180deg,rgba(14,165,233,0.08),rgba(255,255,255,0.92))]",
+        "border-black/6 bg-white/80 dark:bg-white/5",
     },
   ];
 
@@ -454,17 +454,17 @@ export default function BrokerChat({
         </div>
       )}
       <div
-        className={`flex items-center justify-between border-b border-black/8 bg-[linear-gradient(90deg,rgba(15,118,110,0.08),transparent)] p-4 sm:p-6 ${isInline ? "px-0 pt-0" : ""}`}
+        className={`flex items-center justify-between border-b border-black/8 bg-white/70 dark:bg-white/5 p-4 sm:p-6 ${isInline ? "px-0 pt-0" : ""}`}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-[var(--accent)]/15 bg-[var(--accent-soft)] text-[var(--accent)]">
-            <Bot size={22} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/8 bg-slate-100 text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-white">
+            <Bot size={20} />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Broker Freund Desk</h3>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white">Broker Freund Desk</h3>
             <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Live-Kontext
               </span>
             </div>
@@ -633,13 +633,13 @@ export default function BrokerChat({
                 ))}
               </div>
             </div>
-            <div className="rounded-[1.2rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.86))] p-4">
+            <div className="rounded-[1.2rem] border border-black/8 bg-white/70 dark:bg-white/5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Aktueller Plan
                   </div>
-                  <div className="mt-1 text-sm font-black text-slate-900">
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
                     {tabGuide.title}
                   </div>
                 </div>
@@ -647,7 +647,7 @@ export default function BrokerChat({
                   type="button"
                   onClick={() => void submitMessage(tabGuide.prompt)}
                   disabled={loading}
-                  className="rounded-full border border-[var(--accent)]/20 bg-white/80 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)] disabled:opacity-50"
+                  className="rounded-full border border-black/10 bg-white/80 dark:border-white/10 dark:bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200 transition-colors hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black disabled:opacity-50"
                 >
                   Seite erklaeren
                 </button>

@@ -539,7 +539,7 @@ function InlineWorldMap({
   if (!svg) {
     return (
       <div
-        className="world-map-inline-wrap absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.08),transparent_68%)]"
+        className="world-map-inline-wrap absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-[#121214]"
         role="img"
         aria-label={assetFailed ? "Weltkarte konnte nicht geladen werden" : "Weltkarte wird geladen"}
         aria-busy={!assetFailed}
@@ -1832,10 +1832,10 @@ export default function WorldMarketMap({
           </div>
 
           <div
-            className="world-map-canvas interactive-world-map relative mt-3 h-[220px] overflow-hidden rounded-[1.15rem] border border-slate-900/6 bg-[#edf2f8] min-[430px]:h-[246px]"
+            className="world-map-canvas interactive-world-map relative mt-3 h-[220px] overflow-hidden rounded-[1.15rem] border border-black/6 bg-[#f5f5f7] dark:bg-[#121214] min-[430px]:h-[246px]"
             {...mapCanvasHandlers}
           >
-            <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.92),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.82),transparent_36%)]" />
+            <div className="world-map-glow absolute inset-0 bg-gradient-to-b from-white/60 to-transparent dark:from-white/5 dark:to-transparent" />
             <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
               <InlineWorldMap highlights={countryHighlights} />
               {showEventLayer && positionedGeoSignals.slice(0, 12).map((item, index) => (
@@ -1995,11 +1995,11 @@ export default function WorldMarketMap({
         <div className="hidden items-start gap-5 sm:grid xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
           <div className="world-map-shell relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
             <div
-              className="world-map-canvas interactive-world-map relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] overflow-hidden rounded-[1.4rem] border border-slate-900/6 bg-[#edf2f8] sm:min-h-[320px] xl:min-h-[430px]"
+              className="world-map-canvas interactive-world-map relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] overflow-hidden rounded-[1.4rem] border border-black/6 bg-[#f5f5f7] dark:bg-[#121214] sm:min-h-[320px] xl:min-h-[430px]"
               {...mapCanvasHandlers}
             >
             <div className="absolute inset-0 rounded-[1.4rem] opacity-95">
-              <div className="world-map-glow absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(220,230,240,0.8),transparent_32%)]" />
+              <div className="world-map-glow absolute inset-0 bg-gradient-to-b from-white/60 to-transparent dark:from-white/5 dark:to-transparent" />
               <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
                 <InlineWorldMap highlights={countryHighlights} />
               </div>

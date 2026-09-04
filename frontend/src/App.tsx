@@ -382,8 +382,6 @@ function LoginScreen({
     <div className="min-h-screen bg-[var(--bg-base)] px-4 py-10 text-[var(--text-primary)] sm:px-6">
       <div className="layout-shell max-w-[1680px]">
         <div className="surface-panel relative overflow-hidden rounded-[2.8rem] p-6 sm:p-8 lg:p-10">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_58%)]" />
-          <div className="pointer-events-none absolute bottom-0 right-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(16,17,20,0.08),transparent_68%)]" />
           <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="order-last space-y-6 lg:order-first">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#101114] text-white">

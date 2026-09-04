@@ -342,10 +342,8 @@ h6,
 }
 
 .dashboard-command-panel {
-  background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 30%),
-    radial-gradient(circle at top right, rgba(17, 24, 39, 0.06), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72));
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line-subtle);
 }
 
 .dashboard-guide-panel {
@@ -1090,10 +1088,7 @@ h6,
 }
 
 [data-theme="dark"] .world-map-glow {
-  background:
-    radial-gradient(circle at top left, rgba(45, 212, 191, 0.14), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.12), transparent 38%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.2), rgba(15, 23, 42, 0.72)) !important;
+  background: linear-gradient(180deg, rgba(28, 28, 30, 0.4), rgba(28, 28, 30, 0.85)) !important;
 }
 
 [data-theme="dark"] .world-map-inline {

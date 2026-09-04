@@ -121,10 +121,10 @@ function marketConfirmationMeta(status?: string) {
     return { label: "Preisreaktion widerspricht", className: "border-red-500/20 bg-red-50 text-red-800" };
   }
   if (value === "inconclusive") {
-    return { label: "Preisreaktion noch uneindeutig", className: "border-amber-500/20 bg-amber-50 text-amber-800" };
+    return { label: "Preisreaktion noch uneindeutig", className: "border-amber-500/20 bg-amber-50 text-slate-600 dark:text-slate-300" };
   }
   if (value === "observed_only") {
-    return { label: "Preisreaktion beobachtet", className: "border-sky-500/20 bg-sky-50 text-sky-800" };
+    return { label: "Preisreaktion beobachtet", className: "border-sky-500/20 bg-sky-50 text-slate-600 dark:text-slate-300" };
   }
   return { label: "Preisfenster nicht verfügbar", className: "border-slate-300 bg-white/70 text-slate-600" };
 }
@@ -193,8 +193,8 @@ function NewsEvidenceLayers({
       aria-label="Nachrichtenprüfung: Fakten, Interpretation und Unsicherheit"
       className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3 [overflow-wrap:anywhere] sm:col-start-2"
     >
-      <div className="rounded-[1rem] border border-sky-500/20 bg-sky-50/75 px-3 py-3 text-xs leading-5 text-slate-700">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-800">
+      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-700">
+        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-600 dark:text-slate-300">
           1 · Bestätigte Fakten
         </div>
         <div className="mt-2 font-semibold">{factSummary}</div>
@@ -209,11 +209,11 @@ function NewsEvidenceLayers({
         </div>
       </div>
 
-      <div className="rounded-[1rem] border border-violet-500/20 bg-violet-50/65 px-3 py-3 text-xs leading-5 text-slate-700">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-800">
+      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-700">
+        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-600 dark:text-slate-300">
           2 · Interpretation (Analyse)
         </div>
-        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-600">
+        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
           Analyse, nicht Quellenfakt
         </div>
         <div className="mt-2 font-semibold">{interpretation.meaning || intelligence.meaning || "Einordnung noch offen."}</div>
@@ -229,8 +229,8 @@ function NewsEvidenceLayers({
         </div>
       </div>
 
-      <div className="rounded-[1rem] border border-amber-500/25 bg-amber-50/70 px-3 py-3 text-xs leading-5 text-slate-700">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-800">
+      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-700">
+        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-600 dark:text-slate-300">
           3 · Offene Unsicherheit
         </div>
         <div className="mt-2 font-semibold">
@@ -333,7 +333,7 @@ function setupReadinessMeta(setup: any) {
 function setupBucketTone(bucket: "now" | "next" | "avoid" | "data_missing") {
   if (bucket === "now") return "border-emerald-500/16 bg-emerald-500/5 text-emerald-700";
   if (bucket === "avoid") return "brief-avoid-soft border-red-500/14 text-red-700";
-  if (bucket === "data_missing") return "border-sky-500/15 bg-sky-500/[0.06] text-sky-800";
+  if (bucket === "data_missing") return "border-sky-500/15 bg-sky-500/[0.06] text-slate-600 dark:text-slate-300";
   return "border-amber-500/16 bg-amber-500/5 text-amber-700";
 }
 
@@ -529,7 +529,7 @@ export default function MorningBriefPanel({
     freshness === "fresh"
       ? "bg-emerald-500/10 text-emerald-700"
       : freshness === "recent"
-        ? "bg-amber-500/10 text-amber-800"
+        ? "bg-amber-500/10 text-slate-600 dark:text-slate-300"
         : "bg-red-500/10 text-red-700";
   const deferredLayers = Array.isArray(quality?.deferred) ? quality.deferred : [];
   const sourceStates = quality?.sources && typeof quality.sources === "object" ? quality.sources : {};
@@ -644,16 +644,16 @@ export default function MorningBriefPanel({
 
   return (
     <div className="space-y-6">
-      <div data-testid="decision-scope-news" className="rounded-[1.35rem] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
-        <div className="font-extrabold uppercase tracking-[0.16em]">Research-News · getrennt von Paper-Trades</div>
+      <div data-testid="decision-scope-news" className="rounded-[1.35rem] border border-black/6 bg-white/80 px-4 py-3 text-sm text-slate-800 shadow-xs dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Research-News · getrennt von Paper-Trades</div>
         <div className="mt-1 leading-6">
           {brief.decision_scope?.description || "News, Einordnung und mögliche Marktfolgen sind Research und keine Orderfreigabe."}
           {" "}Ein mögliches Setup muss zuerst alle Paper-Gates bestehen.
         </div>
       </div>
       <section className="surface-panel relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_60%)]" />
-        <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(22,28,36,0.06),transparent_72%)]" />
+        
+        
 
         <div className="relative flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[var(--accent)]">
@@ -680,12 +680,12 @@ export default function MorningBriefPanel({
               {brief.opening_bias}
             </p>
           </div>
-          <div className="rounded-[1.8rem] border border-black/8 bg-white/78 p-5">
+          <div className="rounded-[1.8rem] border border-black/6 bg-white/80 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Opening Read
             </div>
             {quality ? (
-              <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${qualityReady ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
+              <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 ${qualityReady ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
                 {qualityReady ? "Briefing bereit" : "Briefing teilweise"} / {quality.score}/100
               </div>
             ) : null}
@@ -701,12 +701,12 @@ export default function MorningBriefPanel({
               {brief.opening_bias}
             </div>
             {quality?.missing?.length ? (
-              <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/6 px-3 py-2 text-[11px] text-amber-800">
+              <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/6 px-3 py-2 text-[11px] text-slate-600 dark:text-slate-300">
                 Datenluecken: {quality.missing.slice(0, 3).join(" / ")}
               </div>
             ) : null}
             {deferredLayers.length ? (
-              <div className="mt-2 rounded-[0.9rem] border border-sky-500/20 bg-sky-500/8 px-3 py-2 text-[11px] text-sky-800">
+              <div className="mt-2 rounded-[0.9rem] border border-sky-500/20 bg-sky-500/8 px-3 py-2 text-[11px] text-slate-600 dark:text-slate-300">
                 Fast Mode: {deferredLayers.slice(0, 4).join(" / ")} werden nachgeladen.
               </div>
             ) : null}
@@ -714,7 +714,7 @@ export default function MorningBriefPanel({
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-5">
+          <div className="rounded-[1.6rem] border border-black/6 bg-white/80 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Macro Score
             </div>
@@ -722,7 +722,7 @@ export default function MorningBriefPanel({
               {brief.macro_score}
             </div>
           </div>
-          <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-5">
+          <div className="rounded-[1.6rem] border border-black/6 bg-white/80 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Regime
             </div>
@@ -730,14 +730,14 @@ export default function MorningBriefPanel({
               {(() => {
                 const rs = regimeStyle(brief.macro_regime);
                 return (
-                  <span className={`inline-flex rounded-full border ${rs.border} ${rs.bg} px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] ${rs.text}`}>
+                  <span className={`inline-flex rounded-full border ${rs.border} ${rs.bg} px-3 py-1.5 text-[11px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 ${rs.text}`}>
                     {rs.icon} {formatRegimeLabel(brief.macro_regime)}
                   </span>
                 );
               })()}
             </div>
           </div>
-          <div className="rounded-[1.6rem] border border-black/8 bg-white/80 p-5">
+          <div className="rounded-[1.6rem] border border-black/6 bg-white/80 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
               Aktualität
             </div>
@@ -749,7 +749,7 @@ export default function MorningBriefPanel({
                 aktualisiert vor {quality.age_minutes} Min.
               </div>
             ) : null}
-            <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
+            <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 ${realtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
               {realtimeConnected ? "Kursstream live" : "Kurs-Snapshot"}
             </div>
           </div>
@@ -758,7 +758,7 @@ export default function MorningBriefPanel({
 
       {!decisionAllowed ? (
         <section className="rounded-[1.4rem] border border-red-500/20 bg-red-500/8 p-4 text-red-900">
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">Keine Umsetzung mit diesem Datenstand</div>
+          <div className="text-[11px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Keine Umsetzung mit diesem Datenstand</div>
           <p className="mt-2 text-sm leading-6">
             Setups, Ereignisse und Katalysatoren sind gesperrt, bis ein frisches Briefing vorliegt. Der sichtbare Text dient nur als gespeicherter Kontext.
           </p>
@@ -797,7 +797,7 @@ export default function MorningBriefPanel({
               key={item.label}
               className="rounded-[1rem] border border-black/8 bg-white/72 px-3 py-2"
             >
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+              <div className="text-[9px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-500">
                 {item.label}
               </div>
               <div className="mt-1 flex items-center gap-2">
@@ -918,7 +918,7 @@ export default function MorningBriefPanel({
                   Broad universe, not only mega caps.
                 </div>
               </div>
-              <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+              <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-[var(--accent)]">
                 movers
               </span>
             </div>
@@ -1003,7 +1003,7 @@ export default function MorningBriefPanel({
                   <div className="mt-2 text-sm font-bold text-slate-900">{item.theme}</div>
                   <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.title}</div>
                   {statusCopy ? (
-                    <div className="mt-2 rounded-[0.8rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                    <div className="mt-2 rounded-[0.8rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                       {statusCopy}
                     </div>
                   ) : null}
@@ -1105,7 +1105,7 @@ export default function MorningBriefPanel({
             {(["now", "next", "avoid", "data_missing"] as const).map((bucket) => {
               const rows = bucket === "data_missing" ? [] : setupBoard[bucket] || [];
               const title = bucket === "now" ? "Now" : bucket === "next" ? "Next" : bucket === "avoid" ? "Avoid" : "Data Missing";
-              const tone = bucket === "data_missing" ? "border-sky-500/15 bg-sky-500/[0.06] text-sky-800" : setupBucketTone(bucket);
+              const tone = bucket === "data_missing" ? "border-sky-500/15 bg-sky-500/[0.06] text-slate-600 dark:text-slate-300" : setupBucketTone(bucket);
               return (
                 <div key={bucket} className={`rounded-[1.2rem] border p-4 ${tone}`}>
                   <div className="flex items-center justify-between gap-2">
@@ -1435,7 +1435,7 @@ export default function MorningBriefPanel({
                 return (
                 <div
                   key={`${item.name}-${item.ticker}-${index}`}
-                  className="rounded-[1.25rem] border border-[var(--accent)]/16 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.82))] p-4"
+                  className="rounded-[1.25rem] border border-[var(--accent)]/16 bg-white/80 dark:bg-white/5 p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1610,7 +1610,7 @@ export default function MorningBriefPanel({
                   {decisionReadiness.status ? (
                     <div className={`rounded-[1rem] border px-3 py-3 text-xs leading-5 sm:col-start-2 ${decisionMeta.className}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em]">
+                        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                           Decision Gate · {decisionMeta.icon} {decisionMeta.label}
                         </div>
                         <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] opacity-75">
@@ -1631,10 +1631,10 @@ export default function MorningBriefPanel({
 
                   <div className={`rounded-[1rem] border px-3 py-2 sm:col-start-2 ${forecast.className}`}>
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
+                      <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 opacity-75">
                         {forecast.signal}
                       </div>
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-65">
+                      <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 opacity-65">
                         {forecast.short}
                       </div>
                     </div>
@@ -1646,7 +1646,7 @@ export default function MorningBriefPanel({
                   {marketConfirmation.status ? (
                     <div className={`rounded-[1rem] border px-3 py-3 text-xs leading-5 sm:col-start-2 ${confirmationMeta.className}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em]">
+                        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                           {confirmationMeta.label}
                         </div>
                         {marketConfirmation.event_window_aligned ? (
@@ -1727,7 +1727,7 @@ export default function MorningBriefPanel({
 
                   {primarySources.length ? (
                     <div className="rounded-[1rem] border border-blue-500/20 bg-blue-50/55 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700">
+                      <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-blue-700">
                         Verifizierte Primärquelle
                       </div>
                       {primarySources.map((source: any, sourceIndex: number) => (
@@ -1927,7 +1927,7 @@ export default function MorningBriefPanel({
               key={item.key}
               type="button"
               onClick={() => setPingFilter(item.key)}
-              className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
+              className={`rounded-full px-3 py-1.5 text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 ${
                 pingFilter === item.key
                   ? "bg-[#101114] text-white"
                   : "border border-black/8 bg-white text-slate-600"
@@ -1964,7 +1964,7 @@ export default function MorningBriefPanel({
                   {ping.title || "Marktereignis"}
                 </div>
                 {pingStatusCopy(ping.source_status) ? (
-                  <div className="mt-2 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-semibold text-amber-800">
+                  <div className="mt-2 rounded-[0.9rem] border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
                     {pingStatusCopy(ping.source_status)}
                   </div>
                 ) : null}
@@ -2502,15 +2502,15 @@ export default function MorningBriefPanel({
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {watchedPredictionThemes.map((theme: any, index: number) => (
                   <div key={`${theme.theme}-${index}`} className="rounded-[0.9rem] border border-amber-500/20 bg-white/55 p-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-700">
+                    <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-amber-700">
                       {theme.theme}
                     </div>
-                    <div className="mt-1 text-xs leading-5 text-amber-800">{theme.why}</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{theme.why}</div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-white/55 p-3 text-xs leading-5 text-amber-800">
+              <div className="mt-3 rounded-[0.9rem] border border-amber-500/20 bg-white/55 p-3 text-xs leading-5 text-slate-600 dark:text-slate-300">
                 Fast Mode: Live-Maerkte werden nachgeladen. Bis dahin bewertet das Briefing Makro-Themen,
                 News-Cluster und Event-Pings ohne Polymarket-Gewichtung.
               </div>
@@ -2524,7 +2524,7 @@ export default function MorningBriefPanel({
                 confidence gate
               </span>
             </div>
-            <div className="mt-2 text-xs leading-5 text-sky-800">
+            <div className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
               Die Live-Maerkte werden unten angezeigt. Ins Briefing wandern sie erst, wenn Wahrscheinlichkeit,
               Volumen, Themen-Relevanz und Marktbezug zusammen stark genug sind.
             </div>
@@ -2542,7 +2542,7 @@ export default function MorningBriefPanel({
               below signal gate
             </div>
           </div>
-          <div className="mt-3 rounded-[1rem] border border-sky-500/20 bg-sky-500/10 p-3 text-xs leading-5 text-sky-800">
+          <div className="mt-3 rounded-[1rem] border border-sky-500/20 bg-sky-500/10 p-3 text-xs leading-5 text-slate-600 dark:text-slate-300">
             Diese Maerkte sind live geladen, aber noch nicht stark genug fuer ein Trade-Signal. Sie bleiben sichtbar,
             damit du erkennst, was beobachtet wird und warum im Briefing noch kein Polymarket-Setup daraus entsteht.
           </div>

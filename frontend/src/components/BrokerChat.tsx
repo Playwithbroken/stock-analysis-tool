@@ -849,49 +849,49 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex items-center justify-center rounded-[1.1rem] border border-teal-400/35 bg-[linear-gradient(135deg,rgba(15,118,110,0.95),rgba(14,92,87,0.96))] text-white shadow-[0_12px_28px_rgba(15,118,110,0.32),0_4px_12px_rgba(0,0,0,0.18)] backdrop-blur-md transition-all duration-300 hover:translate-y-[-2px] hover:border-teal-300/60 hover:shadow-[0_16px_36px_rgba(15,118,110,0.42)] active:translate-y-0 ${fabCompact ? "opacity-80 scale-95" : "opacity-100 scale-100"} p-2 lg:p-2.5 lg:rounded-[1.35rem]`}
+        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex items-center gap-3 rounded-full border border-white/18 bg-[#1d1d1f]/94 text-white shadow-[0_14px_38px_rgba(0,0,0,0.24),0_3px_10px_rgba(0,0,0,0.15)] backdrop-blur-2xl transition-all duration-300 hover:translate-y-[-2px] hover:bg-[#2c2c2e] hover:border-white/30 hover:shadow-[0_18px_48px_rgba(0,0,0,0.32)] active:translate-y-0 ${fabCompact ? "opacity-90 scale-95" : "opacity-100 scale-100"} p-2 lg:px-4 lg:py-2.5`}
         aria-label="Broker Freund Desk öffnen"
       >
-        {/* Glow halo on hover */}
-        <div className="absolute inset-0 -z-10 rounded-[1.35rem] bg-teal-400/15 blur-md opacity-0 transition-opacity group-hover:opacity-100" />
+        {/* Apple subtle glow on hover */}
+        <div className="absolute inset-0 -z-10 rounded-full bg-white/5 blur-md opacity-0 transition-opacity group-hover:opacity-100" />
 
         {/* Bot Icon with glowing live pulse indicator */}
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/16 shadow-inner lg:h-10 lg:w-10">
-          <Bot size={18} className="text-white drop-shadow-sm lg:h-5 lg:w-5" />
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/14 text-white shadow-inner lg:h-10 lg:w-10">
+          <Bot size={20} className="text-white drop-shadow-sm" />
           <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-teal-950 bg-emerald-400" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-slate-900 bg-emerald-400" />
           </span>
         </div>
 
-        {/* Desktop Text Block (clearly visible on desktop/tablets) */}
-        <div className="hidden min-w-0 pl-2.5 pr-1.5 text-left lg:flex lg:flex-col">
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-teal-200">
+        {/* Desktop Text Block */}
+        <div className="hidden min-w-0 text-left lg:flex lg:flex-col">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-slate-300">
             <span>Broker Freund</span>
-            <span className="rounded bg-teal-400/25 px-1 py-0.2 text-[8px] font-bold text-teal-100">KI</span>
+            <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[8px] font-semibold text-emerald-300">KI</span>
           </div>
-          <div className="truncate text-xs font-black text-white">
+          <div className="truncate text-xs font-semibold tracking-tight text-white">
             Desk &middot; Chat öffnen
           </div>
         </div>
 
-        {/* Desktop Desk Badge */}
-        <div className="hidden lg:flex ml-1.5 items-center rounded-lg border border-white/18 bg-white/12 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-white">
-          Desk
+        {/* Desktop Desk Action Pill */}
+        <div className="hidden lg:flex items-center rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-200">
+          Frag die KI
         </div>
 
         {/* Desktop Hover Tooltip */}
-        <div className="pointer-events-none absolute bottom-0 right-[calc(100%+14px)] hidden w-[16rem] rounded-[1.3rem] border border-white/18 bg-[linear-gradient(180deg,rgba(11,18,22,0.96),rgba(15,118,110,0.94))] px-4 py-3 text-left text-white opacity-0 shadow-[0_24px_54px_rgba(15,23,42,0.28)] transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 lg:block lg:translate-x-2">
+        <div className="pointer-events-none absolute bottom-0 right-[calc(100%+14px)] hidden w-[17rem] rounded-2xl border border-white/15 bg-[#1d1d1f]/96 p-4 text-left text-white opacity-0 shadow-[0_24px_54px_rgba(0,0,0,0.36)] backdrop-blur-2xl transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 lg:block lg:translate-x-2">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-teal-300">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
               Broker Freund KI Desk
             </div>
-            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-emerald-300">
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-emerald-300">
               Live
             </span>
           </div>
-          <div className="mt-1 text-sm font-bold text-white">Dein persönlicher Markt-Desk</div>
-          <div className="mt-1 text-[11px] leading-5 text-white/75">
+          <div className="mt-1.5 text-sm font-semibold text-white">Dein persönlicher Markt-Desk</div>
+          <div className="mt-1 text-xs leading-5 text-slate-300">
             Analysiere Setups, GEX, Order Blocks, AVWAP, Portfolio-Risiken und Makro-Signale in Echtzeit.
           </div>
         </div>

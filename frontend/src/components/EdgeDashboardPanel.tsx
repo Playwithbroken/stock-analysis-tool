@@ -81,9 +81,9 @@ function classify(score: number | null, text: string): EdgeTone {
 }
 
 function toneClasses(tone: EdgeTone) {
-  if (tone === "action") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-800";
-  if (tone === "avoid") return "border-red-500/20 bg-red-500/10 text-red-800";
-  return "border-amber-500/20 bg-amber-500/10 text-amber-800";
+  if (tone === "action") return "border-emerald-500/20 bg-emerald-50/80 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-500/30";
+  if (tone === "avoid") return "border-rose-500/20 bg-rose-50/80 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-500/30";
+  return "border-black/8 bg-slate-100/70 text-slate-700 dark:bg-white/10 dark:text-slate-300 dark:border-white/10";
 }
 
 function toneLabel(tone: EdgeTone) {
@@ -612,13 +612,13 @@ export default function EdgeDashboardPanel({
     <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl">
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
             Edge Dashboard
           </div>
-          <h2 className="font-serif mt-2 text-2xl text-slate-950 sm:text-3xl">
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
             Was jetzt handeln, beobachten oder meiden?
           </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <p className="mt-2 text-sm font-normal leading-6 text-slate-600 dark:text-slate-300">
             Scoreboard, Morning Brief, Portfolio, Lernkurve und Marktregime werden hier zu einer
             priorisierten Arbeitsliste verdichtet.
           </p>
@@ -626,21 +626,21 @@ export default function EdgeDashboardPanel({
         <div className="flex flex-wrap gap-2">
           <a
             href="#world-market-map"
-            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/10 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-800"
+            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/8 bg-white/80 dark:bg-white/10 dark:border-white/10 px-3 py-2 text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-200"
           >
             <Globe2 size={14} /> Weltkarte
           </a>
           <button
             type="button"
             onClick={onOpenMarkets}
-            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/10 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-800"
+            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/8 bg-white/80 dark:bg-white/10 dark:border-white/10 px-3 py-2 text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-200"
           >
             <TrendingUp size={14} /> Märkte
           </button>
           <button
             type="button"
             onClick={onOpenPortfolio}
-            className="inline-flex items-center gap-2 rounded-[0.95rem] bg-[#101114] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-white"
+            className="inline-flex items-center gap-2 rounded-[0.95rem] bg-[#1d1d1f] px-3 py-2 text-xs font-semibold tracking-wide text-white dark:bg-white dark:text-slate-950"
           >
             <ShieldAlert size={14} /> Portfolio
           </button>
@@ -651,7 +651,7 @@ export default function EdgeDashboardPanel({
         <div className="mt-5 flex items-start gap-3 rounded-[1.15rem] border border-red-500/20 bg-red-500/8 p-4 text-red-900">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <div>
-            <div className="text-xs font-extrabold uppercase tracking-[0.15em]">Briefing für Entscheidungen gesperrt</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.15em]">Briefing für Entscheidungen gesperrt</div>
             <div className="mt-1 text-sm leading-6">
               Der Datenstand ist veraltet oder eingeschränkt. Alte Setups und Ereignisse wurden entfernt; aktuelle Scoreboard- und Portfoliodaten bleiben nutzbar.
             </div>
@@ -663,58 +663,58 @@ export default function EdgeDashboardPanel({
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className="rounded-[1.25rem] border border-black/8 bg-white/72 p-4">
+            <div key={item.label} className="rounded-[1.25rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 p-4 shadow-xs">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                <Icon size={16} className="text-slate-500" />
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{item.label}</div>
+                <Icon size={16} className="text-slate-400" />
               </div>
-              <div className="mt-3 break-words text-2xl font-black leading-tight text-slate-950">{item.value}</div>
-              <div className="mt-1 break-words text-xs font-semibold leading-5 text-slate-500">{item.detail}</div>
+              <div className="mt-2.5 break-words text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{item.value}</div>
+              <div className="mt-1 break-words text-xs font-normal leading-5 text-slate-500 dark:text-slate-400">{item.detail}</div>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-4 hidden rounded-[1.25rem] border border-[var(--accent)]/18 bg-[linear-gradient(135deg,rgba(20,184,166,0.11),rgba(255,255,255,0.76))] p-4 sm:block">
+      <div className="mt-4 hidden rounded-[1.25rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 p-4 sm:block">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
-              Lernkontrolle für Top-Nachrichten
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+              Lernkontrolle &middot; Top-Nachrichten
             </div>
-            <div className="mt-1 text-sm font-semibold leading-6 text-slate-700 sm:line-clamp-2">
+            <div className="mt-1 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200 sm:line-clamp-2">
               {topNewsLesson}
             </div>
           </div>
           <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
-            <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Treffer</div>
-              <div className="mt-1 text-base font-black text-slate-950">
+            <div className="rounded-[0.95rem] border border-black/5 bg-white/60 dark:border-white/8 dark:bg-white/5 px-3 py-2">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">Treffer</div>
+              <div className="mt-1 text-base font-semibold text-slate-950 dark:text-white">
                 {topNewsHitRate != null ? `${formatNumber(topNewsHitRate, 0)}%` : "n/a"}
               </div>
             </div>
-            <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Geprüft</div>
-              <div className="mt-1 text-base font-black text-slate-950">{formatNumber(topNewsEvaluated, 0)}</div>
+            <div className="rounded-[0.95rem] border border-black/5 bg-white/60 dark:border-white/8 dark:bg-white/5 px-3 py-2">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">Geprüft</div>
+              <div className="mt-1 text-base font-semibold text-slate-950 dark:text-white">{formatNumber(topNewsEvaluated, 0)}</div>
             </div>
-            <div className="rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2">
-              <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Offen</div>
-              <div className="mt-1 text-base font-black text-slate-950">{formatNumber(topNewsPending, 0)}</div>
+            <div className="rounded-[0.95rem] border border-black/5 bg-white/60 dark:border-white/8 dark:bg-white/5 px-3 py-2">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">Offen</div>
+              <div className="mt-1 text-base font-semibold text-slate-950 dark:text-white">{formatNumber(topNewsPending, 0)}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 hidden rounded-[1.35rem] border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/6 sm:block">
+      <div className="mt-4 hidden rounded-[1.35rem] border border-black/6 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5 sm:block">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
               Makro-Entscheidungsrahmen
             </div>
-            <div className="mt-1 text-base font-black text-slate-950 dark:text-white">
+            <div className="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">
               Was bedeutet das für den Markt?
             </div>
           </div>
-          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
             Risiko / Chance / Trigger / Invalidierung
           </div>
         </div>
@@ -722,39 +722,39 @@ export default function EdgeDashboardPanel({
         {macroPlaybookRows.length ? (
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
             {macroPlaybookRows.map((item) => (
-              <div key={item.key} className="rounded-[1.1rem] border border-black/8 bg-white/78 p-3 dark:border-white/10 dark:bg-slate-950/45">
+              <div key={item.key} className="rounded-[1.2rem] border border-black/6 bg-white/80 p-4 shadow-xs dark:border-white/10 dark:bg-white/5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.13em] ${toneClasses(item.tone)}`}>
+                    <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-semibold tracking-wide ${toneClasses(item.tone)}`}>
                       {toneLabel(item.tone)}
                     </span>
-                    <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] font-medium tracking-wide text-slate-500 dark:text-slate-400">
                       {item.region} / {item.type}
                     </span>
                   </div>
-                  <div className="text-sm font-black text-slate-950 dark:text-white">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
                     {item.impactScore != null ? `${formatNumber(item.impactScore, 0)}` : "n/a"}
                   </div>
                 </div>
-                <div className="mt-3 line-clamp-2 text-sm font-black leading-5 text-slate-950 dark:text-white">
+                <div className="mt-2.5 line-clamp-2 text-sm font-semibold leading-5 text-slate-900 dark:text-white">
                   {item.title}
                 </div>
-                <div className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
+                <div className="mt-1.5 line-clamp-2 text-xs font-normal leading-5 text-slate-600 dark:text-slate-300">
                   {item.whyNow}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {(item.assets.length ? item.assets : ["Marktkorb"]).slice(0, 4).map((asset) => (
-                    <span key={asset} className="rounded-full border border-black/8 bg-slate-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-600 dark:border-white/10 dark:bg-white/8 dark:text-slate-200">
+                    <span key={asset} className="rounded-full border border-black/6 bg-slate-50/70 px-2 py-0.5 text-[9px] font-medium text-slate-600 dark:border-white/10 dark:bg-white/6 dark:text-slate-300">
                       {asset}
                     </span>
                   ))}
                 </div>
-                <div className="mt-3 grid gap-2 border-t border-black/6 pt-3 text-[11px] font-semibold leading-5 text-slate-600 dark:border-white/10 dark:text-slate-300">
+                <div className="mt-3 grid gap-1.5 border-t border-black/6 pt-3 text-[11px] font-normal leading-5 text-slate-600 dark:border-white/10 dark:text-slate-300">
                   <div>
-                    <span className="font-black text-slate-900 dark:text-white">Trigger:</span> {normalizeGermanDisplayText(item.trigger)}
+                    <span className="font-semibold text-slate-900 dark:text-white">Trigger:</span> {normalizeGermanDisplayText(item.trigger)}
                   </div>
                   <div>
-                    <span className="font-black text-slate-900 dark:text-white">Stop:</span> {normalizeGermanDisplayText(item.invalidation)}
+                    <span className="font-semibold text-slate-900 dark:text-white">Stop:</span> {normalizeGermanDisplayText(item.invalidation)}
                   </div>
                 </div>
               </div>
@@ -773,53 +773,53 @@ export default function EdgeDashboardPanel({
 
       {/* INSTITUTIONAL TRADING EDGE: GEX, VOLUME PROFILE & ASYMMETRIC SETUPS */}
       {tradingEdge?.asymmetric_setups?.length ? (
-        <div className="mt-5 rounded-[1.35rem] border border-[var(--accent)]/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.06),rgba(255,255,255,0.85))] p-5 shadow-sm dark:bg-slate-950/60">
+        <div className="mt-5 rounded-[1.35rem] border border-black/6 bg-white/70 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1d1d1f] text-white dark:bg-white dark:text-slate-950">
                 <Zap size={16} />
               </span>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                   Institutionelle Trading Edge
                 </div>
-                <div className="text-base font-black text-slate-950 dark:text-white">
+                <div className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
                   Asymmetrische Setups &middot; Min. 2.5:1 R:R &middot; GEX &middot; Volume Profile
                 </div>
               </div>
             </div>
-            <div className="text-xs font-semibold text-slate-500">
+            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
               Struktureller Stop &middot; Feste 0.75% Kontorisiko-Kalibrierung
             </div>
           </div>
 
           {telegramStatusMessage ? (
-            <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-900">
+            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-50/80 px-4 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
               {telegramStatusMessage}
             </div>
           ) : null}
 
           {tradingEdge?.regime?.stance ? (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/5 bg-white/80 p-3 text-xs shadow-xs dark:border-white/10 dark:bg-slate-900/60">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/5 bg-white/80 p-3 text-xs shadow-xs dark:border-white/10 dark:bg-white/5">
               <div className="flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 rounded-full ${
                   tradingEdge.regime.stance === "RISK_ON" ? "bg-emerald-500 animate-pulse" :
-                  tradingEdge.regime.stance === "CAUTIOUS" ? "bg-amber-500" : "bg-red-500"
+                  tradingEdge.regime.stance === "CAUTIOUS" ? "bg-amber-500" : "bg-rose-500"
                 }`} />
-                <span className="font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                  Marktumfeld: {tradingEdge.regime.stance === "RISK_ON" ? "🟢 Risk-On (Ideale Long-Bedingungen)" :
-                                 tradingEdge.regime.stance === "CAUTIOUS" ? "🟡 Neutral / Selektiv" : "🔴 Risk-Off (Defensiv)"}
+                <span className="font-semibold tracking-wide text-slate-800 dark:text-slate-200">
+                  Marktumfeld: {tradingEdge.regime.stance === "RISK_ON" ? "Risk-On (Ideale Long-Bedingungen)" :
+                                 tradingEdge.regime.stance === "CAUTIOUS" ? "Neutral / Selektiv" : "Risk-Off (Defensiv)"}
                 </span>
               </div>
-              <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+              <div className="flex items-center gap-4 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                 {tradingEdge.regime.vix ? (
-                  <span>VIX: <strong className="text-slate-900 dark:text-white">{tradingEdge.regime.vix.value}</strong></span>
+                  <span>VIX: <strong className="font-semibold text-slate-900 dark:text-white">{tradingEdge.regime.vix.value}</strong></span>
                 ) : null}
                 {tradingEdge.regime.spy ? (
-                  <span>SPY: <strong className="text-slate-900 dark:text-white">${tradingEdge.regime.spy.price}</strong> ({tradingEdge.regime.spy.trend})</span>
+                  <span>SPY: <strong className="font-semibold text-slate-900 dark:text-white">${tradingEdge.regime.spy.price}</strong> ({tradingEdge.regime.spy.trend})</span>
                 ) : null}
                 {tradingEdge.regime.qqq ? (
-                  <span>QQQ: <strong className="text-slate-900 dark:text-white">${tradingEdge.regime.qqq.price}</strong> ({tradingEdge.regime.qqq.trend})</span>
+                  <span>QQQ: <strong className="font-semibold text-slate-900 dark:text-white">${tradingEdge.regime.qqq.price}</strong> ({tradingEdge.regime.qqq.trend})</span>
                 ) : null}
               </div>
             </div>
@@ -829,7 +829,7 @@ export default function EdgeDashboardPanel({
             {tradingEdge.asymmetric_setups.map((setup: any) => (
               <div
                 key={setup.ticker}
-                className="flex flex-col justify-between rounded-[1.2rem] border border-black/8 bg-white/90 p-4 shadow-sm transition hover:border-[var(--accent)]/50 dark:border-white/10 dark:bg-slate-900/70"
+                className="flex flex-col justify-between rounded-[1.2rem] border border-black/6 bg-white/90 p-4 shadow-xs transition hover:border-black/15 dark:border-white/10 dark:bg-white/5"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
@@ -837,105 +837,105 @@ export default function EdgeDashboardPanel({
                       <button
                         type="button"
                         onClick={() => onAnalyzeTicker(setup.ticker)}
-                        className="text-lg font-black tracking-tight text-slate-950 transition hover:text-[var(--accent)] dark:text-white"
+                        className="text-lg font-semibold tracking-tight text-slate-950 transition hover:text-slate-600 dark:text-white"
                       >
                         {setup.ticker}
                       </button>
                       {setup.grade_badge ? (
-                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                          setup.grade === "A+" ? "border border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" :
-                          setup.grade === "A" ? "border border-blue-500/40 bg-blue-500/15 text-blue-800 dark:text-blue-300" :
-                          "border border-slate-400/40 bg-slate-400/15 text-slate-700 dark:text-slate-300"
+                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium tracking-wide ${
+                          setup.grade === "A+" ? "border border-emerald-500/25 bg-emerald-50/80 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" :
+                          setup.grade === "A" ? "border border-sky-500/25 bg-sky-50/80 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" :
+                          "border border-slate-200 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-300"
                         }`}>
                           {setup.grade_badge} ({setup.confluence_score}/100)
                         </span>
                       ) : null}
-                      <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                      <span className="rounded-full bg-slate-100 dark:bg-white/10 px-2.5 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
                         {setup.setup_name}
                       </span>
                     </div>
                     <div className="text-right">
-                      <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-black text-emerald-800">
+                      <span className="rounded-md border border-black/6 bg-slate-50/80 dark:bg-white/10 dark:border-white/10 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
                         R:R {setup.risk_reward_ratio}:1
                       </span>
                     </div>
                   </div>
 
-                  <p className="mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <p className="mt-2 text-xs font-normal text-slate-600 dark:text-slate-300">
                     {setup.catalyst_description}
                   </p>
 
                   {setup.confluence_factors?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1">
+                    <div className="mt-2.5 flex flex-wrap gap-1">
                       {setup.confluence_factors.map((f: string, idx: number) => (
-                        <span key={idx} className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-700 dark:bg-white/10 dark:text-slate-300">
+                        <span key={idx} className="rounded-sm bg-slate-100/80 px-1.5 py-0.5 text-[9px] font-medium text-slate-700 dark:bg-white/10 dark:text-slate-300">
                           ✓ {f}
                         </span>
                       ))}
                     </div>
                   ) : null}
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5 text-[11px] font-semibold text-slate-700 dark:bg-white/5 dark:text-slate-300">
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/80 p-2.5 text-[11px] font-medium text-slate-700 dark:bg-white/5 dark:text-slate-300 border border-black/4 dark:border-white/5">
                     <div>
-                      <span className="text-slate-400">Einstieg:</span> <span className="font-bold text-slate-900 dark:text-white">${setup.entry_price}</span>
+                      <span className="text-slate-400">Einstieg:</span> <span className="font-semibold text-slate-900 dark:text-white">${setup.entry_price}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Hard Stop:</span> <span className="font-bold text-red-600">${setup.invalidation_price}</span>
+                      <span className="text-slate-400">Hard Stop:</span> <span className="font-semibold text-rose-600 dark:text-rose-400">${setup.invalidation_price}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Ziel 1 (2R):</span> <span className="font-bold text-emerald-700">${setup.target_1}</span>
+                      <span className="text-slate-400">Ziel 1 (2R):</span> <span className="font-semibold text-emerald-600 dark:text-emerald-400">${setup.target_1}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Ziel 2 (3.5R+):</span> <span className="font-bold text-emerald-700">${setup.target_2}</span>
+                      <span className="text-slate-400">Ziel 2 (3.5R+):</span> <span className="font-semibold text-emerald-600 dark:text-emerald-400">${setup.target_2}</span>
                     </div>
                   </div>
 
                   {setup.options_gex ? (
-                    <div className="mt-2 text-[10px] font-semibold text-slate-500">
-                      GEX: <span className="font-bold text-slate-700 dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
+                    <div className="mt-2 text-[10px] font-normal text-slate-500">
+                      GEX: <span className="font-semibold text-slate-700 dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
                     </div>
                   ) : null}
                   {setup.volume_profile ? (
-                    <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
                       Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
                     </div>
                   ) : null}
                   {setup.anchored_vwap ? (
-                    <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
                       ⚓ AVWAP: {setup.anchored_vwap.ytd ? `YTD $${setup.anchored_vwap.ytd}` : ""}
                       {setup.anchored_vwap.earnings ? ` · Earnings $${setup.anchored_vwap.earnings}` : ""}
                     </div>
                   ) : null}
                   {setup.whale_flow?.badge ? (
-                    <div className="mt-1 flex items-center gap-1.5 rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-800 dark:bg-purple-500/20 dark:text-purple-300">
+                    <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-800 dark:bg-purple-500/20 dark:text-purple-300">
                       <span>{setup.whale_flow.badge}</span>
                       {setup.whale_flow.volume_ratio ? (
-                        <span className="font-extrabold text-purple-900 dark:text-purple-200">
+                        <span className="font-semibold text-purple-900 dark:text-purple-200">
                           ({setup.whale_flow.volume_ratio}x Vol)
                         </span>
                       ) : null}
                     </div>
                   ) : null}
                   {setup.liquidity_zones?.zone_label && setup.liquidity_zones.zone_label !== "Neutral" ? (
-                    <div className="mt-1 flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
+                    <div className="mt-1 flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
                       <span>{setup.liquidity_zones.zone_label}</span>
                     </div>
                   ) : null}
                   {setup.mtf_alignment?.badge ? (
-                    <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      🧭 MTF: <span className="font-bold text-slate-800 dark:text-slate-200">{setup.mtf_alignment.badge}</span>
+                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
+                      🧭 MTF: <span className="font-semibold text-slate-800 dark:text-slate-200">{setup.mtf_alignment.badge}</span>
                     </div>
                   ) : null}
 
                   {setup.earnings_info ? (
-                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] font-bold text-amber-900 dark:text-amber-300">
+                    <div className="mt-2 rounded-lg border border-amber-500/25 bg-amber-50/80 p-2 text-[10px] font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
                       {setup.earnings_info.warning}
                     </div>
                   ) : null}
 
                   {setup.trade_management ? (
-                    <div className="mt-2 rounded-lg bg-slate-50 p-2 text-[10px] text-slate-600 dark:bg-white/5 dark:text-slate-300">
-                      <div className="font-bold text-slate-900 dark:text-white">Trailing-Stop Disziplin:</div>
+                    <div className="mt-2 rounded-lg bg-slate-50/80 p-2 text-[10px] text-slate-600 dark:bg-white/5 dark:text-slate-300">
+                      <div className="font-semibold text-slate-900 dark:text-white">Trailing-Stop Disziplin:</div>
                       <div>• <strong>2.0R Ziel:</strong> {setup.trade_management.target_1_action}</div>
                       <div>• <strong>3.5R+ Ziel:</strong> {setup.trade_management.target_2_action}</div>
                     </div>
@@ -943,14 +943,14 @@ export default function EdgeDashboardPanel({
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-black/5 pt-3 dark:border-white/5">
-                  <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Sizing: <span className="text-slate-950 dark:text-white">{setup.recommended_shares} Stk</span> (~{setup.total_position_capital?.toLocaleString()}€)
+                  <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                    Sizing: <span className="font-semibold text-slate-950 dark:text-white">{setup.recommended_shares} Stk</span> (~{setup.total_position_capital?.toLocaleString()}€)
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => onAnalyzeTicker(setup.ticker)}
-                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200"
+                      className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                     >
                       Chart
                     </button>
@@ -958,7 +958,7 @@ export default function EdgeDashboardPanel({
                       type="button"
                       onClick={() => handleSendEdgeTelegram(setup.ticker)}
                       disabled={sendingTelegramTicker === setup.ticker}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-slate-950"
                     >
                       <Smartphone size={13} />
                       {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
@@ -973,17 +973,17 @@ export default function EdgeDashboardPanel({
 
       {/* LIVE TRADE LIFECYCLE & TRAILING STOP TRACKER */}
       {activeTrades.length > 0 ? (
-        <div className="mt-5 rounded-[1.35rem] border border-blue-500/25 bg-[linear-gradient(135deg,rgba(59,130,246,0.06),rgba(255,255,255,0.85))] p-5 shadow-sm dark:bg-slate-950/60">
+        <div className="mt-5 rounded-[1.35rem] border border-black/6 bg-white/70 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 text-blue-700 dark:text-blue-400">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1d1d1f] text-white dark:bg-white dark:text-slate-950">
                 <Target size={16} />
               </span>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                   Live Trade-Lifecycle & Trailing Stops
                 </div>
-                <div className="text-base font-black text-slate-950 dark:text-white">
+                <div className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
                   Aktive Positionen &middot; Automatische Gewinnmitnahmen &middot; Breakeven-Schutz
                 </div>
               </div>
@@ -991,7 +991,7 @@ export default function EdgeDashboardPanel({
             <button
               type="button"
               onClick={handleEvaluateLifecycle}
-              className="inline-flex items-center gap-1.5 self-start rounded-lg border border-blue-500/30 bg-white/80 px-3 py-1.5 text-xs font-bold text-blue-700 shadow-2xs transition hover:bg-blue-50 dark:bg-slate-900 dark:text-blue-300"
+              className="inline-flex items-center gap-1.5 self-start rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
             >
               <Activity size={13} />
               Jetzt Prüfen
@@ -1013,27 +1013,27 @@ export default function EdgeDashboardPanel({
               const progressT1 = Math.max(0, Math.min(100, Math.round(((last - entry) / (t1 - entry || 1)) * 100)));
 
               return (
-                <div key={t.ticker} className="rounded-xl border border-black/8 bg-white/90 p-3.5 shadow-2xs dark:border-white/10 dark:bg-slate-900/80">
+                <div key={t.ticker} className="rounded-xl border border-black/6 bg-white/90 p-3.5 shadow-xs dark:border-white/10 dark:bg-white/5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-slate-900 dark:text-white">{t.ticker}</span>
-                      <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[9px] font-black text-blue-700 dark:text-blue-300">
+                      <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{t.ticker}</span>
+                      <span className="rounded-full bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[9px] font-medium text-slate-700 dark:text-slate-300">
                         {t.grade_badge || "Grade A"}
                       </span>
                     </div>
-                    <span className={`text-xs font-black ${Number(rMult) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                    <span className={`text-xs font-semibold ${Number(rMult) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                       {Number(rMult) >= 0 ? `+${rMult}R` : `${rMult}R`}
                     </span>
                   </div>
 
                   <div className="mt-2.5 flex items-baseline justify-between text-xs">
-                    <span className="text-slate-500">Kurs: <b className="text-slate-900 dark:text-white">${last.toFixed(2)}</b></span>
+                    <span className="text-slate-500">Kurs: <b className="font-semibold text-slate-900 dark:text-white">${last.toFixed(2)}</b></span>
                     <span className="text-slate-500">Einstieg: ${entry.toFixed(2)}</span>
                   </div>
 
                   {/* Progress bar to Target 1 */}
                   <div className="mt-2">
-                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                    <div className="flex justify-between text-[10px] font-medium text-slate-500">
                       <span>Ziel 1: ${t1.toFixed(2)}</span>
                       <span>{progressT1}%</span>
                     </div>

@@ -4712,6 +4712,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_trade_closed_alert(event))
                 lines.append("")
                 continue
+            if event.get("category") == "trading_edge":
+                lines.append(line)
+                lines.append("")
+                continue
 
             prefix = self._telegram_prefix_for_event(event)
             rendered_line = f"{prefix} {self._tg_esc(line)}".strip()

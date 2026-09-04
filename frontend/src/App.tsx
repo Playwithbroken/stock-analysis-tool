@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, LazyExoticComponent } from "react";
 import SearchBar, { normalizeTickerInput } from "./components/SearchBar";
 import LoadingState from "./components/LoadingState";
@@ -19,7 +19,7 @@ import {
   normalizeGermanDisplayText,
 } from "./lib/displayText";
 import { getBriefLoadState, guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
-import { Activity, ArrowDownRight, ArrowUpRight, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowUpRight, Bot, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
 import useAccessibleDialog from "./hooks/useAccessibleDialog";
 
@@ -1378,33 +1378,26 @@ function AppContent() {
               className={`ticker-marquee-chip ${index >= tapeMovers.length ? "ticker-marquee-duplicate" : ""}`}
               aria-hidden={index >= tapeMovers.length ? true : undefined}
             >
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
-                  isWinner
-                    ? "bg-emerald-500/10 text-emerald-700"
-                    : "bg-red-500/10 text-red-700"
-                }`}
-              >
-                {isWinner ? "Gewinner" : "Verlierer"}
-              </span>
-              <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700">
+              <span className="text-xs font-semibold tracking-tight text-slate-900 dark:text-slate-100">
                 {item.symbol}
               </span>
+              {item.price != null ? (
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  {formatPrice(item.price)}
+                </span>
+              ) : null}
               <span
-                className={`inline-flex items-center gap-1 text-xs font-bold ${
-                  isWinner ? "text-emerald-700" : "text-red-700"
+                className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-tight ${
+                  isWinner
+                    ? "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                    : "bg-rose-500/10 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400"
                 }`}
               >
-                <ArrowIcon size={12} />
+                <ArrowIcon size={11} />
                 {typeof item.change === "number"
                   ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}%`
                   : "Move"}
               </span>
-              {item.price != null ? (
-                <span className="text-xs font-semibold text-slate-500">
-                  {formatPrice(item.price)}
-                </span>
-              ) : null}
             </div>
           );
         })}
@@ -1537,6 +1530,25 @@ function AppContent() {
               </div>
 
               <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 md:flex-nowrap">
+                {/* Desktop: Broker Freund Desk Quick Trigger */}
+                <button
+                  type="button"
+                  onClick={() => setIsChatOpen((prev) => !prev)}
+                  aria-label="Broker Freund KI Desk öffnen"
+                  className={`hidden items-center gap-2 rounded-[1rem] border px-3 py-2 text-xs font-semibold tracking-tight transition-all sm:inline-flex ${
+                    isChatOpen
+                      ? "border-black/20 bg-[#1d1d1f] text-white shadow-sm dark:bg-white dark:text-slate-900"
+                      : "border-[var(--line-subtle)] bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
+                  }`}
+                  title="Broker Freund KI Desk öffnen"
+                >
+                  <Bot size={15} className={isChatOpen ? "text-white dark:text-slate-900" : "text-slate-700 dark:text-slate-300"} />
+                  <span>Broker Freund</span>
+                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    KI Desk
+                  </span>
+                </button>
+
                 {/* Desktop: full USD / EUR toggle */}
                 <div className="hidden rounded-[1.1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] sm:flex">
                   <button

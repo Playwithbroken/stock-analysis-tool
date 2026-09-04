@@ -210,14 +210,9 @@ h6,
 
 .app-shell-header {
   position: relative;
-  background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.62)),
-    rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  box-shadow:
-    0 24px 54px rgba(17, 24, 39, 0.08),
-    0 6px 20px rgba(255, 255, 255, 0.4) inset;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line-subtle);
+  box-shadow: var(--shadow-card);
 }
 
 .app-shell-header::after {
@@ -644,8 +639,8 @@ h6,
   }
 
   .broker-chat-fab {
-    right: max(2.5rem, calc((100vw - 1680px) / 2 + 1.5rem)) !important;
-    bottom: 2.5rem !important;
+    right: 2rem !important;
+    bottom: 2rem !important;
     height: auto !important;
     width: auto !important;
   }

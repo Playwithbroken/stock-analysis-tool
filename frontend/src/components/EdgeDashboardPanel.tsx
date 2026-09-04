@@ -587,7 +587,7 @@ export default function EdgeDashboardPanel({
     const badge = suitabilityBadge(advisory);
     const reason = advisory?.reasons?.[0];
     return (
-    <div key={row.key} className="rounded-[1.1rem] border border-black/8 bg-white/78 p-3">
+    <div key={row.key} className="rounded-[1.1rem] border border-black/6 bg-white/80 p-3.5 shadow-xs dark:border-white/10 dark:bg-white/5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -598,7 +598,7 @@ export default function EdgeDashboardPanel({
               <button
                 type="button"
                 onClick={() => onAnalyzeTicker(row.ticker)}
-                className="text-xs font-black uppercase tracking-[0.12em] text-slate-950 hover:text-[var(--accent)]"
+                className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-950 hover:text-[var(--accent)]"
               >
                 {row.ticker}
               </button>
@@ -617,8 +617,8 @@ export default function EdgeDashboardPanel({
           ) : null}
         </div>
         <div className="text-right">
-          <div className="text-xl font-black text-slate-950">{row.score != null ? formatNumber(row.score, 0) : "n/a"}</div>
-          <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">Punkte</div>
+          <div className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">{row.score != null ? formatNumber(row.score, 0) : "n/a"}</div>
+          <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400">Punkte</div>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-black/6 pt-3">
@@ -936,17 +936,17 @@ export default function EdgeDashboardPanel({
                     </div>
                   ) : null}
                   {setup.whale_flow?.badge ? (
-                    <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-800 dark:bg-purple-500/20 dark:text-purple-300">
+                    <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
                       <span>{setup.whale_flow.badge}</span>
                       {setup.whale_flow.volume_ratio ? (
-                        <span className="font-semibold text-purple-900 dark:text-purple-200">
+                        <span className="font-semibold text-slate-900 dark:text-white">
                           ({setup.whale_flow.volume_ratio}x Vol)
                         </span>
                       ) : null}
                     </div>
                   ) : null}
                   {setup.liquidity_zones?.zone_label && setup.liquidity_zones.zone_label !== "Neutral" ? (
-                    <div className="mt-1 flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
+                    <div className="mt-1 flex items-center gap-1 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
                       <span>{setup.liquidity_zones.zone_label}</span>
                     </div>
                   ) : null}
@@ -1078,7 +1078,7 @@ export default function EdgeDashboardPanel({
                     </div>
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${isT1Hit ? "bg-emerald-500" : "bg-blue-500"}`}
+                        className={`h-full rounded-full transition-all duration-500 ${isT1Hit ? "bg-emerald-500" : "bg-[#1d1d1f] dark:bg-white"}`}
                         style={{ width: `${progressT1}%` }}
                       />
                     </div>
@@ -1095,7 +1095,7 @@ export default function EdgeDashboardPanel({
                     <button
                       type="button"
                       onClick={() => onAnalyzeTicker(t.ticker)}
-                      className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+                      className="text-xs font-medium text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white"
                     >
                       Chart &rarr;
                     </button>
@@ -1111,14 +1111,14 @@ export default function EdgeDashboardPanel({
       <div className="mt-5 rounded-[1.35rem] border border-black/8 bg-white/75 p-5 shadow-2xs dark:border-white/10 dark:bg-slate-900/60">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#1d1d1f] text-white dark:bg-white dark:text-slate-950">
               <TrendingUp size={16} />
             </span>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                 Institutional Alpha &amp; Accumulation
               </div>
-              <div className="text-base font-black text-slate-950 dark:text-white">
+              <div className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
                 Relative Stärke vs. S&amp;P 500 (Mansfield RS Leaders)
               </div>
             </div>
@@ -1148,14 +1148,14 @@ export default function EdgeDashboardPanel({
               <div
                 key={leader.ticker}
                 onClick={() => onAnalyzeTicker(leader.ticker)}
-                className="cursor-pointer rounded-xl border border-black/6 bg-white/90 p-3 transition hover:border-amber-400/50 hover:shadow-sm dark:border-white/8 dark:bg-slate-950/40"
+                className="cursor-pointer rounded-xl border border-black/6 bg-white/90 p-3 transition hover:border-black/20 dark:hover:border-white/20 hover:shadow-sm dark:border-white/8 dark:bg-slate-950/40"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black text-slate-400">#{i + 1}</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">{leader.ticker}</span>
+                    <span className="text-xs font-medium text-slate-400">#{i + 1}</span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white">{leader.ticker}</span>
                   </div>
-                  <span className={`text-xs font-black ${leader.mansfield_rs >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  <span className={`text-xs font-semibold ${leader.mansfield_rs >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                     {leader.mansfield_rs >= 0 ? `+${leader.mansfield_rs.toFixed(1)}%` : `${leader.mansfield_rs.toFixed(1)}%`} RS
                   </span>
                 </div>
@@ -1164,7 +1164,7 @@ export default function EdgeDashboardPanel({
                   <span>{leader.badge}</span>
                 </div>
                 {leader.divergent_strength ? (
-                  <div className="mt-1.5 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-black text-amber-800 dark:text-amber-300">
+                  <div className="mt-1.5 rounded-sm bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[9px] font-medium text-slate-700 dark:text-slate-300">
                     ⚡ Stark trotz Markt
                   </div>
                 ) : null}

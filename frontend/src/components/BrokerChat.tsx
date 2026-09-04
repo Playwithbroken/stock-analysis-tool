@@ -849,51 +849,25 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex items-center gap-3 rounded-full border border-white/18 bg-[#1d1d1f]/94 text-white shadow-[0_14px_38px_rgba(0,0,0,0.24),0_3px_10px_rgba(0,0,0,0.15)] backdrop-blur-2xl transition-all duration-300 hover:translate-y-[-2px] hover:bg-[#2c2c2e] hover:border-white/30 hover:shadow-[0_18px_48px_rgba(0,0,0,0.32)] active:translate-y-0 ${fabCompact ? "opacity-90 scale-95" : "opacity-100 scale-100"} p-2 lg:px-4 lg:py-2.5`}
+        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex items-center gap-2.5 rounded-full border border-black/10 bg-[#1d1d1f] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all duration-200 hover:translate-y-[-1px] hover:bg-black hover:shadow-[0_12px_30px_rgba(0,0,0,0.24)] active:translate-y-0 ${fabCompact ? "opacity-90 scale-95" : "opacity-100 scale-100"} px-3 py-2 sm:px-4 sm:py-2.5`}
         aria-label="Broker Freund Desk öffnen"
       >
-        {/* Apple subtle glow on hover */}
-        <div className="absolute inset-0 -z-10 rounded-full bg-white/5 blur-md opacity-0 transition-opacity group-hover:opacity-100" />
-
-        {/* Bot Icon with glowing live pulse indicator */}
-        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/14 text-white shadow-inner lg:h-10 lg:w-10">
-          <Bot size={20} className="text-white drop-shadow-sm" />
-          <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-slate-900 bg-emerald-400" />
+        {/* Bot Icon with live indicator */}
+        <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-white sm:h-8 sm:w-8">
+          <Bot size={16} className="text-white" />
+          <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
           </span>
         </div>
 
-        {/* Desktop Text Block */}
-        <div className="hidden min-w-0 text-left lg:flex lg:flex-col">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-slate-300">
-            <span>Broker Freund</span>
-            <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[8px] font-semibold text-emerald-300">KI</span>
-          </div>
-          <div className="truncate text-xs font-semibold tracking-tight text-white">
-            Desk &middot; Chat öffnen
-          </div>
-        </div>
-
-        {/* Desktop Desk Action Pill */}
-        <div className="hidden lg:flex items-center rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-200">
-          Frag die KI
-        </div>
-
-        {/* Desktop Hover Tooltip */}
-        <div className="pointer-events-none absolute bottom-0 right-[calc(100%+14px)] hidden w-[17rem] rounded-2xl border border-white/15 bg-[#1d1d1f]/96 p-4 text-left text-white opacity-0 shadow-[0_24px_54px_rgba(0,0,0,0.36)] backdrop-blur-2xl transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 lg:block lg:translate-x-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Broker Freund KI Desk
-            </div>
-            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-emerald-300">
-              Live
-            </span>
-          </div>
-          <div className="mt-1.5 text-sm font-semibold text-white">Dein persönlicher Markt-Desk</div>
-          <div className="mt-1 text-xs leading-5 text-slate-300">
-            Analysiere Setups, GEX, Order Blocks, AVWAP, Portfolio-Risiken und Makro-Signale in Echtzeit.
-          </div>
+        {/* Text */}
+        <div className="flex items-center gap-2 text-left">
+          <span className="text-xs font-semibold tracking-tight text-white">
+            Broker Freund
+          </span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+            KI Desk
+          </span>
         </div>
       </button>
 

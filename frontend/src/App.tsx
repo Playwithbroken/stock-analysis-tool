@@ -2193,32 +2193,32 @@ function AppContent() {
             aria-modal="true"
             aria-labelledby="install-help-title"
             tabIndex={-1}
-            className="surface-panel w-full max-w-md rounded-[2rem] p-7 shadow-2xl"
+            className="surface-panel w-full max-w-md rounded-2xl border border-black/8 p-6 sm:p-7 shadow-2xl dark:border-white/10 dark:bg-[#1c1c1e]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] bg-[var(--accent-soft)] text-[var(--accent)]">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] text-[#1d1d1f] dark:bg-white/10 dark:text-white">
                 <Smartphone size={18} />
               </div>
               <div>
-                <div id="install-help-title" className="text-lg font-black text-[var(--text-primary)]">App installieren</div>
-                <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-              Wenn kein Installationsdialog erscheint, nutze im Browser-Menü den Punkt
-              "App installieren" oder "Zum Startbildschirm hinzufügen".
+                <div id="install-help-title" className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">App installieren</div>
+                <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  Wenn kein Installationsdialog erscheint, nutze im Browser-Menü den Punkt
+                  "App installieren" oder "Zum Startbildschirm hinzufügen".
                 </p>
               </div>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-700">
+              <div className="rounded-xl border border-black/8 bg-black/[0.02] p-4 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                 Desktop: Menü in Chrome oder Edge öffnen und "App installieren" wählen.
               </div>
-              <div className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 text-sm text-slate-700">
+              <div className="rounded-xl border border-black/8 bg-black/[0.02] p-4 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                 iPhone: Teilen-Dialog öffnen und "Zum Home-Bildschirm" wählen.
               </div>
             </div>
             <button
               onClick={() => setShowInstallHelp(false)}
-              className="mt-6 w-full rounded-[1.2rem] bg-[var(--accent)] py-3 text-sm font-extrabold uppercase tracking-[0.16em] text-white hover:bg-[var(--accent-strong)]"
+              className="mt-6 w-full rounded-xl bg-[#1d1d1f] py-3 text-xs font-bold uppercase tracking-[0.14em] text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-white/90"
             >
               Verstanden
             </button>

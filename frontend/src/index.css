@@ -422,25 +422,25 @@ h6,
 }
 
 [data-theme="dark"] .provider-state-panel {
-  background: rgba(15, 23, 42, 0.78) !important;
-  border-color: rgba(148, 163, 184, 0.18) !important;
-  color: #dbe4ef !important;
+  background: rgba(28, 28, 30, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: #f5f5f7 !important;
 }
 
 [data-theme="dark"] .provider-state-panel[data-provider-state="error"] {
-  background: linear-gradient(135deg, rgba(127, 29, 29, 0.22), rgba(15, 23, 42, 0.82)) !important;
-  border-color: rgba(248, 113, 113, 0.24) !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(28, 28, 30, 0.88)) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
 }
 
 [data-theme="dark"] .provider-state-panel[data-provider-state="slow"],
 [data-theme="dark"] .provider-state-panel[data-provider-state="degraded"] {
-  background: linear-gradient(135deg, rgba(120, 53, 15, 0.2), rgba(15, 23, 42, 0.82)) !important;
-  border-color: rgba(251, 191, 36, 0.22) !important;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(28, 28, 30, 0.88)) !important;
+  border-color: rgba(245, 158, 11, 0.28) !important;
 }
 
 [data-theme="dark"] .provider-state-panel button,
 [data-theme="dark"] .provider-state-panel > div > div > span {
-  background: rgba(30, 41, 59, 0.88) !important;
+  background: rgba(44, 44, 46, 0.9) !important;
   color: inherit;
 }
 
@@ -780,19 +780,19 @@ h6,
 }
 
 [data-theme="dark"] .app-shell {
-  background: rgba(15, 23, 42, 0.62);
-  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(20, 20, 22, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="dark"] .app-shell-header {
-  background: rgba(15, 23, 42, 0.88);
-  border-color: rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  background: rgba(28, 28, 30, 0.88);
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
 }
 
 [data-theme="dark"] .surface-panel {
-  background: rgba(15, 23, 42, 0.72);
-  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(28, 28, 30, 0.78);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
 [data-theme="dark"] .brief-avoid-soft {
@@ -800,8 +800,8 @@ h6,
 }
 
 [data-theme="dark"] .glass-card {
-  background: rgba(15, 23, 42, 0.66);
-  border-color: rgba(148, 163, 184, 0.15);
+  background: rgba(28, 28, 30, 0.72);
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 [data-theme="dark"] .surface-strong {
@@ -819,16 +819,16 @@ h6,
   color: rgba(255, 255, 255, 0.35);
 }
 [data-theme="dark"] .login-password-input {
-  background: rgba(0, 0, 0, 0.25);
-  border-color: rgba(0, 0, 0, 0.3);
-  color: #0f1117;
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f5f7;
 }
 [data-theme="dark"] .login-password-input::placeholder {
-  color: rgba(15, 17, 23, 0.45);
+  color: rgba(255, 255, 255, 0.4);
 }
 [data-theme="dark"] .surface-strong {
-  background: #e8ecf2 !important;
-  color: #0f1117 !important;
+  background: #f5f5f7 !important;
+  color: #000000 !important;
 }
 
 /* Header gradient — theme-aware */
@@ -836,7 +836,7 @@ h6,
   background: linear-gradient(180deg, rgba(250,248,243,0.98), rgba(250,248,243,0.94) 72%, rgba(250,248,243,0.82));
 }
 [data-theme="dark"] .header-gradient {
-  background: linear-gradient(180deg, rgba(11,15,22,0.98), rgba(11,15,22,0.94) 72%, rgba(11,15,22,0.82));
+  background: linear-gradient(180deg, rgba(18,18,20,0.98), rgba(18,18,20,0.94) 72%, rgba(18,18,20,0.82));
 }
 
 /* ── Dark mode: fix hardcoded Tailwind whites/slates ──────────────── */
@@ -997,13 +997,13 @@ h6,
 
 /* Dark mode: bottom nav (mobile) */
 [data-theme="dark"] .bg-\[rgba\(255\,255\,255\,0\.9\)\] {
-  background: rgba(22,26,35,0.92) !important;
+  background: rgba(28, 28, 30, 0.94) !important;
 }
 
 [data-theme="dark"] .hover\:bg-white:hover,
 [data-theme="dark"] .hover\:bg-white\/80:hover,
 [data-theme="dark"] .hover\:bg-slate-50:hover {
-  background-color: rgba(30, 41, 59, 0.92) !important;
+  background-color: rgba(44, 44, 46, 0.85) !important;
 }
 
 [data-theme="dark"] input,
@@ -1133,22 +1133,22 @@ h6,
 }
 
 [data-theme="dark"] .world-map-zoom-controls {
-  background: rgba(15, 23, 42, 0.88) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34) !important;
+  background: rgba(28, 28, 30, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45) !important;
 }
 
 [data-theme="dark"] .world-map-gesture-hint {
-  background: rgba(15, 23, 42, 0.84) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  color: rgba(226, 232, 240, 0.82) !important;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3) !important;
+  background: rgba(28, 28, 30, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(245, 245, 247, 0.85) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35) !important;
 }
 
 [data-theme="dark"] .world-map-impact-drawer {
-  background: rgba(10, 18, 31, 0.98) !important;
-  border-color: rgba(148, 163, 184, 0.22) !important;
-  box-shadow: 0 -22px 54px rgba(0, 0, 0, 0.48) !important;
+  background: rgba(20, 20, 22, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 -22px 54px rgba(0, 0, 0, 0.6) !important;
 }
 
 [data-theme="dark"] .analysis-card,
@@ -1174,8 +1174,8 @@ h6,
 [data-theme="dark"] .surface-panel .bg-white\/95,
 [data-theme="dark"] .surface-panel .bg-slate-50,
 [data-theme="dark"] .surface-panel .bg-slate-100 {
-  background-color: rgba(15, 23, 42, 0.82) !important;
-  border-color: rgba(148, 163, 184, 0.16) !important;
+  background-color: rgba(28, 28, 30, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
 }
 
 [data-theme="dark"] .surface-panel .bg-white\/88,
@@ -1183,56 +1183,56 @@ h6,
 [data-theme="dark"] .surface-panel .bg-white\/92,
 [data-theme="dark"] .surface-panel .bg-white\/94,
 [data-theme="dark"] .surface-panel .bg-white\/95 {
-  background-color: rgba(20, 29, 42, 0.92) !important;
+  background-color: rgba(36, 36, 38, 0.92) !important;
 }
 
 [data-theme="dark"] .surface-panel .bg-black\/\[0\.025\] {
-  background-color: rgba(30, 41, 59, 0.68) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 [data-theme="dark"] .dashboard-command-panel {
-  background: rgba(15, 23, 42, 0.74) !important;
+  background: rgba(28, 28, 30, 0.80) !important;
 }
 
 [data-theme="dark"] .mobile-topbar,
 [data-theme="dark"] .mobile-tabbar {
-  background: rgba(15, 23, 42, 0.92);
-  border-color: rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.26);
+  background: rgba(28, 28, 30, 0.94);
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.4);
 }
 
 [data-theme="dark"] .mobile-topbar-button,
 [data-theme="dark"] .mobile-topbar-icon {
-  background: rgba(17, 24, 39, 0.82);
-  border-color: rgba(148, 163, 184, 0.18);
-  color: #e5edf7;
+  background: rgba(44, 44, 46, 0.88);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: #f5f5f7;
 }
 
 [data-theme="dark"] .dashboard-priority-card {
-  background-color: rgba(15, 23, 42, 0.76);
-  border-color: rgba(148, 163, 184, 0.16);
+  background-color: rgba(28, 28, 30, 0.82);
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 [data-theme="dark"] .dashboard-priority-card .text-slate-950 {
-  color: #f8fafc !important;
+  color: #ffffff !important;
 }
 
 [data-theme="dark"] .dashboard-priority-card .text-slate-600 {
-  color: #cbd5e1 !important;
+  color: #aeaeb2 !important;
 }
 
 [data-theme="dark"] .group.bg-white\/72,
 [data-theme="dark"] a.bg-white\/72 {
-  background-color: rgba(15, 23, 42, 0.82) !important;
-  border-color: rgba(148, 163, 184, 0.16) !important;
+  background-color: rgba(28, 28, 30, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
 }
 
 [data-theme="dark"] a.bg-white\/72:hover {
-  background-color: rgba(20, 29, 42, 0.94) !important;
+  background-color: rgba(36, 36, 38, 0.94) !important;
 }
 
 [data-theme="dark"] .world-market-map {
-  color: #d7dee9;
+  color: #f5f5f7;
 }
 
 [data-theme="dark"] .world-market-map .bg-white,
@@ -1252,9 +1252,9 @@ h6,
 [data-theme="dark"] .world-market-map .bg-slate-100,
 [data-theme="dark"] .world-market-map .bg-\[\#eaf0f6\],
 [data-theme="dark"] .world-market-map .bg-\[\#edf2f8\] {
-  background-color: rgba(17, 24, 39, 0.88) !important;
-  border-color: rgba(148, 163, 184, 0.16) !important;
-  color: #d7dee9 !important;
+  background-color: rgba(28, 28, 30, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: #f5f5f7 !important;
   box-shadow: none !important;
 }
 
@@ -1262,23 +1262,23 @@ h6,
 [data-theme="dark"] .world-market-map .bg-white\/95,
 [data-theme="dark"] .world-market-map .bg-white\/90,
 [data-theme="dark"] .world-market-map .bg-white\/88 {
-  background-color: rgba(20, 29, 42, 0.94) !important;
+  background-color: rgba(36, 36, 38, 0.94) !important;
 }
 
 [data-theme="dark"] .world-market-map .text-slate-950,
 [data-theme="dark"] .world-market-map .text-slate-900,
 [data-theme="dark"] .world-market-map .text-slate-800 {
-  color: #f4f7fb !important;
+  color: #ffffff !important;
 }
 
 [data-theme="dark"] .world-market-map .text-slate-700,
 [data-theme="dark"] .world-market-map .text-slate-600 {
-  color: #c3ccda !important;
+  color: #aeaeb2 !important;
 }
 
 [data-theme="dark"] .world-market-map .text-slate-500,
 [data-theme="dark"] .world-market-map .text-slate-400 {
-  color: #94a3b8 !important;
+  color: #8e8e93 !important;
 }
 
 [data-theme="dark"] .world-market-map .border-black\/6,
@@ -1286,12 +1286,12 @@ h6,
 [data-theme="dark"] .world-market-map .border-black\/10,
 [data-theme="dark"] .world-market-map .border-black\/12,
 [data-theme="dark"] .world-market-map .border-slate-900\/6 {
-  border-color: rgba(148, 163, 184, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
 }
 
 [data-theme="dark"] .world-market-map .hover\:bg-white:hover,
 [data-theme="dark"] .world-market-map .hover\:bg-white\/80:hover {
-  background-color: rgba(30, 41, 59, 0.96) !important;
+  background-color: rgba(44, 44, 46, 0.95) !important;
 }
 
 [data-theme="dark"] .world-market-map .bg-slate-900\/75 {
@@ -1300,8 +1300,8 @@ h6,
 
 [data-theme="dark"] .mobile-topbar,
 [data-theme="dark"] nav {
-  background: rgba(15, 23, 42, 0.92) !important;
-  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: rgba(28, 28, 30, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
 }
 
 @media (max-width: 640px) {

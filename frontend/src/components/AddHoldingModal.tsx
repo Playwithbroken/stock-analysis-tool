@@ -58,19 +58,19 @@ export default function AddHoldingModal({
   // No portfolios exist yet — show helpful message
   if (portfolios.length === 0) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm" role="presentation">
-        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="no-portfolio-title" tabIndex={-1} className="surface-panel w-full max-w-sm rounded-[2rem] p-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[var(--accent-soft)] text-[var(--accent)]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-md dark:bg-black/65" role="presentation">
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="no-portfolio-title" tabIndex={-1} className="surface-panel w-full max-w-sm rounded-2xl border border-black/8 p-8 text-center dark:border-white/10 dark:bg-[#1c1c1e]">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black/[0.04] text-[#1d1d1f] dark:bg-white/10 dark:text-white">
             <Plus size={24} />
           </div>
-          <h3 id="no-portfolio-title" className="text-xl font-black text-[var(--text-primary)]">Noch kein Portfolio</h3>
-          <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-            Erstelle zuerst ein Portfolio im <strong>Portfolio-Tab</strong>, dann kannst du
+          <h3 id="no-portfolio-title" className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Noch kein Portfolio</h3>
+          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+            Erstelle zuerst ein Portfolio im <strong className="font-semibold text-slate-700 dark:text-slate-200">Portfolio-Tab</strong>, dann kannst du
             Aktien direkt aus der Analyse hinzufügen.
           </p>
           <button
             onClick={onClose}
-            className="mt-6 w-full rounded-[1.2rem] bg-[var(--accent)] py-3 text-sm font-extrabold uppercase tracking-[0.16em] text-white hover:bg-[var(--accent-strong)]"
+            className="mt-6 w-full rounded-xl bg-[#1d1d1f] py-3 text-xs font-bold uppercase tracking-[0.14em] text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-white/90"
           >
             Verstanden
           </button>
@@ -115,18 +115,18 @@ export default function AddHoldingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.42)] p-4 backdrop-blur-sm" role="presentation">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="add-holding-title" aria-describedby={error ? "add-holding-error" : undefined} tabIndex={-1} className="surface-panel w-full max-w-md rounded-[2rem] p-6 sm:p-7">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-md dark:bg-black/65" role="presentation">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="add-holding-title" aria-describedby={error ? "add-holding-error" : undefined} tabIndex={-1} className="surface-panel w-full max-w-md rounded-2xl border border-black/8 p-6 sm:p-7 dark:border-white/10 dark:bg-[#1c1c1e]">
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] bg-[var(--accent-soft)] text-[var(--accent)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/[0.04] text-[#1d1d1f] dark:bg-white/10 dark:text-white">
             <Plus size={18} />
           </div>
           <div>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Portfolio
             </div>
-            <h3 id="add-holding-title" className="mt-1 text-2xl font-black text-slate-900">
-              Asset hinzufuegen
+            <h3 id="add-holding-title" className="mt-0.5 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Asset hinzufügen
             </h3>
           </div>
         </div>
@@ -137,10 +137,10 @@ export default function AddHoldingModal({
               value={selectedPortfolioId}
               onChange={(e) => setSelectedPortfolioId(e.target.value)}
               disabled={saving}
-              className="w-full appearance-none rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/20"
+              className="w-full appearance-none rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-white/20"
             >
               {portfolios.map((p) => (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={p.id} className="bg-white text-slate-900 dark:bg-[#1c1c1e] dark:text-white">
                   {p.name}
                 </option>
               ))}
@@ -158,7 +158,7 @@ export default function AddHoldingModal({
                 }}
                 placeholder="AAPL"
                 disabled={saving}
-                className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
+                className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-slate-500 dark:focus:ring-white/20"
               />
             </Field>
             <Field label="Anzahl">
@@ -171,7 +171,7 @@ export default function AddHoldingModal({
                 }}
                 placeholder="10"
                 disabled={saving}
-                className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
+                className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-slate-500 dark:focus:ring-white/20"
               />
             </Field>
           </div>
@@ -186,7 +186,7 @@ export default function AddHoldingModal({
               }}
               placeholder="0.00"
               disabled={saving}
-              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20"
+              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-slate-500 dark:focus:ring-white/20"
             />
           </Field>
 
@@ -196,13 +196,13 @@ export default function AddHoldingModal({
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
               disabled={saving}
-              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/20"
+              className="w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-white/20"
             />
           </Field>
         </div>
 
         {error ? (
-          <div id="add-holding-error" role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          <div id="add-holding-error" role="alert" className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-600 dark:text-red-400">
             {error}
           </div>
         ) : null}
@@ -211,16 +211,16 @@ export default function AddHoldingModal({
           <button
             onClick={onClose}
             disabled={saving}
-            className="rounded-xl border border-black/8 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-black/[0.03]"
+            className="rounded-xl border border-black/8 bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
           >
             Abbrechen
           </button>
           <button
             onClick={handleAdd}
             disabled={saving || !ticker || !shares || !selectedPortfolioId}
-            className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+            className="rounded-xl bg-[#1d1d1f] px-5 py-2.5 text-xs font-bold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-white/90 disabled:opacity-50"
           >
-            {saving ? "Speichert..." : "Hinzufuegen"}
+            {saving ? "Speichert..." : "Hinzufügen"}
           </button>
         </div>
       </div>
@@ -237,7 +237,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+      <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
         {label}
       </div>
       {children}

@@ -49,6 +49,7 @@ class TelegramInteractiveService:
         trading_signals_service: Optional[Any] = None,
         alert_service: Optional[Any] = None,
         portfolio_manager: Optional[Any] = None,
+        paper_trading_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -68,6 +69,7 @@ class TelegramInteractiveService:
         self.signals_service = trading_signals_service
         self.alert_service = alert_service
         self.portfolio_manager = portfolio_manager
+        self.paper_service = paper_trading_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -188,6 +190,12 @@ class TelegramInteractiveService:
             res = self._cmd_mtf([ticker])
             self.send_message(chat_id, res)
 
+        elif cb.startswith("paper:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Buche {ticker} ins Paper Trading...")
+            res = self._execute_paper_trade(ticker)
+            self.send_message(chat_id, res)
+
         elif cb.startswith("track:"):
             ticker = cb.split(":", 1)[1].upper()
             if self.asymmetric_service and self.lifecycle_service:
@@ -272,6 +280,8 @@ class TelegramInteractiveService:
                 return self._cmd_mtf(args)
             elif cmd in ("/track", "/trades"):
                 return self._cmd_track()
+            elif cmd == "/paper":
+                return self._cmd_paper(args)
             elif cmd == "/heat":
                 return self._cmd_heat()
             elif cmd == "/scan":
@@ -293,6 +303,7 @@ class TelegramInteractiveService:
             "⚡ <b>Verfügbare Befehle:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop & Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/paper TICKER</code> – Setup direkt ins Paper Trading Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/gex TICKER</code> – Gamma Exposure & Market Maker Regime (z.B. <code>/gex TSLA</code>)\n"
             "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL) (z.B. <code>/levels AAPL</code>)\n"
             "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Earnings, Swing-Low) (z.B. <code>/avwap MSFT</code>)\n"
@@ -313,6 +324,10 @@ class TelegramInteractiveService:
         return {
             "inline_keyboard": [
                 [
+                    {"text": "📝 In Paper Trader buchen", "callback_data": f"paper:{ticker}"},
+                    {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
+                ],
+                [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
                     {"text": "📊 Volume Profile", "callback_data": f"levels:{ticker}"},
                 ],
@@ -325,11 +340,112 @@ class TelegramInteractiveService:
                     {"text": "🧭 MTF Sync", "callback_data": f"mtf:{ticker}"},
                 ],
                 [
-                    {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
                     {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
                 ],
             ]
         }
+
+    def _cmd_paper(self, args: List[str]) -> str:
+        if not args:
+            return (
+                "📝 <b>Paper Trading Buchung</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "<code>/paper NVDA</code>\n\n"
+                "💡 <i>Tipp: Bei jedem <code>/edge</code> Setup kannst du einfach auf '📝 In Paper Trader buchen' tippen.</i>"
+            )
+        ticker = args[0].upper().strip()
+        return self._execute_paper_trade(ticker)
+
+    def _execute_paper_trade(self, ticker: str) -> str:
+        """Executes a 1-tap paper trade directly from Telegram into the Demo Account."""
+        ticker = ticker.upper().strip()
+        if not self.asymmetric_service:
+            return "❌ <b>Asymmetric Trade Service ist nicht geladen.</b>"
+
+        # 1. Generate the asymmetric setup
+        setup = self.asymmetric_service.generate_trade_setup(ticker)
+        if not setup:
+            return f"❌ Konnte kein valides Trade-Setup für <b>{ticker}</b> berechnen."
+
+        entry_price = float(setup.get("entry_price") or 0.0)
+        stop_price = float(setup.get("invalidation_price") or 0.0)
+        target_price = float(setup.get("target_1") or 0.0)
+        target_2 = float(setup.get("target_2") or 0.0)
+        qty = float(setup.get("recommended_shares") or 1)
+        confluence_score = float(setup.get("confluence_score") or 80)
+        rr = setup.get("risk_reward_ratio", 2.5)
+        grade_badge = setup.get("grade_badge", "⭐ Grade A")
+        setup_name = setup.get("setup_name", "Trading Edge")
+
+        # 2. Check if already open
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                open_trades = [
+                    t for t in self.portfolio_manager.list_paper_trades(limit=150)
+                    if str(t.get("ticker") or "").upper() == ticker and t.get("status") == "open"
+                ]
+                if open_trades:
+                    return (
+                        f"ℹ️ <b>Position bereits aktiv</b>\n"
+                        f"Ein offener Paper Trade für <b>{ticker}</b> existiert bereits im Demokonto."
+                    )
+            except Exception as e:
+                logger.warning("Error checking existing paper trades: %s", e)
+
+        # 3. Create the paper trade via paper_service or portfolio_manager
+        trade_payload = {
+            "ticker": ticker,
+            "asset_class": "equity",
+            "direction": "long",
+            "setup_type": f"institutional_edge_{setup_name.lower().replace(' ', '_')}",
+            "entry_price": entry_price,
+            "stop_price": stop_price,
+            "target_price": target_price,
+            "quantity": qty,
+            "confidence_score": confluence_score,
+            "thesis": f"{setup.get('catalyst_description', '')} | Konfluenz: {', '.join(setup.get('confluence_factors', []))} | R:R {rr}:1",
+            "notes": f"Telegram 1-Tap Execution | {grade_badge} | Ziel 2: ${target_2:.2f}",
+        }
+
+        created = False
+        if self.paper_service and hasattr(self.paper_service, "create_trade_from_payload"):
+            try:
+                self.paper_service.create_trade_from_payload(trade_payload)
+                created = True
+            except Exception as pe:
+                logger.warning("Error creating paper trade via paper_service, falling back to portfolio_manager: %s", pe)
+
+        if not created and self.portfolio_manager and hasattr(self.portfolio_manager, "create_paper_trade"):
+            try:
+                self.portfolio_manager.create_paper_trade(trade_payload)
+                created = True
+            except Exception as pme:
+                logger.error("Error creating paper trade via portfolio_manager: %s", pme)
+
+        if not created:
+            return f"❌ Fehler beim Eröffnen des Paper Trades für <b>{ticker}</b>."
+
+        # 4. Register with Lifecycle Service for trailing stop & breakeven management
+        if self.lifecycle_service:
+            try:
+                self.lifecycle_service.register_trade(setup)
+            except Exception as le:
+                logger.warning("Lifecycle registration warning: %s", le)
+
+        # 5. Return formatted confirmation
+        pos_cap = float(setup.get("total_position_capital") or (qty * entry_price))
+        return (
+            f"📝 <b>PAPER TRADE GEBUCHT: {ticker}</b> ({grade_badge})\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Menge:</b> {int(qty)} Stück (~{pos_cap:,.0f}€)\n"
+            f"• <b>Einstieg:</b> ${entry_price:.2f}\n"
+            f"• <b>Hard Stop:</b> ${stop_price:.2f}\n"
+            f"• <b>Ziel 1 (2.0R):</b> ${target_price:.2f}\n"
+            f"• <b>Ziel 2 (3.5R+):</b> ${target_2:.2f}\n"
+            f"• <b>R:R Verhältnis:</b> {rr:.1f}:1\n"
+            f"• <b>Konfluenz:</b> {confluence_score:.0f}/100 Pkt.\n\n"
+            f"🛡️ <i>Trade ist im Demokonto eingebucht und wird vom Lifecycle Engine (Trailing Stop & Breakeven) aktiv überwacht.</i>"
+        )
 
     def _cmd_edge(self, args: List[str], chat_id: Optional[str] = None) -> str:
         if not self.asymmetric_service:

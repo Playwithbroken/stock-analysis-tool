@@ -270,6 +270,66 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("RELATIVE STÄRKE VS. SPY", res)
         self.assertIn("NVDA", res)
 
+    def test_cmd_paper_execution(self):
+        self.mock_pm.list_paper_trades.return_value = []
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "ticker": "NVDA",
+            "setup_name": "VAH Breakout",
+            "entry_price": 120.0,
+            "invalidation_price": 114.0,
+            "target_1": 132.0,
+            "target_2": 141.0,
+            "risk_per_share": 6.0,
+            "recommended_shares": 25,
+            "confluence_score": 85,
+            "grade_badge": "💎 Grade A+",
+            "risk_reward_ratio": 2.8,
+            "total_position_capital": 3000.0,
+            "confluence_factors": ["POC Support", "Positives Gamma"],
+        }
+        res = self.service.handle_command("999888", "/paper NVDA")
+        self.assertIn("PAPER TRADE GEBUCHT: NVDA", res)
+        self.assertIn("25 Stück", res)
+        self.assertIn("$120.00", res)
+        self.assertIn("$114.00", res)
+        self.assertIn("$132.00", res)
+        # Verify trade was created via portfolio_manager
+        self.mock_pm.create_paper_trade.assert_called_once()
+        # Verify lifecycle registration
+        self.mock_lifecycle.register_trade.assert_called()
+
+    def test_inline_keyboard_has_paper_button(self):
+        kb = self.service._build_inline_keyboard("NVDA")
+        all_buttons = [btn for row in kb["inline_keyboard"] for btn in row]
+        paper_btn = next((b for b in all_buttons if b.get("callback_data") == "paper:NVDA"), None)
+        self.assertIsNotNone(paper_btn)
+        self.assertIn("In Paper Trader buchen", paper_btn["text"])
+
+    def test_paper_callback_query(self):
+        self.mock_pm.list_paper_trades.return_value = []
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "ticker": "AAPL",
+            "setup_name": "Support Bounce",
+            "entry_price": 220.0,
+            "invalidation_price": 210.0,
+            "target_1": 240.0,
+            "target_2": 255.0,
+            "risk_per_share": 10.0,
+            "recommended_shares": 15,
+            "confluence_score": 80,
+            "grade_badge": "⭐ Grade A",
+            "risk_reward_ratio": 2.5,
+            "total_position_capital": 3300.0,
+            "confluence_factors": ["VAL Retest"],
+        }
+        with patch.object(self.service, "send_message") as mock_send, \
+             patch.object(self.service, "answer_callback_query") as mock_ans:
+            self.service.handle_callback_query("999888", "paper:AAPL", "cq_123")
+            mock_ans.assert_called_once()
+            mock_send.assert_called_once()
+            sent_text = mock_send.call_args[0][1]
+            self.assertIn("PAPER TRADE GEBUCHT: AAPL", sent_text)
+
 
 if __name__ == "__main__":
     unittest.main()

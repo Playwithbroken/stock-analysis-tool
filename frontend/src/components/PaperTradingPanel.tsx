@@ -1899,29 +1899,29 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               {strategyReadiness.filter((item: any) => item.real_world_ready).length} prüfbereit
             </div>
           </div>
-          <div data-testid="paper-evidence-campaign" className="mt-4 rounded-[1.25rem] border border-violet-200 bg-violet-50/80 p-4 text-violet-950">
+          <div data-testid="paper-evidence-campaign" className="mt-4 rounded-[1.25rem] border border-black/8 bg-white/80 dark:bg-white/5 p-4 text-slate-900 dark:text-white">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="font-extrabold uppercase tracking-[0.16em]">Echte Evidenzkampagne</div>
-              <div className="rounded-full border border-violet-200 bg-white px-3 py-1 font-black">
+              <div className="font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Echte Evidenzkampagne</div>
+              <div className="rounded-full border border-black/8 bg-white/90 dark:border-white/10 dark:bg-white/10 px-3 py-1 font-bold text-slate-800 dark:text-slate-200">
                 {evidenceCampaign.strategies_ready || 0}/{evidenceCampaign.strategy_count || strategyReadiness.length} Strategien reif
               </div>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-violet-200 bg-white/80 p-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-violet-500">Geschlossene Trades</div>
-                <div className="mt-1 text-xl font-black">{evidenceCampaign.closed_trades_total || 0}/{evidenceCampaign.required_closed_trades_total || 180}</div>
+              <div className="rounded-xl border border-black/8 bg-white/80 dark:bg-white/5 p-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400">Geschlossene Trades</div>
+                <div className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{evidenceCampaign.closed_trades_total || 0}/{evidenceCampaign.required_closed_trades_total || 180}</div>
               </div>
-              <div className="rounded-xl border border-violet-200 bg-white/80 p-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-violet-500">Entscheidende Outcomes</div>
-                <div className="mt-1 text-xl font-black">{evidenceCampaign.decisive_outcomes_total || 0}/{evidenceCampaign.global_outcome_target || 100}</div>
+              <div className="rounded-xl border border-black/8 bg-white/80 dark:bg-white/5 p-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400">Entscheidende Outcomes</div>
+                <div className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{evidenceCampaign.decisive_outcomes_total || 0}/{evidenceCampaign.global_outcome_target || 100}</div>
               </div>
-              <div className="rounded-xl border border-violet-200 bg-white/80 p-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-violet-500">Nächster Fokus</div>
-                <div className="mt-1 font-black">{evidenceCampaign.next_priority?.label || "Erste echte Stichprobe sammeln"}</div>
-                <div className="mt-1 text-violet-700">{evidenceCampaign.next_priority?.progress_pct || 0}% erreicht</div>
+              <div className="rounded-xl border border-black/8 bg-white/80 dark:bg-white/5 p-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400">Nächster Fokus</div>
+                <div className="mt-1 font-bold text-slate-900 dark:text-white">{evidenceCampaign.next_priority?.label || "Erste echte Stichprobe sammeln"}</div>
+                <div className="mt-1 text-slate-600 dark:text-slate-300">{evidenceCampaign.next_priority?.progress_pct || 0}% erreicht</div>
               </div>
             </div>
-            <div className="mt-3 font-semibold leading-5 text-violet-800">
+            <div className="mt-3 font-semibold leading-5 text-slate-600 dark:text-slate-300">
               {evidenceCampaign.policy || "Nur echte, zeitlich fällige Paper-Outcomes zählen; keine synthetischen Abschlüsse."}
             </div>
             {(evidenceCampaign.zero_evidence_strategies || []).length > 0 && (
@@ -2403,23 +2403,23 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           </div>
         </div>
 
-        <div className="mt-4 rounded-[1.6rem] border border-violet-500/20 bg-violet-50/70 p-4 text-xs text-violet-950">
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/80 dark:bg-white/5 p-4 text-xs text-slate-900 dark:text-white">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="font-extrabold uppercase tracking-[0.18em] text-violet-700">Quantitative Korrelation</div>
+              <div className="font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantitative Korrelation</div>
               <div className="mt-1">{correlationAnalysis.message || "Renditekorrelation wird geladen; statische Risikobuckets bleiben aktiv."}</div>
             </div>
-            <div className="rounded-full border border-violet-500/20 bg-white px-3 py-1 font-black">
+            <div className="rounded-full border border-black/8 bg-white/90 dark:border-white/10 dark:bg-white/10 px-3 py-1 font-bold text-slate-800 dark:text-slate-200">
               {correlationAnalysis.status || "unavailable"}
             </div>
           </div>
-          <div className="mt-2 text-violet-800">
+          <div className="mt-2 text-slate-600 dark:text-slate-300">
             Methode: {correlationAnalysis.method || "6-Monats-Tagesrenditen"} · Block ab {Number(correlationAnalysis.threshold || 0.88).toFixed(2)} bei mindestens {correlationAnalysis.minimum_observations || 40} Beobachtungen.
           </div>
           {!!highCorrelationPairs.length && (
             <div className="mt-3 flex flex-wrap gap-2">
               {highCorrelationPairs.slice(0, 8).map((pair: any) => (
-                <span key={`${pair.candidate}-${pair.existing_ticker}`} className="rounded-full border border-violet-200 bg-white px-3 py-1 font-bold">
+                <span key={`${pair.candidate}-${pair.existing_ticker}`} className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-3 py-1 font-bold text-slate-800 dark:text-slate-200">
                   {pair.candidate}/{pair.existing_ticker}: {Number(pair.correlation || 0).toFixed(2)} ({pair.observations}d)
                 </span>
               ))}
@@ -2427,15 +2427,15 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           )}
         </div>
 
-        <div className="mt-4 rounded-[1.6rem] border border-violet-500/20 bg-violet-50/55 p-4 text-xs text-slate-600">
+        <div className="mt-4 rounded-[1.6rem] border border-black/8 bg-white/80 dark:bg-white/5 p-4 text-xs text-slate-700 dark:text-slate-300">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="font-extrabold uppercase tracking-[0.18em] text-violet-700">News-Beweiskarte</div>
-              <div className="mt-1 max-w-3xl text-slate-600">
+              <div className="font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">News-Beweiskarte</div>
+              <div className="mt-1 max-w-3xl text-slate-600 dark:text-slate-400">
                 Misst realisierten Follow-through getrennt nach echter Quelle und Eventtyp. Erst ab {newsEvidenceSummary.minimum_adjustment_sample || 10} Abschlüssen wird der News-Score angepasst.
               </div>
             </div>
-            <div className="rounded-full border border-violet-500/20 bg-white px-3 py-1 font-black text-violet-800">
+            <div className="rounded-full border border-black/8 bg-white/90 dark:border-white/10 dark:bg-white/10 px-3 py-1 font-bold text-slate-800 dark:text-slate-200">
               {newsEvidenceSummary.closed_news_trades || 0} geschlossene News-Trades
             </div>
           </div>
@@ -2968,7 +2968,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       <button
                         onClick={() => openFromPlaybook(item.id, item.direction)}
                         disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
-                        className="rounded-xl bg-violet-700 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+                        className="rounded-xl bg-[#1d1d1f] dark:bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white dark:text-black transition-colors hover:bg-black dark:hover:bg-slate-200 disabled:opacity-50"
                       >
                         Paper {item.direction} · News bestätigt
                       </button>
@@ -3012,7 +3012,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           Number(item.recommended_leverage),
                         )}
                         disabled={busyId === item.id || item.tradeable === false || item.demo_tradeable === false}
-                        className="rounded-xl bg-violet-700 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+                        className="rounded-xl bg-[#1d1d1f] dark:bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white dark:text-black transition-colors hover:bg-black dark:hover:bg-slate-200 disabled:opacity-50"
                       >
                         Paper {item.direction} · Hebel {item.recommended_leverage}x
                       </button>

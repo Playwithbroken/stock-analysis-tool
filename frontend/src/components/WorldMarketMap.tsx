@@ -1835,7 +1835,7 @@ export default function WorldMarketMap({
             className="world-map-canvas interactive-world-map relative mt-3 h-[220px] overflow-hidden rounded-[1.15rem] border border-black/6 bg-[#f5f5f7] dark:bg-[#121214] min-[430px]:h-[246px]"
             {...mapCanvasHandlers}
           >
-            <div className="world-map-glow absolute inset-0 bg-gradient-to-b from-white/60 to-transparent dark:from-white/5 dark:to-transparent" />
+            <div className="world-map-glow pointer-events-none absolute inset-0 bg-black/[0.01] dark:bg-white/[0.01]" />
             <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
               <InlineWorldMap highlights={countryHighlights} />
               {showEventLayer && positionedGeoSignals.slice(0, 12).map((item, index) => (
@@ -1993,19 +1993,19 @@ export default function WorldMarketMap({
         </div>
 
         <div className="hidden items-start gap-5 sm:grid xl:items-start xl:grid-cols-[1.3fr_0.7fr]">
-          <div className="world-map-shell relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 bg-[#eaf0f6] p-4 sm:block sm:p-5">
+          <div className="world-map-shell relative hidden h-fit overflow-hidden rounded-[2rem] border border-black/8 dark:border-white/10 bg-[#eaf0f6] dark:bg-[#18181b] p-4 sm:block sm:p-5">
             <div
               className="world-map-canvas interactive-world-map relative w-full min-h-[260px] max-h-[min(76vh,760px)] [aspect-ratio:16/8.6] overflow-hidden rounded-[1.4rem] border border-black/6 bg-[#f5f5f7] dark:bg-[#121214] sm:min-h-[320px] xl:min-h-[430px]"
               {...mapCanvasHandlers}
             >
             <div className="absolute inset-0 rounded-[1.4rem] opacity-95">
-              <div className="world-map-glow absolute inset-0 bg-gradient-to-b from-white/60 to-transparent dark:from-white/5 dark:to-transparent" />
+              <div className="world-map-glow pointer-events-none absolute inset-0 bg-black/[0.01] dark:bg-white/[0.01]" />
               <div className="world-map-interactive-layer absolute inset-0" style={mapContentStyle}>
                 <InlineWorldMap highlights={countryHighlights} />
               </div>
             </div>
 
-            <div className="absolute left-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
+            <div className="absolute left-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/92 dark:bg-[#1d1d1f]/90 p-2 shadow-[0_14px_30px_rgba(0,0,0,0.12)] md:flex">
               {[
                 { key: "regions", label: "Regionenkarten", value: showRegionCards, set: setShowRegionCards, Icon: MapPinned },
                 { key: "legend", label: "Legende", value: showLegend, set: setShowLegend, Icon: ListFilter },
@@ -2020,8 +2020,8 @@ export default function WorldMarketMap({
                   aria-label={item.label}
                   aria-pressed={item.value}
                   title={item.label}
-                  className={`flex h-8 w-8 items-center justify-center rounded-[0.7rem] border text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] ${
-                    item.value ? "border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)]" : "border-black/8 bg-white"
+                  className={`flex h-8 w-8 items-center justify-center rounded-[0.7rem] border text-slate-500 transition-colors ${
+                    item.value ? "border-black/20 bg-black/10 text-slate-900 dark:border-white/20 dark:bg-white/20 dark:text-white" : "border-black/8 bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-400"
                   }`}
                 >
                   <item.Icon size={15} aria-hidden="true" />
@@ -2029,7 +2029,7 @@ export default function WorldMarketMap({
               ))}
             </div>
 
-            <div className="world-map-zoom-controls absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 bg-white/92 p-2 shadow-[0_14px_30px_rgba(15,23,42,0.12)] md:flex">
+            <div className="world-map-zoom-controls absolute right-4 top-4 z-30 hidden w-12 flex-col items-center gap-2 rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/92 dark:bg-[#1d1d1f]/90 p-2 shadow-[0_14px_30px_rgba(0,0,0,0.12)] md:flex">
               {[
                 { label: "+", action: () => setMapZoom((value) => Number((value + 0.18).toFixed(2))) },
                 { label: "-", action: () => setMapZoom((value) => Number((value - 0.18).toFixed(2))) },
@@ -2040,14 +2040,14 @@ export default function WorldMarketMap({
                   type="button"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={item.action}
-                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 bg-white text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-100 dark:hover:bg-white/20"
                   aria-label={`Kartenzoom ${item.label}`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
-            <div className="world-map-gesture-hint absolute bottom-4 left-4 z-30 hidden rounded-full border border-black/8 bg-white/90 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.1)] md:block">
+            <div className="world-map-gesture-hint absolute bottom-4 left-4 z-30 hidden rounded-full border border-black/8 dark:border-white/10 bg-white/90 dark:bg-[#1d1d1f]/90 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 shadow-[0_10px_24px_rgba(0,0,0,0.1)] md:block">
               Rad zoomt / ziehen bewegt / Esc reset / {mapZoomLabel}
             </div>
 
@@ -2057,19 +2057,19 @@ export default function WorldMarketMap({
                     key={card.label}
                     type="button"
                     onClick={() => onSelectRegion(card.label)}
-                    className="absolute z-20 hidden min-w-[160px] rounded-[0.95rem] border border-black/8 bg-white/95 px-3 py-2 text-left shadow-[0_16px_36px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-[1px] md:block"
+                    className="absolute z-20 hidden min-w-[160px] rounded-[0.95rem] border border-black/8 dark:border-white/10 bg-white/95 dark:bg-[#1d1d1f]/95 px-3 py-2 text-left shadow-[0_16px_36px_rgba(0,0,0,0.14)] transition-all hover:-translate-y-[1px] md:block"
                     style={{ left: card.left, top: card.top }}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex h-6 min-w-[1.8rem] items-center justify-center rounded-[0.45rem] px-1 text-[9px] font-black text-white ${regionBadgeColor(card.label)}`}>
+                        <span className={`inline-flex h-6 min-w-[1.8rem] items-center justify-center rounded-[0.45rem] px-1 text-[9px] font-bold text-white ${regionBadgeColor(card.label)}`}>
                           {regionFlag(card.label)}
                         </span>
-                        <div className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200">
                           {regionDisplayLabel(card.label)}
                         </div>
                       </div>
-                      <span className={`text-[11px] font-black ${textToneClass(card.tone)}`}>
+                      <span className={`text-[11px] font-bold ${textToneClass(card.tone)}`}>
                         {card.avgChange}
                       </span>
                     </div>

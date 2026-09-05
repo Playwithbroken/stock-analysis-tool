@@ -1372,8 +1372,8 @@ export default function AnalysisResult({
 
       <aside className="analysis-side-panel min-w-0 xl:sticky xl:top-[7.25rem] xl:w-full xl:max-w-[21rem] xl:self-start xl:justify-self-end">
         <div className="surface-panel rounded-[2.2rem] p-6 sm:p-7">
-          <div className="mb-8 flex items-center gap-4 text-slate-900">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-[#1d1d1f] text-white shadow-[0_8px_24px_rgba(0,0,0,0.14)] dark:bg-white/10">
+          <div className="mb-8 flex items-center gap-4 text-slate-900 dark:text-white">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-[#1d1d1f] text-white shadow-[0_8px_24px_rgba(0,0,0,0.14)] dark:bg-white dark:text-black">
               <svg
                 className="h-7 w-7"
                 viewBox="0 0 24 24"
@@ -1389,12 +1389,12 @@ export default function AnalysisResult({
               </svg>
             </div>
             <div>
-              <h3 className="text-xl font-black leading-none tracking-tight text-slate-900">
+              <h3 className="text-xl font-bold leading-none tracking-tight text-slate-900 dark:text-white">
                 Broker Freund
               </h3>
               <div className="mt-2 flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                   Live | Marktbriefing
                 </p>
               </div>
@@ -1402,45 +1402,44 @@ export default function AnalysisResult({
           </div>
 
           <div className="space-y-5">
-            <div className="relative overflow-hidden rounded-[2rem] border border-black/8 bg-white/80 p-6 text-center">
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-emerald-600 to-transparent opacity-40"></div>
-              <div className="mb-2 text-6xl font-black tracking-tighter text-slate-900">
+            <div className="relative overflow-hidden rounded-[2rem] border border-black/8 bg-white/80 p-6 text-center dark:border-white/10 dark:bg-white/5">
+              <div className="mb-2 text-6xl font-bold tracking-tighter text-slate-900 dark:text-white">
                 {dataQuality.blocksDecision ? "--" : scoreValue.toFixed(0)}
               </div>
-              <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <div className="mb-4 text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Analyse-Score
               </div>
-              <div className={`inline-block rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest ${verdictTone}`}>
+              <div className={`inline-block rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest ${verdictTone}`}>
                 {dataQuality.blocksDecision
                   ? "Nicht freigegeben"
                   : localizeRecommendationAction(recommendation?.action || recommendation)}
               </div>
             </div>
 
-            <div className="rounded-[1.7rem] border border-black/8 bg-white/80 p-5">
-              <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                <span className="h-2 w-2 rounded-full bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.25)]"></span>
+            <div className="rounded-[1.7rem] border border-black/8 bg-white/80 p-5 dark:border-white/10 dark:bg-white/5">
+              <h4 className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>
                 Meine Einschätzung
               </h4>
-              <div className="mt-4 text-sm font-medium leading-7 text-slate-700">
+              <div className="mt-4 text-sm font-medium leading-7 text-slate-700 dark:text-slate-200">
                 "{dataQuality.blocksDecision ? dataQuality.detail : data.verdict}"
               </div>
             </div>
 
             <div className="grid gap-3">
-              <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   Technisch
                 </span>
-                <span className="text-sm font-mono font-bold text-sky-700">
+                <span className="text-sm font-mono font-bold text-sky-700 dark:text-sky-400">
                   {dataQuality.blocksDecision ? "--" : `${technicalScore.toFixed(0)}%`}
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              <div className="flex items-center justify-between rounded-[1.4rem] border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   Fundament
                 </span>
-                <span className="text-sm font-mono font-bold text-emerald-700">
+                <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400">
                   {dataQuality.blocksDecision ? "--" : `${fundamentalScore.toFixed(0)}%`}
                 </span>
               </div>
@@ -1448,11 +1447,11 @@ export default function AnalysisResult({
 
             <button
               onClick={exportToPDF}
-              className="group flex w-full items-center justify-center gap-2 rounded-[1.4rem] border border-black/8 bg-[var(--accent)] py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[var(--accent-strong)]"
+              className="group flex w-full items-center justify-center gap-2 rounded-[1.4rem] border border-black/8 bg-[#1d1d1f] py-4 text-xs font-semibold uppercase tracking-widest text-white transition-all hover:bg-black dark:border-white/10 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
             >
               <Download
                 size={16}
-                className="text-white/60 transition-colors group-hover:text-white"
+                className="text-white/60 transition-colors group-hover:text-white dark:text-slate-950/60 dark:group-hover:text-slate-950"
               />
               Dossier exportieren
             </button>
@@ -1467,8 +1466,8 @@ function NewsFeed({ news }: { news: any[] }) {
   if (!news || news.length === 0) return null;
   return (
     <div className="surface-panel rounded-xl p-6">
-      <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900">
-        <FileText size={20} className="text-emerald-700" /> Top-Nachrichten & Stimmung
+      <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+        <FileText size={20} className="text-emerald-700 dark:text-emerald-400" /> Top-Nachrichten & Stimmung
       </h3>
       <div className="space-y-4">
         {news.slice(0, 5).map((item, i) => (
@@ -1477,17 +1476,17 @@ function NewsFeed({ news }: { news: any[] }) {
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="block group cursor-pointer rounded-xl border border-black/8 bg-white/70 p-4 transition-all hover:bg-white"
+            className="block group cursor-pointer rounded-xl border border-black/8 bg-white/70 p-4 transition-all hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
           >
-            <h4 className="line-clamp-2 text-sm font-bold text-slate-900 transition-colors group-hover:text-emerald-700">
+            <h4 className="line-clamp-2 text-sm font-semibold text-slate-900 transition-colors group-hover:text-emerald-700 dark:text-white dark:group-hover:text-emerald-400">
               {item.title}
             </h4>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] text-slate-500 font-bold uppercase">
+              <span className="text-[10px] text-slate-500 font-semibold uppercase dark:text-slate-400">
                 {item.source || item.publisher}
               </span>
-              <span className="text-[10px] text-gray-700 font-bold">·</span>
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] text-slate-400 font-semibold">·</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">
                 {item.time || item.published}
               </span>
             </div>
@@ -1525,13 +1524,13 @@ function MetricCard({
             aria-label={`${displayLabel}: ${help}`}
           >
             ?
-            <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 hidden w-64 rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-within:block group-focus-within:opacity-100">
-              <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
+            <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 hidden w-64 rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/96 dark:bg-slate-900 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 dark:text-slate-300 opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-within:block group-focus-within:opacity-100">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-900 dark:text-white">
                 {displayLabel}
               </span>
               {help}
               {meta ? (
-                <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                <span className="mt-2 block text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
                   {meta}
                 </span>
               ) : null}
@@ -1539,12 +1538,12 @@ function MetricCard({
           </span>
         ) : null}
       </div>
-      <div className="text-xl font-mono font-bold text-slate-900">
+      <div className="text-xl font-mono font-bold text-slate-900 dark:text-white">
         {displayValue ?? "N/A"}
       </div>
       {trend && (
         <div
-          className={`mt-2 text-[10px] font-bold ${trend === "up" ? "text-emerald-700" : "text-red-700"}`}
+          className={`mt-2 text-[10px] font-semibold ${trend === "up" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}
         >
           {trend === "up" ? "↑ Positiv" : "↓ Kritisch"}
         </div>

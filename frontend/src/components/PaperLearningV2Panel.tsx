@@ -82,16 +82,16 @@ export default function PaperLearningV2Panel({
   };
 
   return (
-    <div data-testid="paper-learning-v2" className="mt-5 rounded-[1.7rem] border border-violet-200 bg-violet-50/75 p-5 text-violet-950">
+    <div data-testid="paper-learning-v2" className="mt-5 rounded-[1.7rem] border border-black/8 bg-white/80 dark:bg-white/5 p-5 text-slate-900 dark:text-white">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-violet-700">Learning Engine v2</div>
-          <h3 className="mt-1 text-xl font-black">Entscheidung und Ergebnis werden getrennt gelernt.</h3>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-violet-900/80">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Learning Engine v2</div>
+          <h3 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Entscheidung und Ergebnis werden getrennt gelernt.</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
             Entry-Merkmale bleiben unveränderlich. Neue Regeln laufen zuerst als Shadow-Test und dürfen harte Risikolimits niemals lockern.
           </p>
         </div>
-        <span className="rounded-full border border-violet-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-violet-700">
+        <span className="rounded-full border border-black/8 bg-white/90 dark:border-white/10 dark:bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200">
           nur Paper · {policy.version || "v2"}
         </span>
       </div>
@@ -114,18 +114,18 @@ export default function PaperLearningV2Panel({
         ))}
       </div>
 
-      <div data-testid="paper-learning-operations" className="mt-4 rounded-xl border border-violet-300 bg-white/90 p-4">
+      <div data-testid="paper-learning-operations" className="mt-4 rounded-xl border border-black/8 bg-white/90 dark:bg-white/5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-600">Heute als Nächstes</div>
-            <div className="mt-1 text-base font-black">{nextAction.title || "Weitere Paper-Evidenz sammeln"}</div>
-            <div className="mt-1 text-sm leading-5 text-violet-800">{nextAction.detail || "Nur qualifizierte Setups verwenden und Ergebnisse planmäßig auswerten."}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Heute als Nächstes</div>
+            <div className="mt-1 text-base font-bold text-slate-900 dark:text-white">{nextAction.title || "Weitere Paper-Evidenz sammeln"}</div>
+            <div className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-300">{nextAction.detail || "Nur qualifizierte Setups verwenden und Ergebnisse planmäßig auswerten."}</div>
           </div>
           <button
             type="button"
             onClick={onEvaluate}
             disabled={!onEvaluate || evaluating}
-            className="rounded-xl bg-violet-700 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-[#1d1d1f] dark:bg-white px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white dark:text-black disabled:cursor-not-allowed disabled:opacity-50"
           >
             {evaluating ? "Prüfung läuft …" : `Fällige Outcomes prüfen (${operations.due_outcomes || 0})`}
           </button>

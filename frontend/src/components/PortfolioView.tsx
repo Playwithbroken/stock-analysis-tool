@@ -1250,15 +1250,15 @@ export default function PortfolioView({
             </section>
 
             {portfolioVerdict && (
-              <div className="mt-6 flex items-start gap-4 rounded-[1.8rem] border border-[var(--accent)]/12 bg-[linear-gradient(135deg,rgba(240,253,250,0.92),rgba(255,255,255,0.9))] p-6 text-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <div className="mt-6 flex items-start gap-4 rounded-[1.8rem] border border-black/8 bg-white/80 dark:bg-white/5 p-6 text-slate-900 dark:text-white shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-white">
                   <LayoutGrid size={22} />
                 </div>
                 <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                     Portfolio-Einordnung
                   </div>
-                  <p className="mt-3 text-base leading-7 text-slate-700">{portfolioVerdict}</p>
+                  <p className="mt-3 text-base leading-7 text-slate-700 dark:text-slate-300">{portfolioVerdict}</p>
                 </div>
               </div>
             )}
@@ -1312,7 +1312,7 @@ export default function PortfolioView({
                           <div className="text-sm font-bold text-slate-800">{sector}</div>
                           <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
                             <div
-                              className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),#244f4a)]"
+                              className="h-full rounded-full bg-[#1d1d1f] dark:bg-white"
                               style={{ width: `${pct}%` }}
                             />
                           </div>

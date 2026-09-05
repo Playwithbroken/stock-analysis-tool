@@ -2893,9 +2893,9 @@ export default function WorldMarketMap({
               </div>
             ) : null}
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.88))] p-4">
+            <div className="rounded-[1.5rem] border border-black/8 bg-white/80 dark:bg-white/5 p-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                   Warum das wichtig ist
                 </div>
                 {focusTicker ? (

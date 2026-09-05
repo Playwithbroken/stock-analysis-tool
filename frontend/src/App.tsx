@@ -320,8 +320,8 @@ function AnalyzerLoadingPanel({ ticker }: { ticker?: string }) {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="rounded-[1.5rem] border border-black/8 bg-white/68 p-4">
-          <div className="h-48 rounded-[1.1rem] bg-[linear-gradient(90deg,rgba(15,23,42,0.05),rgba(15,118,110,0.10),rgba(15,23,42,0.05))] bg-[length:200%_100%] loading-pulse sm:h-64" />
+        <div className="rounded-[1.5rem] border border-black/8 bg-white/68 dark:bg-white/5 p-4">
+          <div className="h-48 rounded-[1.1rem] bg-slate-200/70 dark:bg-white/10 loading-pulse sm:h-64" />
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {["Kursverlauf", "Risiko", "Trigger"].map((item) => (
               <div key={item} className="rounded-[1rem] border border-black/8 bg-white/70 p-3">
@@ -1634,10 +1634,10 @@ function AppContent() {
         {activeTab === "dashboard" ? (
           <div className="space-y-8">
             {shouldShowOnboardingNudge ? (
-              <section className="rounded-[1.6rem] border border-[var(--accent)]/16 bg-[linear-gradient(180deg,rgba(15,118,110,0.07),rgba(255,255,255,0.9))] p-4 sm:p-5">
+              <section className="rounded-[1.6rem] border border-black/8 bg-white/80 dark:bg-white/5 p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Optionale Einrichtung
                     </div>
                     <div className="mt-1 text-sm font-semibold text-slate-800">
@@ -1990,8 +1990,8 @@ function AppContent() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-[2rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.88))] p-6">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="rounded-[2rem] border border-black/8 bg-white/80 dark:bg-white/5 p-6">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                     Arbeitsablauf
                   </div>
                   <div className="mt-4 space-y-3">

@@ -122,13 +122,13 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
         ))}
       </div>
 
-      <div className="mt-4 rounded-[1.8rem] border border-[var(--accent)]/18 bg-[linear-gradient(135deg,rgba(20,184,166,0.12),rgba(255,255,255,0.86))] p-5">
+      <div className="mt-4 rounded-[1.8rem] border border-black/8 bg-white/80 dark:bg-white/5 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[var(--accent)]">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
               Top-News Prognose-Lernen
             </div>
-            <h3 className="mt-2 text-xl font-black text-slate-900">Sofortmeldungen werden messbar.</h3>
+            <h3 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">Sofortmeldungen werden messbar.</h3>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               Jede wichtige Nachricht mit Richtung wird als Forecast gespeichert. Die App lernt, ob
               schnelle Telegram-Pushes wirklich einen Vorteil bringen oder erst bestaetigt werden muessen.
@@ -209,9 +209,9 @@ export default function LearningBoardPanel({ data }: LearningBoardPanelProps) {
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-[1.8rem] border border-[var(--accent)]/14 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.82))] p-5">
+        <div className="rounded-[1.8rem] border border-black/8 bg-white/80 dark:bg-white/5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[var(--accent)]">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
               Ranking-Lessons
             </div>
             <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">

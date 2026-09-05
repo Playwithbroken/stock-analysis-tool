@@ -39,8 +39,8 @@ function ScoreCard({
     <div
       className={`rounded-[1.4rem] border p-4 ${
         isCongress
-          ? "border-[var(--accent)]/18 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.86))]"
-          : "border-black/8 bg-white/75"
+          ? "border-black/10 bg-white/85 dark:bg-white/5"
+          : "border-black/8 bg-white/75 dark:bg-white/5"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -198,8 +198,8 @@ export default function SignalScoreboardPanel({
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.8rem] border border-[var(--accent)]/12 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.9))] p-5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+          <div className="rounded-[1.8rem] border border-black/8 bg-white/80 dark:bg-white/5 p-5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
               Top Ideas
             </div>
             <div className="mt-4 grid gap-3">

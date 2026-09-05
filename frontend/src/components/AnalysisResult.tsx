@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import PriceChart from "./PriceChart";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
@@ -1373,7 +1373,7 @@ export default function AnalysisResult({
       <aside className="analysis-side-panel min-w-0 xl:sticky xl:top-[7.25rem] xl:w-full xl:max-w-[21rem] xl:self-start xl:justify-self-end">
         <div className="surface-panel rounded-[2.2rem] p-6 sm:p-7">
           <div className="mb-8 flex items-center gap-4 text-slate-900">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(145deg,var(--accent),#0f766e)] text-white shadow-[0_18px_40px_rgba(15,118,110,0.24)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-[#1d1d1f] text-white shadow-[0_8px_24px_rgba(0,0,0,0.14)] dark:bg-white/10">
               <svg
                 className="h-7 w-7"
                 viewBox="0 0 24 24"

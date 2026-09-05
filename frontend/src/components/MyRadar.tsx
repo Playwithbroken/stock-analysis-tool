@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import MorningBriefPanel from "./MorningBriefPanel";
 import PaperTradingPanel from "./PaperTradingPanel";
 import SignalScoreboardPanel from "./SignalScoreboardPanel";
@@ -241,8 +241,8 @@ export default function MyRadar({ onAnalyze, onOpenSignals }: MyRadarProps) {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-[2.5rem] border border-[var(--accent)]/12 bg-[linear-gradient(180deg,rgba(15,118,110,0.08),rgba(255,255,255,0.88))] p-6 sm:p-8">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Daily Brief</div>
+          <div className="rounded-[2.5rem] border border-black/8 bg-white/80 dark:bg-white/5 p-6 sm:p-8">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Daily Brief</div>
             <div className="mt-4 space-y-3">
               <div className="rounded-[1.4rem] border border-black/8 bg-white/78 p-4 text-sm text-slate-700">
                 {topTicker?.events?.[0]

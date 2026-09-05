@@ -309,8 +309,8 @@ h6,
   animation-play-state: paused;
 }
 [data-theme="dark"] .header-movers-periods button[aria-pressed="true"] {
-  background: #2dd4bf !important;
-  color: #062b26 !important;
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 [data-theme="dark"] .header-movers-tape .text-emerald-700 {
   color: #34d399 !important;
@@ -897,7 +897,8 @@ h6,
 }
 
 [data-theme="dark"] .bg-\[\#101114\] {
-  background-color: #2dd4bf !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
 }
 [data-theme="dark"] .bg-\[\#101114\] + div .text-slate-900,
 [data-theme="dark"] .bg-\[\#101114\] + div .text-lg {
@@ -941,8 +942,8 @@ h6,
 }
 
 [data-theme="dark"] .chart-period-selector button[aria-pressed="true"] {
-  background: #2dd4bf !important;
-  color: #062b26 !important;
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 
 [data-theme="dark"] .indicator-help-card {
@@ -1294,7 +1295,7 @@ h6,
 }
 
 [data-theme="dark"] .world-market-map .bg-slate-900\/75 {
-  background-color: rgba(45, 212, 191, 0.7) !important;
+  background-color: rgba(255, 255, 255, 0.14) !important;
 }
 
 [data-theme="dark"] .mobile-topbar,

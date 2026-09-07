@@ -1028,31 +1028,31 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             <StatTile label="Realisiert" value={money(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value, currency)} tone={(Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) > 0 ? "good" : Number(capitalFlow.realized_pnl_value ?? demoAccount.realized_pnl_value ?? 0) < 0 ? "bad" : "default") as any} />
             <StatTile label="Netto-Ergebnis" value={`${money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / ${formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}`} tone={accountTone as any} />
           </div>
-          <div data-testid="paper-period-performance" className="mt-4 rounded-[1.4rem] border border-indigo-200 bg-indigo-50/70 p-4">
+          <div data-testid="paper-period-performance" className="mt-4 rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-indigo-700">Portfolio-Update</div>
-                <div className="mt-1 text-sm font-semibold leading-6 text-indigo-950">7 Tage, laufender Monat und laufendes Jahr – nur aus gespeicherten Konto-Snapshots.</div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Portfolio-Update</div>
+                <div className="mt-1 text-sm font-semibold leading-6 text-slate-900 dark:text-white">7 Tage, laufender Monat und laufendes Jahr – nur aus gespeicherten Konto-Snapshots.</div>
               </div>
-              <div className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.13em] text-indigo-800">
+              <div className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.13em] text-slate-700 dark:text-slate-300">
                 {periodPerformance.snapshot_count || 0} Tages-Snapshots
               </div>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {periodPerformanceRows.map((period: any) => (
-                <div key={period.key} className="rounded-2xl border border-indigo-200 bg-white/90 p-3">
+                <div key={period.key} className="rounded-2xl border border-black/8 bg-white/90 dark:border-white/10 dark:bg-white/10 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-black text-slate-950">{period.label}</div>
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.11em] ${period.status === "ready" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                    <div className="font-bold text-slate-900 dark:text-white">{period.label}</div>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.11em] ${period.status === "ready" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}>
                       {period.status === "ready" ? "messbar" : "sammelt"}
                     </span>
                   </div>
                   {period.status === "ready" ? (
                     <>
-                      <div className={`mt-2 text-xl font-black ${Number(period.equity_change_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      <div className={`mt-2 text-xl font-bold ${Number(period.equity_change_value || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                         {money(period.equity_change_value, currency)} / {formatPct(period.return_pct)}
                       </div>
-                      <div className="mt-1 text-xs font-semibold text-slate-600">Realisiert {money(period.realized_pnl_value, currency)} · W/L {period.winner_count || 0}/{period.loser_count || 0}</div>
+                      <div className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Realisiert {money(period.realized_pnl_value, currency)} · W/L {period.winner_count || 0}/{period.loser_count || 0}</div>
                       <div className="mt-1 text-[10px] text-slate-500">Eröffnet {period.opened_trade_count || 0} · geschlossen {period.closed_trade_count || 0}</div>
                     </>
                   ) : (
@@ -1489,29 +1489,29 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                       </div>
                     ) : null}
                     {newsEvidence ? (
-                      <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/80 px-3 py-3 text-[11px] leading-5 text-violet-950">
-                        <div className="flex flex-wrap items-center gap-2 font-extrabold uppercase tracking-[0.12em] text-violet-700">
+                      <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-3 text-[11px] leading-5 text-slate-800 dark:text-slate-200">
+                        <div className="flex flex-wrap items-center gap-2 font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                           <span>News-Evidenz beim Entry</span>
-                          <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5">
+                          <span className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-slate-700 dark:text-slate-300">
                             {newsEvidence.market_confirmation?.status || "offen"}
                           </span>
                           {newsEvidence.original_document_verified ? (
-                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">Primärdokument</span>
+                            <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-blue-700 dark:text-blue-300">Primärdokument</span>
                           ) : null}
                         </div>
                         <a
                           href={newsEvidence.source_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-1 block font-bold underline-offset-4 hover:underline"
+                          className="mt-1 block font-bold text-slate-900 dark:text-white underline-offset-4 hover:underline"
                         >
                           {newsEvidence.publisher || "Tier-1-Quelle"} · {newsEvidence.title}
                         </a>
-                        <div className="mt-1 text-violet-800">
+                        <div className="mt-1 text-slate-600 dark:text-slate-300">
                           Relative Reaktion {newsEvidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {newsEvidence.fact_basis || "offen"} · Kausalität nicht bewiesen
                         </div>
                         {trade.trade_ticket?.max_holding_days ? (
-                          <div className="mt-1 font-bold text-violet-700">
+                          <div className="mt-1 font-bold text-slate-700 dark:text-slate-300">
                             Event-Fenster maximal {trade.trade_ticket.max_holding_days} Tage
                             {management.elapsed_hours != null ? ` · bisher ${Number(management.elapsed_hours).toFixed(1)} Stunden` : ""}
                           </div>
@@ -1608,8 +1608,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               newsGateMonitor.status === "ready"
                 ? "border-emerald-500/20 bg-emerald-50/80 text-emerald-950"
                 : newsGateMonitor.status === "account_blocked"
-                  ? "border-red-500/20 bg-red-50/80 text-red-950"
-                  : "border-violet-500/20 bg-violet-50/80 text-violet-950"
+                  ? "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400"
+                  : "border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 text-slate-800 dark:text-slate-200"
             }`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -2583,32 +2583,32 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
           <div className="mt-3 font-semibold text-cyan-900">{marketRegimePerformance.policy || "Belastbare Bewertung erst ab 30 geschlossenen Trades je Regime."}</div>
         </div>
 
-        <div className="mt-4 rounded-[1.6rem] border border-indigo-500/20 bg-indigo-50/60 p-4 text-xs text-indigo-950">
-          <div className="font-extrabold uppercase tracking-[0.18em] text-indigo-700">Strategie-Auswertung nach Dimension</div>
-          <div className="mt-1 text-indigo-800">Setup, Marktregime, Quelle, Scoreband und Risikobucket werden getrennt ausgewertet.</div>
+        <div className="mt-4 rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-4 text-xs text-slate-700 dark:text-slate-300">
+          <div className="font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Strategie-Auswertung nach Dimension</div>
+          <div className="mt-1 text-slate-600 dark:text-slate-300">Setup, Marktregime, Quelle, Scoreband und Risikobucket werden getrennt ausgewertet.</div>
           {strategyDimensionRows.length ? (
             <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {strategyDimensionRows.slice(0, 18).map((item: any) => (
-                <div key={`${item.dimension}-${item.label}`} className="rounded-xl border border-indigo-200 bg-white px-3 py-3">
+                <div key={`${item.dimension}-${item.label}`} className="rounded-xl border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-3 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-indigo-600">{String(item.dimension).replace(/_/g, " ")}</div>
-                      <div className="mt-1 font-black text-slate-900">{String(item.label).replace(/_/g, " ")}</div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{String(item.dimension).replace(/_/g, " ")}</div>
+                      <div className="mt-1 font-bold text-slate-900 dark:text-white">{String(item.label).replace(/_/g, " ")}</div>
                     </div>
-                    <div className="font-black">{item.trades || 0}/30</div>
+                    <div className="font-bold text-slate-900 dark:text-white">{item.trades || 0}/30</div>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-600">
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-600 dark:text-slate-300">
                     <span>Treffer {Number(item.performance?.win_rate || 0).toFixed(1)}%</span>
                     <span>PF {item.performance?.profit_factor == null ? "offen" : Number(item.performance.profit_factor).toFixed(2)}</span>
                     <span>Erwartung {money(item.performance?.expectancy_value, currency)}</span>
                     <span>Drawdown {Number(item.performance?.max_drawdown_pct || 0).toFixed(2)}%</span>
                   </div>
-                  <div className="mt-2 font-semibold text-indigo-800">{germanStatus(item.readiness, item.readiness)}</div>
+                  <div className="mt-2 font-semibold text-slate-700 dark:text-slate-300">{germanStatus(item.readiness, item.readiness)}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-xl border border-dashed border-indigo-300 bg-white px-3 py-3">Noch keine geschlossenen Trades für die Segmentauswertung.</div>
+            <div className="mt-3 rounded-xl border border-dashed border-black/15 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-3">Noch keine geschlossenen Trades für die Segmentauswertung.</div>
           )}
           <div className="mt-3 font-semibold">{strategyDimensionPerformance.policy}</div>
         </div>
@@ -2655,21 +2655,21 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   <p className="mt-3 text-sm leading-6 text-slate-700">{item.thesis}</p>
                   <OptionContractEvidence item={item} />
                   {item.news_evidence ? (
-                    <div className="mt-3 rounded-[1.1rem] border border-violet-200 bg-violet-50/80 p-3 text-xs leading-5 text-violet-950">
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-violet-700">
+                    <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3 text-xs leading-5 text-slate-800 dark:text-slate-200">
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                         <span>Verifizierter News-Trigger</span>
-                        <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5">
+                        <span className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-slate-700 dark:text-slate-300">
                           Preisreaktion bestätigt
                         </span>
                         {item.news_evidence.original_document_verified ? (
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">Primärdokument geprüft</span>
+                          <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-blue-700 dark:text-blue-300">Primärdokument geprüft</span>
                         ) : null}
                       </div>
                       <a
                         href={item.news_evidence.source_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-2 block font-black underline-offset-4 hover:underline"
+                        className="mt-2 block font-black text-slate-900 dark:text-white underline-offset-4 hover:underline"
                       >
                         {item.news_evidence.publisher || "Tier-1-Quelle"} · {item.news_evidence.headline || item.headline}
                       </a>
@@ -2764,16 +2764,16 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     </div>
                   )}
                   {item.news_learning_adjustment && (
-                    <div className="mt-3 rounded-[1rem] border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
-                      <div className="font-extrabold uppercase tracking-[0.14em]">News-Evidenz lernen</div>
-                      <div className="mt-1 font-black">
+                    <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3 text-xs text-slate-800 dark:text-slate-200">
+                      <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">News-Evidenz lernen</div>
+                      <div className="mt-1 font-bold text-slate-900 dark:text-white">
                         Score {Number(item.news_learning_adjustment.score_delta || 0) >= 0 ? "+" : ""}
                         {item.news_learning_adjustment.score_delta || 0} · Mindeststichprobe {item.news_learning_adjustment.minimum_sample || 10}
                       </div>
                       {(item.news_learning_adjustment.notes || []).map((note: string) => (
-                        <div key={note} className="mt-1">{note}</div>
+                        <div key={note} className="mt-1 text-slate-600 dark:text-slate-300">{note}</div>
                       ))}
-                      <div className="mt-2 font-bold text-red-700">Echtgeld bleibt gesperrt.</div>
+                      <div className="mt-2 font-bold text-red-600 dark:text-red-400">Echtgeld bleibt gesperrt.</div>
                     </div>
                   )}
                   {item.news_shadow_prior && (
@@ -2806,22 +2806,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                   {item.correlation_check && item.correlation_check.status !== "not_applicable" ? (
                     <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
                       item.correlation_check.blocked
-                        ? "border-red-200 bg-red-50 text-red-800"
-                        : "border-violet-200 bg-violet-50 text-violet-900"
+                        ? "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400"
+                        : "border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 text-slate-800 dark:text-slate-200"
                     }`}>
-                      <div className="font-extrabold uppercase tracking-[0.12em]">Korrelationscheck</div>
-                      <div className="mt-1">{item.correlation_check.reason || item.correlation_check.status}</div>
+                      <div className="font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Korrelationscheck</div>
+                      <div className="mt-1 text-slate-700 dark:text-slate-300">{item.correlation_check.reason || item.correlation_check.status}</div>
                     </div>
                   ) : null}
                   {item.leverage_assessment && (
-                    <div className={`mt-3 rounded-[1rem] border p-3 text-xs ${
+                    <div className={`mt-3 rounded-xl border p-3 text-xs ${
                       item.leverage_assessment.eligible
-                        ? "border-violet-300 bg-violet-50 text-violet-900"
-                        : "border-slate-200 bg-slate-50 text-slate-700"
+                        ? "border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 text-slate-800 dark:text-slate-200"
+                        : "border-black/8 bg-black/[0.01] dark:border-white/10 dark:bg-white/[0.02] text-slate-500 dark:text-slate-400"
                     }`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-extrabold uppercase tracking-[0.14em]">Paper-Hebel-Gate</div>
-                        <div className="rounded-full border border-current/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em]">
+                        <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Paper-Hebel-Gate</div>
+                        <div className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
                           {item.leverage_assessment.eligible
                             ? `${item.leverage_assessment.recommended_leverage}x sinnvoll`
                             : "Hebel gesperrt"}
@@ -2937,7 +2937,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         </div>
                       ) : null}
                       {productChecks[item.id]?.valid && productChecks[item.id]?.data?.offered_leverage ? (
-                        <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-800">
+                        <div className="mt-2 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 font-bold text-slate-800 dark:text-slate-200">
                           Anbieterhebel {Number(productChecks[item.id].data.offered_leverage).toFixed(1)}x und Produktmultiplikator {Number(productChecks[item.id].data.contract_multiplier).toFixed(4)} werden exakt übernommen; der Hebel wird nicht nochmals auf Produktkurs oder P&amp;L gerechnet.
                         </div>
                       ) : null}

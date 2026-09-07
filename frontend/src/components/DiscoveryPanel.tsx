@@ -987,18 +987,18 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       ))}
                     </div>
 
-                    <div className="rounded-[1.4rem] border border-indigo-500/15 bg-indigo-500/6 p-4">
-                      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-700">
+                    <div className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-4">
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                         AI Recommendation
                       </div>
-                      <div className="mb-2 text-sm font-bold text-slate-900">
+                      <div className="mb-2 text-sm font-bold text-slate-900 dark:text-white">
                         {opp.recommendation}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {opp.reasons?.slice(0, 2).map((r: string, i: number) => (
                           <span
                             key={i}
-                            className="rounded-full border border-black/8 bg-white/78 px-2 py-0.5 text-[9px] text-slate-600"
+                            className="rounded-full border border-black/8 bg-white/78 dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-[9px] text-slate-600 dark:text-slate-300"
                           >
                             {r}
                           </span>
@@ -1048,7 +1048,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     Growth- und Narrative-Kandidaten mit klarer Kennzeichnung, ob echte Live-Daten oder Watchlist-Fallback genutzt werden.
                   </p>
                 </div>
-                <div className="rounded-full border border-indigo-500/15 bg-indigo-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-indigo-700">
+                <div className="rounded-full border border-black/8 bg-black/[0.03] dark:border-white/10 dark:bg-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700 dark:text-slate-200">
                   {aiLoading ? "Live-Scan" : moonshots.length ? `${moonshots.length} Treffer` : "Growth Bias"}
                 </div>
               </div>
@@ -1096,16 +1096,16 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   <div
                     key={stock.ticker}
                     onClick={() => openMarketDetails(stock, "ai")}
-                    className="surface-panel cursor-pointer rounded-[2rem] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500/18"
+                    className="surface-panel cursor-pointer rounded-[2rem] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-black/20 dark:hover:border-white/25"
                   >
                     <div className="mb-6 flex items-start justify-between gap-4">
                       <div>
-                        <div className="mb-1 text-3xl font-black text-slate-900">
+                        <div className="mb-1 text-3xl font-black text-slate-900 dark:text-white">
                           {stock.ticker}
                         </div>
                         <div className="text-sm text-slate-500">{stock.name}</div>
                       </div>
-                      <div className="rounded-lg border border-indigo-500/15 bg-indigo-500/8 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-700">
+                      <div className="rounded-full border border-black/8 bg-black/[0.04] dark:border-white/10 dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200">
                         Growth
                       </div>
                     </div>
@@ -1114,11 +1114,11 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         <span className="text-slate-500 uppercase tracking-widest">
                           Potential
                         </span>
-                        <span className="text-indigo-700">{stock.score || 85}%</span>
+                        <span className="text-slate-900 dark:text-white">{stock.score || 85}%</span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06]">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
                         <div
-                          className="h-full rounded-full bg-indigo-500"
+                          className="h-full rounded-full bg-[#1d1d1f] dark:bg-white"
                           style={{ width: `${stock.score || 85}%` }}
                         ></div>
                       </div>

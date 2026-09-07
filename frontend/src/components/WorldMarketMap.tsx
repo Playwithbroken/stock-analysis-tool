@@ -358,10 +358,10 @@ function tonePillClass(tone: string) {
 }
 
 function regionBadgeColor(label: string) {
-  if (label === "USA") return "bg-sky-500";
-  if (label === "Europe") return "bg-indigo-500";
-  if (label === "Asia") return "bg-fuchsia-500";
-  return "bg-slate-500";
+  if (label === "USA") return "bg-[#1d1d1f] dark:bg-white dark:text-black";
+  if (label === "Europe") return "bg-slate-700 dark:bg-slate-300 dark:text-black";
+  if (label === "Asia") return "bg-slate-800 dark:bg-slate-200 dark:text-black";
+  return "bg-slate-600 dark:bg-slate-400 dark:text-black";
 }
 
 function regionFlag(label: string) {

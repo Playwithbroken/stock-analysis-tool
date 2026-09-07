@@ -1019,14 +1019,14 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                             className={`rounded-2xl border px-3 py-2 text-left text-xs font-bold transition-colors ${
                               active
                                 ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
-                                : "border-black/8 bg-white text-slate-700 hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                                : "border-black/8 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
                             }`}
                           >
                             <span className="flex min-w-0 items-center justify-between gap-2">
-                              <span className="truncate text-sm font-black uppercase tracking-[0.12em]">
+                              <span className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-900 dark:text-white">
                                 {parsed.ticker || ticker}
                               </span>
-                              <span className="shrink-0 rounded-full border border-black/8 bg-slate-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                              <span className="shrink-0 rounded-full border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/5 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                                 {typeLabel}
                               </span>
                             </span>

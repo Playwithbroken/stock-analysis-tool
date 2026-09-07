@@ -1137,7 +1137,7 @@ export default function EdgeDashboardPanel({
         </div>
 
         {scanResult ? (
-          <div className="mt-3 rounded-xl border border-black/10 bg-slate-50 p-2.5 text-xs font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+          <div className="mt-3 rounded-xl border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/5 p-2.5 text-xs font-bold text-slate-800 dark:text-slate-200">
             {scanResult}
           </div>
         ) : null}

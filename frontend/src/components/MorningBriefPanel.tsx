@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import WorldMarketMap from "./WorldMarketMap";
 import { normalizeGeoRegions } from "../lib/geoRegions";
 import { isBriefDecisionCurrent } from "../lib/briefSafety";
@@ -2408,7 +2408,7 @@ export default function MorningBriefPanel({
                     {st.message_count || 0} messages
                   </div>
                   {(st.top_messages || []).slice(0, 1).map((msg: any, mi: number) => (
-                    <div key={mi} className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs italic text-slate-600 line-clamp-2">
+                    <div key={mi} className="mt-2 rounded-lg border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-xs italic text-slate-600 dark:text-slate-300 line-clamp-2">
                       {msg.text}
                     </div>
                   ))}

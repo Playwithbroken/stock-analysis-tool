@@ -757,7 +757,7 @@ export default function PortfolioView({
       return {
         label: "Gesperrt",
         detail: "Login erforderlich, bevor Portfolios geladen oder gespeichert werden.",
-        tone: "border-slate-300 bg-slate-50 text-slate-700",
+        tone: "border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/5 text-slate-700 dark:text-slate-300",
         dot: "bg-slate-400",
       };
     }
@@ -805,7 +805,7 @@ export default function PortfolioView({
             <button
               onClick={refreshPortfolioList}
               disabled={portfoliosLoading || refreshingPortfolios}
-              className="inline-flex items-center gap-2 rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-[1.2rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 dark:text-slate-200 transition-colors hover:bg-black/5 dark:hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${portfoliosLoading || refreshingPortfolios ? "animate-spin" : ""}`} />
               Aktualisieren
@@ -816,7 +816,7 @@ export default function PortfolioView({
                 setCreatePortfolioNotice(null);
                 setShowCreateModal(true);
               }}
-              className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700"
+              className="rounded-[1.2rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200 transition-colors hover:bg-black/5 dark:hover:bg-white/15"
             >
               Neues Portfolio
             </button>

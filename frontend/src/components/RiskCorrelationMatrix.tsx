@@ -92,12 +92,12 @@ export default function RiskCorrelationMatrix({ portfolioId }: RiskMatrixProps) 
         </table>
       </div>
 
-      <div className="mt-6 flex gap-3 rounded-xl border border-black/8 bg-white/72 p-4">
-        <Info size={16} className="mt-0.5 shrink-0 text-sky-600" />
-        <p className="text-[10px] leading-tight text-slate-600">
-          <strong className="text-slate-900">Interpretation:</strong> Werte nahe{" "}
-          <span className="text-red-700">1.0</span> bedeuten hohes Klumpenrisiko.
-          Werte nahe <span className="text-emerald-700">0 oder negativ</span> bieten
+      <div className="mt-6 flex gap-3 rounded-xl border border-black/8 bg-white/72 p-4 dark:border-white/10 dark:bg-white/5">
+        <Info size={16} className="mt-0.5 shrink-0 text-slate-600 dark:text-slate-400" />
+        <p className="text-[10px] leading-tight text-slate-600 dark:text-slate-400">
+          <strong className="text-slate-900 dark:text-white">Interpretation:</strong> Werte nahe{" "}
+          <span className="text-red-700 dark:text-red-400">1.0</span> bedeuten hohes Klumpenrisiko.
+          Werte nahe <span className="text-emerald-700 dark:text-emerald-400">0 oder negativ</span> bieten
           maximale Diversifizierung.
         </p>
       </div>

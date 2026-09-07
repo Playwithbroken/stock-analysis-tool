@@ -670,17 +670,17 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
           </section>
 
-          <section data-testid="compliance-release-gate" className={`mb-5 rounded-[1.5rem] border p-4 ${compliance.request_allowed === false ? "border-red-300 bg-red-50/80" : "border-sky-200 bg-sky-50/70"}`}>
+          <section data-testid="compliance-release-gate" className={`mb-5 rounded-[1.5rem] border p-4 ${compliance.request_allowed === false ? "border-red-300 bg-red-50/80 dark:border-red-500/20 dark:bg-red-500/10" : "border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5"}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Release-Scope</div>
-                <div className="mt-1 text-lg font-black text-slate-900">{displayValue(compliance.distribution_mode || "personal")}</div>
-                <div className="mt-1 text-xs leading-5 text-slate-600">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Release-Scope</div>
+                <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">{displayValue(compliance.distribution_mode || "personal")}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
                   {compliance.external_use ? "Nutzung durch Dritte benötigt eine aktuelle externe Rechts-, Compliance- und Datenschutzfreigabe." : "Privater Einzelarbeitsbereich; keine Drittfreigabe behauptet."}
                 </div>
-                {(compliance.blockers || []).length ? <div className="mt-2 text-xs font-bold text-red-800">Blocker: {(compliance.blockers || []).join(" · ")}</div> : null}
+                {(compliance.blockers || []).length ? <div className="mt-2 text-xs font-bold text-red-800 dark:text-red-400">Blocker: {(compliance.blockers || []).join(" · ")}</div> : null}
               </div>
-              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${compliance.request_allowed === false ? "border-red-300 bg-white text-red-800" : "border-sky-300 bg-white text-sky-800"}`}>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${compliance.request_allowed === false ? "border-red-300 bg-white text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400" : "border-black/10 bg-white text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"}`}>
                 {compliance.external_use ? (compliance.external_release_allowed ? "extern freigegeben" : "extern gesperrt") : "privat"}
               </span>
             </div>

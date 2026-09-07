@@ -88,11 +88,11 @@ export default function PortfolioPerformance({
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)]">
-          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-xl border border-black/8 bg-white/92 p-3 shadow-[0_18px_36px_rgba(17,24,39,0.1)] dark:border-white/10 dark:bg-[#1c1c1e]/95 dark:shadow-[0_18px_36px_rgba(0,0,0,0.5)]">
+          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
             {payload[0].payload.time}
           </p>
-          <p className="text-lg font-bold text-slate-900">
+          <p className="text-lg font-bold text-slate-900 dark:text-white">
             {formatPrice(payload[0].value)}
           </p>
           <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
@@ -108,10 +108,10 @@ export default function PortfolioPerformance({
     <div className="surface-panel rounded-[2rem] p-6">
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="mb-1 flex items-center gap-2 text-slate-500">
+          <div className="mb-1 flex items-center gap-2 text-slate-500 dark:text-slate-400">
             <TrendingUp
               size={16}
-              className={isPositive ? "text-emerald-600" : "text-red-600"}
+              className={isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
             />
             <span className="text-sm font-medium uppercase tracking-[0.18em]">
               Portfolioentwicklung
@@ -120,19 +120,19 @@ export default function PortfolioPerformance({
           <div className="flex items-baseline gap-3">
             <div
               className={`text-2xl font-bold ${
-                isPositive ? "text-emerald-700" : "text-red-700"
+                isPositive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"
               }`}
             >
               {formatPercent(stats.changePct)}
             </div>
-            <div className="text-sm font-mono text-slate-500">
+            <div className="text-sm font-mono text-slate-500 dark:text-slate-400">
               {isPositive ? "+" : ""}
               {formatPrice(stats.change)}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl border border-black/8 bg-white/80 p-1">
+        <div className="flex items-center gap-1 rounded-xl border border-black/8 bg-white/80 p-1 dark:border-white/10 dark:bg-white/5">
           {PERIODS.map((p) => (
             <button
               key={p.id}
@@ -140,7 +140,7 @@ export default function PortfolioPerformance({
               className={`rounded-lg px-4 py-1.5 text-xs font-bold transition-all ${
                 period.id === p.id
                   ? "bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(15,118,110,0.18)]"
-                  : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900"
+                  : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
               }`}
             >
               {p.label}
@@ -153,18 +153,18 @@ export default function PortfolioPerformance({
         className="h-[250px] w-full"
         minHeight={250}
         fallback={
-          <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
+          <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70 dark:border-white/10 dark:bg-white/5">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Portfoliowert wird berechnet
             </span>
           </div>
         }
       >
         {loading ? (
-          <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70">
+          <div className="flex h-full w-full flex-col items-center justify-center space-y-4 rounded-xl border border-black/8 bg-white/70 dark:border-white/10 dark:bg-white/5">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--accent)]/15 border-t-[var(--accent)]" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Portfoliowert wird berechnet
             </span>
           </div>

@@ -609,9 +609,9 @@ export default function AnalysisResult({
     <div className="analysis-result-layout grid gap-6 xl:grid-cols-[minmax(0,1fr)_19.5rem] 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:gap-8">
       <div className="min-w-0">
         <div className="space-y-6 pb-20">
-          <div data-testid="decision-scope-research" className="rounded-[1.35rem] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
-            <div className="font-extrabold uppercase tracking-[0.16em]">Research · keine Orderfreigabe</div>
-            <div className="mt-1 leading-6">
+          <div data-testid="decision-scope-research" className="rounded-[1.35rem] border border-black/8 bg-black/[0.02] px-4 py-3 text-sm text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+            <div className="font-extrabold uppercase tracking-[0.16em] text-slate-900 dark:text-white">Research · keine Orderfreigabe</div>
+            <div className="mt-1 leading-6 text-slate-600 dark:text-slate-400">
               {data.decision_scope?.description || "Analyse- und Beobachtungsinformation; keine Order und keine Kauf- oder Verkaufsempfehlung."}
               {" "}{data.decision_scope?.required_user_action || "Quellen, Datenstand und Risiko unabhängig prüfen."}
             </div>
@@ -908,11 +908,11 @@ export default function AnalysisResult({
                   </div>
                 )}
               </div>
-              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6 shadow-lg shadow-sky-500/5">
-                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-700">
+              <div className="rounded-2xl border border-black/8 bg-black/[0.02] p-6 shadow-sm dark:border-white/10 dark:bg-white/5">
+                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">
                   <Plus size={14} /> Stärken
                 </h3>
-                <div className="space-y-3 text-sm font-medium text-slate-700">
+                <div className="space-y-3 text-sm font-medium text-slate-700 dark:text-slate-300">
                   {data.risk_audit.positive_signals?.map(
                     (s: any, i: number) => (
                       <div key={i}>+ {s.signal}</div>

@@ -49,15 +49,15 @@ export default function AssetSuggestions({
         {suggestions.map((item) => (
           <div
             key={item.ticker}
-            className="group cursor-pointer rounded-xl border border-black/8 bg-white/75 p-4 transition-all hover:border-[var(--accent)]/25 hover:bg-white"
+            className="group cursor-pointer rounded-xl border border-black/8 bg-white/75 p-4 transition-all hover:border-[var(--accent)]/25 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20 dark:hover:bg-white/10"
             onClick={() => onAdd(item.ticker)}
           >
             <div className="mb-2 flex items-start justify-between">
               <div>
-                <div className="text-lg font-bold text-slate-900 transition-colors group-hover:text-[var(--accent)]">
+                <div className="text-lg font-bold text-slate-900 transition-colors group-hover:text-[var(--accent)] dark:text-white">
                   {item.ticker}
                 </div>
-                <div className="max-w-[120px] truncate text-[10px] text-slate-500">
+                <div className="max-w-[120px] truncate text-[10px] text-slate-500 dark:text-slate-400">
                   {item.name}
                 </div>
               </div>
@@ -66,10 +66,10 @@ export default function AssetSuggestions({
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between text-[11px]">
-              <span className="font-medium text-slate-600">{item.reason}</span>
+              <span className="font-medium text-slate-600 dark:text-slate-400">{item.reason}</span>
               <ArrowRight
                 size={14}
-                className="text-slate-500 transition-all group-hover:translate-x-1 group-hover:text-[var(--accent)]"
+                className="text-slate-500 transition-all group-hover:translate-x-1 group-hover:text-[var(--accent)] dark:text-slate-400"
               />
             </div>
           </div>

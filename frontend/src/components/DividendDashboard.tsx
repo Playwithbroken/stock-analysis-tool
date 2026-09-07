@@ -85,10 +85,10 @@ export default function DividendDashboard({ portfolioId }: DividendDashboardProp
             </span>
           </div>
           <div className="flex items-baseline gap-3">
-            <div className="text-2xl font-bold text-slate-900">
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">
               {formatPrice(data?.yearly_total || 0)}
             </div>
-            <div className="rounded bg-emerald-500/10 px-2 py-0.5 text-sm font-bold text-emerald-700">
+            <div className="rounded bg-emerald-500/10 px-2 py-0.5 text-sm font-bold text-emerald-700 dark:text-emerald-400">
               {data?.yield_on_cost.toFixed(2)}% Rendite auf Einstand
             </div>
           </div>

@@ -832,13 +832,13 @@ export default function PortfolioView({
         </div>
 
         {scalableStatus && (
-          <div className="mt-6 flex flex-col gap-4 rounded-[1.5rem] border border-sky-200 bg-sky-50/80 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mt-6 flex flex-col gap-4 rounded-[1.5rem] border border-black/8 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-800">
+              <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-300">
                 <ShieldCheck className="h-4 w-4" />
                 Scalable Capital · Read-only
               </div>
-              <div className="mt-2 text-sm font-bold text-slate-800">
+              <div className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
                 {!scalableStatus.enabled
                   ? "Integration ist vorbereitet, aber serverseitig noch nicht aktiviert."
                   : !scalableStatus.cli_installed
@@ -849,7 +849,7 @@ export default function PortfolioView({
                         : `${scalableStatus.position_count || 0} Positionen geprüft synchronisiert.`
                       : scalableStatus.error_message || "Bereit für den ersten sicheren Abgleich."}
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-600">
+              <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
                 {scalableStatus.last_success_at
                   ? `Letzter gültiger Stand: ${new Date(scalableStatus.last_success_at).toLocaleString()}${
                       scalableStatus.auto_sync_enabled
@@ -858,12 +858,12 @@ export default function PortfolioView({
                     }`
                   : "Keine Orders, Sparpläne oder Änderungen – ausschließlich Portfolio-Lesedaten."}
               </div>
-              {scalableNotice && <div className="mt-2 text-xs font-bold text-sky-900">{scalableNotice}</div>}
+              {scalableNotice && <div className="mt-2 text-xs font-bold text-slate-900 dark:text-white">{scalableNotice}</div>}
             </div>
             <button
               onClick={syncScalablePortfolio}
               disabled={!scalableStatus.enabled || !scalableStatus.cli_installed || scalableSyncing}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-sky-700 px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[#1d1d1f] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
               {scalableSyncing ? "Prüfe …" : "Scalable synchronisieren"}
@@ -872,25 +872,25 @@ export default function PortfolioView({
         )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Portfolios
             </div>
-            <div className="mt-2 text-3xl font-black text-slate-900">{portfolios.length}</div>
+            <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">{portfolios.length}</div>
           </div>
-          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Ausgewählt
             </div>
-            <div className="mt-2 text-xl font-black text-slate-900">
+            <div className="mt-2 text-xl font-black text-slate-900 dark:text-white">
               {currentPortfolio?.name || "Kein Portfolio"}
             </div>
           </div>
-          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Aktive Positionen
             </div>
-            <div className="mt-2 text-3xl font-black text-slate-900">
+            <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
               {currentPortfolio?.holdings.length || 0}
             </div>
           </div>
@@ -904,7 +904,7 @@ export default function PortfolioView({
               className={`rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                 selectedPortfolio === portfolio.id
                   ? "bg-[var(--accent)] text-white shadow-[0_14px_30px_rgba(15,118,110,0.16)]"
-                  : "border border-black/8 bg-white text-slate-600"
+                  : "border border-black/8 bg-white text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
               }`}
             >
               {portfolio.name} ({portfolio.holdings.length})
@@ -931,7 +931,7 @@ export default function PortfolioView({
                 <button
                   onClick={() => currentPortfolio && analyzePortfolio(currentPortfolio, true)}
                   disabled={loading || currentPortfolio.holdings.length === 0}
-                  className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+                  className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                 >
                   <span className="inline-flex items-center gap-2">
                     <RefreshCw size={14} />
@@ -940,7 +940,7 @@ export default function PortfolioView({
                 </button>
                 <button
                   onClick={() => window.open(`/api/portfolio/${selectedPortfolio}/export/csv`)}
-                  className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
+                  className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Download size={14} />
@@ -954,7 +954,7 @@ export default function PortfolioView({
                       setSelectedPortfolio(null);
                     }
                   }}
-                  className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700"
+                  className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Trash2 size={14} />
@@ -966,46 +966,46 @@ export default function PortfolioView({
 
             {analysis && (
               <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Gesamtwert
                   </div>
-                  <div className="mt-2 text-3xl font-black text-slate-900">
+                  <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                     {formatPrice(analysis.summary.total_value)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Investiert
                   </div>
-                  <div className="mt-2 text-3xl font-black text-slate-900">
+                  <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                     {formatPrice(analysis.summary.total_cost)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Rendite seit Kauf
                   </div>
-                  <div className={`mt-2 text-3xl font-black ${returnValue >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  <div className={`mt-2 text-3xl font-black ${returnValue >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {formatPrice(returnValue)}
                   </div>
-                  <div className={`mt-1 text-sm font-bold ${returnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  <div className={`mt-1 text-sm font-bold ${returnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {formatPercent(returnPct)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Portfolio-Score
                   </div>
                   <div className={`mt-2 text-3xl font-black ${scoreTone(analysis.summary.avg_score)}`}>
                     {formatNumber(analysis.summary.avg_score)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Positionen
                   </div>
-                  <div className="mt-2 text-3xl font-black text-slate-900">
+                  <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                     {analysis.summary.num_holdings}
                   </div>
                   {avgHoldingDays != null && (
@@ -1014,7 +1014,7 @@ export default function PortfolioView({
                     </div>
                   )}
                   {avgHoldingDays != null && (
-                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                       Ø Haltedauer {formatHoldingPeriod(avgHoldingDays)}
                     </div>
                   )}
@@ -1023,16 +1023,16 @@ export default function PortfolioView({
             )}
 
             {analysis && (
-              <section className="mt-6 rounded-[1.7rem] border border-black/8 bg-white/75 p-5">
+              <section className="mt-6 rounded-[1.7rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                       Portfolio-Beratungscheck
                     </div>
-                    <h3 className="mt-2 text-2xl text-slate-900">
+                    <h3 className="mt-2 text-2xl text-slate-900 dark:text-white">
                       {advisoryHeadline}
                     </h3>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
                       Prüft Konzentration, Positionslimit, Diversifikation und Score gegen dein Beratungsprofil.
                     </p>
                   </div>
@@ -1043,53 +1043,53 @@ export default function PortfolioView({
                 </div>
 
                 <div className="mt-5 grid gap-3 lg:grid-cols-4">
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Status
                     </div>
-                    <div className="mt-2 text-sm font-black leading-6 text-slate-900">{advisoryStatusCopy}</div>
+                    <div className="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-white">{advisoryStatusCopy}</div>
                   </div>
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Top Position
                     </div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">
+                    <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                       {advisoryTopHolding?.ticker || "n/a"}
                     </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                    <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                       {advisoryTopHoldingPct != null ? `${formatNumber(advisoryTopHoldingPct)}% vom Portfolio` : "Keine Bewertung"}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Positionslimit
                     </div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">
+                    <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                       {formatNumber(maxSinglePositionPct)}%
                     </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                    <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                       aus deinem Beratungsprofil
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Profil
                     </div>
-                    <div className="mt-2 text-sm font-black leading-6 text-slate-900">
+                    <div className="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-white">
                       {profileValueLabel(advisoryProfileLimits?.preferred_strategy || advisoryProfile?.preferred_strategy || "mixed")} / {profileValueLabel(advisoryProfileLimits?.risk_tolerance || advisoryProfile?.risk_tolerance || "medium")}
                     </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                    <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                       Verlusttragfähigkeit {profileValueLabel(advisoryProfileLimits?.loss_capacity || advisoryProfile?.loss_capacity || "medium")}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Priorisierte Prüfliste
                     </div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                       Score {portfolioAdvisoryLoading ? "--" : portfolioAdvisory?.advisory_score ?? "--"}/100
                     </div>
                   </div>
@@ -1108,7 +1108,7 @@ export default function PortfolioView({
                         <div className="mt-2 text-xs font-semibold leading-5 opacity-90">
                           {item.detail || "Keine harte Bremse erkannt."}
                         </div>
-                        <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold leading-5 text-slate-700">
+                        <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold leading-5 text-slate-700 dark:bg-black/40 dark:text-slate-200">
                           {item.next_step || "Trigger, Zielgewicht und Invalidierung dokumentieren."}
                         </div>
                       </div>
@@ -1133,14 +1133,14 @@ export default function PortfolioView({
             <section className="surface-panel rounded-[2rem] p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                     Preisalarme
                   </div>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                     Auslösung bei Kursberührung mit fünf Minuten Sperrzeit. Alarme werden in dieser Beta nur per Telegram versendet.
                   </p>
                 </div>
-                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
+                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
                   {alerts.filter((item) => item.enabled).length} aktiv
                 </div>
               </div>
@@ -1150,12 +1150,12 @@ export default function PortfolioView({
                   value={newAlertSymbol}
                   onChange={(e) => setNewAlertSymbol(e.target.value.toUpperCase())}
                   placeholder="Ticker (z.B. AAPL)"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <select
                   value={newAlertDirection}
                   onChange={(e) => setNewAlertDirection(e.target.value as "above" | "below")}
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 >
                   <option value="above">Überschreitet</option>
                   <option value="below">Unterschreitet</option>
@@ -1166,11 +1166,11 @@ export default function PortfolioView({
                   type="number"
                   step="0.01"
                   placeholder="Zielkurs"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <button
                   onClick={createPriceAlert}
-                  className="rounded-xl bg-[var(--accent)] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
+                  className="rounded-xl bg-[#1d1d1f] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
                 >
                   Alarm hinzufügen
                 </button>
@@ -1179,7 +1179,7 @@ export default function PortfolioView({
               <div className="mt-5 overflow-x-auto">
                 <table className="min-w-full">
                   <thead>
-                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:border-white/8 dark:bg-white/[0.02] dark:text-slate-400">
                       <th className="px-4 py-3">Ticker</th>
                       <th className="px-4 py-3">Regel</th>
                       <th className="px-4 py-3 text-right">Zielkurs</th>
@@ -1191,25 +1191,25 @@ export default function PortfolioView({
                   <tbody>
                     {alertsLoading ? (
                       <tr>
-                        <td className="px-4 py-4 text-sm text-slate-500" colSpan={6}>
+                        <td className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
                           Alerts werden geladen...
                         </td>
                       </tr>
                     ) : alerts.length === 0 ? (
                       <tr>
-                        <td className="px-4 py-4 text-sm text-slate-500" colSpan={6}>
+                        <td className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
                           Noch keine Alerts vorhanden.
                         </td>
                       </tr>
                     ) : (
                       alerts.map((alert) => (
-                        <tr key={alert.id} className="border-b border-black/6 last:border-b-0">
-                          <td className="px-4 py-4 text-sm font-extrabold text-slate-900">{alert.symbol}</td>
-                          <td className="px-4 py-4 text-sm font-semibold text-slate-700">{alertDirectionLabel(alert.direction)}</td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                        <tr key={alert.id} className="border-b border-black/6 last:border-b-0 dark:border-white/8">
+                          <td className="px-4 py-4 text-sm font-extrabold text-slate-900 dark:text-white">{alert.symbol}</td>
+                          <td className="px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">{alertDirectionLabel(alert.direction)}</td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                             {formatPrice(alert.target_price)}
                           </td>
-                          <td className="px-4 py-4 text-xs text-slate-500">
+                          <td className="px-4 py-4 text-xs text-slate-500 dark:text-slate-400">
                             {alert.last_triggered_at
                               ? new Date(alert.last_triggered_at).toLocaleString()
                               : "Noch nie"}
@@ -1218,8 +1218,8 @@ export default function PortfolioView({
                             <span
                               className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
                                 alert.enabled
-                                  ? "bg-emerald-500/10 text-emerald-700"
-                                  : "bg-slate-200 text-slate-500"
+                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                  : "bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-400"
                               }`}
                             >
                               {alert.enabled ? "Aktiv" : "Pausiert"}
@@ -1229,15 +1229,15 @@ export default function PortfolioView({
                             <div className="flex justify-end gap-2">
                               <button
                                 onClick={() => toggleAlert(alert)}
-                                className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                               >
                                 {alert.enabled ? "Pausieren" : "Aktivieren"}
                               </button>
                               <button
                                 onClick={() => deleteAlert(alert)}
-                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
+                                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                               >
-                                Entfernen
+                                Löschen
                               </button>
                             </div>
                           </td>
@@ -1268,11 +1268,11 @@ export default function PortfolioView({
             <>
               <div className="grid gap-6 lg:grid-cols-2">
                 {isScalableManagedPortfolio ? (
-                  <section className="surface-panel rounded-[2rem] border border-sky-200 bg-sky-50/70 p-6">
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-800">
+                  <section className="surface-panel rounded-[2rem] border border-black/8 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/5">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-300">
                       Verifizierter Broker-Snapshot
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-700">
+                    <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
                       Aktueller Wert und FIFO-Einstand stammen direkt aus dem abgeglichenen Scalable-Snapshot.
                       Eine historische Kurve wird erst angezeigt, wenn Scalable dafür vollständig vergleichbare
                       Zeitreihen liefert.
@@ -1340,53 +1340,53 @@ export default function PortfolioView({
                     return (
                       <div
                         key={`mobile-${holding.ticker}`}
-                        className="rounded-[1.3rem] border border-black/8 bg-white/80 p-4"
+                        className="rounded-[1.3rem] border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="font-extrabold text-slate-900">{holding.ticker}</div>
-                            <div className="truncate text-sm text-slate-500">{holding.name}</div>
+                            <div className="font-extrabold text-slate-900 dark:text-white">{holding.ticker}</div>
+                            <div className="truncate text-sm text-slate-500 dark:text-slate-400">{holding.name}</div>
                           </div>
                           <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
                             holding.recommendation?.includes("BUY")
-                              ? "bg-emerald-500/10 text-emerald-700"
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                               : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
-                                ? "bg-red-500/10 text-red-700"
-                                : "bg-amber-500/10 text-amber-700"
+                                ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                           }`}>
                             {recommendationLabel(holding.recommendation)}
                           </span>
                         </div>
 
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Anteile</div>
-                            <div className="mt-1 font-bold text-slate-900">{holding.shares}</div>
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Anteile</div>
+                            <div className="mt-1 font-bold text-slate-900 dark:text-white">{holding.shares}</div>
                           </div>
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Wert</div>
-                            <div className="mt-1 font-bold text-slate-900">{formatPrice(holding.position_value || 0)}</div>
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Wert</div>
+                            <div className="mt-1 font-bold text-slate-900 dark:text-white">{formatPrice(holding.position_value || 0)}</div>
                           </div>
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Kaufkurs</div>
-                            <div className="mt-1 font-bold text-slate-900">
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Kaufkurs</div>
+                            <div className="mt-1 font-bold text-slate-900 dark:text-white">
                               {hasEntry ? formatPrice(holding.buy_price) : "Kurs fehlt"}
                             </div>
                           </div>
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Aktuell</div>
-                            <div className="mt-1 font-bold text-slate-900">{formatPrice(holding.current_price || 0)}</div>
+                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Aktuell</div>
+                            <div className="mt-1 font-bold text-slate-900 dark:text-white">{formatPrice(holding.current_price || 0)}</div>
                           </div>
                         </div>
 
-                        <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                          <span className="rounded-full border border-black/8 bg-white px-3 py-1">
+                        <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                          <span className="rounded-full border border-black/8 bg-white px-3 py-1 dark:border-white/10 dark:bg-white/5">
                             Kaufdatum {formatPurchaseDate(holding.purchase_date)}
                           </span>
-                          <span className="rounded-full border border-black/8 bg-white px-3 py-1">
+                          <span className="rounded-full border border-black/8 bg-white px-3 py-1 dark:border-white/10 dark:bg-white/5">
                             Seit Kauf {formatHoldingPeriod(holding.holding_days)}
                           </span>
-                          <span className={`rounded-full px-3 py-1 ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
+                          <span className={`rounded-full px-3 py-1 ${scoreTone(holding.score || 0)} bg-black/[0.04] dark:bg-white/10`}>
                             Score {formatNumber(holding.score, 0, "0")}
                           </span>
                         </div>
@@ -1399,7 +1399,7 @@ export default function PortfolioView({
                               buyPrice: holding.buy_price,
                               purchaseDate: holding.purchase_date,
                             })}
-                            className="mt-3 w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left text-xs font-semibold text-amber-800"
+                            className="mt-3 w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left text-xs font-semibold text-amber-800 dark:text-amber-400"
                           >
                             Kaufkurs fehlt: Einstand eintragen, damit Rendite seit Kauf korrekt berechnet wird.
                           </button>
@@ -1407,17 +1407,17 @@ export default function PortfolioView({
 
                         <div className="mt-4 flex items-end justify-between gap-3">
                           <div>
-                            <div className={`text-base font-extrabold ${holdingReturn >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                            <div className={`text-base font-extrabold ${holdingReturn >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                               {formatPrice(holdingReturn)}
                             </div>
-                            <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                            <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                               {formatPercent(holdingReturnPct)}
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <button
                               onClick={() => onAnalyzeStock(holding.ticker)}
-                              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                             >
                               Analysieren
                             </button>
@@ -1428,17 +1428,17 @@ export default function PortfolioView({
                                 buyPrice: holding.buy_price,
                                 purchaseDate: holding.purchase_date,
                               })}
-                              className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] ${
+                              className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
                                 isEditing
                                   ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
-                                  : "border-black/8 bg-white text-slate-700"
+                                  : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                               }`}
                             >
                               {isEditing ? "Bearbeitung" : "Bearbeiten"}
                             </button>
                             <button
                               onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
-                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                             >
                               Entfernen
                             </button>
@@ -1517,7 +1517,7 @@ export default function PortfolioView({
                 <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full">
                     <thead>
-                      <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                      <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:border-white/8 dark:bg-white/[0.02] dark:text-slate-400">
                         <th className="px-6 py-4">Aktie</th>
                         <th className="px-4 py-4 text-right">Anteile</th>
                         <th className="px-4 py-4 text-right">Kaufdatum</th>
@@ -1539,34 +1539,34 @@ export default function PortfolioView({
                         const isEditing = isEditingHolding(holding.ticker);
                         return (
                         <Fragment key={`desktop-${holding.ticker}`}>
-                          <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02]">
+                          <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02] dark:border-white/8 dark:hover:bg-white/[0.02]">
                             <td className="px-6 py-4">
-                              <div className="font-extrabold text-slate-900">{holding.ticker}</div>
-                              <div className="max-w-[220px] truncate text-sm text-slate-500">{holding.name}</div>
+                              <div className="font-extrabold text-slate-900 dark:text-white">{holding.ticker}</div>
+                              <div className="max-w-[220px] truncate text-sm text-slate-500 dark:text-slate-400">{holding.name}</div>
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                               {holding.shares}
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                               {formatPurchaseDate(holding.purchase_date)}
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                               {formatHoldingPeriod(holding.holding_days)}
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                               {hasEntry ? formatPrice(holding.buy_price) : "Kaufkurs fehlt"}
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                               {formatPrice(holding.current_price || 0)}
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-extrabold text-slate-900">
+                            <td className="px-4 py-4 text-right text-sm font-extrabold text-slate-900 dark:text-white">
                               {formatPrice(holding.position_value || 0)}
                             </td>
                             <td className="px-4 py-4 text-right">
-                              <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                                 {formatPrice(holdingReturn)}
                               </div>
-                              <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                                 {formatPercent(holdingReturnPct)}
                               </div>
                               {!hasEntry && (
@@ -1576,7 +1576,7 @@ export default function PortfolioView({
                               )}
                             </td>
                             <td className="px-4 py-4 text-right">
-                              <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04]`}>
+                              <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04] dark:bg-white/10`}>
                                 {formatNumber(holding.score, 0, "0")}
                               </span>
                             </td>
@@ -1584,10 +1584,10 @@ export default function PortfolioView({
                               <span
                                 className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
                                   holding.recommendation?.includes("BUY")
-                                    ? "bg-emerald-500/10 text-emerald-700"
+                                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                                     : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
-                                      ? "bg-red-500/10 text-red-700"
-                                      : "bg-amber-500/10 text-amber-700"
+                                      ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                                 }`}
                               >
                                 {recommendationLabel(holding.recommendation)}
@@ -1597,7 +1597,7 @@ export default function PortfolioView({
                               <div className="flex justify-end gap-2">
                                 <button
                                   onClick={() => onAnalyzeStock(holding.ticker)}
-                                  className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                  className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                                 >
                                   Analysieren
                                 </button>
@@ -1608,17 +1608,17 @@ export default function PortfolioView({
                                     buyPrice: holding.buy_price,
                                     purchaseDate: holding.purchase_date,
                                   })}
-                                  className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] ${
+                                  className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
                                     isEditing
                                       ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
-                                      : "border-black/8 bg-white text-slate-700"
+                                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                                   }`}
                                 >
                                   {isEditing ? "Bearbeitung" : "Bearbeiten"}
                                 </button>
                                 <button
                                   onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
-                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700"
+                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                                 >
                                   Entfernen
                                 </button>
@@ -1626,11 +1626,11 @@ export default function PortfolioView({
                             </td>
                           </tr>
                           {isEditing && (
-                            <tr className="border-b border-black/6 bg-[var(--accent-soft)]/30">
-                              <td colSpan={10} className="px-6 py-4">
+                            <tr className="border-b border-black/6 bg-[var(--accent-soft)]/30 dark:border-white/8">
+                              <td colSpan={11} className="px-6 py-4">
                                 <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
                                   <label className="block">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                                       Anteile
                                     </div>
                                     <input
@@ -1639,11 +1639,11 @@ export default function PortfolioView({
                                       step="0.0001"
                                       value={editHoldingShares}
                                       onChange={(e) => setEditHoldingShares(e.target.value)}
-                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
                                     />
                                   </label>
                                   <label className="block">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                                       Kaufkurs (USD)
                                     </div>
                                     <input
@@ -1653,24 +1653,24 @@ export default function PortfolioView({
                                       value={editHoldingBuyPrice}
                                       onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
                                       placeholder="Optional"
-                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
                                     />
                                   </label>
                                   <label className="block">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                                       Kaufdatum
                                     </div>
                                     <input
                                       type="date"
                                       value={editHoldingPurchaseDate}
                                       onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
-                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
                                     />
                                   </label>
                                   <div className="flex justify-end gap-2">
                                     <button
                                       onClick={closeEditHolding}
-                                      className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                      className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                                     >
                                       <span className="inline-flex items-center gap-1">
                                         <X size={12} />
@@ -1701,17 +1701,17 @@ export default function PortfolioView({
             </>
           ) : (
             <section className="surface-panel rounded-[2.4rem] p-10 text-center">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[2rem] bg-black/[0.04]">
-                <Plus size={32} className="text-slate-400" />
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[2rem] bg-black/[0.04] dark:bg-white/10">
+                <Plus size={32} className="text-slate-400 dark:text-slate-300" />
               </div>
-              <h3 className="mt-6 text-2xl text-slate-900">Noch keine Positionen</h3>
-              <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-slate-500">
+              <h3 className="mt-6 text-2xl text-slate-900 dark:text-white">Noch keine Positionen</h3>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-slate-500 dark:text-slate-400">
                 Füge deine erste Position hinzu, um Rendite, Erträge, Risiko und Diversifikation auszuwerten.
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <button
                   onClick={() => window.open(`/api/portfolio/${selectedPortfolio}/export/csv`)}
-                  className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
+                  className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                 >
                   CSV exportieren
                 </button>
@@ -1727,13 +1727,13 @@ export default function PortfolioView({
         </div>
       ) : (
         <section className="surface-panel rounded-[2.6rem] p-10 text-center">
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] bg-black/[0.04]">
-            <LayoutGrid size={34} className="text-slate-400" />
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] bg-black/[0.04] dark:bg-white/10">
+            <LayoutGrid size={34} className="text-slate-400 dark:text-slate-300" />
           </div>
-          <h3 className="mt-6 text-3xl text-slate-900">
+          <h3 className="mt-6 text-3xl text-slate-900 dark:text-white">
             {portfolios.length === 0 ? "Erstelle dein erstes Portfolio" : "Portfolio auswählen"}
           </h3>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-slate-500">
+          <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-slate-500 dark:text-slate-400">
             {portfolios.length === 0
               ? "Bündele Positionen, Allokation, Risiko und Entscheidungen an einem Ort."
               : "Wähle oben ein Portfolio aus, um die vollständige Arbeitsansicht zu öffnen."}
@@ -1784,12 +1784,12 @@ export default function PortfolioView({
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="presentation">
-          <div ref={createPortfolioDialogRef} role="dialog" aria-modal="true" aria-labelledby="create-portfolio-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[2rem] p-6">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-md dark:bg-black/65" role="presentation">
+          <div ref={createPortfolioDialogRef} role="dialog" aria-modal="true" aria-labelledby="create-portfolio-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[2rem] border border-black/8 p-6 dark:border-white/10 dark:bg-[#1c1c1e]">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
               Neues Portfolio
             </div>
-            <h3 id="create-portfolio-title" className="mt-2 text-2xl text-slate-900">Portfolio anlegen</h3>
+            <h3 id="create-portfolio-title" className="mt-2 text-2xl text-slate-900 dark:text-white">Portfolio anlegen</h3>
             <input
               type="text"
               value={newPortfolioName}
@@ -1798,16 +1798,16 @@ export default function PortfolioView({
                 setCreatePortfolioError(null);
               }}
               placeholder="Name des Portfolios"
-              className="mt-5 w-full rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+              className="mt-5 w-full rounded-[1.2rem] border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
               autoFocus
             />
             {createPortfolioError ? (
-              <div role="alert" className="mt-3 rounded-[1rem] border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-700">
+              <div role="alert" className="mt-3 rounded-[1rem] border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-700 dark:text-red-400">
                 {createPortfolioError}
               </div>
             ) : null}
             {createPortfolioNotice ? (
-              <div role="status" aria-live="polite" className="mt-3 rounded-[1rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-700">
+              <div role="status" aria-live="polite" className="mt-3 rounded-[1rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
                 {createPortfolioNotice}
               </div>
             ) : null}
@@ -1819,14 +1819,14 @@ export default function PortfolioView({
                   setShowCreateModal(false);
                 }}
                 disabled={creatingPortfolio}
-                className="rounded-[1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700"
+                className="rounded-[1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleCreatePortfolio}
                 disabled={!newPortfolioName.trim() || creatingPortfolio}
-                className="rounded-[1rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+                className="rounded-[1rem] bg-[#1d1d1f] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 disabled:opacity-50"
               >
                 {creatingPortfolio ? "Wird gespeichert..." : "Erstellen"}
               </button>

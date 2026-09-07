@@ -2040,7 +2040,7 @@ export default function WorldMarketMap({
                   type="button"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={item.action}
-                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-100 dark:hover:bg-white/20"
+                  className="h-8 w-8 rounded-[0.7rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200 transition-colors hover:bg-black/5 dark:hover:bg-white/20"
                   aria-label={`Kartenzoom ${item.label}`}
                 >
                   {item.label}
@@ -2482,9 +2482,9 @@ export default function WorldMarketMap({
                             <span>{item.actionable} handlungsrelevant</span>
                           </div>
                         </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                           <div
-                            className={`h-full rounded-full ${selectedGeoPlace === item.place ? "bg-[var(--accent)]" : "bg-slate-900/75"}`}
+                            className={`h-full rounded-full ${selectedGeoPlace === item.place ? "bg-[var(--accent)]" : "bg-slate-900/75 dark:bg-white/80"}`}
                             style={{ width: `${item.weight}%` }}
                           />
                         </div>
@@ -2779,7 +2779,7 @@ export default function WorldMarketMap({
                                 {heat.level}
                               </span>
                             </div>
-                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                               <div
                                 className={`h-full rounded-full ${heat.toneClass}`}
                                 style={{ width: `${heat.level}%` }}

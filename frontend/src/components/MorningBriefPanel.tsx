@@ -1378,7 +1378,7 @@ export default function MorningBriefPanel({
                               {heat.level}
                             </span>
                           </div>
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                             <div
                               className={`h-full rounded-full ${heat.toneClass}`}
                               style={{ width: `${heat.level}%` }}
@@ -2468,16 +2468,16 @@ export default function MorningBriefPanel({
                   <div className="mt-3 flex items-center gap-3">
                     {prob != null && (
                       <div className="flex items-center gap-2">
-                        <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-2 w-16 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                           <div
                             className={`h-full rounded-full ${prob >= 70 ? "bg-emerald-500" : prob <= 30 ? "bg-red-500" : "bg-amber-400"}`}
                             style={{ width: `${prob}%` }}
                           />
                         </div>
-                        <span className="text-sm font-black text-slate-900">{prob}%</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">{prob}%</span>
                       </div>
                     )}
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <span className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                       relevance {openValue(pm.relevance)}
                     </span>
                   </div>
@@ -2561,25 +2561,25 @@ export default function MorningBriefPanel({
                   href={pm.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-[1.2rem] border border-black/8 bg-white/70 p-4 transition-colors hover:bg-white"
+                  className="rounded-[1.2rem] border border-black/8 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
                 >
-                  <div className="text-sm font-bold text-slate-900 line-clamp-2">
+                  <div className="text-sm font-bold text-slate-900 dark:text-white line-clamp-2">
                     {pm.question}
                   </div>
                   <div className="mt-3 flex items-center gap-3">
                     {prob != null && (
                       <div className="flex items-center gap-2">
-                        <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-2 w-16 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                           <div
                             className={`h-full rounded-full ${prob >= 70 ? "bg-emerald-500" : prob <= 30 ? "bg-red-500" : "bg-amber-400"}`}
                             style={{ width: `${prob}%` }}
                           />
                         </div>
-                        <span className="text-sm font-black text-slate-900">{prob}%</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">{prob}%</span>
                       </div>
                     )}
                     {vol && (
-                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                         Vol {vol}
                       </span>
                     )}

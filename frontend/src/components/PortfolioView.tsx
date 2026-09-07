@@ -1251,7 +1251,7 @@ export default function PortfolioView({
 
             {portfolioVerdict && (
               <div className="mt-6 flex items-start gap-4 rounded-[1.8rem] border border-black/8 bg-white/80 dark:bg-white/5 p-6 text-slate-900 dark:text-white shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-white">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/[0.04] dark:bg-white/10 text-slate-800 dark:text-white">
                   <LayoutGrid size={22} />
                 </div>
                 <div>

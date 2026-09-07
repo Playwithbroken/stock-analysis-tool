@@ -457,7 +457,7 @@ export default function BrokerChat({
         className={`flex items-center justify-between border-b border-black/8 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4 sm:p-6 ${isInline ? "px-0 pt-0" : ""}`}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/8 bg-slate-100 text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/8 bg-black/[0.04] text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-white">
             <Bot size={20} />
           </div>
           <div>
@@ -495,7 +495,7 @@ export default function BrokerChat({
               <div className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">
                 {latestOracleMessage}
               </div>
-              <div className="mt-3 rounded-[1rem] border border-black/8 dark:border-white/10 bg-slate-100 dark:bg-white/10 px-3 py-2 text-xs font-medium leading-5 text-slate-700 dark:text-slate-300">
+              <div className="mt-3 rounded-[1rem] border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/10 px-3 py-2 text-xs font-medium leading-5 text-slate-700 dark:text-slate-300">
                 {assistantFocus}
               </div>
             </div>
@@ -505,7 +505,7 @@ export default function BrokerChat({
                   key={item.label}
                   className={`rounded-[1rem] border px-3 py-2 ${
                     item.active
-                      ? "border-black/20 dark:border-white/20 bg-slate-100 dark:bg-white/15 text-slate-900 dark:text-white"
+                      ? "border-black/20 dark:border-white/20 bg-black/[0.04] dark:bg-white/15 text-slate-900 dark:text-white"
                       : "border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 text-slate-400 dark:text-slate-500"
                   }`}
                 >
@@ -619,7 +619,7 @@ export default function BrokerChat({
                   {dataReadiness}
                 </span>
               </div>
-              <div className="mt-3 rounded-[1rem] border border-black/8 dark:border-white/10 bg-slate-100 dark:bg-white/10 px-3 py-2 text-xs font-medium leading-5 text-slate-700 dark:text-slate-300">
+              <div className="mt-3 rounded-[1rem] border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/10 px-3 py-2 text-xs font-medium leading-5 text-slate-700 dark:text-slate-300">
                 {assistantFocus}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -677,7 +677,7 @@ export default function BrokerChat({
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                       msg.role === "user"
-                        ? "border-black/10 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                        ? "border-black/10 bg-black/[0.04] text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                         : "border-black/10 bg-[#1d1d1f] text-white dark:border-white/10 dark:bg-white dark:text-black"
                     }`}
                   >
@@ -690,7 +690,7 @@ export default function BrokerChat({
                   <div
                     className={`whitespace-pre-line rounded-2xl border p-4 text-sm leading-relaxed ${
                       msg.role === "user"
-                        ? "border-black/10 bg-slate-100 text-slate-900 dark:border-white/10 dark:bg-white/10 dark:text-white"
+                        ? "border-black/10 bg-black/[0.04] text-slate-900 dark:border-white/10 dark:bg-white/10 dark:text-white"
                         : "border-black/8 bg-white/80 text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
                     }`}
                   >
@@ -718,7 +718,7 @@ export default function BrokerChat({
       >
         {currentTicker && !isInline && (
           <div className="mb-4 flex items-center gap-2">
-            <span className="rounded-md border border-black/10 dark:border-white/10 bg-slate-100 dark:bg-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-700 dark:text-slate-300">
+            <span className="rounded-md border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-700 dark:text-slate-300">
               Kontext: {currentTicker}
             </span>
           </div>
@@ -744,7 +744,7 @@ export default function BrokerChat({
                 {tabName} Desk
               </span>
               {primaryTicker ? (
-                <span className="rounded-full border border-black/10 dark:border-white/10 bg-slate-100 dark:bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-800 dark:text-slate-200">
+                <span className="rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-800 dark:text-slate-200">
                   Fokus {String(primaryTicker).toUpperCase()}
                 </span>
               ) : null}
@@ -761,7 +761,7 @@ export default function BrokerChat({
               {contextStats.filter((item) => item.active).slice(0, 5).map((item) => (
                 <span
                   key={item.label}
-                  className="rounded-full border border-black/10 dark:border-white/10 bg-slate-100 dark:bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-300"
+                  className="rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-300"
                 >
                   {item.label} {item.value}
                 </span>
@@ -774,7 +774,7 @@ export default function BrokerChat({
                   type="button"
                   onClick={command.run}
                   disabled={command.disabled}
-                  className="shrink-0 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/10 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-800 dark:text-slate-200 transition-colors hover:bg-slate-100 dark:hover:bg-white/15 disabled:border-black/6 disabled:bg-white/50 dark:disabled:bg-white/5 disabled:text-slate-400"
+                  className="shrink-0 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/10 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-800 dark:text-slate-200 transition-colors hover:bg-black/5 dark:hover:bg-white/15 disabled:border-black/6 disabled:bg-white/50 dark:disabled:bg-white/5 disabled:text-slate-400"
                 >
                   <span className="block">{command.label}</span>
                   <span className="mt-0.5 block text-[9px] font-medium tracking-[0.1em] text-slate-500 dark:text-slate-400">
@@ -788,7 +788,7 @@ export default function BrokerChat({
                   type="button"
                   onClick={() => void submitMessage(action)}
                   disabled={loading}
-                  className="shrink-0 rounded-xl border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/10 px-3 py-2 text-left text-[11px] font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/15 disabled:opacity-50"
+                  className="shrink-0 rounded-xl border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/10 px-3 py-2 text-left text-[11px] font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-black/5 dark:hover:bg-white/15 disabled:opacity-50"
                 >
                   {action}
                 </button>
@@ -801,7 +801,7 @@ export default function BrokerChat({
             <button
               type="button"
               onClick={() => setMobileSheetMode("full")}
-              className="w-full rounded-xl border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-100 dark:hover:bg-white/15"
+              className="w-full rounded-xl border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:bg-black/5 dark:hover:bg-white/15"
             >
               Vollstaendige Desk-Ansicht oeffnen
             </button>

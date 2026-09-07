@@ -1862,8 +1862,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       }`}>
                         {internals.fear_greed[0].value}
                       </div>
-                      <div className="mt-1 text-xs font-bold uppercase text-slate-500">{internals.fear_greed[0].label}</div>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div className="mt-1 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{internals.fear_greed[0].label}</div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                         <div
                           className={`h-full rounded-full transition-all ${
                             internals.fear_greed[0].value > 60 ? "bg-emerald-500" : internals.fear_greed[0].value < 40 ? "bg-red-500" : "bg-amber-400"
@@ -1939,10 +1939,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           className="rounded-[1.2rem] border border-black/8 bg-white/70 p-3 text-left transition-colors hover:bg-white"
                         >
                           <div className="text-xs font-black text-slate-900">{s.symbol}</div>
-                          <div className={`mt-1 text-lg font-black ${(s.change_1d || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          <div className={`mt-1 text-lg font-black ${(s.change_1d || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                             {formatMove(s.change_1d)}
                           </div>
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                             <div
                               className={`h-full rounded-full ${(s.change_1d || 0) >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
                               style={{ width: `${Math.min(Math.abs(s.change_1d || 0) * 20, 100)}%` }}

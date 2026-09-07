@@ -654,7 +654,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     { label: "MACD", active: showMACD, setActive: setShowMACD, activeTone: "border-sky-500/30 bg-sky-500/10 text-sky-700", help: INDICATOR_HELP.MACD },
     { label: "SMA", active: showSMA, setActive: setShowSMA, activeTone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700", help: INDICATOR_HELP.SMA },
     { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700", help: INDICATOR_HELP.Bollinger },
-    { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700", help: INDICATOR_HELP.Volume },
+    { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-black/20 bg-black/5 text-slate-800 dark:border-white/20 dark:bg-white/10 dark:text-white", help: INDICATOR_HELP.Volume },
     { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700", help: INDICATOR_HELP.VWAP },
     { label: "⚡ Edge", active: showEdgeLevels, setActive: setShowEdgeLevels, activeTone: "border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-300 font-bold", help: INDICATOR_HELP.EdgeLevels },
   ];

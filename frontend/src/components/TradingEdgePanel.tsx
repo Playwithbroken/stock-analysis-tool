@@ -187,10 +187,10 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
     >
       <header className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
             Trading Edge
           </div>
-          <h2 className="mt-1 text-xl font-bold text-slate-900">
+          <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">
             Live signals — squeeze, insider, options, regime
           </h2>
         </div>
@@ -199,47 +199,47 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
       {/* Regime bar */}
       <div className="grid gap-3 sm:grid-cols-3">
         {regime.vix && (
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">
+          <div className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-4">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               VIX
             </div>
             <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold text-slate-900">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">
                 {regime.vix.value}
               </div>
               <div className={`text-sm font-semibold ${colorPct(regime.vix.change)}`}>
                 {arrow(Number(regime.vix.change || 0))} {Number(regime.vix.change || 0).toFixed(2)}
               </div>
             </div>
-            <div className="text-xs text-slate-600 mt-1 capitalize">
+            <div className="text-xs text-slate-600 dark:text-slate-300 mt-1 capitalize">
               regime: {regime.vix.regime}
             </div>
           </div>
         )}
         {regime.crypto_fng && (
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">
+          <div className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-4">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Crypto Fear &amp; Greed
             </div>
-            <div className="text-2xl font-bold text-slate-900">
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">
               {regime.crypto_fng.value}
             </div>
-            <div className="text-xs text-slate-600 mt-1">
+            <div className="text-xs text-slate-600 dark:text-slate-300 mt-1">
               {regime.crypto_fng.label}
             </div>
           </div>
         )}
         {yield_curve.us10y && (
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">
+          <div className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-4">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               US Yields
             </div>
-            <div className="text-sm font-semibold text-slate-900">
+            <div className="text-sm font-semibold text-slate-900 dark:text-white">
               10Y {yield_curve.us10y}% · 5Y {yield_curve.us5y}% · 30Y {yield_curve.us30y}%
             </div>
             <div
               className={`text-xs mt-1 font-bold ${
-                yield_curve.inverted ? "text-rose-600" : "text-emerald-600"
+                yield_curve.inverted ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
               }`}
             >
               {yield_curve.inverted ? "⚠ INVERTED" : "Normal"} (10-5 spread{" "}
@@ -252,7 +252,7 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
       {/* Sectors */}
       {sectors.length > 0 && (
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
             Sector Rotation (5d)
           </div>
           <div className="flex flex-wrap gap-2">
@@ -261,8 +261,8 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
                 key={s.ticker}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
                   s.change_5d > 0
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-rose-50 text-rose-700"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
+                    : "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20"
                 }`}
                 title={`${s.name} 1d ${s.change_1d}%`}
               >
@@ -284,7 +284,7 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
             {premarket.map((m) => (
               <div
                 key={m.ticker}
-                className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2"
+                className="flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2"
               >
                 <span {...tickerBtn(onSelectTicker, m.ticker)}>{m.ticker}</span>
                 <div className={`text-sm font-semibold ${colorPct(m.change_pct)}`}>
@@ -306,7 +306,7 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+                <tr className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="text-left py-1">Ticker</th>
                   <th className="text-right">Score</th>
                   <th className="text-right">Short %</th>
@@ -316,14 +316,14 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
               </thead>
               <tbody>
                 {squeeze.map((s) => (
-                  <tr key={s.ticker} className="border-t border-slate-100">
+                  <tr key={s.ticker} className="border-t border-black/8 dark:border-white/10">
                     <td className="py-1.5">
                       <span {...tickerBtn(onSelectTicker, s.ticker)}>{s.ticker}</span>
                     </td>
-                    <td className="text-right font-bold text-slate-900">{s.score}</td>
-                    <td className="text-right">{s.short_pct_float}%</td>
-                    <td className="text-right">{s.days_to_cover}</td>
-                    <td className="text-right">{s.rsi}</td>
+                    <td className="text-right font-bold text-slate-900 dark:text-white">{s.score}</td>
+                    <td className="text-right text-slate-600 dark:text-slate-300">{s.short_pct_float}%</td>
+                    <td className="text-right text-slate-600 dark:text-slate-300">{s.days_to_cover}</td>
+                    <td className="text-right text-slate-600 dark:text-slate-300">{s.rsi}</td>
                   </tr>
                 ))}
               </tbody>
@@ -342,23 +342,23 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
             {options.map((o) => (
               <div
                 key={o.ticker}
-                className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2"
+                className="flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2"
               >
                 <div>
                   <span {...tickerBtn(onSelectTicker, o.ticker)}>{o.ticker}</span>{" "}
                   <span
                     className={`ml-1 text-xs font-bold ${
                       o.sentiment === "bullish"
-                        ? "text-emerald-600"
+                        ? "text-emerald-600 dark:text-emerald-400"
                         : o.sentiment === "bearish"
-                        ? "text-rose-600"
-                        : "text-slate-500"
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-slate-500 dark:text-slate-400"
                     }`}
                   >
                     {o.sentiment}
                   </span>
                 </div>
-                <div className="text-xs text-slate-600">
+                <div className="text-xs text-slate-600 dark:text-slate-300">
                   P/C {o.pc_ratio} · C {o.calls_vol.toLocaleString()} / P{" "}
                   {o.puts_vol.toLocaleString()}
                 </div>
@@ -379,16 +379,16 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
               a.actions.slice(-2).map((act, i) => (
                 <div
                   key={`${a.ticker}-${i}`}
-                  className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-sm"
                 >
                   <div>
                     <span {...tickerBtn(onSelectTicker, a.ticker)}>{a.ticker}</span>{" "}
-                    <span className="text-slate-600">{act.firm}</span>
+                    <span className="text-slate-600 dark:text-slate-400">{act.firm}</span>
                   </div>
                   <div className="text-xs">
-                    <span className="text-slate-500">{act.from || "—"}</span>
+                    <span className="text-slate-500 dark:text-slate-400">{act.from || "—"}</span>
                     {" → "}
-                    <span className="font-bold text-slate-900">{act.to || act.action}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{act.to || act.action}</span>
                   </div>
                 </div>
               ))

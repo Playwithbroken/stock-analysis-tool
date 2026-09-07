@@ -862,53 +862,53 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               )}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Profil</span>
+              <label className="block rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Profil</span>
                 <select
                   value={autopilotSettings?.mode || "aggressive_learning"}
                   onChange={(event) => updateAutopilotSetting("mode", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                  className="mt-2 w-full rounded-xl border border-black/8 bg-white dark:border-white/10 dark:bg-[#2c2c2e] dark:text-white px-3 py-2 text-sm font-bold text-slate-900"
                 >
                   <option value="strict">Strict: nur Top-Setups</option>
                   <option value="learn">Learn: mehr Tests, klein</option>
                   <option value="aggressive_learning">Aggressive Learning: schneller lernen</option>
                 </select>
               </label>
-              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Max. Trades pro Lauf</span>
+              <label className="block rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Max. Trades pro Lauf</span>
                 <input
                   type="range"
                   min={1}
                   max={8}
                   value={Number(autopilotSettings?.max_trades || 3)}
                   onChange={(event) => updateAutopilotSetting("max_trades", Number(event.target.value))}
-                  className="mt-3 w-full"
+                  className="mt-3 w-full accent-[var(--accent)]"
                 />
-                <div className="mt-1 text-sm font-black text-slate-900">{Number(autopilotSettings?.max_trades || 3)} Paper-Trades</div>
+                <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">{Number(autopilotSettings?.max_trades || 3)} Paper-Trades</div>
               </label>
-              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Aggro Mindestscore</span>
+              <label className="block rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Aggro Mindestscore</span>
                 <input
                   type="range"
                   min={35}
                   max={90}
                   value={Number(autopilotSettings?.aggressive_min_score || autoSelection.aggressive_learning_min_score || 52)}
                   onChange={(event) => updateAutopilotSetting("aggressive_min_score", Number(event.target.value))}
-                  className="mt-3 w-full"
+                  className="mt-3 w-full accent-[var(--accent)]"
                 />
-                <div className="mt-1 text-sm font-black text-slate-900">{Number(autopilotSettings?.aggressive_min_score || 52).toFixed(0)} Score</div>
+                <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">{Number(autopilotSettings?.aggressive_min_score || 52).toFixed(0)} Score</div>
               </label>
-              <label className="block rounded-2xl border border-black/8 bg-slate-50 p-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Aggro Risiko-Größe</span>
+              <label className="block rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Aggro Risiko-Größe</span>
                 <input
                   type="range"
                   min={3}
                   max={65}
                   value={Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || autoSelection.aggressive_learning_risk_multiplier || 0.25) * 100)}
                   onChange={(event) => updateAutopilotSetting("aggressive_risk_multiplier", Number(event.target.value) / 100)}
-                  className="mt-3 w-full"
+                  className="mt-3 w-full accent-[var(--accent)]"
                 />
-                <div className="mt-1 text-sm font-black text-slate-900">
+                <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">
                   {Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || 0.25) * 100)}% der normalen Paper-Größe
                 </div>
               </label>
@@ -1121,23 +1121,23 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
               {exposureBuckets.map((bucket: any) => (
-                <div key={bucket.key} className="rounded-2xl border border-black/8 bg-slate-50/80 p-3">
+                <div key={bucket.key} className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{bucket.label}</div>
-                    <div className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{bucket.label}</div>
+                    <div className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                       {bucket.count || 0}
                     </div>
                   </div>
-                  <div className="mt-2 text-lg font-black text-slate-950">{money(bucket.notional_value, currency)}</div>
-                  <div className={`mt-1 text-xs font-bold ${Number(bucket.pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  <div className="mt-2 text-lg font-black text-slate-950 dark:text-white">{money(bucket.notional_value, currency)}</div>
+                  <div className={`mt-1 text-xs font-bold ${Number(bucket.pnl_value || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     P/L {money(bucket.pnl_value, currency)} / {formatPct(bucket.pnl_pct_of_notional, 2, "0.00%")}
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
+            <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
               Groesstes Einzelrisiko:{" "}
-              <span className="font-extrabold text-slate-900">
+              <span className="font-extrabold text-slate-900 dark:text-white">
                 {exposureProfile.biggest_open_risk?.ticker || "kein Trade"}
               </span>{" "}
               {exposureProfile.biggest_open_risk?.direction ? `/${String(exposureProfile.biggest_open_risk.direction).toUpperCase()}` : ""} / Risiko{" "}
@@ -1362,22 +1362,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
             {nextPaperDecision ? (
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Geld / Risiko</div>
-                  <div className="mt-1 font-semibold">
+                <div className="rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Geld / Risiko</div>
+                  <div className="mt-1 font-semibold text-slate-900 dark:text-white">
                     Position {money(nextPaperDecision.suggested_notional_value, currency)} / max. Verlust{" "}
                     {money(nextPaperDecision.suggested_max_loss_value, currency)}
                   </div>
                 </div>
-                <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Trigger</div>
-                  <div className="mt-1 font-semibold">
+                <div className="rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Trigger</div>
+                  <div className="mt-1 font-semibold text-slate-900 dark:text-white">
                     {nextPaperDecision.trigger || nextPaperDecision.decision_framework?.entry_trigger || "Noch keine saubere Bestätigung."}
                   </div>
                 </div>
-                <div className="rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500">Invalidierung</div>
-                  <div className="mt-1 font-semibold">
+                <div className="rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                  <div className="font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Invalidierung</div>
+                  <div className="mt-1 font-semibold text-slate-900 dark:text-white">
                     {nextPaperDecision.invalidation || nextPaperDecision.decision_framework?.invalidation || "Stop, These oder Newsqualitaet muss vor Einstieg klar sein."}
                   </div>
                 </div>
@@ -1532,28 +1532,28 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         </div>
                       </div>
                     ) : null}
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
-                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Einstieg {trade.entry_price ?? "N/A"}</span>
-                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Kurs {trade.current_price ?? "N/A"}</span>
-                      <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700">Stop {trade.stop_price ?? "N/A"}</span>
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">Ziel {trade.target_price ?? "N/A"}</span>
-                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">Hebel {trade.leverage ?? 1}x</span>
-                      <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">CRV {trade.risk_reward || "N/A"}</span>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                      <span className="rounded-full border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-1">Einstieg {trade.entry_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-1">Kurs {trade.current_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-red-700 dark:text-red-400">Stop {trade.stop_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-700 dark:text-emerald-400">Ziel {trade.target_price ?? "N/A"}</span>
+                      <span className="rounded-full border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-1">Hebel {trade.leverage ?? 1}x</span>
+                      <span className="rounded-full border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-1">CRV {trade.risk_reward || "N/A"}</span>
                       {management.risk_distance_pct != null ? (
-                        <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">
+                        <span className="rounded-full border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-1">
                           Stop-Abstand {formatPct(management.risk_distance_pct, 2, "0.00%")}
                         </span>
                       ) : null}
                       {management.target_progress_pct != null ? (
-                        <span className="rounded-full border border-black/8 bg-slate-50 px-3 py-1">
+                        <span className="rounded-full border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-1">
                           Ziel-Fortschritt {Number(management.target_progress_pct).toFixed(1)}%
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-3 rounded-xl border border-black/8 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
+                    <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-3 py-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
                       {germanText(management.summary, "Paper-Position halten, solange der Trigger gültig bleibt.")}
                     </div>
-                    <div className="mt-2 text-xs font-bold leading-5 text-slate-700">
+                    <div className="mt-2 text-xs font-bold leading-5 text-slate-700 dark:text-slate-300">
                       Nächste Prüfung: {germanText(management.next_check, "Trigger, Stop und Ziel erneut prüfen, bevor der Plan geändert wird.")}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">

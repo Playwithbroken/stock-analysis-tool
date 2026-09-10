@@ -7834,7 +7834,7 @@ async def get_top_gainers(window: str = "1w"):
         cache_key = f"discovery:gainers:{normalized_window}"
         cached = _cache_get(
             cache_key,
-            _safe_int_env("DISCOVERY_MOVERS_CACHE_TTL_SECONDS", 75, minimum=15),
+            _safe_int_env("DISCOVERY_MOVERS_CACHE_TTL_SECONDS", 180, minimum=30),
         )
         if cached is not None:
             return convert_numpy_types(cached)
@@ -7848,7 +7848,12 @@ async def get_top_gainers(window: str = "1w"):
             )
             if stale is not None:
                 return convert_numpy_types(stale)
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            from src.discovery_service import FALLBACK_MOVERS
+            norm_w = (window or "1w").strip().lower()
+            return FALLBACK_MOVERS.get(norm_w, FALLBACK_MOVERS["1d"]).get("gainers", [])
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/discovery/losers")
 async def get_top_losers(window: str = "1w"):
@@ -7859,7 +7864,7 @@ async def get_top_losers(window: str = "1w"):
         cache_key = f"discovery:losers:{normalized_window}"
         cached = _cache_get(
             cache_key,
-            _safe_int_env("DISCOVERY_MOVERS_CACHE_TTL_SECONDS", 75, minimum=15),
+            _safe_int_env("DISCOVERY_MOVERS_CACHE_TTL_SECONDS", 180, minimum=30),
         )
         if cached is not None:
             return convert_numpy_types(cached)
@@ -7873,7 +7878,12 @@ async def get_top_losers(window: str = "1w"):
             )
             if stale is not None:
                 return convert_numpy_types(stale)
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            from src.discovery_service import FALLBACK_MOVERS
+            norm_w = (window or "1w").strip().lower()
+            return FALLBACK_MOVERS.get(norm_w, FALLBACK_MOVERS["1d"]).get("losers", [])
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/discovery/small-caps")
 async def get_small_cap_growth():

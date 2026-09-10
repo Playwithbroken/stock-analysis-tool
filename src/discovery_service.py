@@ -13,6 +13,112 @@ import random
 from src.data_fetcher import DataFetcher
 from src.analyzer import StockAnalyzer
 
+UNIVERSE_NAMES: Dict[str, str] = {
+    "AAPL": "Apple Inc.",
+    "MSFT": "Microsoft Corp.",
+    "AMZN": "Amazon.com Inc.",
+    "NVDA": "NVIDIA Corp.",
+    "GOOGL": "Alphabet Inc.",
+    "META": "Meta Platforms Inc.",
+    "TSLA": "Tesla Inc.",
+    "AVGO": "Broadcom Inc.",
+    "ADBE": "Adobe Inc.",
+    "COST": "Costco Wholesale Corp.",
+    "PEP": "PepsiCo Inc.",
+    "NFLX": "Netflix Inc.",
+    "AMD": "Advanced Micro Devices",
+    "TMUS": "T-Mobile US Inc.",
+    "INTC": "Intel Corp.",
+    "CSCO": "Cisco Systems Inc.",
+    "CMCSA": "Comcast Corp.",
+    "AMAT": "Applied Materials",
+    "QCOM": "Qualcomm Inc.",
+    "ISRG": "Intuitive Surgical",
+    "MU": "Micron Technology",
+    "TXN": "Texas Instruments",
+    "AMGN": "Amgen Inc.",
+    "HON": "Honeywell International",
+    "INTU": "Intuit Inc.",
+    "BKNG": "Booking Holdings",
+    "SBUX": "Starbucks Corp.",
+    "VRTX": "Vertex Pharmaceuticals",
+    "MDLZ": "Mondelez International",
+    "REGN": "Regeneron Pharmaceuticals",
+    "PANW": "Palo Alto Networks",
+    "SNPS": "Synopsys Inc.",
+    "ASML": "ASML Holding",
+    "LRCX": "Lam Research",
+    "ADI": "Analog Devices",
+    "MELI": "MercadoLibre Inc.",
+    "CDNS": "Cadence Design Systems",
+    "KLAC": "KLA Corp.",
+    "PDD": "PDD Holdings Inc.",
+    "PYPL": "PayPal Holdings",
+    "PLTR": "Palantir Technologies",
+    "ARM": "Arm Holdings",
+    "SAP.DE": "SAP SE",
+    "ALV.DE": "Allianz SE",
+    "RKLB": "Rocket Lab USA",
+    "COIN": "Coinbase Global",
+}
+
+FALLBACK_MOVERS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
+    "1d": {
+        "gainers": [
+            {"ticker": "NVDA", "name": "NVIDIA Corp.", "price": 128.50, "change": 3.42, "change_1d": 3.42, "change_1w": 5.10, "change_1m": 8.40, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "META", "name": "Meta Platforms Inc.", "price": 512.20, "change": 2.65, "change_1d": 2.65, "change_1w": 4.20, "change_1m": 7.10, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AAPL", "name": "Apple Inc.", "price": 224.80, "change": 1.78, "change_1d": 1.78, "change_1w": 2.30, "change_1m": 4.50, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "MSFT", "name": "Microsoft Corp.", "price": 448.60, "change": 1.35, "change_1d": 1.35, "change_1w": 1.90, "change_1m": 3.80, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AMZN", "name": "Amazon.com Inc.", "price": 186.40, "change": 1.12, "change_1d": 1.12, "change_1w": 3.10, "change_1m": 5.20, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "ASML", "name": "ASML Holding", "price": 845.00, "change": 0.95, "change_1d": 0.95, "change_1w": 2.50, "change_1m": 4.10, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+        ],
+        "losers": [
+            {"ticker": "TSLA", "name": "Tesla Inc.", "price": 218.40, "change": -2.85, "change_1d": -2.85, "change_1w": -4.10, "change_1m": -6.20, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "INTC", "name": "Intel Corp.", "price": 20.80, "change": -2.15, "change_1d": -2.15, "change_1w": -5.30, "change_1m": -8.40, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AMD", "name": "Advanced Micro Devices", "price": 142.30, "change": -1.65, "change_1d": -1.65, "change_1w": -2.90, "change_1m": -4.80, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "QCOM", "name": "Qualcomm Inc.", "price": 164.20, "change": -1.20, "change_1d": -1.20, "change_1w": -1.80, "change_1m": -3.20, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "PYPL", "name": "PayPal Holdings", "price": 68.50, "change": -0.85, "change_1d": -0.85, "change_1w": -1.40, "change_1m": -2.10, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "CSCO", "name": "Cisco Systems Inc.", "price": 54.10, "change": -0.60, "change_1d": -0.60, "change_1w": -0.90, "change_1m": -1.50, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+        ],
+    },
+    "1w": {
+        "gainers": [
+            {"ticker": "NVDA", "name": "NVIDIA Corp.", "price": 128.50, "change": 6.80, "change_1d": 3.42, "change_1w": 6.80, "change_1m": 8.40, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "META", "name": "Meta Platforms Inc.", "price": 512.20, "change": 5.40, "change_1d": 2.65, "change_1w": 5.40, "change_1m": 7.10, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AAPL", "name": "Apple Inc.", "price": 224.80, "change": 3.20, "change_1d": 1.78, "change_1w": 3.20, "change_1m": 4.50, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "MSFT", "name": "Microsoft Corp.", "price": 448.60, "change": 2.90, "change_1d": 1.35, "change_1w": 2.90, "change_1m": 3.80, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AMZN", "name": "Amazon.com Inc.", "price": 186.40, "change": 2.70, "change_1d": 1.12, "change_1w": 2.70, "change_1m": 5.20, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AVGO", "name": "Broadcom Inc.", "price": 168.00, "change": 2.30, "change_1d": 0.85, "change_1w": 2.30, "change_1m": 4.60, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+        ],
+        "losers": [
+            {"ticker": "INTC", "name": "Intel Corp.", "price": 20.80, "change": -6.20, "change_1d": -2.15, "change_1w": -6.20, "change_1m": -8.40, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "TSLA", "name": "Tesla Inc.", "price": 218.40, "change": -5.10, "change_1d": -2.85, "change_1w": -5.10, "change_1m": -6.20, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AMD", "name": "Advanced Micro Devices", "price": 142.30, "change": -3.80, "change_1d": -1.65, "change_1w": -3.80, "change_1m": -4.80, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "PYPL", "name": "PayPal Holdings", "price": 68.50, "change": -2.60, "change_1d": -0.85, "change_1w": -2.60, "change_1m": -2.10, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "QCOM", "name": "Qualcomm Inc.", "price": 164.20, "change": -2.10, "change_1d": -1.20, "change_1w": -2.10, "change_1m": -3.20, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "CSCO", "name": "Cisco Systems Inc.", "price": 54.10, "change": -1.50, "change_1d": -0.60, "change_1w": -1.50, "change_1m": -1.50, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+        ],
+    },
+    "1m": {
+        "gainers": [
+            {"ticker": "NVDA", "name": "NVIDIA Corp.", "price": 128.50, "change": 14.50, "change_1d": 3.42, "change_1w": 6.80, "change_1m": 14.50, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "META", "name": "Meta Platforms Inc.", "price": 512.20, "change": 11.20, "change_1d": 2.65, "change_1w": 5.40, "change_1m": 11.20, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "PLTR", "name": "Palantir Technologies", "price": 32.40, "change": 9.80, "change_1d": 1.80, "change_1w": 4.50, "change_1m": 9.80, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AMZN", "name": "Amazon.com Inc.", "price": 186.40, "change": 7.30, "change_1d": 1.12, "change_1w": 2.70, "change_1m": 7.30, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "MSFT", "name": "Microsoft Corp.", "price": 448.60, "change": 5.90, "change_1d": 1.35, "change_1w": 2.90, "change_1m": 5.90, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AAPL", "name": "Apple Inc.", "price": 224.80, "change": 5.20, "change_1d": 1.78, "change_1w": 3.20, "change_1m": 5.20, "trend_context": "Market momentum", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+        ],
+        "losers": [
+            {"ticker": "INTC", "name": "Intel Corp.", "price": 20.80, "change": -12.40, "change_1d": -2.15, "change_1w": -6.20, "change_1m": -12.40, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "TSLA", "name": "Tesla Inc.", "price": 218.40, "change": -9.10, "change_1d": -2.85, "change_1w": -5.10, "change_1m": -9.10, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "AMD", "name": "Advanced Micro Devices", "price": 142.30, "change": -6.50, "change_1d": -1.65, "change_1w": -3.80, "change_1m": -6.50, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "PYPL", "name": "PayPal Holdings", "price": 68.50, "change": -4.20, "change_1d": -0.85, "change_1w": -2.60, "change_1m": -4.20, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "QCOM", "name": "Qualcomm Inc.", "price": 164.20, "change": -3.80, "change_1d": -1.20, "change_1w": -2.10, "change_1m": -3.80, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+            {"ticker": "CSCO", "name": "Cisco Systems Inc.", "price": 54.10, "change": -2.40, "change_1d": -0.60, "change_1w": -1.50, "change_1m": -2.40, "trend_context": "Market pullback", "source": "market_snapshot", "data_as_of": "", "fallback": True},
+        ],
+    },
+}
+
 class DiscoveryService:
     _equity_candidate_cache: tuple[List[Dict[str, Any]], datetime] | None = None
 
@@ -185,48 +291,87 @@ class DiscoveryService:
         rs = avg_gain / avg_loss
         return 100.0 - (100.0 / (1.0 + rs))
 
+    def _fetch_stock_basic_sync(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """Fast synchronous stock price data extraction without heavy yfinance info calls."""
+        try:
+            f = DataFetcher(ticker)
+            p = f.get_price_data()
+            current_price = p.get("current_price")
+            if not current_price or float(current_price) <= 0:
+                return None
+
+            c_1d = p.get("change_1d")
+            c_1w = p.get("change_1w")
+            c_1m = p.get("change_1m")
+
+            name = UNIVERSE_NAMES.get(ticker) or ticker
+            return {
+                "ticker": ticker,
+                "name": name,
+                "price": float(current_price),
+                "change": float(c_1w) if c_1w is not None else 0.0,
+                "change_1d": float(c_1d) if c_1d is not None else None,
+                "change_1w": float(c_1w) if c_1w is not None else None,
+                "change_1m": float(c_1m) if c_1m is not None else None,
+                "trend_context": "Market momentum",
+                "source": "yahoo_finance",
+                "data_as_of": datetime.now().isoformat(),
+                "fallback": False,
+            }
+        except Exception:
+            return None
+
     async def _fetch_stock_basic(self, ticker: str) -> Optional[Dict[str, Any]]:
         """Helper to fetch basic stock info in parallel."""
-        try:
-            # We wrap this in a thread because yfinance is blocking
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._fetch_stock_basic_sync, ticker)
+
+    async def _scan_market_movers_pool(self) -> List[Dict[str, Any]]:
+        """Fetch unified universe prices once and cache for all windows and types."""
+        now = datetime.now()
+        if hasattr(self, "_movers_pool_cache") and self._movers_pool_cache is not None:
+            cache_data, ts = self._movers_pool_cache
+            if (now - ts).total_seconds() < 180:
+                return cache_data
+
+        if not hasattr(self, "_movers_lock"):
+            import asyncio
+            self._movers_lock = asyncio.Lock()
+
+        async with self._movers_lock:
+            if hasattr(self, "_movers_pool_cache") and self._movers_pool_cache is not None:
+                cache_data, ts = self._movers_pool_cache
+                if (now - ts).total_seconds() < 180:
+                    return cache_data
+
             import asyncio
             from concurrent.futures import ThreadPoolExecutor
-            
-            def fetch():
-                f = DataFetcher(ticker)
-                p = f.get_price_data()
-                change_1d = None
-                try:
-                    hist = f.stock.history(period="7d", interval="1d")
-                    if hist is not None and not hist.empty and len(hist["Close"]) >= 2:
-                        last_close = float(hist["Close"].iloc[-1])
-                        prev_close = float(hist["Close"].iloc[-2])
-                        if prev_close:
-                            change_1d = ((last_close / prev_close) - 1.0) * 100.0
-                except Exception:
-                    change_1d = None
-                return {
-                    "ticker": ticker,
-                    "name": f.info.get("longName", ticker),
-                    "price": p.get("current_price"),
-                    "change": p.get("change_1w"),
-                    "change_1d": change_1d,
-                    "change_1w": p.get("change_1w"),
-                    "change_1m": p.get("change_1m"),
-                    "trend_context": "Market momentum",
-                    "source": "yahoo_finance",
-                    "data_as_of": datetime.utcnow().isoformat(),
-                    "fallback": False,
-                }
-            
+
+            # Use top 24 liquid universe stocks
+            scan_pool = [
+                "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "AMD",
+                "NFLX", "AVGO", "ADBE", "COST", "INTC", "CSCO", "QCOM", "AMAT",
+                "MU", "ARM", "PLTR", "ASML", "SAP.DE", "ALV.DE", "RKLB", "COIN",
+            ]
+
             loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, fetch)
-        except:
-            return None
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [loop.run_in_executor(executor, self._fetch_stock_basic_sync, t) for t in scan_pool]
+                raw_results = await asyncio.gather(*futures, return_exceptions=True)
+
+            results = [r for r in raw_results if isinstance(r, dict) and r.get("price")]
+            if len(results) >= 4:
+                self._movers_pool_cache = (results, now)
+                return results
+
+            if hasattr(self, "_movers_pool_cache") and self._movers_pool_cache is not None:
+                return self._movers_pool_cache[0]
+
+            return results
 
     async def get_market_movers(self, type: str = 'gainers', window: str = "1w") -> List[Dict[str, Any]]:
         """Identify real-time top gainers or losers from the selection universe with caching."""
-        now = datetime.now()
         normalized_window = (window or "1w").lower()
         if normalized_window not in {"1d", "1w", "1m"}:
             normalized_window = "1w"
@@ -235,26 +380,40 @@ class DiscoveryService:
             "1w": "change_1w",
             "1m": "change_1m",
         }[normalized_window]
-        cache_key = f"movers_{type}_{normalized_window}"
-        if hasattr(self, '_movers_cache') and cache_key in self._movers_cache:
-            cache_data, timestamp = self._movers_cache[cache_key]
-            if (now - timestamp).total_seconds() < 600:
-                return cache_data
 
-        scan_pool = random.sample(self.market_movers_universe, min(len(self.market_movers_universe), 15))
-        
-        import asyncio
-        tasks = [self._fetch_stock_basic(t) for t in scan_pool]
-        results = [r for r in await asyncio.gather(*tasks) if r]
-        for item in results:
-            item["change"] = item.get(change_key)
-                
-        is_gainers = type == 'gainers'
-        results.sort(key=lambda x: x['change'] or 0, reverse=is_gainers)
-        
-        if not hasattr(self, '_movers_cache'): self._movers_cache = {}
-        self._movers_cache[cache_key] = (results, now)
-        return results[:8]
+        is_gainers = (type == 'gainers')
+
+        try:
+            pool = await self._scan_market_movers_pool()
+        except Exception:
+            pool = []
+
+        valid_items = []
+        for item in pool:
+            val = item.get(change_key)
+            if val is not None:
+                item_copy = dict(item)
+                item_copy["change"] = float(val)
+                valid_items.append(item_copy)
+
+        if len(valid_items) >= 4:
+            if is_gainers:
+                # Filter positive or take top performers
+                positives = [it for it in valid_items if (it["change"] or 0) > 0]
+                pool_to_sort = positives if len(positives) >= 3 else valid_items
+                pool_to_sort.sort(key=lambda x: x["change"] or 0, reverse=True)
+                return pool_to_sort[:8]
+            else:
+                # Filter negative or take worst performers
+                negatives = [it for it in valid_items if (it["change"] or 0) < 0]
+                pool_to_sort = negatives if len(negatives) >= 3 else valid_items
+                pool_to_sort.sort(key=lambda x: x["change"] or 0, reverse=False)
+                return pool_to_sort[:8]
+
+        # Resilient fallback if live market feeds are unreachable or offline
+        fallbacks = FALLBACK_MOVERS.get(normalized_window) or FALLBACK_MOVERS["1d"]
+        fallback_list = fallbacks.get("gainers" if is_gainers else "losers", [])
+        return fallback_list[:8]
 
     async def run_screener(
         self,

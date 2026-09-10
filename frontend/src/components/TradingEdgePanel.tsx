@@ -100,10 +100,10 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
         className="surface-panel rounded-[2rem] p-6 space-y-4"
       >
         <div>
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
             Trading Edge
           </div>
-          <h2 className="mt-1 text-xl font-bold text-slate-900">
+          <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">
             Loading live signals…
           </h2>
         </div>
@@ -157,23 +157,23 @@ export const TradingEdgePanel: FC<Props> = ({ edge, loading, onSelectTicker }) =
     return (
       <section
         aria-label="Trading Edge status"
-        className="surface-panel rounded-[2rem] border border-amber-200/80 bg-amber-50/70 p-6"
+        className="surface-panel rounded-[2rem] border border-amber-200/80 bg-amber-50/70 p-6 dark:border-amber-500/30 dark:bg-amber-500/10"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-amber-700">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-400">
               Trading Edge
             </div>
-            <h2 className="mt-1 text-xl font-bold text-slate-950">
+            <h2 className="mt-1 text-xl font-bold text-slate-950 dark:text-white">
               Live-Signale laden im Hintergrund.
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
               {meta.message ||
                 "Der Bereich ist kurz verzoegert. Dashboard, Briefing und Portfolio bleiben nutzbar; Trading Edge wird automatisch nachgeladen."}
             </p>
           </div>
-          <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-amber-700">
-            {meta.refresh_state || "refreshing"}
+          <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+            Hintergrund-Lauf
           </div>
         </div>
       </section>

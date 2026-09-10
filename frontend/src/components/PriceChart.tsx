@@ -650,13 +650,13 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     activeTone: string;
     help: string;
   }> = [
-    { label: "RSI", active: showRSI, setActive: setShowRSI, activeTone: "border-amber-500/30 bg-amber-500/10 text-amber-700", help: INDICATOR_HELP.RSI },
-    { label: "MACD", active: showMACD, setActive: setShowMACD, activeTone: "border-sky-500/30 bg-sky-500/10 text-sky-700", help: INDICATOR_HELP.MACD },
-    { label: "SMA", active: showSMA, setActive: setShowSMA, activeTone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700", help: INDICATOR_HELP.SMA },
-    { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-200", help: INDICATOR_HELP.Bollinger },
+    { label: "RSI", active: showRSI, setActive: setShowRSI, activeTone: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:border-amber-500/40 dark:text-amber-300", help: INDICATOR_HELP.RSI },
+    { label: "MACD", active: showMACD, setActive: setShowMACD, activeTone: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:border-sky-500/40 dark:text-sky-300", help: INDICATOR_HELP.MACD },
+    { label: "SMA", active: showSMA, setActive: setShowSMA, activeTone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300", help: INDICATOR_HELP.SMA },
+    { label: "Bollinger", active: showBollinger, setActive: setShowBollinger, activeTone: "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:border-white/20 dark:text-slate-200", help: INDICATOR_HELP.Bollinger },
     { label: "Volume", active: showVolume, setActive: setShowVolume, activeTone: "border-black/20 bg-black/5 text-slate-800 dark:border-white/20 dark:bg-white/10 dark:text-white", help: INDICATOR_HELP.Volume },
-    { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700", help: INDICATOR_HELP.VWAP },
-    { label: "⚡ Edge", active: showEdgeLevels, setActive: setShowEdgeLevels, activeTone: "border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-300 font-bold", help: INDICATOR_HELP.EdgeLevels },
+    { label: "VWAP", active: showVWAP, setActive: setShowVWAP, activeTone: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:border-cyan-500/40 dark:text-cyan-300", help: INDICATOR_HELP.VWAP },
+    { label: "⚡ Edge", active: showEdgeLevels, setActive: setShowEdgeLevels, activeTone: "border-amber-500/40 bg-amber-500/15 text-amber-900 dark:border-amber-500/50 dark:text-amber-300 font-bold", help: INDICATOR_HELP.EdgeLevels },
   ];
   const activeIndicatorHelp = indicatorToggles.filter((toggle) => toggle.active);
 
@@ -705,12 +705,12 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
     <div className="price-chart analysis-primary-panel surface-panel rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6">
       <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:flex-wrap md:items-center">
         <div>
-          <div className="mb-1 flex flex-wrap items-center gap-2 text-slate-500">
-            <TrendingUp size={16} className={isPositive ? "text-emerald-600" : "text-red-600"} />
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
+            <TrendingUp size={16} className={isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
             <span className="text-sm font-semibold">Kursverlauf ({period.label})</span>
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
-                feedStatus === "Live-Feed" ? "bg-emerald-500/10 text-emerald-700" : "bg-slate-500/10 text-slate-500"
+                feedStatus === "Live-Feed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-slate-500/10 text-slate-500 dark:text-slate-400"
               }`}
             >
               {feedStatus}
@@ -718,39 +718,39 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             <span
               className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
                 historyState === "ready"
-                  ? "bg-emerald-500/10 text-emerald-700"
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                   : historyState === "stale"
-                    ? "bg-amber-500/10 text-amber-700"
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                     : historyState === "snapshot"
-                      ? "bg-sky-500/10 text-sky-700"
+                      ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
                     : historyState === "unavailable"
-                      ? "bg-red-500/10 text-red-700"
-                      : "bg-slate-500/10 text-slate-500"
+                      ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                      : "bg-slate-500/10 text-slate-500 dark:text-slate-400"
               }`}
             >
               {HISTORY_STATUS_LABELS[historyState]}
             </span>
           </div>
           <div className="flex items-baseline gap-3">
-            <div className={`text-xl font-bold ${isPositive ? "text-emerald-700" : "text-red-700"}`}>
+            <div className={`text-xl font-bold ${isPositive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
               {loading || fetchError ? "—" : `${isPositive ? "+" : ""}${stats.changePct.toFixed(2)}%`}
             </div>
-            {!loading && !fetchError ? <div className="text-sm text-slate-500">
+            {!loading && !fetchError ? <div className="text-sm text-slate-500 dark:text-slate-400">
               ({isPositive ? "+" : ""}
               {formatPrice(stats.change)})
             </div> : null}
           </div>
           {feedPrice !== null ? (
-            <div role="group" aria-label="Separater Feed-Kurs" className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-slate-500">
+            <div role="group" aria-label="Separater Feed-Kurs" className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
               <span>Letzter Feed-Kurs</span>
-              <span className="font-semibold text-slate-700">{formatPrice(feedPrice)}</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{formatPrice(feedPrice)}</span>
               <span className="text-[11px]">Separat von der Historie</span>
             </div>
           ) : null}
         </div>
 
         <div
-          className="chart-period-selector grid w-full max-w-full grid-cols-6 items-center gap-0.5 rounded-xl border border-black/8 bg-white/80 p-1 sm:flex sm:w-auto sm:gap-1"
+          className="chart-period-selector grid w-full max-w-full grid-cols-6 items-center gap-0.5 rounded-xl border border-black/8 bg-white/80 p-1 dark:border-white/10 dark:bg-white/5 sm:flex sm:w-auto sm:gap-1"
           role="group"
           aria-label="Zeitraum für den Kursverlauf"
         >
@@ -772,7 +772,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
               className={`relative min-h-10 min-w-0 shrink-0 touch-manipulation rounded-lg px-1 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 sm:min-w-11 sm:px-4 ${
                 period.id === p.id
                   ? "bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(15,118,110,0.18)]"
-                  : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900"
+                  : "text-slate-500 hover:bg-black/[0.04] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
               }`}
             >
               <span className="inline-flex items-center gap-1.5">
@@ -810,8 +810,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
                 ?
               </span>
             </span>
-            <span aria-hidden="true" className="indicator-hover-help pointer-events-none rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 shadow-[0_16px_34px_rgba(15,23,42,0.14)]">
-              <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900">
+            <span aria-hidden="true" className="indicator-hover-help pointer-events-none rounded-[0.9rem] border border-black/8 bg-white/96 p-3 text-left text-[11px] font-semibold normal-case leading-5 tracking-normal text-slate-600 shadow-[0_16px_34px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#1c1c1e]/98 dark:text-slate-300 dark:shadow-[0_16px_34px_rgba(0,0,0,0.5)]">
+              <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-900 dark:text-white">
                 {toggle.label}
               </span>
               {toggle.help}
@@ -821,20 +821,20 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       </div>
       {activeIndicatorHelp.length ? (
         <>
-          <details className="indicator-mobile-help mb-4 rounded-[0.9rem] border border-black/8 bg-white/68 sm:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.13em] text-slate-700">
+          <details className="indicator-mobile-help mb-4 rounded-[0.9rem] border border-black/8 bg-white/68 dark:border-white/10 dark:bg-white/5 sm:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.13em] text-slate-700 dark:text-slate-200">
               <span>Aktive Indikatoren erklären</span>
-              <span className="rounded-full bg-black/[0.05] px-2 py-1 text-[10px] text-slate-500">
+              <span className="rounded-full bg-black/[0.05] dark:bg-white/10 px-2 py-1 text-[10px] text-slate-500 dark:text-slate-400">
                 {activeIndicatorHelp.length}
               </span>
             </summary>
-            <div className="grid gap-2 border-t border-black/8 p-2.5">
+            <div className="grid gap-2 border-t border-black/8 dark:border-white/10 p-2.5">
               {activeIndicatorHelp.map((toggle) => (
                 <div
                   key={toggle.label}
-                  className="indicator-help-card rounded-[0.8rem] border border-black/8 bg-white/68 px-3 py-2.5 text-[11px] leading-5 text-slate-600"
+                  className="indicator-help-card rounded-[0.8rem] border border-black/8 bg-white/68 px-3 py-2.5 text-[11px] leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
                 >
-                  <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">
+                  <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800 dark:text-white">
                     {toggle.label}
                   </span>
                   {toggle.help}
@@ -847,9 +847,9 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             {activeIndicatorHelp.slice(0, 3).map((toggle) => (
               <div
                 key={toggle.label}
-                className="indicator-help-card rounded-[0.9rem] border border-black/8 bg-white/68 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600"
+                className="indicator-help-card rounded-[0.9rem] border border-black/8 bg-white/68 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
               >
-                <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">
+                <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800 dark:text-white">
                   {toggle.label}
                 </span>
                 {toggle.help}
@@ -857,14 +857,14 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             ))}
           </div>
           {activeIndicatorHelp.length > 3 ? (
-            <details className="indicator-mobile-help indicator-extra-help mb-4 hidden rounded-[0.9rem] border border-black/8 bg-white/68 sm:block">
-              <summary className="min-h-11 cursor-pointer px-3.5 py-3 text-xs font-semibold text-slate-700">
+            <details className="indicator-mobile-help indicator-extra-help mb-4 hidden rounded-[0.9rem] border border-black/8 bg-white/68 dark:border-white/10 dark:bg-white/5 sm:block">
+              <summary className="min-h-11 cursor-pointer px-3.5 py-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
                 Weitere {activeIndicatorHelp.length - 3} Indikatoren erklären
               </summary>
-              <div className="grid gap-2 border-t border-black/8 p-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-2 border-t border-black/8 dark:border-white/10 p-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 {activeIndicatorHelp.slice(3).map((toggle) => (
-                  <div key={toggle.label} className="indicator-help-card rounded-[0.8rem] border border-black/8 bg-white/68 px-3 py-2.5 text-[11px] leading-5 text-slate-600">
-                    <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800">{toggle.label}</span>
+                  <div key={toggle.label} className="indicator-help-card rounded-[0.8rem] border border-black/8 bg-white/68 px-3 py-2.5 text-[11px] leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                    <span className="indicator-help-label mr-1 font-extrabold uppercase tracking-[0.14em] text-slate-800 dark:text-white">{toggle.label}</span>
                     {toggle.help}
                   </div>
                 ))}
@@ -939,7 +939,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             type="button"
             onClick={() => inspectFromControls(0)}
             disabled={!chartData.length || displayedIndex === 0}
-            className="rounded-md px-1.5 py-1 text-left transition-colors hover:bg-black/[0.04] hover:text-[var(--accent)] disabled:pointer-events-none disabled:opacity-45"
+            className="rounded-md px-1.5 py-1 text-left transition-colors hover:bg-black/[0.04] hover:text-[var(--accent)] dark:hover:bg-white/10 disabled:pointer-events-none disabled:opacity-45"
             aria-label="Zum ersten historischen Kurspunkt springen"
           >
             Start · {chartData[0] ? formatChartTooltipDate(chartData[0], period.id) : "—"}
@@ -949,7 +949,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             type="button"
             onClick={() => inspectFromControls(Math.max(0, chartData.length - 1))}
             disabled={!chartData.length || displayedIndex === chartData.length - 1}
-            className="rounded-md px-1.5 py-1 text-right transition-colors hover:bg-black/[0.04] hover:text-[var(--accent)] disabled:pointer-events-none disabled:opacity-45"
+            className="rounded-md px-1.5 py-1 text-right transition-colors hover:bg-black/[0.04] hover:text-[var(--accent)] dark:hover:bg-white/10 disabled:pointer-events-none disabled:opacity-45"
             aria-label="Zum neuesten Kurspunkt springen"
           >
             Letzter Punkt · {chartData.at(-1) ? formatChartTooltipDate(chartData.at(-1)!, period.id) : "—"}
@@ -961,8 +961,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         className={`w-full ${subPanels > 0 ? "h-[430px] sm:h-[520px]" : "h-[280px] sm:h-[320px]"}`}
         minHeight={subPanels > 0 ? 430 : 280}
         fallback={
-          <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70">
-            <span className="text-sm text-slate-500">Chart-Layout wird vorbereitet...</span>
+          <div className="flex h-full w-full items-center justify-center rounded-[1.4rem] border border-black/8 bg-white/70 dark:border-white/10 dark:bg-white/5">
+            <span className="text-sm text-slate-500 dark:text-slate-400">Chart-Layout wird vorbereitet...</span>
           </div>
         }
       >
@@ -978,23 +978,23 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
             : 0;
 
           return loading ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-black/8 bg-white/70">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-black/8 bg-white/70 dark:border-white/10 dark:bg-white/5">
             <svg className="h-6 w-6 animate-spin text-[var(--accent)]" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span className="text-sm text-slate-500">Lade Kursverlauf...</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">Lade Kursverlauf...</span>
           </div>
         ) : fetchError ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-dashed border-red-200 bg-red-50/60 text-slate-600">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-dashed border-red-200 bg-red-50/60 text-slate-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-slate-300">
             <span className="text-2xl">!</span>
-            <p className="text-sm font-semibold">Kursdaten konnten nicht geladen werden.</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Kursdaten konnten nicht geladen werden.</p>
             {fetchErrorMessage ? (
-              <p className="max-w-md text-center text-xs text-slate-500">{fetchErrorMessage}</p>
+              <p className="max-w-md text-center text-xs text-slate-500 dark:text-slate-400">{fetchErrorMessage}</p>
             ) : null}
             <button
               onClick={() => setRetryCounter((prev) => prev + 1)}
-              className="rounded-[0.8rem] border border-black/8 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              className="rounded-[0.8rem] border border-black/8 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
             >
               Erneut laden
             </button>
@@ -1229,12 +1229,12 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
       </MeasuredChartFrame>
 
       {discardedPoints > 0 && data.length > 0 ? (
-        <p role="status" className="mt-3 text-xs text-slate-600">
+        <p role="status" className="mt-3 text-xs text-slate-600 dark:text-slate-400">
           {discardedPoints} ungültige Kurspunkte ausgelassen. Die Linie verbindet die verbleibenden, unveränderten Kurspunkte.
         </p>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-1">
           <Clock size={10} />
           {({ "5m": "5-Minuten-Kurse", "15m": "15-Minuten-Kurse", "1d": "Tageskurse", "1wk": "Wochenkurse", "1mo": "Monatskurse" } as Record<string, string>)[period.interval]}
@@ -1247,8 +1247,8 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         <div
           className={`mt-3 rounded-[0.9rem] border px-3 py-2 text-[11px] font-semibold ${
             historyState === "unavailable"
-              ? "border-red-500/20 bg-red-500/10 text-red-700"
-              : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+              ? "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+              : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400"
           }`}
         >
           Datenstatus: {dataStatusLabel(historyState, feedStatus)}.
@@ -1259,7 +1259,7 @@ export default function PriceChart({ ticker, onStatsUpdate }: PriceChartProps) {
         </div>
       ) : null}
       {historyMeta ? (
-        <div className="chart-history-meta mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500">
+        <div className="chart-history-meta mt-2 rounded-[0.9rem] border border-black/8 bg-white/70 px-3 py-2 text-[11px] font-semibold text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
           Historie: {displayMetaValue(historyMeta.source)} / {displayMetaValue(historyMeta.period)}/{displayMetaValue(historyMeta.interval)}
           {historyMeta.requested_period && historyMeta.requested_period !== historyMeta.period
             ? ` / angefragt ${historyMeta.requested_period}/${displayMetaValue(historyMeta.requested_interval)}`

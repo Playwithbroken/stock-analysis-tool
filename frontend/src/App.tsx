@@ -276,14 +276,14 @@ function HeaderTickerChip({
 
   return (
     <div
-      className={`rounded-full border border-black/8 bg-white/78 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors ${priceTone}`}
+      className={`rounded-full border border-black/8 bg-white/78 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors dark:border-white/10 dark:bg-white/5 dark:text-slate-300 ${priceTone}`}
     >
-      <span className="mr-2 uppercase text-slate-500">{symbol}</span>
-      <span className="mr-2 inline-flex items-center gap-1 text-slate-900">
+      <span className="mr-2 uppercase text-slate-500 dark:text-slate-400">{symbol}</span>
+      <span className="mr-2 inline-flex items-center gap-1 text-slate-900 dark:text-white">
         {priceDirection ? (
           <ArrowIcon
             size={12}
-            className={priceDirection === "up" ? "text-emerald-700" : "text-red-700"}
+            className={priceDirection === "up" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}
           />
         ) : null}
         {typeof quote?.price === "number" ? formatPrice(quote.price) : "..."}
@@ -320,25 +320,25 @@ function AnalyzerLoadingPanel({ ticker }: { ticker?: string }) {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="rounded-[1.5rem] border border-black/8 bg-white/68 dark:bg-white/5 p-4">
-          <div className="h-48 rounded-[1.1rem] bg-slate-200/70 dark:bg-white/10 loading-pulse sm:h-64" />
+        <div className="rounded-[1.5rem] border border-black/8 bg-white/68 p-4 dark:border-white/10 dark:bg-white/5">
+          <div className="h-48 rounded-[1.1rem] bg-slate-200/70 loading-pulse dark:bg-white/10 sm:h-64" />
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {["Kursverlauf", "Risiko", "Trigger"].map((item) => (
-              <div key={item} className="rounded-[1rem] border border-black/8 bg-white/70 p-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{item}</div>
-                <div className="mt-3 h-3 w-3/4 rounded-full bg-slate-200 loading-pulse" />
-                <div className="mt-2 h-3 w-1/2 rounded-full bg-slate-200 loading-pulse" />
+              <div key={item} className="rounded-[1rem] border border-black/8 bg-white/70 p-3 dark:border-white/10 dark:bg-white/5">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{item}</div>
+                <div className="mt-3 h-3 w-3/4 rounded-full bg-slate-200 loading-pulse dark:bg-white/10" />
+                <div className="mt-2 h-3 w-1/2 rounded-full bg-slate-200 loading-pulse dark:bg-white/10" />
               </div>
             ))}
           </div>
         </div>
-        <div className="rounded-[1.5rem] border border-black/8 bg-white/72 p-4">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-[1.5rem] border border-black/8 bg-white/72 p-4 dark:border-white/10 dark:bg-white/5">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
             Ladeschritte
           </div>
           <div className="mt-4 space-y-3">
             {["Symbol auflösen", "Datenquelle prüfen", "Dossier berechnen", "Ansicht stabilisieren"].map((step, index) => (
-              <div key={step} className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+              <div key={step} className="flex items-center gap-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[11px] font-black text-[var(--accent)]">
                   {index + 1}
                 </span>
@@ -407,7 +407,7 @@ function LoginScreen({
                   "Zugriffe auf erlaubte Domains begrenzt",
                   "Alarme und Einstellungen geschützt",
                 ].map((item) => (
-                  <div key={item} className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-sm font-semibold text-slate-700">
+                  <div key={item} className="rounded-[1.6rem] border border-black/8 bg-white/75 p-4 text-sm font-semibold text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                     {item}
                   </div>
                 ))}
@@ -420,12 +420,12 @@ function LoginScreen({
                 ].map(([title, body]) => (
                   <div
                     key={title}
-                    className="rounded-[1.7rem] border border-black/8 bg-[rgba(255,255,255,0.76)] p-5"
+                    className="rounded-[1.7rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5"
                   >
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                       {title}
                     </div>
-                    <div className="mt-3 text-sm leading-6 text-slate-700">{body}</div>
+                    <div className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">{body}</div>
                   </div>
                 ))}
               </div>
@@ -1306,7 +1306,7 @@ function AppContent() {
   const favoriteTape = (
     <div className="header-favorites-tape overflow-x-auto no-scrollbar">
       <div className="flex min-w-max items-center gap-2">
-        <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700" : "bg-white/70 text-slate-500 ring-1 ring-black/6"}`}>
+        <div className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${headerRealtimeConnected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-white/70 text-slate-500 ring-1 ring-black/6 dark:bg-white/5 dark:text-slate-400 dark:ring-white/10"}`}>
           {headerRealtimeConnected
             ? `${favoriteTapeLabel} ${headerConnectionState}`
             : `${favoriteTapeLabel} ${headerTransportMode}`}
@@ -1318,10 +1318,10 @@ function AppContent() {
     </div>
   );
   const moversTape = (
-    <div className="ticker-marquee-wrap header-movers-tape rounded-[1.15rem] border border-black/8 bg-white/52 px-2 py-1.5 shadow-[0_8px_24px_rgba(17,24,39,0.035)] sm:px-3">
+    <div className="ticker-marquee-wrap header-movers-tape rounded-[1.15rem] border border-black/8 bg-white/52 px-2 py-1.5 shadow-[0_8px_24px_rgba(17,24,39,0.035)] dark:border-white/10 dark:bg-white/5 sm:px-3">
       <div className="header-movers-meta flex items-center justify-between gap-3 px-1">
         <div className="flex min-w-0 items-baseline gap-2.5">
-          <div className="text-xs font-semibold leading-none text-slate-600">
+          <div className="text-xs font-semibold leading-none text-slate-600 dark:text-slate-300">
             Marktbewegungen
           </div>
           <div className="hidden truncate text-[10px] font-semibold leading-none text-slate-400 sm:block">
@@ -1332,7 +1332,7 @@ function AppContent() {
           <div className="hidden text-[9px] font-bold uppercase leading-none tracking-[0.14em] text-slate-400 lg:block">
             Zeitraum
           </div>
-          <div className="header-movers-periods flex rounded-full border border-black/8 bg-white/65 p-0.5" role="group" aria-label="Zeitraum der Marktbewegungen">
+          <div className="header-movers-periods flex rounded-full border border-black/8 bg-white/65 p-0.5 dark:border-white/10 dark:bg-white/5" role="group" aria-label="Zeitraum der Marktbewegungen">
             {(["1d", "1w", "1m"] as MoversWindow[]).map((window) => (
               <button
                 key={window}
@@ -1342,8 +1342,8 @@ function AppContent() {
                 aria-label={`${({ "1d": "1 Tag", "1w": "1 Woche", "1m": "1 Monat" })[window]}: Marktbewegungen anzeigen`}
                 className={`min-h-10 min-w-10 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] transition-colors sm:min-h-8 ${
                   marketMoversWindow === window
-                    ? "bg-[#101114] text-white"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-[#101114] text-white dark:bg-white dark:text-slate-950"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
                 }`}
               >
                 {window === "1d" ? "1T" : window.toUpperCase()}
@@ -1405,7 +1405,7 @@ function AppContent() {
   );
   const mobileMarketTape = (
     <section className="mobile-market-tape lg:hidden">
-      <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.06)] backdrop-blur-xl">
+      <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
         {favoriteTape}
         {activeTab === "dashboard" && moversTape ? (
           <div className="mt-2">
@@ -1736,20 +1736,20 @@ function AppContent() {
                     </div>
                   );
                 })() : null}
-                <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-3 shadow-[0_12px_28px_rgba(17,24,39,0.05)]">
+                <div className="rounded-[1.25rem] border border-black/8 bg-white/72 p-3 shadow-[0_12px_28px_rgba(17,24,39,0.05)] dark:border-white/10 dark:bg-white/5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                         Kurzstatus
                       </div>
-                      <div className="mt-1 text-sm font-bold text-slate-900">
+                      <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
                         Entscheidung / Markt / Briefing
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIsChatOpen(true)}
-                      className="rounded-full bg-[#101114] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white"
+                      className="rounded-full bg-[#101114] px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
                     >
                       Broker Freund
                     </button>
@@ -1977,20 +1977,20 @@ function AppContent() {
                         key={item.title}
                         type="button"
                         onClick={item.action}
-                        className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 text-left transition-all hover:border-black/14 hover:bg-white hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)]"
+                        className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 text-left transition-all hover:border-black/14 hover:bg-white hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20 dark:hover:bg-white/10"
                       >
-                        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                           {item.title}
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
-                        <div className="mt-4 inline-flex rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.body}</p>
+                        <div className="mt-4 inline-flex rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)] dark:border-white/10 dark:bg-white/5">
                           {item.cta}
                         </div>
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="rounded-[2rem] border border-black/8 bg-white/80 dark:bg-white/5 p-6">
+                <div className="rounded-[2rem] border border-black/8 bg-white/80 p-6 dark:border-white/10 dark:bg-white/5">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                     Arbeitsablauf
                   </div>
@@ -2019,10 +2019,10 @@ function AppContent() {
                         key={item.copy}
                         type="button"
                         onClick={item.action}
-                        className="rounded-[1.3rem] border border-black/8 bg-white/78 p-4 text-left text-sm text-slate-700 transition-all hover:border-black/14 hover:bg-white"
+                        className="rounded-[1.3rem] border border-black/8 bg-white/78 p-4 text-left text-sm text-slate-700 transition-all hover:border-black/14 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10"
                       >
                         <div>{item.copy}</div>
-                        <div className="mt-3 inline-flex rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                        <div className="mt-3 inline-flex rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)] dark:border-white/10 dark:bg-white/5">
                           {item.cta}
                         </div>
                       </button>
@@ -2134,8 +2134,8 @@ function AppContent() {
         </div>
       </nav>
 
-      <footer className="border-t border-black/6 bg-white/50">
-        <div className="layout-shell px-4 py-6 text-center text-sm text-slate-500 sm:px-6 xl:px-8 2xl:px-10">
+      <footer className="border-t border-black/6 bg-white/50 dark:border-white/8 dark:bg-transparent">
+        <div className="layout-shell px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-6 xl:px-8 2xl:px-10">
           Broker Freund {__APP_VERSION__} Beta. Privater Einzelarbeitsbereich. Informationen sind ein Entscheidungsrahmen, keine Gewinnzusage.
         </div>
       </footer>

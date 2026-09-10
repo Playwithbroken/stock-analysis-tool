@@ -411,7 +411,7 @@ export default function BrokerChat({
         ? `Priorisiere ${contextLabel} nur bei bestaetigtem Trigger.`
         : "Suche nach frischem Trigger, bevor du Momentum jagst.",
       tone:
-        "border-black/6 bg-white/80 dark:bg-white/5",
+        "border-black/6 bg-white/80 dark:border-white/10 dark:bg-white/5",
     },
     {
       label: "Risk",
@@ -419,7 +419,7 @@ export default function BrokerChat({
       detail:
         "Groesse klein halten, solange Newsflow oder Open-Richtung nicht sauber bestaetigt sind.",
       tone:
-        "border-black/6 bg-white/80 dark:bg-white/5",
+        "border-black/6 bg-white/80 dark:border-white/10 dark:bg-white/5",
     },
     {
       label: "Hedge",
@@ -428,7 +428,7 @@ export default function BrokerChat({
         ? `Pruefe Hedge-Ideen gegen ${contextLabel}, falls das Setup kippt.`
         : "GLD, UUP oder TLT nur dann aktivieren, wenn Risiko wirklich hochzieht.",
       tone:
-        "border-black/6 bg-white/80 dark:bg-white/5",
+        "border-black/6 bg-white/80 dark:border-white/10 dark:bg-white/5",
     },
   ];
 
@@ -548,13 +548,13 @@ export default function BrokerChat({
                   key={card.label}
                   className={`rounded-[1.2rem] border p-3 ${card.tone}`}
                 >
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                     {card.label}
                   </div>
-                  <div className="mt-2 text-sm font-bold text-slate-900">
+                  <div className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
                     {card.value}
                   </div>
-                  <div className="mt-2 text-[12px] leading-5 text-slate-600">
+                  <div className="mt-2 text-[12px] leading-5 text-slate-600 dark:text-neutral-300">
                     {card.detail}
                   </div>
                 </div>
@@ -633,7 +633,7 @@ export default function BrokerChat({
                 ))}
               </div>
             </div>
-            <div className="rounded-[1.2rem] border border-black/8 bg-white/70 dark:bg-white/5 p-4">
+            <div className="rounded-[1.2rem] border border-black/8 dark:border-white/10 bg-white/70 dark:bg-white/5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">

@@ -1665,7 +1665,7 @@ export default function WorldMarketMap({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500 dark:text-neutral-400">
                 Weltmarktkarte
               </div>
               <span
@@ -1673,15 +1673,15 @@ export default function WorldMarketMap({
                 aria-label={dataCurrent ? "Aktuelle Regionaldaten" : "Ersatzansicht ohne aktuelle Regionaldaten"}
                 className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${
                   dataCurrent
-                    ? "border-emerald-500/15 bg-emerald-500/8 text-emerald-700"
-                    : "border-amber-500/20 bg-amber-500/10 text-amber-800"
+                    ? "border-emerald-500/15 bg-emerald-500/8 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                    : "border-amber-500/20 bg-amber-500/10 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
                 }`}
               >
                 {dataCurrent ? "Regionaldaten aktuell" : "Ersatzansicht · Werte ausstehend"}
               </span>
             </div>
-            <h3 className="mt-2 text-3xl text-slate-900 sm:text-4xl">Globale Marktbewegungen über Nacht</h3>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+            <h3 className="mt-2 text-3xl text-slate-900 dark:text-white sm:text-4xl">Globale Marktbewegungen über Nacht</h3>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-neutral-300">
               Regionen, Makro-Ton, geopolitische Ereignisse und der Übergang bis zur US-Eröffnung
               in einer kompakten Makro-Ansicht.
             </p>
@@ -1697,7 +1697,7 @@ export default function WorldMarketMap({
                 className={`min-h-10 rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] transition-all ${
                   selectedRegion === region.label
                     ? "bg-[var(--accent)] text-white shadow-[0_8px_20px_rgba(0,0,0,0.12)]"
-                    : "border border-black/8 bg-white/70 text-slate-500"
+                    : "border border-black/8 bg-white/70 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
                 }`}
               >
                 {regionDisplayLabel(region.label)}
@@ -1723,8 +1723,8 @@ export default function WorldMarketMap({
               aria-pressed={activeFilter === item.key}
               className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                 activeFilter === item.key
-                  ? "bg-[#101114] text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)]"
-                  : "border border-black/8 bg-white/70 text-slate-500"
+                  ? "bg-[#101114] text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)] dark:bg-white dark:text-black dark:shadow-[0_10px_24px_rgba(0,0,0,0.5)]"
+                  : "border border-black/8 bg-white/70 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
               }`}
             >
               {item.label}
@@ -1732,12 +1732,12 @@ export default function WorldMarketMap({
           ))}
         </div>
 
-        <div className="flex flex-col gap-2 rounded-[1.2rem] border border-black/8 bg-white/70 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex flex-col gap-2 rounded-[1.2rem] border border-black/8 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
           <div className="map-control-strip flex w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0" role="group" aria-label="Ereignisse sortieren" tabIndex={0}>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
               Sortierung
             </div>
-            {[ 
+            {[
               { key: "impact", label: "Wirkung" },
               { key: "region", label: "Region" },
               { key: "latest", label: "Neueste" },
@@ -1750,24 +1750,24 @@ export default function WorldMarketMap({
                 className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                   sortMode === item.key
                     ? "bg-[var(--accent)] text-white"
-                    : "border border-black/8 bg-white text-slate-500"
+                    : "border border-black/8 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
                 }`}
               >
                 {item.label}
               </button>
             ))}
-            <span className="ml-1 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+            <span className="ml-1 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300">
               {mapSignalSummary.total} Ereignisse
             </span>
-            <span className="rounded-full border border-red-500/12 bg-red-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-red-700">
+            <span className="rounded-full border border-red-500/12 bg-red-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
               {mapSignalSummary.highImpact} hoch
             </span>
-            <span className="rounded-full border border-emerald-500/12 bg-emerald-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">
+            <span className="rounded-full border border-emerald-500/12 bg-emerald-500/6 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
               {mapSignalSummary.actionable} aktive Setups
             </span>
           </div>
           <div className="map-control-strip flex w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0" role="group" aria-label="Kartenzeitraum und Ebenen" tabIndex={0}>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
               Zeitraum
             </div>
             {[
@@ -1783,7 +1783,7 @@ export default function WorldMarketMap({
                 className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                   timeLens === item.key
                     ? "bg-[var(--accent)] text-white"
-                    : "border border-black/8 bg-white text-slate-500"
+                    : "border border-black/8 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
                 }`}
               >
                 {item.label}
@@ -1802,8 +1802,8 @@ export default function WorldMarketMap({
                 aria-pressed={item.value}
                 className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition-all ${
                   item.value
-                    ? "bg-[#101114] text-white"
-                    : "border border-black/8 bg-white text-slate-500"
+                    ? "bg-[#101114] text-white dark:bg-white dark:text-black"
+                    : "border border-black/8 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
                 }`}
               >
                 {item.label}
@@ -1812,20 +1812,20 @@ export default function WorldMarketMap({
           </div>
         </div>
 
-        <div className="world-map-mobile-card sm:hidden rounded-[1.45rem] border border-black/8 bg-white/78 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+        <div className="world-map-mobile-card sm:hidden rounded-[1.45rem] border border-black/8 bg-white/78 dark:border-white/10 dark:bg-[#1c1c1e]/90 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.5)]">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-neutral-400">
                 Weltkarte
               </div>
-              <div className="mt-1 text-base font-black text-slate-900">
+              <div className="mt-1 text-base font-black text-slate-900 dark:text-white">
                 Ereignisse und Marktwirkung
               </div>
             </div>
             <button
               type="button"
               onClick={() => setImpactDrawerOpen(true)}
-              className="shrink-0 rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+              className="shrink-0 rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
             >
               {mapSignalSummary.total} Hinweise
             </button>
@@ -1867,7 +1867,7 @@ export default function WorldMarketMap({
                 </button>
               ))}
             </div>
-            <div className="world-map-zoom-controls absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 bg-white/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
+            <div className="world-map-zoom-controls absolute right-2 top-2 z-30 flex gap-1 rounded-full border border-black/8 dark:border-white/10 bg-white/90 dark:bg-[#1d1d1f]/90 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
               {[
                 { label: "-", action: () => setMapZoom((value) => Number((value - 0.18).toFixed(2))) },
                 { label: "1x", action: resetMapView },
@@ -1878,19 +1878,19 @@ export default function WorldMarketMap({
                   type="button"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={item.action}
-                  className="h-8 min-w-8 rounded-full px-2 text-[10px] font-black text-slate-600 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  className="h-8 min-w-8 rounded-full px-2 text-[10px] font-black text-slate-600 dark:text-neutral-300 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
                   aria-label={`Kartenzoom ${item.label}`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
-            <div className="world-map-gesture-hint absolute bottom-2 left-2 z-30 rounded-full border border-black/8 bg-white/88 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
+            <div className="world-map-gesture-hint absolute bottom-2 left-2 z-30 rounded-full border border-black/8 dark:border-white/10 bg-white/88 dark:bg-[#1d1d1f]/90 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-neutral-400 shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
               Ziehen / Pinch / {mapZoomLabel}
             </div>
 
             {!positionedGeoSignals.length ? (
-              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-[1rem] border border-black/8 bg-white/88 p-3 text-center text-xs font-semibold text-slate-600">
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/88 dark:bg-[#1d1d1f]/90 p-3 text-center text-xs font-semibold text-slate-600 dark:text-neutral-300">
                 Keine priorisierten Event-Pings im aktuellen Filter.
               </div>
             ) : null}
@@ -1907,19 +1907,19 @@ export default function WorldMarketMap({
                     setPinnedEventIndex(Math.max(0, nextIndex));
                     setImpactDrawerOpen(true);
                   }}
-                  className="rounded-[1rem] border border-black/8 bg-white/88 p-3 text-left"
+                  className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/88 dark:bg-white/5 p-3 text-left"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(item.markerTone)}`}>
                       <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
                       {item.markerIcon}
                     </span>
-                    <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                    <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                       Wirkung {item.event_intelligence?.impact_score || item.impact || "beobachten"}
                     </span>
                   </div>
-                  <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900">{item.title}</div>
-                  <div className="mt-1 text-xs font-semibold text-slate-500">
+                  <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900 dark:text-white">{item.title}</div>
+                  <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-neutral-400">
                     {item.geoPlace || item.geoZone || item.region || "Global"} / {item.event_intelligence?.action || "watch"}
                   </div>
                 </button>
@@ -1936,7 +1936,7 @@ export default function WorldMarketMap({
                 className={`min-w-0 rounded-[0.9rem] border px-1.5 py-2 text-center transition-all ${
                   selectedRegion === region.label
                     ? "border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "border-black/8 bg-white text-slate-600"
+                    : "border-black/8 bg-white text-slate-600 dark:border-white/10 dark:bg-white/10 dark:text-neutral-300"
                 }`}
               >
                 <span className="block truncate text-[9px] font-extrabold uppercase tracking-[0.1em]">
@@ -1953,7 +1953,7 @@ export default function WorldMarketMap({
             <button
               type="button"
               onClick={() => setImpactDrawerOpen(true)}
-              className="mt-3 block w-full rounded-[1.05rem] border border-black/8 bg-white/88 p-3 text-left"
+              className="mt-3 block w-full rounded-[1.05rem] border border-black/8 dark:border-white/10 bg-white/88 dark:bg-white/5 p-3 text-left"
             >
               <div className="flex items-center justify-between gap-2">
                 <span
@@ -1964,24 +1964,24 @@ export default function WorldMarketMap({
                   <span className={`h-2 w-2 rounded-full ${markerAccentClass(activeGeoEvent.markerTone)}`} />
                   {activeGeoEvent.markerIcon}
                 </span>
-                <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-400">
                   Handelswirkung
                 </span>
               </div>
-              <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900">
+              <div className="mt-2 line-clamp-2 text-sm font-black text-slate-900 dark:text-white">
                 {activeGeoEvent.title}
               </div>
-              <div className="mt-1 text-xs font-semibold text-slate-500">
+              <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-neutral-400">
                 {activeGeoEvent.region || "Global"} / {activeGeoEvent.event_intelligence?.action || "watch"}
               </div>
               {macroDecisionFacts.length ? (
                 <div className="mt-3 grid gap-2">
                   {macroDecisionFacts.slice(0, 4).map((fact) => (
-                    <div key={fact.label} className="rounded-[0.85rem] border border-black/8 bg-white/78 px-3 py-2">
-                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                    <div key={fact.label} className="rounded-[0.85rem] border border-black/8 dark:border-white/10 bg-white/78 dark:bg-white/5 px-3 py-2">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                         {fact.label}
                       </div>
-                      <div className="mt-1 line-clamp-2 text-[11px] font-bold leading-4 text-slate-700">
+                      <div className="mt-1 line-clamp-2 text-[11px] font-bold leading-4 text-slate-700 dark:text-neutral-200">
                         {fact.value}
                       </div>
                     </div>
@@ -2081,7 +2081,7 @@ export default function WorldMarketMap({
               : null}
 
             {showLegend ? (
-            <div className="absolute bottom-4 left-4 z-30 hidden max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 bg-white/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] sm:flex">
+            <div className="absolute bottom-4 left-4 z-30 hidden max-w-[20rem] flex-wrap gap-2 rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/92 dark:bg-[#1d1d1f]/92 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_24px_rgba(0,0,0,0.5)] sm:flex">
               {[
                 { icon: "WAR", label: "Konflikt", tone: "red" as const },
                 { icon: "CB", label: "Zentralbank", tone: "blue" as const },
@@ -2090,7 +2090,7 @@ export default function WorldMarketMap({
                 { icon: "NAT", label: "Katastrophe", tone: "red" as const },
                 { icon: "POL", label: "Politik", tone: "slate" as const },
               ].map((item) => (
-                <div key={item.icon} className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                <div key={item.icon} className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:text-neutral-300">
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${markerClass(item.tone)}`}>
                     <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.tone)}`} />
                     {item.icon}
@@ -2101,12 +2101,12 @@ export default function WorldMarketMap({
             </div>
             ) : null}
 
-            <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.28),rgba(15,23,42,0))] lg:block" />
+            <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.28),rgba(15,23,42,0))] dark:bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.15),rgba(255,255,255,0))] lg:block" />
 
             {activeGeoEvent ? (
-              <div className="map-event-focus absolute left-20 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/8 bg-white/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)] sm:block">
+              <div className="map-event-focus absolute left-20 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/8 dark:border-white/10 bg-white/94 dark:bg-[#1d1d1f]/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)] dark:shadow-[0_14px_30px_rgba(0,0,0,0.5)] sm:block">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                     Focus
                   </div>
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activeGeoEvent.markerTone)}`}>
@@ -2114,35 +2114,35 @@ export default function WorldMarketMap({
                     {activeGeoEvent.markerIcon}
                   </span>
                 </div>
-                <div className="mt-2 line-clamp-3 text-sm font-bold leading-5 text-slate-900">
+                <div className="mt-2 line-clamp-3 text-sm font-bold leading-5 text-slate-900 dark:text-white">
                   {activeGeoEvent.title}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                   {activeVariantLabel ? (
-                    <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                       {activeVariantLabel}
                     </span>
                   ) : null}
                   {activeGeoEvent.geoZone && activeGeoEvent.geoZone !== activeGeoEvent.regionKey ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                       {activeGeoEvent.geoZone}
                     </span>
                   ) : null}
                   {activeGeoEvent.geoPlace && activeGeoEvent.geoPlace !== activeGeoEvent.geoZone && activeGeoEvent.geoPlace !== activeGeoEvent.regionKey ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                       {activeGeoEvent.geoPlace}
                     </span>
                   ) : null}
-                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                  <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                     {activeGeoEvent.region || "Global"}
                   </span>
                   {activeGeoEvent.event_intelligence?.action ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                       {activeGeoEvent.event_intelligence.action}
                     </span>
                   ) : null}
                   {activeGeoEvent.event_intelligence?.impact_score ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                       impact {activeGeoEvent.event_intelligence.impact_score}
                     </span>
                   ) : null}
@@ -2150,11 +2150,11 @@ export default function WorldMarketMap({
                 {macroDecisionFacts.length ? (
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     {macroDecisionFacts.slice(0, 4).map((fact) => (
-                      <div key={fact.label} className="rounded-[0.85rem] border border-black/8 bg-white/78 px-2.5 py-2">
-                        <div className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      <div key={fact.label} className="rounded-[0.85rem] border border-black/8 dark:border-white/10 bg-white/78 dark:bg-white/5 px-2.5 py-2">
+                        <div className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                           {fact.label}
                         </div>
-                        <div className="mt-1 line-clamp-2 text-[10px] font-bold leading-4 text-slate-700">
+                        <div className="mt-1 line-clamp-2 text-[10px] font-bold leading-4 text-slate-700 dark:text-neutral-200">
                           {fact.value}
                         </div>
                       </div>
@@ -2200,9 +2200,9 @@ export default function WorldMarketMap({
                     <span className={`h-2 w-2 rounded-full ${markerAccentClass(item.markerTone)}`} />
                     <span>{item.markerIcon}</span>
                   </div>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 bg-white/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-72 -translate-x-1/2 rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/96 dark:bg-[#1d1d1f]/96 p-3 text-left opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.14)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.5)] transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                         {item.geoPlace && item.geoPlace !== item.regionKey
                           ? `${item.region || "Global"} | ${item.geoPlace}`
                           : item.geoZone && item.geoZone !== item.regionKey
@@ -2213,32 +2213,32 @@ export default function WorldMarketMap({
                         {item.impact || "macro"}
                       </div>
                     </div>
-                    <div className="mt-2 text-sm font-bold leading-5 text-slate-900">{item.title}</div>
+                    <div className="mt-2 text-sm font-bold leading-5 text-slate-900 dark:text-white">{item.title}</div>
                     {item.publisher ? (
-                      <div className="mt-2 text-[11px] text-slate-500">{item.publisher}</div>
+                      <div className="mt-2 text-[11px] text-slate-500 dark:text-neutral-400">{item.publisher}</div>
                     ) : null}
                     {item.event_intelligence ? (
-                      <div className="mt-3 space-y-2 text-[11px] text-slate-600">
+                      <div className="mt-3 space-y-2 text-[11px] text-slate-600 dark:text-neutral-300">
                         <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300">
                             impact {item.event_intelligence.impact_score}
                           </span>
-                          <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                          <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300">
                             confidence {item.event_intelligence.confidence_score}
                           </span>
                           {item.event_intelligence.action ? (
-                            <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                            <span className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                               {item.event_intelligence.action}
                             </span>
                           ) : null}
                         </div>
                         {item.event_intelligence.why_now ? (
-                          <div className="line-clamp-3 text-[11px] leading-5 text-slate-600">
+                          <div className="line-clamp-3 text-[11px] leading-5 text-slate-600 dark:text-neutral-300">
                             {item.event_intelligence.why_now}
                           </div>
                         ) : null}
                         {item.event_intelligence.affected_assets?.length ? (
-                          <div className="line-clamp-2 text-[10px] leading-5 text-slate-500">
+                          <div className="line-clamp-2 text-[10px] leading-5 text-slate-500 dark:text-neutral-400">
                             Assets: {item.event_intelligence.affected_assets.join(" | ")}
                           </div>
                         ) : null}
@@ -2255,26 +2255,26 @@ export default function WorldMarketMap({
                 href={activePulseEvent.link}
                 target="_blank"
                 rel="noreferrer"
-                className="absolute right-4 bottom-4 z-30 hidden max-w-[15rem] rounded-[1rem] border border-black/8 bg-white/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)] sm:block"
+                className="absolute right-4 bottom-4 z-30 hidden max-w-[15rem] rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/94 dark:bg-[#1d1d1f]/94 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.1)] dark:shadow-[0_12px_28px_rgba(0,0,0,0.5)] sm:block"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
                     <span className={`h-2 w-2 rounded-full ${markerAccentClass(activePulseEvent.markerTone)}`} />
                     Live-Alarm
                   </span>
-                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                     {activePulseEvent.region || "Global"}
                   </span>
                 </div>
-                <div className="mt-2 line-clamp-3 text-[12px] font-semibold leading-5 text-slate-800">
+                <div className="mt-2 line-clamp-3 text-[12px] font-semibold leading-5 text-slate-800 dark:text-white">
                   {activePulseEvent.title}
                 </div>
                 {activePulseEvent.event_intelligence ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300">
                       impact {activePulseEvent.event_intelligence.impact_score}
                     </span>
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300">
                       {activePulseEvent.event_intelligence.action}
                     </span>
                   </div>
@@ -2284,7 +2284,7 @@ export default function WorldMarketMap({
                     {compactList(activePulseEvent.event_intelligence?.affected_sectors, 2).map((sector) => (
                       <span
                         key={sector}
-                        className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
+                        className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]"
                       >
                         {sector}
                       </span>
@@ -2297,7 +2297,7 @@ export default function WorldMarketMap({
                     event.preventDefault();
                     setImpactDrawerOpen(true);
                   }}
-                  className="mt-3 rounded-full border border-black/8 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
+                  className="mt-3 rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
                 >
                   Handelswirkung
                 </button>
@@ -2307,9 +2307,9 @@ export default function WorldMarketMap({
 
             <div className="mt-4 space-y-3 sm:hidden">
               {activeGeoEvent ? (
-                <div className="rounded-[1.05rem] border border-black/8 bg-white/90 px-4 py-3 shadow-[0_12px_24px_rgba(15,23,42,0.08)]">
+                <div className="rounded-[1.05rem] border border-black/8 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 shadow-[0_12px_24px_rgba(15,23,42,0.08)] dark:shadow-[0_12px_24px_rgba(0,0,0,0.5)]">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                       Focus
                     </div>
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activeGeoEvent.markerTone)}`}>
@@ -2317,20 +2317,20 @@ export default function WorldMarketMap({
                       {activeGeoEvent.markerIcon}
                     </span>
                   </div>
-                  <div className="mt-2 text-sm font-bold leading-5 text-slate-900">
+                  <div className="mt-2 text-sm font-bold leading-5 text-slate-900 dark:text-white">
                     {activeGeoEvent.title}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                  <div className="mt-3 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                       {activeGeoEvent.region || "Global"}
                     </span>
                     {activeGeoEvent.event_intelligence?.action ? (
-                      <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[var(--accent)]">
+                      <span className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2 py-1 text-[var(--accent)]">
                         {activeGeoEvent.event_intelligence.action}
                       </span>
                     ) : null}
                     {activeGeoEvent.event_intelligence?.impact_score ? (
-                      <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                      <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
                         impact {activeGeoEvent.event_intelligence.impact_score}
                       </span>
                     ) : null}
@@ -2338,7 +2338,7 @@ export default function WorldMarketMap({
                   <button
                     type="button"
                     onClick={() => setImpactDrawerOpen(true)}
-                    className="mt-3 rounded-full border border-black/8 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
+                    className="mt-3 rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]"
                   >
                     Handelswirkung
                   </button>
@@ -2350,18 +2350,18 @@ export default function WorldMarketMap({
                   href={activePulseEvent.link}
                   target="_blank"
                   rel="noreferrer"
-                  className="block rounded-[1.05rem] border border-black/8 bg-white/90 p-4 shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
+                  className="block rounded-[1.05rem] border border-black/8 dark:border-white/10 bg-white/90 dark:bg-white/5 p-4 shadow-[0_12px_24px_rgba(15,23,42,0.08)] dark:shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activePulseEvent.markerTone)}`}>
                       <span className={`h-2 w-2 rounded-full ${markerAccentClass(activePulseEvent.markerTone)}`} />
                       Live-Alarm
                     </span>
-                    <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                    <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                       {activePulseEvent.region || "Global"}
                     </span>
                   </div>
-                  <div className="mt-2 text-sm font-semibold leading-5 text-slate-800">
+                  <div className="mt-2 text-sm font-semibold leading-5 text-slate-800 dark:text-white">
                     {activePulseEvent.title}
                   </div>
                 </a>
@@ -2370,31 +2370,31 @@ export default function WorldMarketMap({
           </div>
 
           <div className="space-y-3 xl:max-h-[720px] xl:overflow-y-auto xl:pr-1">
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/85 dark:bg-white/5 p-4">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                 Kartenstatus
               </div>
-              <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
-                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                  Ereignisse <span className="font-bold text-slate-900">{mapSignalSummary.total}</span>
+              <div className="mt-3 grid gap-2 text-xs text-slate-500 dark:text-neutral-400 sm:grid-cols-3 xl:grid-cols-1">
+                <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                  Ereignisse <span className="font-bold text-slate-900 dark:text-white">{mapSignalSummary.total}</span>
                 </div>
-                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                  Hohe Wirkung <span className="font-bold text-slate-900">{mapSignalSummary.highImpact}</span>
+                <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                  Hohe Wirkung <span className="font-bold text-slate-900 dark:text-white">{mapSignalSummary.highImpact}</span>
                 </div>
-                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                  Handlungsrelevant <span className="font-bold text-slate-900">{mapSignalSummary.actionable}</span>
+                <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                  Handlungsrelevant <span className="font-bold text-slate-900 dark:text-white">{mapSignalSummary.actionable}</span>
                 </div>
               </div>
             </div>
 
             {displayRegion && (
-              <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
+              <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/85 dark:bg-white/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                       Regionsfokus
                     </div>
-                    <div className="mt-2 text-xl font-black text-slate-900">
+                    <div className="mt-2 text-xl font-black text-slate-900 dark:text-white">
                       {regionDisplayLabel(displayRegion.label)}
                     </div>
                   </div>
@@ -2412,7 +2412,7 @@ export default function WorldMarketMap({
                     {regionDrilldown.zones.map(([zone, count]) => (
                       <span
                         key={zone}
-                        className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                        className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300"
                       >
                         {zone}
                         {count > 1 ? ` ${count}` : ""}
@@ -2447,7 +2447,7 @@ export default function WorldMarketMap({
                       <button
                         type="button"
                         onClick={() => setSelectedGeoPlace(null)}
-                        className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                        className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300"
                       >
                         Auswahl löschen
                       </button>
@@ -2456,7 +2456,7 @@ export default function WorldMarketMap({
                 ) : null}
                 {regionDrilldown.placeHeat.length ? (
                   <div className="mt-4 space-y-2">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                       Länderaktivität
                     </div>
                     {regionDrilldown.placeHeat.map((item) => (
@@ -2470,13 +2470,13 @@ export default function WorldMarketMap({
                           const nextIndex = positionedGeoSignals.findIndex((candidate) => candidate.geoPlace === nextPlace);
                           if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
                         }}
-                        className="block w-full rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2 text-left transition-colors hover:bg-white"
+                        className="block w-full rounded-[0.95rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-left transition-colors hover:bg-white dark:hover:bg-white/10"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 dark:text-neutral-200">
                             {item.place}
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                          <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                             <span>{item.events} Ereignisse</span>
                             <span>|</span>
                             <span>{item.actionable} handlungsrelevant</span>
@@ -2496,15 +2496,15 @@ export default function WorldMarketMap({
                   {(displayRegion.assets || []).slice(0, 1).map((asset) => (
                     <div
                       key={asset.ticker}
-                      className="flex items-center justify-between rounded-[0.95rem] border border-black/8 bg-white/75 px-3 py-2"
+                      className="flex items-center justify-between rounded-[0.95rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2"
                     >
                       <div>
-                        <div className="text-sm font-bold text-slate-900">{asset.label}</div>
-                        <div className="text-[11px] text-slate-500">{asset.ticker}</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white">{asset.label}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-neutral-400">{asset.ticker}</div>
                       </div>
                       <div
                         className={`text-sm font-bold ${
-                          (asset.change_1d || 0) >= 0 ? "text-emerald-700" : "text-red-700"
+                          (asset.change_1d || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"
                         }`}
                       >
                         {formatPct(asset.change_1d || 0)}
@@ -2516,24 +2516,24 @@ export default function WorldMarketMap({
             )}
 
             {displayRegion ? (
-              <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
+              <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/85 dark:bg-white/5 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                     Regionsdetails
                   </div>
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-400">
                     {regionDisplayLabel(displayRegion.label)}
                   </div>
                 </div>
-                <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                    Ereignisse <span className="font-bold text-slate-900">{regionDrilldown.total}</span>
+                <div className="mt-3 grid gap-2 text-xs text-slate-500 dark:text-neutral-400 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                    Ereignisse <span className="font-bold text-slate-900 dark:text-white">{regionDrilldown.total}</span>
                   </div>
-                  <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                    Hohe Wirkung <span className="font-bold text-slate-900">{regionDrilldown.highImpact}</span>
+                  <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                    Hohe Wirkung <span className="font-bold text-slate-900 dark:text-white">{regionDrilldown.highImpact}</span>
                   </div>
-                  <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                    Handlungsrelevant <span className="font-bold text-slate-900">{regionDrilldown.actionable}</span>
+                  <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                    Handlungsrelevant <span className="font-bold text-slate-900 dark:text-white">{regionDrilldown.actionable}</span>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
@@ -2547,7 +2547,7 @@ export default function WorldMarketMap({
                       {regionDrilldown.eventMix.map(([eventCode, count]) => (
                         <span
                           key={eventCode}
-                          className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                          className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300"
                         >
                           {eventCode} {count}
                         </span>
@@ -2565,10 +2565,10 @@ export default function WorldMarketMap({
                             if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
                             setImpactDrawerOpen(true);
                           }}
-                          className="rounded-[0.95rem] border border-black/8 bg-white px-3 py-2 text-left transition-colors hover:bg-[var(--accent-soft)]"
+                          className="rounded-[0.95rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-left transition-colors hover:bg-[var(--accent-soft)] dark:hover:bg-white/10"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                               {item.eventCode} | {item.label}
                             </div>
                             <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(item.freshness)}`}>
@@ -2576,7 +2576,7 @@ export default function WorldMarketMap({
                             </div>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em]">
-                            <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-slate-500">
+                            <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-slate-500 dark:text-neutral-300">
                               {item.impact}
                             </span>
                             <span className="rounded-full border border-[var(--accent)]/12 bg-[var(--accent-soft)] px-2 py-1 text-[var(--accent)]">
@@ -2587,17 +2587,17 @@ export default function WorldMarketMap({
                             </span>
                           </div>
                           {item.thesis ? (
-                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-600">
+                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-600 dark:text-neutral-300">
                               {item.thesis}
                             </div>
                           ) : null}
                           {item.trigger ? (
-                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
+                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500 dark:text-neutral-400">
                               Trigger: {item.trigger}
                             </div>
                           ) : null}
                           {item.risk ? (
-                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-400">
+                            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-400 dark:text-neutral-400">
                               Risk: {item.risk}
                             </div>
                           ) : null}
@@ -2616,37 +2616,37 @@ export default function WorldMarketMap({
                         className={`block w-full rounded-[1rem] border p-3 text-left transition-colors ${
                           activeGeoEvent?.geoKey === item.geoKey
                             ? "border-[var(--accent)] bg-[var(--accent-soft)]/70"
-                            : "border-black/8 bg-white/75 hover:bg-white"
+                            : "border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                             {describeEventVariant(item) || item.markerLabel}
                           </div>
                           <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(freshnessLabel(item.event_intelligence?.decay, item.pulse))}`}>
                             {freshnessDisplayLabel(freshnessLabel(item.event_intelligence?.decay, item.pulse))}
                           </div>
                         </div>
-                        <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
+                        <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">{item.title}</div>
                         {item.geoPlace && item.geoPlace !== item.regionKey ? (
                           <div className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                             {item.geoPlace}
                           </div>
                         ) : null}
                         {item.geoZone && item.geoZone !== item.regionKey ? (
-                          <div className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                          <div className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                             {item.geoZone}
                           </div>
                         ) : null}
                         {item.event_intelligence?.affected_assets?.length ? (
-                          <div className="mt-2 text-[11px] leading-5 text-slate-500">
+                          <div className="mt-2 text-[11px] leading-5 text-slate-500 dark:text-neutral-400">
                             Assets: {compactList(item.event_intelligence.affected_assets, 2).join(" | ")}
                           </div>
                         ) : null}
                       </button>
                     ))
                   ) : (
-                    <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
+                    <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 p-3 text-sm text-slate-500 dark:text-neutral-400">
                       Keine dominanten Regionsdetails für {regionDisplayLabel(displayRegion.label)} im aktuellen Filter.
                     </div>
                   )}
@@ -2655,13 +2655,13 @@ export default function WorldMarketMap({
             ) : null}
 
             {activeGeoEvent ? (
-              <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
+              <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/85 dark:bg-white/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                       Markt-Auswirkung
                     </div>
-                    <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                    <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-400">
                       Entscheidungsrahmen
                     </div>
                   </div>
@@ -2669,7 +2669,7 @@ export default function WorldMarketMap({
                     <button
                       type="button"
                       onClick={() => setImpactDrawerOpen(true)}
-                      className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)] lg:hidden"
+                      className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)] lg:hidden"
                     >
                       Open
                     </button>
@@ -2678,14 +2678,14 @@ export default function WorldMarketMap({
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 line-clamp-3 text-sm font-bold leading-6 text-slate-900">
+                <div className="mt-3 line-clamp-3 text-sm font-bold leading-6 text-slate-900 dark:text-white">
                   {activeGeoEvent.title}
                 </div>
                 {tradeImpactCards.length ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {tradeImpactCards.map((card) => (
-                      <div key={card.label} className="rounded-[0.95rem] border border-black/8 bg-white/80 px-3 py-2">
-                        <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      <div key={card.label} className="rounded-[0.95rem] border border-black/8 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-2">
+                        <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                           {regionDisplayLabel(card.label)}
                         </div>
                         <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
@@ -2695,30 +2695,30 @@ export default function WorldMarketMap({
                     ))}
                   </div>
                 ) : null}
-                <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                   {activeVariantLabel ? (
-                    <span className="rounded-full border border-black/8 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                       {activeVariantLabel}
                     </span>
                   ) : null}
                   {activeGeoEvent.geoZone && activeGeoEvent.geoZone !== activeGeoEvent.regionKey ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                       {activeGeoEvent.geoZone}
                     </span>
                   ) : null}
                   {activeGeoEvent.geoPlace && activeGeoEvent.geoPlace !== activeGeoEvent.geoZone && activeGeoEvent.geoPlace !== activeGeoEvent.regionKey ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                       {activeGeoEvent.geoPlace}
                     </span>
                   ) : null}
-                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                  <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                     {activeGeoEvent.region || "Global"}
                   </span>
-                  <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                  <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                     {activeGeoEvent.impact || "macro"}
                   </span>
                   {activeGeoEvent.event_intelligence?.action ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                       {activeGeoEvent.event_intelligence.action}
                     </span>
                   ) : null}
@@ -2730,7 +2730,7 @@ export default function WorldMarketMap({
                     {freshnessDisplayLabel(freshnessLabel(activeGeoEvent.event_intelligence?.decay, activeGeoEvent.pulse))}
                   </span>
                   {activeGeoEvent.event_intelligence?.leverage ? (
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                       leverage {activeGeoEvent.event_intelligence.leverage}
                     </span>
                   ) : null}
@@ -2742,25 +2742,25 @@ export default function WorldMarketMap({
                 </div>
                 {activeGeoEvent.event_intelligence ? (
                   <div className="mt-3">
-                    <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-                      <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                        Marktwirkung <span className="font-bold text-slate-900">{activeGeoEvent.event_intelligence.impact_score}/100</span>
+                    <div className="grid gap-2 text-xs text-slate-500 dark:text-neutral-400 sm:grid-cols-3">
+                      <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                        Marktwirkung <span className="font-bold text-slate-900 dark:text-white">{activeGeoEvent.event_intelligence.impact_score}/100</span>
                       </div>
-                      <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                        Belastbarkeit <span className="font-bold text-slate-900">{macroConfidenceLabel(activeGeoEvent.event_intelligence.confidence_score, activeGeoEvent.event_intelligence.decision_quality)}</span>
+                      <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                        Belastbarkeit <span className="font-bold text-slate-900 dark:text-white">{macroConfidenceLabel(activeGeoEvent.event_intelligence.confidence_score, activeGeoEvent.event_intelligence.decision_quality)}</span>
                       </div>
-                      <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2">
-                        Zeithorizont <span className="font-bold text-slate-900">{macroHorizonLabel(activeGeoEvent)}</span>
+                      <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2">
+                        Zeithorizont <span className="font-bold text-slate-900 dark:text-white">{macroHorizonLabel(activeGeoEvent)}</span>
                       </div>
                     </div>
-                    <div className="mt-2 rounded-[0.9rem] border border-amber-500/15 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                    <div className="mt-2 rounded-[0.9rem] border border-amber-500/15 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-slate-600 dark:text-neutral-300">
                       Belastbarkeit bewertet Quellen- und Signalstruktur. Sie garantiert nicht, dass die Meldung wahr ist oder der Markt wie erwartet reagiert.
                     </div>
                   </div>
                 ) : null}
                 {compactList(activeGeoEvent.event_intelligence?.affected_sectors).length ? (
                   <div className="mt-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                       Betroffene Sektoren
                     </div>
                     <div className="mt-2 grid gap-2">
@@ -2769,13 +2769,13 @@ export default function WorldMarketMap({
                         return (
                           <div
                             key={sector}
-                            className="rounded-[0.95rem] border border-black/8 bg-white px-3 py-2"
+                            className="rounded-[0.95rem] border border-black/8 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2"
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700">
+                              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700 dark:text-neutral-200">
                                 {sector}
                               </span>
-                              <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                              <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                                 {heat.level}
                               </span>
                             </div>
@@ -2793,7 +2793,7 @@ export default function WorldMarketMap({
                 ) : null}
                 {compactList(activeGeoEvent.event_intelligence?.affected_assets, 4).length ? (
                   <div className="mt-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                       Betroffene Assets
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -2810,7 +2810,7 @@ export default function WorldMarketMap({
                   </div>
                 ) : null}
                 {activeGeoEvent.portfolio_exposure?.note ? (
-                  <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
+                  <div className="mt-3 rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700 dark:text-neutral-200">
                     <div className="flex items-center justify-between gap-2">
                       <span>{activeGeoEvent.portfolio_exposure.note}</span>
                       {activeGeoEvent.portfolio_exposure.exposure_strength ? (
@@ -2829,7 +2829,7 @@ export default function WorldMarketMap({
                           <button
                             key={holding}
                             onClick={() => onAnalyze(holding)}
-                            className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700"
+                            className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700 dark:text-neutral-200"
                           >
                             {holding}
                           </button>
@@ -2841,7 +2841,7 @@ export default function WorldMarketMap({
                         {compactList(activeGeoEvent.portfolio_exposure.matched_sectors, 3).map((sector) => (
                           <span
                             key={sector}
-                            className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                            className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400"
                           >
                             {sector}
                           </span>
@@ -2852,7 +2852,7 @@ export default function WorldMarketMap({
                 ) : null}
                 {hedgeIdeas.length ? (
                   <div className="mt-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                       Absicherungs-Ideen
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -2860,7 +2860,7 @@ export default function WorldMarketMap({
                         <button
                           key={idea.ticker}
                           onClick={() => onAnalyze(idea.ticker)}
-                          className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600"
+                          className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:text-neutral-300"
                         >
                           {idea.ticker} - {idea.label}
                         </button>
@@ -2870,38 +2870,38 @@ export default function WorldMarketMap({
                 ) : null}
                 <div className="mt-3 space-y-2">
                   {activeGeoEvent.event_intelligence?.execution_bias ? (
-                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                    <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-xs leading-6 text-slate-600 dark:text-neutral-300">
                       Handelsrichtung: {activeGeoEvent.event_intelligence.execution_bias} | Positionsgröße: {activeGeoEvent.event_intelligence.size_guidance}
                     </div>
                   ) : null}
                   {activeGeoEvent.event_intelligence?.trigger ? (
-                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                    <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-xs leading-6 text-slate-600 dark:text-neutral-300">
                       Trigger: {activeGeoEvent.event_intelligence.trigger}
                     </div>
                   ) : null}
                   {activeGeoEvent.event_intelligence?.invalidation ? (
-                    <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs leading-6 text-slate-600">
+                    <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-xs leading-6 text-slate-600 dark:text-neutral-300">
                       These ungültig wenn: {activeGeoEvent.event_intelligence.invalidation}
                     </div>
                   ) : null}
                 </div>
                 {activeGeoEvent.event_intelligence?.execution_window ? (
-                  <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                     Zeithorizont: {activeGeoEvent.event_intelligence.execution_window}
                   </div>
                 ) : null}
               </div>
             ) : null}
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/80 dark:bg-white/5 p-4">
+            <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                   Warum das wichtig ist
                 </div>
                 {focusTicker ? (
                   <button
                     onClick={() => onAnalyze(focusTicker)}
-                    className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600"
+                    className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600 dark:text-neutral-300"
                   >
                     {focusTicker}
                   </button>
@@ -2912,32 +2912,32 @@ export default function WorldMarketMap({
                   whyItMatters.map((item, index) => (
                     <div
                       key={`${item}-${index}`}
-                      className="rounded-[1rem] border border-black/8 bg-white/78 p-3 text-sm leading-6 text-slate-700"
+                      className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/78 dark:bg-white/5 p-3 text-sm leading-6 text-slate-700 dark:text-neutral-200"
                     >
                       {item}
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-[1rem] border border-black/8 bg-white/78 p-3 text-sm leading-6 text-slate-500">
+                  <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/78 dark:bg-white/5 p-3 text-sm leading-6 text-slate-500 dark:text-neutral-400">
                     Der aktive Welt- und Makroblock wird geladen. Sobald neue Ereignisse klassifiziert sind, erscheint hier die direkte Relevanz für Region, Risiko und mögliche Marktreaktion.
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/85 dark:bg-white/5 p-4">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                 Ereignisebene
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
-                  Neu <span className="font-bold text-slate-900">{eventTempo.developing}</span>
+                <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">
+                  Neu <span className="font-bold text-slate-900 dark:text-white">{eventTempo.developing}</span>
                 </div>
-                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
-                  Aktiv <span className="font-bold text-slate-900">{eventTempo.active}</span>
+                <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">
+                  Aktiv <span className="font-bold text-slate-900 dark:text-white">{eventTempo.active}</span>
                 </div>
-                <div className="rounded-[0.9rem] border border-black/8 bg-white/75 px-3 py-2 text-xs text-slate-500">
-                  Abklingend <span className="font-bold text-slate-900">{eventTempo.fading}</span>
+                <div className="rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">
+                  Abklingend <span className="font-bold text-slate-900 dark:text-white">{eventTempo.fading}</span>
                 </div>
               </div>
               <div className="mt-4 space-y-3">
@@ -2963,10 +2963,10 @@ export default function WorldMarketMap({
                         if (nextIndex >= 0) setPinnedEventIndex(nextIndex);
                         setImpactDrawerOpen(true);
                       }}
-                      className={`block rounded-[1rem] border p-3 transition-colors hover:bg-white ${
+                      className={`block rounded-[1rem] border p-3 transition-colors hover:bg-white dark:hover:bg-white/10 ${
                         activeGeoEvent?.title === item.title
                           ? "border-[var(--accent)] bg-[var(--accent-soft)]/70"
-                          : "border-black/8 bg-white/75"
+                          : "border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
@@ -2975,7 +2975,7 @@ export default function WorldMarketMap({
                         >
                           {describeEventVariant(item) || item.markerLabel}
                         </div>
-                      <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                         <span>{item.region || "Global"}</span>
                         {item.geoPlace && item.geoPlace !== item.regionKey ? (
                           <>
@@ -3000,9 +3000,9 @@ export default function WorldMarketMap({
                           </span>
                         </div>
                       </div>
-                      <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.title}</div>
+                      <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">{item.title}</div>
                       {item.event_intelligence ? (
-                        <div className="mt-3 space-y-2 text-xs text-slate-500">
+                        <div className="mt-3 space-y-2 text-xs text-slate-500 dark:text-neutral-400">
                           <div className="flex flex-wrap gap-2">
                             <span>Wirkung {item.event_intelligence.impact_score}</span>
                             <span>Belastbarkeit {item.event_intelligence.confidence_score}</span>
@@ -3017,7 +3017,7 @@ export default function WorldMarketMap({
                                 {decisionQualityLabel(item.event_intelligence.decision_quality)}
                               </span>
                               {item.event_intelligence.size_guidance ? (
-                                <span className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                                <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300">
                                   {item.event_intelligence.size_guidance}
                                 </span>
                               ) : null}
@@ -3028,7 +3028,7 @@ export default function WorldMarketMap({
                               {compactList(item.event_intelligence.affected_sectors, 2).map((sector) => (
                                 <span
                                   key={sector}
-                                  className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500"
+                                  className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300"
                                 >
                                   {sector}
                                 </span>
@@ -3047,7 +3047,7 @@ export default function WorldMarketMap({
                         </div>
                       ) : null}
                       {item.portfolio_exposure?.note ? (
-                        <div className="mt-2 rounded-[0.9rem] border border-black/8 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700">
+                        <div className="mt-2 rounded-[0.9rem] border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-3 py-2 text-xs text-slate-700 dark:text-neutral-200">
                           <div className="flex items-center justify-between gap-2">
                             <span>{item.portfolio_exposure.note}</span>
                             {item.portfolio_exposure.exposure_strength ? (
@@ -3069,7 +3069,7 @@ export default function WorldMarketMap({
                                     event.preventDefault();
                                     onAnalyze(holding);
                                   }}
-                                  className="rounded-full border border-black/8 bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                  className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-700 dark:text-neutral-200"
                                 >
                                   {holding}
                                 </button>
@@ -3081,7 +3081,7 @@ export default function WorldMarketMap({
                     </a>
                   ))
                 ) : (
-                  <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
+                  <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 p-3 text-sm text-slate-500 dark:text-neutral-400">
                     {showEventLayer
                       ? `Keine dominanten Ereignisse im aktuellen Filter${selectedGeoPlace ? ` für ${selectedGeoPlace}` : ""} für ${timeLens}.`
                       : "Die Ereignisebene ist ausgeblendet."}
@@ -3090,12 +3090,12 @@ export default function WorldMarketMap({
               </div>
             </div>
 
-            <div className="rounded-[1.5rem] border border-black/8 bg-white/85 p-4">
+            <div className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/85 dark:bg-white/5 p-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                   Kontra-Radar
                 </div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-400">
                   Medienabkühlung
                 </div>
               </div>
@@ -3104,30 +3104,30 @@ export default function WorldMarketMap({
                   regionalContrarian.slice(0, 2).map((item, index) => (
                     <div
                       key={`${item.ticker}-${index}`}
-                      className="rounded-[1rem] border border-black/8 bg-white/75 p-3"
+                      className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <button
                           onClick={() => item.ticker && onAnalyze(item.ticker)}
-                          className="text-sm font-black text-slate-900"
+                          className="text-sm font-black text-slate-900 dark:text-white"
                         >
                           {item.ticker}
                         </button>
                         <div
                           className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
                             item.contrarian_bias === "long"
-                              ? "bg-emerald-500/10 text-emerald-700"
-                              : "bg-red-500/10 text-red-700"
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                              : "bg-red-500/10 text-red-700 dark:text-red-400"
                           }`}
                         >
                           inverse {item.contrarian_bias}
                         </div>
                       </div>
-                      <div className="mt-2 text-sm text-slate-600">{item.reason}</div>
+                      <div className="mt-2 text-sm text-slate-600 dark:text-neutral-300">{item.reason}</div>
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-[1rem] border border-black/8 bg-white/75 p-3 text-sm text-slate-500">
+                  <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 p-3 text-sm text-slate-500 dark:text-neutral-400">
                     Kein bestaetigtes kontraeres Mediensetup in der aktiven Region.
                   </div>
                 )}
@@ -3140,13 +3140,13 @@ export default function WorldMarketMap({
           {timeline.slice(0, 3).map((item: any) => (
             <div
               key={item.stage}
-              className="rounded-[1.5rem] border border-black/8 bg-white/78 p-4"
+              className="rounded-[1.5rem] border border-black/8 dark:border-white/10 bg-white/78 dark:bg-white/5 p-4"
             >
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                 {item.stage}
               </div>
               <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-lg font-black text-slate-900">{item.label}</div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{item.label}</div>
                 <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.16em] ${tonePillClass(item.tone)}`}>
                   {localizeMarketRegime(item.tone)}
                 </div>
@@ -3154,17 +3154,17 @@ export default function WorldMarketMap({
               <div className={`mt-3 text-2xl font-black ${textToneClass(item.tone)}`}>
                 {formatPct(item.move)}
               </div>
-              <div className="mt-2 text-sm leading-6 text-slate-600">{item.driver}</div>
+              <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-neutral-300">{item.driver}</div>
             </div>
           ))}
         </div>
 
-        <div className="hidden rounded-[1.6rem] border border-black/8 bg-white/80 p-4 sm:block">
+        <div className="hidden rounded-[1.6rem] border border-black/8 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 sm:block">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
               Ereignisverlauf
             </div>
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-400">
               {timeLens} lens
             </div>
           </div>
@@ -3173,33 +3173,33 @@ export default function WorldMarketMap({
               replayEvents.map((item) => (
                 <div
                   key={item.key}
-                  className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4"
+                  className="rounded-[1.2rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-400">
                       {item.region}
                     </div>
                     <div className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${freshnessClass(item.freshness)}`}>
                       {item.freshness}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm font-bold text-slate-900">{item.variant}</div>
+                  <div className="mt-2 text-sm font-bold text-slate-900 dark:text-white">{item.variant}</div>
                   {item.geoPlace && item.geoPlace !== item.region ? (
                     <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                       {item.geoPlace}
                     </div>
                   ) : null}
                   {item.geoZone && item.geoZone !== item.region ? (
-                    <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                    <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
                       {item.geoZone}
                     </div>
                   ) : null}
-                  <div className="mt-2 line-clamp-2 text-sm text-slate-600">{item.title}</div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                  <div className="mt-2 line-clamp-2 text-sm text-slate-600 dark:text-neutral-300">{item.title}</div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                       {item.impact}
                     </span>
-                    <span className="rounded-full border border-black/8 bg-white px-2 py-1">
+                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-300">
                       {item.action}
                     </span>
                     {item.asset ? (
@@ -3212,14 +3212,14 @@ export default function WorldMarketMap({
                     ) : null}
                   </div>
                   {item.trigger ? (
-                    <div className="mt-3 text-xs leading-6 text-slate-500">
+                    <div className="mt-3 text-xs leading-6 text-slate-500 dark:text-neutral-400">
                       Trigger: {item.trigger}
                     </div>
                   ) : null}
                 </div>
               ))
             ) : (
-              <div className="rounded-[1.2rem] border border-black/8 bg-white/75 p-4 text-sm text-slate-500 xl:col-span-3">
+              <div className="rounded-[1.2rem] border border-black/8 dark:border-white/10 bg-white/75 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-neutral-400 xl:col-span-3">
                 Kein Replay im aktuellen Kartenfilter. Wechsle auf `24h` oder `7d`, um den breiteren Event-Verlauf zu sehen.
               </div>
             )}
@@ -3233,28 +3233,28 @@ export default function WorldMarketMap({
             type="button"
             aria-label="Marktwirkungsbereich schließen"
             onClick={() => setImpactDrawerOpen(false)}
-            className="fixed inset-0 z-[70] bg-black/18 backdrop-blur-[1px] lg:hidden"
+            className="fixed inset-0 z-[70] bg-black/18 dark:bg-black/60 backdrop-blur-[1px] lg:hidden"
           />
-          <div id="map-impact-dialog" role="dialog" aria-modal="true" aria-labelledby="map-impact-title" className="world-map-impact-drawer fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-[71] max-h-[min(78dvh,42rem)] overflow-y-auto rounded-[1.6rem] border border-black/8 bg-[rgba(250,248,244,0.98)] p-4 shadow-[0_-18px_48px_rgba(17,24,39,0.18)] backdrop-blur-3xl lg:hidden">
+          <div id="map-impact-dialog" role="dialog" aria-modal="true" aria-labelledby="map-impact-title" className="world-map-impact-drawer fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-[71] max-h-[min(78dvh,42rem)] overflow-y-auto rounded-[1.6rem] border border-black/8 dark:border-white/10 bg-[rgba(250,248,244,0.98)] dark:bg-[#1c1c1e]/98 p-4 shadow-[0_-18px_48px_rgba(17,24,39,0.18)] dark:shadow-[0_-18px_48px_rgba(0,0,0,0.6)] backdrop-blur-3xl lg:hidden">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                   Markt-Auswirkung
                 </div>
-                <div id="map-impact-title" className="mt-1 text-base font-black text-slate-900">
+                <div id="map-impact-title" className="mt-1 text-base font-black text-slate-900 dark:text-white">
                   {activeVariantLabel || activeGeoEvent.markerLabel}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setImpactDrawerOpen(false)}
-                className="min-h-10 rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500"
+                className="min-h-10 rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-neutral-300"
               >
                 Schließen
               </button>
             </div>
 
-            <div className="mt-3 text-sm font-bold leading-6 text-slate-900">
+            <div className="mt-3 text-sm font-bold leading-6 text-slate-900 dark:text-white">
               {activeGeoEvent.title}
             </div>
 
@@ -3262,8 +3262,8 @@ export default function WorldMarketMap({
               <div className="mt-4">
                 <div className="grid gap-2">
                   {tradeImpactCards.map((card) => (
-                    <div key={card.label} className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3">
-                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    <div key={card.label} className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/5 px-3 py-3">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                         {regionDisplayLabel(card.label)}
                       </div>
                       <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${card.tone}`}>
@@ -3272,15 +3272,15 @@ export default function WorldMarketMap({
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 rounded-[1rem] border border-amber-500/15 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                <div className="mt-2 rounded-[1rem] border border-amber-500/15 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-slate-600 dark:text-amber-300/80">
                   Hohe Belastbarkeit ist keine Garantie. Quelle, zweite Bestätigung und echte Preisreaktion bleiben Pflicht.
                 </div>
               </div>
             ) : null}
 
             {activeGeoEvent.event_intelligence?.why_now ? (
-              <div className="mt-4 rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
-                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+              <div className="mt-4 rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/5 px-3 py-3 text-sm leading-6 text-slate-700 dark:text-neutral-200">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                   Warum jetzt
                 </div>
                 <div className="mt-2">{activeGeoEvent.event_intelligence.why_now}</div>
@@ -3289,20 +3289,20 @@ export default function WorldMarketMap({
 
             <div className="mt-4 space-y-2">
               {activeGeoEvent.event_intelligence?.trigger ? (
-                <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
-                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Trigger</span>
+                <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/5 px-3 py-3 text-sm leading-6 text-slate-700 dark:text-neutral-200">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">Trigger</span>
                   <div className="mt-2">{activeGeoEvent.event_intelligence.trigger}</div>
                 </div>
               ) : null}
               {activeGeoEvent.event_intelligence?.invalidation ? (
-                <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
-                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">These ungültig wenn</span>
+                <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/5 px-3 py-3 text-sm leading-6 text-slate-700 dark:text-neutral-200">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">These ungültig wenn</span>
                   <div className="mt-2">{activeGeoEvent.event_intelligence.invalidation}</div>
                 </div>
               ) : null}
               {activeGeoEvent.event_intelligence?.execution_bias ? (
-                <div className="rounded-[1rem] border border-black/8 bg-white/82 px-3 py-3 text-sm leading-6 text-slate-700">
-                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Umsetzung</span>
+                <div className="rounded-[1rem] border border-black/8 dark:border-white/10 bg-white/82 dark:bg-white/5 px-3 py-3 text-sm leading-6 text-slate-700 dark:text-neutral-200">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">Umsetzung</span>
                   <div className="mt-2">
                     {activeGeoEvent.event_intelligence.execution_bias}
                     {activeGeoEvent.event_intelligence.size_guidance ? ` | ${activeGeoEvent.event_intelligence.size_guidance}` : ""}
@@ -3313,7 +3313,7 @@ export default function WorldMarketMap({
 
             {tradeImpactAssets.length ? (
               <div className="mt-4">
-                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                   Betroffene Assets
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -3332,7 +3332,7 @@ export default function WorldMarketMap({
 
             {hedgeIdeas.length ? (
               <div className="mt-4">
-                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
                   Absicherungs-Ideen
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -3340,7 +3340,7 @@ export default function WorldMarketMap({
                     <button
                       key={idea.ticker}
                       onClick={() => onAnalyze(idea.ticker)}
-                      className="rounded-full border border-black/8 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                      className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:text-neutral-300"
                     >
                       {idea.ticker} - {idea.label}
                     </button>

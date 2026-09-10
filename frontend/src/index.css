@@ -1697,6 +1697,14 @@ h6,
   background: rgba(17, 24, 39, 0.24);
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 .sentiment-positive,
 .rating-very_positive,
 .rating-positive {

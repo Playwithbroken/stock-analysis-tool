@@ -864,27 +864,31 @@ function AppContent() {
         if (!cancelled && briefRequestIdRef.current === requestId && !displayableBriefLoaded) {
           setGlobalBriefStatus("error");
         }
-      }, 10000);
+      }, 15000);
       try {
-        const fastPayload = await fetchJsonWithRetry<any>("/api/market/morning-brief?fast=true", undefined, {
-          retries: 0,
-          retryDelayMs: 250,
-          timeoutMs: 2500,
-        });
-        if (!cancelled && briefRequestIdRef.current === requestId) {
-          setGlobalBrief(fastPayload);
-          setSelectedGeoRegion(fastPayload?.regions?.europe?.label || fastPayload?.regions?.usa?.label || "Europe");
-          const fastState = getBriefLoadState(fastPayload);
-          displayableBriefLoaded = fastState.displayable;
-          currentBriefLoaded = fastState.current;
-          setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "loading");
+        try {
+          const fastPayload = await fetchJsonWithRetry<any>("/api/market/morning-brief?fast=true", undefined, {
+            retries: 1,
+            retryDelayMs: 300,
+            timeoutMs: 6000,
+          });
+          if (!cancelled && briefRequestIdRef.current === requestId) {
+            setGlobalBrief(fastPayload);
+            setSelectedGeoRegion(fastPayload?.regions?.europe?.label || fastPayload?.regions?.usa?.label || "Europe");
+            const fastState = getBriefLoadState(fastPayload);
+            displayableBriefLoaded = fastState.displayable;
+            currentBriefLoaded = fastState.current;
+            setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "loading");
+          }
+        } catch (fastErr) {
+          console.warn("Fast morning brief load failed, continuing to full fetch:", fastErr);
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, 300));
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
-          retries: 0,
-          retryDelayMs: 250,
-          timeoutMs: 8500,
+          retries: 1,
+          retryDelayMs: 400,
+          timeoutMs: 10000,
         });
         if (!cancelled && briefRequestIdRef.current === requestId) {
           const fullState = getBriefLoadState(payload);

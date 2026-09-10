@@ -1656,14 +1656,14 @@ h6,
     right: max(0.85rem, env(safe-area-inset-right));
     height: 2.75rem !important;
     width: 2.75rem !important;
-    border-radius: 0.95rem !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    border-radius: 9999px !important;
     opacity: 0.95;
   }
 
   .broker-chat-fab > div:nth-child(2) {
-    height: 2rem !important;
-    width: 2rem !important;
-    border-radius: 0.75rem !important;
+    display: none !important;
   }
 }
 

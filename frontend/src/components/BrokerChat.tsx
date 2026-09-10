@@ -835,7 +835,7 @@ export default function BrokerChat({
           </div>
         )}
         {!isInline && (
-          <p className="mt-4 text-center text-[10px] text-slate-500">
+          <p className="mt-4 text-center text-[10px] text-slate-500 dark:text-slate-400">
             Broker Freund Desk analysiert Live-Daten. Keine direkte Anlageberatung.
           </p>
         )}
@@ -849,7 +849,7 @@ export default function BrokerChat({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex items-center gap-2.5 rounded-full border border-black/10 bg-[#1d1d1f] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all duration-200 hover:translate-y-[-1px] hover:bg-black hover:shadow-[0_12px_30px_rgba(0,0,0,0.24)] active:translate-y-0 ${fabCompact ? "opacity-90 scale-95" : "opacity-100 scale-100"} px-3 py-2 sm:px-4 sm:py-2.5`}
+        className={`broker-chat-fab group fixed z-40${isOpen ? " hidden" : ""} flex items-center gap-2.5 rounded-full border border-black/10 bg-[#1d1d1f] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all duration-200 hover:translate-y-[-1px] hover:bg-black hover:shadow-[0_12px_30px_rgba(0,0,0,0.24)] active:translate-y-0 dark:border-white/15 dark:bg-[#1c1c1e] dark:shadow-[0_8px_24px_rgba(0,0,0,0.6)] dark:hover:bg-[#2c2c2e] dark:hover:border-white/25 ${fabCompact ? "opacity-90 scale-95" : "opacity-100 scale-100"} px-3 py-2 sm:px-4 sm:py-2.5`}
         aria-label="Broker Freund Desk öffnen"
       >
         {/* Bot Icon with live indicator */}
@@ -880,7 +880,7 @@ export default function BrokerChat({
               setIsOpen(false);
               onClose?.();
             }}
-            className="fixed inset-0 z-40 bg-black/12 backdrop-blur-[1px] lg:hidden"
+            className="fixed inset-0 z-40 bg-black/20 dark:bg-black/60 backdrop-blur-xs lg:hidden"
           />
           {chatContent}
         </>

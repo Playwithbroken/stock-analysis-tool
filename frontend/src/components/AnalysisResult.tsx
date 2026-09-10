@@ -821,7 +821,7 @@ export default function AnalysisResult({
           </section>
 
           {alertModalOpen ? (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4" role="presentation">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 backdrop-blur-md dark:bg-black/65" role="presentation">
               <div ref={alertDialogRef} role="dialog" aria-modal="true" aria-labelledby="price-alert-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[1.6rem] border border-black/8 p-6 dark:border-white/10 dark:bg-[#1c1c1e]">
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                   Kursalarm

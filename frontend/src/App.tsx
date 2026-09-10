@@ -2183,7 +2183,7 @@ function AppContent() {
       </Suspense>
       {showInstallHelp && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-4 backdrop-blur-md dark:bg-black/65"
           onClick={() => setShowInstallHelp(false)}
           role="presentation"
         >

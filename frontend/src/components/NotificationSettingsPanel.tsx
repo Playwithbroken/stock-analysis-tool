@@ -165,44 +165,44 @@ export default function NotificationSettingsPanel({
     <section className="surface-panel rounded-[2rem] p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
             Notification Settings
           </div>
-          <h2 className="mt-2 text-3xl text-slate-900">Workspace profile and delivery</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+          <h2 className="mt-2 text-3xl text-slate-900 dark:text-white">Workspace profile and delivery</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-300">
             Lokales Profil, Telegram-Status und Open-Brief-Zeiten. Telegram ist der einzige aktive Push-Kanal,
             damit keine doppelten oder nervigen Meldungen entstehen.
           </p>
         </div>
         {statusText ? (
-          <div className="text-xs font-semibold text-slate-500">{statusText}</div>
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{statusText}</div>
         ) : null}
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Display name
             </div>
             <input
               value={profile.display_name}
               onChange={(e) => setProfile((prev) => ({ ...prev, display_name: e.target.value }))}
-              className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+              className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
             />
           </div>
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Timezone
             </div>
             <input
               value={profile.timezone}
               onChange={(e) => setProfile((prev) => ({ ...prev, timezone: e.target.value }))}
-              className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+              className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
             />
           </div>
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Theme
             </div>
             <select
@@ -212,7 +212,7 @@ export default function NotificationSettingsPanel({
                 setTheme(t);
                 setProfile((prev) => ({ ...prev, theme: t }));
               }}
-              className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+              className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
             >
               <option value="premium-light">Premium Light</option>
               <option value="dark">Dark Mode</option>
@@ -238,68 +238,68 @@ export default function NotificationSettingsPanel({
         />
 
         <div className="space-y-3">
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Telegram delivery
             </div>
-            <div className="mt-2 text-sm font-black text-slate-900">
+            <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
               {notificationStatus?.telegram?.configured
                 ? notificationStatus?.telegram?.enabled
                   ? "Live"
                   : "Configured"
                 : "Missing"}
             </div>
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {notificationStatus?.telegram?.configured
                 ? "Bot und Chat sind verbunden."
                 : "TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID und TELEGRAM_ALERTS_ENABLED=true setzen."}
             </div>
           </div>
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Weitere Push-Kanäle
             </div>
-            <div className="mt-2 text-sm font-black text-slate-900">
+            <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
               Aus
             </div>
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Email und Browser-Push bleiben in dieser Beta bewusst aus. Alle Briefings und Alerts laufen über Telegram.
             </div>
           </div>
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Macro alerts
             </div>
-            <div className="mt-2 text-sm font-black text-slate-900">
+            <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
               {notificationStatus?.macro_alerts?.enabled ? "Live" : "Disabled"}
             </div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">
+            <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
               Telegram-only / Min score {notificationStatus?.macro_alerts?.min_score ?? 82} /
               Cooldown {notificationStatus?.macro_alerts?.cooldown_hours ?? 3}h / max{" "}
               {notificationStatus?.macro_alerts?.max_items ?? 5}
             </div>
           </div>
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Scheduled briefs
             </div>
-            <div className="mt-2 text-sm font-black text-slate-900">
+            <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
               {notificationStatus?.schedule?.timezone || "Europe/Berlin"}
             </div>
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Europe {notificationStatus?.schedule?.europe_open || "--:--"} / US {notificationStatus?.schedule?.us_open || "--:--"}
             </div>
           </div>
-          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               Telegram-Tagesübersicht
             </div>
-            <div className="mt-2 text-sm font-black text-slate-900">
+            <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
               {notificationStatus?.schedule?.daily_overview?.enabled
                 ? `Aktiv um ${notificationStatus.schedule.daily_overview.time}`
                 : "Optional / aus"}
             </div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">
+            <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
               Reine Konto- und Lernstandsübersicht. Kauf-, Verkauf-, Management- und Risiko-Pushes bleiben sofort und unabhängig.
             </div>
           </div>
@@ -348,14 +348,14 @@ function AdvisoryProfilePanel({
     profile.loss_capacity === "low";
 
   return (
-    <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4">
+    <div className="rounded-[1.4rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
             Advisory profile
           </div>
-          <div className="mt-2 text-xl font-black text-slate-950">Suitability rules</div>
-          <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-600">
+          <div className="mt-2 text-xl font-black text-slate-950 dark:text-white">Suitability rules</div>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-600 dark:text-slate-300">
             Jeder Setup-Impuls wird gegen Ziel, Erfahrung, Verlusttragfaehigkeit und
             Positionsgroesse geprueft. Das verhindert blinde Trades.
           </p>
@@ -363,8 +363,8 @@ function AdvisoryProfilePanel({
         <div
           className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
             profile.advisory_profile_complete
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-amber-100 text-amber-800"
+              ? "bg-emerald-100 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+              : "bg-amber-100 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
           }`}
         >
           {profile.advisory_profile_complete ? "Active" : "Needs review"}
@@ -435,11 +435,11 @@ function AdvisoryProfilePanel({
         value={profile.suitability_notes}
         onChange={(e) => setField("suitability_notes", e.target.value)}
         placeholder="Eigene Regeln: z.B. keine Earnings-Gambles, kein Hebel, nur bestaetigte Trigger."
-        className="mt-3 min-h-[86px] w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-800 outline-none transition focus:border-teal-400"
+        className="mt-3 min-h-[86px] w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-800 outline-none transition focus:border-neutral-400 dark:border-white/10 dark:bg-white/5 dark:text-neutral-100 dark:placeholder:text-neutral-500"
       />
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className={`text-xs font-semibold ${strictLimit ? "text-amber-700" : "text-emerald-700"}`}>
+        <div className={`text-xs font-semibold ${strictLimit ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
           {strictLimit
             ? "Konservativer Rahmen: riskante Setups werden schneller blockiert."
             : "Aktiver Rahmen: passende Setups duerfen nach Trigger-Pruefung weiterlaufen."}
@@ -448,7 +448,7 @@ function AdvisoryProfilePanel({
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="rounded-xl bg-slate-950 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-xl bg-[#1d1d1f] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
         >
           {saving ? "Saving..." : "Save advisory"}
         </button>
@@ -469,14 +469,14 @@ function AdvisorySelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block rounded-2xl border border-black/8 bg-white/70 p-3">
-      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+    <label className="block rounded-2xl border border-black/8 bg-white/70 p-3 dark:border-white/10 dark:bg-white/5">
+      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-black text-slate-900"
+        className="mt-2 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
       >
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>
@@ -500,11 +500,11 @@ function AdvisoryNumber({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="block rounded-2xl border border-black/8 bg-white/70 p-3">
-      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+    <label className="block rounded-2xl border border-black/8 bg-white/70 p-3 dark:border-white/10 dark:bg-white/5">
+      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
         {label}
       </span>
-      <div className="mt-2 flex items-center gap-2 rounded-xl border border-black/8 bg-white px-3 py-2">
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-black/8 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#1c1c1e]">
         <input
           type="number"
           min={1}
@@ -512,9 +512,9 @@ function AdvisoryNumber({
           step={0.5}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full bg-transparent text-sm font-black text-slate-900 outline-none"
+          className="w-full bg-transparent text-sm font-black text-slate-900 outline-none dark:text-white"
         />
-        <span className="text-xs font-black text-slate-500">{suffix}</span>
+        <span className="text-xs font-black text-slate-500 dark:text-neutral-400">{suffix}</span>
       </div>
     </label>
   );
@@ -546,13 +546,13 @@ function ManualMacroAlertTrigger() {
   };
 
   return (
-    <div className="rounded-[1.4rem] border border-amber-500/20 bg-amber-50/50 p-4">
+    <div className="rounded-[1.4rem] border border-amber-500/20 bg-amber-50/50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
             Check macro alerts
           </div>
-          <div className="mt-1 text-xs leading-5 text-slate-600">
+          <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-neutral-300">
             Prueft Krieg, Wahlen, Zentralbanken, Oel und Policy-News gegen das
             Qualitaetsgate und sendet nur neue High-Impact-Treffer an Telegram.
           </div>
@@ -560,7 +560,7 @@ function ManualMacroAlertTrigger() {
         <button
           onClick={check}
           disabled={busy}
-          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-xl bg-[#1d1d1f] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
         >
           {busy ? "Checking..." : "Check now"}
         </button>
@@ -568,7 +568,7 @@ function ManualMacroAlertTrigger() {
       {msg ? (
         <div
           className={`mt-3 text-xs font-semibold ${
-            msg.startsWith("Fehler") ? "text-rose-700" : "text-emerald-700"
+            msg.startsWith("Fehler") ? "text-rose-700 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400"
           }`}
         >
           {msg}
@@ -616,13 +616,13 @@ function ManualTelegramTrigger() {
   };
 
   return (
-    <div className="mt-4 rounded-[1.4rem] border border-teal-500/20 bg-teal-50/40 p-4">
+    <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-neutral-50/70 p-4 dark:border-white/10 dark:bg-white/5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-teal-700">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-neutral-600 dark:text-neutral-400">
             Send Telegram brief now
           </div>
-          <div className="mt-1 text-xs text-slate-600">
+          <div className="mt-1 text-xs text-slate-600 dark:text-neutral-300">
             Manually trigger any session brief - useful before market open or
             to verify the bot link.
           </div>
@@ -631,7 +631,7 @@ function ManualTelegramTrigger() {
           <select
             value={session}
             onChange={(e) => setSession(e.target.value)}
-            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-800"
+            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
             disabled={busy}
           >
             {sessions.map((s) => (
@@ -643,7 +643,7 @@ function ManualTelegramTrigger() {
           <button
             onClick={send}
             disabled={busy}
-            className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-50"
+            className="rounded-xl bg-[#1d1d1f] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
           >
             {busy ? "Sending..." : "Send to Telegram"}
           </button>
@@ -652,7 +652,7 @@ function ManualTelegramTrigger() {
       {msg ? (
         <div
           className={`mt-3 text-xs font-semibold ${
-            msg.startsWith("Gesendet") ? "text-emerald-700" : "text-rose-700"
+            msg.startsWith("Gesendet") ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"
           }`}
         >
           {msg}
@@ -692,13 +692,13 @@ function ManualPaperAccountStatusTrigger() {
   };
 
   return (
-    <div className="mt-4 rounded-[1.4rem] border border-emerald-500/20 bg-emerald-50/45 p-4">
+    <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-neutral-50/70 p-4 dark:border-white/10 dark:bg-white/5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-neutral-600 dark:text-neutral-400">
             Paper account to Telegram
           </div>
-          <div className="mt-1 text-xs leading-5 text-slate-600">
+          <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-neutral-300">
             Sendet den aktuellen 500k-Demo-Status mit Equity, offenem Risiko,
             P&L und den wichtigsten Trade-Checks.
           </div>
@@ -706,7 +706,7 @@ function ManualPaperAccountStatusTrigger() {
         <button
           onClick={send}
           disabled={busy}
-          className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
+          className="rounded-xl bg-[#1d1d1f] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
         >
           {busy ? "Sending..." : "Send paper status"}
         </button>
@@ -714,7 +714,7 @@ function ManualPaperAccountStatusTrigger() {
       {msg ? (
         <div
           className={`mt-3 text-xs font-semibold ${
-            msg.startsWith("Gesendet") ? "text-emerald-700" : "text-rose-700"
+            msg.startsWith("Gesendet") ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"
           }`}
         >
           {msg}

@@ -869,12 +869,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
         <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-black/10 to-transparent" />
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="flex flex-1 items-center gap-3 rounded-[1.3rem] bg-white/70 px-4 py-3 ring-1 ring-black/5 sm:gap-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
+          <div className="flex flex-1 items-center gap-3 rounded-[1.3rem] bg-white/70 px-4 py-3 ring-1 ring-black/5 dark:bg-white/5 dark:ring-white/10 sm:gap-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] sm:h-11 sm:w-11 sm:rounded-2xl">
               <Search size={18} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
                 Globale Suche
               </div>
               {/* Ghost-text overlay: shows query + ghost as overlaid read-only span */}
@@ -914,7 +914,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                   aria-expanded={showDropdown}
                   aria-controls="search-suggestion-list"
                   aria-autocomplete="list"
-                  className="relative w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0 sm:text-lg"
+                  className="relative w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-0 sm:text-lg dark:text-white dark:placeholder:text-slate-500"
                   style={{ caretColor: "currentColor" }}
                   autoComplete="off"
                   spellCheck={false}
@@ -923,7 +923,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             </div>
             {/* Ghost-text hint pill */}
             {ghostText && (
-              <span className="hidden shrink-0 rounded-md border border-black/8 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:inline">
+              <span className="hidden shrink-0 rounded-md border border-black/8 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:inline dark:border-white/10 dark:bg-white/10 dark:text-slate-400">
                 Tab
               </span>
             )}
@@ -960,13 +960,13 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                 key={`${item.category}-${item.ticker}`}
                 type="button"
                 onClick={() => handleQuickSelect(item.value)}
-                className="search-quick-chip inline-flex shrink-0 items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900"
+                className="search-quick-chip inline-flex shrink-0 items-center gap-2 rounded-full border border-black/8 bg-white/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 transition-colors hover:border-black/15 hover:bg-white hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10 dark:hover:text-white"
               >
-                <span className="font-black text-slate-800">{item.ticker}</span>
-                <span className="rounded-full border border-black/8 bg-white px-1.5 py-0.5 text-[8px] font-extrabold tracking-[0.12em] text-slate-500">
+                <span className="font-black text-slate-800 dark:text-white">{item.ticker}</span>
+                <span className="rounded-full border border-black/8 bg-white px-1.5 py-0.5 text-[8px] font-extrabold tracking-[0.12em] text-slate-500 dark:border-white/10 dark:bg-white/10 dark:text-slate-400">
                   {typeLabel}
                 </span>
-                <span className="hidden text-[9px] font-extrabold tracking-[0.1em] text-slate-400 sm:inline">
+                <span className="hidden text-[9px] font-extrabold tracking-[0.1em] text-slate-400 dark:text-slate-500 sm:inline">
                   {item.category}
                 </span>
               </button>
@@ -974,9 +974,9 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
           })}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-[11px] text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-[11px] text-slate-500 dark:text-slate-400">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-black/8 bg-white/65 px-3 py-1 font-bold uppercase tracking-[0.14em] text-slate-600">
+            <span className="rounded-full border border-black/8 bg-white/65 px-3 py-1 font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-white/10 dark:bg-white/10 dark:text-slate-300">
               Schnelleingabe
             </span>
             <span>Tippe einen Namen oder Ticker – Tab vervollständigt automatisch.</span>
@@ -991,12 +991,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
             ref={dropdownRef}
             id="search-suggestion-list"
             role="listbox"
-            className="absolute left-3 right-3 top-full z-50 mt-3 max-h-[min(72vh,34rem)] overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(255,255,255,0.94)] shadow-[0_24px_80px_rgba(17,24,39,0.12)] backdrop-blur-xl"
+            className="absolute left-3 right-3 top-full z-50 mt-3 max-h-[min(72vh,34rem)] overflow-hidden rounded-[1.75rem] border border-black/8 bg-[rgba(255,255,255,0.94)] shadow-[0_24px_80px_rgba(17,24,39,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c1e]/98 dark:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
           >
             <div className="grid max-h-[calc(min(72vh,34rem)-3.1rem)] gap-1 overflow-y-auto p-3 md:grid-cols-2">
               {Object.entries(suggestions).filter(([, tickers]) => Array.isArray(tickers) && tickers.length > 0).map(([category, tickers]) => (
-                <div key={category} className="rounded-2xl bg-black/[0.02] p-3">
-                  <h4 className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div key={category} className="rounded-2xl bg-black/[0.02] dark:bg-white/5 p-3">
+                  <h4 className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                     {category}
                   </h4>
                   <div className="flex flex-col gap-2">
@@ -1031,7 +1031,7 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                               </span>
                             </span>
                             {parsed.name ? (
-                              <span className="mt-0.5 block truncate text-[11px] font-semibold normal-case tracking-normal text-slate-500">
+                              <span className="mt-0.5 block truncate text-[11px] font-semibold normal-case tracking-normal text-slate-500 dark:text-slate-400">
                                 {parsed.name}
                               </span>
                             ) : null}
@@ -1042,12 +1042,12 @@ export default function SearchBar({ onSearch, loading, inputRef }: SearchBarProp
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-black/6 bg-black/[0.02] px-4 py-3 text-[11px] text-slate-500">
+            <div className="flex items-center justify-between border-t border-black/6 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 px-4 py-3 text-[11px] text-slate-500 dark:text-slate-400">
               <span>Pfeile navigieren - Enter auswaehlen - Tab vervollstaendigen</span>
               <button
                 type="button"
                 onClick={() => setShowDropdown(false)}
-                className="font-bold uppercase tracking-[0.18em] text-slate-700"
+                className="font-bold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white"
               >
                 Schliessen
               </button>

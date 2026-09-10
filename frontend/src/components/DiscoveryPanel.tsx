@@ -1038,13 +1038,13 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             <section className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500 dark:text-neutral-400">
                     AI Chancen
                   </div>
-                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                  <h2 className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                     Moonshot Scanner
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-neutral-300">
                     Growth- und Narrative-Kandidaten mit klarer Kennzeichnung, ob echte Live-Daten oder Watchlist-Fallback genutzt werden.
                   </p>
                 </div>
@@ -1063,22 +1063,22 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
                             Future Star {stock.quality_gate === "passed" ? "geprueft" : "watch"}
                           </div>
-                          <div className="mt-2 text-2xl font-black text-slate-900">{stock.ticker}</div>
-                          <div className="text-sm text-slate-500">{stock.name}</div>
+                          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{stock.ticker}</div>
+                          <div className="text-sm text-slate-500 dark:text-neutral-400">{stock.name}</div>
                         </div>
-                        <div className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-black text-emerald-700">
+                        <div className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-black text-emerald-700 dark:text-emerald-400">
                           {stock.score || 0}/100
                         </div>
                       </div>
-                      <div className="mt-4 grid gap-2 text-xs font-bold text-slate-600 sm:grid-cols-3">
+                      <div className="mt-4 grid gap-2 text-xs font-bold text-slate-600 dark:text-neutral-300 sm:grid-cols-3">
                         <div>{toFiniteNumber(stock.growth) != null ? `Growth ${formatNumber(stock.growth)}%` : "Growth n/a"}</div>
                         <div>MCap {toFiniteNumber(stock.market_cap) != null ? `${formatNumber(toFiniteNumber(stock.market_cap)! / 1e9)}B` : "n/a"}</div>
                         <div>Vol {toFiniteNumber(stock.volume_ratio) != null ? `${formatNumber(stock.volume_ratio)}x` : "n/a"}</div>
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                      <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-neutral-300">
                         {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Noch kein sauberer News-Katalysator."}
                       </p>
                       {stock.risk_flags?.[0] ? (
@@ -1103,7 +1103,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         <div className="mb-1 text-3xl font-black text-slate-900 dark:text-white">
                           {stock.ticker}
                         </div>
-                        <div className="text-sm text-slate-500">{stock.name}</div>
+                        <div className="text-sm text-slate-500 dark:text-neutral-400">{stock.name}</div>
                       </div>
                       <div className="rounded-full border border-black/8 bg-black/[0.04] dark:border-white/10 dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200">
                         Growth
@@ -1111,7 +1111,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     </div>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between text-xs font-bold">
-                        <span className="text-slate-500 uppercase tracking-widest">
+                        <span className="text-slate-500 dark:text-neutral-400 uppercase tracking-widest">
                           Potential
                         </span>
                         <span className="text-slate-900 dark:text-white">{stock.score || 85}%</span>
@@ -1122,19 +1122,19 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           style={{ width: `${stock.score || 85}%` }}
                         ></div>
                       </div>
-                      <p className="text-[10px] italic text-slate-500">
+                      <p className="text-[10px] italic text-slate-500 dark:text-neutral-400">
                         "{stock.trend_context}"
                       </p>
                     </div>
                   </div>
                 )) : (
-                  <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 md:col-span-2 lg:col-span-3">
+                  <div className="surface-panel rounded-[2rem] p-6 text-sm text-slate-500 dark:text-neutral-400 md:col-span-2 lg:col-span-3">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <div className="font-bold text-slate-800">
+                        <div className="font-bold text-slate-800 dark:text-white">
                           {aiLoading ? "Moonshot Scanner laedt..." : "Keine sauberen Moonshot-Kandidaten im aktuellen Scan."}
                         </div>
-                        <div className="mt-2 max-w-2xl leading-6">
+                        <div className="mt-2 max-w-2xl leading-6 dark:text-neutral-300">
                           {aiLoading
                             ? "Growth-Kandidaten werden lazy geladen, damit der Markets-Tab nicht den App-Start blockiert."
                             : aiError
@@ -1146,7 +1146,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         type="button"
                         onClick={() => refreshAiScanners(true)}
                         disabled={aiLoading}
-                        className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60"
+                        className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200"
                       >
                         {aiLoading ? "Scan laeuft" : "Neu scannen"}
                       </button>
@@ -1164,20 +1164,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               <section className="surface-panel rounded-[1.8rem] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                       Market Details
                     </div>
-                    <div className="mt-2 text-3xl font-black text-slate-900">
+                    <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                       {selectedMarketDetail.ticker}
                     </div>
-                    <div className="mt-1 text-sm text-slate-500">
+                    <div className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
                       {selectedMarketDetail.name}
                     </div>
-                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                       {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
                       {formatMove(selectedMarketDetail.change)}
                     </div>
-                    <div className="mt-2 text-xs text-slate-500">
+                    <div className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
                       {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
                     </div>
                   </div>
@@ -1188,7 +1188,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         setSelectedMarketDetail(null);
                         setSelectedMarketDetailScope(null);
                       }}
-                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300"
                     >
                       Schliessen
                     </button>
@@ -1205,8 +1205,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             ) : null}
 
             <section className="space-y-6">
-              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                <span className="text-emerald-700">Up</span> MARKET GAINERS
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                <span className="text-emerald-700 dark:text-emerald-400">Up</span> MARKET GAINERS
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {gainers.map((stock) => (
@@ -1216,18 +1216,18 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     className="surface-panel flex cursor-pointer items-center justify-between rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-emerald-500/20"
                   >
                     <div>
-                      <div className="font-black text-slate-900">
+                      <div className="font-black text-slate-900 dark:text-white">
                         {stock.ticker}
                       </div>
-                      <div className="max-w-[100px] truncate text-[10px] text-slate-500">
+                      <div className="max-w-[100px] truncate text-[10px] text-slate-500 dark:text-neutral-400">
                         {stock.name}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-emerald-700">
+                      <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
                         {formatMove(stock.change)}
                       </div>
-                      <div className="text-[8px] font-black uppercase text-slate-500">
+                      <div className="text-[8px] font-black uppercase text-slate-500 dark:text-neutral-400">
                         {stock.trend_context}
                       </div>
                     </div>
@@ -1237,8 +1237,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             </section>
 
             <section className="space-y-6">
-              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                <span className="text-red-500">📉</span> MAJOR DRAWDOWNS
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                <span className="text-red-500 dark:text-red-400">📉</span> MAJOR DRAWDOWNS
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {losers.map((stock) => (
@@ -1248,18 +1248,18 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     className="surface-panel flex cursor-pointer items-center justify-between rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-red-500/20"
                   >
                     <div>
-                      <div className="font-black text-slate-900">
+                      <div className="font-black text-slate-900 dark:text-white">
                         {stock.ticker}
                       </div>
-                      <div className="max-w-[100px] truncate text-[10px] text-slate-500">
+                      <div className="max-w-[100px] truncate text-[10px] text-slate-500 dark:text-neutral-400">
                         {stock.name}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-red-700">
+                      <div className="text-sm font-bold text-red-700 dark:text-red-400">
                         {formatMove(stock.change)}
                       </div>
-                      <div className="text-[8px] font-black uppercase text-slate-500">
+                      <div className="text-[8px] font-black uppercase text-slate-500 dark:text-neutral-400">
                         Pullback
                       </div>
                     </div>

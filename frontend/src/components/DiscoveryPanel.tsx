@@ -1695,20 +1695,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               <section className="surface-panel rounded-[1.8rem] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                       Alternative Details
                     </div>
-                    <div className="mt-2 text-3xl font-black text-slate-900">
+                    <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                       {selectedMarketDetail.ticker}
                     </div>
-                    <div className="mt-1 text-sm text-slate-500">
+                    <div className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
                       {selectedMarketDetail.name}
                     </div>
-                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                       {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
                       {formatMove(selectedMarketDetail.change)}
                     </div>
-                    <div className="mt-2 text-xs text-slate-500">
+                    <div className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
                       {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
                     </div>
                   </div>
@@ -1719,7 +1719,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         setSelectedMarketDetail(null);
                         setSelectedMarketDetailScope(null);
                       }}
-                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300"
                     >
                       Schliessen
                     </button>
@@ -1736,8 +1736,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             ) : null}
 
             <section className="space-y-6">
-              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                <span className="text-amber-600">Alt</span> CRYPTO ASSETS
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                <span className="text-amber-600 dark:text-amber-400">Alt</span> CRYPTO ASSETS
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {cryptos.map((coin) => (
@@ -1746,18 +1746,18 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     onClick={() => openMarketDetails(coin, "alternative")}
                     className="surface-panel cursor-pointer rounded-3xl p-6 transition-all hover:border-amber-500/20"
                   >
-                    <div className="mb-1 text-2xl font-black text-slate-900">
+                    <div className="mb-1 text-2xl font-black text-slate-900 dark:text-white">
                       {coin.ticker.replace("-USD", "")}
                     </div>
-                    <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                    <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                       Digital Asset
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <div className="text-xl font-mono text-slate-900">
+                      <div className="text-xl font-mono text-slate-900 dark:text-white">
                         {formatPrice(coin.price || 0)}
                       </div>
                       <div
-                        className={`text-xs font-bold ${coin.change && coin.change > 0 ? "text-emerald-700" : "text-red-700"}`}
+                        className={`text-xs font-bold ${coin.change && coin.change > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
                       >
                         {coin.change && coin.change > 0 ? "+" : ""}
                         {formatMove(coin.change)}
@@ -1769,8 +1769,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             </section>
 
             <section className="space-y-6">
-              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                <span className="text-yellow-600">Hedge</span> COMMODITIES
+              <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                <span className="text-yellow-600 dark:text-yellow-400">Hedge</span> COMMODITIES
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {commodities.map((item) => (
@@ -1779,7 +1779,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     onClick={() => openMarketDetails(item, "alternative")}
                     className="surface-panel cursor-pointer rounded-3xl p-6 transition-all hover:border-yellow-500/20"
                   >
-                    <div className="mb-1 text-2xl font-black text-slate-900">
+                    <div className="mb-1 text-2xl font-black text-slate-900 dark:text-white">
                       {item.ticker === "GC=F"
                         ? "GOLD"
                         : item.ticker === "CL=F"
@@ -1788,15 +1788,15 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                             ? "SILVER"
                             : item.ticker}
                     </div>
-                    <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-yellow-700">
+                    <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-yellow-700 dark:text-yellow-400">
                       Market Hedge
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <div className="text-xl font-mono text-slate-900">
+                      <div className="text-xl font-mono text-slate-900 dark:text-white">
                         {formatPrice(item.price || 0)}
                       </div>
                       <div
-                        className={`text-xs font-bold ${(item.change || 0) > 0 ? "text-emerald-700" : "text-red-700"}`}
+                        className={`text-xs font-bold ${(item.change || 0) > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
                       >
                         {(item.change || 0) > 0 ? "+" : ""}
                         {formatMove(item.change)}
@@ -1822,22 +1822,22 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {internals.vix && (
                     <div className="surface-panel rounded-[1.6rem] p-5">
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">VIX</div>
-                      <div className={`mt-2 text-3xl font-black ${(internals.vix.current || 0) > 25 ? "text-red-700" : (internals.vix.current || 0) > 18 ? "text-amber-700" : "text-emerald-700"}`}>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">VIX</div>
+                      <div className={`mt-2 text-3xl font-black ${(internals.vix.current || 0) > 25 ? "text-red-700 dark:text-red-400" : (internals.vix.current || 0) > 18 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                         {internals.vix.current ?? "offen"}
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                          internals.vix.term_structure === "contango" ? "bg-emerald-500/10 text-emerald-700" : "bg-red-500/10 text-red-700"
+                          internals.vix.term_structure === "contango" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-red-500/10 text-red-700 dark:text-red-400"
                         }`}>
                           {internals.vix.term_structure}
                         </span>
                         {internals.vix.contango_pct != null && (
-                          <span className="text-xs text-slate-500">{internals.vix.contango_pct > 0 ? "+" : ""}{internals.vix.contango_pct}%</span>
+                          <span className="text-xs text-slate-500 dark:text-neutral-400">{internals.vix.contango_pct > 0 ? "+" : ""}{internals.vix.contango_pct}%</span>
                         )}
                       </div>
                       {internals.vix.vix3m && (
-                        <div className="mt-2 text-xs text-slate-500">VIX3M: {internals.vix.vix3m}</div>
+                        <div className="mt-2 text-xs text-slate-500 dark:text-neutral-400">VIX3M: {internals.vix.vix3m}</div>
                       )}
                       {internals.vix.history_5d?.length > 0 && (
                         <div className="mt-3 flex items-end gap-1 h-8">
@@ -1856,13 +1856,13 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   )}
                   {internals.fear_greed && internals.fear_greed[0] && (
                     <div className="surface-panel rounded-[1.6rem] p-5">
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Fear & Greed</div>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">Fear & Greed</div>
                       <div className={`mt-2 text-3xl font-black ${
-                        internals.fear_greed[0].value > 60 ? "text-emerald-700" : internals.fear_greed[0].value < 40 ? "text-red-700" : "text-amber-700"
+                        internals.fear_greed[0].value > 60 ? "text-emerald-700 dark:text-emerald-400" : internals.fear_greed[0].value < 40 ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"
                       }`}>
                         {internals.fear_greed[0].value}
                       </div>
-                      <div className="mt-1 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{internals.fear_greed[0].label}</div>
+                      <div className="mt-1 text-xs font-bold uppercase text-slate-500 dark:text-neutral-400">{internals.fear_greed[0].label}</div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                         <div
                           className={`h-full rounded-full transition-all ${
@@ -1880,31 +1880,31 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   )}
                   {internals.put_call_ratio != null && (
                     <div className="surface-panel rounded-[1.6rem] p-5">
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Put/Call Ratio</div>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">Put/Call Ratio</div>
                       <div className={`mt-2 text-3xl font-black ${
-                        internals.put_call_ratio > 1.2 ? "text-red-700" : internals.put_call_ratio < 0.7 ? "text-emerald-700" : "text-amber-700"
+                        internals.put_call_ratio > 1.2 ? "text-red-700 dark:text-red-400" : internals.put_call_ratio < 0.7 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
                       }`}>
                         {internals.put_call_ratio}
                       </div>
-                      <div className="mt-2 text-xs text-slate-500">
+                      <div className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
                         {internals.put_call_ratio > 1.2 ? "Bearish bias — more puts" : internals.put_call_ratio < 0.7 ? "Bullish bias — more calls" : "Neutral positioning"}
                       </div>
                     </div>
                   )}
                   {internals.yield_spread && (
                     <div className="surface-panel rounded-[1.6rem] p-5">
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">Yield Spread</div>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">Yield Spread</div>
                       <div className={`mt-2 text-3xl font-black ${
-                        internals.yield_spread.inverted ? "text-red-700" : "text-emerald-700"
+                        internals.yield_spread.inverted ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"
                       }`}>
                         {internals.yield_spread.spread != null ? `${internals.yield_spread.spread > 0 ? "+" : ""}${internals.yield_spread.spread}%` : "offen"}
                       </div>
                       <div className={`mt-1 rounded-full inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                        internals.yield_spread.inverted ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"
+                        internals.yield_spread.inverted ? "bg-red-500/10 text-red-700 dark:text-red-400" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                       }`}>
                         {internals.yield_spread.inverted ? "⚠ Inverted" : "Normal"}
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500 dark:text-neutral-400">
                         <div>13W: {internals.yield_spread.t13w ?? "offen"}%</div>
                         <div>10Y: {internals.yield_spread.t10y ?? "offen"}%</div>
                       </div>
@@ -1916,17 +1916,17 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 {internals.breadth && (
                   <div className="surface-panel rounded-[2rem] p-5">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                         Sector Breadth
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
                           ▲ {internals.breadth.advancing_sectors}
                         </span>
-                        <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                        <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-400">
                           ▼ {internals.breadth.declining_sectors}
                         </span>
-                        <span className="text-[10px] font-bold text-slate-500">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-neutral-400">
                           A/D {internals.breadth.ratio}
                         </span>
                       </div>
@@ -1936,9 +1936,9 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         <button
                           key={s.symbol}
                           onClick={() => onAnalyze(s.symbol)}
-                          className="rounded-[1.2rem] border border-black/8 bg-white/70 p-3 text-left transition-colors hover:bg-white"
+                          className="rounded-[1.2rem] border border-black/8 bg-white/70 p-3 text-left transition-colors hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                         >
-                          <div className="text-xs font-black text-slate-900">{s.symbol}</div>
+                          <div className="text-xs font-black text-slate-900 dark:text-white">{s.symbol}</div>
                           <div className={`mt-1 text-lg font-black ${(s.change_1d || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                             {formatMove(s.change_1d)}
                           </div>
@@ -1955,7 +1955,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                 )}
               </>
             ) : (
-              <div className="surface-panel rounded-[2rem] p-8 text-center text-sm text-slate-500">
+              <div className="surface-panel rounded-[2rem] p-8 text-center text-sm text-slate-500 dark:text-neutral-400">
                 Market Internals konnten nicht geladen werden.
               </div>
             )}

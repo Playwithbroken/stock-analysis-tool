@@ -1082,7 +1082,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Noch kein sauberer News-Katalysator."}
                       </p>
                       {stock.risk_flags?.[0] ? (
-                        <p className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-bold text-amber-800">
+                        <p className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-500/30 dark:text-amber-400">
                           Risiko: {stock.risk_flags[0]}
                         </p>
                       ) : null}

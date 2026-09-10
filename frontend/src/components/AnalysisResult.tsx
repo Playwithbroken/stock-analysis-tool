@@ -86,14 +86,14 @@ const clampScore = (value: number | null | undefined): number => {
 
 const scoreTone = (value: number | null | undefined): string => {
   const score = clampScore(value);
-  if (score >= 65) return "border-emerald-500/20 bg-emerald-500/10 text-emerald-800";
-  if (score <= 35) return "border-red-500/20 bg-red-500/10 text-red-800";
-  return "border-amber-500/20 bg-amber-500/10 text-amber-800";
+  if (score >= 65) return "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-400";
+  if (score <= 35) return "border-red-500/20 bg-red-500/10 text-red-800 dark:border-red-500/30 dark:text-red-400";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:text-amber-400";
 };
 
 const metricTone = (value: number | null | undefined, positiveAbove = 0): string => {
-  if (value == null || !Number.isFinite(value)) return "text-slate-500";
-  return value >= positiveAbove ? "text-emerald-700" : "text-red-700";
+  if (value == null || !Number.isFinite(value)) return "text-slate-500 dark:text-neutral-400";
+  return value >= positiveAbove ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400";
 };
 
 const inferAssetClass = (ticker: string, data: any): string => {
@@ -121,20 +121,20 @@ const suitabilityTone = (decision?: string): {
   if (decision === "blocked" || decision === "needs_profile") {
     return {
       label: decision === "needs_profile" ? "Profil fehlt" : "Blockiert",
-      classes: "border-red-500/20 bg-red-500/10 text-red-800",
+      classes: "border-red-500/20 bg-red-500/10 text-red-800 dark:border-red-500/30 dark:text-red-400",
       icon: <Ban size={16} />,
     };
   }
   if (decision === "action_requires_review") {
     return {
       label: "Prüfen",
-      classes: "border-amber-500/25 bg-amber-500/10 text-amber-800",
+      classes: "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:text-amber-400",
       icon: <ShieldAlert size={16} />,
     };
   }
   return {
     label: decision === "setup_allowed" ? "Passt zum Rahmen" : "Beobachten",
-    classes: "border-emerald-500/20 bg-emerald-500/10 text-emerald-800",
+    classes: "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-400",
     icon: <ShieldCheck size={16} />,
   };
 };
@@ -219,10 +219,10 @@ export default function AnalysisResult({
   const inferredRiskLevel = inferRiskLevel(scoreValue, chartStats?.changePct ?? price_data?.change_1y, assetClass);
   const verdictTone =
     scoreValue >= 70
-      ? "bg-emerald-500/12 text-emerald-700"
+      ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
       : scoreValue <= -20
-        ? "bg-red-500/12 text-red-700"
-        : "bg-amber-500/12 text-amber-700";
+        ? "bg-red-500/12 text-red-700 dark:bg-red-500/20 dark:text-red-400"
+        : "bg-amber-500/12 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400";
   const technicalScore = clampScore(analysis?.technical?.score ?? total_score);
   const fundamentalScore = clampScore(analysis?.fundamental?.score ?? total_score);
   const financialStatements = fundamentals?.financial_statements || {};
@@ -947,31 +947,31 @@ export default function AnalysisResult({
 
             <div className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
               <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-[1.5rem] border border-emerald-500/16 bg-emerald-500/8 p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+                <div className="rounded-[1.5rem] border border-emerald-500/16 bg-emerald-500/8 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
                     Positives Szenario
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                  <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-neutral-300">
                     {fundamentals?.revenue_growth && fundamentals.revenue_growth > 0
                       ? `Wachstum bleibt sichtbar (${formatRatioPercent(fundamentals.revenue_growth)} Umsatzwachstum), zudem spricht die positive Kurs- und Score-Struktur für selektive Stärke.`
                       : "Das positive Szenario braucht eine frische Umsatz- oder Margenbestätigung, sonst bleibt das Setup nur taktisch."}
                   </p>
                 </div>
-                <div className="rounded-[1.5rem] border border-amber-500/16 bg-amber-500/8 p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
+                <div className="rounded-[1.5rem] border border-amber-500/16 bg-amber-500/8 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
                     Basisszenario
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                  <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-neutral-300">
                     {recommendation?.action
                       ? `Aktueller App-Case: ${localizeRecommendationAction(recommendation.action)}. Entscheidend ist, ob Trigger und nächster Ergebnis- oder Nachrichtenimpuls zusammenpassen.`
                       : "Neutrales Szenario: erst Preisreaktion und Datenbestätigung abwarten."}
                   </p>
                 </div>
-                <div className="rounded-[1.5rem] border border-red-500/16 bg-red-500/8 p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-red-700">
+                <div className="rounded-[1.5rem] border border-red-500/16 bg-red-500/8 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-red-700 dark:text-red-400">
                     Negatives Szenario
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                  <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-neutral-300">
                     {dossierRisks.length
                       ? dossierRisks.slice(0, 2).join(" ")
                       : "Das negative Szenario entsteht vor allem bei schwacher Anschlussdynamik, negativem Ausblick oder breiter Risikoaversion."}
@@ -1077,10 +1077,10 @@ export default function AnalysisResult({
                 <div
                   className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${
                     latestEarnings?.status === "beat"
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
                       : latestEarnings?.status === "miss"
-                        ? "border-red-500/20 bg-red-500/10 text-red-700"
-                        : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                        ? "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:text-amber-400"
                   }`}
                 >
                   {localizeAnalysisLabel(latestEarnings?.status || "inline")}
@@ -1153,10 +1153,10 @@ export default function AnalysisResult({
                   const status = String(check.status || "").toLowerCase();
                   const tone =
                     ["met", "beat", "solid"].includes(status)
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800"
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-400"
                       : ["missed", "miss", "risk"].includes(status)
-                        ? "border-red-500/20 bg-red-500/10 text-red-800"
-                        : "border-amber-500/20 bg-amber-500/10 text-amber-800";
+                        ? "border-red-500/20 bg-red-500/10 text-red-800 dark:border-red-500/30 dark:text-red-400"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:text-amber-400";
                   return (
                     <div key={check.label} className={`rounded-[1.2rem] border p-4 ${tone}`}>
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
@@ -1306,7 +1306,7 @@ export default function AnalysisResult({
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-bold">{localizeAnalysisLabel(section.category)}</h3>
                   <span
-                    className={`rounded-md px-2 py-1 text-xs font-bold ${section.score > 20 ? "bg-emerald-500/10 text-emerald-700" : section.score < -20 ? "bg-red-500/10 text-red-700" : "bg-amber-500/10 text-amber-700"}`}
+                    className={`rounded-md px-2 py-1 text-xs font-bold ${section.score > 20 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : section.score < -20 ? "bg-red-500/10 text-red-700 dark:text-red-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}
                   >
                     {section.score.toFixed(0)}
                   </span>

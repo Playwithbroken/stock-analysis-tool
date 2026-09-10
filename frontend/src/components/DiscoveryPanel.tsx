@@ -1416,10 +1416,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         )}
                         <div className="flex justify-between items-start mb-6">
                           <div className="min-w-0">
-                            <div className="mb-1 text-3xl font-black text-slate-900">
+                            <div className="mb-1 text-3xl font-black text-slate-900 dark:text-white">
                               {etf.ticker}
                             </div>
-                            <div className="truncate text-sm text-slate-500">
+                            <div className="truncate text-sm text-slate-500 dark:text-neutral-400">
                               {etf.name}
                             </div>
                           </div>
@@ -1429,31 +1429,31 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-6">
-                          <div className="rounded-2xl border border-black/8 bg-white/75 p-3">
-                            <div className="mb-1 text-[8px] font-bold uppercase text-slate-500">
+                          <div className="rounded-2xl border border-black/8 bg-white/75 p-3 dark:border-white/10 dark:bg-white/5">
+                            <div className="mb-1 text-[8px] font-bold uppercase text-slate-500 dark:text-neutral-400">
                               Kosten (TER)
                             </div>
-                            <div className="text-lg font-black text-emerald-700">
+                            <div className="text-lg font-black text-emerald-700 dark:text-emerald-400">
                               {formatTer(etf.ter)}
                             </div>
                           </div>
-                          <div className="rounded-2xl border border-black/8 bg-white/75 p-3">
-                            <div className="mb-1 text-[8px] font-bold uppercase text-slate-500">
+                          <div className="rounded-2xl border border-black/8 bg-white/75 p-3 dark:border-white/10 dark:bg-white/5">
+                            <div className="mb-1 text-[8px] font-bold uppercase text-slate-500 dark:text-neutral-400">
                               Performance (1W)
                             </div>
                             <div
-                              className={`text-lg font-black ${(etf.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
+                              className={`text-lg font-black ${(etf.change || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
                             >
                               {formatMove(etf.change)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
-                          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+                          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-neutral-400">
                             Kategorie
                           </div>
-                          <div className="truncate text-sm font-bold text-slate-900">
+                          <div className="truncate text-sm font-bold text-slate-900 dark:text-white">
                             {etf.category || "Diverse"}
                           </div>
                         </div>
@@ -1494,14 +1494,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               <section className="surface-panel rounded-[2rem] p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-700">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-400">
                       Future Stars
                     </div>
-                    <h3 className="mt-2 text-2xl text-slate-900">
+                    <h3 className="mt-2 text-2xl text-slate-900 dark:text-white">
                       Kleine Werte mit echter Chance nach News- und Datencheck
                     </h3>
                   </div>
-                  <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-700">
+                  <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400">
                     {futureStars.filter((item) => item.quality_gate === "passed").length} geprueft
                   </div>
                 </div>
@@ -1510,29 +1510,29 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     <button
                       key={stock.ticker}
                       onClick={() => onAnalyze(stock.ticker)}
-                      className="rounded-[1.2rem] border border-black/8 bg-white p-4 text-left transition-all hover:-translate-y-0.5"
+                      className="rounded-[1.2rem] border border-black/8 bg-white p-4 text-left transition-all hover:-translate-y-0.5 dark:border-white/10 dark:bg-white/5"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-xl font-black text-slate-900">{stock.ticker}</div>
-                        <div className="text-xs font-black text-emerald-700">{stock.score}/100</div>
+                        <div className="text-xl font-black text-slate-900 dark:text-white">{stock.ticker}</div>
+                        <div className="text-xs font-black text-emerald-700 dark:text-emerald-400">{stock.score}/100</div>
                       </div>
-                      <div className="mt-1 truncate text-xs font-semibold text-slate-500">{stock.name}</div>
-                      <div className="mt-3 text-xs font-bold text-slate-700">
+                      <div className="mt-1 truncate text-xs font-semibold text-slate-500 dark:text-neutral-400">{stock.name}</div>
+                      <div className="mt-3 text-xs font-bold text-slate-700 dark:text-neutral-300">
                         {toFiniteNumber(stock.growth) != null ? `${formatNumber(stock.growth)}% Wachstum` : "Growth n/a"} · {toFiniteNumber(stock.market_cap) != null ? `${formatNumber(toFiniteNumber(stock.market_cap)! / 1e9)}B` : "MCap n/a"}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-400">
                           Gate {stock.gate_passed ?? 0}/{stock.gate_total ?? 6}
                         </span>
-                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600 dark:text-neutral-300">
                           {stock.quality_gate || "watch"}
                         </span>
                       </div>
-                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-neutral-400">
                         {(stock.catalysts && stock.catalysts[0]) || stock.reason || "Katalysator beobachten."}
                       </p>
                       {stock.gate_reason ? (
-                        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-amber-700">{stock.gate_reason}</p>
+                        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-amber-700 dark:text-amber-400">{stock.gate_reason}</p>
                       ) : null}
                     </button>
                   ))}
@@ -1543,14 +1543,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             <section className="surface-panel rounded-[2rem] p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                     Screener
                   </div>
-                  <h3 className="mt-2 text-2xl text-slate-900">
+                  <h3 className="mt-2 text-2xl text-slate-900 dark:text-white">
                     RSI, Sector und 52W Filter
                   </h3>
                 </div>
-                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500">
+                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400">
                   {sortedScreenerRows.length} Treffer
                 </div>
               </div>
@@ -1560,25 +1560,25 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   value={screenerRsi}
                   onChange={(e) => setScreenerRsi(e.target.value)}
                   placeholder="RSI max (z.B. 30)"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <input
                   value={screenerSector}
                   onChange={(e) => setScreenerSector(e.target.value)}
                   placeholder="Sector (z.B. Technology)"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <input
                   value={screenerHigh52}
                   onChange={(e) => setScreenerHigh52(e.target.value)}
                   placeholder="Nahe 52W High <= %"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <input
                   value={screenerLow52}
                   onChange={(e) => setScreenerLow52(e.target.value)}
                   placeholder="Nahe 52W Low <= %"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800"
+                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <button
                   onClick={runScreener}
@@ -1591,9 +1591,9 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             </section>
 
             <section className="surface-panel overflow-hidden rounded-[2rem] p-0">
-              <div className="border-b border-black/6 px-6 py-4">
+              <div className="border-b border-black/6 px-6 py-4 dark:border-white/10">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                     Filter-Ergebnisse
                   </div>
                   <div className="flex gap-2">
@@ -1604,7 +1604,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           e.target.value as "rsi_14" | "market_cap" | "high52_proximity" | "low52_proximity",
                         )
                       }
-                      className="rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                      className="rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
                     >
                       <option value="rsi_14">Sort: RSI</option>
                       <option value="market_cap">Sort: Market Cap</option>
@@ -1615,7 +1615,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       onClick={() =>
                         setScreenerSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
                       }
-                      className="rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                      className="rounded-lg border border-black/8 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-white"
                     >
                       {screenerSortDirection === "asc" ? "Asc" : "Desc"}
                     </button>
@@ -1625,7 +1625,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               <div className="overflow-x-auto">
                 <table className="min-w-[860px] text-sm">
                   <thead>
-                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400">
                       <th className="px-5 py-3">Ticker</th>
                       <th className="px-4 py-3">Name</th>
                       <th className="px-4 py-3">Sector</th>
@@ -1640,41 +1640,41 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   <tbody>
                     {screenerLoading ? (
                       <tr>
-                        <td colSpan={9} className="px-5 py-5 text-sm text-slate-500">
+                        <td colSpan={9} className="px-5 py-5 text-sm text-slate-500 dark:text-neutral-400">
                           Screener wird geladen...
                         </td>
                       </tr>
                     ) : sortedScreenerRows.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-5 py-5 text-sm text-slate-500">
+                        <td colSpan={9} className="px-5 py-5 text-sm text-slate-500 dark:text-neutral-400">
                           Keine Ergebnisse fuer die aktuellen Filter.
                         </td>
                       </tr>
                     ) : (
                       sortedScreenerRows.map((row) => (
-                        <tr key={row.ticker} className="border-b border-black/6 last:border-b-0">
-                          <td className="px-5 py-4 text-sm font-extrabold text-slate-900">{row.ticker}</td>
-                          <td className="px-4 py-4 text-sm text-slate-600">{row.name}</td>
-                          <td className="px-4 py-4 text-sm text-slate-600">{row.sector || "-"}</td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                        <tr key={row.ticker} className="border-b border-black/6 last:border-b-0 dark:border-white/5">
+                          <td className="px-5 py-4 text-sm font-extrabold text-slate-900 dark:text-white">{row.ticker}</td>
+                          <td className="px-4 py-4 text-sm text-slate-600 dark:text-neutral-300">{row.name}</td>
+                          <td className="px-4 py-4 text-sm text-slate-600 dark:text-neutral-300">{row.sector || "-"}</td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-neutral-200">
                             {row.price != null ? formatPrice(row.price) : "-"}
                           </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-neutral-200">
                             {formatNumber(row.rsi_14, 1, "-")}
                           </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-neutral-200">
                             {toFiniteNumber(row.market_cap) != null ? `${formatNumber(toFiniteNumber(row.market_cap)! / 1e9)}B` : "-"}
                           </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-neutral-200">
                             {toFiniteNumber(row.high52_proximity) != null ? `${formatNumber(row.high52_proximity)}%` : "-"}
                           </td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-neutral-200">
                             {toFiniteNumber(row.low52_proximity) != null ? `${formatNumber(row.low52_proximity)}%` : "-"}
                           </td>
                           <td className="px-5 py-4 text-right">
                             <button
                               onClick={() => onAnalyze(row.ticker)}
-                              className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                              className="rounded-lg border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                             >
                               Analysieren
                             </button>

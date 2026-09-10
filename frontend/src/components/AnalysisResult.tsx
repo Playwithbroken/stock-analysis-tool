@@ -655,7 +655,7 @@ export default function AnalysisResult({
                   {data.ticker?.slice(0, 2)}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="truncate text-2xl text-slate-900 sm:text-3xl">
+                  <h2 className="truncate text-2xl text-slate-900 sm:text-3xl dark:text-white">
                     {data.company_name}
                   </h2>
                   <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
@@ -674,16 +674,16 @@ export default function AnalysisResult({
                 >
                   <Download size={16} /> Broker-Dossier (PDF)
                 </button>
-                <div className="rounded-xl border border-black/8 bg-white/70 px-4 py-3 text-left">
-                  <div className="text-2xl font-bold text-slate-900 sm:text-3xl">
+                <div className="rounded-xl border border-black/8 bg-white/70 px-4 py-3 text-left dark:border-white/10 dark:bg-white/5">
+                  <div className="text-2xl font-bold text-slate-900 sm:text-3xl dark:text-white">
                     {formatPrice(liveQuote?.price ?? price_data?.current_price)}
                   </div>
                   <div
-                    className={`text-base sm:text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
+                    className={`text-base sm:text-lg ${(chartStats?.changePct ?? price_data?.change_1y ?? 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
                   >
                     {formatPercent(chartStats?.changePct ?? price_data?.change_1y)} ({chartStats?.label ?? "1Y"})
                   </div>
-                  <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                  <div className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${realtimeConnected ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500 dark:text-neutral-400"}`}>
                     {realtimeConnected && !dataQuality.blocksDecision ? "Live-Kurs" : dataQuality.label}
                   </div>
                 </div>
@@ -692,7 +692,7 @@ export default function AnalysisResult({
                     onClick={() => setIsModalOpen(true)}
                     disabled={dataQuality.blocksDecision}
                     title={dataQuality.blocksDecision ? "Erst vollständige Daten laden" : undefined}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-45"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1d1d1f] px-4 py-3 text-sm font-bold text-white transition-all hover:bg-black disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
                   >
                     <Plus size={16} /> Portfolio hinzufügen
                   </button>
@@ -724,7 +724,7 @@ export default function AnalysisResult({
                   </button>
                 </div>
                 {alertStatus ? (
-                  <div className="rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600">
+                  <div className="rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300">
                     {alertStatus}
                   </div>
                 ) : null}
@@ -744,13 +744,13 @@ export default function AnalysisResult({
           <section className="surface-panel rounded-[1.7rem] border border-black/8 p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                   Beratungsrahmen
                 </div>
-                <h3 className="mt-2 text-2xl text-slate-900">
+                <h3 className="mt-2 text-2xl text-slate-900 dark:text-white">
                   Passt dieses Dossier zu deinem Beratungsrahmen?
                 </h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-neutral-300">
                   Der Check verbindet Analyse, Asset-Klasse und Risikoniveau mit deinem Profil.
                   Ergebnis ist ein Entscheidungsrahmen, keine blinde Kauf- oder Verkaufsempfehlung.
                 </p>
@@ -762,14 +762,14 @@ export default function AnalysisResult({
             </div>
 
             <div className="mt-5 grid gap-3 lg:grid-cols-[0.75fr_1.25fr_1fr]">
-              <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              <div className="rounded-2xl border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                   Eignungsscore
                 </div>
-                <div className="mt-2 text-4xl font-black text-slate-950">
+                <div className="mt-2 text-4xl font-black text-slate-950 dark:text-white">
                   {dataQuality.blocksDecision ? "--" : suitabilityLoading ? "..." : suitability?.suitability_score ?? "--"}
                 </div>
-                <div className="mt-1 text-xs font-semibold text-slate-500">
+                <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-neutral-400">
                   {localizeAnalysisLabel(assetClass)} / Risiko {localizeAnalysisLabel(inferredRiskLevel)}
                 </div>
               </div>
@@ -929,13 +929,13 @@ export default function AnalysisResult({
           <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                   Dossier-Einordnung
                 </div>
-                <h3 className="mt-2 text-3xl text-slate-900">
+                <h3 className="mt-2 text-3xl text-slate-900 dark:text-white">
                   Was für diese Aktie wirklich wichtig ist
                 </h3>
-                <p className="mobile-dossier-copy mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                <p className="mobile-dossier-copy mt-2 max-w-3xl text-sm leading-7 text-slate-600 dark:text-neutral-300">
                   Kompakte Investment-Story aus Fundamentaldaten, Quartalsergebnissen, Bewertung, Analysten, Nachrichten und Risiko.
                   Keine Kaufempfehlung, sondern ein besserer Entscheidungsrahmen.
                 </p>
@@ -1141,10 +1141,10 @@ export default function AnalysisResult({
           {businessQualityChecks.length > 0 && (
             <section className="surface-panel rounded-[1.6rem] p-5">
               <div className="mb-4">
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                   Qualitätsprüfung des Geschäfts
                 </div>
-                <h3 className="mt-2 text-2xl font-black text-slate-900">
+                <h3 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                   Umsatz, Ergebnisse, Dividende und Cashflow auf einen Blick
                 </h3>
               </div>
@@ -1180,14 +1180,14 @@ export default function AnalysisResult({
             <section className="surface-panel rounded-[1.6rem] p-5">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-neutral-400">
                     Bilanz- und Cashflow-Analyse
                   </div>
-                  <h3 className="mt-2 text-2xl font-black text-slate-900">
+                  <h3 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                     Umsatz, Margen und Cashflow
                   </h3>
                 </div>
-                <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400">
                   {financialStatements?.coverage?.annual_periods || annualFinancials.length} Jahresperioden
                 </div>
               </div>
@@ -1228,7 +1228,7 @@ export default function AnalysisResult({
               <div className="mt-5 overflow-x-auto">
                 <table className="w-full min-w-[680px] text-left text-xs sm:min-w-[760px] sm:text-sm">
                   <thead>
-                    <tr className="border-b border-black/8 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    <tr className="border-b border-black/8 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:border-white/10 dark:text-neutral-400">
                       <th className="py-2 pr-4">Periode</th>
                       <th className="py-2 pr-4">Umsatz</th>
                       <th className="py-2 pr-4">Bruttomarge</th>
@@ -1240,8 +1240,8 @@ export default function AnalysisResult({
                   </thead>
                   <tbody>
                     {annualFinancials.slice(0, 5).map((row: any) => (
-                      <tr key={row.period} className="border-b border-black/5 text-slate-700">
-                        <td className="py-3 pr-4 font-bold text-slate-900">{row.period}</td>
+                      <tr key={row.period} className="border-b border-black/5 text-slate-700 dark:border-white/5 dark:text-neutral-300">
+                        <td className="py-3 pr-4 font-bold text-slate-900 dark:text-white">{row.period}</td>
                         <td className="py-3 pr-4 font-mono">{formatBigNumber(row.revenue, formatPrice)}</td>
                         <td className="py-3 pr-4 font-mono">{formatRatioPercent(row.gross_margin)}</td>
                         <td className="py-3 pr-4 font-mono">{formatRatioPercent(row.operating_margin)}</td>

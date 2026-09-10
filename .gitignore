@@ -41,6 +41,8 @@ artifacts/
 frontend/qa-artifacts/
 qa-artifacts/
 qa_smoke_playwright.mjs
+*.db
+*.db-*
 data/*.db
 data/*.db-*
 data/backups/

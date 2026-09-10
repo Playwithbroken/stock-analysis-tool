@@ -7,11 +7,13 @@ tokens remain owned by the official Scalable CLI.
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
 import hmac
+import io
 import json
 import os
 from pathlib import Path
@@ -28,6 +30,15 @@ from src.storage import DB_PATH
 
 SCALABLE_PORTFOLIO_ID = "scalable-capital-read-only"
 SCALABLE_PORTFOLIO_NAME = "Scalable Capital (Read-only)"
+
+SAMPLE_SCALABLE_POSITIONS = [
+    {"ticker": "SAP.DE", "isin": "DE0007164600", "name": "SAP SE", "shares": 25, "buy_price": 182.50},
+    {"ticker": "ASML.AS", "isin": "NL0010273215", "name": "ASML Holding NV", "shares": 8, "buy_price": 690.00},
+    {"ticker": "NVDA", "isin": "US67066G1040", "name": "NVIDIA Corp.", "shares": 50, "buy_price": 112.40},
+    {"ticker": "MSFT", "isin": "US5949181045", "name": "Microsoft Corp.", "shares": 20, "buy_price": 415.00},
+    {"ticker": "AAPL", "isin": "US0378331005", "name": "Apple Inc.", "shares": 30, "buy_price": 195.00},
+    {"ticker": "ALV.DE", "isin": "DE0008404005", "name": "Allianz SE", "shares": 35, "buy_price": 275.00},
+]
 
 _ALLOWED_COMMANDS = {
     "capabilities": ("capabilities", "--json"),
@@ -334,6 +345,125 @@ class ScalableIntegrationService:
         )
         conn.commit()
         conn.close()
+        self.ensure_scalable_portfolio_exists()
+
+    def ensure_scalable_portfolio_exists(self) -> None:
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO portfolios (id, name, created_at) VALUES (?, ?, ?)",
+                (SCALABLE_PORTFOLIO_ID, SCALABLE_PORTFOLIO_NAME, _utc_now()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    @staticmethod
+    def parse_holdings_csv(csv_text: str) -> List[Dict[str, Any]]:
+        text = str(csv_text or "").strip()
+        if not text:
+            return []
+
+        first_line = text.split("\n")[0]
+        delimiter = ";" if ";" in first_line else "\t" if "\t" in first_line else ","
+
+        positions: List[Dict[str, Any]] = []
+        try:
+            reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+            if reader.fieldnames:
+                field_map = {}
+                for fn in reader.fieldnames:
+                    clean = re.sub(r"[^a-z0-9]", "", str(fn).lower())
+                    if clean in {"ticker", "symbol", "aktie", "kuerzel", "kürzel"}:
+                        field_map["ticker"] = fn
+                    elif clean in {"isin"}:
+                        field_map["isin"] = fn
+                    elif clean in {"name", "bezeichnung", "titel", "wertpapier", "wertpapierbezeichnung", "asset"}:
+                        field_map["name"] = fn
+                    elif clean in {"shares", "quantity", "stuecke", "stueck", "stücke", "stück", "bestand", "anzahl", "stk"}:
+                        field_map["quantity"] = fn
+                    elif clean in {"buyprice", "buy_price", "kaufkurs", "einstandskurs", "einstandspreis", "kaufpreis", "preis", "fifoprice", "fifo_price"}:
+                        field_map["buy_price"] = fn
+                    elif clean in {"valuation", "marketvalue", "market_value", "wert", "depotwert", "kurswert", "gesamtwert"}:
+                        field_map["valuation"] = fn
+                    elif clean in {"currency", "waehrung", "währung"}:
+                        field_map["currency"] = fn
+
+                if "ticker" in field_map or "isin" in field_map or "quantity" in field_map:
+                    for row in reader:
+                        raw_ticker = str(row.get(field_map.get("ticker", ""), "")).strip().upper()
+                        raw_isin = str(row.get(field_map.get("isin", ""), "")).strip().upper()
+                        raw_name = str(row.get(field_map.get("name", ""), "")).strip()
+                        raw_qty = str(row.get(field_map.get("quantity", ""), "")).strip().replace(",", ".")
+                        raw_buy = str(row.get(field_map.get("buy_price", ""), "")).strip().replace(",", ".")
+                        raw_val = str(row.get(field_map.get("valuation", ""), "")).strip().replace(",", ".")
+                        raw_curr = str(row.get(field_map.get("currency", ""), "EUR")).strip().upper() or "EUR"
+
+                        raw_qty = re.sub(r"[^\d.]", "", raw_qty)
+                        raw_buy = re.sub(r"[^\d.]", "", raw_buy)
+                        raw_val = re.sub(r"[^\d.]", "", raw_val)
+
+                        try:
+                            qty = float(raw_qty) if raw_qty else 0.0
+                        except ValueError:
+                            qty = 0.0
+
+                        try:
+                            buy_p = float(raw_buy) if raw_buy else None
+                        except ValueError:
+                            buy_p = None
+
+                        try:
+                            val = float(raw_val) if raw_val else None
+                        except ValueError:
+                            val = None
+
+                        if (raw_ticker or raw_isin) and qty > 0:
+                            positions.append({
+                                "ticker": raw_ticker,
+                                "isin": raw_isin,
+                                "name": raw_name or raw_ticker or raw_isin,
+                                "shares": qty,
+                                "buy_price": buy_p,
+                                "valuation": val,
+                                "currency": raw_curr,
+                            })
+                    if positions:
+                        return positions
+        except Exception:
+            pass
+
+        for line in text.splitlines():
+            clean_line = line.strip()
+            if not clean_line or clean_line.startswith("#"):
+                continue
+            parts = re.split(r"[\s,;]+", clean_line)
+            if len(parts) >= 2:
+                sym_or_isin = parts[0].strip().upper()
+                raw_qty = parts[1].strip().replace(",", ".")
+                raw_buy = parts[2].strip().replace(",", ".") if len(parts) >= 3 else None
+                try:
+                    qty = float(re.sub(r"[^\d.]", "", raw_qty))
+                except ValueError:
+                    continue
+                buy_p = None
+                if raw_buy:
+                    try:
+                        buy_p = float(re.sub(r"[^\d.]", "", raw_buy))
+                    except ValueError:
+                        buy_p = None
+                if qty > 0:
+                    is_isin = bool(_ISIN_PATTERN.fullmatch(sym_or_isin))
+                    positions.append({
+                        "ticker": "" if is_isin else sym_or_isin,
+                        "isin": sym_or_isin if is_isin else "",
+                        "name": sym_or_isin,
+                        "shares": qty,
+                        "buy_price": buy_p,
+                        "currency": "EUR",
+                    })
+
+        return positions
 
     def is_managed_portfolio(self, portfolio_id: str) -> bool:
         return str(portfolio_id or "") == SCALABLE_PORTFOLIO_ID
@@ -808,8 +938,8 @@ class ScalableIntegrationService:
         conn.commit()
         conn.close()
 
-    def portfolio_analysis(self) -> Dict[str, Any]:
-        """Build current-value metrics only from the reconciled broker snapshot."""
+    def portfolio_analysis(self, *, enrich_market_data: bool = True) -> Dict[str, Any]:
+        """Build current-value metrics from the reconciled or imported broker snapshot."""
         snapshot = self.snapshot()
         if snapshot["status"].get("status") != "ok":
             raise ScalableIntegrationError(
@@ -820,23 +950,58 @@ class ScalableIntegrationService:
         total_value = Decimal("0")
         total_cost = Decimal("0")
         cost_basis_complete = True
+        scores: List[float] = []
+        sector_weights: Dict[str, float] = {}
+
         for row in snapshot["positions"]:
             quantity = _decimal(row.get("quantity"), "quantity") or Decimal("0")
             valuation = _decimal(row.get("valuation"), "valuation") or Decimal("0")
             fifo_price = _decimal(row.get("fifo_price"), "fifo_price", optional=True)
             current_price = valuation / quantity if quantity > 0 else Decimal("0")
+
+            ticker = str(row.get("ticker") or "").upper()
+            score = 0
+            recommendation = "HOLD"
+            sector = "Broker-Snapshot"
+            change_1d = None
+
+            if enrich_market_data and ticker:
+                try:
+                    from src.data_fetcher import DataFetcher
+                    from src.analyzer import StockAnalyzer
+                    fetcher = DataFetcher(ticker)
+                    pdata = fetcher.get_price_data()
+                    live_p = pdata.get("current_price") if isinstance(pdata, dict) else None
+                    if live_p and float(live_p) > 0:
+                        current_price = Decimal(str(round(float(live_p), 4)))
+                        valuation = current_price * quantity
+                        change_1d = float(pdata.get("change_percent") or 0.0)
+                    analyzer = StockAnalyzer(fetcher)
+                    analysis = analyzer.analyze()
+                    score = int(analysis.get("score") or 0)
+                    recommendation = str(analysis.get("recommendation") or "HOLD")
+                    sector = str(analysis.get("sector") or "Broker-Snapshot")
+                except Exception:
+                    pass
+
             if fifo_price is None:
                 cost_basis_complete = False
                 cost_basis = valuation
             else:
                 cost_basis = fifo_price * quantity
+
             gain_loss = valuation - cost_basis
             gain_loss_pct = (valuation / cost_basis - Decimal("1")) * Decimal("100") if cost_basis > 0 else Decimal("0")
             total_value += valuation
             total_cost += cost_basis
+            if score > 0:
+                scores.append(float(score))
+            pos_val = float(valuation)
+            sector_weights[sector] = sector_weights.get(sector, 0.0) + pos_val
+
             holdings.append(
                 {
-                    "ticker": row["ticker"],
+                    "ticker": ticker,
                     "isin": row["isin"],
                     "name": row["name"],
                     "shares": float(quantity),
@@ -844,26 +1009,35 @@ class ScalableIntegrationService:
                     "buy_price": float(fifo_price) if fifo_price is not None else None,
                     "purchase_date": None,
                     "holding_days": None,
-                    "position_value": float(valuation),
+                    "position_value": pos_val,
                     "cost_basis": float(cost_basis),
                     "gain_loss": float(gain_loss),
                     "gain_loss_pct": float(gain_loss_pct),
                     "return_since_buy": float(gain_loss),
                     "return_since_buy_pct": float(gain_loss_pct),
-                    "change_1d": None,
+                    "change_1d": change_1d,
                     "change_1y": None,
-                    "sector": "Broker-Snapshot",
-                    "score": 0,
-                    "recommendation": "HOLD",
+                    "sector": sector,
+                    "score": score,
+                    "recommendation": recommendation,
                     "valuation": "BROKER_SNAPSHOT",
                     "broker_currency": row["valuation_currency"],
                     "quote_timestamp_utc": row["quote_timestamp_utc"],
                     "quote_is_outdated": bool(row["quote_is_outdated"]) if row["quote_is_outdated"] is not None else None,
                 }
             )
+
         gain = total_value - total_cost
         gain_pct = (total_value / total_cost - Decimal("1")) * Decimal("100") if total_cost > 0 else Decimal("0")
+        avg_score = round(sum(scores) / len(scores), 1) if scores else 0
+        sector_allocation = {
+            sec: round((val / float(total_value)) * 100, 1)
+            for sec, val in sector_weights.items()
+        } if total_value > 0 else ({"Broker-Snapshot": 100.0} if holdings else {})
+
         return {
+            "configured": True,
+            "total_value": float(total_value),
             "holdings": holdings,
             "summary": {
                 "total_value": float(total_value),
@@ -873,14 +1047,275 @@ class ScalableIntegrationService:
                 "return_since_buy": float(gain),
                 "return_since_buy_pct": float(gain_pct),
                 "num_holdings": len(holdings),
-                "avg_score": 0,
+                "avg_score": avg_score,
                 "avg_holding_days": None,
-                "sector_allocation": {"Broker-Snapshot": 100.0} if holdings else {},
+                "sector_allocation": sector_allocation,
                 "cost_basis_complete": cost_basis_complete,
-                "source": "scalable_cli_reconciled",
+                "source": snapshot["status"].get("source") or "scalable_reconciled",
                 "as_of": snapshot["status"].get("valuation_timestamp_utc"),
-                "currency": snapshot["status"].get("currency"),
+                "currency": snapshot["status"].get("currency") or "EUR",
             },
+        }
+
+    def ensure_scalable_portfolio_exists(self) -> None:
+        """Ensure the Scalable Capital read-only portfolio row exists in portfolios table."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO portfolios (id, name, created_at) VALUES (?, ?, ?)",
+                (SCALABLE_PORTFOLIO_ID, SCALABLE_PORTFOLIO_NAME, _utc_now()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def parse_holdings_csv(self, csv_text: str) -> List[Dict[str, Any]]:
+        """Parse raw CSV or space/tab/semicolon delimited text into position dictionaries."""
+        if not csv_text or not csv_text.strip():
+            return []
+
+        positions: List[Dict[str, Any]] = []
+        lines = [ln.strip() for ln in csv_text.splitlines() if ln.strip()]
+        if not lines:
+            return []
+
+        header_line = lines[0].lower()
+        has_header = any(
+            h in header_line
+            for h in ("ticker", "symbol", "isin", "stück", "stueck", "stk", "share", "kurs", "preis", "price")
+        )
+        data_lines = lines[1:] if has_header else lines
+
+        delimiter = None
+        if has_header:
+            for cand in [";", ",", "\t", "|"]:
+                if cand in lines[0]:
+                    delimiter = cand
+                    break
+
+        header_map: Dict[str, int] = {}
+        if has_header and delimiter:
+            headers = [h.strip().lower() for h in lines[0].split(delimiter)]
+            for idx, h in enumerate(headers):
+                if any(k in h for k in ("ticker", "symbol", "aktie", "wertpapier")):
+                    header_map["ticker"] = idx
+                elif "isin" in h:
+                    header_map["isin"] = idx
+                elif any(k in h for k in ("stück", "stueck", "stk", "share", "shares", "menge", "anzahl", "bestand", "qty", "quantity")):
+                    header_map["shares"] = idx
+                elif any(k in h for k in ("kaufkurs", "einstand", "kurs", "preis", "price", "buy")):
+                    header_map["buy_price"] = idx
+                elif any(k in h for k in ("name", "bezeichnung", "titel")):
+                    header_map["name"] = idx
+
+        for line in data_lines:
+            if delimiter and delimiter in line:
+                parts = [p.strip().strip('"').strip("'") for p in line.split(delimiter)]
+            elif ";" in line:
+                parts = [p.strip().strip('"').strip("'") for p in line.split(";")]
+            elif "\t" in line:
+                parts = [p.strip().strip('"').strip("'") for p in line.split("\t")]
+            elif "," in line:
+                parts = [p.strip().strip('"').strip("'") for p in line.split(",")]
+            else:
+                parts = [p.strip().strip('"').strip("'") for p in line.split()]
+
+            if not parts:
+                continue
+
+            ticker = None
+            isin = None
+            shares = None
+            buy_price = None
+            name = None
+
+            if header_map:
+                if "ticker" in header_map and header_map["ticker"] < len(parts):
+                    ticker = parts[header_map["ticker"]]
+                if "isin" in header_map and header_map["isin"] < len(parts):
+                    isin = parts[header_map["isin"]]
+                if "shares" in header_map and header_map["shares"] < len(parts):
+                    try:
+                        shares = float(parts[header_map["shares"]].replace(",", "."))
+                    except (ValueError, TypeError):
+                        pass
+                if "buy_price" in header_map and header_map["buy_price"] < len(parts):
+                    try:
+                        buy_price = float(parts[header_map["buy_price"]].replace(",", "."))
+                    except (ValueError, TypeError):
+                        pass
+                if "name" in header_map and header_map["name"] < len(parts):
+                    name = parts[header_map["name"]]
+            else:
+                first = parts[0].upper()
+                if _ISIN_PATTERN.fullmatch(first):
+                    isin = first
+                    if len(parts) > 1 and not parts[1].replace(".", "").replace(",", "").isdigit():
+                        ticker = parts[1].upper()
+                        num_start = 2
+                    else:
+                        num_start = 1
+                else:
+                    ticker = first
+                    num_start = 1
+
+                if len(parts) > num_start:
+                    try:
+                        shares = float(parts[num_start].replace(",", "."))
+                    except (ValueError, TypeError):
+                        pass
+                if len(parts) > num_start + 1:
+                    try:
+                        buy_price = float(parts[num_start + 1].replace(",", "."))
+                    except (ValueError, TypeError):
+                        pass
+                if len(parts) > num_start + 2:
+                    name = " ".join(parts[num_start + 2:])
+
+            if not ticker and isin:
+                ticker = isin
+            if ticker and shares and shares > 0:
+                pos = {
+                    "ticker": ticker.upper(),
+                    "symbol": ticker.upper(),
+                    "shares": shares,
+                    "buy_price": buy_price if (buy_price and buy_price > 0) else None,
+                    "avg_buy_price": buy_price if (buy_price and buy_price > 0) else None,
+                }
+                if isin:
+                    pos["isin"] = isin.upper()
+                if name:
+                    pos["name"] = name
+                positions.append(pos)
+
+        return positions
+
+    def import_positions(
+        self,
+        positions_data: List[Dict[str, Any]],
+        *,
+        source_label: str = "manual_import",
+    ) -> Dict[str, Any]:
+        """Import or manually synchronize a list of holdings into the Scalable portfolio."""
+        if not positions_data:
+            raise ScalableIntegrationError("import_payload_empty", "Keine Positionen zum Importieren übergeben.")
+
+        attempted_at = _utc_now()
+        normalized: List[NormalizedPosition] = []
+        seen_isins: set[str] = set()
+        seen_tickers: set[str] = set()
+        total_valuation = Decimal("0")
+
+        for item in positions_data:
+            if not isinstance(item, dict):
+                continue
+            ticker = str(item.get("ticker") or item.get("symbol") or "").strip().upper()
+            isin = str(item.get("isin") or "").strip().upper()
+            name = str(item.get("name") or ticker or isin).strip()[:240]
+
+            if not ticker and isin and _ISIN_PATTERN.fullmatch(isin):
+                ticker = (
+                    self._ticker_overrides().get(isin)
+                    or self._existing_ticker_map().get(isin)
+                    or self.ticker_resolver(isin, name)
+                )
+                ticker = str(ticker or "").strip().upper()
+
+            if not isin or not _ISIN_PATTERN.fullmatch(isin):
+                clean_sym = re.sub(r"[^A-Z0-9]", "", ticker)[:8].rjust(8, "0")
+                isin = f"DE000{clean_sym}9"[:12]
+
+            if not ticker or not _TICKER_PATTERN.fullmatch(ticker):
+                continue
+
+            if ticker in seen_tickers or isin in seen_isins:
+                continue
+            seen_tickers.add(ticker)
+            seen_isins.add(isin)
+
+            raw_qty = item.get("quantity") if item.get("quantity") is not None else item.get("shares")
+            quantity = _decimal(raw_qty, "quantity", optional=True) or Decimal("0")
+            if quantity <= 0:
+                continue
+
+            raw_buy = item.get("fifo_price") if item.get("fifo_price") is not None else item.get("buy_price")
+            fifo_price = _decimal(raw_buy, "fifo_price", optional=True)
+
+            raw_val = item.get("valuation") if item.get("valuation") is not None else item.get("market_value")
+            valuation = _decimal(raw_val, "valuation", optional=True)
+            if valuation is None or valuation <= 0:
+                if fifo_price is not None and fifo_price > 0:
+                    valuation = fifo_price * quantity
+                else:
+                    valuation = Decimal("100") * quantity
+
+            total_valuation += valuation
+            currency = str(item.get("currency") or item.get("valuation_currency") or "EUR").strip().upper()[:8]
+
+            normalized.append(
+                NormalizedPosition(
+                    isin=isin,
+                    ticker=ticker,
+                    name=name or ticker,
+                    security_type=str(item.get("security_type") or "equity")[:80],
+                    quantity=quantity,
+                    fifo_price=fifo_price,
+                    valuation=valuation,
+                    valuation_currency=currency,
+                    quote_mid_price=fifo_price,
+                    quote_currency=currency,
+                    quote_timestamp_utc=attempted_at,
+                    quote_is_outdated=False,
+                    resolution_method=source_label,
+                )
+            )
+
+        if not normalized:
+            raise ScalableIntegrationError(
+                "no_valid_positions",
+                "Es konnten keine gültigen Positionen mit Ticker und Stückzahl erkannt werden.",
+            )
+
+        overview = {
+            "invested_value": total_valuation,
+            "total_value": total_valuation,
+            "broker_total_value": total_valuation,
+            "unrepresented_crypto_value": Decimal("0"),
+            "valuation_timestamp_utc": attempted_at,
+        }
+        payload_hash = self._payload_hash(normalized, overview)
+        self._commit_snapshot(normalized, overview, attempted_at, payload_hash)
+        snap = self.snapshot()
+        return {
+            "success": True,
+            "status": "ok",
+            "imported_count": len(normalized),
+            "positions": snap.get("positions", []),
+            "snapshot": snap,
+        }
+
+    def reset_positions(self) -> Dict[str, Any]:
+        """Reset and empty all Scalable imported holdings."""
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM holdings WHERE portfolio_id = ?", (SCALABLE_PORTFOLIO_ID,))
+            conn.execute("DELETE FROM scalable_positions")
+            conn.execute(
+                """UPDATE scalable_sync_state
+                   SET status = 'never_synced', position_count = 0, total_value = NULL,
+                       error_code = NULL, error_message = NULL
+                   WHERE singleton_id = 1"""
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        snap = self.snapshot()
+        return {
+            "success": True,
+            "status": "ok",
+            "positions": [],
+            "snapshot": snap,
         }
 
     def sync(self) -> Dict[str, Any]:

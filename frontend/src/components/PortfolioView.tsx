@@ -5,9 +5,10 @@ import DividendDashboard from "./DividendDashboard";
 import RiskCorrelationMatrix from "./RiskCorrelationMatrix";
 import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
+import ScalableImportModal from "./ScalableImportModal";
 import PaperTradingPanel from "./PaperTradingPanel";
 import ProviderStatePanel, { useSlowProviderState } from "./ProviderStatePanel";
-import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
 import useAccessibleDialog from "../hooks/useAccessibleDialog";
@@ -253,6 +254,8 @@ export default function PortfolioView({
   const [scalableStatus, setScalableStatus] = useState<ScalableIntegrationStatus | null>(null);
   const [scalableSyncing, setScalableSyncing] = useState(false);
   const [scalableNotice, setScalableNotice] = useState("");
+  const [showScalableImportModal, setShowScalableImportModal] = useState(false);
+  const [scalableResetting, setScalableResetting] = useState(false);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [newAlertSymbol, setNewAlertSymbol] = useState("");
@@ -347,6 +350,39 @@ export default function PortfolioView({
       await fetchScalableStatus();
     } finally {
       setScalableSyncing(false);
+    }
+  };
+
+  const handleLoadScalableSample = async () => {
+    setScalableSyncing(true);
+    setScalableNotice("Lade Scalable Musterdepot …");
+    try {
+      const response = await fetch("/api/integrations/scalable/load-sample", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail?.message || payload.detail || "Fehler beim Laden");
+      await fetchScalableStatus();
+      await onRefresh();
+      setSelectedPortfolio("scalable-capital-read-only");
+      setScalableNotice("Scalable Musterdepot erfolgreich geladen.");
+    } catch (err: any) {
+      setScalableNotice(err.message || "Musterdepot konnte nicht geladen werden.");
+    } finally {
+      setScalableSyncing(false);
+    }
+  };
+
+  const handleResetScalable = async () => {
+    if (!window.confirm("Möchtest du die importierten Scalable-Positionen wirklich zurücksetzen?")) return;
+    setScalableResetting(true);
+    try {
+      await fetch("/api/integrations/scalable/reset", { method: "POST" });
+      await fetchScalableStatus();
+      await onRefresh();
+      setScalableNotice("Scalable-Positionen zurückgesetzt.");
+    } catch {
+      setScalableNotice("Fehler beim Zurücksetzen.");
+    } finally {
+      setScalableResetting(false);
     }
   };
 
@@ -820,14 +856,21 @@ export default function PortfolioView({
             >
               Neues Portfolio
             </button>
-            {currentPortfolio && !isScalableManagedPortfolio && (
+            {isScalableManagedPortfolio ? (
+              <button
+                onClick={() => setShowScalableImportModal(true)}
+                className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+              >
+                Scalable Positionen importieren
+              </button>
+            ) : currentPortfolio ? (
               <button
                 onClick={() => setShowAddHoldingModal(true)}
                 className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
               >
                 Position hinzufügen
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -841,13 +884,15 @@ export default function PortfolioView({
               <div className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
                 {!scalableStatus.enabled
                   ? "Integration ist vorbereitet, aber serverseitig noch nicht aktiviert."
-                  : !scalableStatus.cli_installed
-                    ? "Offizielle Scalable CLI wurde auf dem Server noch nicht gefunden."
-                    : scalableStatus.status === "ok"
-                      ? scalableStatus.snapshot_stale
-                        ? `${scalableStatus.position_count || 0} Positionen vorhanden · Snapshot ist überfällig.`
-                        : `${scalableStatus.position_count || 0} Positionen geprüft synchronisiert.`
-                      : scalableStatus.error_message || "Bereit für den ersten sicheren Abgleich."}
+                  : scalableStatus.position_count && scalableStatus.position_count > 0
+                    ? `${scalableStatus.position_count} Positionen aktiv und überwacht.`
+                    : !scalableStatus.cli_installed
+                      ? "CLI nicht installiert – Nutze den CSV-Import oder die Schnelleingabe, um deine Aktien einzubinden."
+                      : scalableStatus.status === "ok"
+                        ? scalableStatus.snapshot_stale
+                          ? `${scalableStatus.position_count || 0} Positionen vorhanden · Snapshot ist überfällig.`
+                          : `${scalableStatus.position_count || 0} Positionen geprüft synchronisiert.`
+                        : scalableStatus.error_message || "Bereit für den ersten Import oder Abgleich."}
               </div>
               <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
                 {scalableStatus.last_success_at
@@ -856,18 +901,40 @@ export default function PortfolioView({
                         ? ` · automatisch alle ${scalableStatus.auto_sync_interval_minutes || 15} Minuten`
                         : ""
                     }`
-                  : "Keine Orders, Sparpläne oder Änderungen – ausschließlich Portfolio-Lesedaten."}
+                  : "Importiere dein Scalable-Depot per CSV oder Schnelleingabe, um Kurse, Gewinne und Scores live zu analysieren."}
               </div>
               {scalableNotice && <div className="mt-2 text-xs font-bold text-slate-900 dark:text-white">{scalableNotice}</div>}
             </div>
-            <button
-              onClick={syncScalablePortfolio}
-              disabled={!scalableStatus.enabled || !scalableStatus.cli_installed || scalableSyncing}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[#1d1d1f] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
-              {scalableSyncing ? "Prüfe …" : "Scalable synchronisieren"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowScalableImportModal(true)}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[var(--accent-strong)] shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                CSV / Depot importieren
+              </button>
+              <button
+                type="button"
+                onClick={handleLoadScalableSample}
+                disabled={scalableSyncing}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-45"
+              >
+                <Sparkles className="h-4 w-4" />
+                Musterdepot laden
+              </button>
+              {scalableStatus.cli_installed && (
+                <button
+                  type="button"
+                  onClick={syncScalablePortfolio}
+                  disabled={!scalableStatus.enabled || scalableSyncing}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[#1d1d1f] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
+                  {scalableSyncing ? "Prüfe …" : "CLI Sync"}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -947,20 +1014,44 @@ export default function PortfolioView({
                     CSV exportieren
                   </span>
                 </button>
-                {!isScalableManagedPortfolio && <button
-                  onClick={() => {
-                    if (confirm("Dieses Portfolio wirklich löschen?")) {
-                      onDeletePortfolio(currentPortfolio.id);
-                      setSelectedPortfolio(null);
-                    }
-                  }}
-                  className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Trash2 size={14} />
-                    Löschen
-                  </span>
-                </button>}
+                {isScalableManagedPortfolio ? (
+                  <>
+                    <button
+                      onClick={() => setShowScalableImportModal(true)}
+                      className="rounded-[1.1rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Plus size={14} />
+                        Positionen importieren
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleResetScalable}
+                      disabled={scalableResetting}
+                      className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Trash2 size={14} />
+                        {scalableResetting ? "Leere …" : "Depot leeren"}
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (confirm("Dieses Portfolio wirklich löschen?")) {
+                        onDeletePortfolio(currentPortfolio.id);
+                        setSelectedPortfolio(null);
+                      }
+                    }}
+                    className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Trash2 size={14} />
+                      Löschen
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1842,6 +1933,17 @@ export default function PortfolioView({
         portfolios={portfolios}
         initialTicker={newHolding.ticker}
         initialPrice={parseFloat(newHolding.buyPrice) || undefined}
+      />
+
+      <ScalableImportModal
+        isOpen={showScalableImportModal}
+        onClose={() => setShowScalableImportModal(false)}
+        onSuccess={async () => {
+          await fetchScalableStatus();
+          await onRefresh();
+          setSelectedPortfolio("scalable-capital-read-only");
+          setScalableNotice("Scalable-Positionen erfolgreich importiert und live analysiert.");
+        }}
       />
 
     </div>

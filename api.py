@@ -3582,6 +3582,7 @@ async def quick_lookup(ticker: str) -> Dict[str, Any]:
 
 @app.get("/api/portfolios")
 async def get_portfolios():
+    get_scalable_integration_service().ensure_scalable_portfolio_exists()
     portfolios = get_portfolio_manager().get_portfolios()
     return convert_numpy_types(portfolios)
 
@@ -3683,6 +3684,67 @@ async def send_scalable_decisions(force: bool = False):
             status_code=409,
             detail={"code": exc.code, "message": exc.public_message, "details": exc.details},
         )
+
+
+class ScalableImportRequest(BaseModel):
+    positions: Optional[List[Dict[str, Any]]] = None
+    csv_text: Optional[str] = None
+    source_label: Optional[str] = "manual_import"
+
+
+@app.post("/api/integrations/scalable/import")
+async def import_scalable_positions(req: ScalableImportRequest):
+    """Import holdings directly from CSV or parsed JSON into Scalable Capital portfolio."""
+    service = get_scalable_integration_service()
+    positions = list(req.positions or [])
+    if req.csv_text:
+        parsed = service.parse_holdings_csv(req.csv_text)
+        if parsed:
+            positions.extend(parsed)
+    if not positions:
+        raise HTTPException(
+            status_code=400,
+            detail="Keine gültigen Positionen übergeben. Bitte CSV oder Positionsliste angeben.",
+        )
+    try:
+        snapshot = await asyncio.to_thread(service.import_positions, positions, source_label=req.source_label or "manual_import")
+        asyncio.create_task(_refresh_scalable_readonly_context())
+        return {
+            "status": "ok",
+            "message": f"{len(snapshot.get('positions', []))} Positionen erfolgreich in Scalable Capital importiert.",
+            "snapshot": snapshot,
+        }
+    except ScalableIntegrationError as exc:
+        raise HTTPException(status_code=400, detail={"code": exc.code, "message": exc.public_message})
+
+
+@app.post("/api/integrations/scalable/load-sample")
+async def load_sample_scalable_portfolio():
+    """Load a realistic sample Scalable Capital portfolio for instant exploration."""
+    from src.scalable_integration_service import SAMPLE_SCALABLE_POSITIONS
+    service = get_scalable_integration_service()
+    try:
+        snapshot = await asyncio.to_thread(service.import_positions, SAMPLE_SCALABLE_POSITIONS, source_label="sample_scalable_depot")
+        asyncio.create_task(_refresh_scalable_readonly_context())
+        return {
+            "status": "ok",
+            "message": f"Musterdepot mit {len(SAMPLE_SCALABLE_POSITIONS)} Positionen erfolgreich geladen.",
+            "snapshot": snapshot,
+        }
+    except ScalableIntegrationError as exc:
+        raise HTTPException(status_code=400, detail={"code": exc.code, "message": exc.public_message})
+
+
+@app.post("/api/integrations/scalable/reset")
+async def reset_scalable_portfolio():
+    """Reset and empty all Scalable imported holdings."""
+    service = get_scalable_integration_service()
+    snapshot = await asyncio.to_thread(service.reset_positions)
+    return {
+        "status": "ok",
+        "message": "Scalable-Positionen wurden zurückgesetzt.",
+        "snapshot": snapshot,
+    }
 
 
 @app.get("/api/portfolio/{p_id}/verdict")

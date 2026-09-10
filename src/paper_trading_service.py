@@ -3410,12 +3410,12 @@ class PaperTradingService:
             ),
         )
         aggressive_risk_multiplier = min(
-            0.65,
+            1.0,
             max(
                 exploration_risk_multiplier,
                 float(
                     autopilot_settings.get("aggressive_risk_multiplier")
-                    or os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.60")
+                    or os.getenv("PAPER_TRADING_AGGRESSIVE_LEARNING_RISK_MULTIPLIER", "0.85")
                 ),
             ),
         )
@@ -4921,9 +4921,9 @@ class PaperTradingService:
             "performance": performance,
         }
 
-    def _demo_account_config(self) -> Dict[str, Any]:
-        profile = os.getenv("PAPER_CAPITAL_PROFILE", "conviction").strip().lower()
-        if profile not in {"balanced", "conviction"}:
+    def _demo_account_config(self, capital_profile: Optional[str] = None) -> Dict[str, Any]:
+        profile = (capital_profile or os.getenv("PAPER_CAPITAL_PROFILE", "conviction")).strip().lower()
+        if profile not in {"balanced", "conviction", "full_portfolio"}:
             profile = "conviction"
         profile_defaults = {
             "balanced": {
@@ -4937,6 +4937,8 @@ class PaperTradingService:
                 "max_open_trades": 12,
                 "daily_loss_limit_pct": 1.0,
                 "max_drawdown_pct": 8.0,
+                "max_equity_exposure_pct": 45.0,
+                "max_etf_exposure_pct": 45.0,
             },
             "conviction": {
                 "risk_per_trade_pct": 0.75,
@@ -4949,6 +4951,22 @@ class PaperTradingService:
                 "max_open_trades": 16,
                 "daily_loss_limit_pct": 1.5,
                 "max_drawdown_pct": 12.0,
+                "max_equity_exposure_pct": 90.0,
+                "max_etf_exposure_pct": 90.0,
+            },
+            "full_portfolio": {
+                "risk_per_trade_pct": 2.0,
+                "max_open_risk_pct": 12.0,
+                "max_position_pct": 25.0,
+                "max_gross_exposure_pct": 96.0,
+                "min_cash_reserve_pct": 4.0,
+                "max_ticker_exposure_pct": 30.0,
+                "target_gross_exposure_pct": 90.0,
+                "max_open_trades": 16,
+                "daily_loss_limit_pct": 2.5,
+                "max_drawdown_pct": 15.0,
+                "max_equity_exposure_pct": 95.0,
+                "max_etf_exposure_pct": 95.0,
             },
         }[profile]
 
@@ -5026,8 +5044,8 @@ class PaperTradingService:
                 1.0,
                 env_float("PAPER_TRADING_MEDIUM_CONVICTION_RISK_MULTIPLIER", 0.80, minimum=0.01),
             ),
-            "max_equity_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_EQUITY_EXPOSURE_PCT", 45.0, minimum=0.1)),
-            "max_etf_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_ETF_EXPOSURE_PCT", 45.0, minimum=0.1)),
+            "max_equity_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_EQUITY_EXPOSURE_PCT", profile_defaults["max_equity_exposure_pct"], minimum=0.1)),
+            "max_etf_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_ETF_EXPOSURE_PCT", profile_defaults["max_etf_exposure_pct"], minimum=0.1)),
             "max_crypto_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_CRYPTO_EXPOSURE_PCT", 12.0, minimum=0.1)),
             "max_option_exposure_pct": min(100.0, env_float("PAPER_TRADING_MAX_OPTION_EXPOSURE_PCT", 8.0, minimum=0.1)),
             "max_option_premium_pct": env_float("PAPER_TRADING_MAX_OPTION_PREMIUM_PCT", 2.0, minimum=0.01),
@@ -5979,7 +5997,15 @@ class PaperTradingService:
         base_multiplier: float,
     ) -> tuple[float, str]:
         base = min(1.0, max(0.01, float(base_multiplier or 0.01)))
-        if str(demo_account.get("capital_profile") or "balanced") != "conviction":
+        profile = str(demo_account.get("capital_profile") or "balanced")
+        if profile == "full_portfolio":
+            score = float(playbook.get("score") or 0)
+            if score >= 85:
+                return 1.0, "full_power"
+            if score >= 70:
+                return max(base, 0.90), "high"
+            return max(base, 0.75), "conviction"
+        if profile != "conviction":
             return base, "standard"
         score = float(playbook.get("score") or 0)
         high_score = float(demo_account.get("high_conviction_min_score") or 90)

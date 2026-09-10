@@ -879,7 +879,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <input
                   type="range"
                   min={1}
-                  max={8}
+                  max={16}
                   value={Number(autopilotSettings?.max_trades || 3)}
                   onChange={(event) => updateAutopilotSetting("max_trades", Number(event.target.value))}
                   className="mt-3 w-full accent-[var(--accent)]"
@@ -902,18 +902,30 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Aggro Risiko-Größe</span>
                 <input
                   type="range"
-                  min={3}
-                  max={65}
-                  value={Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || autoSelection.aggressive_learning_risk_multiplier || 0.25) * 100)}
+                  min={5}
+                  max={100}
+                  value={Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || autoSelection.aggressive_learning_risk_multiplier || 0.60) * 100)}
                   onChange={(event) => updateAutopilotSetting("aggressive_risk_multiplier", Number(event.target.value) / 100)}
                   className="mt-3 w-full accent-[var(--accent)]"
                 />
                 <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">
-                  {Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || 0.25) * 100)}% der normalen Paper-Größe
+                  {Math.round(Number(autopilotSettings?.aggressive_risk_multiplier || 0.60) * 100)}% der normalen Paper-Größe
                 </div>
               </label>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  updateAutopilotSetting("mode", "aggressive_learning");
+                  updateAutopilotSetting("max_trades", 6);
+                  updateAutopilotSetting("aggressive_risk_multiplier", 1.0);
+                  updateAutopilotSetting("aggressive_min_score", 45);
+                }}
+                className="rounded-xl border border-sky-500/20 bg-sky-50 dark:bg-sky-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-800 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors shadow-sm"
+              >
+                ⚡ 500k Voll-Allokation (50k–100k € Tranchen)
+              </button>
               <button
                 onClick={() => runConfiguredAutopilot(false)}
                 disabled={busyId?.includes("autopilot-preview")}
@@ -984,7 +996,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               </div>
               <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 Demo-Konto startet mit {money(capitalFlow.starting_capital_value ?? demoAccount.starting_capital ?? DEFAULT_DEMO_CAPITAL, currency)}.
-                Aktuell sind {money(capitalFlow.open_exposure_value ?? demoAccount.open_exposure_value, currency)} investiert und{" "}
+                Aktuell sind {money(capitalFlow.open_exposure_value ?? demoAccount.open_exposure_value, currency)} investiert (Ziel: {money(demoAccount.capital_deployment?.target_gross_exposure_value || 450000, currency)} · {demoAccount.capital_deployment?.target_gross_exposure_pct || 90} % Allokation) und{" "}
                 {money(capitalFlow.cash_available_value ?? demoAccount.cash_available_value, currency)} frei. Ergebnis seit Start:{" "}
                 <span className={`font-black ${Number(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value ?? 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                   {money(capitalFlow.net_pnl_value ?? demoAccount.net_pnl_value, currency)} / {formatPct(capitalFlow.net_pnl_pct ?? demoAccount.net_pnl_pct, 2, "0.00%")}

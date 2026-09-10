@@ -960,24 +960,24 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         {
                           label: "Risk",
                           val: opp.risk_score,
-                          color: "text-red-700",
+                          color: "text-red-700 dark:text-red-400",
                         },
                         {
                           label: "Reward",
                           val: opp.reward_score,
-                          color: "text-emerald-700",
+                          color: "text-emerald-700 dark:text-emerald-400",
                         },
                         {
                           label: "Score",
                           val: opp.opportunity_score,
-                          color: "text-indigo-700",
+                          color: "text-slate-900 dark:text-white",
                         },
                       ].map((stat) => (
                         <div
                           key={stat.label}
-                          className="rounded-[1.1rem] border border-black/8 bg-[rgba(255,255,255,0.82)] p-3 text-center"
+                          className="rounded-[1.1rem] border border-black/8 bg-[rgba(255,255,255,0.82)] p-3 text-center dark:border-white/10 dark:bg-white/5"
                         >
-                          <div className="mb-1 text-[8px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          <div className="mb-1 text-[8px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                             {stat.label}
                           </div>
                           <div className={`text-lg font-black ${stat.color}`}>
@@ -1274,8 +1274,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             {isComparing ? (
               <section className="space-y-6">
-                <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                  <span className="text-indigo-500">🏢</span> ETF COMPARISON
+                <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                  <span className="text-slate-500 dark:text-slate-400">🏢</span> ETF COMPARISON
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {selectedEtfs.map((etf) => (
@@ -1289,40 +1289,40 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         </span>
                       </div>
                       <div className="mb-8">
-                        <h3 className="mb-2 text-3xl font-black text-slate-900">
+                        <h3 className="mb-2 text-3xl font-black text-slate-900 dark:text-white">
                           {etf.ticker}
                         </h3>
-                        <p className="line-clamp-1 text-sm text-slate-500">
+                        <p className="line-clamp-1 text-sm text-slate-500 dark:text-slate-400">
                           {etf.name}
                         </p>
                       </div>
 
                       <div className="space-y-6">
-                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-2">
                             Jährliche Kosten (TER)
                           </span>
-                            <div className="text-2xl font-black text-emerald-700">
+                            <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">
                             {formatTer(etf.ter)}
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-2">
                             Performance (1 Woche)
                           </span>
                           <div
-                            className={`text-2xl font-black ${(etf.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}
+                            className={`text-2xl font-black ${(etf.change || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
                           >
                             {formatMove(etf.change)}
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
+                        <div className="rounded-2xl border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-2">
                             Anlagewelt
                           </span>
-                          <div className="text-sm font-bold text-slate-900">
+                          <div className="text-sm font-bold text-slate-900 dark:text-white">
                             {etf.category || "Diverse"}
                           </div>
                         </div>
@@ -1340,8 +1340,8 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               </section>
             ) : (
               <section className="space-y-6">
-                <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                  <span className="text-indigo-500">🏢</span> ETF EXPLORER
+                <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                  <span className="text-slate-500 dark:text-slate-400">🏢</span> ETF EXPLORER
                 </h2>
                 {selectedEtfDetail ? (
                   <div className="surface-panel rounded-[1.8rem] p-5">

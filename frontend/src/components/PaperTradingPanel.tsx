@@ -1061,42 +1061,42 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 </div>
               ))}
             </div>
-            <div className="mt-3 text-[10px] font-semibold leading-5 text-indigo-700">{periodPerformance.policy || "Fehlende Perioden-Baselines bleiben ausdrücklich offen."}</div>
+            <div className="mt-3 text-[10px] font-semibold leading-5 text-slate-500 dark:text-slate-400">{periodPerformance.policy || "Fehlende Perioden-Baselines bleiben ausdrücklich offen."}</div>
           </div>
-          <div data-testid="execution-cost-calibration" className="mt-4 rounded-[1.4rem] border border-sky-200 bg-sky-50/65 p-4">
+          <div data-testid="execution-cost-calibration" className="mt-4 rounded-[1.4rem] border border-sky-200 bg-sky-50/65 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-700">Spread-, Slippage- und Gebührenkalibrierung</div>
-                <div className="mt-1 text-sm font-semibold leading-6 text-sky-950">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-400">Spread-, Slippage- und Gebührenkalibrierung</div>
+                <div className="mt-1 text-sm font-semibold leading-6 text-sky-950 dark:text-slate-200">
                   Rollierende {executionCostCalibration.lookback_days || 90} Tage · mindestens die halbe beobachtete Bid/Ask-Spanne je Seite · Gebühren separat im Fill berücksichtigt.
                 </div>
               </div>
-              <div className="rounded-full border border-sky-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-800">
+              <div className="rounded-full border border-sky-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-800 dark:border-white/10 dark:bg-white/10 dark:text-sky-300">
                 {executionCostCalibration.calibrated_asset_classes || 0} / {executionCostRows.length || 4} kalibriert
               </div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {executionCostRows.map((row: any) => (
-                <div key={row.asset_class} className="rounded-2xl border border-sky-200 bg-white/85 p-3 text-xs text-sky-950">
+                <div key={row.asset_class} className="rounded-2xl border border-sky-200 bg-white/85 p-3 text-xs text-sky-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-extrabold uppercase tracking-[0.13em]">{row.asset_class}</div>
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${row.status === "calibrated" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                    <div className="font-extrabold uppercase tracking-[0.13em] text-slate-900 dark:text-white">{row.asset_class}</div>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${row.status === "calibrated" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400" : "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"}`}>
                       {row.status === "calibrated" ? "kalibriert" : "vorläufig"}
                     </span>
                   </div>
-                  <div className="mt-2 font-semibold leading-5">
+                  <div className="mt-2 font-semibold leading-5 text-slate-800 dark:text-slate-300">
                     Spread-Median {row.median_observed_spread_pct != null ? `${Number(row.median_observed_spread_pct).toFixed(2)}%` : "noch keine Quote"}
                   </div>
-                  <div className="text-sky-700">
+                  <div className="text-sky-700 dark:text-sky-400">
                     Slippage {row.median_slippage_bps ?? row.policy_fallback_bps ?? "?"} bps · Gebühren {row.median_fee_bps ?? "Policy"} bps
                   </div>
-                  <div className="mt-1 text-[10px] font-bold text-sky-600">
+                  <div className="mt-1 text-[10px] font-bold text-sky-600 dark:text-sky-400">
                     {row.spread_samples || 0}/{row.minimum_spread_samples || 5} Spread-Beobachtungen
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-3 text-[10px] font-semibold leading-5 text-sky-700">
+            <div className="mt-3 text-[10px] font-semibold leading-5 text-sky-700 dark:text-sky-400">
               Modell {executionCostCalibration.model_version || "spread_calibration_v1"} · ohne ausreichende Stichprobe gilt weiterhin der konservative Assetklassen-Fallback.
             </div>
           </div>
@@ -2646,41 +2646,41 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {(item.tags || []).map((tag: string) => (
-                      <span key={tag} className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">{item.thesis}</p>
-                  <OptionContractEvidence item={item} />
-                  {item.news_evidence ? (
-                    <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3 text-xs leading-5 text-slate-800 dark:text-slate-200">
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                        <span>Verifizierter News-Trigger</span>
-                        <span className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-slate-700 dark:text-slate-300">
-                          Preisreaktion bestätigt
+                      {(item.tags || []).map((tag: string) => (
+                        <span key={tag} className="rounded-full border border-black/8 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                          {tag}
                         </span>
-                        {item.news_evidence.original_document_verified ? (
-                          <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-blue-700 dark:text-blue-300">Primärdokument geprüft</span>
-                        ) : null}
-                      </div>
-                      <a
-                        href={item.news_evidence.source_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 block font-black text-slate-900 dark:text-white underline-offset-4 hover:underline"
-                      >
-                        {item.news_evidence.publisher || "Tier-1-Quelle"} · {item.news_evidence.headline || item.headline}
-                      </a>
-                      <div className="mt-1 text-violet-800">
-                        Veröffentlicht {item.news_evidence.published_at ? new Date(item.news_evidence.published_at).toLocaleString() : "offen"} · relative Reaktion {item.news_evidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {item.news_evidence.fact_basis || "offen"}
-                      </div>
-                      <div className="mt-1 font-semibold text-violet-700">
-                        Event-Fenster maximal {item.max_holding_days || 3} Tage · zeitliche Bestätigung ist kein Kausalitätsbeweis. Echtgeld bleibt gesperrt.
-                      </div>
+                      ))}
                     </div>
-                  ) : null}
+                    <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">{item.thesis}</p>
+                    <OptionContractEvidence item={item} />
+                    {item.news_evidence ? (
+                      <div className="mt-3 rounded-xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3 text-xs leading-5 text-slate-800 dark:text-slate-200">
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                          <span>Verifizierter News-Trigger</span>
+                          <span className="rounded-full border border-black/8 bg-white dark:border-white/10 dark:bg-white/10 px-2 py-0.5 text-slate-700 dark:text-slate-300">
+                            Preisreaktion bestätigt
+                          </span>
+                          {item.news_evidence.original_document_verified ? (
+                            <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-blue-700 dark:text-blue-300">Primärdokument geprüft</span>
+                          ) : null}
+                        </div>
+                        <a
+                          href={item.news_evidence.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 block font-black text-slate-900 dark:text-white underline-offset-4 hover:underline"
+                        >
+                          {item.news_evidence.publisher || "Tier-1-Quelle"} · {item.news_evidence.headline || item.headline}
+                        </a>
+                        <div className="mt-1 text-slate-600 dark:text-slate-400">
+                          Veröffentlicht {item.news_evidence.published_at ? new Date(item.news_evidence.published_at).toLocaleString() : "offen"} · relative Reaktion {item.news_evidence.market_confirmation?.relative_move_since_publication ?? "?"}% · Faktenbasis {item.news_evidence.fact_basis || "offen"}
+                        </div>
+                        <div className="mt-1 font-semibold text-slate-700 dark:text-slate-300">
+                          Event-Fenster maximal {item.max_holding_days || 3} Tage · zeitliche Bestätigung ist kein Kausalitätsbeweis. Echtgeld bleibt gesperrt.
+                        </div>
+                      </div>
+                    ) : null}
                   {item.decision_framework && (
                     <div className="mt-3 grid gap-2 rounded-[1.1rem] border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/5 p-3 text-xs text-slate-700 dark:text-slate-300 lg:grid-cols-3">
                       <div>

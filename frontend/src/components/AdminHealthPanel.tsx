@@ -8,9 +8,9 @@ interface AdminHealthPanelProps {
 
 function statusTone(status?: string) {
   const value = String(status || "").toLowerCase();
-  if (["ok", "live", "ready", "sent", "sendable", "passed"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
-  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending", "disabled", "not_observed", "collecting"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
-  return "bg-red-500/10 text-red-700 border-red-500/20";
+  if (["ok", "live", "ready", "sent", "sendable", "passed"].includes(value)) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30";
+  if (["degraded", "partial", "snapshot", "skipped", "missed", "pending", "disabled", "not_observed", "collecting"].includes(value)) return "bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-400 dark:border-amber-500/30";
+  return "bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-400 dark:border-red-500/30";
 }
 
 function fmtDate(value?: string | null) {
@@ -374,22 +374,22 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
     loading: {
       label: "System wird geprüft",
       detail: "Health-Daten werden geladen und bewertet.",
-      tone: "border-slate-300 bg-slate-100 text-slate-700",
+      tone: "border-slate-300 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300",
     },
     critical: {
       label: "Handlung erforderlich",
       detail: `${criticalHealthProblems.length} kritische ${criticalHealthProblems.length === 1 ? "Störung" : "Störungen"} zuerst beheben.`,
-      tone: "border-red-500/25 bg-red-500/10 text-red-800",
+      tone: "border-red-500/25 bg-red-500/10 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
     },
     attention: {
       label: "Betrieb mit Einschränkung",
       detail: `${warningHealthProblems.length} ${warningHealthProblems.length === 1 ? "Hinweis" : "Hinweise"} prüfen.`,
-      tone: "border-amber-500/25 bg-amber-500/10 text-amber-800",
+      tone: "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
     },
     ready: {
       label: "System einsatzbereit",
       detail: "Keine aktiven Health-Probleme erkannt.",
-      tone: "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
+      tone: "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
     },
   }[systemReadiness];
   const nextBriefJob = [...jobs]
@@ -435,22 +435,22 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           : "Nächsten Termin abwarten";
 
   return (
-    <div className="fixed inset-0 z-[210] bg-black/45 p-3 backdrop-blur-sm sm:p-6" onClick={onClose} role="presentation">
+    <div className="fixed inset-0 z-[210] bg-black/45 p-3 backdrop-blur-md sm:p-6 dark:bg-black/65" onClick={onClose} role="presentation">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="health-center-title"
         tabIndex={-1}
-        className="surface-panel ml-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[2rem]"
+        className="surface-panel ml-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-black/8 dark:border-white/10 dark:bg-[#1c1c1e]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 p-5 dark:border-white/10">
           <div>
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
               Admin Health Center
             </div>
-            <h2 id="health-center-title" className="mt-1 text-3xl text-slate-900">Briefings, Scheduler und Datenfeeds</h2>
+            <h2 id="health-center-title" className="mt-1 text-3xl text-slate-900 dark:text-white">Briefings, Scheduler und Datenfeeds</h2>
           </div>
           <div className="flex w-full min-w-0 max-w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
             {health?.status ? (
@@ -462,7 +462,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               type="button"
               onClick={load}
               disabled={loading || warming || runningDue}
-              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
             >
               {loading ? "Lädt" : "Neu laden"}
             </button>
@@ -470,7 +470,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               type="button"
               onClick={runDueBriefs}
               disabled={loading || warming || runningDue || downloadingBackup}
-              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-50"
+              className="rounded-xl border border-black/8 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
             >
               {runningDue ? "Läuft" : "Fällige senden"}
             </button>
@@ -478,7 +478,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               type="button"
               onClick={downloadBackup}
               disabled={loading || warming || runningDue || downloadingBackup || verifyingRestore || !database.exists}
-              className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700 disabled:opacity-50"
+              className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-400 disabled:opacity-50"
             >
               {downloadingBackup ? "Lädt" : "DB Backup"}
             </button>
@@ -486,7 +486,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               type="button"
               onClick={verifyRestore}
               disabled={loading || warming || runningDue || downloadingBackup || verifyingRestore || !backup.latest_at}
-              className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-sky-700 disabled:opacity-50"
+              className="rounded-xl border border-black/8 bg-black/[0.03] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/8 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
             >
               {verifyingRestore ? "Prüft" : "Restore testen"}
             </button>
@@ -494,14 +494,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               type="button"
               onClick={warmBrief}
               disabled={loading || warming || runningDue || downloadingBackup}
-              className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+              className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
             >
               {warming ? "Wärmt" : "Brief vorladen"}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl bg-[#101114] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white"
+              className="rounded-xl bg-[#1d1d1f] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
             >
               Schließen
             </button>
@@ -516,7 +516,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           ) : null}
 
           {warmupResult ? (
-            <div className="mb-4 rounded-[1.2rem] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800">
+            <div className="mb-4 rounded-[1.2rem] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-300">
               <span className="font-extrabold">Brief-Cache vorgeladen.</span>{" "}
               {warmupResult.headline || "Snapshot bereit"} / {warmupResult.elapsed_ms ?? "offen"}ms,
               {warmupResult.snapshot_items ?? 0} signal items, generated {fmtDate(warmupResult.generated_at)}.
@@ -524,7 +524,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           ) : null}
 
           {runResult ? (
-            <div className="mb-4 rounded-[1.2rem] border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-sky-800">
+            <div className="mb-4 rounded-[1.2rem] border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-sky-800 dark:border-sky-500/30 dark:text-sky-300">
               <span className="font-extrabold">Scheduler wurde manuell ausgeführt.</span>{" "}
               {Array.isArray(runResult) && runResult.length
                 ? runResult.map((item: any) => `${item.job || "scheduler"}: ${item.status}${item.message ? ` (${item.message})` : ""}`).join(", ")
@@ -538,26 +538,26 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] opacity-70">
                   Systemstatus
                 </div>
-                <div className="mt-1 text-xl font-black text-slate-950">
+                <div className="mt-1 text-xl font-black text-slate-950 dark:text-white">
                   {systemReadinessCopy.label}
                 </div>
-                <div className="mt-1 text-sm leading-6 text-slate-700">
+                <div className="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-300">
                   {systemReadinessCopy.detail}
                 </div>
               </div>
               <div className="grid shrink-0 grid-cols-2 gap-2">
-                <div className="min-w-24 rounded-xl border border-red-500/15 bg-white/75 px-3 py-2 text-center">
-                  <div className="text-lg font-black text-red-700">{criticalHealthProblems.length}</div>
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Kritisch</div>
+                <div className="min-w-24 rounded-xl border border-red-500/15 bg-white/75 px-3 py-2 text-center dark:border-white/10 dark:bg-white/5">
+                  <div className="text-lg font-black text-red-700 dark:text-red-400">{criticalHealthProblems.length}</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Kritisch</div>
                 </div>
-                <div className="min-w-24 rounded-xl border border-amber-500/15 bg-white/75 px-3 py-2 text-center">
-                  <div className="text-lg font-black text-amber-700">{warningHealthProblems.length}</div>
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Hinweise</div>
+                <div className="min-w-24 rounded-xl border border-amber-500/15 bg-white/75 px-3 py-2 text-center dark:border-white/10 dark:bg-white/5">
+                  <div className="text-lg font-black text-amber-700 dark:text-amber-400">{warningHealthProblems.length}</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Hinweise</div>
                 </div>
               </div>
             </div>
-            <div className="mt-3 rounded-xl border border-black/8 bg-white/75 px-3 py-2 text-sm text-slate-700">
-              <span className="font-extrabold text-slate-900">Jetzt wichtig: </span>
+            <div className="mt-3 rounded-xl border border-black/8 bg-white/75 px-3 py-2 text-sm text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+              <span className="font-extrabold text-slate-900 dark:text-white">Jetzt wichtig: </span>
               {primaryHealthProblem
                 ? `${primaryHealthProblem.label}. ${primaryHealthProblem.action}`
                 : "Keine Maßnahme nötig. Nächsten Brief-Termin und Telegram-Zustellung beobachten."}
@@ -566,30 +566,30 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
 
           <div className={`mb-5 rounded-[1.5rem] border p-4 ${
             schedulerVerdict === "healthy"
-              ? "border-emerald-500/20 bg-emerald-500/10"
+              ? "border-emerald-500/20 bg-emerald-500/10 dark:border-emerald-500/30 dark:bg-emerald-500/10"
               : schedulerVerdict === "action"
-                ? "border-sky-500/20 bg-sky-500/10"
+                ? "border-sky-500/20 bg-sky-500/10 dark:border-sky-500/30 dark:bg-sky-500/10"
                 : schedulerVerdict === "missed"
-                  ? "border-amber-500/20 bg-amber-500/10"
-                  : "border-red-500/20 bg-red-500/10"
+                  ? "border-amber-500/20 bg-amber-500/10 dark:border-amber-500/30 dark:bg-amber-500/10"
+                  : "border-red-500/20 bg-red-500/10 dark:border-red-500/30 dark:bg-red-500/10"
           }`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-600">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-400">
                   Scheduler-Urteil
                 </div>
-                <div className="mt-1 text-lg font-black text-slate-900">
+                <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">
                   {schedulerVerdict}
                 </div>
-                <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
+                <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-700 dark:text-slate-300">
                   {schedulerCopy}
                 </div>
               </div>
-              <div className="max-w-full whitespace-normal rounded-full border border-black/8 bg-white/75 px-3 py-1 text-right text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-slate-700">
+              <div className="max-w-full whitespace-normal rounded-full border border-black/8 bg-white/75 px-3 py-1 text-right text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-300">
                 Nächster Schritt: {nextAction}
               </div>
             </div>
-            <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+            <div className="mt-3 grid gap-2 text-xs text-slate-600 dark:text-slate-400 md:grid-cols-3">
               <div>Nächster Brief: {displayValue(scheduleSummary.next_label)} / {fmtDate(scheduleSummary.next_due_at)}</div>
               <div>Loop: {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}</div>
               <div>
@@ -601,70 +601,70 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </div>
 
           <div className="mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-4">
-            <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+            <div className="rounded-[1.4rem] border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Nächster Brief
               </div>
-              <div className="mt-2 text-lg font-black text-slate-900">
+              <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">
                 {displayValue(scheduleSummary.next_label)}
               </div>
-              <div className="mt-1 text-xs text-slate-500">{fmtDate(scheduleSummary.next_due_at)}</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{fmtDate(scheduleSummary.next_due_at)}</div>
             </div>
-            <div className="rounded-[1.4rem] border border-emerald-500/15 bg-emerald-500/6 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+            <div className="rounded-[1.4rem] border border-emerald-500/15 bg-emerald-500/6 p-4 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
                 Zuletzt gesendet
               </div>
-              <div className="mt-2 text-lg font-black text-slate-900">
+              <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">
                 {scheduleSummary.last_success_job || "keiner"}
               </div>
-              <div className="mt-1 text-xs text-slate-500">{fmtDate(scheduleSummary.last_success_at)}</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{fmtDate(scheduleSummary.last_success_at)}</div>
             </div>
-            <div className="rounded-[1.4rem] border border-amber-500/15 bg-amber-500/6 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700">
+            <div className="rounded-[1.4rem] border border-amber-500/15 bg-amber-500/6 p-4 dark:border-amber-500/25 dark:bg-amber-500/10">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
                 Warteschlange
               </div>
-              <div className="mt-2 text-lg font-black text-slate-900">
+              <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">
                 {scheduleSummary.due_now_count ?? 0} fällig / {scheduleSummary.catchup_count ?? 0} nachholbar / {scheduleSummary.missed_count ?? 0} verpasst
               </div>
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Loop {displayValue(scheduleSummary.loop_state)} / {fmtDate(health?.schedule?.loop_seen_at)}
               </div>
               {schedule.loop_stale ? (
-                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-800">
+                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-800 dark:border-red-500/30 dark:text-red-300">
                   Scheduler-Loop ist stale: letzter Tick vor {schedule.loop_age_minutes ?? "?"}m,
                   Schwelle {schedule.loop_stale_after_minutes ?? "?"}m. Railway Worker/Logs prüfen.
                 </div>
               ) : null}
               {scheduleSummary.needs_manual_run ? (
-                <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-800">
+                <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:text-amber-300">
                   Run Due/Missed kann jetzt {scheduleSummary.catchup_count || scheduleSummary.due_now_count} Brief(s) nachholen.
                 </div>
               ) : null}
             </div>
-            <div className={`rounded-[1.4rem] border p-4 ${scheduleSummary.last_error ? "border-red-500/15 bg-red-500/6" : "border-black/8 bg-white/80"}`}>
-              <div className={`text-[10px] font-extrabold uppercase tracking-[0.18em] ${scheduleSummary.last_error ? "text-red-700" : "text-slate-500"}`}>
+            <div className={`rounded-[1.4rem] border p-4 ${scheduleSummary.last_error ? "border-red-500/15 bg-red-500/6 dark:border-red-500/25 dark:bg-red-500/10" : "border-black/8 bg-white/80 dark:border-white/10 dark:bg-white/5"}`}>
+              <div className={`text-[10px] font-extrabold uppercase tracking-[0.18em] ${scheduleSummary.last_error ? "text-red-700 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>
                 Letzter Fehler
               </div>
-              <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">
+              <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
                 {scheduleSummary.last_error || "Kein aktiver Versandfehler"}
               </div>
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {scheduleSummary.last_error_job ? `${scheduleSummary.last_error_job} / ` : ""}
                 {fmtDate(scheduleSummary.last_error_at)}
               </div>
             </div>
           </div>
 
-          <section data-testid="decision-audit-health" className={`mb-5 rounded-[1.5rem] border p-4 ${decisionAudit.valid === false ? "border-red-300 bg-red-50/80" : "border-emerald-200 bg-emerald-50/70"}`}>
+          <section data-testid="decision-audit-health" className={`mb-5 rounded-[1.5rem] border p-4 ${decisionAudit.valid === false ? "border-red-300 bg-red-50/80 dark:border-red-500/25 dark:bg-red-500/10" : "border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/25 dark:bg-emerald-500/10"}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Entscheidungs-Audit</div>
-                <div className="mt-1 text-lg font-black text-slate-900">Hash-Kette {decisionAudit.valid === false ? "beschädigt" : "intakt"}</div>
-                <div className="mt-1 text-xs leading-5 text-slate-600">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Entscheidungs-Audit</div>
+                <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">Hash-Kette {decisionAudit.valid === false ? "beschädigt" : "intakt"}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
                   {decisionAudit.entries ?? 0} Snapshots · Empfehlungen, Quellenstand, Modell-/Regelversion und Nutzeraktion werden append-only gespeichert.
                 </div>
               </div>
-              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${decisionAudit.valid === false ? "border-red-300 bg-white text-red-800" : "border-emerald-300 bg-white text-emerald-800"}`}>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${decisionAudit.valid === false ? "border-red-300 bg-white text-red-800 dark:border-red-500/30 dark:bg-white/10 dark:text-red-300" : "border-emerald-300 bg-white text-emerald-800 dark:border-emerald-500/30 dark:bg-white/10 dark:text-emerald-300"}`}>
                 {decisionAudit.valid === false ? "ungültig" : "verifiziert"}
               </span>
             </div>
@@ -686,20 +686,20 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
             </div>
           </section>
 
-          <section className="mb-5 rounded-[1.5rem] border border-black/8 bg-white/55 p-4">
+          <section className="mb-5 rounded-[1.5rem] border border-black/8 bg-white/55 p-4 dark:border-white/10 dark:bg-white/5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                   Provider-Metriken
                 </div>
-                <div className="mt-1 text-lg font-black text-slate-900">
+                <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">
                   Quotes, News, Optionen und Telegram
                 </div>
-                <div className="mt-1 text-xs leading-5 text-slate-500">
+                <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                   Einheitlicher Vertrag {providerMetrics.schema_version || "provider-metrics.v1"}: Erfolgsquote, Latenz und stabiler Fehlercode im rollierenden Prozessfenster.
                 </div>
               </div>
-              <span className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+              <span className="rounded-full border border-black/8 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:border-white/10 dark:bg-white/10 dark:text-slate-300">
                 bis {providerMetrics.window_size_per_service ?? 200} Messungen je Dienst
               </span>
             </div>
@@ -713,26 +713,26 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   telegram: "Telegram",
                 };
                 return (
-                  <div key={service.service} className="min-w-0 rounded-[1.2rem] border border-black/8 bg-white/80 p-3">
+                  <div key={service.service} className="min-w-0 rounded-[1.2rem] border border-black/8 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 dark:text-white">
                         {labelMap[service.service] || service.service}
                       </div>
                       <span className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${statusTone(service.status)}`}>
                         {service.status}
                       </span>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                      <div>Erfolg <span className="font-extrabold text-slate-900">{service.success_rate_pct == null ? "offen" : `${service.success_rate_pct}%`}</span></div>
-                      <div>Versuche <span className="font-extrabold text-slate-900">{service.attempt_count ?? 0}</span></div>
-                      <div>Ø <span className="font-extrabold text-slate-900">{service.average_latency_ms == null ? "offen" : `${service.average_latency_ms}ms`}</span></div>
-                      <div>P95 <span className="font-extrabold text-slate-900">{service.p95_latency_ms == null ? "offen" : `${service.p95_latency_ms}ms`}</span></div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400">
+                      <div>Erfolg <span className="font-extrabold text-slate-900 dark:text-white">{service.success_rate_pct == null ? "offen" : `${service.success_rate_pct}%`}</span></div>
+                      <div>Versuche <span className="font-extrabold text-slate-900 dark:text-white">{service.attempt_count ?? 0}</span></div>
+                      <div>Ø <span className="font-extrabold text-slate-900 dark:text-white">{service.average_latency_ms == null ? "offen" : `${service.average_latency_ms}ms`}</span></div>
+                      <div>P95 <span className="font-extrabold text-slate-900 dark:text-white">{service.p95_latency_ms == null ? "offen" : `${service.p95_latency_ms}ms`}</span></div>
                     </div>
-                    <div className="mt-2 truncate text-[11px] text-slate-500" title={service.last_provider || ""}>
+                    <div className="mt-2 truncate text-[11px] text-slate-500 dark:text-slate-400" title={service.last_provider || ""}>
                       {service.last_provider || "noch keine Messung"} / {service.last_operation || "–"}
                     </div>
                     {lastError.error_code ? (
-                      <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-4 text-amber-800">
+                      <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-4 text-amber-800 dark:border-amber-500/30 dark:text-amber-300">
                         {lastError.error_code} / {fmtDate(lastError.occurred_at)}
                       </div>
                     ) : null}
@@ -743,75 +743,75 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </section>
 
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2 xl:grid-cols-4">
-            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8" : "border-black/8 bg-white/75"}`}>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">App Release</div>
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${database.persistence_ready === false ? "border-red-500/25 bg-red-500/8 dark:border-red-500/30 dark:bg-red-500/10" : "border-black/8 bg-white/75 dark:border-white/10 dark:bg-white/5"}`}>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">App Release</div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">{displayValue(appInfo.version)}</div>
-                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${appInfo.auth_configured ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{displayValue(appInfo.version)}</div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${appInfo.auth_configured ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400" : "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"}`}>
                   {appInfo.auth_configured ? "auth ok" : "auth fehlt"}
                 </span>
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Env: {displayValue(appInfo.environment)} / Secure cookie: {appInfo.cookie_secure ? "ja" : "nein"}
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
-                Commit: <span className="font-extrabold text-slate-700">{displayValue(releaseInfo.commit_short)}</span>
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                Commit: <span className="font-extrabold text-slate-700 dark:text-slate-200">{displayValue(releaseInfo.commit_short)}</span>
                 {releaseInfo.branch ? ` / ${releaseInfo.branch}` : ""}
               </div>
-              <div className="mt-1 truncate text-[11px] leading-5 text-slate-500" title={releaseInfo.deployment_id || ""}>
+              <div className="mt-1 truncate text-[11px] leading-5 text-slate-500 dark:text-slate-400" title={releaseInfo.deployment_id || ""}>
                 Laufzeit: {typeof releaseInfo.uptime_seconds === "number" ? `${Math.floor(releaseInfo.uptime_seconds / 3600)}h ${Math.floor((releaseInfo.uptime_seconds % 3600) / 60)}m` : "offen"}
                 {releaseInfo.region ? ` / ${releaseInfo.region}` : ""}
               </div>
             </div>
 
-            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${productionSoak.status === "passed" ? "border-emerald-500/20 bg-emerald-500/8" : productionSoak.status === "failed" ? "border-red-500/25 bg-red-500/8" : "border-amber-500/20 bg-amber-500/8"}`}>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">7-Tage Production Soak</div>
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${productionSoak.status === "passed" ? "border-emerald-500/20 bg-emerald-500/8 dark:border-emerald-500/25 dark:bg-emerald-500/10" : productionSoak.status === "failed" ? "border-red-500/25 bg-red-500/8 dark:border-red-500/25 dark:bg-red-500/10" : "border-amber-500/20 bg-amber-500/8 dark:border-amber-500/25 dark:bg-amber-500/10"}`}>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">7-Tage Production Soak</div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">
+                <div className="text-lg font-black text-slate-900 dark:text-white">
                   {productionSoak.status === "passed" ? "Abnahme erreicht" : productionSoak.status === "failed" ? "Neu starten" : `${productionSoak.remaining_hours ?? 168}h verbleibend`}
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(productionSoak.status)}`}>
                   {productionSoak.status || "not_observed"}
                 </span>
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Seit {fmtDate(productionSoak.started_at)} / frühestens {fmtDate(productionSoak.eligible_at)}
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 {productionSoak.observation_count ?? 0} Prüfungen an {productionSoak.observed_days ?? 0} Tagen / Commit {productionSoak.release_commit ? String(productionSoak.release_commit).slice(0, 8) : "offen"}
               </div>
-              <div className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+              <div className="mt-1 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
                 {productionSoak.message || "Der Scheduler startet die Beobachtung automatisch."}
               </div>
               {productionSoak.incidents?.length ? (
-                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs font-semibold leading-5 text-red-800">
+                <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs font-semibold leading-5 text-red-800 dark:border-red-500/30 dark:text-red-300">
                   {productionSoak.incidents[productionSoak.incidents.length - 1]?.code}: {productionSoak.incidents[productionSoak.incidents.length - 1]?.detail}
                 </div>
               ) : null}
             </div>
 
-            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">SQLite Datenbank</div>
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">SQLite Datenbank</div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">{formatBytes(database.size_bytes)}</div>
-                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${database.exists && database.writable && database.quick_check === "ok" && database.persistence_ready !== false ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{formatBytes(database.size_bytes)}</div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${database.exists && database.writable && database.quick_check === "ok" && database.persistence_ready !== false ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400" : "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"}`}>
                   {database.persistence_ready === false ? "Volume fehlt" : database.exists && database.quick_check === "ok" ? "ok" : "prüfen"}
                 </span>
               </div>
-              <div className="mt-2 truncate text-xs leading-5 text-slate-500" title={database.path || ""}>
+              <div className="mt-2 truncate text-xs leading-5 text-slate-500 dark:text-slate-400" title={database.path || ""}>
                 {database.path || "kein Pfad"}
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Schreibbar: {database.writable ? "ja" : "nein"} / Quick check: {displayValue(database.quick_check)}
               </div>
-              <div className="mt-1 truncate text-xs leading-5 text-slate-500" title={database.identity || ""}>
+              <div className="mt-1 truncate text-xs leading-5 text-slate-500 dark:text-slate-400" title={database.identity || ""}>
                 DB-ID: {database.identity ? String(database.identity).slice(0, 12) : "noch nicht gesetzt"} / seit {fmtDate(database.initialized_at)}
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 {database.counts?.portfolios ?? 0} Portfolios / {database.counts?.holdings ?? 0} Positionen / {database.counts?.paper_trades ?? 0} Paper-Trades / {database.counts?.forecasts ?? 0} Forecasts
               </div>
               {database.railway_runtime ? (
-                <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs font-semibold leading-5 ${database.persistence_ready ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800" : "border-red-500/20 bg-red-500/10 text-red-800"}`}>
+                <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs font-semibold leading-5 ${database.persistence_ready ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-300" : "border-red-500/20 bg-red-500/10 text-red-800 dark:border-red-500/30 dark:text-red-300"}`}>
                   {database.persistence_ready
                     ? `Volume ${database.volume_name} aktiv unter ${database.volume_mount_path}.`
                     : "Kein passendes Railway Volume erkannt. Volume an diesen Service mit Mount Path /app/data anhängen; sonst gehen Portfolio und Lerndaten beim Deploy verloren."}
@@ -819,112 +819,112 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               ) : null}
             </div>
 
-            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${backup.latest_at && backup.restore_test_last_success_at && !backup.last_error && !backup.restore_test_last_error ? "border-emerald-500/15 bg-emerald-500/6" : "border-amber-500/20 bg-amber-500/8"}`}>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Backup & Restore</div>
+            <div className={`min-w-0 rounded-[1.5rem] border p-4 ${backup.latest_at && backup.restore_test_last_success_at && !backup.last_error && !backup.restore_test_last_error ? "border-emerald-500/15 bg-emerald-500/6 dark:border-emerald-500/25 dark:bg-emerald-500/10" : "border-amber-500/20 bg-amber-500/8 dark:border-amber-500/25 dark:bg-amber-500/10"}`}>
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Backup & Restore</div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">{backup.backup_count ?? 0} Sicherungen</div>
-                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${backup.latest_at && backup.restore_test_last_success_at && !backup.last_error && !backup.restore_test_last_error ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-amber-500/20 bg-amber-500/10 text-amber-700"}`}>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{backup.backup_count ?? 0} Sicherungen</div>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${backup.latest_at && backup.restore_test_last_success_at && !backup.last_error && !backup.restore_test_last_error ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400" : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:text-amber-400"}`}>
                   {backup.restore_test_last_success_at ? "restore ok" : "prüfen"}
                 </span>
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Letztes Backup: {fmtDate(backup.latest_at)} ({backup.latest_age_hours ?? "–"}h)
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Restore-Test: {fmtDate(backup.restore_test_last_success_at)} / Rhythmus {backup.restore_test_interval_days ?? 7} Tage
               </div>
-              <div className="mt-1 truncate text-xs leading-5 text-slate-500" title={backup.directory || ""}>
+              <div className="mt-1 truncate text-xs leading-5 text-slate-500 dark:text-slate-400" title={backup.directory || ""}>
                 {backup.directory || "Backup-Verzeichnis fehlt"} / Retention {backup.retention_count ?? 14}
               </div>
               {backup.last_error || backup.restore_test_last_error ? (
-                <div className="mt-2 text-xs font-semibold text-red-700">{backup.last_error || backup.restore_test_last_error}</div>
+                <div className="mt-2 text-xs font-semibold text-red-700 dark:text-red-400">{backup.last_error || backup.restore_test_last_error}</div>
               ) : null}
             </div>
 
-            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Telegram</div>
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Telegram</div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">{displayValue(telegram.status)}</div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{displayValue(telegram.status)}</div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(telegram.status)}`}>
                   {telegram.sendable ? "sendbar" : "blockiert"}
                 </span>
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Chat: {displayValue(telegram.chat_id, "fehlt")}
               </div>
-              {telegram.error ? <div className="mt-2 text-xs text-red-700">{telegram.error}</div> : null}
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              {telegram.error ? <div className="mt-2 text-xs text-red-700 dark:text-red-400">{telegram.error}</div> : null}
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Betriebsmonitor: {displayValue(operationalAlerts.status, "noch nicht gelaufen")} / {fmtDate(operationalAlerts.checked_at)}
               </div>
             </div>
 
             <div className={`min-w-0 rounded-[1.5rem] border p-4 ${
               paperAutopilotReady
-                ? "border-emerald-500/15 bg-emerald-500/6"
-                : "border-amber-500/20 bg-amber-500/8"
+                ? "border-emerald-500/15 bg-emerald-500/6 dark:border-emerald-500/25 dark:bg-emerald-500/10"
+                : "border-amber-500/20 bg-amber-500/8 dark:border-amber-500/25 dark:bg-amber-500/10"
             }`}>
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Paper Autopilot
               </div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-lg font-black text-slate-900">
+                <div className="text-lg font-black text-slate-900 dark:text-white">
                   {paperAutopilot.enabled ? displayValue(paperAutopilot.status) : "deaktiviert"}
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
                   paperAutopilotReady
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
-                    : "border-amber-500/20 bg-amber-500/10 text-amber-700"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
+                    : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:text-amber-400"
                 }`}>
                   {paperAutopilot.stale ? "überfällig" : paperAutopilot.loop_enabled ? "Loop aktiv" : "Loop aus"}
                 </span>
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Letzter Lauf {fmtDate(paperAutopilot.checked_at)}
                 {typeof paperAutopilot.age_minutes === "number" ? ` / vor ${paperAutopilot.age_minutes}m` : ""}
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Nächste Prüfung {fmtDate(paperAutopilot.next_check_at)} / Cooldown {paperAutopilot.cooldown_minutes ?? "?"}m
               </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Zuletzt {paperAutopilot.opened_count ?? 0} eröffnet / {paperAutopilot.selected_count ?? 0} ausgewählt
               </div>
               {paperAutopilot.demo_account_after?.equity_value ? (
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
-                    Equity <span className="font-extrabold text-slate-900">{formatMoney(paperAutopilot.demo_account_after.equity_value)}</span>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                    Equity <span className="font-extrabold text-slate-900 dark:text-white">{formatMoney(paperAutopilot.demo_account_after.equity_value)}</span>
                   </div>
-                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
-                    Frei <span className="font-extrabold text-slate-900">{formatMoney(paperAutopilot.demo_account_after.cash_available_value)}</span>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                    Frei <span className="font-extrabold text-slate-900 dark:text-white">{formatMoney(paperAutopilot.demo_account_after.cash_available_value)}</span>
                   </div>
-                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
-                    Investiert <span className="font-extrabold text-slate-900">{formatMoney(paperAutopilot.demo_account_after.open_exposure_value)}</span>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                    Investiert <span className="font-extrabold text-slate-900 dark:text-white">{formatMoney(paperAutopilot.demo_account_after.open_exposure_value)}</span>
                   </div>
-                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600">
-                    P/L <span className={`font-extrabold ${Number(paperAutopilot.demo_account_after.net_pnl_value || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                    P/L <span className={`font-extrabold ${Number(paperAutopilot.demo_account_after.net_pnl_value || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                       {formatMoney(paperAutopilot.demo_account_after.net_pnl_value)}
                     </span>
                   </div>
                   {autopilotPerformance ? (
-                    <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 sm:col-span-2">
-                      Lernqualität <span className="font-extrabold text-slate-900">{autopilotPerformance.sample}</span>
-                      {" / "}PF <span className="font-extrabold text-slate-900">{autopilotPerformance.profitFactor}</span>
-                      {" / "}Erwartung <span className="font-extrabold text-slate-900">{autopilotPerformance.expectancy}</span>
+                    <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 sm:col-span-2">
+                      Lernqualität <span className="font-extrabold text-slate-900 dark:text-white">{autopilotPerformance.sample}</span>
+                      {" / "}PF <span className="font-extrabold text-slate-900 dark:text-white">{autopilotPerformance.profitFactor}</span>
+                      {" / "}Erwartung <span className="font-extrabold text-slate-900 dark:text-white">{autopilotPerformance.expectancy}</span>
                       {" / "}{autopilotPerformance.evidence}
                     </div>
                   ) : null}
                 </div>
               ) : null}
               {paperAutopilot.last_opened?.length ? (
-                <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold uppercase tracking-[0.12em] text-emerald-700">Zuletzt geöffnet</div>
+                <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700 dark:border-emerald-500/25 dark:bg-white/5 dark:text-slate-300">
+                  <div className="font-extrabold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-400">Zuletzt geöffnet</div>
                   <div className="mt-1 space-y-1">
                     {paperAutopilot.last_opened.slice(0, 3).map((item: any) => (
-                      <div key={`${item.ticker}-${item.direction}`} className="grid gap-1 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 sm:grid-cols-[1fr_auto] sm:items-center">
-                        <span className="font-bold text-slate-900">
+                      <div key={`${item.ticker}-${item.direction}`} className="grid gap-1 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/5 dark:bg-white/5 sm:grid-cols-[1fr_auto] sm:items-center">
+                        <span className="font-bold text-slate-900 dark:text-white">
                           {item.ticker} / {item.direction || "long"}
-                          {item.setup_type ? <span className="ml-1 font-semibold text-slate-500">/{item.setup_type}</span> : null}
+                          {item.setup_type ? <span className="ml-1 font-semibold text-slate-500 dark:text-slate-400">/{item.setup_type}</span> : null}
                         </span>
-                        <span className="font-semibold text-slate-600">
+                        <span className="font-semibold text-slate-600 dark:text-slate-300">
                           {formatMoney(item.notional_value)}
                           {item.score ? ` / Score ${item.score}` : ""}
                         </span>
@@ -934,16 +934,16 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
               ) : null}
               {paperAutopilot.last_selected?.length && !paperAutopilot.last_opened?.length ? (
-                <div className="mt-2 rounded-lg border border-sky-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold uppercase tracking-[0.12em] text-sky-700">Letzte Kandidaten</div>
+                <div className="mt-2 rounded-lg border border-sky-500/15 bg-white/70 px-2.5 py-2 text-xs leading-5 text-slate-700 dark:border-sky-500/25 dark:bg-white/5 dark:text-slate-300">
+                  <div className="font-extrabold uppercase tracking-[0.12em] text-sky-700 dark:text-sky-400">Letzte Kandidaten</div>
                   <div className="mt-1 space-y-1">
                     {paperAutopilot.last_selected.slice(0, 3).map((item: any) => (
-                      <div key={`${item.ticker}-${item.direction}`} className="grid gap-1 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 sm:grid-cols-[1fr_auto] sm:items-center">
-                        <span className="font-bold text-slate-900">
+                      <div key={`${item.ticker}-${item.direction}`} className="grid gap-1 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/5 dark:bg-white/5 sm:grid-cols-[1fr_auto] sm:items-center">
+                        <span className="font-bold text-slate-900 dark:text-white">
                           {item.ticker} / {item.direction || "long"}
-                          {item.setup_type ? <span className="ml-1 font-semibold text-slate-500">/{item.setup_type}</span> : null}
+                          {item.setup_type ? <span className="ml-1 font-semibold text-slate-500 dark:text-slate-400">/{item.setup_type}</span> : null}
                         </span>
-                        <span className="font-semibold text-slate-600">
+                        <span className="font-semibold text-slate-600 dark:text-slate-300">
                           {item.score ? `Score ${item.score}` : formatMoney(item.notional_value)}
                         </span>
                       </div>
@@ -952,7 +952,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
               ) : null}
               {paperAutopilot.message ? (
-                <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700">
+                <div className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-700 dark:text-slate-300">
                   {paperAutopilot.message}
                 </div>
               ) : null}
@@ -961,7 +961,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   type="button"
                   onClick={() => runPaperPreview("strict")}
                   disabled={loading || !!runningPaperPreview || sendingPaperAccount}
-                  className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
+                  className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                 >
                   {runningPaperPreview === "strict" ? "Prüft" : "Strict prüfen"}
                 </button>
@@ -969,7 +969,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   type="button"
                   onClick={() => runPaperPreview("learn")}
                   disabled={loading || !!runningPaperPreview || sendingPaperAccount}
-                  className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-800 disabled:opacity-50"
+                  className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-800 transition-colors hover:bg-amber-500/20 dark:border-amber-500/30 dark:text-amber-300 disabled:opacity-50"
                 >
                   {runningPaperPreview === "learn" ? "Prüft" : "Lernen prüfen"}
                 </button>
@@ -977,14 +977,14 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                   type="button"
                   onClick={sendPaperAccountStatus}
                   disabled={loading || !!runningPaperPreview || sendingPaperAccount}
-                  className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-800 disabled:opacity-50 sm:col-span-2"
+                  className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-800 transition-colors hover:bg-emerald-500/20 dark:border-emerald-500/30 dark:text-emerald-300 disabled:opacity-50 sm:col-span-2"
                 >
                   {sendingPaperAccount ? "Sendet" : "Kontostand per Telegram"}
                 </button>
               </div>
               {paperAccountResult ? (
-                <div className="mt-3 rounded-[1rem] border border-emerald-500/15 bg-emerald-500/10 p-3 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold text-slate-900">
+                <div className="mt-3 rounded-[1rem] border border-emerald-500/15 bg-emerald-500/10 p-3 text-xs leading-5 text-slate-700 dark:border-emerald-500/25 dark:text-slate-300">
+                  <div className="font-extrabold text-slate-900 dark:text-white">
                     Telegram-Kontostand: {paperAccountResult.status || "ok"}
                   </div>
                   <div>
@@ -993,24 +993,24 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     offen {paperAccountResult.demo_account?.open_trade_count ?? 0}
                   </div>
                   {accountResultPerformance ? (
-                    <div className="mt-1 font-semibold text-slate-700">
+                    <div className="mt-1 font-semibold text-slate-700 dark:text-slate-300">
                       Lernqualität: {accountResultPerformance.sample} / PF {accountResultPerformance.profitFactor} /
                       Erwartung {accountResultPerformance.expectancy} / Treffer {accountResultPerformance.winRate}
                     </div>
                   ) : null}
                   {paperAccountResult.demo_account?.day_action ? (
-                    <div className="mt-1 font-semibold text-emerald-800">
+                    <div className="mt-1 font-semibold text-emerald-800 dark:text-emerald-400">
                       Tagesaktion: {paperAccountResult.demo_account.day_action}
                     </div>
                   ) : null}
                 </div>
               ) : null}
               {paperPreviewResult ? (
-                <div className="mt-3 rounded-[1rem] border border-sky-500/15 bg-sky-500/10 p-3 text-xs leading-5 text-slate-700">
-                  <div className="mb-2 inline-flex rounded-full border border-black/8 bg-white/75 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                <div className="mt-3 rounded-[1rem] border border-sky-500/15 bg-sky-500/10 p-3 text-xs leading-5 text-slate-700 dark:border-sky-500/25 dark:text-slate-300">
+                  <div className="mb-2 inline-flex rounded-full border border-black/8 bg-white/75 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:border-white/10 dark:bg-white/10 dark:text-slate-400">
                     {paperPreviewResult.mode === "learn" ? "Learning Preview" : "Strict Preview"} / keine Ausführung
                   </div>
-                  <div className="font-extrabold text-slate-900">
+                  <div className="font-extrabold text-slate-900 dark:text-white">
                     {paperPreviewResult.selected?.length
                       ? `${paperPreviewResult.selected.length} Kandidat(en) paper-ready`
                       : "Kein Kandidat paper-ready"}
@@ -1019,25 +1019,25 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     {paperPreviewResult.message || "Preview abgeschlossen."}
                   </div>
                   {paperPreviewResult.selected_capital ? (
-                    <div className="mt-2 rounded-lg border border-black/8 bg-white/70 px-2 py-1">
+                    <div className="mt-2 rounded-lg border border-black/8 bg-white/70 px-2 py-1 dark:border-white/10 dark:bg-white/5">
                       Kapital: {formatMoney(paperPreviewResult.selected_capital.notional_value)} geplant /
                       Risiko {formatMoney(paperPreviewResult.selected_capital.max_loss_value)}
                     </div>
                   ) : null}
                   {paperPreviewResult.selected?.[0]?.ticker ? (
-                    <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2 py-1">
+                    <div className="mt-2 rounded-lg border border-emerald-500/15 bg-white/70 px-2 py-1 dark:border-white/10 dark:bg-white/5">
                       Top: <span className="font-extrabold">{paperPreviewResult.selected[0].ticker}</span>
                       {paperPreviewResult.selected[0].score ? ` / Score ${paperPreviewResult.selected[0].score}` : ""}
                     </div>
                   ) : null}
                   {paperPreviewResult.blocker_summary?.next_best_rejected?.ticker ? (
-                    <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/70 px-2.5 py-2">
+                    <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/70 px-2.5 py-2 dark:border-white/10 dark:bg-white/5">
                       <div className="flex items-center justify-between gap-2">
                         <span>
-                          Geblockt: <span className="font-extrabold">{paperPreviewBlock.blocked.ticker}</span>
+                          Geblockt: <span className="font-extrabold text-slate-900 dark:text-white">{paperPreviewBlock.blocked.ticker}</span>
                         </span>
                         {paperPreviewBlock.blocked.score ? (
-                          <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                          <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:border-white/10 dark:bg-white/10 dark:text-slate-400">
                             Score {paperPreviewBlock.blocked.score}
                           </span>
                         ) : null}
@@ -1045,25 +1045,25 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                       {paperPreviewBlock.reasons.length ? (
                         <div className="mt-2 space-y-1">
                           {paperPreviewBlock.reasons.map((reason: string) => (
-                            <div key={reason} className="rounded-md border border-amber-500/10 bg-amber-500/8 px-2 py-1 text-amber-900">
+                            <div key={reason} className="rounded-md border border-amber-500/10 bg-amber-500/8 px-2 py-1 text-amber-900 dark:border-amber-500/20 dark:text-amber-300">
                               {reason}
                             </div>
                           ))}
                         </div>
                       ) : null}
                       {paperPreviewBlock.blocked.missing_to_trade ? (
-                        <div className="mt-2 font-semibold text-amber-900">
+                        <div className="mt-2 font-semibold text-amber-900 dark:text-amber-300">
                           Fehlt: {paperPreviewBlock.blocked.missing_to_trade}
                         </div>
                       ) : null}
                       {paperPreviewBlock.scoreGap > 0 ? (
-                        <div className="mt-1 text-slate-600">
+                        <div className="mt-1 text-slate-600 dark:text-slate-400">
                           Score-Lücke: {paperPreviewBlock.scoreGap.toFixed(1)} Punkte bis{" "}
                           {paperPreviewResult.mode === "learn" ? "Lerntrade" : "Strict-Trade"}.
                         </div>
                       ) : null}
                       {paperPreviewBlock.blocked.next_action ? (
-                        <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800">
+                        <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-slate-200">
                           Nächster Schritt: {paperPreviewBlock.blocked.next_action}
                         </div>
                       ) : null}
@@ -1072,76 +1072,76 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
               ) : null}
               {paperNextCandidate ? (
-                <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/75 px-2.5 py-2 text-xs leading-5 text-slate-700">
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-white/75 px-2.5 py-2 text-xs leading-5 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-extrabold uppercase tracking-[0.12em] text-amber-800">
+                    <div className="font-extrabold uppercase tracking-[0.12em] text-amber-800 dark:text-amber-400">
                       Nächster prüfbarer Kandidat
                     </div>
                     {paperNextCandidate.score ? (
-                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                      <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:border-white/10 dark:bg-white/10 dark:text-slate-400">
                         Score {paperNextCandidate.score}
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-1 font-extrabold text-slate-950">
+                  <div className="mt-1 font-extrabold text-slate-950 dark:text-white">
                     {paperNextCandidate.ticker}
                     {paperNextCandidate.direction ? ` / ${paperNextCandidate.direction}` : ""}
                     {paperNextCandidate.setup_type ? ` / ${paperNextCandidate.setup_type}` : ""}
                   </div>
-                  <div className="mt-1 text-slate-600">
+                  <div className="mt-1 text-slate-600 dark:text-slate-400">
                     Geplant {formatMoney(paperNextCandidate.notional_value)} /
                     Max. Paper-Risiko {formatMoney(paperNextCandidate.max_loss_value)}
                   </div>
                   {paperNextCandidate.thesis ? (
-                    <div className="mt-1 line-clamp-2 font-semibold text-slate-700">
+                    <div className="mt-1 line-clamp-2 font-semibold text-slate-700 dark:text-slate-300">
                       These: {paperNextCandidate.thesis}
                     </div>
                   ) : null}
                   {paperAutopilot.block_reasons?.length ? (
                     <div className="mt-2 space-y-1">
                       {paperAutopilot.block_reasons.map((reason: string) => (
-                        <div key={reason} className="rounded-md border border-amber-500/10 bg-amber-500/8 px-2 py-1 text-amber-900">
+                        <div key={reason} className="rounded-md border border-amber-500/10 bg-amber-500/8 px-2 py-1 text-amber-900 dark:border-amber-500/20 dark:text-amber-300">
                           Block: {reason}
                         </div>
                       ))}
                     </div>
                   ) : null}
-                  <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800">
+                  <div className="mt-2 rounded-md border border-black/8 bg-white px-2 py-1 font-semibold text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-slate-200">
                     Nur Paper: erst Trigger, Stop, Ziel, Positionsgröße und Outcome-Lernen prüfen.
                   </div>
                 </div>
               ) : null}
             </div>
 
-            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Paper Outcome Lernen
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Geprüft</div>
-                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.evaluated ?? 0}</div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Geprüft</div>
+                  <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">{paperOutcomes.summary?.evaluated ?? 0}</div>
                 </div>
-                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Offen</div>
-                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.pending ?? 0}</div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Offen</div>
+                  <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">{paperOutcomes.summary?.pending ?? 0}</div>
                 </div>
-                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Treffer</div>
-                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.hit_rate ?? 0}%</div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Treffer</div>
+                  <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">{paperOutcomes.summary?.hit_rate ?? 0}%</div>
                 </div>
-                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Misses</div>
-                  <div className="mt-1 text-lg font-black text-slate-900">{paperOutcomes.summary?.misses ?? 0}</div>
+                <div className="rounded-lg border border-black/8 bg-white/70 px-2.5 py-2 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Misses</div>
+                  <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">{paperOutcomes.summary?.misses ?? 0}</div>
                 </div>
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 Letzter Check {fmtDate(paperOutcomes.last_run?.checked_at)} /
                 Status {displayValue(paperOutcomes.last_run?.status)}
                 {paperOutcomes.last_run?.due != null ? ` / fällig ${paperOutcomes.last_run.due}` : ""}
               </div>
               {paperOutcomes.status && paperOutcomes.status !== "ok" ? (
-                <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs leading-5 text-amber-900">
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs leading-5 text-amber-900 dark:border-amber-500/30 dark:text-amber-300">
                   <div className="font-extrabold">Outcome-Lernen braucht Aufmerksamkeit: {paperOutcomes.status}</div>
                   <div>
                     Offen {paperOutcomes.summary?.pending ?? 0}
@@ -1151,7 +1151,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 </div>
               ) : null}
               {paperOutcomes.last_run?.pending_data ? (
-                <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-800">
+                <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:text-amber-300">
                   {paperOutcomes.last_run.pending_data} Outcome(s) warten auf Kursdaten. Diese Trades noch nicht bewerten.
                 </div>
               ) : null}
@@ -1159,13 +1159,13 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                 type="button"
                 onClick={evaluatePaperOutcomes}
                 disabled={loading || evaluatingPaperOutcomes}
-                className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-50"
+                className="mt-3 w-full rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
               >
                 {evaluatingPaperOutcomes ? "Prüft" : "Outcomes prüfen"}
               </button>
               {paperOutcomeResult ? (
-                <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2.5 py-2 text-xs leading-5 text-slate-700">
-                  <div className="font-extrabold text-slate-900">
+                <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2.5 py-2 text-xs leading-5 text-slate-700 dark:border-sky-500/25 dark:text-slate-300">
+                  <div className="font-extrabold text-slate-900 dark:text-white">
                     Outcome-Check: {paperOutcomeResult.status || "ok"}
                   </div>
                   <div>
@@ -1173,7 +1173,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                     Daten offen {paperOutcomeResult.pending_data ?? 0}
                   </div>
                   {paperOutcomeResult.paper_learning_alerts?.status ? (
-                    <div className="mt-1 text-slate-500">
+                    <div className="mt-1 text-slate-500 dark:text-slate-400">
                       Telegram Learning: {paperOutcomeResult.paper_learning_alerts.status}
                     </div>
                   ) : null}
@@ -1182,7 +1182,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               {paperOutcomes.top_errors?.length ? (
                 <div className="mt-2 space-y-1">
                   {paperOutcomes.top_errors.slice(0, 3).map((item: any) => (
-                    <div key={item.error_tag} className="flex items-center justify-between gap-2 rounded-lg border border-red-500/10 bg-red-500/6 px-2.5 py-1 text-xs text-red-800">
+                    <div key={item.error_tag} className="flex items-center justify-between gap-2 rounded-lg border border-red-500/10 bg-red-500/6 px-2.5 py-1 text-xs text-red-800 dark:border-red-500/20 dark:text-red-300">
                       <span>{item.error_tag}</span>
                       <span className="font-extrabold">{item.count}</span>
                     </div>
@@ -1191,31 +1191,31 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               ) : null}
             </div>
 
-            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Macro Alert Audit</div>
-              <div className="mt-3 text-sm font-black text-slate-900">
+            <div className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Macro Alert Audit</div>
+              <div className="mt-3 text-sm font-black text-slate-900 dark:text-white">
                 {macroAlerts.last_audit?.eligible ?? 0} freigegeben / {macroAlerts.last_audit?.quality_passed ?? 0} Gate bestanden
               </div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 {macroAlerts.last_audit?.candidates ?? 0} Kandidaten / {macroAlerts.last_audit?.already_sent ?? 0} bereits gesendet / {macroAlerts.last_audit?.cooldown_blocked ?? 0} Cooldown-blockiert
               </div>
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Letzter Scan {fmtDate(macroAlerts.last_audit?.scanned_at)}
               </div>
             </div>
 
             {Object.entries(feeds).map(([key, feed]: [string, any]) => (
-              <div key={key} className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              <div key={key} className="min-w-0 rounded-[1.5rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                   {key.replace("_", " ")}
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="text-lg font-black text-slate-900">{displayValue(feed.status)}</div>
+                  <div className="text-lg font-black text-slate-900 dark:text-white">{displayValue(feed.status)}</div>
                   <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone(feed.status)}`}>
                     {displayValue(feed.status)}
                   </span>
                 </div>
-                <div className="mt-2 text-xs leading-5 text-slate-500">
+                <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                   {feed.generated_at ? `Generated ${fmtDate(feed.generated_at)}` : null}
                   {feed.sample ? `${feed.sample} ${feed.price ?? ""}` : null}
                   {feed.quotes != null ? `${feed.quotes} quotes` : null}
@@ -1226,96 +1226,96 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </div>
 
           <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-            <section className="min-w-0 rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
+            <section className="min-w-0 rounded-[1.6rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Scheduled Briefs</div>
-                  <div className="mt-1 text-sm text-slate-500">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Scheduled Briefs</div>
+                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     Timezone {health?.timezone || "Europe/Berlin"} / {health?.schedule?.weekdays}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     Last check {fmtDate(health?.schedule?.last_checked_at)} / loop {fmtDate(health?.schedule?.loop_seen_at)} / grace {health?.schedule?.delivery_grace_minutes ?? "offen"}m
                   </div>
                   {health?.schedule?.loop_error ? (
-                    <div className="mt-1 text-xs font-semibold text-red-700">
+                    <div className="mt-1 text-xs font-semibold text-red-700 dark:text-red-400">
                       Scheduler error: {health.schedule.loop_error}
                     </div>
                   ) : null}
                 </div>
-                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${health?.schedule?.enabled ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700" : "border-red-500/20 bg-red-500/10 text-red-700"}`}>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${health?.schedule?.enabled ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400" : "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"}`}>
                   {health?.schedule?.enabled ? "enabled" : "disabled"}
                 </span>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-[1.1rem] border border-emerald-500/15 bg-emerald-500/10 p-3">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">
+                <div className="rounded-[1.1rem] border border-emerald-500/15 bg-emerald-500/10 p-3 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
                     Letzter erfolgreicher Brief
                   </div>
-                  <div className="mt-1 text-sm font-black text-slate-900">
+                  <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">
                     {lastSuccessJob?.label || scheduleSummary.last_success_job || "Noch keiner"}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {fmtDate(lastSuccessJob?.last_success_at || lastSuccessJob?.last_sent_at || scheduleSummary.last_success_at)}
                   </div>
                 </div>
-                <div className="rounded-[1.1rem] border border-sky-500/15 bg-sky-500/10 p-3">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700">
+                <div className="rounded-[1.1rem] border border-sky-500/15 bg-sky-500/10 p-3 dark:border-sky-500/25 dark:bg-sky-500/10">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-400">
                     Nächster geplanter Brief
                   </div>
-                  <div className="mt-1 text-sm font-black text-slate-900">
+                  <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">
                     {nextBriefJob?.label || "offen"}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {nextBriefJob ? `${fmtDate(nextBriefJob.next_due_at)} / Plan ${nextBriefJob.time}` : "Keine nächste Ausführung berechnet"}
                   </div>
                 </div>
               </div>
               <div className="mt-4 grid gap-2 md:grid-cols-2">
                 {jobs.map((job: any) => (
-                  <div key={job.job_key} className="rounded-[1.1rem] border border-black/8 bg-white p-3">
+                  <div key={job.job_key} className="rounded-[1.1rem] border border-black/8 bg-white p-3 dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="font-extrabold text-slate-900">{job.label}</div>
+                      <div className="font-extrabold text-slate-900 dark:text-white">{job.label}</div>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
                         job.last_status === "blocked"
-                          ? "bg-red-500/10 text-red-700"
+                          ? "bg-red-500/10 text-red-700 dark:text-red-400"
                           : job.sent_today
-                          ? "bg-emerald-500/10 text-emerald-700"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                           : job.due_now
-                            ? "bg-amber-500/10 text-amber-700"
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                             : job.catchup_available
-                              ? "bg-sky-500/10 text-sky-700"
+                              ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
                             : job.missed_today
-                              ? "bg-red-500/10 text-red-700"
-                              : "bg-slate-500/10 text-slate-500"
+                              ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                              : "bg-slate-500/10 text-slate-500 dark:text-slate-400"
                       }`}>
                         {jobStateLabel(job)}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">Plan {job.time} / nächster Termin {fmtDate(job.next_due_at)}</div>
-                    <div className="mt-1 text-xs text-slate-500">Heute fällig {fmtDate(job.scheduled_at_today)} / Grace bis {fmtDate(job.grace_until)}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Plan {job.time} / nächster Termin {fmtDate(job.next_due_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Heute fällig {fmtDate(job.scheduled_at_today)} / Grace bis {fmtDate(job.grace_until)}</div>
                     {job.minutes_late != null ? (
-                      <div className="mt-1 text-xs text-slate-500">{job.minutes_late} Minuten verspätet</div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{job.minutes_late} Minuten verspätet</div>
                     ) : null}
                     {job.catchup_available ? (
-                      <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-700">
+                      <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-700 dark:border-sky-500/25 dark:text-sky-300">
                         Noch in Grace-Zeit: automatisch oder per Run Due/Missed nachsendbar.
                       </div>
                     ) : null}
-                    <div className="mt-1 text-xs text-slate-500">
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       Letzter Erfolg {fmtDate(job.last_success_at || job.last_sent_at)}
                     </div>
                     {job.last_status ? (
-                      <div className="mt-1 text-xs text-slate-500">
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         Letzter Status {job.last_status} / {fmtDate(job.last_status_updated_at)}
                       </div>
                     ) : null}
                     {job.last_message ? (
-                      <div className="mt-2 rounded-lg border border-black/8 bg-white/75 px-2 py-1 text-xs font-semibold text-slate-700">
+                      <div className="mt-2 rounded-lg border border-black/8 bg-white/75 px-2 py-1 text-xs font-semibold text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                         {job.last_message}
                       </div>
                     ) : null}
                     {job.last_error ? (
-                      <div className="mt-2 rounded-lg border border-red-500/15 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-700">
+                      <div className="mt-2 rounded-lg border border-red-500/15 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-700 dark:border-red-500/25 dark:text-red-300">
                         {job.last_error}
                       </div>
                     ) : null}
@@ -1324,7 +1324,7 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
                         type="button"
                         onClick={() => sendJobBrief(job)}
                         disabled={loading || warming || runningDue || downloadingBackup || !!sendingSession}
-                        className="rounded-full border border-black/8 bg-[#101114] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                        className="rounded-full border border-black/8 bg-[#1d1d1f] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 disabled:opacity-50"
                       >
                         {sendingSession === job.job_key ? "Sendet" : "Jetzt senden"}
                       </button>
@@ -1334,36 +1334,36 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
               </div>
             </section>
 
-            <section className="min-w-0 rounded-[1.6rem] border border-black/8 bg-white/75 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+            <section className="min-w-0 rounded-[1.6rem] border border-black/8 bg-white/75 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Letzte Zustellungen
               </div>
               <div className="mt-4 space-y-2">
                 {deliveries.length ? deliveries.map((item: any) => (
-                  <div key={item.event_key} className="rounded-[1rem] border border-black/8 bg-white p-3">
+                  <div key={item.event_key} className="rounded-[1rem] border border-black/8 bg-white p-3 dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="text-sm font-bold text-slate-900">{item.title}</div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-white">{item.title}</div>
                       {item.metadata?.impact_score != null ? (
-                        <span className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">
+                        <span className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 dark:border-amber-500/30 dark:text-amber-400">
                           Impact {item.metadata.impact_score}
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">{item.category} / {fmtDate(item.sent_at)}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.category} / {fmtDate(item.sent_at)}</div>
                     {item.metadata?.source_label || item.metadata?.source_quality ? (
-                      <div className="mt-1 text-xs text-slate-500">
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         Quelle: {item.metadata.source_label || "offen"}
                         {item.metadata.source_quality ? ` / ${item.metadata.source_quality}` : ""}
                       </div>
                     ) : null}
                     {item.metadata?.affected_assets?.length ? (
-                      <div className="mt-1 truncate text-xs text-slate-500" title={item.metadata.affected_assets.join(", ")}>
+                      <div className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400" title={item.metadata.affected_assets.join(", ")}>
                         Betroffen: {item.metadata.affected_assets.join(", ")}
                       </div>
                     ) : null}
                   </div>
                 )) : (
-                  <div className="rounded-[1rem] border border-black/8 bg-white p-3 text-sm text-slate-500">
+                  <div className="rounded-[1rem] border border-black/8 bg-white p-3 text-sm text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
                     Noch keine Zustellungen gespeichert.
                   </div>
                 )}
@@ -1372,23 +1372,23 @@ export default function AdminHealthPanel({ isOpen, onClose }: AdminHealthPanelPr
           </div>
 
           {healthProblems.length ? (
-            <div className="mt-5 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-800">
+            <div className="mt-5 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4 dark:border-amber-500/25 dark:bg-amber-500/10">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-800 dark:text-amber-400">
                 Health Aufmerksamkeit
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {healthProblems.map((problem: any) => (
                   <div
                     key={problem.code}
-                    className={`rounded-[1rem] border bg-white/80 p-3 text-sm ${
+                    className={`rounded-[1rem] border bg-white/80 p-3 text-sm dark:bg-white/5 ${
                       problem.tone === "red"
-                        ? "border-red-500/15 text-red-800"
-                        : "border-amber-500/15 text-amber-800"
+                        ? "border-red-500/15 text-red-800 dark:border-red-500/25 dark:text-red-400"
+                        : "border-amber-500/15 text-amber-800 dark:border-amber-500/25 dark:text-amber-400"
                     }`}
                   >
-                    <div className="font-extrabold">{problem.label}</div>
-                    <div className="mt-1 text-xs leading-5 text-slate-600">{problem.action}</div>
-                    <div className="mt-2 inline-flex rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+                    <div className="font-extrabold text-slate-900 dark:text-white">{problem.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{problem.action}</div>
+                    <div className="mt-2 inline-flex rounded-full border border-black/8 bg-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:border-white/10 dark:bg-white/10 dark:text-slate-400">
                       {problem.code}
                     </div>
                   </div>

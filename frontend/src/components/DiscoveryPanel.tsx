@@ -544,20 +544,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
       ) : null}
       <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-3">
         <div>
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-neutral-400">
             Discovery Mode
           </div>
-          <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-            <span className="font-extrabold text-slate-900">{modeCopy.title}</span>
+          <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600 dark:text-neutral-300">
+            <span className="font-extrabold text-slate-900 dark:text-white">{modeCopy.title}</span>
             {" · "}
             {modeCopy.body}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+          <div className="rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400">
             {modeCopy.stat}
           </div>
-          <div className="rounded-full border border-black/8 bg-white/75 p-1">
+          <div className="rounded-full border border-black/8 bg-white/75 p-1 dark:border-white/10 dark:bg-white/5">
           <button
             type="button"
             onClick={() => {
@@ -566,7 +566,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             }}
             aria-pressed={marketView === "movers"}
             className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
-              marketView === "movers" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
+              marketView === "movers" ? "bg-[#1d1d1f] text-white dark:bg-white dark:text-black" : "text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white"
             }`}
           >
             Top Movers
@@ -579,7 +579,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             }}
             aria-pressed={marketView === "explorer"}
             className={`rounded-full px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
-              marketView === "explorer" ? "bg-[#101114] text-white" : "text-slate-500 hover:text-slate-900"
+              marketView === "explorer" ? "bg-[#1d1d1f] text-white dark:bg-white dark:text-black" : "text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white"
             }`}
           >
             Market Explorer
@@ -600,7 +600,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all sm:px-6 ${
                 activeTab === tab.id
                   ? "bg-[var(--accent)] text-white shadow-[0_6px_16px_rgba(0,0,0,0.12)]"
-                  : "text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]"
+                  : "text-slate-500 hover:text-slate-900 hover:bg-black/[0.04] dark:text-neutral-400 dark:hover:text-white dark:hover:bg-white/10"
               }`}
             >
               <span className="inline-flex min-w-[1.2rem] justify-center text-xs font-extrabold uppercase tracking-[0.14em]">
@@ -732,31 +732,31 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             {stars ? (
               <section className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900">
-                    <span className="text-yellow-600">Star</span> Spotlight
+                  <h2 className="flex items-center gap-3 text-2xl font-black italic text-slate-900 dark:text-white">
+                    <span className="text-yellow-600 dark:text-yellow-400">Star</span> Spotlight
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Day Winner */}
                   <div className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-green-500/20">
-                    <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+                    <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                       Tagesgewinner
                     </div>
-                    <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-green-700">
+                    <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-green-700 dark:text-white dark:group-hover:text-green-400">
                       {stars.day_winner?.ticker || emptyTicker}
                     </div>
-                    <div className="mb-4 truncate text-sm text-slate-500">
+                    <div className="mb-4 truncate text-sm text-slate-500 dark:text-neutral-400">
                       {stars.day_winner?.name || emptyName}
                     </div>
-                    <div className="text-2xl font-mono font-bold text-emerald-700">
+                    <div className="text-2xl font-mono font-bold text-emerald-700 dark:text-emerald-400">
                       {formatMove(stars.day_winner?.change)}
                     </div>
                     {stars.day_winner?.ticker ? (
                       <button
                         type="button"
                         onClick={() => onAnalyze(stars.day_winner!.ticker)}
-                        className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                        className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)] dark:border-white/10 dark:bg-white/5 dark:text-neutral-200 dark:hover:border-white/25"
                       >
                         Analysieren
                       </button>
@@ -769,10 +769,10 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
                       Wochentrend
                     </div>
-                    <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-[var(--accent)]">
+                    <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-[var(--accent)] dark:text-white">
                       {stars.week_winner?.ticker || emptyTicker}
                     </div>
-                    <div className="mb-4 truncate text-sm text-slate-500">
+                    <div className="mb-4 truncate text-sm text-slate-500 dark:text-neutral-400">
                       {stars.week_winner?.name || emptyName}
                     </div>
                     <div className="text-2xl font-mono font-bold text-[var(--accent)]">
@@ -782,7 +782,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       <button
                         type="button"
                         onClick={() => onAnalyze(stars.week_winner!.ticker)}
-                        className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                        className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)] dark:border-white/10 dark:bg-white/5 dark:text-neutral-200 dark:hover:border-white/25"
                       >
                         Analysieren
                       </button>
@@ -796,17 +796,17 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         key={stock.ticker || idx}
                         className="surface-panel group relative rounded-3xl p-6 transition-all hover:-translate-y-1 hover:border-sky-500/20"
                       >
-                        <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-sky-700">
+                        <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-sky-700 dark:text-sky-400">
                           Fuer dich relevant
                         </div>
-                        <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-sky-700">
+                        <div className="mb-1 text-3xl font-black text-slate-900 transition-colors group-hover:text-sky-700 dark:text-white dark:group-hover:text-sky-400">
                           {stock.ticker}
                         </div>
-                        <div className="mb-4 truncate text-sm text-slate-500">
+                        <div className="mb-4 truncate text-sm text-slate-500 dark:text-neutral-400">
                           {stock.name}
                         </div>
                         <div
-                          className={`text-2xl font-mono font-bold ${stock.change && stock.change > 0 ? "text-emerald-700" : "text-red-700"}`}
+                          className={`text-2xl font-mono font-bold ${stock.change && stock.change > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
                         >
                           {formatMove(stock.change)}
                         </div>
@@ -814,7 +814,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                           <button
                             type="button"
                             onClick={() => onAnalyze(stock.ticker)}
-                            className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+                            className="mt-4 rounded-full border border-black/10 bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)] dark:border-white/10 dark:bg-white/5 dark:text-neutral-200 dark:hover:border-white/25"
                           >
                             Analysieren
                           </button>
@@ -822,7 +822,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                       </div>
                     ))
                   ) : (
-                    <div className="col-span-2 flex items-center justify-center rounded-3xl border border-dashed border-black/8 bg-white/72 p-6 text-sm text-slate-500">
+                    <div className="col-span-2 flex items-center justify-center rounded-3xl border border-dashed border-black/8 bg-white/72 p-6 text-sm text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400">
                       Noch keine personalisierten Picks mit belastbarer Datenlage.
                     </div>
                   )}
@@ -854,20 +854,20 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
               <section className="surface-panel rounded-[1.8rem] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
                       AI Details
                     </div>
-                    <div className="mt-2 text-3xl font-black text-slate-900">
+                    <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                       {selectedMarketDetail.ticker}
                     </div>
-                    <div className="mt-1 text-sm text-slate-500">
+                    <div className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
                       {selectedMarketDetail.name}
                     </div>
-                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    <div className={`mt-3 text-xl font-black ${(selectedMarketDetail.change || 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                       {(selectedMarketDetail.change || 0) >= 0 ? "+" : ""}
                       {formatMove(selectedMarketDetail.change)}
                     </div>
-                    <div className="mt-2 text-xs text-slate-500">
+                    <div className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
                       {selectedMarketDetail.trend_context || selectedMarketDetail.reason || "Noch kein zusaetzlicher Kontext geladen."}
                     </div>
                   </div>
@@ -878,7 +878,7 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                         setSelectedMarketDetail(null);
                         setSelectedMarketDetailScope(null);
                       }}
-                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600"
+                      className="rounded-full border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300"
                     >
                       Schliessen
                     </button>
@@ -897,13 +897,13 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
             <section className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-500 dark:text-neutral-400">
                     AI Chancen
                   </div>
-                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                  <h2 className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
                     High-Risk Radar
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-neutral-300">
                     Opportunistische Kandidaten mit hohem Bewegungsrisiko. Erst Details lesen, dann bewusst analysieren.
                   </p>
                 </div>
@@ -912,11 +912,11 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                     type="button"
                     onClick={() => refreshAiScanners(true)}
                     disabled={aiLoading}
-                    className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60"
+                    className="rounded-full border border-black/8 bg-white px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-700 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200"
                   >
                     {aiLoading ? "Scan..." : "Neu scannen"}
                   </button>
-                  <div className="rounded-full border border-red-500/15 bg-red-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700">
+                  <div className="rounded-full border border-red-500/15 bg-red-500/6 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
                     {aiLoading ? "Live-Scan" : highRiskOpps.length ? `${highRiskOpps.length} Treffer` : "Opportunistisch"}
                   </div>
                 </div>
@@ -943,14 +943,14 @@ const DiscoveryPanel: React.FC<DiscoveryPanelProps> = ({ onAnalyze: onAnalyzeRaw
                   >
                     <div className="mb-6 flex items-start justify-between gap-4">
                       <div>
-                        <div className="mb-1 text-3xl font-black text-slate-900">
+                        <div className="mb-1 text-3xl font-black text-slate-900 dark:text-white">
                           {opp.ticker}
                         </div>
-                        <div className="max-w-[180px] truncate text-sm text-slate-500">
+                        <div className="max-w-[180px] truncate text-sm text-slate-500 dark:text-neutral-400">
                           {opp.name}
                         </div>
                       </div>
-                      <div className="rounded-full border border-red-500/15 bg-red-500/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-700">
+                      <div className="rounded-full border border-red-500/15 bg-red-500/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
                         {opp.data_mode === "fallback" ? "Watchlist" : "Opportunity"}
                       </div>
                     </div>

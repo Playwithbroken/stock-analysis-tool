@@ -1113,8 +1113,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               </div>
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
                 Number(exposureProfile.open_pnl_value || 0) >= 0
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-red-50 text-red-700"
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                  : "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400"
               }`}>
                 offen {money(exposureProfile.open_pnl_value, currency)}
               </div>
@@ -1978,25 +1978,25 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-black text-slate-900">{item.label}</div>
-                    <div className="mt-1 text-slate-500">{item.horizon}</div>
+                    <div className="font-black text-slate-900 dark:text-white">{item.label}</div>
+                    <div className="mt-1 text-slate-500 dark:text-slate-400">{item.horizon}</div>
                   </div>
                   <span
                     className={`rounded-full px-2.5 py-1 font-extrabold uppercase tracking-[0.12em] ${
                       item.real_world_ready
-                        ? "bg-emerald-50 text-emerald-700"
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
                         : item.status === "learning" || item.status === "active_learning"
-                          ? "bg-amber-50 text-amber-700"
-                          : "bg-slate-100 text-slate-600"
+                          ? "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                          : "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"
                     }`}
                   >
                     {germanStatus(item.status, "Lernen")}
                   </span>
                 </div>
-                <p className="mt-3 leading-5 text-slate-600">{item.objective}</p>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-slate-500">
+                <p className="mt-3 leading-5 text-slate-600 dark:text-slate-300">{item.objective}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-slate-500 dark:text-slate-400">
                   <div>
-                    <div className="font-black text-slate-900">{item.decisive_checks || 0}</div>
+                    <div className="font-black text-slate-900 dark:text-white">{item.decisive_checks || 0}</div>
                     <div>Prüfungen</div>
                   </div>
                   <div>
@@ -2082,16 +2082,16 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
         </div>
 
         <div className="mt-4 grid gap-3 text-xs lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.6rem] border border-sky-200 bg-sky-50/80 p-4 text-sky-900">
+          <div className="rounded-[1.6rem] border border-sky-200 bg-sky-50/80 p-4 text-sky-900 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="font-extrabold uppercase tracking-[0.18em] text-sky-700">Nächster Prüf-Fokus</div>
+              <div className="font-extrabold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-400">Nächster Prüf-Fokus</div>
               <span
                 className={`rounded-full px-3 py-1 font-extrabold uppercase tracking-[0.14em] ${
                   optionReadiness.real_money_ready
-                    ? "bg-emerald-50 text-emerald-700"
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
                     : optionReadiness.status === "building_evidence"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-white/80 text-slate-600"
+                      ? "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                      : "bg-white/80 text-slate-600 dark:bg-white/10 dark:text-slate-300"
                 }`}
               >
                 {germanText(optionReadiness.label, "nur Paper")}
@@ -2390,7 +2390,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 .map((item: any) => {
                   const delta = Number(item.paper_prior_score_delta || 0);
                   return (
-                    <div key={`prior-${item.label}`} className={`rounded-full border px-3 py-1 font-black ${delta > 0 ? "border-emerald-500/20 bg-emerald-50 text-emerald-800" : "border-red-500/20 bg-red-50 text-red-800"}`}>
+                    <div key={`prior-${item.label}`} className={`rounded-full border px-3 py-1 font-black ${delta > 0 ? "border-emerald-500/20 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300" : "border-red-500/20 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"}`}>
                       Event-Prior {String(item.label || "unknown").replace(/_/g, " ")} {delta > 0 ? "+" : ""}{delta} · {item.evaluated} Meldungen
                     </div>
                   );
@@ -2398,7 +2398,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             </div>
           ) : null}
 
-          <div className="mt-3 font-semibold text-sky-900">
+          <div className="mt-3 font-semibold text-sky-900 dark:text-slate-300">
             {newsShadowSummary.sample_unit || "Eine Meldung mit genau einem 24-Stunden-Ergebnis."} {newsShadowSummary.policy || "Shadow-Studie ohne Position oder Echtgeldwirkung."}
           </div>
         </div>
@@ -2918,8 +2918,8 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                           <span
                             className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
                               productChecks[item.id].valid
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-red-50 text-red-700"
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                                : "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300"
                             }`}
                           >
                             {productChecks[item.id].valid ? "bereit" : "blockiert"}
@@ -2927,12 +2927,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         ) : null}
                       </div>
                       {productChecks[item.id]?.errors?.length ? (
-                        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+                        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
                           {productChecks[item.id].errors.slice(0, 4).join(" · ")}
                         </div>
                       ) : null}
                       {productChecks[item.id]?.warnings?.length ? (
-                        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                           {productChecks[item.id].warnings.slice(0, 3).join(" · ")}
                         </div>
                       ) : null}

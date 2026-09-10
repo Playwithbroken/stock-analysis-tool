@@ -107,37 +107,37 @@ function newsForecastMeta(item: any) {
     short: "Abwarten",
     signal: "Noch offen",
     copy: "Noch kein sauberer Richtungsvorteil. Erst bestaetigen, dann in Analyzer oder Markets vertiefen.",
-    className: "border-slate-300 bg-white/68 text-slate-700",
-    arrowClass: "bg-slate-900 text-white shadow-slate-900/15",
+    className: "border-slate-300 bg-white/68 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300",
+    arrowClass: "bg-slate-900 text-white shadow-slate-900/15 dark:bg-white dark:text-slate-950",
   };
 }
 
 function marketConfirmationMeta(status?: string) {
   const value = String(status || "unavailable").toLowerCase();
   if (value === "confirmed") {
-    return { label: "Preisreaktion bestätigt", className: "border-emerald-500/20 bg-emerald-50 text-emerald-800" };
+    return { label: "Preisreaktion bestätigt", className: "border-emerald-500/20 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300" };
   }
   if (value === "contradicted") {
-    return { label: "Preisreaktion widerspricht", className: "border-red-500/20 bg-red-50 text-red-800" };
+    return { label: "Preisreaktion widerspricht", className: "border-red-500/20 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300" };
   }
   if (value === "inconclusive") {
-    return { label: "Preisreaktion noch uneindeutig", className: "border-amber-500/20 bg-amber-50 text-slate-600 dark:text-slate-300" };
+    return { label: "Preisreaktion noch uneindeutig", className: "border-amber-500/20 bg-amber-50 text-slate-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300" };
   }
   if (value === "observed_only") {
-    return { label: "Preisreaktion beobachtet", className: "border-sky-500/20 bg-sky-50 text-slate-600 dark:text-slate-300" };
+    return { label: "Preisreaktion beobachtet", className: "border-sky-500/20 bg-sky-50 text-slate-600 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300" };
   }
-  return { label: "Preisfenster nicht verfügbar", className: "border-slate-300 bg-white/70 text-slate-600" };
+  return { label: "Preisfenster nicht verfügbar", className: "border-slate-300 bg-white/70 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400" };
 }
 
 function newsDecisionMeta(status?: string) {
   const value = String(status || "reject").toLowerCase();
   if (value === "ready_for_paper_review") {
-    return { label: "Paper-Review bereit", icon: "✓", className: "border-emerald-500/25 bg-emerald-50 text-emerald-900" };
+    return { label: "Paper-Review bereit", icon: "✓", className: "border-emerald-500/25 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300" };
   }
   if (value === "monitor") {
-    return { label: "Beobachten", icon: "◷", className: "border-amber-500/25 bg-amber-50 text-amber-900" };
+    return { label: "Beobachten", icon: "◷", className: "border-amber-500/25 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300" };
   }
-  return { label: "Trade ablehnen", icon: "×", className: "border-red-500/25 bg-red-50 text-red-900" };
+  return { label: "Trade ablehnen", icon: "×", className: "border-red-500/25 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300" };
 }
 
 function newsFactBasisLabel(value?: string) {
@@ -1560,18 +1560,18 @@ export default function MorningBriefPanel({
                         ) : null}
                         <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
                           publisherCount >= 2
-                            ? "border-emerald-500/25 bg-emerald-50 text-emerald-700"
-                            : "border-amber-500/25 bg-amber-50 text-amber-700"
+                            ? "border-emerald-500/25 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400"
+                            : "border-amber-500/25 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400"
                         }`}>
                           {publisherCount >= 2 ? `${publisherCount} Publisher` : "Einzelquelle"}
                         </span>
                         {mixedSourceSignal ? (
-                          <span className="rounded-full border border-red-500/25 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+                          <span className="rounded-full border border-red-500/25 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
                             Quellen-Signal widersprüchlich
                           </span>
                         ) : null}
                         {evidence.original_document_verified ? (
-                          <span className="rounded-full border border-blue-500/25 bg-blue-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">
+                          <span className="rounded-full border border-blue-500/25 bg-blue-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                             Primärquelle verifiziert
                           </span>
                         ) : null}
@@ -1580,7 +1580,7 @@ export default function MorningBriefPanel({
                         href={item.source_url || item.link}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-2 block text-sm font-black leading-5 text-slate-950 underline-offset-4 hover:underline"
+                        className="mt-2 block text-sm font-black leading-5 text-slate-950 dark:text-white underline-offset-4 hover:underline"
                       >
                         {item.title}
                       </a>
@@ -1677,35 +1677,35 @@ export default function MorningBriefPanel({
                   ) : null}
 
                   {intelligence.bull_case ? (
-                    <details className="rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs leading-5 text-slate-600 sm:col-start-2">
-                      <summary className="cursor-pointer font-extrabold text-slate-800">Trading-Einordnung und Bestätigung</summary>
+                    <details className="rounded-[1rem] border border-black/8 bg-white px-3 py-2 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 sm:col-start-2">
+                      <summary className="cursor-pointer font-extrabold text-slate-800 dark:text-white">Trading-Einordnung und Bestätigung</summary>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-900">
+                        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
                           <div className="font-extrabold">Bull Case</div>
                           <div className="mt-1">{intelligence.bull_case}</div>
                         </div>
-                        <div className="rounded-lg bg-red-50 p-3 text-red-900">
+                        <div className="rounded-lg bg-red-50 p-3 text-red-900 dark:bg-red-500/10 dark:text-red-300">
                           <div className="font-extrabold">Bear Case</div>
                           <div className="mt-1">{intelligence.bear_case}</div>
                         </div>
                       </div>
                       <div className="mt-3">
-                        <span className="font-extrabold text-slate-800">Bestätigung:</span>{" "}
+                        <span className="font-extrabold text-slate-800 dark:text-white">Bestätigung:</span>{" "}
                         {(intelligence.confirmation || []).join(" · ")}
                       </div>
                       <div className="mt-2">
-                        <span className="font-extrabold text-slate-800">Invalidierung:</span> {intelligence.invalidation}
+                        <span className="font-extrabold text-slate-800 dark:text-white">Invalidierung:</span> {intelligence.invalidation}
                       </div>
-                      <div className="mt-2 text-[11px] text-slate-500">{intelligence.precision_note}</div>
+                      <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">{intelligence.precision_note}</div>
                     </details>
                   ) : null}
 
                   {corroboratingSources.length ? (
-                    <details className="rounded-[1rem] border border-emerald-500/15 bg-emerald-50/45 px-3 py-2 text-xs leading-5 text-slate-600 sm:col-start-2">
-                      <summary className="cursor-pointer font-extrabold text-slate-800">
+                    <details className="rounded-[1rem] border border-emerald-500/15 bg-emerald-50/45 px-3 py-2 text-xs leading-5 text-slate-600 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-slate-300 sm:col-start-2">
+                      <summary className="cursor-pointer font-extrabold text-slate-800 dark:text-white">
                         Quellenabgleich · {publisherCount} Publisher
                       </summary>
-                      <div className="mt-2 text-[11px] text-slate-500">
+                      <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                         Verschiedene Publisher werden gezählt; redaktionelle Unabhängigkeit und Syndizierung sind technisch nicht verifiziert.
                       </div>
                       <div className="mt-3 space-y-2">
@@ -1715,10 +1715,10 @@ export default function MorningBriefPanel({
                             href={source.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="block rounded-lg border border-black/8 bg-white/80 px-3 py-2 underline-offset-4 hover:underline"
+                            className="block rounded-lg border border-black/8 bg-white/80 px-3 py-2 underline-offset-4 hover:underline dark:border-white/10 dark:bg-white/5"
                           >
-                            <span className="font-extrabold text-slate-800">{source.publisher || source.domain}</span>
-                            {source.title ? <span className="ml-2">{source.title}</span> : null}
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200">{source.publisher || source.domain}</span>
+                            {source.title ? <span className="ml-2 text-slate-600 dark:text-slate-400">{source.title}</span> : null}
                           </a>
                         ))}
                       </div>
@@ -1726,8 +1726,8 @@ export default function MorningBriefPanel({
                   ) : null}
 
                   {primarySources.length ? (
-                    <div className="rounded-[1rem] border border-blue-500/20 bg-blue-50/55 px-3 py-3 text-xs leading-5 text-slate-700 sm:col-start-2">
-                      <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-blue-700">
+                    <div className="rounded-[1rem] border border-blue-500/20 bg-blue-50/55 px-3 py-3 text-xs leading-5 text-slate-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-slate-300 sm:col-start-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
                         Verifizierte Primärquelle
                       </div>
                       {primarySources.map((source: any, sourceIndex: number) => (
@@ -1736,19 +1736,19 @@ export default function MorningBriefPanel({
                           href={source.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-2 block rounded-lg border border-blue-500/15 bg-white/85 px-3 py-2 underline-offset-4 hover:underline"
+                          className="mt-2 block rounded-lg border border-blue-500/15 bg-white/85 px-3 py-2 underline-offset-4 hover:underline dark:border-white/10 dark:bg-white/5"
                         >
-                          <span className="font-extrabold text-slate-900">
+                          <span className="font-extrabold text-slate-900 dark:text-white">
                             {source.authority || "SEC"} · {source.form || "Primärdokument"}
                             {source.filed_at ? ` · eingereicht ${source.filed_at}` : ""}
                             {source.published_at ? ` · veröffentlicht ${new Date(source.published_at).toLocaleString()}` : ""}
                           </span>
                           {source.accession ? (
-                            <span className="ml-2 text-slate-500">Accession {source.accession}</span>
+                            <span className="ml-2 text-slate-500 dark:text-slate-400">Accession {source.accession}</span>
                           ) : null}
                         </a>
                       ))}
-                      <div className="mt-2 text-[11px] text-slate-500">
+                      <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                         Primärquellen-Link und offizielle Herkunft sind geprüft. Die Trading-Einordnung bleibt Analyse.
                       </div>
                     </div>

@@ -701,8 +701,8 @@ export default function AnalysisResult({
                     disabled={watchlistBusy}
                     className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-all ${
                       isInWatchlist
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-black/8 bg-white text-slate-700 hover:bg-black/[0.03]"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
+                        : "border-black/8 bg-white text-slate-700 hover:bg-black/[0.03] dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                     }`}
                   >
                     <Plus size={14} />
@@ -712,13 +712,13 @@ export default function AnalysisResult({
                     onClick={openAlertModal}
                     disabled={dataQuality.blocksDecision}
                     title={dataQuality.blocksDecision ? "Erst vollständige Daten laden" : undefined}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-45"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     Alarm setzen
                   </button>
                   <button
                     onClick={onOpenChat}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03]"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-black/[0.03] dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                   >
                     <FileText size={14} /> Dossier erklären
                   </button>
@@ -822,19 +822,19 @@ export default function AnalysisResult({
 
           {alertModalOpen ? (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4" role="presentation">
-              <div ref={alertDialogRef} role="dialog" aria-modal="true" aria-labelledby="price-alert-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[1.6rem] p-6">
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+              <div ref={alertDialogRef} role="dialog" aria-modal="true" aria-labelledby="price-alert-title" tabIndex={-1} className="surface-panel w-full max-w-md rounded-[1.6rem] border border-black/8 p-6 dark:border-white/10 dark:bg-[#1c1c1e]">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                   Kursalarm
                 </div>
-                <h3 id="price-alert-title" className="mt-2 text-2xl text-slate-900">{data.ticker} Kursalarm setzen</h3>
+                <h3 id="price-alert-title" className="mt-2 text-2xl text-slate-900 dark:text-white">{data.ticker} Kursalarm setzen</h3>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <button
                     onClick={() => setAlertDirection("above")}
                     aria-pressed={alertDirection === "above"}
-                    className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
                       alertDirection === "above"
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                        : "border-black/8 bg-white text-slate-600"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
+                        : "border-black/8 bg-white text-slate-600 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
                     }`}
                   >
                     Oberhalb
@@ -842,17 +842,17 @@ export default function AnalysisResult({
                   <button
                     onClick={() => setAlertDirection("below")}
                     aria-pressed={alertDirection === "below"}
-                    className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
                       alertDirection === "below"
-                        ? "border-red-300 bg-red-50 text-red-700"
-                        : "border-black/8 bg-white text-slate-600"
+                        ? "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"
+                        : "border-black/8 bg-white text-slate-600 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
                     }`}
                   >
                     Unterhalb
                   </button>
                 </div>
                 <div className="mt-4">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     Zielkurs
                   </label>
                   <input
@@ -860,13 +860,13 @@ export default function AnalysisResult({
                     step="0.01"
                     value={alertTarget}
                     onChange={(e) => setAlertTarget(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
+                    className="mt-2 w-full rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-white"
                   />
                 </div>
                 <div className="mt-5 flex justify-end gap-3">
                   <button
                     onClick={() => setAlertModalOpen(false)}
-                    className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                    className="rounded-xl border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                   >
                     Abbrechen
                   </button>

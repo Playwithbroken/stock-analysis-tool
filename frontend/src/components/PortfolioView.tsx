@@ -732,16 +732,16 @@ export default function PortfolioView({
         }));
   const advisoryActionTone = (level?: string) =>
     level === "blocker"
-      ? "border-red-200 bg-red-50 text-red-800"
+      ? "border-red-500/20 bg-red-500/10 text-red-800 dark:border-red-500/30 dark:text-red-300"
       : level === "opportunity"
-        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-        : "border-amber-200 bg-amber-50 text-amber-800";
+        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-300"
+        : "border-amber-500/20 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:text-amber-300";
   const sourceCopy = (() => {
     if (dataSource === "server") {
       return {
         label: "Server gespeichert",
         detail: "SQLite/Server ist aktiv. Neue Portfolios bleiben nach Reload erhalten.",
-        tone: "border-emerald-400/30 bg-emerald-50 text-emerald-800",
+        tone: "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-300",
         dot: "bg-emerald-500",
       };
     }
@@ -749,7 +749,7 @@ export default function PortfolioView({
       return {
         label: "Lokale Sicherung",
         detail: dataSourceMessage || "Serverdaten sind gerade nicht erreichbar. Änderungen bleiben im Browser-Fallback.",
-        tone: "border-amber-400/40 bg-amber-50 text-amber-800",
+        tone: "border-amber-500/20 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:text-amber-300",
         dot: "bg-amber-500",
       };
     }
@@ -1122,8 +1122,8 @@ export default function PortfolioView({
               <div
                 className={`mt-6 rounded-[1.2rem] border px-4 py-3 text-sm font-semibold ${
                   holdingEditNotice.type === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-red-200 bg-red-50 text-red-700"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
+                    : "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"
                 }`}
               >
                 {holdingEditNotice.message}

@@ -1548,8 +1548,8 @@ class PaperTradingService:
         entry_execution = (ticket.get("execution_model") or {}).get("entry") if isinstance(ticket.get("execution_model"), dict) else None
         exit_market: Dict[str, Any] = {}
         if existing.get("asset_class") == "option":
-            if closed_price not in (None, 0):
-                exit_reference = float(closed_price or 0)
+            if closed_price is not None:
+                exit_reference = max(0.0001, float(closed_price))
                 exit_market = {
                     "source": "manual_option_close_price",
                     "data_as_of": datetime.utcnow().isoformat(),
@@ -1560,9 +1560,19 @@ class PaperTradingService:
                 exit_market = self._get_stored_option_contract_quote(ticket)
                 exit_reference = float(exit_market.get("price") or 0)
                 if exit_market.get("status") != "available" or exit_reference <= 0:
-                    raise ValueError(
-                        "Stored option contract quote unavailable; an explicit reviewed close price is required."
-                    )
+                    management = existing.get("management_plan") or {}
+                    if management.get("status") == "holding_period_expired" or not exit_reason:
+                        exit_reference = 0.01
+                        exit_market = {
+                            "source": "nominal_expiration_close",
+                            "data_as_of": datetime.utcnow().isoformat(),
+                            "freshness": "nominal",
+                            "liquidity_status": "expired",
+                        }
+                    else:
+                        raise ValueError(
+                            "Stored option contract quote unavailable; an explicit reviewed close price is required."
+                        )
         else:
             exit_market = self._get_market_snapshot(existing.get("ticker"))
             exit_reference = float(closed_price or 0) or float(exit_market.get("price") or 0) or float(existing.get("entry_price") or 0)

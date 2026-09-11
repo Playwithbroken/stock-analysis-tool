@@ -519,15 +519,22 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
-  const closeTrade = async (tradeId: string) => {
+  const closeTrade = async (tradeId: string, customPrice?: number, customReason?: string) => {
     setBusyId(tradeId);
     setStatus("");
     try {
       const draft = journalDraft[tradeId] || { notes: "", exit_reason: "", lessons_learned: "" };
+      const body: any = { ...draft };
+      if (customPrice !== undefined) {
+        body.closed_price = customPrice;
+      }
+      if (customReason && !body.exit_reason) {
+        body.exit_reason = customReason;
+      }
       const response = await fetch(`/api/trading/paper-trades/${tradeId}/close`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify(body),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Paper-Trade konnte nicht geschlossen werden.");
@@ -1252,10 +1259,12 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
             {tradeActionItems.length ? (
               <div className="mt-4 grid gap-2 lg:grid-cols-2">
                 {tradeActionItems.slice(0, 4).map((item: any) => (
-                  <button
+                  <div
                     key={item.id || `${item.ticker}-${item.direction}`}
                     onClick={() => item.ticker && onAnalyze(item.ticker)}
-                    className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3 text-left transition hover:border-[var(--accent)]/30 hover:bg-black/5 dark:hover:bg-white/10"
+                    role="button"
+                    tabIndex={0}
+                    className="rounded-2xl border border-black/8 bg-black/[0.02] dark:border-white/10 dark:bg-white/5 p-3 text-left transition hover:border-[var(--accent)]/30 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1275,7 +1284,25 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                     <div className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
                       {germanText(item.summary, "Paper-Plan prüfen.")}
                     </div>
-                  </button>
+                    {(item.decision_grade === "exit" || item.action === "price_and_close_review" || item.management_status === "holding_period_expired") ? (
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-red-500/20 pt-2">
+                        <span className="text-[11px] font-bold text-red-600 dark:text-red-400">
+                          Exit fällig
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeTrade(item.id, undefined, item.management_status || "holding_period_expired");
+                          }}
+                          disabled={busyId === item.id}
+                          className="rounded-xl bg-red-600 hover:bg-red-700 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-white shadow transition-colors disabled:opacity-50"
+                        >
+                          {busyId === item.id ? "Wird geschlossen..." : "⚡ Exit ausführen"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             ) : null}

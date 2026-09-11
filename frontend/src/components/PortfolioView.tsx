@@ -451,10 +451,9 @@ export default function PortfolioView({
         if (!cancelled) setPaperDashboardLoading(false);
       }
     };
-    const timer = window.setTimeout(loadPaperDashboard, 1800);
+    loadPaperDashboard();
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
   }, []);
 

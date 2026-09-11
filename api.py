@@ -7306,6 +7306,15 @@ async def set_paper_capital_profile(req: PaperCapitalProfileRequest):
     return {"status": "ok", "profile": profile}
 
 
+@app.post("/api/trading/paper-risk-circuit/reset")
+async def reset_paper_risk_circuit():
+    """Manual unpause / override of simulated paper trading risk pause or loss streak cooldown."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    pm = get_portfolio_manager()
+    pm.set_app_setting("paper_circuit_cooldown_override", now_iso)
+    return {"status": "ok", "unpaused_at": now_iso}
+
+
 @app.get("/api/trading/paper-autopilot/settings")
 async def get_paper_autopilot_settings():
     try:

@@ -250,6 +250,7 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const [productDrafts, setProductDrafts] = useState<Record<string, any>>({});
   const [productChecks, setProductChecks] = useState<Record<string, any>>({});
   const [capitalProfileUpdating, setCapitalProfileUpdating] = useState(false);
+  const [resettingRiskCircuit, setResettingRiskCircuit] = useState(false);
 
   const handleSetCapitalProfile = async (profile: string) => {
     setCapitalProfileUpdating(true);
@@ -266,6 +267,20 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
       // ignore
     } finally {
       setCapitalProfileUpdating(false);
+    }
+  };
+
+  const handleResetRiskCircuit = async () => {
+    setResettingRiskCircuit(true);
+    try {
+      const res = await fetch("/api/trading/paper-risk-circuit/reset", { method: "POST" });
+      if (res.ok && onRefresh) {
+        await onRefresh();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setResettingRiskCircuit(false);
     }
   };
 
@@ -1076,6 +1091,17 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
               }`}>
                 {germanStatus(demoAccount.day_status, "überwachen")}
               </div>
+              {(demoAccount.risk_circuit?.active || demoAccount.day_status === "risk_halt") && (
+                <button
+                  type="button"
+                  onClick={handleResetRiskCircuit}
+                  disabled={resettingRiskCircuit}
+                  className="rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-amber-800 dark:text-amber-300 transition-colors shadow-sm disabled:opacity-50"
+                  title="Hebt die Pause nach einer Verlustserie auf, damit das 500k Portfolio aktiv weiter gehandelt werden kann."
+                >
+                  {resettingRiskCircuit ? "Wird freigegeben..." : "⚡ Cooldown beenden (Freigeben)"}
+                </button>
+              )}
             </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">

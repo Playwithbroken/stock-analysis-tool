@@ -4944,6 +4944,9 @@ class PaperTradingService:
                 "max_drawdown_pct": 8.0,
                 "max_equity_exposure_pct": 45.0,
                 "max_etf_exposure_pct": 45.0,
+                "max_consecutive_losses": 3,
+                "loss_streak_cooldown_hours": 24.0,
+                "post_loss_streak_risk_multiplier": 0.25,
             },
             "conviction": {
                 "risk_per_trade_pct": 0.75,
@@ -4958,6 +4961,9 @@ class PaperTradingService:
                 "max_drawdown_pct": 12.0,
                 "max_equity_exposure_pct": 90.0,
                 "max_etf_exposure_pct": 90.0,
+                "max_consecutive_losses": 5,
+                "loss_streak_cooldown_hours": 8.0,
+                "post_loss_streak_risk_multiplier": 0.40,
             },
             "full_portfolio": {
                 "risk_per_trade_pct": 2.0,
@@ -4968,10 +4974,13 @@ class PaperTradingService:
                 "max_ticker_exposure_pct": 30.0,
                 "target_gross_exposure_pct": 90.0,
                 "max_open_trades": 16,
-                "daily_loss_limit_pct": 2.5,
-                "max_drawdown_pct": 15.0,
+                "daily_loss_limit_pct": 3.0,
+                "max_drawdown_pct": 18.0,
                 "max_equity_exposure_pct": 95.0,
                 "max_etf_exposure_pct": 95.0,
+                "max_consecutive_losses": 6,
+                "loss_streak_cooldown_hours": 2.0,
+                "post_loss_streak_risk_multiplier": 0.50,
             },
         }[profile]
 
@@ -5063,11 +5072,11 @@ class PaperTradingService:
             "max_open_trades": env_int("PAPER_TRADING_MAX_OPEN_TRADES", int(profile_defaults["max_open_trades"]), minimum=1),
             "daily_loss_limit_pct": env_float("PAPER_TRADING_DAILY_LOSS_LIMIT_PCT", profile_defaults["daily_loss_limit_pct"], minimum=0.1),
             "max_drawdown_pct": env_float("PAPER_TRADING_MAX_DRAWDOWN_PCT", profile_defaults["max_drawdown_pct"], minimum=0.5),
-            "max_consecutive_losses": env_int("PAPER_TRADING_MAX_CONSECUTIVE_LOSSES", 3, minimum=1),
-            "loss_streak_cooldown_hours": env_float("PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS", 24.0, minimum=1.0),
+            "max_consecutive_losses": env_int("PAPER_TRADING_MAX_CONSECUTIVE_LOSSES", int(profile_defaults.get("max_consecutive_losses", 3)), minimum=1),
+            "loss_streak_cooldown_hours": env_float("PAPER_TRADING_LOSS_STREAK_COOLDOWN_HOURS", float(profile_defaults.get("loss_streak_cooldown_hours", 24.0)), minimum=0.1),
             "post_loss_streak_risk_multiplier": min(
                 1.0,
-                env_float("PAPER_TRADING_POST_LOSS_STREAK_RISK_MULTIPLIER", 0.25, minimum=0.01),
+                env_float("PAPER_TRADING_POST_LOSS_STREAK_RISK_MULTIPLIER", float(profile_defaults.get("post_loss_streak_risk_multiplier", 0.25)), minimum=0.01),
             ),
             "mode": "paper_learning_only",
         }
@@ -5138,6 +5147,18 @@ class PaperTradingService:
             and cooldown_until
             and cooldown_until > compare_now
         )
+        override_str = ""
+        try:
+            override_str = self.portfolio_manager.get_app_setting("paper_circuit_cooldown_override", "")
+        except Exception:
+            pass
+        if override_str and streak_cooldown_active and latest_closed_at:
+            try:
+                override_dt = self._as_utc_naive_datetime(override_str)
+                if override_dt and override_dt >= latest_closed_at:
+                    streak_cooldown_active = False
+            except Exception:
+                pass
         daily_loss_limit_value = float(starting_capital) * (float(config["daily_loss_limit_pct"]) / 100)
         daily_loss_blocked = daily_realized_pnl <= -daily_loss_limit_value
         reasons: List[str] = []

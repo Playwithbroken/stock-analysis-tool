@@ -1806,12 +1806,36 @@ export default function PortfolioView({
                 >
                   CSV exportieren
                 </button>
-                {!isScalableManagedPortfolio && <button
-                  onClick={() => setShowAddHoldingModal(true)}
-                  className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
-                >
-                  Aktie hinzufügen
-                </button>}
+                {!isScalableManagedPortfolio ? (
+                  <button
+                    onClick={() => setShowAddHoldingModal(true)}
+                    className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                  >
+                    Aktie hinzufügen
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowScalableImportModal(true)}
+                      className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Plus size={15} />
+                        Positionen importieren
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleLoadScalableSample}
+                      disabled={scalableSyncing}
+                      className="rounded-[1.2rem] border border-amber-500/20 bg-amber-500/10 px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Sparkles size={15} />
+                        Musterdepot laden (Sofort testen)
+                      </span>
+                    </button>
+                  </>
+                )}
               </div>
             </section>
           )}

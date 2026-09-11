@@ -4823,9 +4823,33 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
     """
     try:
         if get_scalable_integration_service().is_managed_portfolio(request.portfolio_id or ""):
-            return convert_numpy_types(
-                await asyncio.to_thread(get_scalable_integration_service().portfolio_analysis)
-            )
+            try:
+                return convert_numpy_types(
+                    await asyncio.to_thread(get_scalable_integration_service().portfolio_analysis)
+                )
+            except Exception as exc:
+                print(f"Scalable portfolio analysis fallback: {exc}")
+                if not request.holdings:
+                    return convert_numpy_types({
+                        "configured": True,
+                        "total_value": 0.0,
+                        "holdings": [],
+                        "summary": {
+                            "total_value": 0.0,
+                            "total_cost": 0.0,
+                            "gain_loss": 0.0,
+                            "gain_loss_pct": 0.0,
+                            "return_since_buy": 0.0,
+                            "return_since_buy_pct": 0.0,
+                            "num_holdings": 0,
+                            "avg_score": 0.0,
+                            "sector_allocation": {},
+                            "cost_basis_complete": True,
+                            "source": "scalable_fallback",
+                            "as_of": datetime.now(timezone.utc).isoformat(),
+                            "currency": "EUR",
+                        },
+                    })
         holdings_data = []
         total_value = 0
         total_cost = 0
@@ -7258,6 +7282,28 @@ async def validate_leverage_product(req: LeverageProductValidationRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class PaperCapitalProfileRequest(BaseModel):
+    profile: str
+
+
+@app.get("/api/trading/paper-capital-profile")
+async def get_paper_capital_profile():
+    pm = get_portfolio_manager()
+    profile = pm.get_app_setting("paper_capital_profile", os.getenv("PAPER_CAPITAL_PROFILE", "full_portfolio"))
+    return {"profile": profile}
+
+
+@app.post("/api/trading/paper-capital-profile")
+async def set_paper_capital_profile(req: PaperCapitalProfileRequest):
+    allowed = {"full_portfolio", "conviction", "balanced"}
+    profile = req.profile.strip().lower()
+    if profile not in allowed:
+        raise HTTPException(status_code=400, detail=f"Ungültiges Profil. Erlaubt: {sorted(allowed)}")
+    pm = get_portfolio_manager()
+    pm.set_app_setting("paper_capital_profile", profile)
+    return {"status": "ok", "profile": profile}
 
 
 @app.get("/api/trading/paper-autopilot/settings")

@@ -4922,9 +4922,14 @@ class PaperTradingService:
         }
 
     def _demo_account_config(self, capital_profile: Optional[str] = None) -> Dict[str, Any]:
-        profile = (capital_profile or os.getenv("PAPER_CAPITAL_PROFILE", "conviction")).strip().lower()
+        stored_profile = ""
+        try:
+            stored_profile = self.portfolio_manager.get_app_setting("paper_capital_profile", "")
+        except Exception:
+            pass
+        profile = (capital_profile or os.getenv("PAPER_CAPITAL_PROFILE") or stored_profile or "full_portfolio").strip().lower()
         if profile not in {"balanced", "conviction", "full_portfolio"}:
-            profile = "conviction"
+            profile = "full_portfolio"
         profile_defaults = {
             "balanced": {
                 "risk_per_trade_pct": 0.35,

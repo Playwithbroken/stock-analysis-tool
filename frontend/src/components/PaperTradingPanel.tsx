@@ -249,6 +249,25 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
   const [journalDraft, setJournalDraft] = useState<Record<string, { notes: string; exit_reason: string; lessons_learned: string }>>({});
   const [productDrafts, setProductDrafts] = useState<Record<string, any>>({});
   const [productChecks, setProductChecks] = useState<Record<string, any>>({});
+  const [capitalProfileUpdating, setCapitalProfileUpdating] = useState(false);
+
+  const handleSetCapitalProfile = async (profile: string) => {
+    setCapitalProfileUpdating(true);
+    try {
+      const res = await fetch("/api/trading/paper-capital-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile }),
+      });
+      if (res.ok && onRefresh) {
+        await onRefresh();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCapitalProfileUpdating(false);
+    }
+  };
 
   const stats = data?.stats || {};
   const playbooks = data?.playbooks || [];
@@ -1011,7 +1030,32 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                 Heute: {demoAccount.day_action || "Auf ein klares Setup mit Trigger warten."}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-black/8 bg-black/[0.03] dark:border-white/10 dark:bg-white/5 p-1">
+                {[
+                  { id: "full_portfolio", label: "500k Voll-Allokation (90 %)", desc: "Bis zu 16 Trades · 50k–100k € Tranchen" },
+                  { id: "conviction", label: "Conviction (75 %)", desc: "16 Trades · 25k–50k € Tranchen" },
+                  { id: "balanced", label: "Ausgewogen (45 %)", desc: "Konservativ" },
+                ].map((p) => {
+                  const isActive = (demoAccount.capital_profile || "full_portfolio") === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={capitalProfileUpdating}
+                      onClick={() => handleSetCapitalProfile(p.id)}
+                      className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all ${
+                        isActive
+                          ? "bg-[var(--accent)] text-white shadow-sm"
+                          : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                      }`}
+                      title={p.desc}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
               <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${
                 (capitalFlow.capital_status || demoAccount.capital_status) === "ahead"
                   ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"

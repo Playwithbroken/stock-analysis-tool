@@ -941,11 +941,28 @@ class ScalableIntegrationService:
     def portfolio_analysis(self, *, enrich_market_data: bool = True) -> Dict[str, Any]:
         """Build current-value metrics from the reconciled or imported broker snapshot."""
         snapshot = self.snapshot()
-        if snapshot["status"].get("status") != "ok":
-            raise ScalableIntegrationError(
-                "snapshot_unavailable",
-                "Es liegt noch kein gültiger Scalable-Snapshot vor.",
-            )
+        positions = snapshot.get("positions") or []
+        if not positions:
+            return {
+                "configured": True,
+                "total_value": 0.0,
+                "holdings": [],
+                "summary": {
+                    "total_value": 0.0,
+                    "total_cost": 0.0,
+                    "gain_loss": 0.0,
+                    "gain_loss_pct": 0.0,
+                    "return_since_buy": 0.0,
+                    "return_since_buy_pct": 0.0,
+                    "num_holdings": 0,
+                    "avg_score": 0.0,
+                    "sector_allocation": {},
+                    "cost_basis_complete": True,
+                    "source": snapshot.get("status", {}).get("source") or "scalable_empty",
+                    "as_of": snapshot.get("status", {}).get("valuation_timestamp_utc") or _utc_now(),
+                    "currency": snapshot.get("status", {}).get("currency") or "EUR",
+                },
+            }
         holdings: List[Dict[str, Any]] = []
         total_value = Decimal("0")
         total_cost = Decimal("0")
@@ -953,11 +970,14 @@ class ScalableIntegrationService:
         scores: List[float] = []
         sector_weights: Dict[str, float] = {}
 
-        for row in snapshot["positions"]:
+        for row in positions:
             quantity = _decimal(row.get("quantity"), "quantity") or Decimal("0")
             valuation = _decimal(row.get("valuation"), "valuation") or Decimal("0")
             fifo_price = _decimal(row.get("fifo_price"), "fifo_price", optional=True)
             current_price = valuation / quantity if quantity > 0 else Decimal("0")
+            if (current_price <= 0 or valuation <= 0) and fifo_price and fifo_price > 0:
+                current_price = fifo_price
+                valuation = fifo_price * quantity
 
             ticker = str(row.get("ticker") or "").upper()
             score = 0

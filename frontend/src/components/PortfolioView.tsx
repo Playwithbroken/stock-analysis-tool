@@ -295,7 +295,8 @@ export default function PortfolioView({
   useEffect(() => {
     if (selectedPortfolio && portfolios && Array.isArray(portfolios)) {
       const portfolio = portfolios.find((p) => p.id === selectedPortfolio);
-      if (portfolio && portfolio.holdings && portfolio.holdings.length > 0) {
+      const isScalable = portfolio?.id === "scalable-capital-read-only" || portfolio?.id === scalableStatus?.managed_portfolio_id;
+      if (portfolio && ((portfolio.holdings && portfolio.holdings.length > 0) || isScalable)) {
         analyzePortfolio(portfolio);
         if (portfolio.id !== "scalable-capital-read-only") {
           fetchPortfolioVerdict(selectedPortfolio);
@@ -310,7 +311,7 @@ export default function PortfolioView({
       setAnalysis(null);
       setPortfolioVerdict(null);
     }
-  }, [selectedPortfolio, portfolios]);
+  }, [selectedPortfolio, portfolios, scalableStatus]);
 
   const fetchScalableStatus = async () => {
     try {
@@ -574,7 +575,8 @@ export default function PortfolioView({
   };
 
   const analyzePortfolio = async (portfolio: Portfolio, forceRefresh = false) => {
-    if (portfolio.holdings.length === 0) return;
+    const isScalable = portfolio.id === "scalable-capital-read-only" || portfolio.id === scalableStatus?.managed_portfolio_id;
+    if (portfolio.holdings.length === 0 && !isScalable) return;
 
     const cacheKey = portfolioAnalysisKey(portfolio);
     const cached = portfolioAnalysisCache.get(cacheKey);
@@ -604,6 +606,14 @@ export default function PortfolioView({
         const data = (await response.json()) as PortfolioAnalysis;
         cachePortfolioAnalysis(cacheKey, data);
         setAnalysis(data);
+        if (isScalable && data.holdings && data.holdings.length > 0 && portfolio.holdings.length === 0) {
+          portfolio.holdings = data.holdings.map((h: any) => ({
+            ticker: h.ticker,
+            shares: h.shares,
+            buyPrice: h.buy_price,
+            purchaseDate: h.purchase_date,
+          }));
+        }
       }
     } catch {
       setAnalysis(null);
@@ -997,7 +1007,7 @@ export default function PortfolioView({
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => currentPortfolio && analyzePortfolio(currentPortfolio, true)}
-                  disabled={loading || currentPortfolio.holdings.length === 0}
+                  disabled={loading || (currentPortfolio.holdings.length === 0 && !isScalableManagedPortfolio)}
                   className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                 >
                   <span className="inline-flex items-center gap-2">

@@ -737,11 +737,32 @@ class PortfolioManager:
         portfolios = [dict(row) for row in cursor.fetchall()]
         
         for p in portfolios:
-            cursor.execute(
-                'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE portfolio_id = ?',
-                (p['id'],),
-            )
-            p['holdings'] = [dict(row) for row in cursor.fetchall()]
+            if p.get('id') == 'scalable-capital-read-only':
+                try:
+                    cursor.execute(
+                        'SELECT ticker, CAST(quantity AS REAL) as shares, CAST(fifo_price AS REAL) as buyPrice, synced_at as purchaseDate FROM scalable_positions ORDER BY ticker'
+                    )
+                    scalable_rows = [dict(row) for row in cursor.fetchall()]
+                    if scalable_rows:
+                        p['holdings'] = scalable_rows
+                    else:
+                        cursor.execute(
+                            'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE portfolio_id = ?',
+                            (p['id'],),
+                        )
+                        p['holdings'] = [dict(row) for row in cursor.fetchall()]
+                except Exception:
+                    cursor.execute(
+                        'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE portfolio_id = ?',
+                        (p['id'],),
+                    )
+                    p['holdings'] = [dict(row) for row in cursor.fetchall()]
+            else:
+                cursor.execute(
+                    'SELECT ticker, shares, buy_price as buyPrice, purchase_date as purchaseDate FROM holdings WHERE portfolio_id = ?',
+                    (p['id'],),
+                )
+                p['holdings'] = [dict(row) for row in cursor.fetchall()]
             # Rename for frontend compatibility
             p['createdAt'] = p.pop('created_at')
             

@@ -2789,7 +2789,7 @@ class PortfolioHolding(BaseModel):
 
 
 class PortfolioRequest(BaseModel):
-    holdings: List[PortfolioHolding]
+    holdings: List[PortfolioHolding] = Field(default_factory=list)
     portfolio_id: Optional[str] = None
 
 class CreatePortfolioRequest(BaseModel):

@@ -4983,7 +4983,7 @@ class PaperTradingService:
                 "min_cash_reserve_pct": 4.0,
                 "max_ticker_exposure_pct": 30.0,
                 "target_gross_exposure_pct": 90.0,
-                "max_open_trades": 16,
+                "max_open_trades": 24,
                 "daily_loss_limit_pct": 3.0,
                 "max_drawdown_pct": 18.0,
                 "max_equity_exposure_pct": 95.0,

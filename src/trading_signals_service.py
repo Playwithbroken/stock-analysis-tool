@@ -370,19 +370,19 @@ class TradingSignalsService:
     def get_asymmetric_setups(
         self,
         watchlist: List[str],
-        portfolio_capital: float = 50000.0,
+        portfolio_capital: float = 500000.0,
         risk_budget_pct: float = 0.75,
-        limit: int = 4,
+        limit: int = 6,
     ) -> List[Dict[str, Any]]:
         cached = self._c_asymmetric
         if cached.data and time.time() - cached.ts < self.TTL_SHORT:
             return cached.data[:limit]
 
-        candidates = [tk for tk in watchlist if tk and not tk.startswith("^")][:8]
-        # Always ensure key market leaders are represented if watchlist is small
-        defaults = ["NVDA", "AAPL", "MSFT", "TSLA", "SPY", "QQQ"]
+        candidates = [tk for tk in watchlist if tk and not tk.startswith("^")][:16]
+        # Always ensure key market leaders and diversified candidates are represented
+        defaults = ["NVDA", "AAPL", "MSFT", "TSLA", "SPY", "QQQ", "ABBV", "GLD", "COST", "LLY", "XLE", "USO"]
         for d in defaults:
-            if d not in candidates and len(candidates) < 8:
+            if d not in candidates and len(candidates) < 16:
                 candidates.append(d)
 
         setups: List[Dict[str, Any]] = []
@@ -417,7 +417,7 @@ class TradingSignalsService:
         if not alert_service:
             return {"status": "skipped", "reason": "No alert service provided"}
 
-        tickers = list(watchlist or ["NVDA", "AAPL", "MSFT", "TSLA", "META", "AMZN", "GOOGL"])
+        tickers = list(watchlist or ["NVDA", "AAPL", "MSFT", "TSLA", "META", "AMZN", "GOOGL", "ABBV", "GLD", "COST", "LLY"])
         setups = self.get_asymmetric_setups(tickers, limit=limit * 2)
 
         dispatched = []

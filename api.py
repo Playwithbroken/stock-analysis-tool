@@ -7466,7 +7466,10 @@ async def get_asymmetric_trade_setups(limit: int = 6):
         items = get_portfolio_manager().get_signal_watch_items()
         watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
         service = get_trading_signals_service()
-        setups = await asyncio.to_thread(service.get_asymmetric_setups, watchlist, limit=limit)
+        paper_service = get_paper_trading_service()
+        account_snap = paper_service.build_demo_account_snapshot()
+        portfolio_capital = float(account_snap.get("starting_capital") or account_snap.get("equity") or 500000.0)
+        setups = await asyncio.to_thread(service.get_asymmetric_setups, watchlist, portfolio_capital=portfolio_capital, limit=limit)
         return convert_numpy_types({"setups": setups, "count": len(setups)})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -7477,6 +7480,9 @@ async def send_trading_edge_setup_telegram(req: SendEdgeSetupTelegramRequest):
     """Dispatches a high-conviction trade setup card directly to the user's smartphone via Telegram."""
     try:
         service = get_trading_signals_service()
+        paper_service = get_paper_trading_service()
+        account_snap = paper_service.build_demo_account_snapshot()
+        default_cap = float(account_snap.get("starting_capital") or account_snap.get("equity") or 500000.0)
         ticker = (req.ticker or "").strip().upper()
 
         ticket = None
@@ -7484,7 +7490,7 @@ async def send_trading_edge_setup_telegram(req: SendEdgeSetupTelegramRequest):
             ticket = await asyncio.to_thread(
                 service.asymmetric_service.generate_trade_setup,
                 ticker,
-                req.portfolio_capital or 50000.0,
+                req.portfolio_capital or default_cap,
                 req.risk_budget_pct or 0.75,
             )
         else:
@@ -7493,7 +7499,7 @@ async def send_trading_edge_setup_telegram(req: SendEdgeSetupTelegramRequest):
             setups = await asyncio.to_thread(
                 service.get_asymmetric_setups,
                 watchlist,
-                req.portfolio_capital or 50000.0,
+                req.portfolio_capital or default_cap,
                 req.risk_budget_pct or 0.75,
                 1,
             )
@@ -7549,9 +7555,9 @@ async def open_edge_paper_trade(req: OpenEdgePaperTradeRequest):
                     "trade": attach_scope(existing[0], paper_scope()),
                 })
 
-        # Sizing according to available demo cash
+        # Sizing according to available demo cash and 500k capital basis
         account_snap = paper_service.build_demo_account_snapshot()
-        avail_cash = float(account_snap.get("cash") or 50000.0)
+        avail_cash = float(account_snap.get("cash_available_value") or account_snap.get("starting_capital") or 500000.0)
         risk_budget = 0.75
 
         ticket = await asyncio.to_thread(
@@ -7662,7 +7668,7 @@ async def evaluate_trading_lifecycle_now():
 
 
 @app.get("/api/trading/portfolio-heat")
-async def get_trading_portfolio_heat(portfolio_capital: float = 50000.0):
+async def get_trading_portfolio_heat(portfolio_capital: float = 500000.0):
     """Calculates total portfolio risk (heat) and cross-correlation clusters."""
     try:
         lifecycle_svc = get_trade_lifecycle_service()

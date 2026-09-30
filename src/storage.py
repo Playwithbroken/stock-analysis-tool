@@ -1108,6 +1108,29 @@ class PortfolioManager:
         conn.commit()
         conn.close()
 
+    def ensure_default_watch_items(self, min_count: int = 5) -> List[Dict[str, Any]]:
+        """Ensures a curated list of European and US market leaders is present in the watchlist."""
+        existing = self.get_signal_watch_items()
+        if len(existing) < min_count:
+            default_items = [
+                ("ticker", "SAP.DE"),
+                ("ticker", "RHM.DE"),
+                ("ticker", "ASML.AS"),
+                ("ticker", "ALV.DE"),
+                ("ticker", "SIE.DE"),
+                ("ticker", "NVDA"),
+                ("ticker", "MSFT"),
+                ("ticker", "AAPL"),
+                ("ticker", "AMZN"),
+                ("ticker", "PLTR"),
+                ("ticker", "TSLA"),
+                ("ticker", "META"),
+            ]
+            for kind, val in default_items:
+                self.add_signal_watch_item(kind, val)
+            return self.get_signal_watch_items()
+        return existing
+
     def get_sent_signal_event_keys(self) -> set[str]:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()

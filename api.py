@@ -2743,6 +2743,10 @@ async def _price_alert_loop():
 @app.on_event("startup")
 async def startup_event():
     global _background_task_watchdog_task
+    try:
+        get_portfolio_manager().ensure_default_watch_items(min_count=5)
+    except Exception as exc:
+        logger.warning("Default watch items seeding warning: %s", exc)
     _ensure_background_tasks()
     if _background_task_watchdog_task is None or _background_task_watchdog_task.done():
         _background_task_watchdog_task = asyncio.create_task(_background_task_watchdog_loop())

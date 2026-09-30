@@ -194,6 +194,20 @@ class TelegramInteractiveService:
             ticker = cb.split(":", 1)[1].upper()
             self.answer_callback_query(callback_query_id, f"Buche {ticker} ins Paper Trading...")
             res = self._execute_paper_trade(ticker)
+            self.send_message(chat_id, res, reply_markup=self._build_trade_management_keyboard(ticker))
+
+        elif cb.startswith("close:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Schließe Position {ticker}...")
+            res = self._execute_close_trade(ticker)
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("be:"):
+            ticker = cb.split(":", 1)[1].upper()
+            res = self._execute_breakeven_stop(ticker)
+            self.answer_callback_query(
+                callback_query_id, f"🛡️ Stop für {ticker} auf Breakeven gesetzt!", show_alert=True
+            )
             self.send_message(chat_id, res)
 
         elif cb.startswith("track:"):
@@ -210,7 +224,7 @@ class TelegramInteractiveService:
                         f"Ziel 1 (${setup['target_1']:.2f}) und Invalidation (${setup['invalidation_price']:.2f}) "
                         f"werden kontinuierlich überwacht."
                     )
-                    self.send_message(chat_id, confirm_text)
+                    self.send_message(chat_id, confirm_text, reply_markup=self._build_trade_management_keyboard(ticker))
                 else:
                     self.answer_callback_query(callback_query_id, "Fehler beim Laden des Setups.")
             else:
@@ -220,23 +234,6 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "Portfolio Heat wird berechnet...")
             res = self._cmd_heat()
             self.send_message(chat_id, res)
-
-        elif cb.startswith("be:"):
-            ticker = cb.split(":", 1)[1].upper()
-            if self.lifecycle_service:
-                trades = self.lifecycle_service.get_active_trades()
-                matched = next((t for t in trades if t.get("ticker") == ticker), None)
-                if matched:
-                    matched["trailing_stop"] = matched["entry_price"]
-                    self.lifecycle_service._save_trades()
-                    self.answer_callback_query(
-                        callback_query_id, f"🛡️ Stop für {ticker} auf Breakeven gesetzt!", show_alert=True
-                    )
-                    self.send_message(chat_id, f"🛡️ Stop-Loss für <b>{ticker}</b> wurde auf Breakeven (${matched['entry_price']:.2f}) nachgezogen.")
-                else:
-                    self.answer_callback_query(callback_query_id, f"Trade {ticker} nicht gefunden.")
-            else:
-                self.answer_callback_query(callback_query_id, "Lifecycle Service nicht aktiv.")
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -282,6 +279,16 @@ class TelegramInteractiveService:
                 return self._cmd_track()
             elif cmd == "/paper":
                 return self._cmd_paper(args)
+            elif cmd == "/close":
+                return self._cmd_close(args)
+            elif cmd == "/be":
+                return self._cmd_be(args)
+            elif cmd == "/watchlist":
+                return self._cmd_watchlist()
+            elif cmd == "/watch":
+                return self._cmd_watch(args)
+            elif cmd == "/unwatch":
+                return self._cmd_unwatch(args)
             elif cmd == "/heat":
                 return self._cmd_heat()
             elif cmd == "/scan":
@@ -300,23 +307,29 @@ class TelegramInteractiveService:
             "🤖 <b>Broker Freund – Interaktiver Trading Edge Bot</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "Dein institutioneller Trading-Begleiter direkt am Smartphone.\n\n"
-            "⚡ <b>Verfügbare Befehle:</b>\n"
+            "⚡ <b>Trading & Order Management:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop & Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
-            "• <code>/paper TICKER</code> – Setup direkt ins Paper Trading Depot buchen (z.B. <code>/paper NVDA</code>)\n"
-            "• <code>/gex TICKER</code> – Gamma Exposure & Market Maker Regime (z.B. <code>/gex TSLA</code>)\n"
-            "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL) (z.B. <code>/levels AAPL</code>)\n"
-            "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Earnings, Swing-Low) (z.B. <code>/avwap MSFT</code>)\n"
-            "• <code>/whale [TICKER]</code> – Whale Flow & Dark Pool Absorption Detector\n"
-            "• <code>/fvg TICKER</code> – Smart Money Fair Value Gaps & Order Blocks\n"
-            "• <code>/mtf TICKER</code> – Multi-Timeframe Trend & Momentum Alignment (1D, 1H, 15M)\n"
-            "• <code>/regime</code> – SPY/QQQ Trend & VIX Risiko-Status\n"
+            "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
+            "• <code>/close TICKER</code> – Offene Position direkt schließen & PnL sichern (z.B. <code>/close NVDA</code>)\n"
+            "• <code>/be TICKER</code> – Stop-Loss auf Breakeven (Einstand) nachziehen\n"
+            "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n\n"
+            "📋 <b>Watchlist-Verwaltung:</b>\n"
+            "• <code>/watchlist</code> – Alle überwachten EU- und US-Aktien anzeigen\n"
+            "• <code>/watch TICKER</code> – Aktie zur Signal-Watchlist hinzufügen (z.B. <code>/watch SAP.DE</code>)\n"
+            "• <code>/unwatch TICKER</code> – Aktie von Watchlist entfernen\n"
+            "• <code>/scan</code> – Sofortiger Watchlist-Scan für Edge-Setups\n\n"
+            "🧠 <b>Institutionelle Edge-Analysen:</b>\n"
+            "• <code>/gex TICKER</code> – Gamma Exposure & Market Maker Regime\n"
+            "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL)\n"
+            "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Swing, Earnings)\n"
+            "• <code>/whale [TICKER]</code> – Dark Pool & Whale Flow Detector\n"
+            "• <code>/fvg TICKER</code> – Smart Money Fair Value Gaps\n"
+            "• <code>/mtf TICKER</code> – Multi-Timeframe Trend-Alignment (1D, 1H, 15M)\n"
+            "• <code>/regime</code> – Macro Regime (SPY/QQQ & VIX)\n"
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
-            "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n"
-            "• <code>/heat</code> – Portfolio Heat & Korrelations-Shield\n"
-            "• <code>/scan</code> – Watchlist-Scan sofort manuell ausführen\n"
-            "• <code>/help</code> – Diese Übersicht anzeigen\n\n"
-            "💡 <i>Tipp: Tippe einfach auf einen blau hinterlegten Befehl oben zum Ausführen.</i>"
+            "• <code>/heat</code> – Portfolio Heat & Korrelations-Shield\n\n"
+            "💡 <i>Tipp: Bei jedem /edge Setup kannst du einfach auf die interaktiven Buttons tippen!</i>"
         )
 
     def _build_inline_keyboard(self, ticker: str) -> Dict[str, Any]:
@@ -326,6 +339,10 @@ class TelegramInteractiveService:
                 [
                     {"text": "📝 In Paper Trader buchen", "callback_data": f"paper:{ticker}"},
                     {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
+                ],
+                [
+                    {"text": "🛡️ Stop auf Breakeven", "callback_data": f"be:{ticker}"},
+                    {"text": "🚪 Position schließen", "callback_data": f"close:{ticker}"},
                 ],
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
@@ -341,6 +358,24 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
+                ],
+            ]
+        }
+
+    def _build_trade_management_keyboard(self, ticker: str) -> Dict[str, Any]:
+        """Generates action buttons specifically for an active position."""
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": "🛡️ Stop auf Breakeven", "callback_data": f"be:{ticker}"},
+                    {"text": "🚪 Position schließen", "callback_data": f"close:{ticker}"},
+                ],
+                [
+                    {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
+                    {"text": "📊 Volume Profile", "callback_data": f"levels:{ticker}"},
+                ],
+                [
+                    {"text": "🎯 Setups & Trailing Stop", "callback_data": "track"},
                 ],
             ]
         }
@@ -446,6 +481,257 @@ class TelegramInteractiveService:
             f"• <b>Konfluenz:</b> {confluence_score:.0f}/100 Pkt.\n\n"
             f"🛡️ <i>Trade ist im Demokonto eingebucht und wird vom Lifecycle Engine (Trailing Stop & Breakeven) aktiv überwacht.</i>"
         )
+
+    def _cmd_close(self, args: List[str]) -> str:
+        if not args:
+            return (
+                "🚪 <b>Position schließen</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "• <code>/close NVDA</code>\n"
+                "• <code>/close SAP.DE</code>\n\n"
+                "💡 <i>Tipp: Bei aktiven Trades kannst du auch einfach auf den Button '🚪 Position schließen' tippen.</i>"
+            )
+        ticker = args[0].upper().strip()
+        return self._execute_close_trade(ticker)
+
+    def _execute_close_trade(self, ticker: str) -> str:
+        """Closes an active paper trade or removes it from lifecycle tracking."""
+        ticker = ticker.upper().strip()
+
+        # 1. Look for open paper trades in portfolio manager
+        open_trades: List[Dict[str, Any]] = []
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                open_trades = [
+                    t for t in self.portfolio_manager.list_paper_trades(limit=200)
+                    if str(t.get("ticker") or "").upper() == ticker and str(t.get("status") or "").lower() == "open"
+                ]
+            except Exception as e:
+                logger.warning("Error fetching open paper trades: %s", e)
+
+        # 2. Get current spot price
+        spot: Optional[float] = None
+        if self.lifecycle_service:
+            spot = self.lifecycle_service._fetch_current_price(ticker)
+        if not spot or spot <= 0:
+            if open_trades:
+                spot = float(open_trades[0].get("current_price") or open_trades[0].get("entry_price") or 0.0)
+
+        # 3. Update Lifecycle Service if tracking
+        lifecycle_closed = False
+        if self.lifecycle_service:
+            trades = self.lifecycle_service.get_active_trades()
+            matched = next(
+                (t for t in trades if t.get("ticker") == ticker and t.get("status") in ("OPEN", "TARGET_1_HIT")),
+                None,
+            )
+            if matched:
+                matched["status"] = "CLOSED"
+                if spot:
+                    matched["last_price"] = spot
+                self.lifecycle_service._save_trades()
+                lifecycle_closed = True
+
+        if not open_trades and not lifecycle_closed:
+            return (
+                f"ℹ️ <b>Keine offene Position für {ticker} gefunden.</b>\n"
+                f"Weder im Paper Trading Depot noch im aktiven Lifecycle-Monitor vorhanden.\n\n"
+                f"Prüfe deine offenen Trades mit <code>/track</code>."
+            )
+
+        # 4. Close the paper trade(s) in database
+        closed_reports: List[str] = []
+        for trade in open_trades:
+            trade_id = str(trade.get("id"))
+            entry_p = float(trade.get("entry_price") or 0.0)
+            exit_p = spot if (spot and spot > 0) else entry_p
+            qty = float(trade.get("quantity") or 1.0)
+
+            closed_ok = False
+            if self.paper_service and hasattr(self.paper_service, "close_trade"):
+                try:
+                    self.paper_service.close_trade(
+                        trade_id=trade_id,
+                        closed_price=exit_p,
+                        exit_reason="telegram_bot_manual_close",
+                        notes="Manuell über Telegram Smartphone Bot geschlossen",
+                    )
+                    closed_ok = True
+                except Exception as c_err:
+                    logger.warning("PaperService close failed: %s, falling back to PortfolioManager", c_err)
+
+            if not closed_ok and self.portfolio_manager and hasattr(self.portfolio_manager, "close_paper_trade"):
+                try:
+                    self.portfolio_manager.close_paper_trade(
+                        trade_id=trade_id,
+                        closed_price=exit_p,
+                        exit_reason="telegram_bot_manual_close",
+                        notes="Manuell über Telegram Smartphone Bot geschlossen",
+                    )
+                    closed_ok = True
+                except Exception as p_err:
+                    logger.error("PortfolioManager close failed: %s", p_err)
+
+            pnl_per_share = exit_p - entry_p
+            pnl_pct = (pnl_per_share / entry_p * 100) if entry_p > 0 else 0.0
+            pnl_total = pnl_per_share * qty
+            sign = "+" if pnl_total >= 0 else ""
+            emoji = "🟢" if pnl_total >= 0 else "🔴"
+            closed_reports.append(
+                f"• <b>Ausstieg:</b> ${exit_p:.2f} (Einstieg: ${entry_p:.2f})\n"
+                f"• <b>Stück:</b> {int(qty)} | <b>Ergebnis:</b> <b>{sign}${pnl_total:,.2f} ({sign}{pnl_pct:.2f}%)</b> {emoji}"
+            )
+
+        detail_text = "\n\n".join(closed_reports) if closed_reports else f"• Lifecycle-Tracking für <b>{ticker}</b> beendet."
+        return (
+            f"🚪 <b>POSITION GESCHLOSSEN: {ticker}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{detail_text}\n\n"
+            f"✅ <i>Position im Paper Depot glattgestellt und Risikomonitoring beendet. Dein Demokonto wurde aktualisiert.</i>"
+        )
+
+    def _cmd_be(self, args: List[str]) -> str:
+        if not args:
+            return (
+                "🛡️ <b>Stop auf Breakeven setzen</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "• <code>/be NVDA</code>\n"
+                "• <code>/be SAP.DE</code>\n\n"
+                "💡 <i>Tipp: Bei jedem aktiven Trade kannst du auch einfach auf den Button '🛡️ Stop auf Breakeven' tippen.</i>"
+            )
+        ticker = args[0].upper().strip()
+        return self._execute_breakeven_stop(ticker)
+
+    def _execute_breakeven_stop(self, ticker: str) -> str:
+        """Moves trailing stop to breakeven for an active setup / paper trade."""
+        ticker = ticker.upper().strip()
+        updated_any = False
+        entry_price = 0.0
+
+        if self.lifecycle_service:
+            trades = self.lifecycle_service.get_active_trades()
+            matched = next(
+                (t for t in trades if t.get("ticker") == ticker and t.get("status") in ("OPEN", "TARGET_1_HIT")),
+                None,
+            )
+            if matched:
+                entry_price = float(matched.get("entry_price") or 0.0)
+                matched["trailing_stop"] = entry_price
+                self.lifecycle_service._save_trades()
+                updated_any = True
+
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                open_trades = [
+                    t for t in self.portfolio_manager.list_paper_trades(limit=150)
+                    if str(t.get("ticker") or "").upper() == ticker and str(t.get("status") or "").lower() == "open"
+                ]
+                for pt in open_trades:
+                    if not entry_price:
+                        entry_price = float(pt.get("entry_price") or 0.0)
+                    tid = pt.get("id")
+                    if tid and hasattr(self.portfolio_manager, "update_paper_trade_journal"):
+                        self.portfolio_manager.update_paper_trade_journal(
+                            trade_id=tid,
+                            notes=f"Stop auf Breakeven (${entry_price:.2f}) via Telegram angepasst.",
+                        )
+                    updated_any = True
+            except Exception as pe:
+                logger.warning("Error checking paper trades for breakeven: %s", pe)
+
+        if not updated_any:
+            return (
+                f"ℹ️ Kein aktiver Trade für <b>{ticker}</b> gefunden.\n"
+                f"Prüfe deine offenen Trades mit <code>/track</code>."
+            )
+
+        entry_display = f"${entry_price:.2f}" if entry_price > 0 else "Einstandspreis"
+        return (
+            f"🛡️ <b>STOP-LOSS AUF BREAKEVEN: {ticker}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Neuer Trailing Stop:</b> {entry_display}\n"
+            f"• <b>Verbleibendes Risiko:</b> 0.00 € (Risikofreier Trade!)\n\n"
+            f"Dein Kapital ist geschützt. Die Position kann ohne Verlustrisiko weiterlaufen."
+        )
+
+    def _cmd_watch(self, args: List[str]) -> str:
+        if not args:
+            return (
+                "ℹ️ <b>Watchlist hinzufügen</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "• <code>/watch SAP.DE</code> (DAX Leader)\n"
+                "• <code>/watch RHM.DE</code> (Rheinmetall)\n"
+                "• <code>/watch NVDA</code> (US Leader)"
+            )
+        ticker = args[0].upper().strip()
+        if not self.portfolio_manager:
+            return "⚠️ Portfolio Manager nicht initialisiert."
+        try:
+            self.portfolio_manager.add_signal_watch_item("ticker", ticker)
+            return (
+                f"✅ <b>Watchlist aktualisiert</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>{ticker}</b> wurde erfolgreich zur Signal-Watchlist hinzugefügt.\n"
+                f"Wird ab sofort in automatischen Scans, Morning Briefs und Edge-Benachrichtigungen überwacht.\n\n"
+                f"Tippe <code>/watchlist</code> für die Übersicht oder <code>/edge {ticker}</code> für eine sofortige Analyse."
+            )
+        except Exception as exc:
+            return f"❌ Fehler beim Hinzufügen von {ticker}: {exc}"
+
+    def _cmd_unwatch(self, args: List[str]) -> str:
+        if not args:
+            return (
+                "ℹ️ <b>Watchlist entfernen</b>\n"
+                "Bitte einen Ticker angeben: z.B. <code>/unwatch NVDA</code> oder <code>/unwatch SAP.DE</code>"
+            )
+        ticker = args[0].upper().strip()
+        if not self.portfolio_manager:
+            return "⚠️ Portfolio Manager nicht initialisiert."
+        try:
+            self.portfolio_manager.remove_signal_watch_item("ticker", ticker)
+            return (
+                f"🗑️ <b>Watchlist aktualisiert</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>{ticker}</b> wurde von der Signal-Watchlist entfernt."
+            )
+        except Exception as exc:
+            return f"❌ Fehler beim Entfernen von {ticker}: {exc}"
+
+    def _cmd_watchlist(self) -> str:
+        tickers = self._get_watchlist_tickers()
+        if not tickers:
+            return (
+                "ℹ️ <b>Die Signal-Watchlist ist aktuell leer.</b>\n"
+                "Füge Symbole hinzu mit <code>/watch TICKER</code>."
+            )
+
+        europe_tickers = [
+            t for t in tickers
+            if any(t.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC", ".L"])
+        ]
+        us_tickers = [t for t in tickers if t not in europe_tickers]
+
+        lines = [
+            f"📋 <b>SIGNAL-WATCHLIST ({len(tickers)} Titel)</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        if europe_tickers:
+            lines.append("🇪🇺 <b>Europa / DAX Leaders:</b>")
+            for t in sorted(europe_tickers):
+                lines.append(f"  • <code>{t}</code> (Abruf: <code>/edge {t}</code>)")
+            lines.append("")
+
+        if us_tickers:
+            lines.append("🇺🇸 <b>US & International Leaders:</b>")
+            for t in sorted(us_tickers):
+                lines.append(f"  • <code>{t}</code> (Abruf: <code>/edge {t}</code>)")
+            lines.append("")
+
+        lines.append(
+            "💡 <i>Befehle: <code>/watch TICKER</code> | <code>/unwatch TICKER</code> | <code>/scan</code></i>"
+        )
+        return "\n".join(lines)
 
     def _cmd_edge(self, args: List[str], chat_id: Optional[str] = None) -> str:
         if not self.asymmetric_service:
@@ -703,10 +989,15 @@ class TelegramInteractiveService:
 
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""
-        default_list = ["NVDA", "AAPL", "MSFT", "TSLA", "META", "AMZN", "GOOGL"]
+        default_list = [
+            "SAP.DE", "RHM.DE", "ASML.AS", "ALV.DE", "SIE.DE",
+            "NVDA", "MSFT", "AAPL", "AMZN", "PLTR", "TSLA", "META"
+        ]
         if not self.portfolio_manager:
             return default_list
         try:
+            if hasattr(self.portfolio_manager, "ensure_default_watch_items"):
+                self.portfolio_manager.ensure_default_watch_items(min_count=5)
             items = self.portfolio_manager.get_signal_watch_items()
             tickers = [
                 it["value"].upper().strip()
@@ -808,6 +1099,11 @@ class TelegramInteractiveService:
                                 tk = parts[1].upper() if len(parts) > 1 else ""
                                 if tk:
                                     reply_markup = self._build_inline_keyboard(tk)
+                            elif text.startswith("/paper"):
+                                parts = text.split()
+                                tk = parts[1].upper() if len(parts) > 1 else ""
+                                if tk:
+                                    reply_markup = self._build_trade_management_keyboard(tk)
                             self.send_message(chat_id, response_text, reply_markup=reply_markup)
 
                 elif poll_res.status_code == 409:

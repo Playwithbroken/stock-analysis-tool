@@ -330,6 +330,71 @@ class TestTelegramInteractiveService(unittest.TestCase):
             sent_text = mock_send.call_args[0][1]
             self.assertIn("PAPER TRADE GEBUCHT: AAPL", sent_text)
 
+    def test_inline_keyboard_has_be_and_close_buttons(self):
+        kb = self.service._build_inline_keyboard("NVDA")
+        all_buttons = [btn for row in kb["inline_keyboard"] for btn in row]
+        be_btn = next((b for b in all_buttons if b.get("callback_data") == "be:NVDA"), None)
+        close_btn = next((b for b in all_buttons if b.get("callback_data") == "close:NVDA"), None)
+        self.assertIsNotNone(be_btn)
+        self.assertIn("Stop auf Breakeven", be_btn["text"])
+        self.assertIsNotNone(close_btn)
+        self.assertIn("Position schließen", close_btn["text"])
+
+    def test_cmd_watch_and_unwatch(self):
+        res_watch = self.service.handle_command("999888", "/watch SAP.DE")
+        self.assertIn("Watchlist aktualisiert", res_watch)
+        self.assertIn("SAP.DE", res_watch)
+        self.mock_pm.add_signal_watch_item.assert_called_with("ticker", "SAP.DE")
+
+        res_unwatch = self.service.handle_command("999888", "/unwatch SAP.DE")
+        self.assertIn("Watchlist aktualisiert", res_unwatch)
+        self.assertIn("SAP.DE", res_unwatch)
+        self.mock_pm.remove_signal_watch_item.assert_called_with("ticker", "SAP.DE")
+
+    def test_cmd_watchlist_categorization(self):
+        self.mock_pm.get_signal_watch_items.return_value = [
+            {"kind": "ticker", "value": "SAP.DE"},
+            {"kind": "ticker", "value": "RHM.DE"},
+            {"kind": "ticker", "value": "NVDA"},
+        ]
+        res = self.service.handle_command("999888", "/watchlist")
+        self.assertIn("SIGNAL-WATCHLIST (3 Titel)", res)
+        self.assertIn("Europa / DAX Leaders:", res)
+        self.assertIn("SAP.DE", res)
+        self.assertIn("RHM.DE", res)
+        self.assertIn("US & International Leaders:", res)
+        self.assertIn("NVDA", res)
+
+    def test_cmd_close_paper_trade(self):
+        self.mock_pm.list_paper_trades.return_value = [
+            {
+                "id": "trade_xyz",
+                "ticker": "NVDA",
+                "status": "open",
+                "entry_price": 120.0,
+                "current_price": 130.0,
+                "quantity": 10,
+            }
+        ]
+        self.mock_lifecycle._fetch_current_price.return_value = 130.0
+        self.mock_lifecycle.get_active_trades.return_value = [
+            {"ticker": "NVDA", "status": "OPEN", "entry_price": 120.0}
+        ]
+
+        res = self.service.handle_command("999888", "/close NVDA")
+        self.assertIn("POSITION GESCHLOSSEN: NVDA", res)
+        self.assertIn("+$100.00", res)
+        self.assertIn("+8.33%", res)
+
+    def test_cmd_be_stop(self):
+        self.mock_lifecycle.get_active_trades.return_value = [
+            {"ticker": "NVDA", "status": "OPEN", "entry_price": 120.0, "trailing_stop": 114.0}
+        ]
+        res = self.service.handle_command("999888", "/be NVDA")
+        self.assertIn("STOP-LOSS AUF BREAKEVEN: NVDA", res)
+        self.assertIn("$120.00", res)
+        self.assertIn("Risikofreier Trade", res)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -745,9 +745,134 @@ class DataFetcher:
         except Exception as e:
             print(f"Error fetching earnings history for {self.ticker}: {e}")
             return []
+
+    def get_upcoming_earnings(self) -> Optional[Dict[str, Any]]:
+        """Fetch next scheduled earnings date, timing and EPS estimate."""
+        try:
+            now_date = datetime.now(timezone.utc).date()
+
+            # 1. Try get_earnings_dates()
+            try:
+                ed = self.stock.get_earnings_dates(limit=10)
+                if ed is not None and isinstance(ed, pd.DataFrame) and not ed.empty:
+                    future_rows = []
+                    for idx, row in ed.iterrows():
+                        dt = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx
+                        row_date = dt.date() if hasattr(dt, "date") else None
+                        if row_date and row_date >= now_date:
+                            reported = self._safe_number(row.get("Reported EPS") if hasattr(row, "get") else None)
+                            estimate = self._safe_number(row.get("EPS Estimate") if hasattr(row, "get") else None)
+                            if reported is None:
+                                future_rows.append((row_date, dt, estimate))
+
+                    if future_rows:
+                        # Sort by earliest future date
+                        future_rows.sort(key=lambda x: x[0])
+                        next_date, next_dt, next_estimate = future_rows[0]
+                        timing = "TBD"
+                        if hasattr(next_dt, "hour"):
+                            if next_dt.hour >= 16:
+                                timing = "After Market Close (AMC)"
+                            elif 6 <= next_dt.hour <= 10:
+                                timing = "Before Market Open (BMO)"
+
+                        days_until = (next_date - now_date).days
+                        return {
+                            "date": next_date.strftime("%Y-%m-%d"),
+                            "timing": timing,
+                            "days_until": days_until,
+                            "eps_estimate": next_estimate,
+                        }
+            except Exception:
+                pass
+
+            # 2. Try self.stock.calendar
+            try:
+                cal = getattr(self.stock, "calendar", None)
+                if cal is not None:
+                    dates = None
+                    if isinstance(cal, dict):
+                        dates = cal.get("Earnings Date") or cal.get("earningsDate")
+                    elif isinstance(cal, pd.DataFrame) and not cal.empty:
+                        if "Earnings Date" in cal.index:
+                            dates = cal.loc["Earnings Date"].tolist()
+                    if dates:
+                        if not isinstance(dates, (list, tuple)):
+                            dates = [dates]
+                        for d in dates:
+                            row_date = d.date() if hasattr(d, "date") else None
+                            if row_date and row_date >= now_date:
+                                return {
+                                    "date": row_date.strftime("%Y-%m-%d"),
+                                    "timing": "TBD",
+                                    "days_until": (row_date - now_date).days,
+                                    "eps_estimate": None,
+                                }
+            except Exception:
+                pass
+
+            # 3. Try self.info earningsDate
+            try:
+                info_dates = self.info.get("earningsDate") or self.info.get("nextEarningsDate")
+                if info_dates:
+                    if not isinstance(info_dates, (list, tuple)):
+                        info_dates = [info_dates]
+                    for d in info_dates:
+                        row_date = d.date() if hasattr(d, "date") else None
+                        if row_date and row_date >= now_date:
+                            return {
+                                "date": row_date.strftime("%Y-%m-%d"),
+                                "timing": "TBD",
+                                "days_until": (row_date - now_date).days,
+                                "eps_estimate": None,
+                            }
+            except Exception:
+                pass
+
+            return None
+        except Exception as e:
+            print(f"Error fetching upcoming earnings for {self.ticker}: {e}")
+            return None
     
     def get_insider_transactions(self) -> list:
-        return []
+        """Fetch Form 4 insider transactions."""
+        try:
+            from src.superinvestor_service import SuperinvestorService
+            raw_df = getattr(self.stock, "insider_transactions", None)
+            return SuperinvestorService.parse_insider_transactions(raw_df)
+        except Exception as e:
+            print(f"Error fetching insider transactions for {self.ticker}: {e}")
+            return []
+
+    def get_insider_radar(self) -> Dict[str, Any]:
+        """Fetch comprehensive insider transactions, 6m summary, institutions and superinvestors."""
+        try:
+            from src.superinvestor_service import SuperinvestorService
+            raw_trans = getattr(self.stock, "insider_transactions", None)
+            raw_purchases = getattr(self.stock, "insider_purchases", None)
+            raw_inst = getattr(self.stock, "institutional_holders", None)
+
+            transactions = SuperinvestorService.parse_insider_transactions(raw_trans)
+            summary = SuperinvestorService.parse_insider_summary(raw_purchases, transactions)
+            institutions = SuperinvestorService.parse_institutional_holders(raw_inst)
+            superinvestors = SuperinvestorService.get_superinvestors_for_ticker(self.ticker)
+
+            return {
+                "transactions": transactions,
+                "summary": summary,
+                "institutional_holders": institutions,
+                "superinvestors": superinvestors,
+                "superinvestors_count": len(superinvestors),
+            }
+        except Exception as e:
+            print(f"Error fetching insider radar for {self.ticker}: {e}")
+            return {
+                "transactions": [],
+                "summary": {"sentiment": "NEUTRAL", "sentiment_label": "Keine Daten", "recent_activity": False},
+                "institutional_holders": [],
+                "superinvestors": [],
+                "superinvestors_count": 0,
+            }
 
     def get_dividends(self) -> Dict[str, Any]:
         """Get basic dividend information for portfolio income estimates."""
@@ -892,6 +1017,7 @@ class DataFetcher:
             "comparison": self.get_comparison_data(),
             "earnings_history": self.get_earnings_history(),
             "guidance_signal": self.get_guidance_signal(),
+            "insider_radar": self.get_insider_radar(),
             "etf_holdings": self.get_etf_holdings() if self.info.get("quoteType") == "ETF" else [],
             "fetch_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }

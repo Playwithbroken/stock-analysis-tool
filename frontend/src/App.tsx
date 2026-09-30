@@ -431,69 +431,79 @@ function LoginScreen({
               </div>
             </div>
 
-            <div className="order-first surface-strong rounded-[2.4rem] p-6 sm:p-8 lg:order-last">
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-white/50">
-                Zugang
+            <div className="order-first surface-strong rounded-[2.4rem] p-6 sm:p-8 lg:order-last border border-white/12 bg-gradient-to-b from-[#181b26] to-[#0e1017] shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Sicherer Zugang
               </div>
-              <div className="mt-4 text-3xl font-black text-white">
+              <div className="mt-4 text-3xl font-black tracking-tight text-white">
                 Zugangscode eingeben
               </div>
-              <p className="mt-3 text-sm leading-7 text-white/70">
+              <p className="mt-3 text-sm leading-relaxed text-slate-300">
                 {configured
-                  ? "Nur mit lokaler Session wird die App geladen."
+                  ? "Nur mit autorisierter lokaler Session wird der private Arbeitsbereich geladen."
                   : status.includes("automatisch erneut geprüft")
                     ? "Der Server startet noch. Die Verbindung wird im Hintergrund erneut geprüft."
                   : "Der Server braucht noch APP_ACCESS_PASSWORD und APP_SESSION_SECRET."}
               </p>
               <div className="mt-6 space-y-3">
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submit();
-                  }}
-                  aria-label="6-stelliger Zugangscode"
-                  className="login-password-input w-full rounded-[1.2rem] border px-4 py-3 text-sm font-semibold"
-                  placeholder="6-stelliger Zugangscode"
-                />
-                <label className="flex items-center gap-2 rounded-[1rem] border border-white/12 bg-white/8 px-3 py-2 text-xs text-white/80">
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submit();
+                    }}
+                    aria-label="6-stelliger Zugangscode"
+                    className="login-password-input w-full rounded-[1.2rem] border px-4 py-3.5 text-sm font-semibold tracking-wider text-white outline-none"
+                    placeholder="6-stelliger Zugangscode"
+                    autoFocus
+                  />
+                </div>
+                <label className="flex items-center gap-2.5 rounded-[1rem] border border-white/12 bg-white/[0.04] px-3.5 py-2.5 text-xs font-medium text-slate-200 cursor-pointer hover:bg-white/[0.07] transition-colors">
                   <input
                     type="checkbox"
                     checked={rememberDevice}
                     onChange={(e) => setRememberDevice(e.target.checked)}
-                    className="h-4 w-4 rounded border-white/30 bg-transparent"
+                    className="h-4 w-4 rounded border-white/30 bg-transparent text-emerald-500 focus:ring-emerald-500/30"
                   />
                   Auf diesem Gerät angemeldet bleiben (7 Tage)
                 </label>
                 <button
                   onClick={submit}
                   disabled={submitting || !configured}
-                  className="w-full rounded-[1.2rem] bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-900 disabled:opacity-50"
+                  className="login-submit-btn w-full rounded-[1.2rem] px-4 py-3.5 text-xs font-extrabold uppercase tracking-[0.18em] shadow-lg disabled:opacity-50"
                 >
-                  {submitting ? "Zugang wird geprüft..." : "Entsperren"}
+                  {submitting ? "Zugang wird autorisiert..." : "Arbeitsbereich entsperren"}
                 </button>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-3">
-                <div className="rounded-[1.2rem] border border-white/10 bg-white/8 p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/45">
+                <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
                     Zugangsmodell
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-white">Ein privater Zugangscode</div>
+                  <div className="mt-1.5 text-sm font-bold text-white">Ein privater Zugangscode</div>
                 </div>
-                <div className="rounded-[1.2rem] border border-white/10 bg-white/8 p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/45">
+                <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] p-4">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
                     Plattform
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-white">Für Web und Smartphone</div>
+                  <div className="mt-1.5 text-sm font-bold text-white">Für Web und Smartphone</div>
                 </div>
               </div>
               {status ? (
-                <div className="mt-4 text-sm text-white/75">
+                <div className={`mt-4 rounded-xl border p-3.5 text-xs font-semibold leading-relaxed ${
+                  status.includes("401") || status.includes("403")
+                    ? "border-rose-500/30 bg-rose-500/15 text-rose-200"
+                    : status.includes("500")
+                    ? "border-amber-500/30 bg-amber-500/15 text-amber-200"
+                    : "border-emerald-500/30 bg-emerald-500/15 text-emerald-200"
+                }`}>
                   {status.includes("500")
                     ? "Keine Verbindung zum Server. Bitte den Backend-Status prüfen."
                     : status.includes("401") || status.includes("403")
-                      ? "Der Zugangscode ist falsch. Bitte erneut versuchen."
+                      ? "Der eingegebene Zugangscode ist ungültig. Bitte erneut versuchen."
                       : status}
                 </div>
               ) : null}
@@ -864,13 +874,13 @@ function AppContent() {
         if (!cancelled && briefRequestIdRef.current === requestId && !displayableBriefLoaded) {
           setGlobalBriefStatus("error");
         }
-      }, 15000);
+      }, 45000);
       try {
         try {
           const fastPayload = await fetchJsonWithRetry<any>("/api/market/morning-brief?fast=true", undefined, {
-            retries: 1,
-            retryDelayMs: 300,
-            timeoutMs: 6000,
+            retries: 2,
+            retryDelayMs: 600,
+            timeoutMs: 15000,
           });
           if (!cancelled && briefRequestIdRef.current === requestId) {
             setGlobalBrief(fastPayload);
@@ -886,9 +896,9 @@ function AppContent() {
 
         await new Promise((resolve) => window.setTimeout(resolve, 300));
         const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
-          retries: 1,
-          retryDelayMs: 400,
-          timeoutMs: 10000,
+          retries: 2,
+          retryDelayMs: 800,
+          timeoutMs: 35000,
         });
         if (!cancelled && briefRequestIdRef.current === requestId) {
           const fullState = getBriefLoadState(payload);

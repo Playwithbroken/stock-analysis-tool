@@ -43,8 +43,10 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
     const root = document.documentElement;
     if (theme === "dark") {
       root.setAttribute("data-theme", "dark");
+      root.classList.add("dark");
     } else {
       root.removeAttribute("data-theme");
+      root.classList.remove("dark");
     }
   }, [theme]);
 

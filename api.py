@@ -3,7 +3,7 @@ FastAPI Backend for Stock Analysis Tool
 Provides REST API endpoints for stock analysis.
 """
 
-from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -2639,13 +2639,17 @@ async def _scalable_auto_sync_loop():
 async def _warm_brief_once() -> Dict[str, Any]:
     started = datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin")))
     items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
-    snapshot = await asyncio.wait_for(
-        asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
-        timeout=float(os.getenv("BRIEF_WARMUP_SNAPSHOT_TIMEOUT_SECONDS", "5")),
-    )
+    try:
+        snapshot = await asyncio.wait_for(
+            asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items),
+            timeout=float(os.getenv("BRIEF_WARMUP_SNAPSHOT_TIMEOUT_SECONDS", "25")),
+        )
+    except Exception as exc:
+        print(f"Brief warmup snapshot fallback: {exc}")
+        snapshot = {"items": items or [], "ticker_signals": []}
     brief = await asyncio.wait_for(
         asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot, True),
-        timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "30")),
+        timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "60")),
     )
     try:
         trading_edge = await asyncio.wait_for(
@@ -2810,6 +2814,69 @@ class UpdateHoldingRequest(BaseModel):
     shares: Optional[float] = None
     buy_price: Optional[float] = Field(default=None, alias="buyPrice")
     purchase_date: Optional[str] = Field(default=None, alias="purchaseDate")
+
+
+class PortfolioRebalanceRequest(BaseModel):
+    mode: str = "equal"  # "equal", "cap", "custom"
+    fresh_cash: float = 0.0
+    target_weights: Optional[Dict[str, float]] = None
+    max_position_pct: float = 20.0
+    fee_per_trade: float = 1.0
+
+
+class StressTestRequest(BaseModel):
+    scenario: str = "financial_crisis_2008"
+    custom_market_drop_pct: Optional[float] = 20.0
+
+
+class DividendForecastRequest(BaseModel):
+    years: int = 10
+    monthly_contribution: float = 250.0
+    reinvest_dividends: bool = True
+    dividend_growth_rate: float = 5.0
+    capital_growth_rate: float = 4.0
+    tax_allowance: float = 1000.0
+
+
+class DCFParametersRequest(BaseModel):
+    fcf_growth_rate: Optional[float] = Field(None, description="FCF-Wachstumsrate p.a. (z. B. 0.10 für 10%)")
+    discount_rate: Optional[float] = Field(None, description="Abzinsungssatz WACC (z. B. 0.09 für 9%)")
+    terminal_growth_rate: Optional[float] = Field(0.025, description="Ewige Wachstumsrate (z. B. 0.025 für 2.5%)")
+    projection_years: Optional[int] = Field(5, description="Projektionshorizont in Jahren (5 oder 10)")
+    margin_of_safety: Optional[float] = Field(0.20, description="Sicherheitsmarge (z. B. 0.20 für 20%)")
+    custom_base_fcf: Optional[float] = Field(None, description="Benutzerdefinierter Basis-Free-Cashflow")
+
+
+class ETFOverlapRequest(BaseModel):
+    monthly_savings: Optional[float] = Field(250.0, description="Monatlicher ETF-Sparplan in EUR")
+    gross_return: Optional[float] = Field(0.07, description="Angenommene jährliche Bruttorendite (z. B. 0.07 für 7%)")
+
+
+class TaxHarvestingRequest(BaseModel):
+    church_tax_type: Optional[str] = Field("none", description="Kirchensteuer: 'none', '8%' oder '9%'")
+    fsa_allowance: Optional[float] = Field(1000.0, description="Gesamter Freistellungsauftrag (1000 EUR Single, 2000 EUR Verheiratet)")
+    fsa_used: Optional[float] = Field(0.0, description="Bereits in Anspruch genommener Freibetrag")
+    broker_splits: Optional[List[Dict[str, Any]]] = Field(None, description="Broker-Aufteilung")
+
+
+class OptionsStrategyRequest(BaseModel):
+    dte: Optional[int] = Field(30, ge=1, le=365, description="Restlaufzeit in Tagen (DTE)")
+    shares: Optional[int] = Field(100, ge=1, description="Anzahl Aktien")
+    custom_iv: Optional[float] = Field(None, ge=0.05, le=3.0, description="Implizite Volatilität (z. B. 0.25)")
+
+
+class MonteCarloRequest(BaseModel):
+    initial_wealth: Optional[float] = Field(None, ge=0.0, description="Startkapital (wenn leer, wird aktueller Depotwert genutzt)")
+    annual_return: Optional[float] = Field(None, ge=-0.20, le=0.50, description="Erwartete Rendite p.a. (z. B. 0.08 für 8%)")
+    annual_volatility: Optional[float] = Field(None, ge=0.01, le=1.0, description="Erwartete Volatilität p.a. (z. B. 0.16 für 16%)")
+    monthly_savings: Optional[float] = Field(500.0, ge=0.0, description="Monatliche Sparrate")
+    monthly_withdrawal: Optional[float] = Field(0.0, ge=0.0, description="Monatliche Entnahme / Rente")
+    horizon_years: Optional[int] = Field(20, ge=1, le=50, description="Anlagehorizont in Jahren")
+    inflation_rate: Optional[float] = Field(0.02, ge=0.0, le=0.20, description="Inflationsrate p.a.")
+    target_wealth: Optional[float] = Field(1000000.0, ge=100.0, description="Zielvermögen")
+    num_simulations: Optional[int] = Field(2000, ge=100, le=10000, description="Anzahl Pfade")
+    withdrawal_inflation_adjusted: Optional[bool] = Field(True, description="Entnahmen an Inflation anpassen")
+
 
 class OracleRequest(BaseModel):
     message: str
@@ -3392,6 +3459,9 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "guidance_signal": data.get("guidance_signal", {}),
             "business_quality": _build_business_quality_checks(data),
             "analysis": analyses,
+            "bull_bear_debate": result.get("bull_bear_debate"),
+            "dcf_valuation": analyzer.calculate_dcf() if data.get("fundamentals", {}).get("quote_type") != "ETF" else None,
+            "insider_radar": data.get("insider_radar"),
             "etf_analysis": analyzer.analyze_etf() if data.get("fundamentals", {}).get("quote_type") == "ETF" else None,
             "recommendation": result.get("recommendation"),
             "valuation": result.get("valuation", Valuation.FAIRLY_VALUED).value,
@@ -3414,6 +3484,9 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                 "total_score": result.get("total_score", 0),
                 "valuation": analysis_payload["valuation"],
                 "verdict": analysis_payload["verdict"],
+                "bull_bear_debate": analysis_payload["bull_bear_debate"],
+                "dcf_valuation": analysis_payload["dcf_valuation"],
+                "insider_radar": analysis_payload.get("insider_radar"),
                 "fetch_time": data.get("fetch_time"),
                 "data_quality": analysis_payload["data_quality"],
                 "news": data.get("news", []),
@@ -3429,6 +3502,70 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
         )
+
+
+@app.get("/api/analyze/{ticker}/dcf")
+async def get_dcf_valuation(ticker: str) -> Dict[str, Any]:
+    """
+    Get default DCF intrinsic value, Reverse-DCF, scenarios, and sensitivity matrix.
+    """
+    try:
+        resolved_ticker = _normalize_ticker_input(ticker)
+        fetcher = DataFetcher(resolved_ticker)
+        data = fetcher.get_all_data()
+        if not data or not data.get("price_data") or not data.get("price_data", {}).get("current_price"):
+            raise HTTPException(status_code=404, detail=f"No price data available for {ticker}")
+        analyzer = StockAnalyzer(data)
+        dcf_res = analyzer.calculate_dcf()
+        return convert_numpy_types(dcf_res)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DCF calculation failed: {str(e)}")
+
+
+@app.post("/api/analyze/{ticker}/dcf")
+async def calculate_custom_dcf(ticker: str, params: DCFParametersRequest) -> Dict[str, Any]:
+    """
+    Calculate custom DCF valuation with user-specified WACC, growth rates, horizon, or custom FCF.
+    """
+    try:
+        resolved_ticker = _normalize_ticker_input(ticker)
+        fetcher = DataFetcher(resolved_ticker)
+        data = fetcher.get_all_data()
+        if not data or not data.get("price_data") or not data.get("price_data", {}).get("current_price"):
+            raise HTTPException(status_code=404, detail=f"No price data available for {ticker}")
+        analyzer = StockAnalyzer(data)
+        dcf_res = analyzer.calculate_dcf(
+            fcf_growth_rate=params.fcf_growth_rate,
+            discount_rate=params.discount_rate,
+            terminal_growth_rate=params.terminal_growth_rate,
+            projection_years=params.projection_years or 5,
+            margin_of_safety=params.margin_of_safety if params.margin_of_safety is not None else 0.20,
+            custom_base_fcf=params.custom_base_fcf,
+        )
+        return convert_numpy_types(dcf_res)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Custom DCF calculation failed: {str(e)}")
+
+
+@app.get("/api/analyze/{ticker}/insiders")
+async def get_stock_insider_radar(ticker: str) -> Dict[str, Any]:
+    """
+    Get SEC Form 4 insider transactions, 6m summary, top institutions, and matching 13F Superinvestors.
+    """
+    try:
+        resolved_ticker = _normalize_ticker_input(ticker)
+        fetcher = DataFetcher(resolved_ticker)
+        radar = fetcher.get_insider_radar()
+        return convert_numpy_types({
+            "ticker": resolved_ticker,
+            **radar
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Insider radar failed: {str(e)}")
 
 
 @app.get("/api/analysis/basic")
@@ -3826,32 +3963,834 @@ async def get_portfolio_dividends(p_id: str):
 
 
 @app.get("/api/portfolio/{p_id}/correlation")
-async def get_portfolio_correlation(p_id: str):
-    """Calculate correlation matrix between holdings."""
-    import pandas as pd
+@app.get("/api/portfolios/{p_id}/correlation")
+async def get_portfolio_correlation(
+    p_id: str,
+    timeframe: str = Query("1y", pattern="^(30d|90d|1y|3y)$", description="Zeitfenster: '30d', '90d', '1y', '3y'")
+):
+    """
+    Calculate institutional cross-asset correlation matrix, hierarchical risk clusters,
+    diversification index, and Risk-Parity weights.
+    """
     try:
         portfolios = get_portfolio_manager().get_portfolios()
         portfolio = next((p for p in portfolios if p['id'] == p_id), None)
-        if not portfolio or len(portfolio['holdings']) < 2:
-            return {"matrix": []}
-            
-        data = {}
-        for h in portfolio['holdings']:
-            f = DataFetcher(h['ticker'])
-            hist = f.get_history(period="1y", interval="1d")
-            data[h['ticker']] = [e['price'] for e in hist]
-            
-        # Ensure equal lengths
-        min_len = min(len(v) for v in data.values())
-        df = pd.DataFrame({k: v[:min_len] for k, v in data.items()})
-        corr = df.pct_change().corr()
-        
-        return {
-            "labels": list(corr.columns),
-            "values": corr.values.tolist()
-        }
+        if not portfolio:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+        from src.correlation_service import CorrelationService
+
+        holdings = portfolio.get('holdings', [])
+        result = CorrelationService.analyze_portfolio_correlation(holdings=holdings, timeframe=timeframe)
+        result["portfolio_id"] = p_id
+        result["portfolio_name"] = portfolio.get("name", "Portfolio")
+        return convert_numpy_types(result)
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/api/correlation/analyze")
+async def analyze_custom_correlation(
+    tickers: List[str] = Body(..., embed=True),
+    timeframe: str = Query("1y", pattern="^(30d|90d|1y|3y)$")
+):
+    """
+    Calculate cross-asset correlation and risk clustering for a custom list of tickers.
+    """
+    from src.correlation_service import CorrelationService
+    holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in tickers]
+    result = CorrelationService.analyze_portfolio_correlation(holdings=holdings, timeframe=timeframe)
+    return convert_numpy_types(result)
+
+
+class BlackLittermanRequest(BaseModel):
+    timeframe: str = "1y"
+    risk_free_rate: float = 0.035
+    views: Optional[List[Dict[str, Any]]] = None
+
+
+@app.get("/api/portfolio/{p_id}/efficient-frontier")
+@app.get("/api/portfolios/{p_id}/efficient-frontier")
+async def get_portfolio_efficient_frontier(
+    p_id: str,
+    timeframe: str = Query("1y", pattern="^(90d|1y|3y)$"),
+    rf: float = Query(0.035, ge=0.0, le=0.20)
+):
+    """
+    Computes Modern Portfolio Theory Efficient Frontier, GMV, Max Sharpe,
+    and initial Black-Litterman equilibrium weights for a portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings or len(holdings) < 2:
+        return {
+            "valid": False,
+            "error": "Mindestens 2 Positionen im Portfolio erforderlich für eine Optimierung."
+        }
+
+    from src.optimization_service import OptimizationService
+    result = OptimizationService.run_optimization(
+        holdings=holdings,
+        timeframe=timeframe,
+        risk_free_rate=rf
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/{p_id}/optimize/black-litterman")
+@app.post("/api/portfolios/{p_id}/optimize/black-litterman")
+async def optimize_black_litterman(
+    p_id: str,
+    request: BlackLittermanRequest
+):
+    """
+    Computes Bayesian Black-Litterman optimization with user tactical views.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings or len(holdings) < 2:
+        return {
+            "valid": False,
+            "error": "Mindestens 2 Positionen im Portfolio erforderlich für eine Optimierung."
+        }
+
+    from src.optimization_service import OptimizationService
+    result = OptimizationService.run_optimization(
+        holdings=holdings,
+        timeframe=request.timeframe,
+        risk_free_rate=request.risk_free_rate,
+        views=request.views
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/optimize/custom")
+async def optimize_custom_portfolio(
+    tickers: List[str] = Body(..., embed=True),
+    timeframe: str = Query("1y", pattern="^(90d|1y|3y)$"),
+    rf: float = Query(0.035, ge=0.0, le=0.20)
+):
+    """
+    Computes Efficient Frontier & Black-Litterman optimization for custom tickers.
+    """
+    from src.optimization_service import OptimizationService
+    holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in tickers]
+    result = OptimizationService.run_optimization(
+        holdings=holdings,
+        timeframe=timeframe,
+        risk_free_rate=rf
+    )
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/tail-risk")
+@app.get("/api/portfolios/{p_id}/tail-risk")
+async def get_portfolio_tail_risk(
+    p_id: str,
+    timeframe: str = Query("1y", pattern="^(1y|3y|5y)$")
+):
+    """
+    Computes Tail Risk, Value-at-Risk (VaR), Cornish-Fisher VaR,
+    Expected Shortfall (CVaR), and Underwater Drawdown for a portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.tail_risk_service import TailRiskService
+    total_val = 0.0
+    for h in holdings:
+        shares = float(h.get("shares") or 0.0)
+        price = float(h.get("current_price") or h.get("buyPrice") or 100.0)
+        total_val += shares * price
+
+    result = TailRiskService.analyze_portfolio_tail_risk(
+        holdings=holdings,
+        total_portfolio_value=max(1000.0, total_val),
+        timeframe=timeframe
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/tail-risk/analyze")
+async def analyze_custom_tail_risk(
+    tickers: List[str] = Body(..., embed=True),
+    timeframe: str = Query("1y", pattern="^(1y|3y|5y)$")
+):
+    """
+    Computes Tail Risk, VaR, CVaR and Underwater Drawdown for custom tickers.
+    """
+    from src.tail_risk_service import TailRiskService
+    holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in tickers]
+    result = TailRiskService.analyze_portfolio_tail_risk(
+        holdings=holdings,
+        total_portfolio_value=100000.0,
+        timeframe=timeframe
+    )
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/esg")
+@app.get("/api/portfolios/{p_id}/esg")
+async def get_portfolio_esg_analysis(p_id: str):
+    """
+    Computes EU SFDR classification, Carbon Intensity (WACI),
+    E-S-G pillar scores, controversies, and exclusion screening for a portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.esg_service import ESGService
+    result = ESGService.analyze_portfolio_esg(holdings)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.get("/api/stock/{ticker}/esg")
+async def get_stock_esg_analysis(ticker: str):
+    """
+    Returns single stock ESG profile, carbon intensity, and controversies.
+    """
+    from src.esg_service import ESGService
+    profile = ESGService.get_stock_esg_profile(ticker)
+    return convert_numpy_types(profile)
+
+
+@app.post("/api/portfolio/esg/analyze")
+async def analyze_custom_esg(
+    tickers: List[str] = Body(..., embed=True)
+):
+    """
+    Computes ESG diagnostics for custom tickers.
+    """
+    from src.esg_service import ESGService
+    holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in tickers]
+    result = ESGService.analyze_portfolio_esg(holdings)
+    return convert_numpy_types(result)
+
+
+class LiquiditySimulateRequest(BaseModel):
+    ticker: str
+    order_value_eur: float
+    current_price: float = 100.0
+
+
+@app.get("/api/portfolio/{p_id}/liquidity")
+@app.get("/api/portfolios/{p_id}/liquidity")
+async def get_portfolio_liquidity_analysis(
+    p_id: str,
+    participation_rate: float = Query(0.10, ge=0.01, le=1.0)
+):
+    """
+    Computes Days-to-Liquidate (DTL), SEC Rule 22e-4 liquidity tiers,
+    Almgren-Chriss market impact/slippage, fire-sale stress cost, and Health Score.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.liquidity_service import LiquidityService
+    result = LiquidityService.analyze_portfolio_liquidity(
+        holdings=holdings,
+        participation_rate=participation_rate
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.get("/api/stock/{ticker}/liquidity")
+async def get_stock_liquidity_analysis(ticker: str):
+    """
+    Returns single stock liquidity metrics: ADV, Bid-Ask spread, volatility, and tick sizes.
+    """
+    from src.liquidity_service import LiquidityService
+    profile = LiquidityService.get_stock_liquidity_profile(ticker)
+    return convert_numpy_types(profile)
+
+
+@app.post("/api/portfolio/liquidity/simulate")
+async def simulate_liquidity_order_impact(request: LiquiditySimulateRequest):
+    """
+    Simulates market impact, slippage, and optimal execution schedule for custom orders.
+    """
+    from src.liquidity_service import LiquidityService
+    result = LiquidityService.simulate_order_impact(
+        ticker=request.ticker,
+        order_value_eur=request.order_value_eur,
+        current_price=request.current_price
+    )
+    return convert_numpy_types(result)
+
+
+class CurrencyShockSimulateRequest(BaseModel):
+    portfolio_id: Optional[str] = None
+    tickers: Optional[List[str]] = None
+    fx_shocks: Dict[str, float]
+
+
+@app.get("/api/portfolio/{p_id}/currency-hedging")
+@app.get("/api/portfolios/{p_id}/currency-hedging")
+async def get_portfolio_currency_hedging(p_id: str):
+    """
+    Computes look-through net currency exposure, FX Value-at-Risk (VaR),
+    Covered Interest Parity forward hedging costs, and Minimum Variance Hedge Ratios.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.currency_hedging_service import CurrencyHedgingService
+    result = CurrencyHedgingService.analyze_portfolio_currency_risk(holdings)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/currency-hedging/simulate")
+async def simulate_portfolio_currency_shock(request: CurrencyShockSimulateRequest):
+    """
+    Simulates macro exchange rate shocks on the portfolio.
+    """
+    from src.currency_hedging_service import CurrencyHedgingService
+    holdings = []
+    if request.portfolio_id:
+        portfolios = get_portfolio_manager().get_portfolios()
+        portfolio = next((p for p in portfolios if p["id"] == request.portfolio_id), None)
+        if portfolio:
+            holdings = portfolio.get("holdings", [])
+    elif request.tickers:
+        holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in request.tickers]
+
+    if not holdings:
+        raise HTTPException(status_code=400, detail="Keine Positionen für FX-Simulation übergeben.")
+
+    result = CurrencyHedgingService.simulate_fx_shock(holdings, request.fx_shocks)
+    return convert_numpy_types(result)
+
+
+class BrinsonAnalyzeRequest(BaseModel):
+    tickers: List[str]
+    benchmark: str = "msci_world"
+
+
+@app.get("/api/portfolio/{p_id}/attribution")
+@app.get("/api/portfolios/{p_id}/attribution")
+async def get_portfolio_performance_attribution(
+    p_id: str,
+    benchmark: str = Query("msci_world", pattern="^(msci_world|sp500|dax|stoxx600)$")
+):
+    """
+    Computes GIPS Brinson-Fachler performance attribution (Allocation, Selection, Interaction Effect)
+    and Active Share against global benchmarks (MSCI World, S&P 500, DAX, STOXX 600).
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.performance_attribution_service import PerformanceAttributionService
+    result = PerformanceAttributionService.calculate_brinson_attribution(
+        holdings=holdings,
+        benchmark_key=benchmark
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/attribution/analyze")
+async def analyze_custom_attribution(request: BrinsonAnalyzeRequest):
+    """
+    Computes Brinson-Fachler attribution for custom tickers against a chosen benchmark.
+    """
+    from src.performance_attribution_service import PerformanceAttributionService
+    holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in request.tickers]
+    result = PerformanceAttributionService.calculate_brinson_attribution(
+        holdings=holdings,
+        benchmark_key=request.benchmark
+    )
+    return convert_numpy_types(result)
+
+
+class FixedIncomeSimulateRequest(BaseModel):
+    portfolio_id: Optional[str] = None
+    tickers: Optional[List[str]] = None
+    shift_bps: float = 100.0
+
+
+@app.get("/api/portfolio/{p_id}/fixed-income")
+@app.get("/api/portfolios/{p_id}/fixed-income")
+async def get_portfolio_fixed_income_analytics(p_id: str):
+    """
+    Computes Modified Duration, MacAulay Duration, Convexity, DV01,
+    Yield-to-Maturity (YTM), and interest rate stress testing.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.fixed_income_service import FixedIncomeService
+    result = FixedIncomeService.analyze_portfolio_fixed_income(holdings)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/fixed-income/simulate")
+async def simulate_fixed_income_yield_shift(request: FixedIncomeSimulateRequest):
+    """
+    Simulates custom basis point yield curve shifts on the portfolio.
+    """
+    from src.fixed_income_service import FixedIncomeService
+    holdings = []
+    if request.portfolio_id:
+        portfolios = get_portfolio_manager().get_portfolios()
+        portfolio = next((p for p in portfolios if p["id"] == request.portfolio_id), None)
+        if portfolio:
+            holdings = portfolio.get("holdings", [])
+    elif request.tickers:
+        holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in request.tickers]
+
+    if not holdings:
+        raise HTTPException(status_code=400, detail="Keine Positionen für Zins-Simulation übergeben.")
+
+    result = FixedIncomeService.simulate_yield_shift(holdings, request.shift_bps)
+    return convert_numpy_types(result)
+
+
+class RiskRatiosAnalyzeRequest(BaseModel):
+    tickers: List[str]
+    benchmark: str = "msci_world"
+
+
+@app.get("/api/portfolio/{p_id}/risk-ratios")
+@app.get("/api/portfolios/{p_id}/risk-ratios")
+async def get_portfolio_risk_ratios(
+    p_id: str,
+    benchmark: str = Query("msci_world", pattern="^(msci_world|sp500|dax)$")
+):
+    """
+    Computes Sharpe, Sortino, Calmar, Treynor, Information, and Omega Ratios
+    plus Pain Index vs. benchmark.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.ratio_analytics_service import RatioAnalyticsService
+    result = RatioAnalyticsService.analyze_portfolio_risk_ratios(
+        holdings=holdings,
+        benchmark_key=benchmark
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/risk-ratios/analyze")
+async def analyze_custom_risk_ratios(request: RiskRatiosAnalyzeRequest):
+    """
+    Computes risk-adjusted performance ratios for custom tickers.
+    """
+    from src.ratio_analytics_service import RatioAnalyticsService
+    holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in request.tickers]
+    result = RatioAnalyticsService.analyze_portfolio_risk_ratios(
+        holdings=holdings,
+        benchmark_key=request.benchmark
+    )
+    return convert_numpy_types(result)
+
+
+class CrisisShockSimulateRequest(BaseModel):
+    portfolio_id: Optional[str] = None
+    tickers: Optional[List[str]] = None
+    equity_shock_pct: float = -20.0
+    rate_shock_bps: float = 100.0
+    oil_shock_pct: float = 30.0
+    credit_spread_bps: float = 150.0
+    usd_shock_pct: float = 5.0
+
+
+@app.get("/api/portfolio/{p_id}/crisis-scenarios")
+@app.get("/api/portfolios/{p_id}/crisis-scenarios")
+async def get_portfolio_crisis_scenarios(p_id: str):
+    """
+    Replays the portfolio against 7 major historical crises:
+    - 1987 Black Monday
+    - 2000 Dot-com Bubble
+    - 2008 Lehman GFC
+    - 2011 Euro Debt Crisis
+    - 2020 Covid-19 Crash
+    - 2022 Stagflation & Rate Shock
+    - Geopolitical Energy & Trade Shock
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "valid": False,
+            "error": "Keine Positionen im Portfolio vorhanden."
+        }
+
+    from src.crisis_scenario_service import CrisisScenarioService
+    result = CrisisScenarioService.analyze_portfolio(holdings)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/crisis-scenarios/simulate")
+async def simulate_custom_crisis_shock(request: CrisisShockSimulateRequest):
+    """
+    Simulates custom macro shock vectors across equities, rates, commodities, and credit spreads.
+    """
+    from src.crisis_scenario_service import CrisisScenarioService
+    holdings = []
+    total_val = 0.0
+    if request.portfolio_id:
+        portfolios = get_portfolio_manager().get_portfolios()
+        portfolio = next((p for p in portfolios if p["id"] == request.portfolio_id), None)
+        if portfolio:
+            holdings = portfolio.get("holdings", [])
+    elif request.tickers:
+        holdings = [{"ticker": t, "name": t, "shares": 1, "current_price": 100} for t in request.tickers]
+
+    if not holdings:
+        raise HTTPException(status_code=400, detail="Keine Positionen für Krisen-Simulation übergeben.")
+
+    result = CrisisScenarioService.simulate_custom_shock(
+        holdings=holdings,
+        total_value=total_val,
+        equity_shock_pct=request.equity_shock_pct,
+        rate_shock_bps=request.rate_shock_bps,
+        oil_shock_pct=request.oil_shock_pct,
+        credit_spread_bps=request.credit_spread_bps,
+        usd_shock_pct=request.usd_shock_pct,
+    )
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/institutional-report")
+@app.get("/api/portfolios/{p_id}/institutional-report")
+async def get_portfolio_institutional_report(
+    p_id: str,
+    benchmark: str = "msci_world",
+    client_type: str = "Institutional / Family Office",
+    horizon: int = 5
+):
+    """
+    Generates a full UCITS / MiFID II compliant Institutional Factsheet and
+    Investment Committee Memo report dataset for the portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.institutional_reporting_service import InstitutionalReportingService
+    result = InstitutionalReportingService.generate_factsheet_data(
+        portfolio=portfolio,
+        benchmark_key=benchmark,
+        client_type=client_type,
+        investment_horizon_years=horizon
+    )
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/{p_id}/rebalance")
+@app.post("/api/portfolios/{p_id}/rebalance")
+async def calculate_portfolio_rebalance(p_id: str, request: PortfolioRebalanceRequest):
+    """
+    Calculates actionable rebalancing orders for a portfolio.
+    Supports:
+    - Equal Weighting
+    - Max Position Capping
+    - Custom Target Weights
+    - Fresh Cash Injection (Tax-Efficient Cash-Only Rebalancing)
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "mode": request.mode,
+            "fresh_cash": request.fresh_cash,
+            "current_total_value": 0.0,
+            "new_total_value": request.fresh_cash,
+            "items": [],
+            "summary": {
+                "total_buys_value": 0.0,
+                "total_sells_value": 0.0,
+                "net_cash_flow": 0.0,
+                "num_buys": 0,
+                "num_sells": 0,
+                "num_holds": 0,
+                "estimated_fees": 0.0,
+                "trades_count": 0,
+            }
+        }
+
+    # Extract current prices and values
+    items_data = []
+    current_total_value = 0.0
+    for h in holdings:
+        ticker = str(h.get("ticker", "")).strip().upper()
+        shares = float(h.get("shares") or 0.0)
+        buy_price = float(h.get("buyPrice") or 0.0)
+        price = 0.0
+        try:
+            p_data = DataFetcher(ticker).get_price_data()
+            price = float(p_data.get("current_price") or 0.0)
+        except Exception:
+            price = 0.0
+        if price <= 0:
+            price = buy_price if buy_price > 0 else 1.0
+
+        pos_val = shares * price
+        current_total_value += pos_val
+        items_data.append({
+            "ticker": ticker,
+            "name": h.get("name") or ticker,
+            "shares": shares,
+            "price": price,
+            "current_value": pos_val,
+        })
+
+    fresh_cash = max(0.0, float(request.fresh_cash or 0.0))
+    new_total_value = current_total_value + fresh_cash
+    n = len(items_data)
+
+    # Calculate target weights based on mode
+    target_weights: Dict[str, float] = {}
+    if request.mode == "equal":
+        eq_weight = 100.0 / n if n > 0 else 0.0
+        for item in items_data:
+            target_weights[item["ticker"]] = eq_weight
+    elif request.mode == "cap":
+        requested_cap = max(5.0, min(100.0, float(request.max_position_pct or 20.0)))
+        effective_cap = max(100.0 / n, requested_cap)
+        weights = {}
+        for item in items_data:
+            weights[item["ticker"]] = (item["current_value"] / current_total_value * 100.0) if current_total_value > 0 else (100.0 / n)
+
+        for _ in range(12):
+            exceeded = {t: w - effective_cap for t, w in weights.items() if w > effective_cap}
+            if not exceeded:
+                break
+            excess_pool = sum(exceeded.values())
+            for t in exceeded:
+                weights[t] = effective_cap
+            below_cap = [t for t, w in weights.items() if w < effective_cap]
+            if not below_cap:
+                break
+            below_sum = sum(weights[t] for t in below_cap)
+            for t in below_cap:
+                if below_sum > 0:
+                    weights[t] += excess_pool * (weights[t] / below_sum)
+                else:
+                    weights[t] += excess_pool / len(below_cap)
+        target_weights = weights
+    elif request.mode == "custom" and request.target_weights:
+        custom_sum = sum(request.target_weights.values())
+        if custom_sum > 0:
+            for item in items_data:
+                raw_w = float(request.target_weights.get(item["ticker"], 0.0))
+                target_weights[item["ticker"]] = (raw_w / custom_sum) * 100.0
+        else:
+            eq_weight = 100.0 / n if n > 0 else 0.0
+            for item in items_data:
+                target_weights[item["ticker"]] = eq_weight
+    else:
+        eq_weight = 100.0 / n if n > 0 else 0.0
+        for item in items_data:
+            target_weights[item["ticker"]] = eq_weight
+
+    # Normalize target weights to ensure exact sum = 100
+    t_sum = sum(target_weights.values())
+    if t_sum > 0 and abs(t_sum - 100.0) > 0.01:
+        for t in target_weights:
+            target_weights[t] = (target_weights[t] / t_sum) * 100.0
+
+    # Build orders
+    rebalance_items = []
+    total_buys = 0.0
+    total_sells = 0.0
+    num_buys = 0
+    num_sells = 0
+    num_holds = 0
+
+    # For cash-only rebalancing: sum shortfalls of underweight positions
+    shortfalls = {}
+    for item in items_data:
+        t = item["ticker"]
+        cur_w = (item["current_value"] / current_total_value * 100.0) if current_total_value > 0 else 0.0
+        tgt_w = target_weights.get(t, 0.0)
+        target_val = new_total_value * (tgt_w / 100.0)
+        delta_val = target_val - item["current_value"]
+        if delta_val > 0:
+            shortfalls[t] = delta_val
+    total_shortfall = sum(shortfalls.values())
+
+    for item in items_data:
+        t = item["ticker"]
+        shares = item["shares"]
+        price = item["price"]
+        cur_val = item["current_value"]
+        cur_w = (cur_val / current_total_value * 100.0) if current_total_value > 0 else 0.0
+        tgt_w = target_weights.get(t, 0.0)
+        target_val = new_total_value * (tgt_w / 100.0)
+        delta_val = target_val - cur_val
+
+        # Round delta shares to whole integer
+        delta_shares = round(delta_val / price) if price > 0 else 0
+        if delta_shares > 0:
+            action = "BUY"
+            order_val = delta_shares * price
+            total_buys += order_val
+            num_buys += 1
+        elif delta_shares < 0 and shares > 0:
+            delta_shares = max(-int(shares), delta_shares)
+            action = "SELL"
+            order_val = abs(delta_shares) * price
+            total_sells += order_val
+            num_sells += 1
+        else:
+            delta_shares = 0
+            action = "HOLD"
+            order_val = 0.0
+            num_holds += 1
+
+        # Cash-only buy shares (only buying, no selling)
+        cash_only_shares = 0
+        cash_only_action = "HOLD"
+        if fresh_cash > 0 and total_shortfall > 0 and t in shortfalls:
+            allocated_cash = fresh_cash * (shortfalls[t] / total_shortfall)
+            cash_only_shares = math.floor(allocated_cash / price) if price > 0 else 0
+            if cash_only_shares > 0:
+                cash_only_action = "BUY"
+
+        rebalance_items.append({
+            "ticker": t,
+            "name": item["name"],
+            "current_shares": shares,
+            "current_price": round(price, 2),
+            "current_value": round(cur_val, 2),
+            "current_weight_pct": round(cur_w, 2),
+            "target_weight_pct": round(tgt_w, 2),
+            "target_value": round(target_val, 2),
+            "delta_value": round(delta_val, 2),
+            "delta_shares": delta_shares,
+            "action": action,
+            "estimated_order_value": round(order_val, 2),
+            "cash_only_shares": cash_only_shares,
+            "cash_only_action": cash_only_action,
+        })
+
+    fee_rate = float(request.fee_per_trade or 1.0)
+    estimated_fees = (num_buys + num_sells) * fee_rate
+
+    return {
+        "portfolio_id": p_id,
+        "portfolio_name": portfolio.get("name", "Portfolio"),
+        "mode": request.mode,
+        "fresh_cash": fresh_cash,
+        "current_total_value": round(current_total_value, 2),
+        "new_total_value": round(new_total_value, 2),
+        "items": rebalance_items,
+        "summary": {
+            "total_buys_value": round(total_buys, 2),
+            "total_sells_value": round(total_sells, 2),
+            "net_cash_flow": round(total_buys - total_sells, 2),
+            "num_buys": num_buys,
+            "num_sells": num_sells,
+            "num_holds": num_holds,
+            "estimated_fees": round(estimated_fees, 2),
+            "trades_count": num_buys + num_sells,
+        }
+    }
 
 
 @app.get("/api/discovery/dividends")
@@ -5056,6 +5995,795 @@ async def get_portfolio_history(p_id: str, period: str = "1mo"):
 
     return []
 
+
+@app.get("/api/portfolio/{p_id}/benchmark")
+@app.get("/api/portfolios/{p_id}/benchmark")
+async def get_portfolio_benchmark_comparison(
+    p_id: str,
+    benchmark: str = "SPY",
+    period: str = "1y",
+):
+    """
+    Compares the historical performance of a portfolio against a major benchmark.
+    Calculates Alpha, Beta, Sharpe Ratio, Sortino Ratio, Max Drawdown, and Correlation.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings") or []
+    if not holdings:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "benchmark_symbol": benchmark,
+            "benchmark_name": benchmark,
+            "period": period,
+            "chart_data": [],
+            "metrics": {
+                "total_return_portfolio_pct": 0.0,
+                "total_return_benchmark_pct": 0.0,
+                "alpha_excess_pct": 0.0,
+                "beta": 1.0,
+                "correlation": 0.0,
+                "sharpe_ratio": 0.0,
+                "sortino_ratio": 0.0,
+                "max_drawdown_portfolio_pct": 0.0,
+                "max_drawdown_benchmark_pct": 0.0,
+            },
+            "verdict": "Keine Positionen im Portfolio vorhanden.",
+        }
+
+    # Normalize benchmark
+    bm_clean = benchmark.upper().strip()
+    benchmark_map = {
+        "SPY": ("SPY", "S&P 500 ETF"),
+        "VOO": ("VOO", "Vanguard S&P 500"),
+        "URTH": ("URTH", "iShares MSCI World ETF"),
+        "MSCI": ("URTH", "iShares MSCI World ETF"),
+        "QQQ": ("QQQ", "Invesco Nasdaq 100"),
+        "DAX": ("^GDAXI", "DAX Performance Index"),
+        "^GDAXI": ("^GDAXI", "DAX Performance Index"),
+    }
+    bm_ticker, bm_name = benchmark_map.get(bm_clean, (bm_clean, bm_clean))
+
+    interval = "1d" if period != "1d" else "5m"
+
+    # Fetch benchmark history
+    def _fetch_bm():
+        try:
+            return DataFetcher(bm_ticker).get_history(period=period, interval=interval)
+        except Exception:
+            return []
+
+    try:
+        bm_history = await asyncio.wait_for(asyncio.to_thread(_fetch_bm), timeout=12.0)
+    except Exception:
+        bm_history = []
+
+    bm_by_date = {}
+    for entry in bm_history or []:
+        d = str(entry.get("time") or entry.get("full_date") or "")
+        p = entry.get("price")
+        if d and p is not None:
+            try:
+                val = float(p)
+                if math.isfinite(val) and val > 0:
+                    bm_by_date[d] = val
+            except (TypeError, ValueError):
+                pass
+
+    # Fetch holdings history
+    portfolio_by_date: Dict[str, float] = {}
+    for holding in holdings:
+        ticker = str(holding.get("ticker") or "").upper().strip()
+        try:
+            shares = float(holding.get("shares") or 0.0)
+        except (TypeError, ValueError):
+            shares = 0.0
+        if shares <= 0 or not ticker:
+            continue
+
+        def _fetch_h(t=ticker):
+            try:
+                return DataFetcher(t).get_history(period=period, interval=interval)
+            except Exception:
+                return []
+
+        try:
+            h_hist = await asyncio.wait_for(asyncio.to_thread(_fetch_h), timeout=10.0)
+        except Exception:
+            h_hist = []
+
+        for entry in h_hist or []:
+            d = str(entry.get("time") or entry.get("full_date") or "")
+            p = entry.get("price")
+            if d and p is not None:
+                try:
+                    val = float(p)
+                    if math.isfinite(val) and val > 0:
+                        portfolio_by_date[d] = portfolio_by_date.get(d, 0.0) + (val * shares)
+                except (TypeError, ValueError):
+                    pass
+
+    # Find common dates or interpolate
+    common_dates = sorted(set(portfolio_by_date.keys()).intersection(set(bm_by_date.keys())))
+    if len(common_dates) < 2:
+        all_dates = sorted(set(portfolio_by_date.keys()).union(set(bm_by_date.keys())))
+        last_p = None
+        last_b = None
+        filled_p = {}
+        filled_b = {}
+        for d in all_dates:
+            if d in portfolio_by_date:
+                last_p = portfolio_by_date[d]
+            if d in bm_by_date:
+                last_b = bm_by_date[d]
+            if last_p is not None and last_b is not None:
+                filled_p[d] = last_p
+                filled_b[d] = last_b
+        common_dates = sorted(filled_p.keys())
+        p_series = [filled_p[d] for d in common_dates]
+        b_series = [filled_b[d] for d in common_dates]
+    else:
+        p_series = [portfolio_by_date[d] for d in common_dates]
+        b_series = [bm_by_date[d] for d in common_dates]
+
+    if len(common_dates) < 2 or not p_series or not b_series or p_series[0] <= 0 or b_series[0] <= 0:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "benchmark_symbol": bm_ticker,
+            "benchmark_name": bm_name,
+            "period": period,
+            "chart_data": [],
+            "metrics": {
+                "total_return_portfolio_pct": 0.0,
+                "total_return_benchmark_pct": 0.0,
+                "alpha_excess_pct": 0.0,
+                "beta": 1.0,
+                "correlation": 0.0,
+                "sharpe_ratio": 0.0,
+                "sortino_ratio": 0.0,
+                "max_drawdown_portfolio_pct": 0.0,
+                "max_drawdown_benchmark_pct": 0.0,
+            },
+            "verdict": "Zu wenige historische Kursdaten für einen zuverlässigen Benchmark-Vergleich verfügbar.",
+        }
+
+    p0 = p_series[0]
+    b0 = b_series[0]
+
+    chart_data = []
+    for d, p, b in zip(common_dates, p_series, b_series):
+        r_p = ((p - p0) / p0) * 100.0
+        r_b = ((b - b0) / b0) * 100.0
+        chart_data.append({
+            "time": d,
+            "portfolio_pct": round(r_p, 2),
+            "benchmark_pct": round(r_b, 2),
+            "portfolio_value": round(p, 2),
+            "benchmark_value": round(b, 2),
+        })
+
+    # Returns arrays for daily stats
+    p_arr = np.array(p_series, dtype=float)
+    b_arr = np.array(b_series, dtype=float)
+    p_returns = np.diff(p_arr) / p_arr[:-1]
+    b_returns = np.diff(b_arr) / b_arr[:-1]
+
+    # Total cumulative return
+    total_p = float(((p_arr[-1] - p0) / p0) * 100.0)
+    total_b = float(((b_arr[-1] - b0) / b0) * 100.0)
+    alpha_excess = total_p - total_b
+
+    # Covariance & Beta
+    if len(b_returns) > 1 and np.var(b_returns) > 1e-10:
+        cov = float(np.cov(p_returns, b_returns)[0, 1])
+        var_b = float(np.var(b_returns, ddof=1))
+        beta = float(cov / var_b) if var_b > 0 else 1.0
+        std_p = float(np.std(p_returns, ddof=1))
+        std_b = float(np.std(b_returns, ddof=1))
+        corr = float(cov / (std_p * std_b)) if (std_p * std_b) > 0 else 0.0
+    else:
+        beta = 1.0
+        corr = 0.0
+        std_p = 0.01
+
+    # Annualization factor
+    days_count = max(1, len(common_dates))
+    ann_factor = 252.0 / days_count
+    ann_p_ret = (total_p / 100.0) * ann_factor
+    rf = 0.03  # 3% risk-free rate
+    ann_vol_p = float(std_p * math.sqrt(252.0)) if std_p > 0 else 0.001
+
+    # Sharpe Ratio
+    sharpe = float((ann_p_ret - rf) / ann_vol_p) if ann_vol_p > 0 else 0.0
+
+    # Sortino Ratio (Downside deviation)
+    downside = p_returns[p_returns < 0]
+    if len(downside) > 1:
+        downside_std = float(np.std(downside, ddof=1) * math.sqrt(252.0))
+        sortino = float((ann_p_ret - rf) / downside_std) if downside_std > 0 else 0.0
+    else:
+        sortino = sharpe
+
+    # Max Drawdown
+    def calc_mdd(series):
+        peak = series[0]
+        max_dd = 0.0
+        for val in series:
+            if val > peak:
+                peak = val
+            dd = (peak - val) / peak if peak > 0 else 0.0
+            if dd > max_dd:
+                max_dd = dd
+        return float(max_dd * 100.0)
+
+    mdd_p = calc_mdd(p_series)
+    mdd_b = calc_mdd(b_series)
+
+    # Verdict
+    if alpha_excess > 5.0:
+        verdict = f"Hervorragende Outperformance: Dein Portfolio schlägt {bm_name} um +{alpha_excess:.1f}% bei einem Beta von {beta:.2f}."
+    elif alpha_excess > 0.0:
+        verdict = f"Solide Marktrendite: Dein Portfolio liegt mit +{alpha_excess:.1f}% leicht über {bm_name}."
+    elif alpha_excess > -5.0:
+        verdict = f"Marktkonforme Entwicklung: Das Portfolio bewegt sich nahezu synchron mit {bm_name} ({alpha_excess:.1f}% Differenz)."
+    else:
+        verdict = f"Underperformance: {bm_name} lag im Betrachtungszeitraum um {abs(alpha_excess):.1f}% vor deinem Portfolio."
+
+    return convert_numpy_types({
+        "portfolio_id": p_id,
+        "portfolio_name": portfolio.get("name", "Portfolio"),
+        "benchmark_symbol": bm_ticker,
+        "benchmark_name": bm_name,
+        "period": period,
+        "chart_data": chart_data,
+        "metrics": {
+            "total_return_portfolio_pct": round(total_p, 2),
+            "total_return_benchmark_pct": round(total_b, 2),
+            "alpha_excess_pct": round(alpha_excess, 2),
+            "beta": round(beta, 2),
+            "correlation": round(corr, 2),
+            "sharpe_ratio": round(sharpe, 2),
+            "sortino_ratio": round(sortino, 2),
+            "max_drawdown_portfolio_pct": round(mdd_p, 2),
+            "max_drawdown_benchmark_pct": round(mdd_b, 2),
+        },
+        "verdict": verdict,
+    })
+
+
+@app.post("/api/portfolio/{p_id}/stress-test")
+@app.post("/api/portfolios/{p_id}/stress-test")
+async def simulate_portfolio_stress_test(p_id: str, payload: StressTestRequest):
+    """
+    Simulates macroeconomic and historical crisis stress test scenarios on the portfolio.
+    Scenarios:
+    - 'financial_crisis_2008': GFC 2008 bank run & credit crunch
+    - 'covid_crash_2020': Swift global market liquidity flash crash
+    - 'rate_shock_2022': Multiple compression on growth & high beta, commodities/value outperforming
+    - 'stagflation': High inflation & commodity shock with margin pressure
+    - 'custom': User-defined market drawdown scaled by individual asset beta
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings") or []
+    scenario = payload.scenario or "financial_crisis_2008"
+    custom_drop = float(payload.custom_market_drop_pct or 20.0)
+
+    if not holdings:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "scenario": scenario,
+            "scenario_name": "Keine Daten",
+            "scenario_description": "Das Portfolio enthaelt keine Positionen.",
+            "summary": {
+                "initial_value": 0.0,
+                "simulated_value": 0.0,
+                "loss_eur": 0.0,
+                "loss_pct": 0.0,
+                "risk_rating": "Robust",
+                "weighted_beta": 1.0,
+            },
+            "holdings": [],
+            "vulnerable_assets": [],
+            "resilient_assets": [],
+            "recommendations": ["Fuege dem Portfolio Aktien hinzu, um einen aussagekraeftigen Stresstest durchzufuehren."],
+        }
+
+    async def _get_holding_meta(h):
+        ticker = str(h.get("ticker") or "").upper().strip()
+        try:
+            shares = float(h.get("shares") or 0.0)
+        except (TypeError, ValueError):
+            shares = 0.0
+        try:
+            buy_price = float(h.get("buyPrice") or 0.0)
+        except (TypeError, ValueError):
+            buy_price = 0.0
+
+        if not ticker or shares <= 0:
+            return None
+
+        def _fetch():
+            try:
+                fetcher = DataFetcher(ticker)
+                raw_info = getattr(fetcher, "info", {})
+                info = raw_info() if callable(raw_info) else (raw_info or {})
+                p = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("price")
+                if not p:
+                    p = fetcher.get_current_price()
+                if not p or p <= 0:
+                    p = buy_price if buy_price > 0 else 100.0
+                sector = info.get("sector") or "Diversified"
+                beta = info.get("beta")
+                try:
+                    beta_val = float(beta) if beta is not None else 1.0
+                    if not math.isfinite(beta_val) or beta_val <= 0.05:
+                        beta_val = 1.0
+                except (TypeError, ValueError):
+                    beta_val = 1.0
+                name = info.get("shortName") or info.get("longName") or ticker
+                return {
+                    "ticker": ticker,
+                    "name": name,
+                    "shares": shares,
+                    "price": float(p),
+                    "sector": sector,
+                    "beta": beta_val,
+                }
+            except Exception:
+                return {
+                    "ticker": ticker,
+                    "name": ticker,
+                    "shares": shares,
+                    "price": buy_price if buy_price > 0 else 100.0,
+                    "sector": "Diversified",
+                    "beta": 1.0,
+                }
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=8.0)
+        except Exception:
+            return {
+                "ticker": ticker,
+                "name": ticker,
+                "shares": shares,
+                "price": buy_price if buy_price > 0 else 100.0,
+                "sector": "Diversified",
+                "beta": 1.0,
+            }
+
+    tasks = [_get_holding_meta(h) for h in holdings]
+    resolved = await asyncio.gather(*tasks, return_exceptions=True)
+    holding_metas = [r for r in resolved if isinstance(r, dict) and r is not None]
+
+    if not holding_metas:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "scenario": scenario,
+            "scenario_name": "Keine Daten",
+            "scenario_description": "Das Portfolio enthaelt keine gueltigen Positionen.",
+            "summary": {
+                "initial_value": 0.0,
+                "simulated_value": 0.0,
+                "loss_eur": 0.0,
+                "loss_pct": 0.0,
+                "risk_rating": "Robust",
+                "weighted_beta": 1.0,
+            },
+            "holdings": [],
+            "vulnerable_assets": [],
+            "resilient_assets": [],
+            "recommendations": [],
+        }
+
+    scenario_configs = {
+        "financial_crisis_2008": {
+            "name": "2008 Finanzkrise & Kreditklemme",
+            "desc": "Weltweiter Banken- und Liquiditätskollaps. Starker Einbruch bei Finanztiteln, Industrie und zyklischem Konsum.",
+            "sector_shocks": {
+                "Financials": -65.0, "Financial Services": -65.0, "Banking": -68.0,
+                "Real Estate": -58.0, "Technology": -46.0, "Industrials": -52.0,
+                "Consumer Cyclical": -50.0, "Energy": -42.0, "Communication Services": -36.0,
+                "Basic Materials": -45.0, "Consumer Defensive": -19.0, "Healthcare": -18.0, "Utilities": -22.0,
+            },
+            "default_shock": -44.0,
+            "beta_weight": 0.35,
+        },
+        "covid_crash_2020": {
+            "name": "2020 Corona Flash Crash",
+            "desc": "Schlagartiger globaler Lockdown-Schock mit höchster historischer Volatilität innerhalb von 4 Wochen.",
+            "sector_shocks": {
+                "Consumer Cyclical": -55.0, "Industrials": -48.0, "Real Estate": -42.0,
+                "Energy": -56.0, "Financials": -40.0, "Financial Services": -40.0,
+                "Technology": -24.0, "Communication Services": -25.0,
+                "Consumer Defensive": -16.0, "Healthcare": -14.0, "Utilities": -20.0,
+            },
+            "default_shock": -34.0,
+            "beta_weight": 0.25,
+        },
+        "rate_shock_2022": {
+            "name": "2022 Zinsschock & Tech-Bärenmarkt",
+            "desc": "Schnellster Zinsanstieg seit 40 Jahren: Multiple-Kompression bei High-Growth-Tech; Energie und Value robust.",
+            "sector_shocks": {
+                "Technology": -42.0, "Communication Services": -39.0, "Real Estate": -34.0,
+                "Consumer Cyclical": -32.0, "Financials": -12.0, "Financial Services": -12.0,
+                "Consumer Defensive": -7.0, "Healthcare": -6.0, "Utilities": -9.0,
+                "Energy": 22.0, "Basic Materials": 10.0,
+            },
+            "default_shock": -22.0,
+            "beta_weight": 0.45,
+        },
+        "stagflation": {
+            "name": "Stagflation & Geopolitischer Rohstoffschock",
+            "desc": "Explodierende Rohstoffpreise bei gleichzeitig stagnierender Wirtschaft und Margendruck auf Konsumenten.",
+            "sector_shocks": {
+                "Energy": 28.0, "Basic Materials": 16.0,
+                "Consumer Cyclical": -36.0, "Technology": -28.0, "Industrials": -26.0,
+                "Real Estate": -32.0, "Communication Services": -24.0,
+                "Financials": -16.0, "Consumer Defensive": -11.0, "Healthcare": -9.0, "Utilities": -6.0,
+            },
+            "default_shock": -21.0,
+            "beta_weight": 0.35,
+        },
+        "custom": {
+            "name": f"Individueller Schock (-{custom_drop:.0f}% Markt)",
+            "desc": f"Simulation eines linearen Marktrücksetzers von -{custom_drop:.0f}%, gewichtet nach dem individuellen Beta jeder Aktie.",
+            "sector_shocks": {},
+            "default_shock": -abs(custom_drop),
+            "beta_weight": 1.0,
+        },
+    }
+
+    cfg = scenario_configs.get(scenario, scenario_configs["financial_crisis_2008"])
+    sec_shocks = cfg["sector_shocks"]
+    default_base = cfg["default_shock"]
+    beta_w = cfg["beta_weight"]
+
+    sim_holdings = []
+    total_initial = 0.0
+    total_simulated = 0.0
+
+    for h in holding_metas:
+        cur_val = h["shares"] * h["price"]
+        total_initial += cur_val
+        sector = h["sector"]
+        beta = h["beta"]
+
+        if scenario == "custom":
+            drop_pct = default_base * beta
+        else:
+            base = sec_shocks.get(sector, default_base)
+            if base < 0:
+                drop_pct = base * ((1.0 - beta_w) + beta_w * beta)
+            else:
+                drop_pct = base * (0.8 + 0.2 * beta)
+
+        drop_pct = max(-98.0, min(150.0, drop_pct))
+        sim_val = max(0.0, cur_val * (1.0 + (drop_pct / 100.0)))
+        loss_eur = cur_val - sim_val
+        total_simulated += sim_val
+
+        sim_holdings.append({
+            "ticker": h["ticker"],
+            "name": h["name"],
+            "shares": h["shares"],
+            "current_price": round(h["price"], 2),
+            "current_value": round(cur_val, 2),
+            "simulated_value": round(sim_val, 2),
+            "loss_eur": round(loss_eur, 2),
+            "shock_pct": round(drop_pct, 2),
+            "sector": sector,
+            "beta": round(beta, 2),
+        })
+
+    total_loss_eur = total_initial - total_simulated
+    total_loss_pct = (-(total_loss_eur / total_initial) * 100.0) if total_initial > 0 else 0.0
+
+    vulnerable = sorted(sim_holdings, key=lambda x: x["shock_pct"])[:3]
+    resilient = sorted(sim_holdings, key=lambda x: x["shock_pct"], reverse=True)[:3]
+
+    if total_loss_pct <= -38.0:
+        risk_rating = "Kritisch"
+    elif total_loss_pct <= -22.0:
+        risk_rating = "Erhoeht"
+    else:
+        risk_rating = "Robust"
+
+    recommendations = []
+    tech_val = sum(h["current_value"] for h in sim_holdings if "Tech" in h["sector"])
+    if total_initial > 0 and (tech_val / total_initial) > 0.35:
+        recommendations.append(
+            f"Technologie-Anteil liegt bei {round((tech_val/total_initial)*100)}%. In Zinsschock-Szenarien führt dies zu überdurchschnittlichem Abwärtsdruck. Erwäge eine gezielte Beimischung von Healthcare oder defensiven Konsumgütern."
+        )
+
+    weighted_beta = sum(h["beta"] * (h["current_value"] / total_initial) for h in sim_holdings) if total_initial > 0 else 1.0
+    if weighted_beta > 1.25:
+        recommendations.append(
+            f"Portfoliogewichtetes Beta ist mit {weighted_beta:.2f} stark expansiv. Eine defensive Cash-Reserve von 10–15% dämpft den maximalen Drawdown spürbar ab."
+        )
+    elif weighted_beta < 0.9:
+        recommendations.append(
+            f"Mit einem gewichteten Beta von {weighted_beta:.2f} zeigt dein Depot bereits überdurchschnittlich defensive Puffer-Eigenschaften."
+        )
+
+    if not recommendations:
+        recommendations.append(
+            "Dein Depot verfügt über eine ausgewogene Sektor- und Risikostruktur. Halte bei Marktturbulenzen an deiner langfristigen Strategie fest."
+        )
+
+    return convert_numpy_types({
+        "portfolio_id": p_id,
+        "portfolio_name": portfolio.get("name", "Portfolio"),
+        "scenario": scenario,
+        "scenario_name": cfg["name"],
+        "scenario_description": cfg["desc"],
+        "summary": {
+            "initial_value": round(total_initial, 2),
+            "simulated_value": round(total_simulated, 2),
+            "loss_eur": round(total_loss_eur, 2),
+            "loss_pct": round(total_loss_pct, 2),
+            "risk_rating": risk_rating,
+            "weighted_beta": round(weighted_beta, 2),
+        },
+        "holdings": sorted(sim_holdings, key=lambda x: x["current_value"], reverse=True),
+        "vulnerable_assets": vulnerable,
+        "resilient_assets": resilient,
+        "recommendations": recommendations,
+    })
+
+
+@app.post("/api/portfolio/{p_id}/dividend-forecast")
+@app.post("/api/portfolios/{p_id}/dividend-forecast")
+async def get_portfolio_dividend_forecast(p_id: str, payload: DividendForecastRequest):
+    """
+    Simulates multi-year dividend snowball compounding (DRIP), savings contributions,
+    German Sparerpauschbetrag tax allowance optimization (26.375% Abgeltungsteuer),
+    and passive income living cost milestones.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings") or []
+    years = max(1, min(30, int(payload.years or 10)))
+    monthly_contrib = max(0.0, float(payload.monthly_contribution or 0.0))
+    annual_contrib = monthly_contrib * 12.0
+    reinvest = bool(payload.reinvest_dividends)
+    g_div = float(payload.dividend_growth_rate or 5.0) / 100.0
+    g_cap = float(payload.capital_growth_rate or 4.0) / 100.0
+    tax_allowance = max(0.0, float(payload.tax_allowance if payload.tax_allowance is not None else 1000.0))
+    tax_rate = 0.26375
+
+    if not holdings:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "parameters": {
+                "years": years,
+                "monthly_contribution": monthly_contrib,
+                "reinvest_dividends": reinvest,
+                "dividend_growth_rate": round(g_div * 100.0, 2),
+                "capital_growth_rate": round(g_cap * 100.0, 2),
+                "tax_allowance": tax_allowance,
+            },
+            "initial_status": {
+                "initial_value": 0.0,
+                "initial_annual_gross_dividend": 0.0,
+                "initial_dividend_yield_pct": 0.0,
+                "current_monthly_net": 0.0,
+                "allowance_used_pct": 0.0,
+                "allowance_remaining": tax_allowance,
+                "taxes_paid_now": 0.0,
+            },
+            "timeline": [],
+            "summary": {
+                "end_portfolio_value": 0.0,
+                "end_annual_gross_dividend": 0.0,
+                "end_annual_net_dividend": 0.0,
+                "end_monthly_net_dividend": 0.0,
+                "total_contributed": 0.0,
+                "total_dividends_earned": 0.0,
+                "total_taxes_paid": 0.0,
+                "total_taxes_saved": 0.0,
+            },
+            "milestones": [],
+            "message": "Füge Positionen hinzu, um deine Dividenden-Projektion zu berechnen.",
+        }
+
+    async def _get_holding_div(h):
+        ticker = str(h.get("ticker") or "").upper().strip()
+        try:
+            shares = float(h.get("shares") or 0.0)
+        except (TypeError, ValueError):
+            shares = 0.0
+        try:
+            buy_price = float(h.get("buyPrice") or 0.0)
+        except (TypeError, ValueError):
+            buy_price = 0.0
+
+        if not ticker or shares <= 0:
+            return None
+
+        def _fetch():
+            try:
+                fetcher = DataFetcher(ticker)
+                raw_info = getattr(fetcher, "info", {})
+                info = raw_info() if callable(raw_info) else (raw_info or {})
+                p = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("price")
+                if not p:
+                    p = fetcher.get_current_price()
+                if not p or p <= 0:
+                    p = buy_price if buy_price > 0 else 100.0
+
+                div_data = fetcher.get_dividends() or {}
+                div_rate = div_data.get("dividend_rate")
+                if div_rate is None or div_rate <= 0:
+                    dy = div_data.get("dividend_yield")
+                    if dy and dy > 0:
+                        div_rate = float(p) * (dy / 100.0 if dy > 1.0 else dy)
+                    else:
+                        div_rate = 0.0
+
+                return {
+                    "ticker": ticker,
+                    "shares": shares,
+                    "price": float(p),
+                    "div_rate": float(div_rate),
+                }
+            except Exception:
+                return {
+                    "ticker": ticker,
+                    "shares": shares,
+                    "price": buy_price if buy_price > 0 else 100.0,
+                    "div_rate": 0.0,
+                }
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=8.0)
+        except Exception:
+            return {
+                "ticker": ticker,
+                "shares": shares,
+                "price": buy_price if buy_price > 0 else 100.0,
+                "div_rate": 0.0,
+            }
+
+    tasks = [_get_holding_div(h) for h in holdings]
+    resolved = await asyncio.gather(*tasks, return_exceptions=True)
+    holding_divs = [r for r in resolved if isinstance(r, dict) and r is not None]
+
+    initial_value = sum(h["shares"] * h["price"] for h in holding_divs)
+    initial_gross_div = sum(h["shares"] * h["div_rate"] for h in holding_divs)
+
+    initial_yield = (initial_gross_div / initial_value) if initial_value > 0 else 0.03
+    reinvest_yield = initial_yield if initial_yield > 0.005 else 0.025
+    reinvestment_yield = reinvest_yield
+
+    timeline = []
+    current_v = initial_value
+    current_gross_div = initial_gross_div
+    cumulative_contributions = initial_value
+    total_divs_earned = 0.0
+    total_tax_paid = 0.0
+    total_tax_saved = 0.0
+
+    for y in range(1, years + 1):
+        gross_div = current_gross_div * (1.0 + g_div)
+        taxable = max(0.0, gross_div - tax_allowance)
+        tax = taxable * tax_rate
+        tax_saved = min(gross_div, tax_allowance) * tax_rate
+        net_div = gross_div - tax
+
+        total_divs_earned += gross_div
+        total_tax_paid += tax
+        total_tax_saved += tax_saved
+
+        reinvest_amt = (net_div if reinvest else 0.0) + annual_contrib
+        cumulative_contributions += annual_contrib
+
+        incremental_div = reinvest_amt * reinvest_yield
+        current_gross_div = gross_div + incremental_div
+        current_v = (current_v * (1.0 + g_cap)) + reinvest_amt
+
+        timeline.append({
+            "year": y,
+            "portfolio_value": round(current_v, 2),
+            "total_contributed": round(cumulative_contributions, 2),
+            "gross_dividend_yearly": round(gross_div, 2),
+            "net_dividend_yearly": round(net_div, 2),
+            "net_dividend_monthly": round(net_div / 12.0, 2),
+            "taxes_paid": round(tax, 2),
+            "tax_saved": round(tax_saved, 2),
+            "tax_free_allowance_used": round(min(gross_div, tax_allowance), 2),
+            "reinvested_amount": round(reinvest_amt, 2),
+        })
+
+    end_entry = timeline[-1] if timeline else {}
+
+    y1_gross = initial_gross_div
+    y1_taxable = max(0.0, y1_gross - tax_allowance)
+    y1_tax = y1_taxable * tax_rate
+    y1_net = y1_gross - y1_tax
+    y1_allowance_used_pct = min(100.0, (y1_gross / tax_allowance * 100.0)) if tax_allowance > 0 else 100.0
+    current_monthly_net = y1_net / 12.0
+
+    end_monthly_net = end_entry.get("net_dividend_monthly", current_monthly_net)
+    milestone_defs = [
+        {"id": "streaming", "title": "Streaming & Abos", "target_monthly": 25.0, "icon": "🍿"},
+        {"id": "internet", "title": "Mobilfunk & Internet", "target_monthly": 50.0, "icon": "📱"},
+        {"id": "energy", "title": "Strom & Nebenkosten", "target_monthly": 120.0, "icon": "⚡"},
+        {"id": "groceries", "title": "Lebensmitteleinkäufe", "target_monthly": 350.0, "icon": "🛒"},
+        {"id": "rent", "title": "Warmmiete / Wohnen", "target_monthly": 850.0, "icon": "🏠"},
+        {"id": "freedom", "title": "Finanzielle Freiheit", "target_monthly": 2000.0, "icon": "🏖️"},
+    ]
+
+    milestones = []
+    for m in milestone_defs:
+        tgt = m["target_monthly"]
+        current_cov = round((current_monthly_net / tgt) * 100.0, 1)
+        forecast_cov = round((end_monthly_net / tgt) * 100.0, 1)
+        eff_yield = reinvest_yield * (1.0 - tax_rate * 0.5)
+        required_capital = (tgt * 12.0) / eff_yield if eff_yield > 0 else (tgt * 12.0) / 0.03
+        milestones.append({
+            "id": m["id"],
+            "title": m["title"],
+            "icon": m["icon"],
+            "target_monthly": tgt,
+            "current_monthly_net": round(current_monthly_net, 2),
+            "current_coverage_pct": current_cov,
+            "forecast_monthly_net": round(end_monthly_net, 2),
+            "forecast_coverage_pct": forecast_cov,
+            "is_reached_now": current_cov >= 100.0,
+            "is_reached_forecast": forecast_cov >= 100.0,
+            "required_portfolio_value": round(required_capital, 2),
+        })
+
+    return convert_numpy_types({
+        "portfolio_id": p_id,
+        "portfolio_name": portfolio.get("name", "Portfolio"),
+        "parameters": {
+            "years": years,
+            "monthly_contribution": monthly_contrib,
+            "reinvest_dividends": reinvest,
+            "dividend_growth_rate": round(g_div * 100.0, 2),
+            "capital_growth_rate": round(g_cap * 100.0, 2),
+            "tax_allowance": tax_allowance,
+        },
+        "initial_status": {
+            "initial_value": round(initial_value, 2),
+            "initial_annual_gross_dividend": round(initial_gross_div, 2),
+            "initial_dividend_yield_pct": round(initial_yield * 100.0, 2),
+            "current_monthly_net": round(current_monthly_net, 2),
+            "allowance_used_pct": round(y1_allowance_used_pct, 1),
+            "allowance_remaining": round(max(0.0, tax_allowance - y1_gross), 2),
+            "taxes_paid_now": round(y1_tax, 2),
+        },
+        "timeline": timeline,
+        "summary": {
+            "end_portfolio_value": end_entry.get("portfolio_value", round(current_v, 2)),
+            "end_annual_gross_dividend": end_entry.get("gross_dividend_yearly", 0.0),
+            "end_annual_net_dividend": end_entry.get("net_dividend_yearly", 0.0),
+            "end_monthly_net_dividend": end_entry.get("net_dividend_monthly", 0.0),
+            "total_contributed": end_entry.get("total_contributed", round(cumulative_contributions, 2)),
+            "total_dividends_earned": round(total_divs_earned, 2),
+            "total_taxes_paid": round(total_tax_paid, 2),
+            "total_taxes_saved": round(total_tax_saved, 2),
+        },
+        "milestones": milestones,
+    })
+
+
 @app.get("/api/portfolio/{p_id}/export/csv")
 async def export_portfolio_csv(p_id: str):
     """Export portfolio as CSV."""
@@ -5082,6 +6810,596 @@ async def export_portfolio_csv(p_id: str):
         media_type="text/csv", 
         headers={"Content-Disposition": f"attachment; filename=portfolio_{p_id}.csv"}
     )
+
+
+@app.get("/api/portfolio/{p_id}/earnings-radar")
+@app.get("/api/portfolios/{p_id}/earnings-radar")
+async def get_portfolio_earnings_radar(p_id: str):
+    """
+    Chronological earnings radar for all holdings in the portfolio,
+    including upcoming dates, countdown, beat/miss history, beat rate,
+    and high-volatility warnings for the next 7 days.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p["id"] == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    holdings = portfolio.get("holdings") or []
+    if not holdings:
+        return {
+            "portfolio_id": p_id,
+            "portfolio_name": portfolio.get("name", "Portfolio"),
+            "upcoming_events": [],
+            "urgent_events": [],
+            "track_records": [],
+            "summary": {
+                "total_holdings": 0,
+                "holdings_with_dates": 0,
+                "urgent_count": 0,
+                "overall_beat_rate_pct": 0.0,
+            },
+            "message": "Füge dem Portfolio Aktien hinzu, um anstehende Quartalszahlen zu verfolgen.",
+        }
+
+    async def _fetch_holding_earnings(h):
+        ticker = str(h.get("ticker") or "").upper().strip()
+        try:
+            shares = float(h.get("shares") or 0.0)
+        except (TypeError, ValueError):
+            shares = 0.0
+        try:
+            buy_price = float(h.get("buyPrice") or 0.0)
+        except (TypeError, ValueError):
+            buy_price = 0.0
+
+        if not ticker or shares <= 0:
+            return None
+
+        def _fetch():
+            try:
+                fetcher = DataFetcher(ticker)
+                raw_info = getattr(fetcher, "info", {})
+                info = raw_info() if callable(raw_info) else (raw_info or {})
+                name = info.get("shortName") or info.get("longName") or ticker
+                p = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("price")
+                if not p:
+                    p = fetcher.get_current_price()
+                if not p or p <= 0:
+                    p = buy_price if buy_price > 0 else 100.0
+
+                upcoming = fetcher.get_upcoming_earnings()
+                history = fetcher.get_earnings_history()
+
+                reported = [r for r in history if r.get("status") in ("beat", "miss", "inline")]
+                beats = sum(1 for r in reported if r.get("status") == "beat")
+                misses = sum(1 for r in reported if r.get("status") == "miss")
+                beat_rate = (beats / len(reported) * 100.0) if reported else None
+
+                return {
+                    "ticker": ticker,
+                    "name": name,
+                    "shares": shares,
+                    "price": float(p),
+                    "value": float(shares * float(p)),
+                    "upcoming": upcoming,
+                    "history": history[:4],
+                    "beat_rate_pct": round(beat_rate, 1) if beat_rate is not None else None,
+                    "beat_count": beats,
+                    "miss_count": misses,
+                    "reported_count": len(reported),
+                }
+            except Exception:
+                return {
+                    "ticker": ticker,
+                    "name": ticker,
+                    "shares": shares,
+                    "price": buy_price if buy_price > 0 else 100.0,
+                    "value": float(shares * (buy_price if buy_price > 0 else 100.0)),
+                    "upcoming": None,
+                    "history": [],
+                    "beat_rate_pct": None,
+                    "beat_count": 0,
+                    "miss_count": 0,
+                    "reported_count": 0,
+                }
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=8.0)
+        except Exception:
+            return {
+                "ticker": ticker,
+                "name": ticker,
+                "shares": shares,
+                "price": buy_price if buy_price > 0 else 100.0,
+                "value": float(shares * (buy_price if buy_price > 0 else 100.0)),
+                "upcoming": None,
+                "history": [],
+                "beat_rate_pct": None,
+                "beat_count": 0,
+                "miss_count": 0,
+                "reported_count": 0,
+            }
+
+    tasks = [_fetch_holding_earnings(h) for h in holdings]
+    resolved = await asyncio.gather(*tasks, return_exceptions=True)
+    holding_data = [r for r in resolved if isinstance(r, dict) and r is not None]
+
+    total_portfolio_val = sum(h["value"] for h in holding_data) or 1.0
+
+    upcoming_events = []
+    track_records = []
+    total_beats = 0
+    total_reported = 0
+
+    for h in holding_data:
+        weight_pct = round((h["value"] / total_portfolio_val) * 100.0, 1)
+        up = h["upcoming"]
+
+        if h["beat_rate_pct"] is not None:
+            total_beats += h["beat_count"]
+            total_reported += h["reported_count"]
+
+        track_records.append({
+            "ticker": h["ticker"],
+            "name": h["name"],
+            "weight_pct": weight_pct,
+            "beat_rate_pct": h["beat_rate_pct"],
+            "beat_count": h["beat_count"],
+            "miss_count": h["miss_count"],
+            "reported_count": h["reported_count"],
+            "recent_quarters": h["history"],
+        })
+
+        if up and up.get("date"):
+            days = int(up.get("days_until") or 0)
+            is_urgent = 0 <= days <= 7
+            upcoming_events.append({
+                "ticker": h["ticker"],
+                "name": h["name"],
+                "weight_pct": weight_pct,
+                "date": up["date"],
+                "timing": up.get("timing") or "TBD",
+                "days_until": days,
+                "eps_estimate": up.get("eps_estimate"),
+                "is_urgent": is_urgent,
+                "beat_rate_pct": h["beat_rate_pct"],
+                "recent_quarters": h["history"][:2],
+            })
+
+    upcoming_events.sort(key=lambda x: x["days_until"])
+    urgent_events = [e for e in upcoming_events if e["is_urgent"]]
+    overall_beat_rate = round((total_beats / total_reported) * 100.0, 1) if total_reported > 0 else 0.0
+
+    return convert_numpy_types({
+        "portfolio_id": p_id,
+        "portfolio_name": portfolio.get("name", "Portfolio"),
+        "upcoming_events": upcoming_events,
+        "urgent_events": urgent_events,
+        "track_records": sorted(track_records, key=lambda x: x["weight_pct"], reverse=True),
+        "summary": {
+            "total_holdings": len(holding_data),
+            "holdings_with_dates": len(upcoming_events),
+            "urgent_count": len(urgent_events),
+            "overall_beat_rate_pct": overall_beat_rate,
+        },
+    })
+
+
+@app.get("/api/portfolio/{p_id}/earnings/export/ics")
+@app.get("/api/portfolios/{p_id}/earnings/export/ics")
+async def export_portfolio_earnings_ics(p_id: str):
+    """Export upcoming earnings calendar as an .ics calendar file for Apple/Google/Outlook calendar."""
+    from fastapi.responses import Response
+    radar_data = await get_portfolio_earnings_radar(p_id)
+    events = radar_data.get("upcoming_events") or []
+    p_name = radar_data.get("portfolio_name") or "Portfolio"
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Broker Freund//Earnings Radar//DE",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        f"X-WR-CALNAME:Earnings - {p_name}",
+    ]
+
+    for ev in events:
+        d_str = ev.get("date", "").replace("-", "")
+        if not d_str:
+            continue
+        ticker = ev.get("ticker", "")
+        name = ev.get("name", ticker)
+        timing = ev.get("timing", "TBD")
+        weight = ev.get("weight_pct", 0.0)
+        eps_est = ev.get("eps_estimate")
+        eps_text = f"EPS-Konsens: {eps_est}" if eps_est is not None else "EPS-Konsens: k.A."
+
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:earnings-{ticker}-{d_str}@brokerfreund.app",
+            "DTSTAMP:20260914T200000Z",
+            f"DTSTART;VALUE=DATE:{d_str}",
+            f"SUMMARY:📊 {ticker} Quartalszahlen ({timing})",
+            f"DESCRIPTION:{name} ({ticker}) veroeffentlicht Quartalszahlen.\\nTiming: {timing}\\n{eps_text}\\nDepotgewichtung: {weight}%\\n\\nVerfolgt mit Broker Freund.",
+            "STATUS:CONFIRMED",
+            "BEGIN:VALARM",
+            "TRIGGER:-P1D",
+            "ACTION:DISPLAY",
+            f"DESCRIPTION:Erinnerung: {ticker} Quartalszahlen morgen!",
+            "END:VALARM",
+            "END:VEVENT",
+        ])
+
+    lines.append("END:VCALENDAR")
+    ics_body = "\r\n".join(lines)
+
+    return Response(
+        content=ics_body,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename=earnings_{p_id}.ics"},
+    )
+
+
+@app.get("/api/portfolio/{p_id}/superinvestors")
+@app.get("/api/portfolios/{p_id}/superinvestors")
+async def get_portfolio_superinvestors(p_id: str):
+    """
+    Get 13F Superinvestor Smart-Money Overlap for the entire portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.superinvestor_service import SuperinvestorService
+
+    holdings = portfolio.get("holdings", [])
+    result = SuperinvestorService.get_portfolio_superinvestors(holdings)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/etf-overlap")
+@app.get("/api/portfolios/{p_id}/etf-overlap")
+async def get_portfolio_etf_overlap(
+    p_id: str,
+    monthly_savings: float = Query(250.0, ge=0.0, description="Monatlicher Sparplan in EUR"),
+    gross_return: float = Query(0.07, ge=0.0, le=0.30, description="Angenommene jährliche Bruttorendite")
+):
+    """
+    Get Look-Through Holding Concentration, Pairwise ETF Overlap Matrix,
+    and Fee-Vampire Compound Drag Analysis for a portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.etf_overlap_service import ETFOverlapService
+
+    holdings = portfolio.get("holdings", [])
+    result = ETFOverlapService.analyze_portfolio(
+        holdings=holdings,
+        monthly_savings=monthly_savings,
+        gross_return=gross_return
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/{p_id}/etf-overlap")
+@app.post("/api/portfolios/{p_id}/etf-overlap")
+async def post_portfolio_etf_overlap(p_id: str, req: ETFOverlapRequest):
+    """
+    Calculate Fee-Vampire Drag with custom monthly savings and gross return parameters.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.etf_overlap_service import ETFOverlapService
+
+    holdings = portfolio.get("holdings", [])
+    result = ETFOverlapService.analyze_portfolio(
+        holdings=holdings,
+        monthly_savings=req.monthly_savings if req.monthly_savings is not None else 250.0,
+        gross_return=req.gross_return if req.gross_return is not None else 0.07
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.get("/api/etf/compare")
+async def compare_etfs(
+    etf1: str = Query(..., description="Erster ETF Ticker (z. B. URTH, SPY, QQQ, VWCE.DE)"),
+    etf2: str = Query(..., description="Zweiter ETF Ticker (z. B. QQQ, SMH, EUNL.DE)")
+):
+    """
+    Pairwise comparison of two ETFs: calculates holding overlap %, shared stocks, and weight differences.
+    """
+    from src.etf_overlap_service import ETFOverlapService
+    result = ETFOverlapService.calculate_pairwise_overlap(etf1, etf2)
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/tax-harvesting")
+@app.get("/api/portfolios/{p_id}/tax-harvesting")
+async def get_portfolio_tax_harvesting(
+    p_id: str,
+    church_tax: str = Query("none", description="Kirchensteuer ('none', '8%', '9%')"),
+    fsa_allowance: float = Query(1000.0, ge=0.0, description="Freibetrag Gesamt in EUR"),
+    fsa_used: float = Query(0.0, ge=0.0, description="Bereits verbrauchter Freibetrag in EUR")
+):
+    """
+    Get German Tax Loss Harvesting Opportunities (§ 20 EStG) and Freistellungsauftrag allocation.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.tax_harvesting_service import TaxHarvestingService
+
+    holdings = portfolio.get("holdings", [])
+    result = TaxHarvestingService.analyze_portfolio(
+        holdings=holdings,
+        church_tax_type=church_tax,
+        fsa_allowance=fsa_allowance,
+        fsa_used=fsa_used
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/{p_id}/tax-harvesting")
+@app.post("/api/portfolios/{p_id}/tax-harvesting")
+async def post_portfolio_tax_harvesting(p_id: str, req: TaxHarvestingRequest):
+    """
+    Calculate Tax Loss Harvesting with custom tax settings, broker splits, and FSA parameters.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.tax_harvesting_service import TaxHarvestingService
+
+    holdings = portfolio.get("holdings", [])
+    result = TaxHarvestingService.analyze_portfolio(
+        holdings=holdings,
+        church_tax_type=req.church_tax_type or "none",
+        fsa_allowance=req.fsa_allowance if req.fsa_allowance is not None else 1000.0,
+        fsa_used=req.fsa_used if req.fsa_used is not None else 0.0,
+        broker_splits=req.broker_splits
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.get("/api/options/{ticker}")
+async def get_stock_options_strategy(
+    ticker: str,
+    dte: int = Query(30, ge=1, le=365, description="Restlaufzeit in Tagen (DTE)"),
+    shares: int = Query(100, ge=1, description="Anzahl gehaltener Aktien"),
+    custom_iv: Optional[float] = Query(None, ge=0.05, le=3.0, description="Implizite Volatilität")
+):
+    """
+    Get Covered Call & Cash-Secured Put strategies with Black-Scholes pricing,
+    Greeks, annualized yield, and POP.
+    """
+    from src.options_service import OptionsService
+    try:
+        fetcher = DataFetcher(ticker)
+        info = fetcher.info or {}
+        curr_price = float(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 100.0)
+    except Exception:
+        curr_price = 100.0
+
+    result = OptionsService.get_stock_options_suite(
+        ticker=ticker,
+        current_price=curr_price,
+        shares=shares,
+        dte=dte,
+        custom_iv=custom_iv
+    )
+    return convert_numpy_types(result)
+
+
+@app.post("/api/options/{ticker}")
+async def post_stock_options_strategy(ticker: str, req: OptionsStrategyRequest):
+    """
+    POST options strategy calculation with custom parameters.
+    """
+    from src.options_service import OptionsService
+    try:
+        fetcher = DataFetcher(ticker)
+        info = fetcher.info or {}
+        curr_price = float(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 100.0)
+    except Exception:
+        curr_price = 100.0
+
+    result = OptionsService.get_stock_options_suite(
+        ticker=ticker,
+        current_price=curr_price,
+        shares=req.shares if req.shares is not None else 100,
+        dte=req.dte if req.dte is not None else 30,
+        custom_iv=req.custom_iv
+    )
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/options-income")
+@app.get("/api/portfolios/{p_id}/options-income")
+async def get_portfolio_options_income(
+    p_id: str,
+    dte: int = Query(30, ge=1, le=365, description="Restlaufzeit in Tagen")
+):
+    """
+    Scan entire portfolio for covered call income opportunities and monthly cashflow potential.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.options_service import OptionsService
+
+    holdings = portfolio.get("holdings", [])
+    result = OptionsService.analyze_portfolio_options(holdings=holdings, dte=dte)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.post("/api/portfolio/{p_id}/monte-carlo")
+@app.post("/api/portfolios/{p_id}/monte-carlo")
+async def run_portfolio_monte_carlo(p_id: str, req: Optional[MonteCarloRequest] = None):
+    """
+    Simulate wealth paths, confidence bands, safe withdrawal rates, and ruin risk for a portfolio.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.monte_carlo_service import MonteCarloSimulator
+
+    holdings = portfolio.get("holdings", [])
+    profile = MonteCarloSimulator.infer_portfolio_profile(holdings)
+
+    params = req or MonteCarloRequest()
+    initial_wealth = params.initial_wealth if params.initial_wealth is not None else profile["total_value"]
+    if initial_wealth <= 0:
+        initial_wealth = 10000.0
+
+    annual_return = params.annual_return if params.annual_return is not None else profile["expected_return"]
+    annual_volatility = params.annual_volatility if params.annual_volatility is not None else profile["volatility"]
+
+    result = MonteCarloSimulator.simulate(
+        initial_wealth=initial_wealth,
+        annual_return=annual_return,
+        annual_volatility=annual_volatility,
+        monthly_savings=params.monthly_savings if params.monthly_savings is not None else 500.0,
+        monthly_withdrawal=params.monthly_withdrawal if params.monthly_withdrawal is not None else 0.0,
+        horizon_years=params.horizon_years if params.horizon_years is not None else 20,
+        inflation_rate=params.inflation_rate if params.inflation_rate is not None else 0.02,
+        target_wealth=params.target_wealth if params.target_wealth is not None else 1000000.0,
+        num_simulations=params.num_simulations if params.num_simulations is not None else 2000,
+        withdrawal_inflation_adjusted=True if params.withdrawal_inflation_adjusted is None else params.withdrawal_inflation_adjusted
+    )
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    result["inferred_profile"] = profile
+    return convert_numpy_types(result)
+
+
+@app.post("/api/monte-carlo/simulate")
+@app.get("/api/monte-carlo/simulate")
+async def run_standalone_monte_carlo(
+    initial_wealth: float = Query(50000.0, ge=0.0),
+    annual_return: float = Query(0.08, ge=-0.20, le=0.50),
+    annual_volatility: float = Query(0.16, ge=0.01, le=1.0),
+    monthly_savings: float = Query(500.0, ge=0.0),
+    monthly_withdrawal: float = Query(0.0, ge=0.0),
+    horizon_years: int = Query(20, ge=1, le=50),
+    inflation_rate: float = Query(0.02, ge=0.0, le=0.20),
+    target_wealth: float = Query(1000000.0, ge=100.0),
+    num_simulations: int = Query(2000, ge=100, le=10000),
+    withdrawal_inflation_adjusted: bool = Query(True)
+):
+    """
+    Execute standalone Monte Carlo wealth simulation with custom parameters.
+    """
+    from src.monte_carlo_service import MonteCarloSimulator
+    result = MonteCarloSimulator.simulate(
+        initial_wealth=initial_wealth,
+        annual_return=annual_return,
+        annual_volatility=annual_volatility,
+        monthly_savings=monthly_savings,
+        monthly_withdrawal=monthly_withdrawal,
+        horizon_years=horizon_years,
+        inflation_rate=inflation_rate,
+        target_wealth=target_wealth,
+        num_simulations=num_simulations,
+        withdrawal_inflation_adjusted=withdrawal_inflation_adjusted
+    )
+    return convert_numpy_types(result)
+
+
+@app.get("/api/portfolio/{p_id}/factor-analysis")
+@app.get("/api/portfolios/{p_id}/factor-analysis")
+@app.post("/api/portfolio/{p_id}/factor-analysis")
+@app.post("/api/portfolios/{p_id}/factor-analysis")
+async def get_portfolio_factor_analysis(p_id: str):
+    """
+    Decompose portfolio into academic Smart Beta factor exposures (Fama-French & Barra),
+    Style Box classification, and regime vulnerability assessments.
+    """
+    portfolios = get_portfolio_manager().get_portfolios()
+    portfolio = next((p for p in portfolios if p.get("id") == p_id), None)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    from src.factor_service import FactorEngine
+
+    holdings = portfolio.get("holdings", [])
+    result = FactorEngine.analyze_portfolio(holdings=holdings)
+    result["portfolio_id"] = p_id
+    result["portfolio_name"] = portfolio.get("name", "Portfolio")
+    return convert_numpy_types(result)
+
+
+@app.get("/api/stock/{ticker}/factors")
+async def get_stock_factors(ticker: str):
+    """
+    Decompose an individual stock into 6 factor exposures and Style Box classification.
+    """
+    from src.factor_service import FactorEngine
+    from src.data_fetcher import DataFetcher
+
+    try:
+        fetcher = DataFetcher(ticker)
+        info = fetcher.info() or {}
+        price_data = fetcher.get_price_data_fast() or {}
+
+        pe = info.get("trailingPE") or info.get("forwardPE") or 0.0
+        pb = info.get("priceToBook") or 0.0
+        beta = info.get("beta") or 1.0
+        div = info.get("dividendYield") or 0.0
+        mcap = (info.get("marketCap") or 45000000000) / 1e9
+        ret_1y = (price_data.get("change_1y") or 0.0) / 100.0
+        ret_3m = (price_data.get("change_3m") or 0.0) / 100.0
+        roe = info.get("returnOnEquity") or 0.0
+        margin = info.get("profitMargins") or 0.0
+        debt_to_equity = info.get("debtToEquity")
+        if debt_to_equity:
+            debt_to_equity = debt_to_equity / 100.0
+
+        result = FactorEngine.analyze_asset(
+            ticker=ticker,
+            name=info.get("shortName") or info.get("longName") or ticker,
+            pe=pe if pe > 0 else None,
+            pb=pb if pb > 0 else None,
+            beta=beta,
+            roe=roe if roe != 0 else None,
+            profit_margin=margin if margin != 0 else None,
+            debt_to_equity=debt_to_equity,
+            return_1y=ret_1y,
+            return_3m=ret_3m,
+            market_cap_billions=mcap,
+            dividend_yield=div
+        )
+        return convert_numpy_types(result)
+    except Exception:
+        result = FactorEngine.analyze_asset(ticker=ticker)
+        return convert_numpy_types(result)
 
 
 @app.get("/api/discovery/trending")

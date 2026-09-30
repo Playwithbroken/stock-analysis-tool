@@ -7,8 +7,29 @@ import AssetSuggestions from "./AssetSuggestions";
 import AddHoldingModal from "./AddHoldingModal";
 import ScalableImportModal from "./ScalableImportModal";
 import PaperTradingPanel from "./PaperTradingPanel";
+import RebalanceWizard from "./RebalanceWizard";
+import BenchmarkComparison from "./BenchmarkComparison";
+import StressTestSimulator from "./StressTestSimulator";
+import DividendForecastSimulator from "./DividendForecastSimulator";
+import EarningsRadar from "./EarningsRadar";
+import PortfolioSuperinvestorRadar from "./PortfolioSuperinvestorRadar";
+import ETFOverlapFeeDetector from "./ETFOverlapFeeDetector";
+import TaxHarvestingManager from "./TaxHarvestingManager";
+import OptionsIncomeScanner from "./OptionsIncomeScanner";
+import MonteCarloSimulator from "./MonteCarloSimulator";
+import FactorDecompositionRadar from "./FactorDecompositionRadar";
+import EfficientFrontierOptimizer from "./EfficientFrontierOptimizer";
+import TailRiskTerminal from "./TailRiskTerminal";
+import ESGSustainabilityRadar from "./ESGSustainabilityRadar";
+import LiquidityRiskSimulator from "./LiquidityRiskSimulator";
+import CurrencyHedgingTerminal from "./CurrencyHedgingTerminal";
+import BrinsonAttributionTerminal from "./BrinsonAttributionTerminal";
+import FixedIncomeTerminal from "./FixedIncomeTerminal";
+import RiskRatiosTerminal from "./RiskRatiosTerminal";
+import CrisisScenarioTerminal from "./CrisisScenarioTerminal";
+import InstitutionalReportGenerator from "./InstitutionalReportGenerator";
 import ProviderStatePanel, { useSlowProviderState } from "./ProviderStatePanel";
-import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { Plus, Download, LayoutGrid, RefreshCw, Trash2, Check, X, ShieldAlert, ShieldCheck, Sparkles, Scale, Coins, CalendarDays, Award, PieChart, Scissors, Layers, Compass, Target, AlertOctagon, Leaf, Droplets, Landmark, BarChart3, Flame, FileText } from "lucide-react";
 import { Portfolio, Holding, PortfolioDataSource } from "../hooks/usePortfolios";
 import { useCurrency } from "../context/CurrencyContext";
 import useAccessibleDialog from "../hooks/useAccessibleDialog";
@@ -267,6 +288,26 @@ export default function PortfolioView({
   const [paperDashboard, setPaperDashboard] = useState<any>(null);
   const [paperDashboardLoading, setPaperDashboardLoading] = useState(false);
   const [paperDashboardError, setPaperDashboardError] = useState("");
+  const [showRebalanceWizard, setShowRebalanceWizard] = useState(false);
+  const [showStressTest, setShowStressTest] = useState(false);
+  const [showDividendForecast, setShowDividendForecast] = useState(false);
+  const [showEarningsRadar, setShowEarningsRadar] = useState(false);
+  const [showSuperinvestors, setShowSuperinvestors] = useState(false);
+  const [showETFOverlap, setShowETFOverlap] = useState(false);
+  const [showTaxHarvesting, setShowTaxHarvesting] = useState(false);
+  const [showOptionsIncome, setShowOptionsIncome] = useState(false);
+  const [showMonteCarlo, setShowMonteCarlo] = useState(false);
+  const [showFactors, setShowFactors] = useState(false);
+  const [showOptimizer, setShowOptimizer] = useState(false);
+  const [showTailRisk, setShowTailRisk] = useState(false);
+  const [showESG, setShowESG] = useState(false);
+  const [showLiquidity, setShowLiquidity] = useState(false);
+  const [showCurrencyHedging, setShowCurrencyHedging] = useState(false);
+  const [showBrinson, setShowBrinson] = useState(false);
+  const [showFixedIncome, setShowFixedIncome] = useState(false);
+  const [showRiskRatios, setShowRiskRatios] = useState(false);
+  const [showCrisisScenarios, setShowCrisisScenarios] = useState(false);
+  const [showInstitutionalReport, setShowInstitutionalReport] = useState(false);
   const paperDashboardSlow = useSlowProviderState(paperDashboardLoading, 5500);
   const createPortfolioDialogRef = useAccessibleDialog<HTMLDivElement>(
     showCreateModal,
@@ -1023,6 +1064,286 @@ export default function PortfolioView({
                     CSV exportieren
                   </span>
                 </button>
+                <button
+                  onClick={() => setShowRebalanceWizard((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showRebalanceWizard
+                      ? "border-teal-500/30 bg-teal-500/15 text-teal-800 dark:text-teal-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Scale size={14} />
+                    {showRebalanceWizard ? "Rebalancing schließen" : "Rebalancing-Rechner"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowStressTest((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showStressTest
+                      ? "border-rose-500/30 bg-rose-500/15 text-rose-800 dark:text-rose-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <ShieldAlert size={14} />
+                    {showStressTest ? "Stresstest schließen" : "Crash-Simulator"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowDividendForecast((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showDividendForecast
+                      ? "border-teal-500/30 bg-teal-500/15 text-teal-800 dark:text-teal-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Coins size={14} />
+                    {showDividendForecast ? "Schneeball schließen" : "Dividenden-Schneeball"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowEarningsRadar((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showEarningsRadar
+                      ? "border-indigo-500/30 bg-indigo-500/15 text-indigo-800 dark:text-indigo-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <CalendarDays size={14} />
+                    {showEarningsRadar ? "Radar schließen" : "Earnings-Radar"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowSuperinvestors((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showSuperinvestors
+                      ? "border-purple-500/30 bg-purple-500/15 text-purple-800 dark:text-purple-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Award size={14} />
+                    {showSuperinvestors ? "Superinvestoren schließen" : "Superinvestoren-Radar"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowETFOverlap((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showETFOverlap
+                      ? "border-cyan-500/30 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <PieChart size={14} />
+                    {showETFOverlap ? "Overlap schließen" : "ETF-Overlap & Gebühren"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowTaxHarvesting((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showTaxHarvesting
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Scissors size={14} />
+                    {showTaxHarvesting ? "Steuer-Shield schließen" : "Steuer-Optimierer (FSA)"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowOptionsIncome((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showOptionsIncome
+                      ? "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Coins size={14} />
+                    {showOptionsIncome ? "Options-Radar schließen" : "Options-Cashflow"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowMonteCarlo((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showMonteCarlo
+                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Layers size={14} />
+                    {showMonteCarlo ? "Monte-Carlo schließen" : "Monte-Carlo (10k Pfade)"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowFactors((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showFactors
+                      ? "border-purple-500/30 bg-purple-500/15 text-purple-800 dark:text-purple-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Compass size={14} />
+                    {showFactors ? "Faktoren schließen" : "Faktor-Attribution"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowOptimizer((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showOptimizer
+                      ? "border-cyan-500/30 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Target size={14} />
+                    {showOptimizer ? "Optimierung schließen" : "Effizienz & MPT"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowTailRisk((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showTailRisk
+                      ? "border-rose-500/30 bg-rose-500/15 text-rose-800 dark:text-rose-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <AlertOctagon size={14} />
+                    {showTailRisk ? "Tail-Risk schließen" : "Tail-Risk & VaR"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowESG((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showESG
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Leaf size={14} />
+                    {showESG ? "ESG schließen" : "ESG & Nachhaltigkeit"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowLiquidity((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showLiquidity
+                      ? "border-cyan-500/30 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Droplets size={14} />
+                    {showLiquidity ? "Liquidität schließen" : "Liquidität & Slippage"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowCurrencyHedging((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showCurrencyHedging
+                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Coins size={14} />
+                    {showCurrencyHedging ? "FX schließen" : "FX & Währungsrisiko"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowBrinson((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showBrinson
+                      ? "border-indigo-500/30 bg-indigo-500/15 text-indigo-800 dark:text-indigo-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Award size={14} />
+                    {showBrinson ? "Attribution schließen" : "Performance-Attribution"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowFixedIncome((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showFixedIncome
+                      ? "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Landmark size={14} />
+                    {showFixedIncome ? "Zinsen schließen" : "Zinsen & Duration"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowRiskRatios((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showRiskRatios
+                      ? "border-violet-500/30 bg-violet-500/15 text-violet-800 dark:text-violet-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <BarChart3 size={14} />
+                    {showRiskRatios ? "Ratios schließen" : "Performance-Ratios"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowCrisisScenarios((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showCrisisScenarios
+                      ? "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Flame size={14} />
+                    {showCrisisScenarios ? "Krisen schließen" : "Krisen-Stresstest"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowInstitutionalReport((prev) => !prev)}
+                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
+                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                    showInstitutionalReport
+                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
+                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  } disabled:opacity-50`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <FileText size={14} />
+                    {showInstitutionalReport ? "Factsheet schließen" : "Factsheet & PDF"}
+                  </span>
+                </button>
                 {isScalableManagedPortfolio ? (
                   <>
                     <button
@@ -1189,7 +1510,7 @@ export default function PortfolioView({
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Priorisierte Prüfliste
                     </div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
                       Score {portfolioAdvisoryLoading ? "--" : portfolioAdvisory?.advisory_score ?? "--"}/100
                     </div>
                   </div>
@@ -1364,6 +1685,165 @@ export default function PortfolioView({
             )}
           </section>
 
+          {showRebalanceWizard && currentPortfolio && (
+            <RebalanceWizard
+              portfolioId={currentPortfolio.id}
+              portfolioName={currentPortfolio.name}
+              holdingsCount={currentPortfolio.holdings.length}
+              maxProfilePositionPct={maxSinglePositionPct}
+              onClose={() => setShowRebalanceWizard(false)}
+            />
+          )}
+
+          {showStressTest && currentPortfolio && (
+            <StressTestSimulator
+              portfolioId={currentPortfolio.id}
+              portfolioName={currentPortfolio.name}
+            />
+          )}
+
+          {showDividendForecast && currentPortfolio && (
+            <DividendForecastSimulator
+              portfolioId={currentPortfolio.id}
+              portfolioName={currentPortfolio.name}
+            />
+          )}
+
+          {showEarningsRadar && currentPortfolio && (
+            <EarningsRadar
+              portfolioId={currentPortfolio.id}
+              portfolioName={currentPortfolio.name}
+            />
+          )}
+
+          {showSuperinvestors && currentPortfolio && (
+            <PortfolioSuperinvestorRadar
+              portfolioId={currentPortfolio.id}
+              onSelectTicker={onAnalyzeStock}
+            />
+          )}
+
+          {showETFOverlap && currentPortfolio && (
+            <ETFOverlapFeeDetector
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+            />
+          )}
+
+          {showTaxHarvesting && currentPortfolio && (
+            <TaxHarvestingManager
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+            />
+          )}
+
+          {showOptionsIncome && currentPortfolio && (
+            <OptionsIncomeScanner
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+            />
+          )}
+
+          {showMonteCarlo && currentPortfolio && (
+            <MonteCarloSimulator
+              portfolioId={currentPortfolio.id}
+              initialCapital={analysis?.summary.total_value}
+              onClose={() => setShowMonteCarlo(false)}
+            />
+          )}
+
+          {showFactors && currentPortfolio && (
+            <FactorDecompositionRadar
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowFactors(false)}
+            />
+          )}
+
+          {showOptimizer && currentPortfolio && (
+            <EfficientFrontierOptimizer
+              portfolioId={currentPortfolio.id}
+              onApplyTargets={(_targets, _strategyName) => {
+                setShowOptimizer(false);
+                setShowRebalanceWizard(true);
+              }}
+              onClose={() => setShowOptimizer(false)}
+            />
+          )}
+
+          {showTailRisk && currentPortfolio && (
+            <TailRiskTerminal
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowTailRisk(false)}
+            />
+          )}
+
+          {showESG && currentPortfolio && (
+            <ESGSustainabilityRadar
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowESG(false)}
+            />
+          )}
+
+          {showLiquidity && currentPortfolio && (
+            <LiquidityRiskSimulator
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowLiquidity(false)}
+            />
+          )}
+
+          {showCurrencyHedging && currentPortfolio && (
+            <CurrencyHedgingTerminal
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowCurrencyHedging(false)}
+            />
+          )}
+
+          {showBrinson && currentPortfolio && (
+            <BrinsonAttributionTerminal
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowBrinson(false)}
+            />
+          )}
+
+          {showFixedIncome && currentPortfolio && (
+            <FixedIncomeTerminal
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowFixedIncome(false)}
+            />
+          )}
+
+          {showRiskRatios && currentPortfolio && (
+            <RiskRatiosTerminal
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowRiskRatios(false)}
+            />
+          )}
+
+          {showCrisisScenarios && currentPortfolio && (
+            <CrisisScenarioTerminal
+              portfolioId={currentPortfolio.id}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowCrisisScenarios(false)}
+            />
+          )}
+
+          {showInstitutionalReport && currentPortfolio && (
+            <InstitutionalReportGenerator
+              portfolioId={currentPortfolio.id}
+              portfolioName={currentPortfolio.name}
+              onAnalyzeStock={onAnalyzeStock}
+              onClose={() => setShowInstitutionalReport(false)}
+            />
+          )}
+
           {analysis && analysis.holdings.length > 0 ? (
             <>
               <div className="grid gap-6 lg:grid-cols-2">
@@ -1383,6 +1863,11 @@ export default function PortfolioView({
                 )}
                 <PortfolioHeatmap holdings={analysis.holdings} />
               </div>
+
+              <BenchmarkComparison
+                portfolioId={selectedPortfolio!}
+                portfolioName={currentPortfolio?.name}
+              />
 
               <div className="grid gap-6 lg:grid-cols-2">
                 {!isScalableManagedPortfolio && <DividendDashboard portfolioId={selectedPortfolio!} />}
@@ -1670,7 +2155,7 @@ export default function PortfolioView({
                                 {formatPercent(holdingReturnPct)}
                               </div>
                               {!hasEntry && (
-                                <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                <div className="mt-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                                   Bearbeiten für eine korrekte Rendite
                                 </div>
                               )}

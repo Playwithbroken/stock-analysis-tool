@@ -1290,9 +1290,9 @@ class EmailAlertService:
             # Scheduled briefs use the richer multi-part Telegram format.
             if job.get("is_brief"):
                 items = self.portfolio_manager.get_signal_watch_items()
-                snapshot_timeout = self._safe_int_env("SCHEDULED_BRIEF_SNAPSHOT_TIMEOUT_SECONDS", 8, minimum=2)
-                brief_timeout = self._safe_int_env("SCHEDULED_BRIEF_BUILD_TIMEOUT_SECONDS", 35, minimum=5)
-                edge_timeout = self._safe_int_env("SCHEDULED_BRIEF_EDGE_TIMEOUT_SECONDS", 10, minimum=2)
+                snapshot_timeout = self._safe_int_env("SCHEDULED_BRIEF_SNAPSHOT_TIMEOUT_SECONDS", 45, minimum=2)
+                brief_timeout = self._safe_int_env("SCHEDULED_BRIEF_BUILD_TIMEOUT_SECONDS", 90, minimum=5)
+                edge_timeout = self._safe_int_env("SCHEDULED_BRIEF_EDGE_TIMEOUT_SECONDS", 25, minimum=2)
                 try:
                     snapshot = self._run_with_timeout(
                         f"{job['job_key']} snapshot",
@@ -1300,18 +1300,12 @@ class EmailAlertService:
                         snapshot_timeout,
                     )
                 except Exception as exc:
-                    failure = {
-                        "job": job["job_key"],
-                        "status": "failed",
-                        "event_key": event_key,
-                        "scheduled_at": job["scheduled_at"].isoformat(),
-                        "minutes_late": job["minutes_late"],
-                        "error": f"snapshot_failed: {exc}",
-                        "message": "Watchlist-Snapshot fehlgeschlagen. Der Brief wurde nicht ohne Basisdaten gesendet.",
-                    }
-                    self._set_brief_job_status(str(job["job_key"]), failure)
-                    results.append(failure)
-                    continue
+                    logger.warning(
+                        "Scheduled brief %s: watchlist snapshot failed/timed out: %s; using fallback snapshot",
+                        job["job_key"],
+                        exc,
+                    )
+                    snapshot = {"items": items or [], "ticker_signals": []}
                 try:
                     self._run_with_timeout(
                         f"{job['job_key']} warm brief",

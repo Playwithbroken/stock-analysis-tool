@@ -64,6 +64,7 @@ def main() -> int:
         os.environ["TELEGRAM_BOT_TOKEN"] = ""
         os.environ["TELEGRAM_CHAT_ID"] = ""
         os.environ["BROWSER_PUSH_ENABLED"] = "false"
+        os.environ["ALPACA_MARKET_DATA_ENABLED"] = "true"
         os.environ["RAILWAY_GIT_COMMIT_SHA"] = "1234567890abcdef1234567890abcdef12345678"
         os.environ["RAILWAY_GIT_BRANCH"] = "main"
         os.environ["RAILWAY_DEPLOYMENT_ID"] = "deployment-test"

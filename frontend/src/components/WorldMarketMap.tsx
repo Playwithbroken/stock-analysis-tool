@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import worldMapSvgUrl from "../assets/world-map-wikimedia.svg?url";
 import { localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
-import { Bell, Layers3, ListFilter, MapPinned } from "lucide-react";
+import { Bell, Layers3, ListFilter, MapPinned, Target, X } from "lucide-react";
 
 // Lazy-load world map SVG — keeps initial bundle ~280KB smaller
 type CountryTone = "red" | "amber" | "blue" | "green" | "slate";
@@ -1108,6 +1108,38 @@ export default function WorldMarketMap({
   const [showRegionCards, setShowRegionCards] = useState(false);
   const [showLiveAlert, setShowLiveAlert] = useState(true);
   const [showEventLayer, setShowEventLayer] = useState(true);
+  const [showFocusOverlay, setShowFocusOverlay] = useState(() => {
+    try {
+      return localStorage.getItem("world_map_focus_dismissed") !== "true";
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleFocusOverlay = useCallback(() => {
+    setShowFocusOverlay((prev) => {
+      const next = !prev;
+      try {
+        if (!next) {
+          localStorage.setItem("world_map_focus_dismissed", "true");
+        } else {
+          localStorage.removeItem("world_map_focus_dismissed");
+        }
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCloseFocusOverlay = useCallback(() => {
+    setShowFocusOverlay(false);
+    try {
+      localStorage.setItem("world_map_focus_dismissed", "true");
+    } catch {
+      // ignore
+    }
+  }, []);
   const [selectedGeoPlace, setSelectedGeoPlace] = useState<string | null>(null);
   const [pinnedEventIndex, setPinnedEventIndex] = useState(0);
   const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
@@ -2011,6 +2043,7 @@ export default function WorldMarketMap({
                 { key: "legend", label: "Legende", value: showLegend, set: setShowLegend, Icon: ListFilter },
                 { key: "events", label: "Ereignisebene", value: showEventLayer, set: setShowEventLayer, Icon: Layers3 },
                 { key: "alert", label: "Live-Alarm", value: showLiveAlert, set: setShowLiveAlert, Icon: Bell },
+                { key: "focus", label: "Fokus-Report", value: showFocusOverlay, set: setShowFocusOverlay, Icon: Target },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -2103,46 +2136,57 @@ export default function WorldMarketMap({
 
             <div className="absolute inset-x-10 top-[60%] hidden h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.28),rgba(15,23,42,0))] dark:bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.15),rgba(255,255,255,0))] lg:block" />
 
-            {activeGeoEvent ? (
-              <div className="map-event-focus absolute left-20 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/8 dark:border-white/10 bg-white/94 dark:bg-[#1d1d1f]/94 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.1)] dark:shadow-[0_14px_30px_rgba(0,0,0,0.5)] sm:block">
+            {showFocusOverlay && activeGeoEvent ? (
+              <div className="map-event-focus absolute left-20 top-4 z-30 hidden max-w-[18rem] rounded-[1.1rem] border border-black/10 dark:border-white/15 bg-white/96 dark:bg-[#181a20]/96 px-4 py-3 shadow-[0_14px_34px_rgba(15,23,42,0.18)] dark:shadow-[0_14px_34px_rgba(0,0,0,0.6)] sm:block">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-neutral-400">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-600 dark:text-neutral-300">
                     Focus
                   </div>
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activeGeoEvent.markerTone)}`}>
-                    <span className={`h-2 w-2 rounded-full ${markerAccentClass(activeGeoEvent.markerTone)}`} />
-                    {activeGeoEvent.markerIcon}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] ${markerClass(activeGeoEvent.markerTone)}`}>
+                      <span className={`h-2 w-2 rounded-full ${markerAccentClass(activeGeoEvent.markerTone)}`} />
+                      {activeGeoEvent.markerIcon}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCloseFocusOverlay}
+                      aria-label="Fokus-Report schließen"
+                      title="Fokus-Report schließen"
+                      className="rounded-lg p-1 text-slate-500 hover:bg-black/10 hover:text-slate-900 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-2 line-clamp-3 text-sm font-bold leading-5 text-slate-900 dark:text-white">
                   {activeGeoEvent.title}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-400">
+                <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:text-neutral-300">
                   {activeVariantLabel ? (
-                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
+                    <span className="rounded-full border border-black/10 dark:border-white/15 bg-[var(--accent-soft)] px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--accent)]">
                       {activeVariantLabel}
                     </span>
                   ) : null}
                   {activeGeoEvent.geoZone && activeGeoEvent.geoZone !== activeGeoEvent.regionKey ? (
-                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
+                    <span className="rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-white/10 px-2 py-1 text-slate-700 dark:text-neutral-200">
                       {activeGeoEvent.geoZone}
                     </span>
                   ) : null}
                   {activeGeoEvent.geoPlace && activeGeoEvent.geoPlace !== activeGeoEvent.geoZone && activeGeoEvent.geoPlace !== activeGeoEvent.regionKey ? (
-                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
+                    <span className="rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-white/10 px-2 py-1 text-slate-700 dark:text-neutral-200">
                       {activeGeoEvent.geoPlace}
                     </span>
                   ) : null}
-                  <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
+                  <span className="rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-white/10 px-2 py-1 text-slate-700 dark:text-neutral-200">
                     {activeGeoEvent.region || "Global"}
                   </span>
                   {activeGeoEvent.event_intelligence?.action ? (
-                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
+                    <span className="rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-white/10 px-2 py-1 text-slate-700 dark:text-neutral-200">
                       {activeGeoEvent.event_intelligence.action}
                     </span>
                   ) : null}
                   {activeGeoEvent.event_intelligence?.impact_score ? (
-                    <span className="rounded-full border border-black/8 dark:border-white/10 bg-white dark:bg-white/10 px-2 py-1 dark:text-neutral-200">
+                    <span className="rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-white/10 px-2 py-1 text-slate-700 dark:text-neutral-200">
                       impact {activeGeoEvent.event_intelligence.impact_score}
                     </span>
                   ) : null}
@@ -2150,11 +2194,11 @@ export default function WorldMarketMap({
                 {macroDecisionFacts.length ? (
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     {macroDecisionFacts.slice(0, 4).map((fact) => (
-                      <div key={fact.label} className="rounded-[0.85rem] border border-black/8 dark:border-white/10 bg-white/78 dark:bg-white/5 px-2.5 py-2">
-                        <div className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-400 dark:text-neutral-400">
+                      <div key={fact.label} className="rounded-[0.85rem] border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-white/10 px-2.5 py-2">
+                        <div className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-neutral-300">
                           {fact.label}
                         </div>
-                        <div className="mt-1 line-clamp-2 text-[10px] font-bold leading-4 text-slate-700 dark:text-neutral-200">
+                        <div className="mt-1 line-clamp-2 text-[10px] font-bold leading-4 text-slate-800 dark:text-neutral-100">
                           {fact.value}
                         </div>
                       </div>

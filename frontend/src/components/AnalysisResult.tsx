@@ -1,5 +1,9 @@
 import React from "react";
 import PriceChart from "./PriceChart";
+import BullBearDebate from "./BullBearDebate";
+import DCFValuationModel from "./DCFValuationModel";
+import InsiderSuperinvestorRadar from "./InsiderSuperinvestorRadar";
+import OptionsIncomeScanner from "./OptionsIncomeScanner";
 import AddHoldingModal from "./AddHoldingModal";
 import { Portfolio, Holding } from "../hooks/usePortfolios";
 import { Plus, Download, FileText, ShieldCheck, ShieldAlert, Ban, AlertTriangle } from "lucide-react";
@@ -925,6 +929,42 @@ export default function AnalysisResult({
 
           {/* Price Chart */}
           <PriceChart ticker={data.ticker} onStatsUpdate={handleStatsUpdate} />
+
+          {/* Bull vs. Bear Debate Engine */}
+          {data.bull_bear_debate && (
+            <BullBearDebate
+              debate={data.bull_bear_debate}
+              ticker={data.ticker}
+              companyName={data.company_name}
+            />
+          )}
+
+          {/* Interactive DCF & Fair-Value Rechner */}
+          {data.dcf_valuation && (
+            <DCFValuationModel
+              initialData={data.dcf_valuation}
+              ticker={data.ticker}
+              companyName={data.company_name}
+              currentPrice={data.price_data?.current_price}
+              currency={data.price_data?.currency}
+            />
+          )}
+
+          {/* Insider & Superinvestor Radar */}
+          {data.insider_radar && (
+            <InsiderSuperinvestorRadar
+              data={data.insider_radar}
+              ticker={data.ticker}
+              companyName={data.company_name}
+              currency={data.price_data?.currency}
+            />
+          )}
+
+          {/* Options & Stillhalter-Strategie Scanner */}
+          <OptionsIncomeScanner
+            ticker={data.ticker}
+            currentPrice={data.price_data?.current_price}
+          />
 
           <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-4">

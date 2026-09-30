@@ -193,15 +193,15 @@ function NewsEvidenceLayers({
       aria-label="Nachrichtenprüfung: Fakten, Interpretation und Unsicherheit"
       className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3 [overflow-wrap:anywhere] sm:col-start-2"
     >
-      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-700">
-        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-600 dark:text-slate-300">
+      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-800 dark:text-slate-200">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
           1 · Bestätigte Fakten
         </div>
-        <div className="mt-2 font-semibold">{factSummary}</div>
-        <div className="mt-3 space-y-1 text-[11px] text-slate-600">
-          <div><span className="font-extrabold">Basis:</span> {newsFactBasisLabel(factBasis)}</div>
-          <div><span className="font-extrabold">Quelle:</span> {sourceName}{sourceDomain ? ` · ${sourceDomain}` : ""}</div>
-          <div className={item.published_at ? "" : "font-bold text-amber-700"}>{formatNewsPublishedAt(item.published_at)}</div>
+        <div className="mt-2 font-semibold text-slate-900 dark:text-white">{factSummary}</div>
+        <div className="mt-3 space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+          <div><span className="font-extrabold text-slate-800 dark:text-slate-200">Basis:</span> {newsFactBasisLabel(factBasis)}</div>
+          <div><span className="font-extrabold text-slate-800 dark:text-slate-200">Quelle:</span> {sourceName}{sourceDomain ? ` · ${sourceDomain}` : ""}</div>
+          <div className={item.published_at ? "" : "font-bold text-amber-600 dark:text-amber-400"}>{formatNewsPublishedAt(item.published_at)}</div>
           <div>
             Link {evidence.link_verified ? "technisch geprüft" : "nicht technisch bestätigt"}
             {evidence.original_document_verified ? " · Primärdokument verifiziert" : " · Primärdokument nicht verifiziert"}
@@ -209,28 +209,28 @@ function NewsEvidenceLayers({
         </div>
       </div>
 
-      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-700">
-        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-600 dark:text-slate-300">
+      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-800 dark:text-slate-200">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
           2 · Interpretation (Analyse)
         </div>
-        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+        <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
           Analyse, nicht Quellenfakt
         </div>
-        <div className="mt-2 font-semibold">{interpretation.meaning || intelligence.meaning || "Einordnung noch offen."}</div>
+        <div className="mt-2 font-semibold text-slate-900 dark:text-white">{interpretation.meaning || intelligence.meaning || "Einordnung noch offen."}</div>
         {marketChannels.length ? (
-          <div className="mt-2 text-slate-600"><span className="font-extrabold">Wirkt über:</span> {marketChannels.join(" · ")}</div>
+          <div className="mt-2 text-slate-600 dark:text-slate-300"><span className="font-extrabold text-slate-800 dark:text-slate-200">Wirkt über:</span> {marketChannels.join(" · ")}</div>
         ) : null}
-        <div className="mt-2 text-slate-600">
-          <span className="font-extrabold">Einschätzung:</span> {interpretation.assessment || intelligence.assessment || "offen"}
+        <div className="mt-2 text-slate-600 dark:text-slate-300">
+          <span className="font-extrabold text-slate-800 dark:text-slate-200">Einschätzung:</span> {interpretation.assessment || intelligence.assessment || "offen"}
         </div>
-        <div className="mt-1 text-slate-600">
-          <span className="font-extrabold">Bias:</span> {interpretation.directional_bias || intelligence.directional_bias || "offen"} ·{" "}
-          <span className="font-extrabold">Horizont:</span> {interpretation.execution_horizon || intelligence.execution_horizon || "offen"}
+        <div className="mt-1 text-slate-600 dark:text-slate-300">
+          <span className="font-extrabold text-slate-800 dark:text-slate-200">Bias:</span> {interpretation.directional_bias || intelligence.directional_bias || "offen"} ·{" "}
+          <span className="font-extrabold text-slate-800 dark:text-slate-200">Horizont:</span> {interpretation.execution_horizon || intelligence.execution_horizon || "offen"}
         </div>
       </div>
 
-      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-700">
-        <div className="text-[10px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-600 dark:text-slate-300">
+      <div className="rounded-[1rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 px-3 py-3 text-xs leading-5 text-slate-800 dark:text-slate-200">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
           3 · Offene Unsicherheit
         </div>
         <div className="mt-2 font-semibold">
@@ -455,34 +455,34 @@ function sourceStateMeta(state: unknown) {
     return {
       label: "geladen",
       detail: "Datenquelle ist aktiv im aktuellen Briefing.",
-      className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700",
+      className: "border-emerald-500/40 bg-emerald-500/15 text-emerald-950 dark:text-emerald-300 font-bold",
     };
   }
   if (text.includes("deferred")) {
     return {
       label: "laedt nach",
       detail: "Fast Mode: Quelle wird nach dem ersten Briefing nachgeladen.",
-      className: "border-sky-500/20 bg-sky-500/10 text-sky-700",
+      className: "border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-300 font-bold",
     };
   }
   if (text.includes("no_recent")) {
     return {
       label: "keine frischen Treffer",
       detail: "Quelle funktioniert, aber im aktuellen Fenster gab es keinen relevanten Treffer.",
-      className: "border-slate-300 bg-white/65 text-slate-500",
+      className: "border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-slate-200 font-bold",
     };
   }
   if (text.includes("empty") || text.includes("unavailable")) {
     return {
       label: "leer / nicht verfuegbar",
       detail: "Quelle lieferte gerade keine verwertbaren Daten oder ist temporaer nicht erreichbar.",
-      className: "border-amber-500/20 bg-amber-500/10 text-amber-700",
+      className: "border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-300 font-bold",
     };
   }
   return {
     label: text.replace(/_/g, " "),
     detail: `Status: ${text.replace(/_/g, " ")}`,
-    className: "border-slate-300 bg-white/65 text-slate-500",
+    className: "border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-slate-200 font-bold",
   };
 }
 
@@ -772,37 +772,37 @@ export default function MorningBriefPanel({
               label: "Earnings Results",
               value: earningsResultCount,
               status: earningsResultCount ? "loaded" : "no fresh results",
-              tone: earningsResultCount ? "text-emerald-700 bg-emerald-500/10" : "text-slate-500 bg-slate-500/10",
+              tone: earningsResultCount ? "text-emerald-950 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30" : "text-slate-700 dark:text-slate-200 bg-black/5 dark:bg-white/10 border border-slate-300 dark:border-white/15",
             },
             {
               label: "Upcoming Earnings",
               value: upcomingEarningsCount,
               status: upcomingEarningsCount ? "loaded" : "none in focus window",
-              tone: upcomingEarningsCount ? "text-emerald-700 bg-emerald-500/10" : "text-slate-500 bg-slate-500/10",
+              tone: upcomingEarningsCount ? "text-emerald-950 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30" : "text-slate-700 dark:text-slate-200 bg-black/5 dark:bg-white/10 border border-slate-300 dark:border-white/15",
             },
             {
               label: "Watchlist Impact",
               value: watchlistImpactCount,
               status: watchlistImpactCount ? "direct hits" : "no direct hits",
-              tone: watchlistImpactCount ? "text-sky-700 bg-sky-500/10" : "text-slate-500 bg-slate-500/10",
+              tone: watchlistImpactCount ? "text-sky-950 dark:text-sky-300 bg-sky-500/15 border border-sky-500/30" : "text-slate-700 dark:text-slate-200 bg-black/5 dark:bg-white/10 border border-slate-300 dark:border-white/15",
             },
             {
               label: "Polymarket",
               value: hasPredictionSignals ? brief.prediction_signals.length : hasPolymarketMarkets ? brief.polymarket.length : 0,
               status: hasPredictionSignals ? "signals passed" : hasPolymarketMarkets ? "confidence gate" : predictionStatus,
-              tone: hasPredictionSignals ? "text-emerald-700 bg-emerald-500/10" : hasPolymarketMarkets ? "text-sky-700 bg-sky-500/10" : "text-amber-700 bg-amber-500/10",
+              tone: hasPredictionSignals ? "text-emerald-950 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30" : hasPolymarketMarkets ? "text-sky-950 dark:text-sky-300 bg-sky-500/15 border border-sky-500/30" : "text-amber-950 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30",
             },
           ].map((item) => (
             <div
               key={item.label}
-              className="rounded-[1rem] border border-black/8 bg-white/72 px-3 py-2"
+              className="rounded-[1rem] border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-[#181a20] px-3.5 py-2.5 shadow-sm"
             >
-              <div className="text-[9px] text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 text-slate-500">
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
                 {item.label}
               </div>
               <div className="mt-1 flex items-center gap-2">
-                <span className="text-sm font-black text-slate-900">{item.value}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] ${item.tone}`}>
+                <span className="text-sm font-black text-slate-900 dark:text-white">{item.value}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] ${item.tone}`}>
                   {item.status}
                 </span>
               </div>
@@ -810,22 +810,22 @@ export default function MorningBriefPanel({
           ))}
         </div>
         {Object.keys(sourceStates).length ? (
-          <div className="mt-3 rounded-[1.2rem] border border-black/6 bg-white/55 p-3">
+          <div className="mt-3.5 rounded-[1.2rem] border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-[#181a20] p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-900 dark:text-white">
                 Datenquellen Status
               </div>
-              <div className="text-[10px] font-semibold text-slate-400">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 zeigt, warum einzelne Sektionen leer oder verzögert sind
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2.5 flex flex-wrap gap-2">
             {Object.entries(sourceStates).slice(0, 8).map(([source, state]) => {
               const meta = sourceStateMeta(state);
               return (
                 <span
                   key={source}
-                  className={`rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] ${meta.className}`}
+                  className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${meta.className}`}
                   title={`${sourceLabel(source)}: ${meta.detail}`}
                 >
                   {sourceLabel(source)} / {meta.label}
@@ -833,7 +833,7 @@ export default function MorningBriefPanel({
               );
             })}
             </div>
-            <div className="mt-2 text-[11px] leading-5 text-slate-500">
+            <div className="mt-2.5 text-xs font-medium leading-relaxed text-slate-700 dark:text-slate-300">
               Grün bedeutet: im Brief aktiv. Blau bedeutet: Fast-Mode lädt nach. Gelb/Grau bedeutet: Quelle war erreichbar,
               aber ohne verwertbaren Treffer oder temporär leer.
             </div>
@@ -848,11 +848,11 @@ export default function MorningBriefPanel({
               <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-700">
                 Future Stars Briefing
               </div>
-              <h3 className="mt-2 text-2xl text-slate-900">
+              <h3 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                 Kleine Werte erst nach News-, Umsatz- und Risiko-Check
               </h3>
             </div>
-            <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-700">
+            <div className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-xs font-black text-emerald-800 dark:text-emerald-300">
               {futureStars.filter((item: any) => item.quality_gate === "passed").length} passed
             </div>
           </div>
@@ -861,27 +861,27 @@ export default function MorningBriefPanel({
               <button
                 key={item.ticker}
                 onClick={() => item.ticker && onAnalyze(item.ticker)}
-                className="rounded-[1.15rem] border border-black/8 bg-white/75 p-4 text-left transition-all hover:-translate-y-0.5"
+                className="rounded-[1.15rem] border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-[#181a20] p-4 text-left transition-all hover:-translate-y-0.5 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-lg font-black text-slate-900">{item.ticker}</span>
-                  <span className="text-xs font-black text-emerald-700">{item.score}/100</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">{item.ticker}</span>
+                  <span className="text-xs font-black text-emerald-800 dark:text-emerald-300">{item.score}/100</span>
                 </div>
-                <div className="mt-1 truncate text-xs font-semibold text-slate-500">{item.name}</div>
-                <div className="mt-3 text-xs font-bold text-slate-700">
+                <div className="mt-1 truncate text-xs font-semibold text-slate-600 dark:text-slate-300">{item.name}</div>
+                <div className="mt-3 text-xs font-bold text-slate-800 dark:text-slate-200">
                   {toFiniteNumber(item.revenue_growth) != null ? `${fixed(item.revenue_growth, 1)}% Umsatz` : "Umsatz n/a"}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-950 dark:text-emerald-300">
                     Gate {item.gate_passed ?? 0}/{item.gate_total ?? 6}
                   </span>
-                  <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-600">
+                  <span className="rounded-full border border-slate-300 dark:border-white/15 bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-200">
                     {item.quality_gate || "watch"}
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-500">{item.catalyst}</p>
+                <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-700 dark:text-slate-300">{item.catalyst}</p>
                 {item.gate_reason ? (
-                  <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-amber-700">{item.gate_reason}</p>
+                  <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-amber-800 dark:text-amber-300 font-semibold">{item.gate_reason}</p>
                 ) : null}
               </button>
             ))}

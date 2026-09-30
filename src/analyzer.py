@@ -1383,6 +1383,8 @@ class StockAnalyzer:
             long_term = "Not recommended - significant concerns"
             action = "SELL / AVOID"
         
+        bull_bear_debate = self.analyze_bull_bear_debate()
+
         return {
             "analyses": {
                 "price_performance": price_analysis,
@@ -1399,6 +1401,7 @@ class StockAnalyzer:
             "valuation": valuation,
             "potential": self.analyze_potential(),
             "rebound": self.analyze_rebound(),
+            "bull_bear_debate": bull_bear_debate,
             "total_score": total_score,
             "recommendation": {
                 "action": action,
@@ -1406,3 +1409,639 @@ class StockAnalyzer:
                 "long_term_investors": long_term,
             }
         }
+
+    def analyze_bull_bear_debate(self) -> Dict[str, Any]:
+        """
+        Synthesizes a structured Bull vs. Bear debate (Two-Agent Thesis).
+        Extracts clear bull thesis points vs. bear counterarguments,
+        calculates a duel balance ratio, defines the core battleground question,
+        and provides concrete confirmation catalysts and invalidation triggers.
+        """
+        fund = self.data.get("fundamentals", {}) or {}
+        price = self.data.get("price_data", {}) or {}
+        vol = self.data.get("volatility", {}) or {}
+        short_info = self.data.get("short_interest", {}) or {}
+        analyst = self.data.get("analyst_data", {}) or {}
+        quote_type = str(fund.get("quote_type") or "").upper()
+
+        bull_points: List[Dict[str, Any]] = []
+        bear_points: List[Dict[str, Any]] = []
+        bull_score: float = 10.0  # baseline
+        bear_score: float = 10.0  # baseline
+
+        # --- 1. Growth & Revenue Momentum ---
+        rev_growth = fund.get("revenue_growth")
+        if rev_growth is not None:
+            g_pct = rev_growth * 100
+            if g_pct > 15:
+                bull_points.append({
+                    "title": "Starkes Umsatzwachstum",
+                    "detail": f"Umsatzplus von {g_pct:+.1f}% belegt anhaltende Nachfrage und Marktexpansion.",
+                    "metric": f"{g_pct:+.1f}% YoY",
+                    "conviction": "high" if g_pct > 25 else "medium"
+                })
+                bull_score += min(25.0, g_pct * 0.8)
+            elif g_pct < 0:
+                bear_points.append({
+                    "title": "Rückläufige Erlöse",
+                    "detail": f"Umsatzrückgang von {g_pct:.1f}% deutet auf Marktsättigung oder intensiven Wettbewerb hin.",
+                    "metric": f"{g_pct:.1f}% YoY",
+                    "conviction": "high" if g_pct < -10 else "medium"
+                })
+                bear_score += min(25.0, abs(g_pct) * 1.0)
+
+        # --- 2. Profitability & Moat ---
+        profit_margin = fund.get("profit_margin")
+        operating_margin = fund.get("operating_margin")
+        effective_margin = profit_margin if profit_margin is not None else operating_margin
+        if effective_margin is not None:
+            m_pct = effective_margin * 100
+            if m_pct > 18:
+                bull_points.append({
+                    "title": "Hohe Margenstärke & Preismacht",
+                    "detail": f"Marge von {m_pct:.1f}% demonstriert einen starken Wettbewerbsvorteil (Moat).",
+                    "metric": f"{m_pct:.1f}% Marge",
+                    "conviction": "high"
+                })
+                bull_score += 18.0
+            elif m_pct < 0:
+                bear_points.append({
+                    "title": "Fehlende Profitabilität",
+                    "detail": f"Negatives operatives Ergebnis ({m_pct:.1f}%) zehrt an der Liquidität und erhöht das Kapitalbeschaffungsrisiko.",
+                    "metric": f"{m_pct:.1f}% Marge",
+                    "conviction": "high"
+                })
+                bear_score += 22.0
+
+        roe = fund.get("roe")
+        if roe is not None:
+            roe_pct = roe * 100
+            if roe_pct > 18:
+                bull_points.append({
+                    "title": "Exzellente Eigenkapitalrendite",
+                    "detail": f"ROE von {roe_pct:.1f}% beweist disziplinierte und ertragreiche Kapitalallokation.",
+                    "metric": f"{roe_pct:.1f}% ROE",
+                    "conviction": "medium"
+                })
+                bull_score += 12.0
+            elif roe_pct < 0:
+                bear_points.append({
+                    "title": "Kapitalvernichtung (Negativer ROE)",
+                    "detail": f"Mit {roe_pct:.1f}% ROE wird Buchwert abgebaut.",
+                    "metric": f"{roe_pct:.1f}% ROE",
+                    "conviction": "medium"
+                })
+                bear_score += 12.0
+
+        # --- 3. Valuation & Multiples ---
+        pe = fund.get("pe_ratio")
+        fwd_pe = fund.get("forward_pe")
+        ev_ebitda = fund.get("ev_ebitda")
+
+        if pe is not None and pe > 0:
+            if pe > 40 or (ev_ebitda is not None and ev_ebitda > 28):
+                val_metric = f"KGV {pe:.1f}" + (f" | EV/EBITDA {ev_ebitda:.1f}" if ev_ebitda else "")
+                bear_points.append({
+                    "title": "Ambitionierte Bewertungsprämie",
+                    "detail": f"Mit {val_metric} ist bereits viel Optimismus eingepreist; minimale Verfehlungen strafen den Kurs ab.",
+                    "metric": val_metric,
+                    "conviction": "high" if pe > 60 else "medium"
+                })
+                bear_score += min(22.0, (pe - 25) * 0.4)
+            elif pe < 16 and (rev_growth is None or rev_growth >= 0):
+                bull_points.append({
+                    "title": "Attraktive fundamentale Bewertung",
+                    "detail": f"KGV von {pe:.1f} bietet eine substanzielle Sicherheitsmarge gegenüber dem breiten Markt.",
+                    "metric": f"KGV {pe:.1f}",
+                    "conviction": "medium"
+                })
+                bull_score += 14.0
+
+        if fwd_pe is not None and pe is not None and pe > 0:
+            if fwd_pe < pe * 0.82:
+                bull_points.append({
+                    "title": "Kräftiges Gewinnwachstum erwartet",
+                    "detail": f"Forward-KGV ({fwd_pe:.1f}) liegt deutlich unter aktuellem KGV ({pe:.1f}) – Analysten erwarten Gewinnsprung.",
+                    "metric": f"Fwd {fwd_pe:.1f} vs {pe:.1f}",
+                    "conviction": "medium"
+                })
+                bull_score += 12.0
+            elif fwd_pe > pe * 1.15:
+                bear_points.append({
+                    "title": "Gewinnkontraktion erwartet",
+                    "detail": f"Forward-KGV ({fwd_pe:.1f}) signalisiert sinkende Gewinne im nächsten Geschäftsjahr.",
+                    "metric": f"Fwd {fwd_pe:.1f} vs {pe:.1f}",
+                    "conviction": "medium"
+                })
+                bear_score += 14.0
+
+        # --- 4. Balance Sheet & Leverage ---
+        debt_equity = fund.get("debt_to_equity")
+        if debt_equity is not None:
+            if debt_equity > 180:
+                bear_points.append({
+                    "title": "Erhöhte Zins- und Verschuldungslast",
+                    "detail": f"Debt-to-Equity bei {debt_equity:.0f}% engt den finanziellen Spielraum in einem volatilen Marktumfeld ein.",
+                    "metric": f"D/E {debt_equity:.0f}%",
+                    "conviction": "high" if debt_equity > 250 else "medium"
+                })
+                bear_score += 15.0
+            elif debt_equity < 45:
+                bull_points.append({
+                    "title": "Kerngesunde Bilanz / Geringer Hebel",
+                    "detail": f"Mit nur {debt_equity:.0f}% Verschuldung besteht maximale finanzielle Flexibilität für Krisen oder M&A.",
+                    "metric": f"D/E {debt_equity:.0f}%",
+                    "conviction": "medium"
+                })
+                bull_score += 10.0
+
+        # --- 5. Market Technicals, Momentum & Sentiment ---
+        change_1y = price.get("change_1y")
+        from_high = price.get("from_52w_high")
+        rsi = price.get("rsi")
+
+        if change_1y is not None:
+            if change_1y > 25:
+                bull_points.append({
+                    "title": "Etablierter Aufwärtstrend",
+                    "detail": f"+{change_1y:.1f}% über 12 Monate bestätigt anhaltende relative Stärke gegenüber Peers.",
+                    "metric": f"+{change_1y:.1f}% 1Y",
+                    "conviction": "medium"
+                })
+                bull_score += 10.0
+            elif change_1y < -25:
+                bear_points.append({
+                    "title": "Anhaltender Abwärtstrend",
+                    "detail": f"{change_1y:.1f}% Jahresverlust signalisiert anhaltenden Verkaufsdruck und Abflüsse.",
+                    "metric": f"{change_1y:.1f}% 1Y",
+                    "conviction": "medium"
+                })
+                bear_score += 12.0
+
+        if rsi is not None:
+            if rsi < 32:
+                bull_points.append({
+                    "title": "Technisch überverkauft (Rebound-Setup)",
+                    "detail": f"RSI von {rsi:.1f} zeigt kurzfristig extreme Verkaufsübertreibung und Erholungschance.",
+                    "metric": f"RSI {rsi:.1f}",
+                    "conviction": "moderate"
+                })
+                bull_score += 8.0
+            elif rsi > 72:
+                bear_points.append({
+                    "title": "Technisch überhitzt (Rückschlaggefahr)",
+                    "detail": f"RSI von {rsi:.1f} signalisiert überdehnte Rallye mit erhöhtem Korrekturrisiko.",
+                    "metric": f"RSI {rsi:.1f}",
+                    "conviction": "moderate"
+                })
+                bear_score += 8.0
+
+        # --- 6. Short Interest & Consensus ---
+        short_pct = short_info.get("short_percent_of_float")
+        if short_pct is not None:
+            if short_pct > 12:
+                bear_points.append({
+                    "title": "Signifikantes Leerverkäufer-Interesse",
+                    "detail": f"{short_pct:.1f}% des Free Floats leerverkauft – Institutionelle wetten aktiv auf Schwäche.",
+                    "metric": f"{short_pct:.1f}% Short Float",
+                    "conviction": "medium"
+                })
+                bear_score += 10.0
+                if change_1y is not None and change_1y > 10:
+                    bull_points.append({
+                        "title": "Potenzieller Short Squeeze Treibstoff",
+                        "detail": f"Hohe Leerverkaufsquote ({short_pct:.1f}%) bei intaktem Trend kann plötzliche Eindeckungswellen auslösen.",
+                        "metric": f"{short_pct:.1f}% Short",
+                        "conviction": "moderate"
+                    })
+                    bull_score += 8.0
+
+        # --- 7. Fallback-Absicherung (Asset-spezifisch) ---
+        if quote_type == "ETF":
+            if not bull_points:
+                bull_points.append({
+                    "title": "Breite Risikostreuung",
+                    "detail": "Korb diversifizierter Einzeltitel senkt das unternehmensspezifische Ausfallrisiko erheblich.",
+                    "metric": "Breite Streuung",
+                    "conviction": "high"
+                })
+                bull_score += 15.0
+            if not bear_points:
+                bear_points.append({
+                    "title": "Kein Einzeltitel-Alpha & Marktrisiko",
+                    "detail": "Vollständig abhängig von Makro- und Indexbewegungen; keine Ausreißer-Renditen.",
+                    "metric": "Markt-Beta",
+                    "conviction": "medium"
+                })
+                bear_score += 15.0
+        elif "CRYPTO" in quote_type:
+            if not bull_points:
+                bull_points.append({
+                    "title": "Asymmetrisches Renditepotenzial",
+                    "detail": "Globale Liquidität und Dezentralisierung bieten Hebelwirkung auf Adoptionswellen.",
+                    "metric": "Liquidität",
+                    "conviction": "medium"
+                })
+                bull_score += 15.0
+            if not bear_points:
+                bear_points.append({
+                    "title": "Hohe Volatilität & regulatorische Risiken",
+                    "detail": "Starke Drawdowns ohne fundamentale Cashflow-Untergrenze.",
+                    "metric": "Hohe Volatilität",
+                    "conviction": "high"
+                })
+                bear_score += 20.0
+
+        # Mindestens zwei fundierte Punkte pro Seite sicherstellen
+        if len(bull_points) < 2:
+            bull_points.append({
+                "title": "Operative Kernstabilität",
+                "detail": "Etablierte Marktposition und bestehende Kundenbasis stützen den Grundbetrieb.",
+                "metric": "Marktpräsenz",
+                "conviction": "moderate"
+            })
+            bull_score += 8.0
+
+        if len(bear_points) < 2:
+            bear_points.append({
+                "title": "Makroökonomische Sensitivität",
+                "detail": "Zinsentwicklung, Wechselkurse und allgemeiner Konjunkturzyklus beeinflussen die Bewertung.",
+                "metric": "Makro-Risiko",
+                "conviction": "moderate"
+            })
+            bear_score += 8.0
+
+        # --- 8. Score, Ratio & Verdict ---
+        total_debate = bull_score + bear_score
+        bull_pct = round((bull_score / total_debate) * 100) if total_debate > 0 else 50
+        bull_pct = max(15, min(85, bull_pct))  # Clamp between 15% and 85%
+        bear_pct = 100 - bull_pct
+
+        if bull_pct >= 64:
+            verdict_headline = "Klares Übergewicht der Bullen – Katalysatoren dominieren"
+            summary = "Die Wachstumstreiber und Qualitätssignale überwiegen die Risikofaktoren deutlich. Rücksetzer bieten statistisch bessere Einstiegsfenster als Ausbrüche."
+        elif bull_pct >= 54:
+            verdict_headline = "Leichter Bullen-Vorteil – These intakt mit Risikomonitoring"
+            summary = "Die Investment-These ist konstruktiv, erfordert jedoch eine genaue Beobachtung von Bewertung und Margenentwicklung."
+        elif bull_pct >= 46:
+            verdict_headline = "Ausgeglichenes Duell – Chance und Risiko auf Augenhöhe"
+            summary = "Weder Bullen noch Bären haben die klare Oberhand. Vor einer Positionsentscheidung sollte die Bestätigung durch den nächsten Katalysator abgewartet werden."
+        elif bull_pct >= 36:
+            verdict_headline = "Bären-Argumente dominieren – Vorsicht und Gegenwind"
+            summary = "Die Risikofaktoren (Bewertung, Verschuldung oder Margendruck) belasten das Setup. Das Chance-Risiko-Verhältnis ist aktuell asymmetrisch nach unten verschoben."
+        else:
+            verdict_headline = "Kritisches Bären-Übergewicht – Deutliches Abwärtsrisiko"
+            summary = "Schwere fundamentale oder bewertungsseitige Belastungen überlagern die wenigen positiven Signale. Kapitalerhalt hat hier Vorrang vor Spekulation."
+
+        # Dynamisches Schlachtfeld (Key Battleground)
+        if pe is not None and pe > 35 and rev_growth is not None and rev_growth > 0.15:
+            battleground = f"Reicht das Umsatzwachstum von +{rev_growth*100:.1f}%, um das KGV von {pe:.1f} mittelfristig zu rechtfertigen?"
+        elif effective_margin is not None and effective_margin < 0:
+            battleground = "Schafft das Management den Turnaround in die freie Cashflow-Generierung vor einer weiteren Kapitalverwässerung?"
+        elif debt_equity is not None and debt_equity > 150:
+            battleground = f"Bleibt der Zinsdienst bei {debt_equity:.0f}% Verschuldung auch bei länger erhöhtem Zinsniveau tragfähig?"
+        elif change_1y is not None and change_1y > 30:
+            battleground = "Kann der bestehende Aufwärtstrend Anschlusskäufe generieren, ohne in eine Überhitzungskorrektur überzugehen?"
+        else:
+            battleground = "Bestätigen die nächsten Quartalszahlen die Marktannahmen oder droht eine Abwärtsrevision der Konsensschätzungen?"
+
+        # Katalysatoren & Invalidierung
+        bull_catalysts = [
+            "Quartalsbericht mit EPS- und Umsatzüberraschung über Konsens",
+            "Margenausweitung durch Skalierungseffekte im Kerngeschäft",
+            "Anhebung der Jahresprognose (Guidance-Upgrade) durch das Management",
+        ]
+        invalidation_triggers = [
+            "Unerwartete Senkung der Margen- oder Umsatzerwartung",
+            "Bruch zentraler technischer Trendlinien (z. B. 200-Tage-Linie)",
+            "Verschlechterung des freien Cashflows oder steigender Verschuldungsgrad",
+        ]
+
+        return {
+            "bull_pct": bull_pct,
+            "bear_pct": bear_pct,
+            "bull_score": round(bull_score, 1),
+            "bear_score": round(bear_score, 1),
+            "verdict_headline": verdict_headline,
+            "summary": summary,
+            "key_battleground": battleground,
+            "bull_thesis": bull_points[:5],
+            "bear_thesis": bear_points[:5],
+            "bull_catalysts": bull_catalysts,
+            "invalidation_triggers": invalidation_triggers,
+        }
+
+    def calculate_dcf(
+        self,
+        fcf_growth_rate: Optional[float] = None,
+        discount_rate: Optional[float] = None,
+        terminal_growth_rate: Optional[float] = 0.025,
+        projection_years: int = 5,
+        margin_of_safety: float = 0.20,
+        custom_base_fcf: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Calculates Discounted Cash Flow (DCF) intrinsic value,
+        Reverse-DCF (market-implied growth rate), 2D sensitivity matrix,
+        and Bear/Base/Bull scenarios.
+        """
+        price_data = self.data.get("price_data") or {}
+        current_price = float(price_data.get("current_price") or 0.0)
+        currency = price_data.get("currency") or "USD"
+        fund = self.data.get("fundamentals") or {}
+        overview = self.data.get("overview") or {}
+
+        # 1. Shares Outstanding
+        shares = (
+            fund.get("shares_outstanding")
+            or overview.get("shares_outstanding")
+            or fund.get("sharesOutstanding")
+            or overview.get("sharesOutstanding")
+        )
+        if not shares or shares <= 0:
+            mkt_cap = (
+                fund.get("market_cap")
+                or overview.get("market_cap")
+                or fund.get("marketCap")
+                or overview.get("marketCap")
+            )
+            if mkt_cap and current_price > 0:
+                shares = float(mkt_cap) / current_price
+            else:
+                shares = 1_000_000_000.0  # Safe fallback to prevent div/0
+        else:
+            shares = float(shares)
+
+        # 2. Cash & Debt (Balance Sheet)
+        cash = float(fund.get("total_cash") or 0.0)
+        debt = float(fund.get("total_debt") or 0.0)
+        net_debt = debt - cash
+
+        # 3. Base Free Cash Flow (FCF_0)
+        fcf_is_estimated = False
+        if custom_base_fcf is not None and custom_base_fcf > 0:
+            base_fcf = float(custom_base_fcf)
+            fcf_source = "Benutzerdefinierter FCF"
+        else:
+            raw_fcf = fund.get("free_cashflow")
+            if raw_fcf is None or raw_fcf <= 0:
+                statements = fund.get("financial_statements", {}).get("annual", [])
+                if statements and isinstance(statements, list):
+                    for st in statements:
+                        s_fcf = st.get("free_cashflow")
+                        if s_fcf and s_fcf > 0:
+                            raw_fcf = s_fcf
+                            break
+            if raw_fcf is not None and raw_fcf > 0:
+                base_fcf = float(raw_fcf)
+                fcf_source = "TTM Free Cashflow (Offiziell)"
+            else:
+                op_cf = fund.get("operating_cashflow")
+                if op_cf and op_cf > 0:
+                    base_fcf = float(op_cf) * 0.75
+                    fcf_source = "Geschätzt aus operativem Cashflow (75% Proxy)"
+                    fcf_is_estimated = True
+                else:
+                    if current_price > 0 and shares > 0:
+                        base_fcf = (shares * current_price) * 0.035
+                        fcf_source = "Normalisierter FCF (3.5% Rendite-Proxy)"
+                        fcf_is_estimated = True
+                    else:
+                        base_fcf = 1_000_000_000.0
+                        fcf_source = "Synthetischer Richtwert"
+                        fcf_is_estimated = True
+
+        # 4. Discount Rate / WACC
+        if discount_rate is not None and discount_rate > 0:
+            r = float(discount_rate)
+        else:
+            vol = self.data.get("volatility") or {}
+            beta = float(vol.get("beta") or 1.0)
+            rf = 0.040  # 4.0% risk-free rate
+            erp = 0.050  # 5.0% equity risk premium
+            r = round(min(max(rf + beta * erp, 0.065), 0.13), 3)
+
+        # 5. FCF Growth Rate (g)
+        if fcf_growth_rate is not None:
+            g = float(fcf_growth_rate)
+        else:
+            rev_g = fund.get("revenue_growth")
+            earn_g = fund.get("earnings_growth")
+            valid = [x for x in [rev_g, earn_g] if x is not None and isinstance(x, (int, float))]
+            if valid:
+                g = round(min(max(sum(valid) / len(valid), 0.03), 0.25), 3)
+            else:
+                g = 0.08
+
+        # 6. Terminal Growth Rate & Mos
+        g_term = float(terminal_growth_rate if terminal_growth_rate is not None else 0.025)
+        # Cap terminal rate below discount rate to guarantee convergence
+        if g_term >= r - 0.005:
+            g_term = round(max(0.005, r - 0.01), 3)
+
+        mos = float(margin_of_safety if margin_of_safety is not None else 0.20)
+        mos = min(max(mos, 0.05), 0.60)
+        years = int(projection_years if projection_years in (5, 10) else 5)
+
+        # 7. Helper to evaluate Fair Value for any (growth, wacc, term)
+        def evaluate_model(g_val: float, r_val: float, gt_val: float) -> Tuple[float, float, float, List[Dict[str, Any]]]:
+            if r_val <= gt_val:
+                gt_val = max(0.005, r_val - 0.008)
+            
+            proj = []
+            fcf_cur = base_fcf
+            pv_total = 0.0
+            for t in range(1, years + 1):
+                fcf_cur *= (1.0 + g_val)
+                pv = fcf_cur / ((1.0 + r_val) ** t)
+                pv_total += pv
+                proj.append({
+                    "year": t,
+                    "fcf": round(fcf_cur, 0),
+                    "pv": round(pv, 0),
+                    "discount_factor": round(1.0 / ((1.0 + r_val) ** t), 4)
+                })
+
+            tv = (fcf_cur * (1.0 + gt_val)) / (r_val - gt_val)
+            pv_tv = tv / ((1.0 + r_val) ** years)
+            ev = pv_total + pv_tv
+            equity = max(0.0, ev + cash - debt)
+            fv_share = equity / shares if shares > 0 else 0.0
+            return fv_share, ev, equity, proj
+
+        fair_value, enterprise_value, equity_value, projections = evaluate_model(g, r, g_term)
+        target_buy_price = fair_value * (1.0 - mos)
+        upside_pct = ((fair_value / current_price) - 1.0) * 100.0 if current_price > 0 else 0.0
+
+        # 8. Reverse-DCF: Market-Implied Growth Rate
+        # Solve for g such that fair_value(g) == current_price
+        target_equity = current_price * shares
+        target_ev = max(0.0, target_equity - cash + debt)
+
+        def ev_for_growth(g_candidate: float) -> float:
+            fcf_c = base_fcf
+            pv_tot = 0.0
+            for t in range(1, years + 1):
+                fcf_c *= (1.0 + g_candidate)
+                pv_tot += fcf_c / ((1.0 + r) ** t)
+            tv_c = (fcf_c * (1.0 + g_term)) / (r - g_term)
+            pv_tv_c = tv_c / ((1.0 + r) ** years)
+            return pv_tot + pv_tv_c
+
+        implied_growth = None
+        if base_fcf > 0 and current_price > 0 and shares > 0:
+            low, high = -0.40, 1.20
+            # Test boundaries
+            ev_low = ev_for_growth(low)
+            ev_high = ev_for_growth(high)
+            if target_ev <= ev_low:
+                implied_growth = -0.40
+            elif target_ev >= ev_high:
+                # expand once
+                ev_ultra = ev_for_growth(2.50)
+                if target_ev >= ev_ultra:
+                    implied_growth = 2.50
+                else:
+                    low, high = 1.20, 2.50
+                    for _ in range(35):
+                        mid = (low + high) / 2.0
+                        if ev_for_growth(mid) < target_ev:
+                            low = mid
+                        else:
+                            high = mid
+                    implied_growth = round((low + high) / 2.0, 4)
+            else:
+                for _ in range(35):
+                    mid = (low + high) / 2.0
+                    if ev_for_growth(mid) < target_ev:
+                        low = mid
+                    else:
+                        high = mid
+                implied_growth = round((low + high) / 2.0, 4)
+
+        # 9. 2D Sensitivity Matrix (5x5: WACC vs Growth)
+        wacc_steps = [
+            round(max(g_term + 0.008, r - 0.02), 3),
+            round(max(g_term + 0.008, r - 0.01), 3),
+            round(r, 3),
+            round(r + 0.01, 3),
+            round(r + 0.02, 3),
+        ]
+        # remove potential duplicates while keeping sorted
+        wacc_steps = sorted(list(dict.fromkeys(wacc_steps)))
+        while len(wacc_steps) < 5:
+            wacc_steps.append(round(wacc_steps[-1] + 0.01, 3))
+
+        growth_steps = [
+            round(max(-0.20, g - 0.04), 3),
+            round(max(-0.20, g - 0.02), 3),
+            round(g, 3),
+            round(g + 0.02, 3),
+            round(g + 0.04, 3),
+        ]
+        growth_steps = sorted(list(dict.fromkeys(growth_steps)))
+        while len(growth_steps) < 5:
+            growth_steps.append(round(growth_steps[-1] + 0.02, 3))
+
+        sensitivity_matrix = []
+        for r_step in wacc_steps:
+            row = []
+            for g_step in growth_steps:
+                val, _, _, _ = evaluate_model(g_step, r_step, g_term)
+                up_p = ((val / current_price) - 1.0) * 100.0 if current_price > 0 else 0.0
+                if up_p >= (mos * 100.0):
+                    verdict = "undervalued"
+                elif up_p >= -5.0:
+                    verdict = "fair"
+                else:
+                    verdict = "overvalued"
+                row.append({
+                    "wacc": r_step,
+                    "growth": g_step,
+                    "fair_value": round(val, 2),
+                    "upside_pct": round(up_p, 1),
+                    "verdict": verdict,
+                })
+            sensitivity_matrix.append(row)
+
+        # 10. Three Scenarios (Bear, Base, Bull)
+        scenarios = {
+            "bear": {
+                "name": "Bärenszenario",
+                "icon": "🐻",
+                "growth": round(max(-0.05, g - 0.04), 3),
+                "wacc": round(r + 0.015, 3),
+                "terminal_growth": round(max(0.01, g_term - 0.005), 3),
+            },
+            "base": {
+                "name": "Basisszenario",
+                "icon": "⚖️",
+                "growth": round(g, 3),
+                "wacc": round(r, 3),
+                "terminal_growth": round(g_term, 3),
+            },
+            "bull": {
+                "name": "Bullenszenario",
+                "icon": "🐂",
+                "growth": round(g + 0.04, 3),
+                "wacc": round(max(0.055, r - 0.01), 3),
+                "terminal_growth": round(min(0.035, g_term + 0.005), 3),
+            }
+        }
+        for key, sc in scenarios.items():
+            s_fv, _, _, _ = evaluate_model(sc["growth"], sc["wacc"], sc["terminal_growth"])
+            sc["fair_value"] = round(s_fv, 2)
+            sc["target_price"] = round(s_fv * (1.0 - mos), 2)
+            sc["upside_pct"] = round(((s_fv / current_price) - 1.0) * 100.0 if current_price > 0 else 0.0, 1)
+
+        # Verdict
+        if upside_pct >= (mos * 100.0):
+            evaluation = "Stark unterbewertet"
+            action_badge = "BUY"
+            color = "emerald"
+        elif upside_pct >= 0.0:
+            evaluation = "Fair bewertet"
+            action_badge = "HOLD"
+            color = "amber"
+        else:
+            evaluation = "Überbewertet"
+            action_badge = "REDUCE"
+            color = "rose"
+
+        return {
+            "ticker": str(self.data.get("ticker") or ""),
+            "currency": currency,
+            "current_price": round(current_price, 2),
+            "fair_value": round(fair_value, 2),
+            "target_buy_price": round(target_buy_price, 2),
+            "margin_of_safety_pct": round(mos * 100.0, 1),
+            "upside_pct": round(upside_pct, 1),
+            "evaluation": evaluation,
+            "action_badge": action_badge,
+            "color": color,
+            "implied_growth_rate": round(implied_growth * 100.0, 1) if implied_growth is not None else None,
+            "inputs": {
+                "base_fcf": round(base_fcf, 0),
+                "base_fcf_source": fcf_source,
+                "fcf_is_estimated": fcf_is_estimated,
+                "fcf_growth_rate": round(g, 3),
+                "discount_rate": round(r, 3),
+                "terminal_growth_rate": round(g_term, 3),
+                "projection_years": years,
+                "shares_outstanding": round(shares, 0),
+                "cash": round(cash, 0),
+                "debt": round(debt, 0),
+                "net_debt": round(net_debt, 0),
+            },
+            "enterprise_value": round(enterprise_value, 0),
+            "equity_value": round(equity_value, 0),
+            "projections": projections,
+            "scenarios": scenarios,
+            "sensitivity_matrix": {
+                "wacc_axis": wacc_steps,
+                "growth_axis": growth_steps,
+                "matrix": sensitivity_matrix,
+            }
+        }
+
+

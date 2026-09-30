@@ -82,11 +82,28 @@ interface SignalWatchlistPanelProps {
   onRefresh: () => Promise<void>;
 }
 
+export function getTickerBadge(ticker: string) {
+  const sym = String(ticker || "").toUpperCase().trim();
+  if (sym.endsWith(".DE") || sym.endsWith(".F")) return { flag: "🇩🇪", region: "DAX / Deutschland", currency: "EUR" };
+  if (sym.endsWith(".AS")) return { flag: "🇳🇱", region: "AEX / Niederlande", currency: "EUR" };
+  if (sym.endsWith(".PA")) return { flag: "🇫🇷", region: "CAC / Frankreich", currency: "EUR" };
+  if (sym.endsWith(".MI")) return { flag: "🇮🇹", region: "MIB / Italien", currency: "EUR" };
+  if (sym.endsWith(".MC")) return { flag: "🇪🇸", region: "IBEX / Spanien", currency: "EUR" };
+  if (sym.endsWith(".L")) return { flag: "🇬🇧", region: "LSE / UK", currency: "GBP" };
+  if (sym.endsWith("-USD")) return { flag: "🪙", region: "Crypto", currency: "USD" };
+  return { flag: "🇺🇸", region: "US Markt", currency: "USD" };
+}
+
 const initialForm = { kind: "ticker", value: "" };
 const quickIdeas = [
-  { kind: "ticker", value: "AAPL" },
+  { kind: "ticker", value: "SAP.DE" },
+  { kind: "ticker", value: "RHM.DE" },
+  { kind: "ticker", value: "ASML.AS" },
+  { kind: "ticker", value: "SIE.DE" },
   { kind: "ticker", value: "NVDA" },
-  { kind: "ticker", value: "AMZN" },
+  { kind: "ticker", value: "PLTR" },
+  { kind: "ticker", value: "AAPL" },
+  { kind: "ticker", value: "MSFT" },
   { kind: "politician", value: "Nancy Pelosi" },
   { kind: "politician", value: "Scott Peters" },
 ];
@@ -351,28 +368,40 @@ export default function SignalWatchlistPanel({
         )}
 
         <div className="mt-5 flex flex-wrap gap-3">
-          {[...groupedItems.ticker, ...groupedItems.politician].map((item) => (
-            <div
-              key={`${item.kind}:${item.value}`}
-              className="flex items-center gap-2 rounded-full border border-black/8 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700"
-            >
-              <span>{item.kind === "ticker" ? "Ticker" : "House"}: {item.value}</span>
-              <button
-                type="button"
-                onClick={() => startEditing(item)}
-                className="rounded-full border border-black/8 bg-black/[0.02] px-2 py-1 text-[10px] font-extrabold text-slate-600 transition-colors hover:border-[var(--accent)]/25 hover:text-[var(--accent)]"
+          {[...groupedItems.ticker, ...groupedItems.politician].map((item) => {
+            const badge = item.kind === "ticker" ? getTickerBadge(item.value) : null;
+            return (
+              <div
+                key={`${item.kind}:${item.value}`}
+                className="flex items-center gap-2 rounded-full border border-black/8 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700 shadow-sm"
               >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => removeItem(item.kind, item.value)}
-                className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-[10px] font-extrabold text-red-700 transition-colors hover:bg-red-500/15"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
+                <span>
+                  {item.kind === "ticker"
+                    ? `${badge?.flag} ${item.value}`
+                    : `🏛️ House: ${item.value}`}
+                </span>
+                {badge ? (
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 lowercase">
+                    {badge.currency}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => startEditing(item)}
+                  className="rounded-full border border-black/8 bg-black/[0.02] px-2 py-1 text-[10px] font-extrabold text-slate-600 transition-colors hover:border-[var(--accent)]/25 hover:text-[var(--accent)]"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeItem(item.kind, item.value)}
+                  className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-[10px] font-extrabold text-red-700 transition-colors hover:bg-red-500/15"
+                >
+                  Remove
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         {!items.length && (
@@ -381,15 +410,18 @@ export default function SignalWatchlistPanel({
               Quick start
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {quickIdeas.map((idea) => (
-                <button
-                  key={`${idea.kind}:${idea.value}`}
-                  onClick={() => setForm(idea)}
-                  className="rounded-full border border-black/8 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700"
-                >
-                  {idea.kind === "ticker" ? "Ticker" : "House"}: {idea.value}
-                </button>
-              ))}
+              {quickIdeas.map((idea) => {
+                const badge = idea.kind === "ticker" ? getTickerBadge(idea.value) : null;
+                return (
+                  <button
+                    key={`${idea.kind}:${idea.value}`}
+                    onClick={() => setForm(idea)}
+                    className="rounded-full border border-black/8 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700 hover:border-[var(--accent)]/30 hover:bg-slate-50 transition-colors"
+                  >
+                    {idea.kind === "ticker" ? `${badge?.flag} ${idea.value}` : `🏛️ House: ${idea.value}`}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -401,11 +433,19 @@ export default function SignalWatchlistPanel({
             Form 4 Radar
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
-            {tickerSignals.map((signal) => (
+            {tickerSignals.map((signal) => {
+              const badge = getTickerBadge(signal.ticker);
+              return (
               <div key={signal.ticker} className="surface-panel rounded-[1.8rem] p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-2xl font-black text-slate-900">{signal.ticker}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl" title={badge.region}>{badge.flag}</span>
+                      <div className="text-2xl font-black text-slate-900">{signal.ticker}</div>
+                      <span className="rounded-md border border-black/5 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                        {badge.currency}
+                      </span>
+                    </div>
                     <div className="text-sm text-slate-500">{signal.title}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -477,7 +517,8 @@ export default function SignalWatchlistPanel({
                   </div>
                 )}
               </div>
-            ))}
+            );
+          })}
           </div>
         </section>
       )}

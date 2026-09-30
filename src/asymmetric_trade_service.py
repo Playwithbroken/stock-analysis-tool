@@ -358,14 +358,25 @@ class AsymmetricTradeService:
             vp_summary = f"POC: {curr_sym}{poc:.2f} | VAH: {curr_sym}{vah:.2f} | VAL: {curr_sym}{val:.2f} ({vp.get('location_label', 'Neutral') if vp else 'N/A'})"
             factors_text = "\n".join([f"  ✓ {f}" for f in confluence_factors])
 
+            ascii_roadmap = (
+                f"<code>"
+                f" 🎯 Ziel 2 : {curr_sym}{target_2:>7.2f} ───┐ (Runner 3.5R+)\n"
+                f" 🎯 Ziel 1 : {curr_sym}{target_1:>7.2f} ───┼─ 50% TP &amp; BE Stop\n"
+                f" ⚡ Entry  : {curr_sym}{entry_price:>7.2f} ─●─┼─ Spot\n"
+                f" 🛑 Inval. : {curr_sym}{invalidation_price:>7.2f} ───┘ (Risk: 1.0R)"
+                f"</code>"
+            )
+
             tg_html = (
                 f"🎯 <b>TRADING EDGE SETUP: {symbol}</b> ({grade_badge})\n"
                 f"<b>Typ:</b> {setup_name}\n"
                 f"<b>Score:</b> {confluence_score}/100 ({grade_title})\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💡 <b>Katalysator & Logik:</b>\n{catalyst}\n\n"
+                f"💡 <b>Katalysator &amp; Logik:</b>\n{catalyst}\n\n"
                 f"📊 <b>Konfluenz-Faktoren:</b>\n{factors_text}\n\n"
-                f"📈 <b>Institutionelle Level:</b>\n"
+                f"📈 <b>Institutionelle Roadmap:</b>\n"
+                f"{ascii_roadmap}\n\n"
+                f"🏛️ <b>Key Level Referenz:</b>\n"
                 f"• <b>Volume Profile:</b> {vp_summary}\n"
                 f"• <b>Optionen GEX:</b> {gex_summary}\n\n"
                 f"⚡ <b>Einstieg:</b> {curr_sym}{entry_price:.2f}\n"

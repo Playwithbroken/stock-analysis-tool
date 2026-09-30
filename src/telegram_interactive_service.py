@@ -1026,6 +1026,9 @@ class TelegramInteractiveService:
         regime = data.get("regime", "neutral")
         regime_label = data.get("regime_label", "Neutral")
 
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
         interpretation = (
             "Market Maker dämpfen Kursausschläge. Rücksetzer zur Put Wall und Rallyes "
             "zur Call Wall neigen zu Mean-Reversion."
@@ -1034,15 +1037,26 @@ class TelegramInteractiveService:
             "Ausbrüche können explosionsartig laufen!"
         )
 
+        ascii_gex = (
+            f"<code>"
+            f" Call Wall  : {c_sym}{cw:>7.2f} ───┐ (Resistenz / Pin)\n"
+            f" Spot Kurs  : {c_sym}{spot:>7.2f} ─●─┼ (Aktueller Kurs)\n"
+            f" Zero Gamma : {c_sym}{zg:>7.2f} ───┼ (Vol-Schwelle)\n"
+            f" Put Wall   : {c_sym}{pw:>7.2f} ───┘ (Boden / Support)"
+            f"</code>"
+        )
+
         return (
             f"⚡ <b>GAMMA EXPOSURE (GEX): {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"• <b>Spot-Kurs:</b> ${spot:.2f}\n"
+            f"• <b>Spot-Kurs:</b> {c_sym}{spot:.2f}\n"
             f"• <b>MM-Regime:</b> <b>{regime_label}</b>\n"
-            f"• <b>Call Wall (Resistenz / Pin):</b> ${cw:.2f}\n"
-            f"• <b>Put Wall (Support / Boden):</b> ${pw:.2f}\n"
-            f"• <b>Zero Gamma (Vol-Schwelle):</b> ${zg:.2f}\n"
-            f"• <b>Net GEX:</b> {net_gex:+,.0f} $\n\n"
+            f"• <b>Net GEX:</b> {net_gex:+,.0f} {c_sym}\n\n"
+            f"📈 <b>Gamma-Level Karte:</b>\n"
+            f"{ascii_gex}\n\n"
+            f"• <b>Call Wall:</b> {c_sym}{cw:.2f}\n"
+            f"• <b>Put Wall:</b> {c_sym}{pw:.2f}\n"
+            f"• <b>Zero Gamma:</b> {c_sym}{zg:.2f}\n\n"
             f"💡 <b>Market Maker Dynamik:</b>\n{interpretation}"
         )
 
@@ -1064,14 +1078,47 @@ class TelegramInteractiveService:
         loc = vp.get("location_label", "Im fairen Wertbereich")
         bias = vp.get("bias", "Neutral")
 
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        if spot >= vah:
+            ladder = (
+                f"<code>"
+                f" Spot: {c_sym}{spot:>7.2f} ───● (Oberhalb Value Area / Ausbruch)\n"
+                f" VAH : {c_sym}{vah:>7.2f} ───┐\n"
+                f" POC : {c_sym}{poc:>7.2f} ───┼ (Höchste Liquidität)\n"
+                f" VAL : {c_sym}{val:>7.2f} ───┘"
+                f"</code>"
+            )
+        elif spot <= val:
+            ladder = (
+                f"<code>"
+                f" VAH : {c_sym}{vah:>7.2f} ───┐\n"
+                f" POC : {c_sym}{poc:>7.2f} ───┼ (Höchste Liquidität)\n"
+                f" VAL : {c_sym}{val:>7.2f} ───┘\n"
+                f" Spot: {c_sym}{spot:>7.2f} ───● (Unterhalb Value Area / Discount)"
+                f"</code>"
+            )
+        else:
+            ladder = (
+                f"<code>"
+                f" VAH : {c_sym}{vah:>7.2f} ───┐\n"
+                f" Spot: {c_sym}{spot:>7.2f} ─●─┼ (Im fairen Wertbereich)\n"
+                f" POC : {c_sym}{poc:>7.2f} ───┼ (Höchste Liquidität)\n"
+                f" VAL : {c_sym}{val:>7.2f} ───┘"
+                f"</code>"
+            )
+
         return (
             f"📊 <b>VOLUME PROFILE (AMT): {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"• <b>Aktueller Kurs:</b> ${spot:.2f}\n"
-            f"• <b>Point of Control (POC):</b> <b>${poc:.2f}</b> (Höchste Liquidität)\n"
-            f"• <b>Value Area High (VAH):</b> ${vah:.2f} (Obere 70%-Grenze)\n"
-            f"• <b>Value Area Low (VAL):</b> ${val:.2f} (Untere 70%-Grenze)\n"
+            f"• <b>Aktueller Kurs:</b> {c_sym}{spot:.2f}\n"
+            f"• <b>Point of Control (POC):</b> <b>{c_sym}{poc:.2f}</b> (Höchste Liquidität)\n"
+            f"• <b>Value Area High (VAH):</b> {c_sym}{vah:.2f} (Obere 70%-Grenze)\n"
+            f"• <b>Value Area Low (VAL):</b> {c_sym}{val:.2f} (Untere 70%-Grenze)\n"
             f"• <b>Ort im Profil:</b> {loc}\n\n"
+            f"📈 <b>Profil-Struktur &amp; Preisleiter:</b>\n"
+            f"{ladder}\n\n"
             f"🎯 <b>Trading Bias:</b>\n{bias}"
         )
 

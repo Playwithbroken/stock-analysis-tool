@@ -236,6 +236,24 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("$218.00", res)
         self.assertIn("Value Area High (VAH)", res)
         self.assertIn("$225.00", res)
+        self.assertIn("<code>", res)
+        self.assertIn("VAH : $ 225.00", res)
+
+    def test_cmd_levels_european_ticker(self):
+        self.mock_volume.compute_volume_profile.return_value = {
+            "spot_price": 222.50,
+            "poc_price": 220.00,
+            "vah_price": 225.00,
+            "val_price": 215.00,
+            "location_label": "Im fairen Wertbereich",
+            "bias": "Befestigung",
+        }
+        res = self.service.handle_command("999888", "/levels SAP.DE")
+        self.assertIn("VOLUME PROFILE (AMT): SAP.DE", res)
+        self.assertIn("€220.00", res)
+        self.assertIn("€225.00", res)
+        self.assertIn("<code>", res)
+        self.assertIn("VAH : € 225.00", res)
 
     def test_cmd_regime(self):
         self.mock_regime.get_market_regime.return_value = {

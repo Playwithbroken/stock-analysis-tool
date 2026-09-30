@@ -3875,10 +3875,34 @@ class EmailAlertService:
         tokens = [token for token in normalized.split() if token not in stop_words]
         return " ".join(tokens[:12])
 
-    def _tg_arrow(self, change: float | None) -> str:
-        if change is None:
+    @staticmethod
+    def _safe_float(val: Any) -> float | None:
+        if val is None or val == "" or str(val).strip() in {"?", "—", "n/a", "N/A", "none", "None"}:
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    @classmethod
+    def _fmt_pct(cls, val: Any, default: str = "—") -> str:
+        f = cls._safe_float(val)
+        if f is None or not math.isfinite(f):
+            return default
+        return f"{f:+.2f}%"
+
+    @classmethod
+    def _fmt_num(cls, val: Any, decimals: int = 2, prefix: str = "", default: str = "") -> str:
+        f = cls._safe_float(val)
+        if f is None or not math.isfinite(f):
+            return default
+        return f"{prefix}{f:,.{decimals}f}"
+
+    def _tg_arrow(self, change: Any) -> str:
+        f = self._safe_float(change)
+        if f is None:
             return "⬜"
-        return "🟢" if change > 0 else "🔴" if change < 0 else "🟡"
+        return "🟢" if f > 0 else "🔴" if f < 0 else "🟡"
 
     def _send_telegram_rich_brief(
         self,
@@ -3942,14 +3966,14 @@ class EmailAlertService:
             region = regions_data.get(rkey, {})
             flag = region_labels.get(rkey, "")
             tone = region.get("tone", "mixed")
-            avg = region.get("avg_change_1d") or 0
-            lines1.append(f"{flag} <b>{rkey.title()}</b> {tone} {avg:+.2f}%")
+            avg_str = self._fmt_pct(region.get("avg_change_1d"), "+0.00%")
+            lines1.append(f"{flag} <b>{rkey.title()}</b> {tone} {avg_str}")
             for asset in region.get("assets", [])[:3]:
-                chg = asset.get("change_1d")
-                price = asset.get("price")
+                chg = self._safe_float(asset.get("change_1d"))
+                price = self._safe_float(asset.get("price"))
                 arrow = self._tg_arrow(chg)
-                chg_str = f"{chg:+.2f}%" if chg is not None else "—"
-                price_str = f" <code>${price:,.2f}</code>" if price else ""
+                chg_str = self._fmt_pct(chg)
+                price_str = f" <code>${price:,.2f}</code>" if price is not None else ""
                 lines1.append(f"  {arrow} {self._tg_esc(asset.get('label', ''))} {chg_str}{price_str}")
 
         macro_icons = {
@@ -3961,12 +3985,12 @@ class EmailAlertService:
             lines1.append("")
             lines1.append("💹 <b>Makro</b>")
             for asset in macro_assets:
-                chg = asset.get("change_1d")
-                price = asset.get("price")
+                chg = self._safe_float(asset.get("change_1d"))
+                price = self._safe_float(asset.get("price"))
                 arrow = self._tg_arrow(chg)
-                chg_str = f"{chg:+.2f}%" if chg is not None else "—"
+                chg_str = self._fmt_pct(chg)
                 label = macro_icons.get(asset.get("ticker", ""), self._tg_esc(asset.get("label", "")))
-                price_str = f" <code>{price:,.2f}</code>" if price else ""
+                price_str = f" <code>{price:,.2f}</code>" if price is not None else ""
                 lines1.append(f"{arrow} {label}{price_str} ({chg_str})")
 
         self._tg_post(token, chat, "\n".join(lines1))
@@ -4547,10 +4571,11 @@ class EmailAlertService:
                 for sess in timeline:
                     label_s = self._tg_esc(sess.get("label") or "")
                     tone_s = self._tg_esc(sess.get("tone") or "")
-                    move_s = float(sess.get("move") or 0)
+                    move_s = self._safe_float(sess.get("move"))
+                    move_str = self._fmt_pct(move_s, "+0.00%")
                     driver_s = self._tg_esc((sess.get("driver") or "")[:80])
                     arrow = self._tg_arrow(move_s)
-                    lines4.append(f"{arrow} <b>{label_s}</b> {tone_s} {move_s:+.2f}% — {driver_s}")
+                    lines4.append(f"{arrow} <b>{label_s}</b> {tone_s} {move_str} — {driver_s}")
 
         if lines4:
             self._tg_post(token, chat, "\n".join(lines4))
@@ -4565,7 +4590,9 @@ class EmailAlertService:
                 fng = regime.get("crypto_fng") or {}
                 parts = []
                 if vix:
-                    parts.append(f"VIX <b>{vix.get('value')}</b> ({self._tg_esc(vix.get('regime',''))}, {vix.get('change','+0'):+.2f})")
+                    vix_val = vix.get("value", "")
+                    vix_chg = self._fmt_pct(vix.get("change"), "+0.00%").rstrip("%")
+                    parts.append(f"VIX <b>{vix_val}</b> ({self._tg_esc(vix.get('regime',''))}, {vix_chg})")
                 if fng:
                     parts.append(f"Crypto F&amp;G <b>{fng.get('value')}</b> ({self._tg_esc(fng.get('label',''))})")
                 if parts:
@@ -4574,8 +4601,9 @@ class EmailAlertService:
             yc = edge.get("yield_curve") or {}
             if yc:
                 inv = "⚠️ <b>INVERTED</b>" if yc.get("inverted") else "normal"
+                spread_val = self._fmt_pct(yc.get("spread_10y_5y"), default="?").rstrip("%")
                 lines5.append(
-                    f"📉 <b>Yield Curve</b> — 10Y {yc.get('us10y','?')}% · 5Y {yc.get('us5y','?')}% · 30Y {yc.get('us30y','?')}% · 10-5 spread {yc.get('spread_10y_5y','?'):+.2f}pp ({inv})"
+                    f"📉 <b>Yield Curve</b> — 10Y {yc.get('us10y','?')}% · 5Y {yc.get('us5y','?')}% · 30Y {yc.get('us30y','?')}% · 10-5 spread {spread_val}pp ({inv})"
                 )
 
             sectors = edge.get("sectors") or []
@@ -4585,17 +4613,24 @@ class EmailAlertService:
                 top3 = sectors[:3]
                 bot3 = sectors[-3:]
                 for s in top3:
-                    lines5.append(f"🟢 <code>{s['ticker']}</code> {self._tg_esc(s['name'])} {s['change_5d']:+.2f}% (1d {s['change_1d']:+.2f}%)")
+                    c5 = self._fmt_pct(s.get("change_5d"))
+                    c1 = self._fmt_pct(s.get("change_1d"))
+                    lines5.append(f"🟢 <code>{s.get('ticker')}</code> {self._tg_esc(s.get('name'))} {c5} (1d {c1})")
                 for s in bot3:
-                    lines5.append(f"🔴 <code>{s['ticker']}</code> {self._tg_esc(s['name'])} {s['change_5d']:+.2f}% (1d {s['change_1d']:+.2f}%)")
+                    c5 = self._fmt_pct(s.get("change_5d"))
+                    c1 = self._fmt_pct(s.get("change_1d"))
+                    lines5.append(f"🔴 <code>{s.get('ticker')}</code> {self._tg_esc(s.get('name'))} {c5} (1d {c1})")
 
             pre = edge.get("premarket") or []
             if pre:
                 lines5.append("")
                 lines5.append("⏰ <b>Pre-Market Movers</b>")
                 for m in pre[:5]:
-                    arrow = self._tg_arrow(m["change_pct"])
-                    lines5.append(f"{arrow} <code>{m['ticker']}</code> {m['change_pct']:+.2f}% @ ${m['pre']}")
+                    chg_m = self._safe_float(m.get("change_pct"))
+                    arrow = self._tg_arrow(chg_m)
+                    chg_str = self._fmt_pct(chg_m)
+                    pre_price = self._fmt_num(m.get("pre"), 2, "$", default="?")
+                    lines5.append(f"{arrow} <code>{m.get('ticker')}</code> {chg_str} @ {pre_price}")
 
             squeeze = edge.get("squeeze") or []
             if squeeze:
@@ -4603,7 +4638,7 @@ class EmailAlertService:
                 lines5.append("🎯 <b>Short-Squeeze Watch</b>")
                 for s in squeeze[:5]:
                     lines5.append(
-                        f"• <code>{s['ticker']}</code> score <b>{s['score']}</b> · short {s['short_pct_float']}% · DTC {s['days_to_cover']} · RSI {s['rsi']}"
+                        f"• <code>{s.get('ticker')}</code> score <b>{s.get('score')}</b> · short {s.get('short_pct_float')}% · DTC {s.get('days_to_cover')} · RSI {s.get('rsi')}"
                     )
 
             options = edge.get("options") or []
@@ -4611,9 +4646,13 @@ class EmailAlertService:
                 lines5.append("")
                 lines5.append("🎲 <b>Unusual Options</b>")
                 for o in options[:5]:
-                    tag = "🐂 bullish" if o["sentiment"] == "bullish" else "🐻 bearish" if o["sentiment"] == "bearish" else "neutral"
+                    tag = "🐂 bullish" if o.get("sentiment") == "bullish" else "🐻 bearish" if o.get("sentiment") == "bearish" else "neutral"
+                    calls_v = self._safe_float(o.get("calls_vol"))
+                    puts_v = self._safe_float(o.get("puts_vol"))
+                    calls_str = f"{int(calls_v):,}" if calls_v is not None else str(o.get("calls_vol") or 0)
+                    puts_str = f"{int(puts_v):,}" if puts_v is not None else str(o.get("puts_vol") or 0)
                     lines5.append(
-                        f"• <code>{o['ticker']}</code> {tag} · P/C {o['pc_ratio']} · calls {o['calls_vol']:,} / puts {o['puts_vol']:,} ({self._tg_esc(o['expiry'])})"
+                        f"• <code>{o.get('ticker')}</code> {tag} · P/C {o.get('pc_ratio')} · calls {calls_str} / puts {puts_str} ({self._tg_esc(o.get('expiry'))})"
                     )
 
             analyst = edge.get("analyst") or []

@@ -332,17 +332,20 @@ class AsymmetricTradeService:
                 "target_2": target_2,
             }
 
+            is_eu = any(symbol.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+            curr_sym = "€" if is_eu else ("£" if symbol.endswith(".L") else "$")
+
             # 7. Trade Management Guidance
             trade_management = {
-                "target_1_action": f"Bei ${target_1:.2f} (2.0R): 50% Teilgewinn sichern, Hard Stop auf Breakeven (${entry_price:.2f}) nachziehen.",
-                "target_2_action": f"Bei ${target_2:.2f} (3.5R+): Restposition glattstellen oder Trailing Stop unter 9 EMA führen.",
+                "target_1_action": f"Bei {curr_sym}{target_1:.2f} (2.0R): 50% Teilgewinn sichern, Hard Stop auf Breakeven ({curr_sym}{entry_price:.2f}) nachziehen.",
+                "target_2_action": f"Bei {curr_sym}{target_2:.2f} (3.5R+): Restposition glattstellen oder Trailing Stop unter 9 EMA führen.",
                 "earnings_shield": earnings_info.get("warning") if earnings_info else "Keine Quartalszahlen in den nächsten 5 Tagen.",
             }
 
             mgmt_text = (
                 f"📋 <b>Trade Management & Trailing Stop:</b>\n"
-                f"• <b>Ziel 1 (${target_1:.2f}):</b> 50% Teilgewinn & Stop auf Breakeven\n"
-                f"• <b>Ziel 2 (${target_2:.2f}):</b> Rest glattstellen oder per 9 EMA Trailing-Stop\n"
+                f"• <b>Ziel 1 ({curr_sym}{target_1:.2f}):</b> 50% Teilgewinn & Stop auf Breakeven\n"
+                f"• <b>Ziel 2 ({curr_sym}{target_2:.2f}):</b> Rest glattstellen oder per 9 EMA Trailing-Stop\n"
             )
             if earnings_info:
                 mgmt_text += f"\n{earnings_info['warning']}\n"
@@ -350,9 +353,9 @@ class AsymmetricTradeService:
             # 8. Format Smartphone Telegram Card
             gex_summary = "N/A (keine US-Optionen)"
             if gex:
-                gex_summary = f"{gex.get('regime_label', 'Neutral')} | Call Wall: ${call_wall:.2f} | Put Wall: ${put_wall:.2f}"
+                gex_summary = f"{gex.get('regime_label', 'Neutral')} | Call Wall: {curr_sym}{call_wall:.2f} | Put Wall: {curr_sym}{put_wall:.2f}"
 
-            vp_summary = f"POC: ${poc:.2f} | VAH: ${vah:.2f} | VAL: ${val:.2f} ({vp.get('location_label', 'Neutral') if vp else 'N/A'})"
+            vp_summary = f"POC: {curr_sym}{poc:.2f} | VAH: {curr_sym}{vah:.2f} | VAL: {curr_sym}{val:.2f} ({vp.get('location_label', 'Neutral') if vp else 'N/A'})"
             factors_text = "\n".join([f"  ✓ {f}" for f in confluence_factors])
 
             tg_html = (
@@ -365,10 +368,10 @@ class AsymmetricTradeService:
                 f"📈 <b>Institutionelle Level:</b>\n"
                 f"• <b>Volume Profile:</b> {vp_summary}\n"
                 f"• <b>Optionen GEX:</b> {gex_summary}\n\n"
-                f"⚡ <b>Einstieg:</b> ${entry_price:.2f}\n"
-                f"🛑 <b>Invalidation (Hard Stop):</b> ${invalidation_price:.2f} (unter Struktur)\n"
-                f"🎯 <b>Ziel 1 (2.0R):</b> ${target_1:.2f} (50% Teilgewinn)\n"
-                f"🚀 <b>Ziel 2 (3.5R+):</b> ${target_2:.2f} (Runner / Call Wall)\n"
+                f"⚡ <b>Einstieg:</b> {curr_sym}{entry_price:.2f}\n"
+                f"🛑 <b>Invalidation (Hard Stop):</b> {curr_sym}{invalidation_price:.2f} (unter Struktur)\n"
+                f"🎯 <b>Ziel 1 (2.0R):</b> {curr_sym}{target_1:.2f} (50% Teilgewinn)\n"
+                f"🚀 <b>Ziel 2 (3.5R+):</b> {curr_sym}{target_2:.2f} (Runner / Call Wall)\n"
                 f"⚖️ <b>Risk/Reward-Ratio:</b> <b>{risk_reward_ratio:.1f} : 1</b>\n\n"
                 f"{mgmt_text}\n"
                 f"📱 <b>Position Sizing ({actual_risk_pct:.2f}% Kontorisiko):</b>\n"

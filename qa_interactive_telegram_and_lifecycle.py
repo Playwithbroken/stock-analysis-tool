@@ -395,6 +395,31 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("$120.00", res)
         self.assertIn("Risikofreier Trade", res)
 
+    def test_cmd_brief_on_demand(self):
+        self.mock_alert.send_session_brief_now.return_value = {"status": "ok"}
+        res = self.service.handle_command("999888", "/brief europe")
+        self.assertIn("Europa / DAX Open Briefing", res)
+        self.assertIn("erfolgreich generiert", res)
+        self.mock_alert.send_session_brief_now.assert_called_with("europe")
+
+    def test_cmd_depot_status(self):
+        self.mock_pm.list_paper_trades.return_value = [
+            {"ticker": "NVDA", "status": "open", "entry_price": 120.0, "quantity": 10},
+            {"ticker": "SAP.DE", "status": "closed", "entry_price": 180.0, "realized_pnl": 250.0},
+        ]
+        mock_paper = MagicMock()
+        mock_paper.build_demo_account_snapshot.return_value = {
+            "equity": 52500.0,
+            "cash": 45000.0,
+            "starting_capital": 50000.0,
+        }
+        self.service.paper_service = mock_paper
+        res = self.service.handle_command("999888", "/depot")
+        self.assertIn("PAPER DEPOT STATUS", res)
+        self.assertIn("52,500.00 EUR", res)
+        self.assertIn("+2,500.00 EUR", res)
+        self.assertIn("NVDA", res)
+
 
 if __name__ == "__main__":
     unittest.main()

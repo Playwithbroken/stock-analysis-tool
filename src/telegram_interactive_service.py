@@ -293,6 +293,10 @@ class TelegramInteractiveService:
                 return self._cmd_heat()
             elif cmd == "/scan":
                 return self._cmd_scan()
+            elif cmd == "/brief":
+                return self._cmd_brief(args)
+            elif cmd in ("/depot", "/account"):
+                return self._cmd_depot()
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -313,10 +317,13 @@ class TelegramInteractiveService:
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/close TICKER</code> – Offene Position direkt schließen & PnL sichern (z.B. <code>/close NVDA</code>)\n"
             "• <code>/be TICKER</code> – Stop-Loss auf Breakeven (Einstand) nachziehen\n"
-            "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n\n"
-            "📋 <b>Watchlist-Verwaltung:</b>\n"
-            "• <code>/watchlist</code> – Alle überwachten EU- und US-Aktien anzeigen\n"
-            "• <code>/watch TICKER</code> – Aktie zur Signal-Watchlist hinzufügen (z.B. <code>/watch SAP.DE</code>)\n"
+            "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n"
+            "• <code>/depot</code> – Aktueller Depotstand, Cash & Performance\n\n"
+            "📋 <b>Watchlist & Markt-Updates:</b>\n"
+            "• <code>/brief</code> – Sofortiges institutionelles Markt-Briefing abrufen\n"
+            "• <code>/brief [europe|usa|close]</code> – Gezieltes Session-Briefing\n"
+            "• <code>/watchlist</code> – Alle 18 überwachten EU- und US-Aktien anzeigen\n"
+            "• <code>/watch TICKER</code> – Aktie zur Signal-Watchlist hinzufügen\n"
             "• <code>/unwatch TICKER</code> – Aktie von Watchlist entfernen\n"
             "• <code>/scan</code> – Sofortiger Watchlist-Scan für Edge-Setups\n\n"
             "🧠 <b>Institutionelle Edge-Analysen:</b>\n"
@@ -732,6 +739,104 @@ class TelegramInteractiveService:
             "💡 <i>Befehle: <code>/watch TICKER</code> | <code>/unwatch TICKER</code> | <code>/scan</code></i>"
         )
         return "\n".join(lines)
+
+    def _cmd_brief(self, args: List[str]) -> str:
+        """Fires an on-demand session brief to Telegram."""
+        if not self.alert_service:
+            return "⚠️ Alert Service nicht geladen."
+
+        valid_sessions = {
+            "global": "Morgen-Briefing (Global)",
+            "europe": "Europa / DAX Open Briefing",
+            "midday": "Mittags-Update",
+            "usa": "US Wall Street Open Briefing",
+            "close": "Markt-Schlussbericht",
+        }
+        session = "global"
+        if args:
+            s_arg = args[0].lower().strip()
+            if s_arg in valid_sessions:
+                session = s_arg
+            elif s_arg in ("morgen", "morning"):
+                session = "global"
+            elif s_arg in ("dax", "eu", "europa"):
+                session = "europe"
+            elif s_arg in ("us", "usa", "wallstreet", "ny"):
+                session = "usa"
+            elif s_arg in ("mittag", "lunch"):
+                session = "midday"
+            elif s_arg in ("abend", "feierabend", "recap"):
+                session = "close"
+
+        try:
+            self.alert_service.send_session_brief_now(session)
+            label = valid_sessions.get(session, session)
+            return (
+                f"✅ <b>{label}</b> wurde erfolgreich generiert und direkt in deinen Telegram-Chat gesendet!\n\n"
+                f"💡 <i>Tipp: Rufe mit <code>/brief europe</code> oder <code>/brief usa</code> gezielte Session-Briefings ab.</i>"
+            )
+        except Exception as exc:
+            return f"❌ Fehler beim Erstellen des Briefings ({session}): {exc}"
+
+    def _cmd_depot(self) -> str:
+        """Provides a complete overview of the Paper Trading Depot & Performance."""
+        if not self.portfolio_manager:
+            return "⚠️ Portfolio Manager nicht initialisiert."
+
+        try:
+            equity = 50000.0
+            cash = 50000.0
+            starting = 50000.0
+
+            if self.paper_service and hasattr(self.paper_service, "build_demo_account_snapshot"):
+                snap = self.paper_service.build_demo_account_snapshot()
+                equity = float(snap.get("equity") or 50000.0)
+                cash = float(snap.get("cash") or 50000.0)
+                starting = float(snap.get("starting_capital") or 50000.0)
+
+            total_pnl = equity - starting
+            pnl_pct = (total_pnl / starting * 100) if starting > 0 else 0.0
+
+            open_trades = [
+                t for t in self.portfolio_manager.list_paper_trades(limit=150)
+                if str(t.get("status") or "").lower() == "open"
+            ]
+            closed_trades = [
+                t for t in self.portfolio_manager.list_paper_trades(limit=250)
+                if str(t.get("status") or "").lower() == "closed"
+            ]
+
+            wins = [t for t in closed_trades if float(t.get("realized_pnl") or 0.0) > 0]
+            win_rate = (len(wins) / len(closed_trades) * 100) if closed_trades else 0.0
+
+            sign = "+" if total_pnl >= 0 else ""
+            pnl_emoji = "🟢" if total_pnl >= 0 else "🔴"
+
+            pos_lines = []
+            if open_trades:
+                for ot in open_trades[:6]:
+                    sym = ot.get("ticker", "N/A")
+                    ep = float(ot.get("entry_price") or 0.0)
+                    qty = float(ot.get("quantity") or 1.0)
+                    is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+                    c_sym = "€" if is_eu else "$"
+                    pos_lines.append(f"  • <b>{sym}</b>: {int(qty)} Stk. @ {c_sym}{ep:.2f} (Schließen: <code>/close {sym}</code>)")
+            else:
+                pos_lines.append("  <i>Keine offenen Positionen aktiv.</i>")
+
+            return (
+                f"💼 <b>BROKER FREUND – PAPER DEPOT STATUS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"• <b>Gesamtwert:</b> <b>{equity:,.2f} EUR</b>\n"
+                f"• <b>Verfügbares Cash:</b> {cash:,.2f} EUR\n"
+                f"• <b>Gesamtertrag (PnL):</b> <b>{sign}{total_pnl:,.2f} EUR ({sign}{pnl_pct:.2f}%)</b> {pnl_emoji}\n"
+                f"• <b>Abgeschlossene Trades:</b> {len(closed_trades)} (Win Rate: {win_rate:.0f}%)\n\n"
+                f"📊 <b>Offene Positionen ({len(open_trades)}):</b>\n"
+                + "\n".join(pos_lines) + "\n\n"
+                f"💡 <i>Tipp: Nutze <code>/track</code> für Trailing Stops oder <code>/edge</code> für neue Setups.</i>"
+            )
+        except Exception as exc:
+            return f"❌ Fehler beim Laden des Depots: {exc}"
 
     def _cmd_edge(self, args: List[str], chat_id: Optional[str] = None) -> str:
         if not self.asymmetric_service:

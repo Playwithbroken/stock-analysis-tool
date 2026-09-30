@@ -2745,6 +2745,9 @@ async def startup_event():
     global _background_task_watchdog_task
     try:
         get_portfolio_manager().ensure_default_watch_items(min_count=5)
+        _cache_forget("signals:")
+        _cache_forget("radar_bootstrap:")
+        _cache_forget("morning_brief:")
     except Exception as exc:
         logger.warning("Default watch items seeding warning: %s", exc)
     _ensure_background_tasks()

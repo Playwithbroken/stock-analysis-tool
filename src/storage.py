@@ -1110,8 +1110,14 @@ class PortfolioManager:
 
     def ensure_default_watch_items(self, min_count: int = 5) -> List[Dict[str, Any]]:
         """Ensures a curated list of European and US market leaders is present in the watchlist."""
+        seeded = self.get_app_setting("curated_watchlist_v1_seeded")
         existing = self.get_signal_watch_items()
-        if len(existing) < min_count:
+        has_eu = any(
+            str(item.get("value") or "").endswith((".DE", ".AS", ".PA", ".MI", ".MC", ".L"))
+            for item in existing
+        )
+
+        if not seeded or not has_eu or len(existing) < min_count:
             default_items = [
                 ("ticker", "SAP.DE"),
                 ("ticker", "RHM.DE"),
@@ -1128,6 +1134,7 @@ class PortfolioManager:
             ]
             for kind, val in default_items:
                 self.add_signal_watch_item(kind, val)
+            self.set_app_setting("curated_watchlist_v1_seeded", "true")
             return self.get_signal_watch_items()
         return existing
 

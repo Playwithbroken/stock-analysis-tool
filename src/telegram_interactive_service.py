@@ -50,6 +50,7 @@ class TelegramInteractiveService:
         alert_service: Optional[Any] = None,
         portfolio_manager: Optional[Any] = None,
         paper_trading_service: Optional[Any] = None,
+        morning_brief_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -70,6 +71,7 @@ class TelegramInteractiveService:
         self.alert_service = alert_service
         self.portfolio_manager = portfolio_manager
         self.paper_service = paper_trading_service
+        self.morning_brief_service = morning_brief_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -297,6 +299,10 @@ class TelegramInteractiveService:
                 return self._cmd_brief(args)
             elif cmd in ("/depot", "/account"):
                 return self._cmd_depot()
+            elif cmd in ("/calendar", "/events"):
+                return self._cmd_calendar()
+            elif cmd == "/news":
+                return self._cmd_news(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -323,6 +329,8 @@ class TelegramInteractiveService:
             "• <code>/brief</code> – Sofortiges institutionelles Markt-Briefing abrufen\n"
             "• <code>/brief [europe|usa|close]</code> – Gezieltes Session-Briefing\n"
             "• <code>/watchlist</code> – Alle 18 überwachten EU- und US-Aktien anzeigen\n"
+            "• <code>/calendar</code> – Wirtschaftskalender & anstehende Earnings\n"
+            "• <code>/news [TICKER]</code> – Breaking News & Sentiment (z.B. <code>/news SAP.DE</code>)\n"
             "• <code>/watch TICKER</code> – Aktie zur Signal-Watchlist hinzufügen\n"
             "• <code>/unwatch TICKER</code> – Aktie von Watchlist entfernen\n"
             "• <code>/scan</code> – Sofortiger Watchlist-Scan für Edge-Setups\n\n"
@@ -837,6 +845,116 @@ class TelegramInteractiveService:
             )
         except Exception as exc:
             return f"❌ Fehler beim Laden des Depots: {exc}"
+
+    def _cmd_calendar(self) -> str:
+        """Displays upcoming macro events and earnings calendar for the watchlist."""
+        if not self.morning_brief_service or not self.portfolio_manager:
+            return "⚠️ Morning Brief Service nicht initialisiert."
+
+        try:
+            items = self.portfolio_manager.get_signal_watch_items()
+            snapshot = {"items": items, "ticker_signals": []}
+            brief = self.morning_brief_service.get_brief_fast(snapshot)
+
+            econ = brief.get("economic_calendar", [])
+            earnings = brief.get("earnings_calendar", []) or brief.get("broad_earnings", [])
+
+            lines = [
+                "📅 <b>WIRTSCHAFTS- & EARNINGS-KALENDER</b>",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+
+            # 1. Economic / Session events
+            econ_lines = []
+            for e in econ[:6]:
+                t = e.get("time", "") or (e.get("scheduled_for", "")[11:16])
+                lbl = e.get("title") or e.get("label") or "Wirtschaftsdaten"
+                impact = e.get("importance") or e.get("impact") or "medium"
+                badge = "🔴" if impact == "high" else "🟡"
+                econ_lines.append(f"• <b>{t}</b> {badge} {lbl}")
+
+            if econ_lines:
+                lines.append("🏛️ <b>Makro-Termine & Sessions:</b>")
+                lines.extend(econ_lines)
+                lines.append("")
+
+            # 2. Watchlist Earnings
+            earn_lines = []
+            imminent_earnings = []
+            for item in earnings[:8]:
+                sym = item.get("ticker", "")
+                co = item.get("company", sym)
+                d = (item.get("scheduled_for") or item.get("date") or "")[:10]
+                days = item.get("days_until")
+                sess = item.get("session", "")
+                sess_str = "Pre-Market" if sess == "pre-market" else "After-Hours" if sess == "after-hours" else ""
+
+                day_str = f"in {days} Tagen" if days is not None else d
+                if days == 0:
+                    day_str = "HEUTE! ⚠️"
+                    imminent_earnings.append(sym)
+                elif days is not None and days <= 3:
+                    day_str = f"in {days} Tagen ⚠️"
+                    imminent_earnings.append(sym)
+
+                earn_lines.append(f"• <b>{sym}</b> ({co}): {d} ({sess_str}, {day_str})")
+
+            if earn_lines:
+                lines.append("📊 <b>Anstehende Quartalszahlen (Watchlist):</b>")
+                lines.extend(earn_lines)
+                lines.append("")
+
+            # 3. Earnings Shield Status
+            if imminent_earnings:
+                lines.append(
+                    f"⚠️ <b>EARNINGS SHIELD AKTIV:</b>\n"
+                    f"Quartalszahlen in Kürze für: <b>{', '.join(imminent_earnings)}</b>.\n"
+                    f"<i>Empfehlung: Vor den Zahlen keine neuen Swings eröffnen oder bestehende Positionen absichern!</i>"
+                )
+            else:
+                lines.append(
+                    "🛡️ <b>Earnings Shield:</b> 🟢 Keine akuten Earnings-Gefahren auf der Watchlist in den nächsten 3 Tagen."
+                )
+
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"❌ Fehler beim Laden des Kalenders: {exc}"
+
+    def _cmd_news(self, args: List[str]) -> str:
+        """Fetches top breaking news & social sentiment for a ticker or market."""
+        if not args:
+            query = "DAX Börse Wirtschaft"
+            target = "Markt & DAX"
+        else:
+            sym = args[0].upper().strip()
+            target = sym
+            clean_sym = sym.replace(".DE", "").replace(".AS", "")
+            query = f"{clean_sym} Aktie Börse"
+
+        social_svc = getattr(self.morning_brief_service, "_social_service", None)
+        if not social_svc:
+            return "⚠️ Social Intelligence Service nicht geladen."
+
+        try:
+            news = social_svc.get_google_news([query], max_per_query=4)
+            if not news:
+                return f"ℹ️ Keine aktuellen Schlagzeilen für <b>{target}</b> gefunden."
+
+            lines = [
+                f"📰 <b>TOP-NEWS: {target}</b>",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+            for n in news[:4]:
+                title = n.get("title", "")
+                src = n.get("source", "News")
+                age = n.get("age_hours", 0)
+                age_str = f"vor {int(age)}h" if age < 24 else f"vor {int(age//24)}d"
+                lines.append(f"• <b>{title}</b>\n  <i>Quelle: {src} ({age_str})</i>\n")
+
+            lines.append(f"💡 <i>Tipp: Analysiere das Setup mit <code>/edge {target}</code></i>")
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"❌ Fehler beim Laden der News: {exc}"
 
     def _cmd_edge(self, args: List[str], chat_id: Optional[str] = None) -> str:
         if not self.asymmetric_service:

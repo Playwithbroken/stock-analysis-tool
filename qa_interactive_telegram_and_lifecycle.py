@@ -420,6 +420,36 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("+2,500.00 EUR", res)
         self.assertIn("NVDA", res)
 
+    def test_cmd_calendar(self):
+        mock_brief_svc = MagicMock()
+        mock_brief_svc.get_brief_fast.return_value = {
+            "economic_calendar": [
+                {"time": "14:30", "title": "US Non-Farm Payrolls", "importance": "high"}
+            ],
+            "earnings_calendar": [
+                {"ticker": "NVDA", "company": "NVIDIA Corp", "date": "2026-11-20", "days_until": 20, "session": "after-hours"}
+            ],
+        }
+        self.service.morning_brief_service = mock_brief_svc
+        res = self.service.handle_command("999888", "/calendar")
+        self.assertIn("WIRTSCHAFTS- & EARNINGS-KALENDER", res)
+        self.assertIn("US Non-Farm Payrolls", res)
+        self.assertIn("NVDA", res)
+        self.assertIn("Earnings Shield", res)
+
+    def test_cmd_news(self):
+        mock_brief_svc = MagicMock()
+        mock_social = MagicMock()
+        mock_social.get_google_news.return_value = [
+            {"title": "SAP kündigt neues KI-Produkt an", "source": "Handelsblatt", "age_hours": 2}
+        ]
+        mock_brief_svc._social_service = mock_social
+        self.service.morning_brief_service = mock_brief_svc
+        res = self.service.handle_command("999888", "/news SAP.DE")
+        self.assertIn("TOP-NEWS: SAP.DE", res)
+        self.assertIn("SAP kündigt neues KI-Produkt an", res)
+        self.assertIn("Handelsblatt", res)
+
 
 if __name__ == "__main__":
     unittest.main()

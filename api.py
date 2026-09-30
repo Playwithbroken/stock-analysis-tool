@@ -1566,6 +1566,7 @@ def get_telegram_interactive_service():
             alert_service=get_email_alert_service(),
             portfolio_manager=get_portfolio_manager(),
             paper_trading_service=get_paper_trading_service(),
+            morning_brief_service=get_morning_brief_service(),
         )
     return _telegram_interactive_service
 

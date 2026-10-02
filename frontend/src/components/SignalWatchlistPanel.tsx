@@ -149,6 +149,10 @@ export default function SignalWatchlistPanel({
   const [sizingData, setSizingData] = useState<any>(null);
   const [sizingLoading, setSizingLoading] = useState<boolean>(false);
 
+  const [breadthData, setBreadthData] = useState<any>(null);
+  const [breadthLoading, setBreadthLoading] = useState<boolean>(false);
+  const [showBreadth, setShowBreadth] = useState<boolean>(false);
+
   const [tradeActionMessage, setTradeActionMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -277,6 +281,46 @@ export default function SignalWatchlistPanel({
       console.error("Matrix error:", err);
     } finally {
       setMatrixLoading(false);
+    }
+  };
+
+  const loadMarketBreadth = async () => {
+    setBreadthLoading(true);
+    setShowBreadth(true);
+    try {
+      const res = await fetch("/api/trading/market-breadth");
+      if (res.ok) {
+        const json = await res.json();
+        setBreadthData(json);
+      }
+    } catch (err) {
+      console.error("Market breadth fetch error:", err);
+    } finally {
+      setBreadthLoading(false);
+    }
+  };
+
+  const handleScaleOut = async (ticker: string) => {
+    setActionLoading(true);
+    setTradeActionMessage(null);
+    try {
+      const res = await fetch(`/api/trading/scale-out/${encodeURIComponent(ticker)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fraction: 0.50, notes: "Web Radar 50% Scale-Out" }),
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setTradeActionMessage(`✂️ 50% Teilverkauf für ${ticker} gebucht! Restposition auf Break-Even gesichert.`);
+        if (onRefresh) onRefresh();
+        if (selectedRadarTicker) loadRadar(selectedRadarTicker);
+      } else {
+        setTradeActionMessage(`❌ ${resData.detail || "Scale-Out fehlgeschlagen."}`);
+      }
+    } catch (e: any) {
+      setTradeActionMessage(`❌ Fehler: ${e.message}`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -679,6 +723,13 @@ export default function SignalWatchlistPanel({
               {matrixLoading ? "Berechne..." : "🌐 Korrelations-Matrix"}
             </button>
             <button
+              onClick={loadMarketBreadth}
+              disabled={breadthLoading}
+              className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-indigo-900 shadow-sm transition-colors hover:bg-indigo-500/20 disabled:opacity-50"
+            >
+              {breadthLoading ? "Lade Internals..." : "📊 Marktbreite & Internals"}
+            </button>
+            <button
               onClick={runCombinedScan}
               disabled={scannerLoading}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
@@ -985,6 +1036,163 @@ export default function SignalWatchlistPanel({
               <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-amber-400 inline-block" /> Hohes Cluster (0.7 - 0.85)</span>
               <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-red-500 inline-block" /> Kritisches Cluster (≥ 0.85)</span>
             </div>
+          </div>
+        )}
+
+        {/* Market Breadth & Internals Drawer */}
+        {showBreadth && breadthData && (
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-50/40 p-4 space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-indigo-900">
+                  📊 Institutionelle Marktbreite &amp; Internals (/breadth)
+                </div>
+                <div className="text-xs text-slate-500">
+                  Übergeordnete Gesundheit der 18 Watchlist-Titel: Moving Average Durchdringung, A/D Ratio &amp; Composite Score.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBreadth(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800"
+              >
+                Schließen ✕
+              </button>
+            </div>
+
+            {/* Top Score Banner */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/20 bg-white p-3.5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">
+                  {breadthData.composite_score >= 70 ? "🟢" : breadthData.composite_score <= 40 ? "🔴" : "⚪"}
+                </span>
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    Composite Market Breadth Score
+                  </div>
+                  <div className="text-base font-black text-slate-900">
+                    {breadthData.status_badge || `${breadthData.composite_score}/100`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl border border-black/5 bg-slate-50 px-3 py-1.5 text-center">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Regime</div>
+                  <div className="text-xs font-black text-indigo-950">{breadthData.regime}</div>
+                </div>
+                <div className="rounded-xl border border-black/5 bg-slate-50 px-3 py-1.5 text-center">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">A/D Ratio</div>
+                  <div className="text-xs font-black text-slate-900">
+                    {breadthData.advancing_count} 🟢 / {breadthData.declining_count} 🔴 ({breadthData.ad_ratio?.toFixed(2)})
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics 4-Grid */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-black/5 bg-white p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  % &gt; 20 EMA (Kurzfristig)
+                </div>
+                <div className="text-xl font-black text-slate-900">
+                  {breadthData.pct_above_20_ema?.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  {breadthData.pct_above_20_ema >= 60 ? "Starkes Momentum" : breadthData.pct_above_20_ema <= 40 ? "Kurzfristige Schwäche" : "Neutraler Drift"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-black/5 bg-white p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  % &gt; 50 SMA (Mittelfristig)
+                </div>
+                <div className="text-xl font-black text-slate-900">
+                  {breadthData.pct_above_50_sma?.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  {breadthData.pct_above_50_sma >= 60 ? "Gesunder Swing-Trend" : "Verteilungsphase"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-black/5 bg-white p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  % &gt; 200 SMA (Strukturell)
+                </div>
+                <div className="text-xl font-black text-slate-900">
+                  {breadthData.pct_above_200_sma?.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  {breadthData.pct_above_200_sma >= 60 ? "Institutioneller Bullenmarkt" : "Bärenmarkt-Gefahr"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-black/5 bg-white p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                  Ø 52W-High / Low Abstand
+                </div>
+                <div className="text-sm font-black text-slate-900 mt-1">
+                  Hoch: <span className="text-red-700">{breadthData.avg_distance_to_52w_high_pct}%</span> | Tief: <span className="text-emerald-700">+{breadthData.avg_distance_to_52w_low_pct}%</span>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  {breadthData.scanned_count} Titel synchronisiert
+                </div>
+              </div>
+            </div>
+
+            {/* Constituents Table */}
+            {breadthData.constituents?.length ? (
+              <div className="overflow-x-auto max-h-64 border border-black/5 rounded-xl bg-white">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-black/5 text-[10px] uppercase font-extrabold text-slate-600">
+                      <th className="p-2">Ticker</th>
+                      <th className="p-2 text-right">Kurs</th>
+                      <th className="p-2 text-right">Änderung</th>
+                      <th className="p-2 text-center">&gt; 20 EMA</th>
+                      <th className="p-2 text-center">&gt; 50 SMA</th>
+                      <th className="p-2 text-center">&gt; 200 SMA</th>
+                      <th className="p-2 text-right">Abstand 52W High</th>
+                      <th className="p-2 text-center">Aktion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breadthData.constituents.map((c: any) => (
+                      <tr key={c.ticker} className="border-b border-black/5 hover:bg-slate-50">
+                        <td className="p-2 font-black text-slate-900">{c.ticker}</td>
+                        <td className="p-2 text-right font-semibold">{c.price?.toFixed(2)}</td>
+                        <td className={`p-2 text-right font-black ${c.change_pct >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {c.change_pct >= 0 ? `+${c.change_pct}%` : `${c.change_pct}%`}
+                        </td>
+                        <td className="p-2 text-center font-bold">
+                          {c.above_20_ema ? "🟢" : "🔴"}
+                        </td>
+                        <td className="p-2 text-center font-bold">
+                          {c.above_50_sma ? "🟢" : "🔴"}
+                        </td>
+                        <td className="p-2 text-center font-bold">
+                          {c.above_200_sma ? "🟢" : "🔴"}
+                        </td>
+                        <td className="p-2 text-right text-[11px] text-slate-600">
+                          {c.distance_52w_high_pct}%
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedRadarTicker(c.ticker);
+                              setShowBreadth(false);
+                            }}
+                            className="rounded px-2 py-0.5 text-[10px] font-bold bg-indigo-500/10 text-indigo-900 hover:bg-indigo-500/20"
+                          >
+                            Radar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -1550,6 +1758,14 @@ export default function SignalWatchlistPanel({
                   className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-black uppercase tracking-[0.16em] text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-50"
                 >
                   📝 In Paper Trader buchen
+                </button>
+                <button
+                  onClick={() => handleScaleOut(selectedRadarTicker)}
+                  disabled={actionLoading}
+                  className="rounded-xl border border-amber-500/30 bg-amber-500/15 px-4 py-2.5 text-xs font-black uppercase tracking-[0.16em] text-amber-950 shadow-sm transition-colors hover:bg-amber-500/25 disabled:opacity-50"
+                  title="50% Teilverkauf buchen & Stop automatisch risikofrei auf Break-Even ziehen"
+                >
+                  ✂️ 50% Scale-Out (BE Stop)
                 </button>
                 <button
                   onClick={() => handleSendTelegram(selectedRadarTicker)}

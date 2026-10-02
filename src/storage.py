@@ -1976,6 +1976,129 @@ class PortfolioManager:
             updated["trade_ticket"] = {}
         return updated
 
+    def partial_close_paper_trade(
+        self,
+        trade_id_or_ticker: str,
+        closed_price: float,
+        fraction: float = 0.50,
+        notes: Optional[str] = None,
+        exit_reason: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Scales out a fraction (default 50%) of an active paper trade:
+        1. Reduces the open trade's quantity to remaining_qty and ratchets stop to entry (breakeven).
+        2. Inserts a closed trade record for the closed slice so realized profit & journal stats update.
+        """
+        conn = _connect_db(row_factory=True)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            'SELECT * FROM paper_trades WHERE (id = ? OR UPPER(ticker) = ?) AND status = "open" ORDER BY opened_at DESC LIMIT 1',
+            (trade_id_or_ticker, trade_id_or_ticker.upper().strip()),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            conn.close()
+            return None
+
+        full_qty = float(existing["quantity"] or 0)
+        fraction = max(0.10, min(float(fraction), 0.90))
+
+        if full_qty <= 1:
+            conn.close()
+            return self.close_paper_trade(
+                trade_id=existing["id"],
+                closed_price=closed_price,
+                notes=notes or "Vollständiger Ausstieg (Position = 1 Stück).",
+                exit_reason=exit_reason or "Take-Profit Vollverkauf",
+            )
+
+        closed_qty = int(full_qty * fraction)
+        if closed_qty <= 0:
+            closed_qty = 1
+        remaining_qty = full_qty - closed_qty
+
+        now_str = datetime.now().isoformat()
+        entry_price = float(existing["entry_price"] or 0)
+
+        # 1. Update open trade: reduce quantity, set stop_price to entry_price (breakeven)
+        note_tag = f"50% Teilverkauf ({closed_qty} Stk.) bei {closed_price:.2f} realisiert. Stop auf Einstand ({entry_price:.2f}) fixiert."
+        cursor.execute(
+            '''
+            UPDATE paper_trades
+            SET quantity = ?,
+                stop_price = ?,
+                notes = CASE WHEN notes IS NULL OR notes = '' THEN ? ELSE notes || ' | ' || ? END
+            WHERE id = ?
+            ''',
+            (
+                remaining_qty,
+                entry_price,
+                note_tag,
+                note_tag,
+                existing["id"],
+            ),
+        )
+
+        # 2. Insert closed trade slice
+        slice_id = str(uuid.uuid4())
+        slice_notes = notes or f"50% Teilgewinnmitnahme ({closed_qty} Stk.) bei {closed_price:.2f} zur Risikominimierung."
+        slice_exit = exit_reason or f"Partial Take-Profit ({int(fraction * 100)}% Scale-Out)"
+        cursor.execute(
+            '''
+            INSERT INTO paper_trades (
+                id, ticker, asset_class, direction, setup_type, thesis, entry_price,
+                stop_price, target_price, quantity, confidence_score, leverage,
+                opened_at, closed_at, closed_price, status, notes, exit_reason, lessons_learned,
+                underlying_entry_price, option_type, contract_multiplier, max_holding_days, error_tag,
+                trade_ticket_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'closed', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                slice_id,
+                existing["ticker"],
+                existing["asset_class"],
+                existing["direction"],
+                existing["setup_type"],
+                existing["thesis"],
+                entry_price,
+                existing["stop_price"],
+                existing["target_price"],
+                closed_qty,
+                existing["confidence_score"],
+                existing["leverage"],
+                existing["opened_at"],
+                now_str,
+                closed_price,
+                slice_notes,
+                slice_exit,
+                existing["lessons_learned"],
+                existing["underlying_entry_price"],
+                existing["option_type"],
+                existing["contract_multiplier"],
+                existing["max_holding_days"],
+                existing["error_tag"],
+                existing["trade_ticket_json"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        return {
+            "status": "scaled_out",
+            "trade_id": existing["id"],
+            "ticker": existing["ticker"],
+            "closed_slice_id": slice_id,
+            "closed_quantity": closed_qty,
+            "remaining_quantity": remaining_qty,
+            "quantity": remaining_qty,
+            "entry_price": entry_price,
+            "closed_price": closed_price,
+            "breakeven_stop": entry_price,
+            "trailing_stop": entry_price,
+            "fraction": fraction,
+        }
+
     def update_paper_trade_ticket(
         self,
         trade_id: str,

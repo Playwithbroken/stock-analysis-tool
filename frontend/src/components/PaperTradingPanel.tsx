@@ -548,6 +548,26 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
     }
   };
 
+  const scaleOutTrade = async (tradeId: string, fraction: number = 0.50) => {
+    setBusyId(tradeId);
+    setStatus("");
+    try {
+      const response = await fetch(`/api/trading/scale-out/${encodeURIComponent(tradeId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fraction, notes: "Paper-Trader 50% Scale-Out" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Scale-Out konnte nicht gebucht werden.");
+      await onRefresh?.();
+      setStatus("✂️ 50% Teilgewinn gebucht. Restposition auf Break-Even gesichert!");
+    } catch (error: any) {
+      setStatus(error?.message || "Scale-Out fehlgeschlagen.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const sendDigest = async () => {
     setBusyId("digest");
     setStatus("");
@@ -1671,6 +1691,14 @@ export default function PaperTradingPanel({ data, onAnalyze, onRefresh }: PaperT
                         className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700"
                       >
                         Analysieren
+                      </button>
+                      <button
+                        onClick={() => scaleOutTrade(trade.id, 0.50)}
+                        disabled={busyId === trade.id}
+                        className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-900 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                        title="50% Teilverkauf buchen & Stop auf Break-Even sichern"
+                      >
+                        ✂️ 50% Scale-Out
                       </button>
                       <button
                         onClick={() => closeTrade(trade.id)}

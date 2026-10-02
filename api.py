@@ -49,6 +49,8 @@ from src.trading_signals_service import TradingSignalsService
 from src.asymmetric_trade_service import AsymmetricTradeService
 from src.opening_range_breakout_service import OpeningRangeBreakoutService
 from src.position_sizing_service import PositionSizingService
+from src.market_breadth_service import MarketBreadthService
+from src.performance_metrics import calculate_trading_journal_metrics
 from src.relative_strength_service import RelativeStrengthService
 from src.trade_lifecycle_service import TradeLifecycleService
 from src.telegram_interactive_service import TelegramInteractiveService
@@ -200,8 +202,10 @@ _liquidity_zone_service = None
 _multi_timeframe_service = None
 _opening_range_breakout_service = None
 _position_sizing_service = None
+_market_breadth_service = None
 _telegram_interactive_service = None
 _telegram_bot_task = None
+_session_automation_task = None
 _realtime_market_service = None
 _forecast_learning_service = None
 _forecast_learning_task = None
@@ -1560,6 +1564,12 @@ def get_position_sizing_service():
         _position_sizing_service = PositionSizingService()
     return _position_sizing_service
 
+def get_market_breadth_service():
+    global _market_breadth_service
+    if _market_breadth_service is None:
+        _market_breadth_service = MarketBreadthService()
+    return _market_breadth_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1585,6 +1595,7 @@ def get_telegram_interactive_service():
             morning_brief_service=get_morning_brief_service(),
             opening_range_breakout_service=get_opening_range_breakout_service(),
             position_sizing_service=get_position_sizing_service(),
+            market_breadth_service=get_market_breadth_service(),
         )
     return _telegram_interactive_service
 
@@ -2518,7 +2529,7 @@ def _remember_finished_task_error(setting_key: str, task: Any) -> None:
 
 
 def _ensure_background_tasks() -> None:
-    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task, _scalable_sync_task, _alpaca_stream_task, _market_safety_task, _alpaca_paper_broker_task, _broker_reconciliation_task, _telegram_bot_task
+    global _signal_alert_task, _price_alert_task, _brief_warmup_task, _forecast_learning_task, _scheduler_startup_catchup_task, _scalable_sync_task, _alpaca_stream_task, _market_safety_task, _alpaca_paper_broker_task, _broker_reconciliation_task, _telegram_bot_task, _session_automation_task
 
     alerts_enabled = _env_enabled("SIGNAL_ALERTS_ENABLED", "false")
     scheduled_briefs_enabled = _env_enabled("SCHEDULED_BRIEFS_ENABLED", "true")
@@ -2579,6 +2590,112 @@ def _ensure_background_tasks() -> None:
             if _telegram_bot_task is None or _telegram_bot_task.done():
                 _remember_finished_task_error("telegram_bot_task_error", _telegram_bot_task)
                 _telegram_bot_task = asyncio.create_task(get_telegram_interactive_service().run_listener_loop())
+
+    # Autonomous Trading Session & ORB Automation Daemon
+    if _env_enabled("SESSION_AUTOMATION_ENABLED", "true"):
+        if _session_automation_task is None or _session_automation_task.done():
+            _remember_finished_task_error("session_automation_task_error", _session_automation_task)
+            _session_automation_task = asyncio.create_task(_trading_session_automation_loop())
+
+
+async def _trading_session_automation_loop() -> None:
+    """
+    Autonomous background trading session daemon:
+    - Runs continuously with 30s sleep interval.
+    - Real-time Lifecycle Evaluation (Target 1, Target 2, Trailing Stops).
+    - 09:30 CET (Mon-Fri): 15m European ORB Breakout Scanner.
+    - 16:00 CET (Mon-Fri): 30m US Wall Street ORB Breakout Scanner.
+    - 17:35 CET (Mon-Fri): Automated XETRA Session Close Recap.
+    - 22:05 CET (Mon-Fri): Automated US Wall Street Close Recap.
+    - Calendar-day keyed deduplication ensures 0 duplicate messages.
+    """
+    await asyncio.sleep(5)
+    print("Autonomous Trading Session Daemon started.")
+
+    while True:
+        try:
+            alert_svc = get_email_alert_service()
+
+            # 1. Real-time Trade Lifecycle Evaluation
+            try:
+                lifecycle_svc = get_trade_lifecycle_service()
+                if lifecycle_svc:
+                    await asyncio.to_thread(lifecycle_svc.evaluate_active_trades, alert_svc)
+            except Exception as life_err:
+                print(f"Session daemon lifecycle check warning: {life_err}")
+
+            # 2. Local CET / Berlin Time Calculation
+            try:
+                from zoneinfo import ZoneInfo
+                now_berlin = datetime.now(ZoneInfo("Europe/Berlin"))
+            except Exception:
+                now_berlin = datetime.now(timezone.utc) + timedelta(hours=2)
+
+            weekday = now_berlin.weekday()  # 0=Monday ... 4=Friday
+            today_str = now_berlin.strftime("%Y-%m-%d")
+            hour = now_berlin.hour
+            minute = now_berlin.minute
+
+            if weekday < 5:  # Monday to Friday
+                pm = get_portfolio_manager()
+                sent_keys = pm.get_sent_signal_event_keys() if hasattr(pm, "get_sent_signal_event_keys") else set()
+                orb_svc = get_opening_range_breakout_service()
+                bot_svc = get_telegram_interactive_service()
+                cfg = alert_svc.get_config()
+                has_tg = bool(cfg.telegram_enabled and cfg.telegram_bot_token and cfg.telegram_chat_id)
+
+                # A. 09:30 CET: European 15m ORB Scanner
+                eu_key = f"orb_eu_auto_scan:{today_str}"
+                if (hour == 9 and 30 <= minute <= 35) and eu_key not in sent_keys:
+                    eu_tickers = ["SAP.DE", "RHM.DE", "ASML.AS", "ALV.DE", "SIE.DE", "BMW.DE", "BAYN.DE"]
+                    scan_res = await asyncio.to_thread(orb_svc.scan_watchlist_orb, eu_tickers, 15)
+                    if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg:
+                        card = orb_svc.format_telegram_orb_scan_summary(scan_res)
+                        event = {"event_key": eu_key, "category": "orb_breakout", "title": "ORB Breakout Scan (15m)", "line": card}
+                        alert_svc._send_notifications(cfg, [event], subject="Broker Freund: 15m ORB Breakouts")
+                    if hasattr(pm, "mark_signal_events_sent"):
+                        pm.mark_signal_events_sent([{"event_key": eu_key}])
+                    print(f"Autonomous European 15m ORB scan executed for {today_str}")
+
+                # B. 16:00 CET: US 30m ORB Scanner
+                us_key = f"orb_us_auto_scan:{today_str}"
+                if (hour == 16 and 0 <= minute <= 5) and us_key not in sent_keys:
+                    us_tickers = ["NVDA", "MSFT", "AAPL", "AMZN", "PLTR", "TSLA", "META", "GOOGL", "AVGO", "GLD"]
+                    scan_res = await asyncio.to_thread(orb_svc.scan_watchlist_orb, us_tickers, 30)
+                    if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg:
+                        card = orb_svc.format_telegram_orb_scan_summary(scan_res)
+                        event = {"event_key": us_key, "category": "orb_breakout", "title": "ORB Breakout Scan (30m)", "line": card}
+                        alert_svc._send_notifications(cfg, [event], subject="Broker Freund: 30m ORB Breakouts")
+                    if hasattr(pm, "mark_signal_events_sent"):
+                        pm.mark_signal_events_sent([{"event_key": us_key}])
+                    print(f"Autonomous US 30m ORB scan executed for {today_str}")
+
+                # C. 17:35 CET: XETRA Close Session Recap
+                xetra_recap_key = f"xetra_close_recap_auto:{today_str}"
+                if (hour == 17 and 35 <= minute <= 40) and xetra_recap_key not in sent_keys:
+                    recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["xetra"])
+                    if recap_msg and has_tg:
+                        event = {"event_key": xetra_recap_key, "category": "session_recap", "title": "XETRA Session Close", "line": recap_msg}
+                        alert_svc._send_notifications(cfg, [event], subject="Broker Freund: XETRA Session Recap")
+                    if hasattr(pm, "mark_signal_events_sent"):
+                        pm.mark_signal_events_sent([{"event_key": xetra_recap_key}])
+                    print(f"Autonomous XETRA close recap executed for {today_str}")
+
+                # D. 22:05 CET: US Wall Street Close Recap
+                us_recap_key = f"us_close_recap_auto:{today_str}"
+                if (hour == 22 and 5 <= minute <= 10) and us_recap_key not in sent_keys:
+                    recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["us"])
+                    if recap_msg and has_tg:
+                        event = {"event_key": us_recap_key, "category": "session_recap", "title": "Wall Street Session Close", "line": recap_msg}
+                        alert_svc._send_notifications(cfg, [event], subject="Broker Freund: Wall Street Session Recap")
+                    if hasattr(pm, "mark_signal_events_sent"):
+                        pm.mark_signal_events_sent([{"event_key": us_recap_key}])
+                    print(f"Autonomous Wall Street close recap executed for {today_str}")
+
+        except Exception as daemon_err:
+            print(f"Trading session daemon cycle warning: {daemon_err}")
+
+        await asyncio.sleep(30)
 
 
 async def _market_safety_loop() -> None:
@@ -10593,6 +10710,84 @@ async def send_recap_alert(session: str):
                 if cid.strip():
                     tg_svc.send_message(cid.strip(), resp_text)
         return {"status": "ok", "session": norm, "message": f"Recap for {norm} sent to Telegram."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/market-breadth")
+async def get_trading_market_breadth(force_refresh: bool = False):
+    """Computes participation, moving-average breadth, and Advance/Decline internals."""
+    try:
+        service = get_market_breadth_service()
+        data = await asyncio.to_thread(service.compute_market_breadth, None, force_refresh)
+        return convert_numpy_types(data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/journal-metrics")
+async def get_trading_journal_metrics(starting_capital: float = 50000.0):
+    """Calculates mathematical Expectancy, Profit Factor, Win/Loss Payoff, and Equity Curve."""
+    try:
+        pm = get_portfolio_manager()
+        trades = pm.list_paper_trades(limit=500) if hasattr(pm, "list_paper_trades") else []
+        metrics = calculate_trading_journal_metrics(trades, starting_capital=starting_capital)
+        return convert_numpy_types(metrics)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ScaleOutRequest(BaseModel):
+    fraction: float = 0.50
+    notes: Optional[str] = None
+
+
+@app.post("/api/trading/scale-out/{ticker}")
+async def post_trading_scale_out(ticker: str, req: ScaleOutRequest = Body(...)):
+    """Executes a partial take-profit (e.g. 50% scale-out) on an open position and locks stop at breakeven."""
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        pm = get_portfolio_manager()
+        if not hasattr(pm, "partial_close_paper_trade"):
+            raise HTTPException(status_code=501, detail="Portfolio manager partial close not implemented.")
+
+        open_trades = [
+            t for t in pm.list_paper_trades(limit=100)
+            if (str(t.get("ticker") or "").upper() == sym or str(t.get("id") or "") == sym) and str(t.get("status") or "").lower() == "open"
+        ]
+        trade_ticker = str(open_trades[0].get("ticker") or sym) if open_trades else sym
+        lifecycle_svc = get_trade_lifecycle_service()
+        spot = lifecycle_svc._fetch_current_price(trade_ticker) if lifecycle_svc else None
+        if not spot or spot <= 0:
+            if open_trades:
+                spot = float(open_trades[0].get("current_price") or open_trades[0].get("entry_price") or 0.0)
+
+        if not spot or spot <= 0:
+            raise HTTPException(status_code=404, detail=f"No price or open trade found for {sym}")
+
+        res = pm.partial_close_paper_trade(
+            trade_id_or_ticker=sym,
+            closed_price=spot,
+            fraction=req.fraction,
+            notes=req.notes or f"Web Drawer {int(req.fraction * 100)}% Scale-Out",
+            exit_reason=f"Partial Scale-Out ({int(req.fraction * 100)}%)",
+        )
+        if not res:
+            raise HTTPException(status_code=404, detail=f"Could not scale out trade for {sym} (no open trade).")
+
+        if lifecycle_svc:
+            trades = lifecycle_svc.get_active_trades()
+            matched = next((t for t in trades if t.get("ticker") == sym and t.get("status") in ("OPEN", "TARGET_1_HIT")), None)
+            if matched:
+                matched["trailing_stop"] = res["entry_price"]
+                matched["status"] = "TARGET_1_HIT"
+                lifecycle_svc._save_trades()
+
+        return convert_numpy_types(res)
     except HTTPException:
         raise
     except Exception as e:

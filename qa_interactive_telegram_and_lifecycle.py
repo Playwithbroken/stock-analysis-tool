@@ -10,6 +10,9 @@ from src.trade_lifecycle_service import TradeLifecycleService
 from src.telegram_interactive_service import TelegramInteractiveService
 from src.opening_range_breakout_service import OpeningRangeBreakoutService
 from src.position_sizing_service import PositionSizingService
+from src.market_breadth_service import MarketBreadthService
+from src.performance_metrics import calculate_trading_journal_metrics
+from src.storage import PortfolioManager
 
 
 class TestOpeningRangeBreakoutService(unittest.TestCase):
@@ -297,6 +300,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.mock_heat = MagicMock()
         self.mock_orb = MagicMock()
         self.mock_sizing = MagicMock()
+        self.mock_breadth = MagicMock()
 
         self.service = TelegramInteractiveService(
             bot_token="test_bot_token",
@@ -313,6 +317,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
             portfolio_manager=self.mock_pm,
             opening_range_breakout_service=self.mock_orb,
             position_sizing_service=self.mock_sizing,
+            market_breadth_service=self.mock_breadth,
         )
 
     def test_authorization_security(self):
@@ -484,10 +489,13 @@ class TestTelegramInteractiveService(unittest.TestCase):
         all_buttons = [btn for row in kb["inline_keyboard"] for btn in row]
         be_btn = next((b for b in all_buttons if b.get("callback_data") == "be:NVDA"), None)
         close_btn = next((b for b in all_buttons if b.get("callback_data") == "close:NVDA"), None)
+        scale_btn = next((b for b in all_buttons if b.get("callback_data") == "scale:NVDA:50"), None)
         self.assertIsNotNone(be_btn)
-        self.assertIn("Stop auf Breakeven", be_btn["text"])
+        self.assertIn("Breakeven", be_btn["text"])
         self.assertIsNotNone(close_btn)
-        self.assertIn("Position schließen", close_btn["text"])
+        self.assertIn("Schließen", close_btn["text"])
+        self.assertIsNotNone(scale_btn)
+        self.assertIn("Teilverkauf", scale_btn["text"])
 
     def test_cmd_watch_and_unwatch(self):
         res_watch = self.service.handle_command("999888", "/watch SAP.DE")
@@ -861,6 +869,193 @@ class TestTelegramInteractiveService(unittest.TestCase):
             mock_send.assert_called_once()
             self.assertIn("OPENING RANGE BREAKOUT: NVDA", mock_send.call_args[0][1])
 
+    def test_cmd_scale(self):
+        self.mock_pm.list_paper_trades.return_value = [
+            {"id": "trade_scale_1", "ticker": "NVDA", "status": "open", "quantity": 10, "entry_price": 120.0}
+        ]
+        self.mock_pm.partial_close_paper_trade.return_value = {
+            "id": "trade_scale_1",
+            "ticker": "NVDA",
+            "status": "open",
+            "quantity": 5,
+            "closed_quantity": 5,
+            "closed_slice_pnl": 50.0,
+            "trailing_stop": 120.0,
+            "entry_price": 120.0,
+        }
+        self.mock_lifecycle._fetch_current_price.return_value = 130.0
+        self.mock_lifecycle.get_active_trades.return_value = [
+            {"ticker": "NVDA", "entry_price": 120.0, "status": "OPEN", "trailing_stop": 115.0}
+        ]
+
+        res = self.service.handle_command("999888", "/scale NVDA 50")
+        self.assertIn("TEILVERKAUF (50% SCALE-OUT): NVDA", res)
+        self.assertIn("+$50.00", res)
+        self.assertIn("Risikofreier Free-Trade", res)
+        self.mock_pm.partial_close_paper_trade.assert_called_once()
+        self.mock_lifecycle._save_trades.assert_called_once()
+        self.assertEqual(self.mock_lifecycle.get_active_trades.return_value[0]["trailing_stop"], 120.0)
+
+    def test_callback_scale(self):
+        self.mock_pm.list_paper_trades.return_value = [
+            {"id": "trade_scale_1", "ticker": "NVDA", "status": "open", "quantity": 10, "entry_price": 120.0}
+        ]
+        self.mock_pm.partial_close_paper_trade.return_value = {
+            "id": "trade_scale_1",
+            "ticker": "NVDA",
+            "status": "open",
+            "quantity": 5,
+            "closed_quantity": 5,
+            "closed_slice_pnl": 50.0,
+            "trailing_stop": 120.0,
+            "entry_price": 120.0,
+        }
+        self.mock_lifecycle._fetch_current_price.return_value = 130.0
+        with patch.object(self.service, "send_message") as mock_send, \
+             patch.object(self.service, "answer_callback_query") as mock_ans:
+            self.service.handle_callback_query("999888", "scale:NVDA:50", "cq_scale_1")
+            mock_ans.assert_called_once()
+            mock_send.assert_called_once()
+            self.assertIn("TEILVERKAUF (50% SCALE-OUT)", mock_send.call_args[0][1])
+
+    def test_cmd_breadth(self):
+        self.mock_breadth.compute_market_breadth.return_value = {
+            "scanned_count": 18,
+            "advancing_count": 12,
+            "declining_count": 6,
+            "ad_ratio": 2.0,
+            "pct_above_20_ema": 66.7,
+            "pct_above_50_sma": 72.2,
+            "pct_above_200_sma": 83.3,
+            "composite_score": 75,
+            "regime": "BULLISH_EXPANSION",
+            "status_badge": "🟢 Marktbreite Bullish (Score: 75/100)",
+        }
+        self.mock_breadth.format_telegram_breadth_card.return_value = "📊 <b>INSTITUTIONELLE MARKTBREITE &amp; INTERNALS</b>\nScore: 75/100"
+        res = self.service.handle_command("999888", "/breadth")
+        self.assertIn("INSTITUTIONELLE MARKTBREITE", res)
+        self.mock_breadth.compute_market_breadth.assert_called_once()
+
+    def test_callback_breadth(self):
+        self.mock_breadth.compute_market_breadth.return_value = {"composite_score": 75}
+        self.mock_breadth.format_telegram_breadth_card.return_value = "📊 <b>MARKTBREITE REPORT</b>"
+        with patch.object(self.service, "send_message") as mock_send, \
+             patch.object(self.service, "answer_callback_query") as mock_ans:
+            self.service.handle_callback_query("999888", "breadth", "cq_breadth_1")
+            mock_ans.assert_called_once()
+            mock_send.assert_called_once()
+            self.assertIn("MARKTBREITE REPORT", mock_send.call_args[0][1])
+
+
+class TestMarketBreadthService(unittest.TestCase):
+    def test_format_telegram_breadth_card(self):
+        svc = MarketBreadthService()
+        sample = {
+            "scanned_count": 18,
+            "advancing_count": 12,
+            "declining_count": 6,
+            "ad_ratio": 2.0,
+            "pct_above_20_ema": 66.7,
+            "pct_above_50_sma": 72.2,
+            "pct_above_200_sma": 83.3,
+            "avg_distance_to_52w_high_pct": -4.2,
+            "avg_distance_to_52w_low_pct": 28.5,
+            "composite_score": 75,
+            "regime": "BULLISH_EXPANSION",
+            "status_badge": "🟢 Marktbreite Bullish (Score: 75/100)",
+            "constituents": [
+                {"ticker": "NVDA", "change_pct": 2.5, "above_20_ema": True, "above_50_sma": True, "above_200_sma": True},
+                {"ticker": "SAP.DE", "change_pct": 1.2, "above_20_ema": True, "above_50_sma": True, "above_200_sma": True},
+            ]
+        }
+        card = svc.format_telegram_breadth_card(sample)
+        self.assertIn("MARKTBREITE &amp; INTERNALS", card)
+        self.assertIn("BULLISH_EXPANSION", card)
+        self.assertIn("66.7%", card)
+        self.assertIn("72.2%", card)
+        self.assertIn("83.3%", card)
+
+
+class TestTradingJournalMetrics(unittest.TestCase):
+    def test_calculate_trading_journal_metrics(self):
+        sample_trades = [
+            {
+                "id": "t1",
+                "ticker": "NVDA",
+                "status": "closed",
+                "entry_price": 100.0,
+                "closed_price": 120.0,
+                "quantity": 10,
+                "closed_at": "2026-10-01T12:00:00Z",
+            },
+            {
+                "id": "t2",
+                "ticker": "SAP.DE",
+                "status": "closed",
+                "entry_price": 200.0,
+                "closed_price": 190.0,
+                "quantity": 10,
+                "closed_at": "2026-10-02T12:00:00Z",
+            },
+        ]
+        metrics = calculate_trading_journal_metrics(sample_trades, starting_capital=50000.0)
+        self.assertEqual(metrics["total_closed_trades"], 2)
+        self.assertEqual(metrics["wins"], 1)
+        self.assertEqual(metrics["losses"], 1)
+        self.assertEqual(metrics["win_rate"], 50.0)
+        self.assertGreater(metrics["expectancy_eur"], 0)
+        self.assertGreater(metrics["profit_factor"], 1.0)
+        self.assertEqual(len(metrics["equity_curve"]), 3)
+
+
+class TestPortfolioManagerScaleOut(unittest.TestCase):
+    def test_partial_close_paper_trade(self):
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            with patch("src.storage.DB_PATH", tmp_path):
+                from src.storage import init_db
+                init_db()
+                pm = PortfolioManager()
+                trade = pm.create_paper_trade({
+                    "ticker": "NVDA",
+                    "entry_price": 100.0,
+                    "stop_price": 90.0,
+                    "target_price": 120.0,
+                    "quantity": 10,
+                    "setup_type": "Test Setup",
+                    "status": "open",
+                })
+                self.assertIsNotNone(trade)
+
+                # Scale out 50%
+                scaled = pm.partial_close_paper_trade(
+                    trade_id_or_ticker="NVDA",
+                    closed_price=110.0,
+                    fraction=0.50,
+                    notes="50% Scale-Out Test",
+                )
+                self.assertIsNotNone(scaled)
+                self.assertEqual(scaled["quantity"], 5)
+                self.assertEqual(scaled["trailing_stop"], 100.0)
+                self.assertEqual(scaled["closed_quantity"], 5)
+
+                # Check that a closed trade record was inserted
+                all_trades = pm.list_paper_trades(limit=10)
+                closed_trades = [t for t in all_trades if t.get("status") == "closed"]
+                self.assertEqual(len(closed_trades), 1)
+                self.assertEqual(closed_trades[0]["quantity"], 5)
+                self.assertEqual(closed_trades[0]["closed_price"], 110.0)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
 
 if __name__ == "__main__":
     unittest.main()
+

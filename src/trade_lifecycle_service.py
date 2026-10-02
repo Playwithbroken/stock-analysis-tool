@@ -206,8 +206,9 @@ class TradeLifecycleService:
                     kb = {
                         "inline_keyboard": [
                             [
-                                {"text": "🛡️ Breakeven bestätigt", "callback_data": f"be:{symbol}"},
-                                {"text": "🚪 Position schließen", "callback_data": f"close:{symbol}"},
+                                {"text": "✂️ 50% Teilverkauf", "callback_data": f"scale:{symbol}:50"},
+                                {"text": "🛡️ Breakeven", "callback_data": f"be:{symbol}"},
+                                {"text": "🚪 Schließen", "callback_data": f"close:{symbol}"},
                             ],
                             [
                                 {"text": "🔍 360° Check", "callback_data": f"check:{symbol}"},

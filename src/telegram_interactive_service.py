@@ -53,6 +53,7 @@ class TelegramInteractiveService:
         morning_brief_service: Optional[Any] = None,
         opening_range_breakout_service: Optional[Any] = None,
         position_sizing_service: Optional[Any] = None,
+        market_breadth_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -76,6 +77,7 @@ class TelegramInteractiveService:
         self.morning_brief_service = morning_brief_service
         self.orb_service = opening_range_breakout_service
         self.sizing_service = position_sizing_service
+        self.breadth_service = market_breadth_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -280,6 +282,24 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "Scanne Watchlist nach ORB Breakouts...")
             res = self._cmd_orb_scan()
             self.send_message(chat_id, res)
+
+        elif cb.startswith("scale:"):
+            parts = cb.split(":")
+            ticker = parts[1].upper()
+            pct = 50
+            if len(parts) > 2:
+                try:
+                    pct = int(parts[2])
+                except ValueError:
+                    pct = 50
+            self.answer_callback_query(callback_query_id, f"Führe {pct}% Teilverkauf für {ticker} aus...")
+            res = self._cmd_scale([ticker, str(pct)])
+            self.send_message(chat_id, res, reply_markup=self._build_inline_keyboard(ticker))
+
+        elif cb == "breadth":
+            self.answer_callback_query(callback_query_id, "Analysiere institutionelle Marktbreite...")
+            res = self._cmd_breadth()
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -363,6 +383,10 @@ class TelegramInteractiveService:
                 return self._cmd_preflight(args)
             elif cmd in ("/orb", "/breakout"):
                 return self._cmd_orb(args) if args else self._cmd_orb_scan()
+            elif cmd in ("/scale", "/partial", "/teilverkauf"):
+                return self._cmd_scale(args)
+            elif cmd in ("/breadth", "/internals", "/marktbreite"):
+                return self._cmd_breadth()
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -389,6 +413,7 @@ class TelegramInteractiveService:
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/close TICKER</code> – Offene Position direkt schließen &amp; PnL sichern (z.B. <code>/close NVDA</code>)\n"
             "• <code>/be TICKER</code> – Stop-Loss auf Breakeven (Einstand) nachziehen\n"
+            "• <code>/scale TICKER [50]</code> – 50% Teilgewinnmitnahme &amp; Rest auf Breakeven sichern\n"
             "• <code>/track</code> – Aktive Setups &amp; Trailing-Stops im Blick\n"
             "• <code>/depot</code> – Aktueller Depotstand, Cash &amp; Performance\n"
             "• <code>/journal</code> – Letzte abgeschlossene Trades &amp; Performance-Historie\n\n"
@@ -405,6 +430,7 @@ class TelegramInteractiveService:
             "• <code>/unwatch TICKER</code> – Aktie von Watchlist entfernen\n"
             "• <code>/scan</code> – Sofortiger Watchlist-Scan für Edge-Setups\n\n"
             "🧠 <b>Institutionelle Edge-Analysen:</b>\n"
+            "• <code>/breadth</code> – Institutionelle Marktbreite (20/50/200 MAs &amp; Advance/Decline)\n"
             "• <code>/gex TICKER</code> – Gamma Exposure &amp; Market Maker Regime\n"
             "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL)\n"
             "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Swing, Earnings)\n"
@@ -426,8 +452,9 @@ class TelegramInteractiveService:
                     {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
                 ],
                 [
-                    {"text": "🛡️ Stop auf Breakeven", "callback_data": f"be:{ticker}"},
-                    {"text": "🚪 Position schließen", "callback_data": f"close:{ticker}"},
+                    {"text": "🛡️ Breakeven", "callback_data": f"be:{ticker}"},
+                    {"text": "✂️ 50% Teilverkauf", "callback_data": f"scale:{ticker}:50"},
+                    {"text": "🚪 Schließen", "callback_data": f"close:{ticker}"},
                 ],
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
@@ -451,7 +478,7 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "⚖️ Sizing & Kelly", "callback_data": f"sizing:{ticker}"},
-                    {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
+                    {"text": "🌐 Marktbreite", "callback_data": "breadth"},
                 ],
             ]
         }
@@ -461,8 +488,9 @@ class TelegramInteractiveService:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "🛡️ Stop auf Breakeven", "callback_data": f"be:{ticker}"},
-                    {"text": "🚪 Position schließen", "callback_data": f"close:{ticker}"},
+                    {"text": "🛡️ Breakeven", "callback_data": f"be:{ticker}"},
+                    {"text": "✂️ 50% Teilverkauf", "callback_data": f"scale:{ticker}:50"},
+                    {"text": "🚪 Schließen", "callback_data": f"close:{ticker}"},
                 ],
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
@@ -1997,6 +2025,106 @@ class TelegramInteractiveService:
         tickers = self._get_watchlist_tickers()
         scan = self.orb_service.scan_watchlist_orb(tickers, or_minutes=30)
         return self.orb_service.format_telegram_orb_scan_summary(scan)
+
+    def _cmd_scale(self, args: List[str]) -> str:
+        """Scales out a fraction (default 50%) of an active paper position and ratchets stop to breakeven."""
+        if not args:
+            return (
+                "✂️ <b>Teilverkauf &amp; Scale-Out Rechner</b>\n"
+                "Realisierte Teilgewinnmitnahme (z.B. 50%) und setzt den Stop auf Breakeven.\n\n"
+                "<b>Syntax:</b> <code>/scale TICKER [PROZENT]</code> (z.B. <code>/scale NVDA 50</code>)"
+            )
+        ticker = args[0].upper().strip()
+        pct = 50
+        if len(args) > 1:
+            try:
+                pct = int(args[1])
+            except ValueError:
+                pct = 50
+        fraction = max(0.10, min(float(pct) / 100.0, 0.90))
+
+        if not self.portfolio_manager or not hasattr(self.portfolio_manager, "partial_close_paper_trade"):
+            return "⚠️ Portfolio Manager unterstützt keinen Teilverkauf."
+
+        open_trades = [
+            t for t in self.portfolio_manager.list_paper_trades(limit=100)
+            if str(t.get("ticker") or "").upper() == ticker and str(t.get("status") or "").lower() == "open"
+        ]
+        if not open_trades:
+            return f"ℹ️ <b>Keine offene Position für {ticker} gefunden.</b>"
+
+        trade = open_trades[0]
+        entry_p = float(trade.get("entry_price") or 0.0)
+
+        spot: Optional[float] = None
+        if self.lifecycle_service:
+            spot = self.lifecycle_service._fetch_current_price(ticker)
+        if not spot or spot <= 0:
+            spot = float(trade.get("current_price") or entry_p)
+
+        exit_p = spot if (spot and spot > 0) else entry_p
+
+        scale_res = self.portfolio_manager.partial_close_paper_trade(
+            trade_id_or_ticker=ticker,
+            closed_price=exit_p,
+            fraction=fraction,
+            notes=f"Teilverkauf {int(fraction*100)}% via Telegram Bot",
+            exit_reason=f"Partial Scale-Out ({int(fraction*100)}%)",
+        )
+        if not scale_res:
+            return f"❌ Konnte Teilverkauf für <b>{ticker}</b> nicht ausführen."
+
+        # Update lifecycle trailing stop to entry (breakeven)
+        if self.lifecycle_service:
+            trades = self.lifecycle_service.get_active_trades()
+            matched = next(
+                (t for t in trades if t.get("ticker") == ticker and t.get("status") in ("OPEN", "TARGET_1_HIT")),
+                None,
+            )
+            if matched:
+                matched["trailing_stop"] = entry_p
+                matched["status"] = "TARGET_1_HIT"
+                self.lifecycle_service._save_trades()
+
+        closed_qty = scale_res.get("closed_quantity", 0)
+        rem_qty = scale_res.get("remaining_quantity", scale_res.get("quantity", 0))
+
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+        spread_pct = 0.08 if is_eu else 0.04
+        slippage_pct = 0.03 if is_eu else 0.02
+        commission_total = 1.0 if is_eu else 0.0
+
+        gross_pnl = (exit_p - entry_p) * closed_qty
+        friction = (exit_p * closed_qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0) + commission_total
+        net_pnl = gross_pnl - friction
+        net_pct = (net_pnl / (entry_p * closed_qty) * 100.0) if (entry_p * closed_qty) > 0 else 0.0
+
+        sign_gross = "+" if gross_pnl >= 0 else ""
+        sign_net = "+" if net_pnl >= 0 else ""
+        emoji_net = "🟢" if net_pnl >= 0 else "🔴"
+
+        return (
+            f"✂️ <b>TEILVERKAUF ({int(fraction*100)}% SCALE-OUT): {ticker}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Teilausstieg:</b> {c_sym}{exit_p:.2f} (Einstieg: {c_sym}{entry_p:.2f})\n"
+            f"• <b>Verkaufte Menge:</b> {closed_qty} Stück (Verbleibend: <b>{rem_qty} Stück</b>)\n"
+            f"• <b>Realisierter Brutto-Gewinn:</b> {sign_gross}{c_sym}{gross_pnl:,.2f}\n"
+            f"• <b>Reibung (Spread &amp; Slippage):</b> -{c_sym}{friction:,.2f}\n"
+            f"• <b>Netto-Gewinn gesichert:</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}\n\n"
+            f"🛡️ <b>Risikofreier Free-Trade:</b>\n"
+            f"Der Stop-Loss für die restlichen <b>{rem_qty} Aktien</b> ist ab sofort fest auf Einstand (<b>{c_sym}{entry_p:.2f}</b>) arretiert!\n"
+            f"Kein Verlustrisiko mehr auf diesem Trade."
+        )
+
+    def _cmd_breadth(self) -> str:
+        """Computes and formats institutional market breadth & internals."""
+        if not self.breadth_service:
+            from src.market_breadth_service import MarketBreadthService
+            self.breadth_service = MarketBreadthService()
+
+        data = self.breadth_service.compute_market_breadth()
+        return self.breadth_service.format_telegram_breadth_card(data)
 
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""

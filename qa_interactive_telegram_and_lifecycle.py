@@ -8,6 +8,81 @@ from unittest.mock import MagicMock, patch
 from src.relative_strength_service import RelativeStrengthService
 from src.trade_lifecycle_service import TradeLifecycleService
 from src.telegram_interactive_service import TelegramInteractiveService
+from src.opening_range_breakout_service import OpeningRangeBreakoutService
+from src.position_sizing_service import PositionSizingService
+
+
+class TestOpeningRangeBreakoutService(unittest.TestCase):
+    def test_compute_orb_breakout(self):
+        svc = OpeningRangeBreakoutService()
+        with patch("src.opening_range_breakout_service.yf.Ticker") as mock_ticker_cls:
+            mock_ticker = MagicMock()
+            mock_ticker_cls.return_value = mock_ticker
+            import pandas as pd
+            dates = pd.date_range("2026-10-02 09:30", periods=10, freq="5min")
+            df = pd.DataFrame({
+                "Open": [100.0, 101.0, 102.0, 101.5, 102.5, 103.0, 104.0, 105.0, 106.0, 107.0],
+                "High": [101.0, 102.0, 103.0, 102.5, 103.0, 104.0, 105.0, 106.0, 107.5, 108.0],
+                "Low": [99.5, 100.5, 101.0, 100.8, 102.0, 102.5, 103.5, 104.5, 105.5, 106.5],
+                "Close": [101.0, 102.0, 102.5, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 107.5],
+                "Volume": [10000] * 10
+            }, index=dates)
+            mock_ticker.history.return_value = df
+            res = svc.analyze_orb("NVDA", or_minutes=15)
+            self.assertIsNotNone(res)
+            self.assertEqual(res["ticker"], "NVDA")
+            self.assertEqual(res["state"], "BULLISH_BREAKOUT")
+            self.assertGreater(res["spot_price"], res["orb_high"])
+
+    def test_format_telegram_orb_card(self):
+        svc = OpeningRangeBreakoutService()
+        sample_orb = {
+            "ticker": "NVDA",
+            "session": "US",
+            "or_minutes": 30,
+            "currency_symbol": "$",
+            "orb_high": 122.50,
+            "orb_low": 118.00,
+            "orb_mid": 120.25,
+            "orb_range": 4.50,
+            "orb_range_pct": 3.75,
+            "spot_price": 124.00,
+            "state": "BULLISH_BREAKOUT",
+            "badge": "🚀 BULLISH BREAKOUT",
+            "target_1": 127.00,
+            "target_2": 131.50,
+            "invalidation_stop": 120.25,
+            "relative_volume": 1.5,
+            "volume_confirmed": True,
+        }
+        card = svc.format_telegram_orb_card(sample_orb)
+        self.assertIn("OPENING RANGE BREAKOUT (ORB): NVDA", card)
+        self.assertIn("122.50", card)
+        self.assertIn("127.00", card)
+        self.assertIn("1.5x", card)
+
+
+class TestPositionSizingService(unittest.TestCase):
+    def test_calculate_sizing_and_kelly(self):
+        svc = PositionSizingService()
+        res = svc.calculate_sizing(
+            ticker="SAP.DE",
+            entry_price=200.0,
+            stop_price=190.0,
+            target_1=220.0,
+            target_2=235.0,
+            capital=50000.0,
+            risk_pct=1.0,
+            win_rate=0.55,
+        )
+        self.assertEqual(res["ticker"], "SAP.DE")
+        self.assertEqual(res["recommended_shares"], 50)  # €500 / €10
+        self.assertEqual(res["max_risk_amount"], 500.0)
+        self.assertEqual(res["currency_symbol"], "€")
+        self.assertGreater(res["kelly_analysis"]["half_kelly_pct"], 0)
+        self.assertIn("friction_breakdown", res)
+        self.assertGreater(res["friction_cost_est"], 0)
+        self.assertGreater(res["target_1_profit_net"], 0)
 
 
 class TestRelativeStrengthService(unittest.TestCase):
@@ -220,6 +295,8 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.mock_alert = MagicMock()
         self.mock_pm = MagicMock()
         self.mock_heat = MagicMock()
+        self.mock_orb = MagicMock()
+        self.mock_sizing = MagicMock()
 
         self.service = TelegramInteractiveService(
             bot_token="test_bot_token",
@@ -234,6 +311,8 @@ class TestTelegramInteractiveService(unittest.TestCase):
             trading_signals_service=self.mock_signals,
             alert_service=self.mock_alert,
             portfolio_manager=self.mock_pm,
+            opening_range_breakout_service=self.mock_orb,
+            position_sizing_service=self.mock_sizing,
         )
 
     def test_authorization_security(self):
@@ -454,7 +533,8 @@ class TestTelegramInteractiveService(unittest.TestCase):
         res = self.service.handle_command("999888", "/close NVDA")
         self.assertIn("POSITION GESCHLOSSEN: NVDA", res)
         self.assertIn("+$100.00", res)
-        self.assertIn("+8.33%", res)
+        self.assertIn("Reibung (Spread &amp; Slippage)", res)
+        self.assertIn("+$99.00", res)
 
     def test_cmd_be_stop(self):
         self.mock_lifecycle.get_active_trades.return_value = [
@@ -550,6 +630,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("Win-Rate: <b>50%</b>", res)
 
     def test_cmd_sizing(self):
+        self.service.sizing_service = None
         self.mock_asymmetric.generate_trade_setup.return_value = {
             "entry_price": 200.0,
             "invalidation_price": 190.0,
@@ -566,6 +647,20 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("50 Aktien", res)
         self.assertIn("Standard (1.5% Risiko = -750 €)", res)
         self.assertIn("75 Aktien", res)
+
+    def test_cmd_sizing_with_service(self):
+        self.service.sizing_service = self.mock_sizing
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "entry_price": 200.0,
+            "invalidation_price": 190.0,
+            "target_1": 220.0,
+            "target_2": 235.0,
+            "risk_per_share": 10.0,
+        }
+        self.mock_sizing.format_telegram_sizing_card.return_value = "⚖️ <b>POSITION SIZING &amp; KELLY-RECHNER: SAP.DE</b>"
+        res = self.service.handle_command("999888", "/sizing SAP.DE 50000")
+        self.assertIn("POSITION SIZING &amp; KELLY-RECHNER: SAP.DE", res)
+        self.mock_sizing.calculate_sizing.assert_called_once()
 
     def test_cmd_recap(self):
         self.mock_regime.get_market_regime.return_value = {
@@ -687,6 +782,84 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("PRE-FLIGHT RISIKO-CHECK: NVDA", res)
         self.assertIn("ERHÖHTES CLUSTER-RISIKO", res)
         self.assertIn("Korrelation r=0.82 mit offener Position <b>MSFT</b>", res)
+
+    def test_cmd_orb_single_ticker(self):
+        self.mock_orb.analyze_orb.return_value = {
+            "ticker": "NVDA",
+            "session": "US",
+            "or_minutes": 30,
+            "currency_symbol": "$",
+            "orb_high": 122.50,
+            "orb_low": 118.00,
+            "orb_mid": 120.25,
+            "orb_range": 4.50,
+            "orb_range_pct": 3.75,
+            "spot_price": 124.00,
+            "state": "BULLISH_BREAKOUT",
+            "badge": "🚀 BULLISH BREAKOUT",
+            "target_1": 127.00,
+            "target_2": 131.50,
+            "invalidation_stop": 120.25,
+            "relative_volume": 1.5,
+            "volume_confirmed": True,
+        }
+        self.mock_orb.format_telegram_orb_card.return_value = "⚡ <b>OPENING RANGE BREAKOUT (ORB): NVDA</b>\nStatus: BULLISH BREAKOUT"
+        res = self.service.handle_command("999888", "/orb NVDA 30")
+        self.assertIn("OPENING RANGE BREAKOUT (ORB): NVDA", res)
+        self.mock_orb.analyze_orb.assert_called_with("NVDA", or_minutes=30)
+
+    def test_cmd_orb_scan(self):
+        self.mock_pm.get_signal_watch_items.return_value = [
+            {"kind": "ticker", "value": "NVDA"},
+            {"kind": "ticker", "value": "SAP.DE"},
+        ]
+        self.mock_orb.scan_watchlist_orb.return_value = {
+            "scanned_count": 2,
+            "or_minutes": 30,
+            "breakouts_count": 1,
+            "breakdowns_count": 0,
+            "breakouts": [
+                {
+                    "ticker": "NVDA",
+                    "state": "BULLISH_BREAKOUT",
+                    "spot_price": 124.0,
+                    "orb_high": 122.5,
+                    "orb_low": 118.0,
+                    "target_1": 127.0,
+                    "relative_volume": 1.6,
+                    "currency_symbol": "$",
+                }
+            ],
+            "breakdowns": [],
+            "inside_range_count": 1,
+        }
+        self.mock_orb.format_telegram_orb_scan_summary.return_value = "⚡ <b>ORB SCANNER REPORT (30M)</b>\nBreakouts gefunden:\n1. NVDA"
+        res = self.service.handle_command("999888", "/orb")
+        self.assertIn("ORB SCANNER REPORT (30M)", res)
+
+    def test_cmd_recap_sessions(self):
+        self.mock_regime.get_market_regime.return_value = {
+            "stance": "RISK_ON",
+            "vix": {"value": 14.5},
+        }
+        res_xetra = self.service.handle_command("999888", "/recap xetra")
+        self.assertIn("XETRA SESSION CLOSE RECAP", res_xetra)
+
+        res_us = self.service.handle_command("999888", "/recap us")
+        self.assertIn("WALL STREET SESSION CLOSE RECAP", res_us)
+
+    def test_callback_orb(self):
+        self.mock_orb.analyze_orb.return_value = {
+            "ticker": "NVDA",
+            "state": "INSIDE_RANGE",
+        }
+        self.mock_orb.format_telegram_orb_card.return_value = "⚡ <b>OPENING RANGE BREAKOUT: NVDA</b>"
+        with patch.object(self.service, "send_message") as mock_send, \
+             patch.object(self.service, "answer_callback_query") as mock_ans:
+            self.service.handle_callback_query("999888", "orb:NVDA", "cq_orb_1")
+            mock_ans.assert_called_once()
+            mock_send.assert_called_once()
+            self.assertIn("OPENING RANGE BREAKOUT: NVDA", mock_send.call_args[0][1])
 
 
 if __name__ == "__main__":

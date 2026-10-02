@@ -47,6 +47,8 @@ from src.session_list_service import SessionListService
 from src.trading_intelligence_service import TradingIntelligenceService
 from src.trading_signals_service import TradingSignalsService
 from src.asymmetric_trade_service import AsymmetricTradeService
+from src.opening_range_breakout_service import OpeningRangeBreakoutService
+from src.position_sizing_service import PositionSizingService
 from src.relative_strength_service import RelativeStrengthService
 from src.trade_lifecycle_service import TradeLifecycleService
 from src.telegram_interactive_service import TelegramInteractiveService
@@ -196,6 +198,8 @@ _anchored_vwap_service = None
 _whale_flow_service = None
 _liquidity_zone_service = None
 _multi_timeframe_service = None
+_opening_range_breakout_service = None
+_position_sizing_service = None
 _telegram_interactive_service = None
 _telegram_bot_task = None
 _realtime_market_service = None
@@ -1544,6 +1548,18 @@ def get_multi_timeframe_service():
         _multi_timeframe_service = MultiTimeframeService()
     return _multi_timeframe_service
 
+def get_opening_range_breakout_service():
+    global _opening_range_breakout_service
+    if _opening_range_breakout_service is None:
+        _opening_range_breakout_service = OpeningRangeBreakoutService()
+    return _opening_range_breakout_service
+
+def get_position_sizing_service():
+    global _position_sizing_service
+    if _position_sizing_service is None:
+        _position_sizing_service = PositionSizingService()
+    return _position_sizing_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1567,6 +1583,8 @@ def get_telegram_interactive_service():
             portfolio_manager=get_portfolio_manager(),
             paper_trading_service=get_paper_trading_service(),
             morning_brief_service=get_morning_brief_service(),
+            opening_range_breakout_service=get_opening_range_breakout_service(),
+            position_sizing_service=get_position_sizing_service(),
         )
     return _telegram_interactive_service
 
@@ -10456,6 +10474,127 @@ async def export_trading_journal(format: str = "csv"):
                 media_type="text/csv",
                 headers={"Content-Disposition": "attachment; filename=trading_journal.csv"}
             )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/orb-scan")
+async def get_trading_orb_scan(or_minutes: int = 30):
+    """Scans all watchlist tickers for 15m or 30m Opening Range Breakouts."""
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        tickers = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        if not tickers:
+            tickers = ["SAP.DE", "RHM.DE", "ASML.AS", "ALV.DE", "SIE.DE", "NVDA", "MSFT", "AAPL", "AMZN", "PLTR", "TSLA", "META"]
+        orb_svc = get_opening_range_breakout_service()
+        scan = await asyncio.to_thread(orb_svc.scan_watchlist_orb, tickers, or_minutes)
+        return convert_numpy_types(scan)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/orb/{ticker}")
+async def get_trading_orb_ticker(ticker: str, or_minutes: int = 30):
+    """Calculates Opening Range Breakout status for a specific asset."""
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        orb_svc = get_opening_range_breakout_service()
+        res = await asyncio.to_thread(orb_svc.analyze_orb, sym, or_minutes)
+        if not res:
+            raise HTTPException(status_code=404, detail=f"No ORB data available for {sym}")
+        return convert_numpy_types(res)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/sizing-calculator/{ticker}")
+async def get_trading_sizing_calculator(ticker: str, capital: float = 50000.0, risk_pct: float = 0.75):
+    """Calculates position sizing, risk capital, Kelly criterion, and realistic friction breakdown."""
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        asym_svc = get_asymmetric_trade_service()
+        setup = await asyncio.to_thread(asym_svc.generate_trade_setup, sym, capital)
+        if not setup:
+            raise HTTPException(status_code=404, detail=f"No trade setup available for {sym}")
+
+        lifecycle_svc = get_trade_lifecycle_service()
+        trades = lifecycle_svc.get_active_trades() if lifecycle_svc else []
+        heat_svc = get_portfolio_heat_service()
+        h_rep = await asyncio.to_thread(heat_svc.evaluate_portfolio_heat, trades, capital)
+        curr_heat = float(h_rep.get("portfolio_heat_pct") or 0.0)
+
+        entry = float(setup.get("entry_price") or 0.0)
+        stop = float(setup.get("invalidation_price") or 0.0)
+        t1 = float(setup.get("target_1") or 0.0)
+        t2 = float(setup.get("target_2") or 0.0)
+        rr = float(setup.get("risk_reward_ratio") or 2.0)
+
+        sizing_svc = get_position_sizing_service()
+        calc = sizing_svc.calculate_sizing(
+            ticker=sym,
+            entry_price=entry,
+            stop_price=stop,
+            target_1=t1,
+            target_2=t2,
+            capital=capital,
+            risk_pct=risk_pct,
+            win_rate=0.60,
+            reward_risk_ratio=rr,
+            current_portfolio_heat=curr_heat,
+        )
+        return convert_numpy_types(calc)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/correlation-matrix")
+async def get_trading_correlation_matrix():
+    """Computes full pairwise correlation matrix for all watchlist tickers and open trades."""
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        tickers = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        if not tickers:
+            tickers = ["SAP.DE", "RHM.DE", "ASML.AS", "ALV.DE", "SIE.DE", "NVDA", "MSFT", "AAPL", "AMZN", "PLTR", "TSLA", "META"]
+
+        lifecycle_svc = get_trade_lifecycle_service()
+        active = lifecycle_svc.get_active_trades() if lifecycle_svc else []
+        for t in active:
+            tk = str(t.get("ticker") or "").upper()
+            if tk and tk not in tickers:
+                tickers.append(tk)
+
+        heat_svc = get_portfolio_heat_service()
+        res = await asyncio.to_thread(heat_svc.compute_correlation_matrix, tickers)
+        return convert_numpy_types(res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/signals/alerts/recap/{session}")
+async def send_recap_alert(session: str):
+    """Triggers an on-demand session recap (xetra or us) via Telegram."""
+    try:
+        norm = session.lower().strip()
+        if norm not in ("xetra", "us", "close"):
+            raise HTTPException(status_code=400, detail="session must be 'xetra' or 'us'")
+        tg_svc = get_telegram_interactive_service()
+        resp_text = tg_svc._cmd_recap([norm])
+        cfg = get_email_alert_service().get_config()
+        if cfg.telegram_chat_id:
+            for cid in cfg.telegram_chat_id.split(","):
+                if cid.strip():
+                    tg_svc.send_message(cid.strip(), resp_text)
+        return {"status": "ok", "session": norm, "message": f"Recap for {norm} sent to Telegram."}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

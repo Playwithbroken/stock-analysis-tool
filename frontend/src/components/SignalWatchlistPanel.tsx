@@ -135,6 +135,20 @@ export default function SignalWatchlistPanel({
   const [scannerLoading, setScannerLoading] = useState<boolean>(false);
   const [showScannerResults, setShowScannerResults] = useState<boolean>(false);
 
+  const [orbScannerData, setOrbScannerData] = useState<any>(null);
+  const [orbScannerLoading, setOrbScannerLoading] = useState<boolean>(false);
+  const [showOrbResults, setShowOrbResults] = useState<boolean>(false);
+  const [tickerOrbData, setTickerOrbData] = useState<any>(null);
+
+  const [matrixData, setMatrixData] = useState<any>(null);
+  const [matrixLoading, setMatrixLoading] = useState<boolean>(false);
+  const [showMatrix, setShowMatrix] = useState<boolean>(false);
+
+  const [sizingCapital, setSizingCapital] = useState<number>(50000);
+  const [sizingRiskPct, setSizingRiskPct] = useState<number>(0.75);
+  const [sizingData, setSizingData] = useState<any>(null);
+  const [sizingLoading, setSizingLoading] = useState<boolean>(false);
+
   const [tradeActionMessage, setTradeActionMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -177,11 +191,46 @@ export default function SignalWatchlistPanel({
     }
   }, []);
 
+  const loadOrbForTicker = React.useCallback(async (ticker: string) => {
+    if (!ticker) return;
+    try {
+      const res = await fetch(`/api/trading/orb/${encodeURIComponent(ticker)}?or_minutes=30`);
+      if (res.ok) {
+        const j = await res.json();
+        setTickerOrbData(j);
+      } else {
+        setTickerOrbData(null);
+      }
+    } catch {
+      setTickerOrbData(null);
+    }
+  }, []);
+
+  const loadSizingForTicker = React.useCallback(async (ticker: string, cap: number, rPct: number) => {
+    if (!ticker) return;
+    setSizingLoading(true);
+    try {
+      const res = await fetch(`/api/trading/sizing-calculator/${encodeURIComponent(ticker)}?capital=${cap}&risk_pct=${rPct}`);
+      if (res.ok) {
+        const j = await res.json();
+        setSizingData(j);
+      } else {
+        setSizingData(null);
+      }
+    } catch {
+      setSizingData(null);
+    } finally {
+      setSizingLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (selectedRadarTicker) {
       loadRadar(selectedRadarTicker);
+      loadOrbForTicker(selectedRadarTicker);
+      loadSizingForTicker(selectedRadarTicker, sizingCapital, sizingRiskPct);
     }
-  }, [selectedRadarTicker, loadRadar]);
+  }, [selectedRadarTicker, loadRadar, loadOrbForTicker, loadSizingForTicker, sizingCapital, sizingRiskPct]);
 
   const runCombinedScan = async () => {
     setScannerLoading(true);
@@ -199,14 +248,46 @@ export default function SignalWatchlistPanel({
     }
   };
 
-  const handleOpenPaperTrade = async (ticker: string) => {
+  const runOrbScan = async () => {
+    setOrbScannerLoading(true);
+    setShowOrbResults(true);
+    try {
+      const res = await fetch("/api/trading/orb-scan?or_minutes=30");
+      if (res.ok) {
+        const json = await res.json();
+        setOrbScannerData(json);
+      }
+    } catch (err) {
+      console.error("ORB scan error:", err);
+    } finally {
+      setOrbScannerLoading(false);
+    }
+  };
+
+  const runMatrixFetch = async () => {
+    setMatrixLoading(true);
+    setShowMatrix(true);
+    try {
+      const res = await fetch("/api/trading/correlation-matrix");
+      if (res.ok) {
+        const json = await res.json();
+        setMatrixData(json);
+      }
+    } catch (err) {
+      console.error("Matrix error:", err);
+    } finally {
+      setMatrixLoading(false);
+    }
+  };
+
+  const handleOpenPaperTrade = async (ticker: string, quantity?: number) => {
     setActionLoading(true);
     setTradeActionMessage(null);
     try {
       const res = await fetch("/api/trading/open-edge-paper-trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify({ ticker, quantity: quantity && quantity > 0 ? quantity : undefined }),
       });
       const resData = await res.json();
       if (res.ok) {
@@ -584,6 +665,20 @@ export default function SignalWatchlistPanel({
               📖 Journal (MD)
             </a>
             <button
+              onClick={runOrbScan}
+              disabled={orbScannerLoading}
+              className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-amber-900 shadow-sm transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              {orbScannerLoading ? "Scanne ORB..." : "⚡ ORB Scanner (15m/30m)"}
+            </button>
+            <button
+              onClick={runMatrixFetch}
+              disabled={matrixLoading}
+              className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-emerald-900 shadow-sm transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              {matrixLoading ? "Berechne..." : "🌐 Korrelations-Matrix"}
+            </button>
+            <button
               onClick={runCombinedScan}
               disabled={scannerLoading}
               className="rounded-xl border border-black/8 bg-white px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
@@ -696,6 +791,199 @@ export default function SignalWatchlistPanel({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ORB Scanner Results Drawer */}
+        {showOrbResults && orbScannerData && (
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-50/50 p-4 space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⚡</span>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-amber-900">
+                  Intraday ORB Scanner ({orbScannerData.or_minutes}m Eröffnungs-Range)
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOrbResults(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800"
+              >
+                Schließen ✕
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-black/5 bg-white p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Gescannte Titel</div>
+                <div className="text-base font-black text-slate-900">{orbScannerData.scanned_count}</div>
+              </div>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-emerald-800">Bullische Ausbrüche (&gt; High)</div>
+                <div className="text-base font-black text-emerald-950">{orbScannerData.breakouts_count}</div>
+              </div>
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-red-800">Bärische Breakdowns (&lt; Low)</div>
+                <div className="text-base font-black text-red-950">{orbScannerData.breakdowns_count}</div>
+              </div>
+            </div>
+
+            {orbScannerData.breakouts?.length ? (
+              <div className="rounded-xl border border-emerald-500/20 bg-white p-3 space-y-2">
+                <div className="text-xs font-black text-emerald-900">
+                  🚀 Aktive Bullische Ausbrüche (Momentum Long):
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {orbScannerData.breakouts.map((b: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between rounded-xl border border-black/5 bg-slate-50 p-2.5 text-xs">
+                      <div>
+                        <div className="flex items-center gap-1.5 font-black text-slate-900">
+                          <span>{b.ticker}</span>
+                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-900">
+                            +{b.distance_pct}%
+                          </span>
+                          {b.volume_confirmed && (
+                            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-900">
+                              🔥 RV: {b.relative_volume}x
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-slate-500">
+                          Kurs: {b.currency_symbol}{b.spot_price?.toFixed(2)} | High: {b.currency_symbol}{b.orb_high?.toFixed(2)} | Stop: {b.currency_symbol}{b.invalidation_stop?.toFixed(2)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedRadarTicker(b.ticker);
+                          handleOpenPaperTrade(b.ticker);
+                        }}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        Buchen
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {orbScannerData.breakdowns?.length ? (
+              <div className="rounded-xl border border-red-500/20 bg-white p-3 space-y-2">
+                <div className="text-xs font-black text-red-900">
+                  ⚡ Aktive Bärische Breakdowns (Short / Risk-Off):
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {orbScannerData.breakdowns.map((b: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between rounded-xl border border-black/5 bg-slate-50 p-2.5 text-xs">
+                      <div>
+                        <div className="flex items-center gap-1.5 font-black text-slate-900">
+                          <span>{b.ticker}</span>
+                          <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[9px] font-bold text-red-900">
+                            -{b.distance_pct}%
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-slate-500">
+                          Kurs: {b.currency_symbol}{b.spot_price?.toFixed(2)} | Low: {b.currency_symbol}{b.orb_low?.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Correlation Matrix Heatmap Drawer */}
+        {showMatrix && matrixData && (
+          <div className="rounded-2xl border border-black/8 bg-white p-4 space-y-4 animate-in fade-in overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-700">
+                  🌐 Watchlist &amp; Portfolio Korrelations-Matrix (90 Tage Pearson r)
+                </div>
+                <div className="text-xs text-slate-500">
+                  Identifiziert Cluster-Risiken &amp; zeitgleiche Drawdown-Gefahr zwischen deinen offenen Positionen.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMatrix(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800"
+              >
+                Schließen ✕
+              </button>
+            </div>
+
+            {matrixData.high_correlation_pairs?.length ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-1.5">
+                <div className="text-xs font-black text-amber-900">
+                  ⚠️ Stark korrelierende Cluster-Paare (r ≥ 0.70):
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {matrixData.high_correlation_pairs.slice(0, 6).map((p: any, idx: number) => (
+                    <span key={idx} className="rounded-lg bg-white px-2.5 py-1 border border-black/5 font-extrabold text-slate-800">
+                      {p.ticker_a} ↔ {p.ticker_b}: <b className="text-amber-900 font-black">r = {p.correlation}</b> ({p.cluster_level})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Matrix Table */}
+            <div className="overflow-x-auto max-h-96 border border-black/5 rounded-xl">
+              <table className="w-full text-center text-[10px] border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-black/5">
+                    <th className="p-2 font-extrabold text-slate-600 sticky left-0 bg-slate-100 z-10">Symbol</th>
+                    {matrixData.tickers?.map((sym: string) => (
+                      <th key={`th-${sym}`} className="p-2 font-extrabold text-slate-700 min-w-14">
+                        {sym.replace(".DE", "")}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrixData.tickers?.map((rowSym: string) => (
+                    <tr key={`tr-${rowSym}`} className="border-b border-black/5">
+                      <td className="p-2 font-black text-slate-900 sticky left-0 bg-white text-left">
+                        {rowSym}
+                      </td>
+                      {matrixData.tickers?.map((colSym: string) => {
+                        const val = matrixData.matrix?.[rowSym]?.[colSym];
+                        if (val === undefined) return <td key={`${rowSym}-${colSym}`} className="p-1 text-slate-400">-</td>;
+                        const isDiag = rowSym === colSym;
+                        let cellClass = "bg-slate-50 text-slate-600";
+                        if (!isDiag) {
+                          if (val >= 0.85) cellClass = "bg-red-500 text-white font-black";
+                          else if (val >= 0.70) cellClass = "bg-amber-400 text-slate-900 font-bold";
+                          else if (val >= 0.30) cellClass = "bg-amber-50 text-slate-700";
+                          else if (val >= 0.0) cellClass = "bg-emerald-50 text-emerald-800";
+                          else cellClass = "bg-emerald-500 text-white font-black";
+                        }
+                        return (
+                          <td
+                            key={`${rowSym}-${colSym}`}
+                            className={`p-1 font-bold ${cellClass}`}
+                            title={`${rowSym} ↔ ${colSym}: r = ${val}`}
+                          >
+                            {isDiag ? "1.00" : val?.toFixed(2)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Matrix Legend */}
+            <div className="flex flex-wrap items-center gap-3 pt-1 text-[10px] font-bold text-slate-500">
+              <span>Legende:</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-emerald-500 inline-block" /> Diversifikation (&lt; 0.0)</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-emerald-100 inline-block" /> Schwach (0.0 - 0.3)</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-amber-50 inline-block" /> Moderat (0.3 - 0.7)</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-amber-400 inline-block" /> Hohes Cluster (0.7 - 0.85)</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-red-500 inline-block" /> Kritisches Cluster (≥ 0.85)</span>
             </div>
           </div>
         )}
@@ -1051,6 +1339,207 @@ export default function SignalWatchlistPanel({
                 ) : null}
               </div>
             ) : null}
+
+            {/* Intraday Opening Range Breakout (ORB) Card */}
+            {tickerOrbData ? (
+              <div className="rounded-2xl border border-black/8 bg-white p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">⚡</span>
+                    <div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                        Intraday Opening Range Breakout (30m Session Range)
+                      </div>
+                      <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                        <span>{tickerOrbData.ticker}</span>
+                        <span className={`rounded-md px-2 py-0.5 text-xs font-black ${
+                          tickerOrbData.state === "BULLISH_BREAKOUT"
+                            ? "bg-emerald-500 text-white animate-pulse"
+                            : tickerOrbData.state === "BEARISH_BREAKDOWN"
+                            ? "bg-red-500 text-white animate-pulse"
+                            : "bg-slate-100 text-slate-700"
+                        }`}>
+                          {tickerOrbData.badge}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-xl border border-black/5 bg-slate-50 px-3 py-1.5 text-center">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                        Relatives Volumen
+                      </div>
+                      <div className="text-xs font-black text-slate-900">
+                        {tickerOrbData.relative_volume}x {tickerOrbData.volume_confirmed ? "🔥" : "⚪"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-4 text-center">
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-2">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">ORB High</div>
+                    <div className="text-sm font-black text-slate-900">{tickerOrbData.currency_symbol}{tickerOrbData.orb_high?.toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-2">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">ORB Mid (Stop)</div>
+                    <div className="text-sm font-black text-slate-900">{tickerOrbData.currency_symbol}{tickerOrbData.orb_mid?.toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-2">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">ORB Low</div>
+                    <div className="text-sm font-black text-slate-900">{tickerOrbData.currency_symbol}{tickerOrbData.orb_low?.toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-2">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Range-Spanne</div>
+                    <div className="text-sm font-black text-slate-900">
+                      {tickerOrbData.currency_symbol}{tickerOrbData.orb_range?.toFixed(2)} ({tickerOrbData.orb_range_pct}%)
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Interactive Position Sizing & Kelly Calculator Card */}
+            <div className="rounded-2xl border border-black/8 bg-white p-5 space-y-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🧮</span>
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                      Institutionelle Risikosteuerung &amp; Kelly-Kriterium
+                    </div>
+                    <div className="text-base font-black text-slate-900">
+                      Interaktiver Position Sizing Rechner ({selectedRadarTicker})
+                    </div>
+                  </div>
+                </div>
+
+                {sizingData?.kelly_analysis ? (
+                  <span className={`rounded-xl px-3 py-1 text-xs font-black border ${
+                    sizingData.kelly_analysis.verdict?.includes("ÜBER")
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-900"
+                      : "border-emerald-500/30 bg-emerald-500/10 text-emerald-900"
+                  }`}>
+                    Half-Kelly: {sizingData.kelly_analysis.half_kelly_pct}% ({sizingData.kelly_analysis.verdict})
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Sliders Grid */}
+              <div className="grid gap-4 md:grid-cols-2 bg-slate-50 p-4 rounded-xl border border-black/5">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
+                    <span>Depotkapital:</span>
+                    <span className="font-black text-slate-900">{sizingCapital.toLocaleString("de-DE")} €</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10000"
+                    max="250000"
+                    step="5000"
+                    value={sizingCapital}
+                    onChange={(e) => setSizingCapital(Number(e.target.value))}
+                    className="w-full accent-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                    <span>10.000 €</span>
+                    <span>100.000 €</span>
+                    <span>250.000 €</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
+                    <span>Risiko pro Trade:</span>
+                    <span className="font-black text-[var(--accent-strong)]">{sizingRiskPct.toFixed(2)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="2.50"
+                    step="0.05"
+                    value={sizingRiskPct}
+                    onChange={(e) => setSizingRiskPct(Number(e.target.value))}
+                    className="w-full accent-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                    <span>0.25% (Sehr konservativ)</span>
+                    <span>1.0% (Standard)</span>
+                    <span>2.5% (Max Limit)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sizing Results */}
+              {sizingData && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-3 text-center">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Empfohlene Stückzahl
+                    </div>
+                    <div className="text-xl font-black text-slate-900">
+                      {sizingData.recommended_shares} Stk.
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Volumen: {sizingData.currency_symbol}{sizingData.position_value?.toLocaleString("de-DE")} ({sizingData.capital_allocation_pct}% Depot)
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-center">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+                      Maximales Risiko (Stop-Out)
+                    </div>
+                    <div className="text-xl font-black text-red-950">
+                      -{sizingData.currency_symbol}{sizingData.max_risk_amount?.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-red-700 mt-0.5">
+                      -{sizingData.actual_risk_pct}% des Depotkapitals
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-center">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-emerald-800">
+                      Ziel 1 Netto-Ertrag (2.0R)
+                    </div>
+                    <div className="text-xl font-black text-emerald-950">
+                      +{sizingData.currency_symbol}{sizingData.target_1_profit_net?.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Brutto: +{sizingData.currency_symbol}{sizingData.target_1_profit_gross?.toFixed(2)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-3 text-center">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Reibung (Spread &amp; Slippage)
+                    </div>
+                    <div className="text-xl font-black text-slate-700">
+                      -{sizingData.currency_symbol}{sizingData.friction_cost_est?.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Spread {sizingData.friction_breakdown?.spread_pct}% + Slip {sizingData.friction_breakdown?.slippage_pct}%
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Direct Booking with Sizing */}
+              {sizingData && (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-black/5">
+                  <div className="text-xs text-slate-500">
+                    💡 <i>Berechnet mit Stop @ {sizingData.currency_symbol}{sizingData.stop_price?.toFixed(2)} und Ziel 1 @ {sizingData.currency_symbol}{sizingData.target_1?.toFixed(2)}.</i>
+                  </div>
+                  <button
+                    onClick={() => handleOpenPaperTrade(selectedRadarTicker, sizingData.recommended_shares)}
+                    disabled={actionLoading}
+                    className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                  >
+                    📝 Mit dieser Stückzahl buchen ({sizingData.recommended_shares} Stk.)
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Action Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

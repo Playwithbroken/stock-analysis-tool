@@ -51,6 +51,8 @@ class TelegramInteractiveService:
         portfolio_manager: Optional[Any] = None,
         paper_trading_service: Optional[Any] = None,
         morning_brief_service: Optional[Any] = None,
+        opening_range_breakout_service: Optional[Any] = None,
+        position_sizing_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -72,6 +74,8 @@ class TelegramInteractiveService:
         self.portfolio_manager = portfolio_manager
         self.paper_service = paper_trading_service
         self.morning_brief_service = morning_brief_service
+        self.orb_service = opening_range_breakout_service
+        self.sizing_service = position_sizing_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -265,6 +269,17 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, f"Pre-Flight Risikocheck für {ticker}...")
             res = self._cmd_preflight([ticker])
             self.send_message(chat_id, res, reply_markup=self._build_inline_keyboard(ticker))
+
+        elif cb.startswith("orb:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"ORB Breakout für {ticker}...")
+            res = self._cmd_orb([ticker])
+            self.send_message(chat_id, res, reply_markup=self._build_inline_keyboard(ticker))
+
+        elif cb == "orb_scan":
+            self.answer_callback_query(callback_query_id, "Scanne Watchlist nach ORB Breakouts...")
+            res = self._cmd_orb_scan()
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -339,13 +354,15 @@ class TelegramInteractiveService:
             elif cmd in ("/movers", "/top", "/ranking"):
                 return self._cmd_movers()
             elif cmd in ("/recap", "/eod"):
-                return self._cmd_recap()
+                return self._cmd_recap(args)
             elif cmd in ("/check", "/info"):
                 return self._cmd_check(args)
             elif cmd in ("/stop", "/stops"):
                 return self._cmd_stop(args)
             elif cmd in ("/preflight", "/checkrisk", "/shield"):
                 return self._cmd_preflight(args)
+            elif cmd in ("/orb", "/breakout"):
+                return self._cmd_orb(args) if args else self._cmd_orb_scan()
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -366,6 +383,8 @@ class TelegramInteractiveService:
             "• <code>/check TICKER</code> – 360° Institutional Check &amp; Multi-Faktor Radar (z.B. <code>/check SAP.DE</code>)\n"
             "• <code>/stop TICKER</code> – Struktur-Stop Rechner (VAL, Put Wall, AVWAP, Invalidation)\n"
             "• <code>/preflight TICKER</code> – Pre-Flight Risikocheck (Portfolio Heat &amp; Cluster-Korrelation)\n"
+            "• <code>/orb</code> – Intraday ORB Scanner (15m/30m Range-Ausbrüche auf der Watchlist)\n"
+            "• <code>/orb TICKER</code> – ORB High/Low, Mid-Stop &amp; Volumen-Bestätigung (z.B. <code>/orb RHM.DE</code>)\n"
             "• <code>/sizing TICKER</code> – Positionsgrößen- &amp; Risikorechner (1.0% bis 2.0% Risk)\n"
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/close TICKER</code> – Offene Position direkt schließen &amp; PnL sichern (z.B. <code>/close NVDA</code>)\n"
@@ -376,6 +395,7 @@ class TelegramInteractiveService:
             "📋 <b>Watchlist &amp; Markt-Updates:</b>\n"
             "• <code>/movers</code> – Watchlist-Tagesgewinner &amp; Verlierer im Ranking\n"
             "• <code>/recap</code> – Schneller Session-Abschlussbericht &amp; Performance-Überblick\n"
+            "• <code>/recap [xetra|us]</code> – Gezielter XETRA- (17:35) oder Wall Street-Recap (22:05)\n"
             "• <code>/brief</code> – Sofortiges institutionelles Markt-Briefing abrufen\n"
             "• <code>/brief [europe|usa|close]</code> – Gezieltes Session-Briefing\n"
             "• <code>/watchlist</code> – Alle 18 überwachten EU- und US-Aktien anzeigen\n"
@@ -426,10 +446,11 @@ class TelegramInteractiveService:
                     {"text": "🛡️ Stops", "callback_data": f"stop:{ticker}"},
                 ],
                 [
+                    {"text": "⚡ ORB Breakout", "callback_data": f"orb:{ticker}"},
                     {"text": "🛡️ Pre-Flight", "callback_data": f"preflight:{ticker}"},
-                    {"text": "⚖️ Sizing", "callback_data": f"sizing:{ticker}"},
                 ],
                 [
+                    {"text": "⚖️ Sizing & Kelly", "callback_data": f"sizing:{ticker}"},
                     {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
                 ],
             ]
@@ -649,14 +670,27 @@ class TelegramInteractiveService:
                 except Exception as p_err:
                     logger.error("PortfolioManager close failed: %s", p_err)
 
-            pnl_per_share = exit_p - entry_p
-            pnl_pct = (pnl_per_share / entry_p * 100) if entry_p > 0 else 0.0
-            pnl_total = pnl_per_share * qty
-            sign = "+" if pnl_total >= 0 else ""
-            emoji = "🟢" if pnl_total >= 0 else "🔴"
+            is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+            c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+            spread_pct = 0.08 if is_eu else 0.04
+            slippage_pct = 0.03 if is_eu else 0.02
+            commission_total = 2.0 if is_eu else 0.0
+
+            gross_pnl = (exit_p - entry_p) * qty
+            friction_entry = (entry_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0)
+            friction_exit = (exit_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0)
+            total_friction = friction_entry + friction_exit + commission_total
+            net_pnl = gross_pnl - total_friction
+            net_pct = (net_pnl / (entry_p * qty) * 100.0) if (entry_p * qty) > 0 else 0.0
+
+            sign_gross = "+" if gross_pnl >= 0 else ""
+            sign_net = "+" if net_pnl >= 0 else ""
+            emoji_net = "🟢" if net_pnl >= 0 else "🔴"
             closed_reports.append(
-                f"• <b>Ausstieg:</b> ${exit_p:.2f} (Einstieg: ${entry_p:.2f})\n"
-                f"• <b>Stück:</b> {int(qty)} | <b>Ergebnis:</b> <b>{sign}${pnl_total:,.2f} ({sign}{pnl_pct:.2f}%)</b> {emoji}"
+                f"• <b>Ausstieg:</b> {c_sym}{exit_p:.2f} (Einstieg: {c_sym}{entry_p:.2f})\n"
+                f"• <b>Menge:</b> {int(qty)} Stück | <b>Brutto:</b> {sign_gross}{c_sym}{gross_pnl:,.2f}\n"
+                f"• <b>Reibung (Spread &amp; Slippage):</b> -{c_sym}{total_friction:,.2f}\n"
+                f"• <b>Netto-Ergebnis:</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}"
             )
 
         detail_text = "\n\n".join(closed_reports) if closed_reports else f"• Lifecycle-Tracking für <b>{ticker}</b> beendet."
@@ -1491,6 +1525,28 @@ class TelegramInteractiveService:
         if risk_per_share <= 0:
             risk_per_share = entry * 0.03
 
+        if self.sizing_service:
+            active = self.lifecycle_service.get_active_trades() if self.lifecycle_service else []
+            curr_heat = 0.0
+            if self.heat_service:
+                h_rep = self.heat_service.evaluate_portfolio_heat(active, portfolio_capital=capital)
+                curr_heat = float(h_rep.get("portfolio_heat_pct") or 0.0)
+
+            rr = float(setup.get("risk_reward_ratio") or 2.0)
+            sizing_calc = self.sizing_service.calculate_sizing(
+                ticker=ticker,
+                entry_price=entry,
+                stop_price=stop,
+                target_1=t1,
+                target_2=t2,
+                capital=capital,
+                risk_pct=0.75,
+                win_rate=0.60,
+                reward_risk_ratio=rr,
+                current_portfolio_heat=curr_heat,
+            )
+            return self.sizing_service.format_telegram_sizing_card(sizing_calc)
+
         is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
         c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
 
@@ -1598,8 +1654,22 @@ class TelegramInteractiveService:
         )
         return "\n".join(lines)
 
-    def _cmd_recap(self) -> str:
+    def _cmd_recap(self, args: Optional[List[str]] = None) -> str:
         """Generates an end-of-day market recap and performance summary."""
+        target_session = "all"
+        if args:
+            sub = " ".join(args).lower().strip()
+            if any(k in sub for k in ["xetra", "europe", "dax", "eu", "17:35"]):
+                target_session = "xetra"
+            elif any(k in sub for k in ["us", "usa", "wallstreet", "ny", "22:05"]):
+                target_session = "us"
+
+        title = "🌆 <b>MARKT- &amp; SESSION-RECAP</b>"
+        if target_session == "xetra":
+            title = "🇪🇺 <b>XETRA SESSION CLOSE RECAP (17:35 MEZ)</b>"
+        elif target_session == "us":
+            title = "🇺🇸 <b>WALL STREET SESSION CLOSE RECAP (22:05 MEZ)</b>"
+
         macro_text = ""
         if self.regime_service:
             try:
@@ -1629,17 +1699,36 @@ class TelegramInteractiveService:
                 pass
 
         active_trades_count = 0
+        active_lines = []
         if self.lifecycle_service:
             try:
-                active_trades_count = len([
+                active = [
                     t for t in self.lifecycle_service.get_active_trades()
                     if t.get("status") in ("OPEN", "TARGET_1_HIT")
-                ])
+                ]
+                active_trades_count = len(active)
+                for tr in active[:4]:
+                    tk = tr.get("ticker", "")
+                    entry = float(tr.get("entry_price") or 0.0)
+                    last = float(tr.get("last_price") or entry)
+                    pnl_pct = ((last - entry) / entry * 100) if entry > 0 else 0.0
+                    sgn = "+" if pnl_pct >= 0 else ""
+                    active_lines.append(f"  • <b>{tk}</b>: {sgn}{pnl_pct:.1f}% ({tr.get('status')})")
             except Exception:
                 pass
 
+        lines = [
+            title,
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"{macro_text.strip()}",
+            f"{depot_text.strip()}",
+            f"• <b>Offene überwachte Setups:</b> <b>{active_trades_count} aktiv</b>",
+        ]
+        if active_lines:
+            lines.extend(active_lines)
+
         return (
-            f"🌆 <b>MARKT- &amp; SESSION-RECAP</b>\n"
+            f"{title}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{macro_text}"
             f"{depot_text}"
@@ -1873,6 +1962,42 @@ class TelegramInteractiveService:
 
         return "\n".join(lines)
 
+    def _cmd_orb(self, args: List[str]) -> str:
+        """Intraday Opening Range Breakout (ORB) analysis for a ticker."""
+        if not args:
+            return (
+                "⚡ <b>Opening Range Breakout (ORB)</b>\n"
+                "Erkennt 15m &amp; 30m Eröffnungs-Range Ausbrüche mit Volumen-Bestätigung.\n\n"
+                "<b>Syntax:</b> <code>/orb NVDA</code> oder <code>/orb SAP.DE</code>\n"
+                "Für alle Watchlist-Titel: <code>/orb</code>"
+            )
+        ticker = args[0].upper().strip()
+        or_min = 30
+        if len(args) > 1:
+            try:
+                or_min = int(args[1])
+            except ValueError:
+                or_min = 30
+
+        if not self.orb_service:
+            from src.opening_range_breakout_service import OpeningRangeBreakoutService
+            self.orb_service = OpeningRangeBreakoutService()
+
+        data = self.orb_service.analyze_orb(ticker, or_minutes=or_min)
+        if not data:
+            return f"❌ Konnte keine ORB-Daten für <b>{ticker}</b> berechnen (keine Intraday-Kurse)."
+        return self.orb_service.format_telegram_orb_card(data)
+
+    def _cmd_orb_scan(self) -> str:
+        """Scans the entire watchlist for active ORB breakouts and breakdowns."""
+        if not self.orb_service:
+            from src.opening_range_breakout_service import OpeningRangeBreakoutService
+            self.orb_service = OpeningRangeBreakoutService()
+
+        tickers = self._get_watchlist_tickers()
+        scan = self.orb_service.scan_watchlist_orb(tickers, or_minutes=30)
+        return self.orb_service.format_telegram_orb_scan_summary(scan)
+
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""
         default_list = [
@@ -1980,7 +2105,7 @@ class TelegramInteractiveService:
                         response_text = self.handle_command(chat_id, text)
                         if response_text:
                             reply_markup = None
-                            if text.startswith("/edge") or text.startswith("/check") or text.startswith("/stop") or text.startswith("/preflight"):
+                            if text.startswith("/edge") or text.startswith("/check") or text.startswith("/stop") or text.startswith("/preflight") or text.startswith("/orb"):
                                 parts = text.split()
                                 tk = parts[1].upper() if len(parts) > 1 else ""
                                 if tk:

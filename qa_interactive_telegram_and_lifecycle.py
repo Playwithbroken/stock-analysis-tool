@@ -468,6 +468,53 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("SAP kündigt neues KI-Produkt an", res)
         self.assertIn("Handelsblatt", res)
 
+    def test_cmd_journal(self):
+        self.mock_pm.list_paper_trades.return_value = [
+            {
+                "ticker": "SAP.DE",
+                "entry_price": 200.0,
+                "closed_price": 220.0,
+                "quantity": 10,
+                "status": "closed",
+                "closed_at": "2026-10-01T15:30:00",
+                "exit_reason": "Target 1 Hit",
+            },
+            {
+                "ticker": "NVDA",
+                "entry_price": 120.0,
+                "closed_price": 115.0,
+                "quantity": 20,
+                "status": "closed",
+                "closed_at": "2026-10-01T16:00:00",
+                "exit_reason": "Stop Loss Hit",
+            },
+        ]
+        res = self.service.handle_command("999888", "/journal")
+        self.assertIn("TRADING JOURNAL", res)
+        self.assertIn("SAP.DE", res)
+        self.assertIn("+€200.00", res)
+        self.assertIn("NVDA", res)
+        self.assertIn("-$100.00", res)
+        self.assertIn("Win-Rate: <b>50%</b>", res)
+
+    def test_cmd_sizing(self):
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "entry_price": 200.0,
+            "invalidation_price": 190.0,
+            "target_1": 220.0,
+            "target_2": 235.0,
+            "risk_per_share": 10.0,
+        }
+        res = self.service.handle_command("999888", "/sizing SAP.DE 50000")
+        self.assertIn("POSITION SIZING RECHNER: SAP.DE", res)
+        self.assertIn("50,000 €", res)
+        self.assertIn("€200.00", res)
+        self.assertIn("€190.00", res)
+        self.assertIn("Konservativ (1.0% Risiko = -500 €)", res)
+        self.assertIn("50 Aktien", res)
+        self.assertIn("Standard (1.5% Risiko = -750 €)", res)
+        self.assertIn("75 Aktien", res)
+
 
 if __name__ == "__main__":
     unittest.main()

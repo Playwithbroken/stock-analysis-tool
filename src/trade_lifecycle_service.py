@@ -131,6 +131,9 @@ class TradeLifecycleService:
             trade["updated_at"] = datetime.now(timezone.utc).isoformat()
             events_fired = trade.setdefault("events_fired", [])
 
+            is_eu = any(symbol.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+            c_sym = "€" if is_eu else ("£" if symbol.endswith(".L") else "$")
+
             # 1. Target 1 Reached
             if status == "OPEN" and spot >= target_1 and "TARGET_1_HIT" not in events_fired:
                 trade["status"] = "TARGET_1_HIT"
@@ -138,19 +141,34 @@ class TradeLifecycleService:
                 trade["trailing_stop"] = entry
                 events_fired.append("TARGET_1_HIT")
 
-                action_desc = f"{symbol} hit Target 1 (${spot:.2f} >= ${target_1:.2f})"
+                action_desc = f"{symbol} hit Target 1 ({c_sym}{spot:.2f} >= {c_sym}{target_1:.2f})"
                 actions.append({"ticker": symbol, "action": "TARGET_1_HIT", "price": spot})
+
+                # Sync journal in paper trading if open
+                if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+                    try:
+                        open_pts = self.portfolio_manager.list_paper_trades(limit=100)
+                        for pt in open_pts:
+                            if str(pt.get("ticker") or "").upper() == symbol and str(pt.get("status") or "").lower() == "open":
+                                tid = pt.get("id")
+                                if tid and hasattr(self.portfolio_manager, "update_paper_trade_journal"):
+                                    self.portfolio_manager.update_paper_trade_journal(
+                                        trade_id=tid,
+                                        notes=f"Target 1 ({c_sym}{target_1:.2f}) erreicht! Stop auf Breakeven ({c_sym}{entry:.2f}) nachgezogen.",
+                                    )
+                    except Exception as e:
+                        logger.debug("Failed syncing paper trade on Target 1: %s", e)
 
                 if alert_service:
                     tg_msg = (
-                        f"🎯 <b>TARGET 1 ERREICHT: {symbol} (${spot:.2f})</b>\n"
+                        f"🎯 <b>TARGET 1 ERREICHT: {symbol} ({c_sym}{spot:.2f})</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Dein 2.0R Kursziel von <b>${target_1:.2f}</b> wurde erreicht!\n\n"
+                        f"Dein 2.0R Kursziel von <b>{c_sym}{target_1:.2f}</b> wurde erreicht!\n\n"
                         f"⚡ <b>Empfohlene Aktion jetzt:</b>\n"
                         f"1. <b>50% der Position schließen</b> (Gewinn sichern!)\n"
-                        f"2. <b>Stop-Loss auf Breakeven (${entry:.2f}) nachziehen</b>\n\n"
+                        f"2. <b>Stop-Loss auf Breakeven ({c_sym}{entry:.2f}) nachziehen</b>\n\n"
                         f"🛡️ <i>Der Trade ist ab sofort risikofrei abgesichert. Die restlichen 50% "
-                        f"laufen weiter Richtung Ziel 2 (${target_2:.2f}).</i>"
+                        f"laufen weiter Richtung Ziel 2 ({c_sym}{target_2:.2f}).</i>"
                     )
                     self._dispatch_tg(alert_service, symbol, f"target_1:{symbol}", tg_msg)
 
@@ -163,9 +181,9 @@ class TradeLifecycleService:
 
                 if alert_service:
                     tg_msg = (
-                        f"🚀 <b>TARGET 2 ERREICHT: {symbol} (${spot:.2f})</b>\n"
+                        f"🚀 <b>TARGET 2 ERREICHT: {symbol} ({c_sym}{spot:.2f})</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Maximales Kursziel (3.5R+ / <b>${target_2:.2f}</b>) erreicht!\n\n"
+                        f"Maximales Kursziel (3.5R+ / <b>{c_sym}{target_2:.2f}</b>) erreicht!\n\n"
                         f"⚡ <b>Empfohlene Aktion:</b>\n"
                         f"Restliche Position vollständig schließen oder Hard Trailing Stop "
                         f"unter das 9 EMA Tief legen."
@@ -182,16 +200,16 @@ class TradeLifecycleService:
                 if alert_service:
                     is_be = (status == "TARGET_1_HIT")
                     reason = (
-                        f"🛡️ <b>Breakeven-Ausstieg</b> für die Restposition (${entry:.2f}). "
+                        f"🛡️ <b>Breakeven-Ausstieg</b> für die Restposition ({c_sym}{entry:.2f}). "
                         f"50% Teilgewinn wurde zuvor bei Ziel 1 gesichert!"
                         if is_be else
-                        f"⚠️ <b>Invalidation Stop ausgelöst</b> (${stop:.2f}). "
+                        f"⚠️ <b>Invalidation Stop ausgelöst</b> ({c_sym}{stop:.2f}). "
                         f"Trade diszipliniert beendet, Risiko strikt begrenzt."
                     )
                     tg_msg = (
-                        f"🛑 <b>STOP-LOSS ERREICHT: {symbol} (${spot:.2f})</b>\n"
+                        f"🛑 <b>STOP-LOSS ERREICHT: {symbol} ({c_sym}{spot:.2f})</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Der Kurs hat die Stop-Marke von <b>${stop:.2f}</b> erreicht.\n\n"
+                        f"Der Kurs hat die Stop-Marke von <b>{c_sym}{stop:.2f}</b> erreicht.\n\n"
                         f"{reason}\n\n"
                         f"💡 <i>Position glattstellen. Kapital für das nächste Setup freigeben.</i>"
                     )
@@ -232,6 +250,9 @@ class TradeLifecycleService:
             stop = t["trailing_stop"]
             status = t["status"]
 
+            is_eu_sym = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+            c_sym = "€" if is_eu_sym else ("£" if sym.endswith(".L") else "$")
+
             # Calculate current R multiple
             risk = t["risk_per_share"]
             r_mult = round((last - entry) / risk, 1) if risk > 0 else 0.0
@@ -242,9 +263,9 @@ class TradeLifecycleService:
             lines.append(
                 f"\n• <b>{sym}</b> ({badge})\n"
                 f"  Status: <b>{status_desc}</b> ({r_str})\n"
-                f"  Einstieg: ${entry:.2f} | Aktuell: <b>${last:.2f}</b>\n"
-                f"  Ziel 1: ${t1:.2f} | Ziel 2: ${t2:.2f}\n"
-                f"  Trailing Stop: <b>${stop:.2f}</b>"
+                f"  Einstieg: {c_sym}{entry:.2f} | Aktuell: <b>{c_sym}{last:.2f}</b>\n"
+                f"  Ziel 1: {c_sym}{t1:.2f} | Ziel 2: {c_sym}{t2:.2f}\n"
+                f"  Trailing Stop: <b>{c_sym}{stop:.2f}</b>"
             )
 
         return "\n".join(lines)

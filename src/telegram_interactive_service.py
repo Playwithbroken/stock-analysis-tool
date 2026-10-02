@@ -236,6 +236,17 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "Portfolio Heat wird berechnet...")
             res = self._cmd_heat()
             self.send_message(chat_id, res)
+
+        elif cb == "journal":
+            self.answer_callback_query(callback_query_id, "Lade Trading-Journal...")
+            res = self._cmd_journal()
+            self.send_message(chat_id, res)
+
+        elif cb.startswith("sizing:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Berechne Position Sizing für {ticker}...")
+            res = self._cmd_sizing([ticker])
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -303,6 +314,10 @@ class TelegramInteractiveService:
                 return self._cmd_calendar()
             elif cmd == "/news":
                 return self._cmd_news(args)
+            elif cmd in ("/journal", "/history"):
+                return self._cmd_journal()
+            elif cmd in ("/sizing", "/size", "/risk"):
+                return self._cmd_sizing(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -317,33 +332,35 @@ class TelegramInteractiveService:
             "🤖 <b>Broker Freund – Interaktiver Trading Edge Bot</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "Dein institutioneller Trading-Begleiter direkt am Smartphone.\n\n"
-            "⚡ <b>Trading & Order Management:</b>\n"
-            "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop & Zielen\n"
+            "⚡ <b>Trading &amp; Order Management:</b>\n"
+            "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop &amp; Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/sizing TICKER</code> – Positionsgrößen- &amp; Risikorechner (1.0% bis 2.0% Risk)\n"
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
-            "• <code>/close TICKER</code> – Offene Position direkt schließen & PnL sichern (z.B. <code>/close NVDA</code>)\n"
+            "• <code>/close TICKER</code> – Offene Position direkt schließen &amp; PnL sichern (z.B. <code>/close NVDA</code>)\n"
             "• <code>/be TICKER</code> – Stop-Loss auf Breakeven (Einstand) nachziehen\n"
-            "• <code>/track</code> – Aktive Setups & Trailing-Stops im Blick\n"
-            "• <code>/depot</code> – Aktueller Depotstand, Cash & Performance\n\n"
-            "📋 <b>Watchlist & Markt-Updates:</b>\n"
+            "• <code>/track</code> – Aktive Setups &amp; Trailing-Stops im Blick\n"
+            "• <code>/depot</code> – Aktueller Depotstand, Cash &amp; Performance\n"
+            "• <code>/journal</code> – Letzte abgeschlossene Trades &amp; Performance-Historie\n\n"
+            "📋 <b>Watchlist &amp; Markt-Updates:</b>\n"
             "• <code>/brief</code> – Sofortiges institutionelles Markt-Briefing abrufen\n"
             "• <code>/brief [europe|usa|close]</code> – Gezieltes Session-Briefing\n"
             "• <code>/watchlist</code> – Alle 18 überwachten EU- und US-Aktien anzeigen\n"
-            "• <code>/calendar</code> – Wirtschaftskalender & anstehende Earnings\n"
-            "• <code>/news [TICKER]</code> – Breaking News & Sentiment (z.B. <code>/news SAP.DE</code>)\n"
+            "• <code>/calendar</code> – Wirtschaftskalender &amp; anstehende Earnings\n"
+            "• <code>/news [TICKER]</code> – Breaking News &amp; Sentiment (z.B. <code>/news SAP.DE</code>)\n"
             "• <code>/watch TICKER</code> – Aktie zur Signal-Watchlist hinzufügen\n"
             "• <code>/unwatch TICKER</code> – Aktie von Watchlist entfernen\n"
             "• <code>/scan</code> – Sofortiger Watchlist-Scan für Edge-Setups\n\n"
             "🧠 <b>Institutionelle Edge-Analysen:</b>\n"
-            "• <code>/gex TICKER</code> – Gamma Exposure & Market Maker Regime\n"
+            "• <code>/gex TICKER</code> – Gamma Exposure &amp; Market Maker Regime\n"
             "• <code>/levels TICKER</code> – Volume Profile (POC, VAH, VAL)\n"
             "• <code>/avwap TICKER</code> – Anchored VWAP (YTD, Swing, Earnings)\n"
-            "• <code>/whale [TICKER]</code> – Dark Pool & Whale Flow Detector\n"
+            "• <code>/whale [TICKER]</code> – Dark Pool &amp; Whale Flow Detector\n"
             "• <code>/fvg TICKER</code> – Smart Money Fair Value Gaps\n"
             "• <code>/mtf TICKER</code> – Multi-Timeframe Trend-Alignment (1D, 1H, 15M)\n"
-            "• <code>/regime</code> – Macro Regime (SPY/QQQ & VIX)\n"
+            "• <code>/regime</code> – Macro Regime (SPY/QQQ &amp; VIX)\n"
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
-            "• <code>/heat</code> – Portfolio Heat & Korrelations-Shield\n\n"
+            "• <code>/heat</code> – Portfolio Heat &amp; Korrelations-Shield\n\n"
             "💡 <i>Tipp: Bei jedem /edge Setup kannst du einfach auf die interaktiven Buttons tippen!</i>"
         )
 
@@ -372,6 +389,7 @@ class TelegramInteractiveService:
                     {"text": "🧭 MTF Sync", "callback_data": f"mtf:{ticker}"},
                 ],
                 [
+                    {"text": "⚖️ Sizing", "callback_data": f"sizing:{ticker}"},
                     {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
                 ],
             ]
@@ -388,6 +406,10 @@ class TelegramInteractiveService:
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
                     {"text": "📊 Volume Profile", "callback_data": f"levels:{ticker}"},
+                ],
+                [
+                    {"text": "⚖️ Position Sizing", "callback_data": f"sizing:{ticker}"},
+                    {"text": "📖 Journal", "callback_data": "journal"},
                 ],
                 [
                     {"text": "🎯 Setups & Trailing Stop", "callback_data": "track"},
@@ -1255,6 +1277,140 @@ class TelegramInteractiveService:
             f"• <b>Neu gepusht:</b> {disp_str}\n"
             f"• <b>Bereits heute gesendet (Dedupliziert):</b> {dedup_str}\n\n"
             f"Nutze <code>/edge</code> oder <code>/track</code> für den aktuellen Stand."
+        )
+
+    def _cmd_journal(self) -> str:
+        """Displays recent closed trades and performance history from the paper journal."""
+        if not self.portfolio_manager or not hasattr(self.portfolio_manager, "list_paper_trades"):
+            return "⚠️ Portfolio Manager nicht initialisiert."
+
+        try:
+            closed = [
+                t for t in self.portfolio_manager.list_paper_trades(limit=150)
+                if str(t.get("status") or "").lower() == "closed"
+            ]
+            if not closed:
+                return (
+                    "📖 <b>TRADING JOURNAL – NOCH KEINE ABGESCHLOSSENEN TRADES</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "Es wurden noch keine Trades im Paper Trading geschlossen.\n\n"
+                    "Öffne Positionen mit <code>/paper TICKER</code> oder schließe aktive Trades mit <code>/close TICKER</code>."
+                )
+
+            lines = [
+                f"📖 <b>TRADING JOURNAL (Letzte {min(len(closed), 6)} Trades)</b>",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+
+            total_pnl = 0.0
+            wins = 0
+
+            for t in closed[:6]:
+                sym = str(t.get("ticker") or "").upper()
+                is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+                c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+
+                entry = float(t.get("entry_price") or 0.0)
+                exit_p = float(t.get("closed_price") or entry)
+                qty = float(t.get("quantity") or 1.0)
+                pnl = (exit_p - entry) * qty
+                pnl_pct = ((exit_p - entry) / entry * 100) if entry > 0 else 0.0
+                pnl_formatted = f"+{c_sym}{pnl:,.2f}" if pnl >= 0 else f"-{c_sym}{abs(pnl):,.2f}"
+                pct_formatted = f"+{pnl_pct:.2f}%" if pnl_pct >= 0 else f"{pnl_pct:.2f}%"
+                emoji = "🟢" if pnl >= 0 else "🔴"
+                if pnl > 0:
+                    wins += 1
+                total_pnl += pnl
+
+                dt = str(t.get("closed_at") or t.get("opened_at") or "")[:10]
+                reason = t.get("exit_reason") or "Manual Close"
+                reason_clean = "Manuell geschlossen" if "manual" in reason.lower() else ("Target erreicht" if "target" in reason.lower() else reason)
+
+                lines.append(
+                    f"• <b>{sym}</b> ({dt}): <b>{pnl_formatted} ({pct_formatted})</b> {emoji}\n"
+                    f"  {int(qty)} Stk. @ {c_sym}{entry:.2f} ➔ {c_sym}{exit_p:.2f} | <i>{reason_clean}</i>"
+                )
+
+            win_rate = (wins / len(closed[:6]) * 100) if closed else 0.0
+            tot_formatted = f"+{total_pnl:,.2f} €" if total_pnl >= 0 else f"-{abs(total_pnl):,.2f} €"
+            tot_emoji = "🟢" if total_pnl >= 0 else "🔴"
+
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append(
+                f"📊 <b>Journal-Statistik:</b> Win-Rate: <b>{win_rate:.0f}%</b> | Realisiert: <b>{tot_formatted}</b> {tot_emoji}\n\n"
+                f"💡 <i>Tipp: Analysiere neue Chancen mit <code>/edge</code> oder berechne dein Risiko mit <code>/sizing TICKER</code>.</i>"
+            )
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"❌ Fehler beim Laden des Journals: {exc}"
+
+    def _cmd_sizing(self, args: List[str]) -> str:
+        """Calculates institutional position size and risk allocation for a ticker."""
+        if not args:
+            return (
+                "⚖️ <b>Positionsgrößen- &amp; Risiko-Rechner</b>\n"
+                "Berechnet die mathematisch exakte Stückzahl basierend auf 1.0% bis 2.0% Kontorisiko.\n\n"
+                "<b>Syntax:</b>\n"
+                "• <code>/sizing NVDA</code> (berechnet mit 50.000 € Depotkapital)\n"
+                "• <code>/sizing SAP.DE 25000</code> (individuelle Kapitalbasis)"
+            )
+
+        ticker = args[0].upper().strip()
+        capital = 50000.0
+        if len(args) > 1:
+            try:
+                capital = float(args[1].replace("€", "").replace("$", "").replace(",", ".").strip())
+            except Exception:
+                pass
+
+        if not self.asymmetric_service:
+            return "⚠️ Asymmetric Trade Service nicht initialisiert."
+
+        setup = self.asymmetric_service.generate_trade_setup(ticker, portfolio_capital=capital)
+        if not setup:
+            return f"❌ Konnte keine Marktdaten für <b>{ticker}</b> abrufen."
+
+        entry = float(setup.get("entry_price") or 0.0)
+        stop = float(setup.get("invalidation_price") or 0.0)
+        t1 = float(setup.get("target_1") or 0.0)
+        t2 = float(setup.get("target_2") or 0.0)
+        risk_per_share = float(setup.get("risk_per_share") or (entry - stop))
+        if risk_per_share <= 0:
+            risk_per_share = entry * 0.03
+
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        # 1.0% Risk (Conservative)
+        r1_budget = capital * 0.010
+        shares_1 = max(1, int(r1_budget / risk_per_share))
+        cap_1 = shares_1 * entry
+
+        # 1.5% Risk (Standard)
+        r15_budget = capital * 0.015
+        shares_15 = max(1, int(r15_budget / risk_per_share))
+        cap_15 = shares_15 * entry
+
+        # 2.0% Risk (Aggressive)
+        r2_budget = capital * 0.020
+        shares_2 = max(1, int(r2_budget / risk_per_share))
+        cap_2 = shares_2 * entry
+
+        return (
+            f"⚖️ <b>POSITION SIZING RECHNER: {ticker}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Kapitalbasis:</b> {capital:,.0f} €\n"
+            f"• <b>Einstieg:</b> {c_sym}{entry:.2f} | <b>Stop-Loss:</b> {c_sym}{stop:.2f}\n"
+            f"• <b>Risiko pro Aktie:</b> {c_sym}{risk_per_share:.2f} ({(risk_per_share/entry*100):.1f}%)\n"
+            f"• <b>Ziele:</b> T1 ({c_sym}{t1:.2f}) | T2 ({c_sym}{t2:.2f})\n\n"
+            f"📐 <b>Empfohlene Stückzahlen nach Kontorisiko:</b>\n\n"
+            f"🛡️ <b>Konservativ (1.0% Risiko = -{r1_budget:,.0f} €):</b>\n"
+            f"  ➔ <b>{shares_1} Aktien</b> (Positionsvolumen: ~{cap_1:,.2f} {c_sym})\n\n"
+            f"⭐ <b>Standard (1.5% Risiko = -{r15_budget:,.0f} €):</b>\n"
+            f"  ➔ <b>{shares_15} Aktien</b> (Positionsvolumen: ~{cap_15:,.2f} {c_sym})\n\n"
+            f"⚡ <b>Aggressiv (2.0% Risiko = -{r2_budget:,.0f} €):</b>\n"
+            f"  ➔ <b>{shares_2} Aktien</b> (Positionsvolumen: ~{cap_2:,.2f} {c_sym})\n\n"
+            f"💡 <i>Regel: Niemals mehr als 2.0% Gesamtrisiko pro Einzeltrade riskieren!</i>"
         )
 
     def _get_watchlist_tickers(self) -> List[str]:

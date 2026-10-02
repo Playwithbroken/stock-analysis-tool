@@ -58,14 +58,14 @@ class TelegramInteractiveService:
         }
         self.asymmetric_service = asymmetric_trade_service
         self.options_service = options_edge_service
-        self.volume_service = volume_profile_service
+        self.volume_service = volume_profile_service or (getattr(asymmetric_trade_service, "volume_service", None) if asymmetric_trade_service else None)
         self.regime_service = market_regime_service
         self.rs_service = relative_strength_service
         self.lifecycle_service = trade_lifecycle_service
         self.heat_service = portfolio_heat_service
         self.avwap_service = anchored_vwap_service
         self.whale_service = whale_flow_service
-        self.liquidity_service = liquidity_zone_service
+        self.liquidity_service = liquidity_zone_service or (getattr(asymmetric_trade_service, "liquidity_service", None) if asymmetric_trade_service else None)
         self.mtf_service = multi_timeframe_service
         self.signals_service = trading_signals_service
         self.alert_service = alert_service
@@ -1285,27 +1285,100 @@ class TelegramInteractiveService:
         return self.mtf_service.format_telegram_mtf_card(data)
 
     def _cmd_scan(self) -> str:
-        if not self.signals_service or not self.alert_service:
-            return "⚠️ Scanner oder Alert Service nicht initialisiert."
-
+        """
+        Combined Multi-Asset Scanner:
+        1. Evaluates and dispatches new Grade A+/A asymmetric setups.
+        2. Scans all watchlist titles simultaneously for Fair Value Gaps (FVG) and Volume Profile Retests (POC, VAH, VAL).
+        3. Identifies double-confluence opportunities.
+        """
         watchlist = self._get_watchlist_tickers()
-        res = self.signals_service.scan_and_dispatch_edge_alerts(
-            self.alert_service, watchlist=watchlist, min_grade=("A+", "A")
-        )
-        disp = res.get("dispatched", [])
-        dedup = res.get("deduplicated", [])
-        count = res.get("scanned_count", 0)
+        if not watchlist:
+            watchlist = [
+                "SAP.DE", "RHM.DE", "ASML.AS", "SIE.DE", "ALV.DE",
+                "NVDA", "AAPL", "MSFT", "PLTR", "TSLA", "META", "AMZN",
+            ]
 
-        disp_str = ", ".join(disp) if disp else "Keine neuen"
-        dedup_str = ", ".join(dedup) if dedup else "Keine"
+        # 1. Edge setups dispatch
+        disp_str = "Keine neuen"
+        dedup_str = "Keine"
+        count = len(watchlist)
+        if self.signals_service and self.alert_service:
+            try:
+                res = self.signals_service.scan_and_dispatch_edge_alerts(
+                    self.alert_service, watchlist=watchlist, min_grade=("A+", "A")
+                )
+                disp = res.get("dispatched", [])
+                dedup = res.get("deduplicated", [])
+                count = res.get("scanned_count", len(watchlist))
+                disp_str = ", ".join(disp) if disp else "Keine neuen"
+                dedup_str = ", ".join(dedup) if dedup else "Keine"
+            except Exception as e:
+                logger.warning("Error dispatching edge alerts during scan: %s", e)
 
-        return (
-            f"🔍 <b>Watchlist-Scan abgeschlossen ({count} Titel analysiert)</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"• <b>Neu gepusht:</b> {disp_str}\n"
-            f"• <b>Bereits heute gesendet (Dedupliziert):</b> {dedup_str}\n\n"
-            f"Nutze <code>/edge</code> oder <code>/track</code> für den aktuellen Stand."
-        )
+        # 2. Combined FVG and Volume Profile Retest Scan
+        combined_res = None
+        if self.signals_service and hasattr(self.signals_service, "scan_combined_fvg_and_volume_retests"):
+            try:
+                combined_res = self.signals_service.scan_combined_fvg_and_volume_retests(watchlist)
+            except Exception as e:
+                logger.warning("Error running combined scanner: %s", e)
+
+        lines = [
+            f"🔍 <b>KOMBINIERTER MULTI-ASSET RADAR ({count} TITEL)</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "<i>Simultaner Scan nach Fair Value Gaps &amp; Volume Profile Retests</i>\n",
+        ]
+
+        if combined_res:
+            confluence = combined_res.get("confluence_matches") or []
+            vp_matches = combined_res.get("volume_profile_matches") or []
+            fvg_matches = combined_res.get("fvg_matches") or []
+
+            # Section A: Double Confluence Matches
+            if confluence:
+                lines.append("🎯 <b>DOPPEL-KONFLUENZ (FVG + VOLUME PROFILE):</b>")
+                for c in confluence[:4]:
+                    sym = c["ticker"]
+                    vp_desc = c["vp"]["description"]
+                    fvg_desc = c["fvg"]["description"]
+                    lines.append(f"• <b>{sym}</b>: {vp_desc} <b>+</b> {fvg_desc} 💎")
+                lines.append("")
+
+            # Section B: Volume Profile Retests (POC / VAH / VAL)
+            if vp_matches:
+                lines.append("📊 <b>VOLUME PROFILE RETESTS (POC / VAH / VAL):</b>")
+                for v in vp_matches[:5]:
+                    sym = v["ticker"]
+                    desc = v["description"]
+                    vtype = v["type"]
+                    dp = v["dist_pct"]
+                    dist_text = f"+{dp:.1f}%" if dp >= 0 else f"{dp:.1f}%"
+                    lines.append(f"• <b>{sym}</b>: <b>{vtype}</b> ({desc}) | <i>Abstand {dist_text}</i>")
+                lines.append("")
+            else:
+                lines.append("📊 <b>Volume Profile:</b> Alle Titel bewegen sich stabil im Value-Bereich.\n")
+
+            # Section C: Fair Value Gaps (FVG)
+            if fvg_matches:
+                lines.append("🕳️ <b>FAIR VALUE GAPS (SMART MONEY ZONEN):</b>")
+                for f in fvg_matches[:5]:
+                    sym = f["ticker"]
+                    ftype = f["type"]
+                    desc = f["description"]
+                    lines.append(f"• <b>{sym}</b>: {ftype} ➔ {desc}")
+                lines.append("")
+            else:
+                lines.append("🕳️ <b>Fair Value Gaps:</b> Keine offenen Imbalancen in Kursnähe.\n")
+
+        # Section D: Edge Setups Status
+        lines.extend([
+            "⚡ <b>Edge Setups Status:</b>",
+            f"• <b>Neu gepusht:</b> {disp_str}",
+            f"• <b>Bereits aktiv (Dedupliziert):</b> {dedup_str}\n",
+            "💡 <i>Tipp: Tippe auf <code>/check TICKER</code> für den 360°-Check oder <code>/stop TICKER</code> für die Schutz-Levels.</i>",
+        ])
+
+        return "\n".join(lines)
 
     def _cmd_journal(self) -> str:
         """Displays recent closed trades and performance history from the paper journal."""

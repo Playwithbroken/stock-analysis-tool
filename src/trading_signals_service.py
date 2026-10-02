@@ -450,6 +450,153 @@ class TradingSignalsService:
             "skipped": skipped,
         }
 
+    def scan_combined_fvg_and_volume_retests(
+        self, watchlist: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Scans watchlist tickers for:
+        1. Fair Value Gaps (FVG) - active demand/supply zones testing current price
+        2. Volume Profile Retests - price testing POC, VAL, or VAH within 1.8%
+        3. Double Confluence - tickers with both FVG & Volume Profile alignment!
+        """
+        tickers = list(
+            watchlist
+            or [
+                "SAP.DE", "RHM.DE", "ASML.AS", "SIE.DE", "ALV.DE",
+                "NVDA", "AAPL", "MSFT", "PLTR", "TSLA", "META", "AMZN",
+            ]
+        )
+
+        fvg_matches: List[Dict[str, Any]] = []
+        vp_matches: List[Dict[str, Any]] = []
+        confluence_matches: List[Dict[str, Any]] = []
+
+        liquidity_svc = getattr(self.asymmetric_service, "liquidity_service", None)
+
+        for tk in tickers:
+            sym = str(tk).strip().upper()
+            if not sym or sym.startswith("^"):
+                continue
+
+            is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+            c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+
+            # 1. Volume Profile Retest Check
+            vp = None
+            vp_hit = None
+            try:
+                vp = self.get_volume_profile(sym)
+                if vp:
+                    spot = float(vp.get("current_price") or 0.0)
+                    poc = float(vp.get("poc") or 0.0)
+                    vah = float(vp.get("vah") or 0.0)
+                    val = float(vp.get("val") or 0.0)
+
+                    if spot > 0:
+                        dist_poc = abs(spot - poc) / poc if poc > 0 else 1.0
+                        dist_val = abs(spot - val) / val if val > 0 else 1.0
+                        dist_vah = abs(spot - vah) / vah if vah > 0 else 1.0
+
+                        if dist_poc <= 0.018:
+                            vp_hit = {
+                                "ticker": sym,
+                                "type": "POC Retest",
+                                "level_price": poc,
+                                "spot": spot,
+                                "dist_pct": round(((spot - poc) / poc) * 100, 2),
+                                "description": f"Testet Point of Control ({c_sym}{poc:.2f})",
+                                "market_location": vp.get("market_location"),
+                            }
+                        elif dist_val <= 0.018:
+                            vp_hit = {
+                                "ticker": sym,
+                                "type": "VAL Support Retest",
+                                "level_price": val,
+                                "spot": spot,
+                                "dist_pct": round(((spot - val) / val) * 100, 2),
+                                "description": f"Testet Value Area Low Support ({c_sym}{val:.2f})",
+                                "market_location": vp.get("market_location"),
+                            }
+                        elif dist_vah <= 0.018:
+                            vp_hit = {
+                                "ticker": sym,
+                                "type": "VAH Breakout Retest",
+                                "level_price": vah,
+                                "spot": spot,
+                                "dist_pct": round(((spot - vah) / vah) * 100, 2),
+                                "description": f"Testet Value Area High ({c_sym}{vah:.2f})",
+                                "market_location": vp.get("market_location"),
+                            }
+                        if vp_hit:
+                            vp_matches.append(vp_hit)
+            except Exception as e:
+                logger.debug("Volume profile scan error for %s: %s", sym, e)
+
+            # 2. Fair Value Gap Check
+            fvg_hit = None
+            try:
+                if liquidity_svc:
+                    lz = liquidity_svc.analyze_zones(sym)
+                    if lz:
+                        spot = float(lz.get("spot_price") or (vp.get("current_price") if vp else 0.0))
+                        active_bull = lz.get("active_bullish_fvgs") or []
+                        active_bear = lz.get("active_bearish_fvgs") or []
+
+                        # Check bullish FVGs near spot (demand support)
+                        for f in active_bull:
+                            g_low = float(f.get("gap_low") or 0.0)
+                            g_high = float(f.get("gap_high") or 0.0)
+                            if g_low > 0 and g_high > 0:
+                                if (g_low <= spot <= g_high * 1.02) or (abs(spot - g_high) / spot <= 0.02):
+                                    fvg_hit = {
+                                        "ticker": sym,
+                                        "type": "Bullish FVG (Demand Support)",
+                                        "gap_low": g_low,
+                                        "gap_high": g_high,
+                                        "spot": spot,
+                                        "status": f.get("status", "UNMITIGATED"),
+                                        "description": f"Demand-Zone {c_sym}{g_low:.2f}–{c_sym}{g_high:.2f} ({f.get('status')})",
+                                    }
+                                    break
+
+                        # Check bearish FVGs near spot (supply resistance) if no bull FVG
+                        if not fvg_hit:
+                            for f in active_bear:
+                                g_low = float(f.get("gap_low") or 0.0)
+                                g_high = float(f.get("gap_high") or 0.0)
+                                if g_low > 0 and g_high > 0:
+                                    if (g_low * 0.98 <= spot <= g_high) or (abs(spot - g_low) / spot <= 0.02):
+                                        fvg_hit = {
+                                            "ticker": sym,
+                                            "type": "Bearish FVG (Supply Resistance)",
+                                            "gap_low": g_low,
+                                            "gap_high": g_high,
+                                            "spot": spot,
+                                            "status": f.get("status", "UNMITIGATED"),
+                                            "description": f"Supply-Zone {c_sym}{g_low:.2f}–{c_sym}{g_high:.2f} ({f.get('status')})",
+                                        }
+                                        break
+                        if fvg_hit:
+                            fvg_matches.append(fvg_hit)
+            except Exception as e:
+                logger.debug("Liquidity zone scan error for %s: %s", sym, e)
+
+            # 3. Double Confluence Match
+            if vp_hit and fvg_hit:
+                confluence_matches.append({
+                    "ticker": sym,
+                    "vp": vp_hit,
+                    "fvg": fvg_hit,
+                    "spot": vp_hit["spot"],
+                })
+
+        return {
+            "scanned_count": len(tickers),
+            "confluence_matches": confluence_matches,
+            "volume_profile_matches": vp_matches,
+            "fvg_matches": fvg_matches,
+        }
+
     # ---------- Aggregator ----------
     def get_full_edge_pack(self, watchlist: List[str]) -> Dict[str, Any]:
         """Build the entire trading edge payload in one call."""

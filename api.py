@@ -10118,6 +10118,177 @@ async def get_market_session_lists():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/trading/institutional-check/{ticker}")
+async def get_trading_institutional_check(ticker: str):
+    """360-degree multi-factor institutional health check for a ticker."""
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        service = get_trading_signals_service()
+        setup = await asyncio.to_thread(service.asymmetric_service.generate_trade_setup, sym)
+        if not setup:
+            raise HTTPException(status_code=404, detail=f"No institutional check data available for {sym}")
+
+        is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+        c_code = "EUR" if is_eu else ("GBP" if sym.endswith(".L") else "USD")
+
+        vp = setup.get("volume_profile") or {}
+        gex = setup.get("options_gex")
+        rs = setup.get("relative_strength")
+        avwap = setup.get("anchored_vwap")
+        whale = setup.get("whale_flow")
+        earn = setup.get("earnings_info")
+
+        return convert_numpy_types({
+            "ticker": sym,
+            "currency": c_code,
+            "currency_symbol": c_sym,
+            "spot": float(setup.get("entry_price") or 0.0),
+            "confluence_score": setup.get("confluence_score", 50),
+            "grade_badge": setup.get("grade_badge", "B"),
+            "entry_price": float(setup.get("entry_price") or 0.0),
+            "invalidation_price": float(setup.get("invalidation_price") or 0.0),
+            "target_1": float(setup.get("target_1") or 0.0),
+            "target_2": float(setup.get("target_2") or 0.0),
+            "risk_reward_ratio": float(setup.get("risk_reward_ratio") or 0.0),
+            "volume_profile": {
+                "poc": vp.get("poc"),
+                "vah": vp.get("vah"),
+                "val": vp.get("val"),
+                "market_location": vp.get("market_location", "neutral"),
+                "location_label": vp.get("location_label", "Neutral"),
+            },
+            "options_gex": {
+                "regime": gex.get("regime") if gex else "no_options",
+                "call_wall": gex.get("call_wall") if gex else None,
+                "put_wall": gex.get("put_wall") if gex else None,
+                "net_gex": gex.get("net_gex") if gex else 0.0,
+            } if gex else None,
+            "relative_strength": {
+                "mansfield_rs": rs.get("mansfield_rs", 0.0) if rs else 0.0,
+                "bias": "OUTPERFORMER" if (rs and rs.get("mansfield_rs", 0.0) > 0) else "UNDERPERFORMER",
+            } if rs else None,
+            "anchored_vwap": {
+                "bias": avwap.get("institutional_bias", "NEUTRAL") if avwap else "NEUTRAL",
+                "ytd": avwap.get("ytd", {}).get("avwap") if isinstance(avwap, dict) and "ytd" in avwap else None,
+            } if avwap else None,
+            "whale_flow": {
+                "bias": whale.get("bias", "Neutral") if whale else "Neutral",
+                "volume_ratio": whale.get("volume_ratio", 1.0) if whale else 1.0,
+            } if whale else None,
+            "earnings_shield": {
+                "days_until": earn.get("days_until") if earn else None,
+                "warning": earn.get("warning") if earn else None,
+                "safe": not (earn and earn.get("days_until") is not None and earn.get("days_until") <= 5),
+            } if earn else {"safe": True, "days_until": None, "warning": None},
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/structural-stops/{ticker}")
+async def get_trading_structural_stops(ticker: str):
+    """Calculates multi-structural stop-loss levels and recommended invalidation."""
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        service = get_trading_signals_service()
+        setup = await asyncio.to_thread(service.asymmetric_service.generate_trade_setup, sym)
+        if not setup:
+            raise HTTPException(status_code=404, detail=f"No structural stop data available for {sym}")
+
+        spot = float(setup.get("entry_price") or 0.0)
+        hard_stop = float(setup.get("invalidation_price") or spot * 0.95)
+        dist_hard = ((spot - hard_stop) / spot * 100) if spot > 0 else 0.0
+
+        is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+        c_code = "EUR" if is_eu else ("GBP" if sym.endswith(".L") else "USD")
+
+        vp = setup.get("volume_profile") or {}
+        val = float(vp.get("val") or (spot * 0.97))
+        dist_val = ((spot - val) / spot * 100) if spot > 0 else 0.0
+
+        gex = setup.get("options_gex")
+        pw = float(gex.get("put_wall")) if (gex and gex.get("put_wall")) else None
+        dist_pw = (((spot - pw) / spot * 100) if (pw and spot > 0) else None)
+
+        avwap = setup.get("anchored_vwap") or {}
+        ytd_vwap = float(avwap.get("ytd", {}).get("avwap")) if isinstance(avwap, dict) and "ytd" in avwap and avwap.get("ytd", {}).get("avwap") else None
+        dist_vwap = (((spot - ytd_vwap) / spot * 100) if (ytd_vwap and spot > 0) else None)
+
+        return convert_numpy_types({
+            "ticker": sym,
+            "currency": c_code,
+            "currency_symbol": c_sym,
+            "spot": spot,
+            "invalidation_stop": {
+                "price": hard_stop,
+                "distance_pct": round(dist_hard, 2),
+                "description": "Schützt den Trade knapp unterhalb der lokalen Marktstruktur.",
+            },
+            "volume_profile_stop": {
+                "price": round(val, 2),
+                "distance_pct": round(dist_val, 2),
+                "description": "Unterhalb Value Area Low (70% Volumen-Klammer). Bruch bricht Long-These.",
+            },
+            "options_put_wall_stop": {
+                "price": round(pw, 2),
+                "distance_pct": round(dist_pw, 2),
+                "description": "Größtes Put Open Interest; Market Maker Support.",
+            } if pw and pw < spot else None,
+            "ytd_avwap_stop": {
+                "price": round(ytd_vwap, 2),
+                "distance_pct": round(dist_vwap, 2),
+                "description": "Fonds-Benchmark (Durchschnittskurs seit Jahresbeginn).",
+            } if ytd_vwap and ytd_vwap < spot else None,
+            "breakeven_stop": spot,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/radar/{ticker}")
+async def get_trading_radar(ticker: str):
+    """Combines 360-degree institutional check and multi-structural stops into one single payload."""
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+        chk = await get_trading_institutional_check(sym)
+        stp = await get_trading_structural_stops(sym)
+        return convert_numpy_types({
+            "ticker": sym,
+            "check": chk,
+            "stops": stp,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/combined-scanner")
+async def get_trading_combined_scanner():
+    """Scans all watchlist tickers for Fair Value Gaps and Volume Profile Retests."""
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+        service = get_trading_signals_service()
+        res = await asyncio.to_thread(service.scan_combined_fvg_and_volume_retests, watchlist)
+        return convert_numpy_types(res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/signals/alerts/morning-brief")
 async def send_morning_brief():
     try:

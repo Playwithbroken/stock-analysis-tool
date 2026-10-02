@@ -559,6 +559,52 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("$115.00", res)
         self.assertIn("$110.00", res)
 
+    def test_cmd_scan_combined_radar(self):
+        self.mock_pm.get_signal_watch_items.return_value = [
+            {"kind": "ticker", "value": "NVDA"},
+            {"kind": "ticker", "value": "SAP.DE"},
+        ]
+        self.mock_signals.scan_and_dispatch_edge_alerts.return_value = {
+            "scanned_count": 2,
+            "dispatched": ["NVDA"],
+            "deduplicated": ["SAP.DE"],
+        }
+        self.mock_signals.scan_combined_fvg_and_volume_retests.return_value = {
+            "scanned_count": 2,
+            "confluence_matches": [
+                {
+                    "ticker": "NVDA",
+                    "vp": {"description": "Testet Point of Control ($118.50)"},
+                    "fvg": {"description": "Demand-Zone $118.00–$119.50 (UNMITIGATED)"},
+                    "spot": 118.80,
+                }
+            ],
+            "volume_profile_matches": [
+                {
+                    "ticker": "SAP.DE",
+                    "type": "POC Retest",
+                    "description": "Testet Point of Control (€214.20)",
+                    "dist_pct": 0.4,
+                }
+            ],
+            "fvg_matches": [
+                {
+                    "ticker": "NVDA",
+                    "type": "Bullish FVG (Demand Support)",
+                    "description": "Demand-Zone $118.00–$119.50 (UNMITIGATED)",
+                }
+            ],
+        }
+
+        res = self.service.handle_command("999888", "/scan")
+        self.assertIn("KOMBINIERTER MULTI-ASSET RADAR", res)
+        self.assertIn("DOPPEL-KONFLUENZ", res)
+        self.assertIn("NVDA", res)
+        self.assertIn("SAP.DE", res)
+        self.assertIn("POC Retest", res)
+        self.assertIn("Demand-Zone", res)
+        self.assertIn("Neu gepusht:</b> NVDA", res)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -54,6 +54,7 @@ class TelegramInteractiveService:
         opening_range_breakout_service: Optional[Any] = None,
         position_sizing_service: Optional[Any] = None,
         market_breadth_service: Optional[Any] = None,
+        macro_shield_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -78,6 +79,7 @@ class TelegramInteractiveService:
         self.orb_service = opening_range_breakout_service
         self.sizing_service = position_sizing_service
         self.breadth_service = market_breadth_service
+        self.macro_service = macro_shield_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -300,6 +302,12 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "Analysiere institutionelle Marktbreite...")
             res = self._cmd_breadth()
             self.send_message(chat_id, res)
+        elif cb in ("macro", "fomc") or cb.startswith("macro:"):
+            self.answer_callback_query(callback_query_id, "Lade Makro- & Notenbank-Shield...")
+            parts = cb.split(":")
+            args = [parts[1]] if len(parts) > 1 else []
+            res = self._cmd_macro(args)
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -387,6 +395,8 @@ class TelegramInteractiveService:
                 return self._cmd_scale(args)
             elif cmd in ("/breadth", "/internals", "/marktbreite"):
                 return self._cmd_breadth()
+            elif cmd in ("/macro", "/fomc", "/notenbank", "/makro"):
+                return self._cmd_macro(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -439,7 +449,8 @@ class TelegramInteractiveService:
             "• <code>/mtf TICKER</code> – Multi-Timeframe Trend-Alignment (1D, 1H, 15M)\n"
             "• <code>/regime</code> – Macro Regime (SPY/QQQ &amp; VIX)\n"
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
-            "• <code>/heat</code> – Portfolio Heat &amp; Korrelations-Shield\n\n"
+            "• <code>/heat</code> – Portfolio Heat &amp; Korrelations-Shield\n"
+            "• <code>/macro</code> – High-Impact Makro- &amp; FOMC-Shield (Zinsentscheide &amp; CPI)\n\n"
             "💡 <i>Tipp: Bei jedem /edge Setup kannst du einfach auf die interaktiven Buttons tippen!</i>"
         )
 
@@ -479,6 +490,9 @@ class TelegramInteractiveService:
                 [
                     {"text": "⚖️ Sizing & Kelly", "callback_data": f"sizing:{ticker}"},
                     {"text": "🌐 Marktbreite", "callback_data": "breadth"},
+                ],
+                [
+                    {"text": "🏛️ Makro- & FOMC-Shield", "callback_data": f"macro:{ticker}"},
                 ],
             ]
         }
@@ -1830,6 +1844,26 @@ class TelegramInteractiveService:
         whale = setup.get("whale_flow")
         whale_str = f"🐋 {whale.get('bias', 'Neutral')}" if whale else "⚪ Neutral"
 
+        # 7. Macro Shield
+        macro_shield = None
+        if self.macro_service:
+            try:
+                macro_shield = self.macro_service.evaluate_macro_shield(ticker)
+            except Exception:
+                pass
+        if not macro_shield:
+            try:
+                from src.macro_shield_service import get_macro_shield_service
+                macro_shield = get_macro_shield_service().evaluate_macro_shield(ticker)
+            except Exception:
+                macro_shield = {"badge": "🟢 Freigabe (Clear)", "trading_halted": False}
+
+        macro_badge = macro_shield.get("badge", "🟢 Freigabe (Clear)")
+        macro_warn = macro_shield.get("warning")
+        macro_str = f"• <b>Makro- &amp; FOMC-Shield:</b> {macro_badge}"
+        if macro_warn:
+            macro_str += f"\n  ➔ <i>{macro_warn}</i>"
+
         return (
             f"🔍 <b>360° INSTITUTIONAL CHECK: {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -1841,7 +1875,8 @@ class TelegramInteractiveService:
             f"• <b>Relative Stärke vs SPY:</b> {rs_str}\n"
             f"• <b>Institutioneller AVWAP:</b> {avwap_str}\n"
             f"• <b>Whale / Dark Pool Flow:</b> {whale_str}\n"
-            f"• <b>Earnings Shield:</b> {earn_str}\n\n"
+            f"• <b>Earnings Shield:</b> {earn_str}\n"
+            f"{macro_str}\n\n"
             f"🎯 <b>Edge-Einstieg &amp; Stop:</b>\n"
             f"• Entry: {c_sym}{setup.get('entry_price', 0):.2f} | Stop: {c_sym}{setup.get('invalidation_price', 0):.2f}\n"
             f"• Ziel 1: {c_sym}{setup.get('target_1', 0):.2f} | Ziel 2: {c_sym}{setup.get('target_2', 0):.2f}\n\n"
@@ -2125,6 +2160,16 @@ class TelegramInteractiveService:
 
         data = self.breadth_service.compute_market_breadth()
         return self.breadth_service.format_telegram_breadth_card(data)
+
+    def _cmd_macro(self, args: List[str]) -> str:
+        """Displays real-time high-impact macro catalysts, central bank schedules, and circuit breaker status."""
+        svc = self.macro_service
+        if not svc:
+            from src.macro_shield_service import get_macro_shield_service
+            svc = get_macro_shield_service()
+        ticker = args[0].upper().strip() if args else None
+        report = svc.evaluate_macro_shield(ticker)
+        return svc.format_telegram_macro_card(report)
 
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""

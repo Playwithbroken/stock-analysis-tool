@@ -1570,6 +1570,15 @@ def get_market_breadth_service():
         _market_breadth_service = MarketBreadthService()
     return _market_breadth_service
 
+_macro_shield_service = None
+
+def get_macro_shield_service():
+    global _macro_shield_service
+    if _macro_shield_service is None:
+        from src.macro_shield_service import get_macro_shield_service as _get_macro
+        _macro_shield_service = _get_macro()
+    return _macro_shield_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1596,6 +1605,7 @@ def get_telegram_interactive_service():
             opening_range_breakout_service=get_opening_range_breakout_service(),
             position_sizing_service=get_position_sizing_service(),
             market_breadth_service=get_market_breadth_service(),
+            macro_shield_service=get_macro_shield_service(),
         )
     return _telegram_interactive_service
 
@@ -10016,6 +10026,16 @@ async def open_edge_paper_trade(req: OpenEdgePaperTradeRequest):
                     "trade": attach_scope(existing[0], paper_scope()),
                 })
 
+        # Macro Circuit Breaker: reject new entries during high-impact blackout window
+        if not req.force:
+            macro_svc = get_macro_shield_service()
+            macro_eval = macro_svc.evaluate_macro_shield(ticker)
+            if macro_eval.get("trading_halted"):
+                raise HTTPException(
+                    status_code=423,
+                    detail=f"Macro Shield Halt: {macro_eval.get('warning')} (Übersteuerung mit 'force' möglich)."
+                )
+
         # Sizing according to available demo cash and 500k capital basis
         account_snap = paper_service.build_demo_account_snapshot()
         avail_cash = float(account_snap.get("cash_available_value") or account_snap.get("starting_capital") or 500000.0)
@@ -10319,6 +10339,7 @@ async def get_trading_institutional_check(ticker: str):
                 "warning": earn.get("warning") if earn else None,
                 "safe": not (earn and earn.get("days_until") is not None and earn.get("days_until") <= 5),
             } if earn else {"safe": True, "days_until": None, "warning": None},
+            "macro_shield": get_macro_shield_service().evaluate_macro_shield(sym),
         })
     except HTTPException:
         raise
@@ -10468,17 +10489,28 @@ async def get_trading_preflight_check(ticker: str, capital: float = 50000.0, ris
         is_overheated = projected_heat > max_heat
         has_cluster_risk = len(corr_check) > 0
 
+        macro_svc = get_macro_shield_service()
+        macro_shield = macro_svc.evaluate_macro_shield(sym)
+
         status = "CRITICAL" if is_overheated else ("WARNING" if has_cluster_risk else "SAFE")
         warnings = []
         if is_overheated:
             warnings.append(f"Portfolio-Überhitzung: Projiziertes Gesamtrisiko ({projected_heat:.2f}%) überschreitet Limit ({max_heat:.2f}%).")
         if has_cluster_risk:
             warnings.append(f"Cluster-Risiko: {len(corr_check)} aktive Position(en) korrelieren stark mit {sym}.")
+        if macro_shield.get("trading_halted"):
+            status = "CRITICAL"
+            warnings.append(macro_shield.get("warning") or "Makro-Blackout aktiv.")
+        elif macro_shield.get("status") == "YELLOW_CAUTION":
+            if status == "SAFE":
+                status = "WARNING"
+            warnings.append(macro_shield.get("warning") or "High-Impact Makro-Event steht bevor.")
 
         return convert_numpy_types({
             "ticker": sym,
             "status": status,
-            "can_execute": not is_overheated,
+            "can_execute": (not is_overheated) and (not macro_shield.get("trading_halted")),
+            "macro_shield": macro_shield,
             "current_heat_pct": current_heat,
             "proposed_risk_pct": risk_pct,
             "projected_heat_pct": projected_heat,
@@ -10722,6 +10754,17 @@ async def get_trading_market_breadth(force_refresh: bool = False):
     try:
         service = get_market_breadth_service()
         data = await asyncio.to_thread(service.compute_market_breadth, None, force_refresh)
+        return convert_numpy_types(data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/macro-shield")
+async def get_trading_macro_shield(ticker: Optional[str] = None):
+    """Evaluates high-impact economic releases (FOMC, CPI, EZB, NFP) and circuit breaker status."""
+    try:
+        service = get_macro_shield_service()
+        data = await asyncio.to_thread(service.evaluate_macro_shield, ticker)
         return convert_numpy_types(data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

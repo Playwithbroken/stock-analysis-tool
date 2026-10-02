@@ -153,6 +153,10 @@ export default function SignalWatchlistPanel({
   const [breadthLoading, setBreadthLoading] = useState<boolean>(false);
   const [showBreadth, setShowBreadth] = useState<boolean>(false);
 
+  const [macroData, setMacroData] = useState<any>(null);
+  const [macroLoading, setMacroLoading] = useState<boolean>(false);
+  const [showMacro, setShowMacro] = useState<boolean>(false);
+
   const [tradeActionMessage, setTradeActionMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -297,6 +301,22 @@ export default function SignalWatchlistPanel({
       console.error("Market breadth fetch error:", err);
     } finally {
       setBreadthLoading(false);
+    }
+  };
+
+  const loadMacroShield = async () => {
+    setMacroLoading(true);
+    setShowMacro(true);
+    try {
+      const res = await fetch(`/api/trading/macro-shield?ticker=${encodeURIComponent(selectedRadarTicker || "")}`);
+      if (res.ok) {
+        const json = await res.json();
+        setMacroData(json);
+      }
+    } catch (err) {
+      console.error("Macro shield fetch error:", err);
+    } finally {
+      setMacroLoading(false);
     }
   };
 
@@ -728,6 +748,13 @@ export default function SignalWatchlistPanel({
               className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-indigo-900 shadow-sm transition-colors hover:bg-indigo-500/20 disabled:opacity-50"
             >
               {breadthLoading ? "Lade Internals..." : "📊 Marktbreite & Internals"}
+            </button>
+            <button
+              onClick={loadMacroShield}
+              disabled={macroLoading}
+              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-rose-900 shadow-sm transition-colors hover:bg-rose-500/20 disabled:opacity-50"
+            >
+              {macroLoading ? "Prüfe Makro..." : "🏛️ Makro & FOMC Shield"}
             </button>
             <button
               onClick={runCombinedScan}
@@ -1196,6 +1223,128 @@ export default function SignalWatchlistPanel({
           </div>
         )}
 
+        {/* Macro Shield & Catalyst Drawer */}
+        {showMacro && macroData && (
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-50/40 p-4 space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🏛️</span>
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-rose-900">
+                    High-Impact Makro- &amp; Notenbank-Shield (/macro)
+                  </div>
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Echtzeit-Katalysatoren-Überwachung: FOMC, EZB, US-CPI, NFP &amp; Core PCE mit automatischer Trading-Sperre.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMacro(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800"
+              >
+                Schließen ✕
+              </button>
+            </div>
+
+            {/* Status Banner */}
+            <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 shadow-sm ${
+              macroData.trading_halted
+                ? "border-red-500/30 bg-red-500/10"
+                : macroData.risk_level === "YELLOW_CAUTION"
+                ? "border-amber-500/30 bg-amber-500/10"
+                : "border-emerald-500/20 bg-white"
+            }`}>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">
+                  {macroData.trading_halted ? "🛑" : macroData.risk_level === "YELLOW_CAUTION" ? "⚠️" : "🟢"}
+                </span>
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                    Makro-Status &amp; Trading Blackout
+                  </div>
+                  <div className="text-base font-black text-slate-900">
+                    {macroData.trading_halted
+                      ? "TRADING HALTED – Neueröffnung gesperrt"
+                      : macroData.risk_level === "YELLOW_CAUTION"
+                      ? "CAUTION – Hohe Wachsamkeit / Volatilität erwartet"
+                      : "CLEAR – Keine unmittelbaren Makro-Gefahren"}
+                  </div>
+                  <div className="text-xs text-slate-600 mt-0.5">
+                    {macroData.warning || "Sämtliche Notenbank- und Inflations-Termine im sicheren Zeitfenster (>120m)."}
+                  </div>
+                </div>
+              </div>
+
+              {macroData.next_catalyst && (
+                <div className="rounded-xl border border-black/5 bg-slate-50 px-4 py-2 text-right">
+                  <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    Nächster Katalysator
+                  </div>
+                  <div className="text-sm font-black text-slate-900">
+                    {macroData.next_catalyst.title}
+                  </div>
+                  <div className="text-xs font-bold text-rose-700">
+                    in {macroData.next_catalyst.proximity_minutes} Min ({macroData.next_catalyst.date_formatted} {macroData.next_catalyst.time_str} CET)
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Upcoming Catalysts List */}
+            {macroData.upcoming_catalysts?.length ? (
+              <div className="space-y-2">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600">
+                  Anstehende High-Impact Termine (Nächste 7 Tage):
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {macroData.upcoming_catalysts.map((cat: any, idx: number) => {
+                    const isImminent = cat.proximity_minutes <= 120;
+                    return (
+                      <div
+                        key={idx}
+                        className={`rounded-xl border p-3 transition-colors ${
+                          isImminent
+                            ? "border-red-500/30 bg-red-500/5 shadow-sm"
+                            : "border-black/5 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] font-extrabold text-slate-700 uppercase">
+                            {cat.region}
+                          </span>
+                          <span className={`text-[10px] font-black ${isImminent ? "text-red-700" : "text-slate-500"}`}>
+                            {cat.proximity_minutes < 60
+                              ? `⚡ In ${cat.proximity_minutes}m`
+                              : cat.proximity_minutes < 1440
+                              ? `In ${(cat.proximity_minutes / 60).toFixed(1)}h`
+                              : `In ${(cat.proximity_minutes / 1440).toFixed(1)}d`}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 text-xs font-black text-slate-900">
+                          {cat.title}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          📅 {cat.date_formatted} um <b>{cat.time_str} CET</b>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {cat.affected_assets?.map((a: string, aIdx: number) => (
+                            <span
+                              key={aIdx}
+                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600"
+                            >
+                              {a}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {/* Loading state */}
         {radarLoading && (
           <div className="flex items-center justify-center p-12 text-slate-500 gap-3">
@@ -1358,6 +1507,30 @@ export default function SignalWatchlistPanel({
                           : `⚠️ ${radarData.check?.earnings_shield?.warning || "Earnings anstehend!"}`}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Factor 7: Makro- & Notenbank-Shield */}
+                  <div className="rounded-xl border border-black/5 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                        7. Makro- &amp; FOMC-Shield
+                      </div>
+                      {radarData.check?.macro_shield?.next_event ? (
+                        <span className="text-[10px] font-bold text-slate-600">
+                          in {radarData.check?.macro_shield?.next_event?.proximity_minutes}m
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-xs font-black text-slate-900">
+                      {radarData.check?.macro_shield?.safe
+                        ? "🟢 Safe (Keine Katalysatoren <120m)"
+                        : `${radarData.check?.macro_shield?.trading_halted ? "🛑" : "⚠️"} ${radarData.check?.macro_shield?.warning || "Makro-Risiko aktiv!"}`}
+                    </div>
+                    {radarData.check?.macro_shield?.next_event ? (
+                      <div className="mt-0.5 text-[10px] text-slate-500">
+                        Nächstes: {radarData.check?.macro_shield?.next_event?.title} ({radarData.check?.macro_shield?.next_event?.date_formatted} {radarData.check?.macro_shield?.next_event?.time_str} CET)
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>

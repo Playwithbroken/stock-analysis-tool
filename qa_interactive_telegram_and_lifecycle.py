@@ -13,6 +13,7 @@ from src.position_sizing_service import PositionSizingService
 from src.market_breadth_service import MarketBreadthService
 from src.performance_metrics import calculate_trading_journal_metrics
 from src.storage import PortfolioManager
+from src.macro_shield_service import MacroShieldService
 
 
 class TestOpeningRangeBreakoutService(unittest.TestCase):
@@ -301,6 +302,15 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.mock_orb = MagicMock()
         self.mock_sizing = MagicMock()
         self.mock_breadth = MagicMock()
+        self.mock_macro = MagicMock()
+        self.mock_macro.evaluate_macro_shield.return_value = {
+            "risk_level": "GREEN_CLEAR",
+            "trading_halted": False,
+            "badge": "🟢 CLEAR",
+            "warning": None,
+            "next_catalyst": None,
+            "upcoming_catalysts": [],
+        }
 
         self.service = TelegramInteractiveService(
             bot_token="test_bot_token",
@@ -318,6 +328,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
             opening_range_breakout_service=self.mock_orb,
             position_sizing_service=self.mock_sizing,
             market_breadth_service=self.mock_breadth,
+            macro_shield_service=self.mock_macro,
         )
 
     def test_authorization_security(self):
@@ -490,12 +501,49 @@ class TestTelegramInteractiveService(unittest.TestCase):
         be_btn = next((b for b in all_buttons if b.get("callback_data") == "be:NVDA"), None)
         close_btn = next((b for b in all_buttons if b.get("callback_data") == "close:NVDA"), None)
         scale_btn = next((b for b in all_buttons if b.get("callback_data") == "scale:NVDA:50"), None)
+        macro_btn = next((b for b in all_buttons if b.get("callback_data") == "macro:NVDA"), None)
         self.assertIsNotNone(be_btn)
         self.assertIn("Breakeven", be_btn["text"])
         self.assertIsNotNone(close_btn)
         self.assertIn("Schließen", close_btn["text"])
         self.assertIsNotNone(scale_btn)
         self.assertIn("Teilverkauf", scale_btn["text"])
+        self.assertIsNotNone(macro_btn)
+        self.assertIn("Makro- & FOMC-Shield", macro_btn["text"])
+
+    def test_cmd_macro(self):
+        self.mock_macro.evaluate_macro_shield.return_value = {
+            "risk_level": "RED_ALERT",
+            "trading_halted": True,
+            "badge": "🛑 TRADING HALTED",
+            "warning": "FOMC Zinsentscheid in 15 Min",
+            "next_catalyst": {
+                "title": "FOMC Rate Decision",
+                "proximity_minutes": 15,
+                "date_formatted": "Heute",
+                "time_str": "20:00",
+            },
+            "upcoming_catalysts": [],
+        }
+        self.mock_macro.format_telegram_macro_card.return_value = "🏛️ <b>HIGH-IMPACT MAKRO- &amp; NOTENBANK-SHIELD</b>"
+        res = self.service.handle_command("999888", "/macro NVDA")
+        self.assertIn("HIGH-IMPACT MAKRO- &amp; NOTENBANK-SHIELD", res)
+        self.mock_macro.evaluate_macro_shield.assert_called_with("NVDA")
+        self.mock_macro.format_telegram_macro_card.assert_called_once()
+
+    def test_callback_macro(self):
+        self.mock_macro.evaluate_macro_shield.return_value = {
+            "risk_level": "GREEN_CLEAR",
+            "trading_halted": False,
+        }
+        self.mock_macro.format_telegram_macro_card.return_value = "🏛️ <b>HIGH-IMPACT MAKRO- &amp; NOTENBANK-SHIELD: AAPL</b>"
+        with patch.object(self.service, "send_message") as mock_send, \
+             patch.object(self.service, "answer_callback_query") as mock_ans:
+            self.service.handle_callback_query("999888", "macro:AAPL", "cq_macro_123")
+            mock_ans.assert_called_once()
+            mock_send.assert_called_once()
+            sent_text = mock_send.call_args[0][1]
+            self.assertIn("HIGH-IMPACT MAKRO- &amp; NOTENBANK-SHIELD: AAPL", sent_text)
 
     def test_cmd_watch_and_unwatch(self):
         res_watch = self.service.handle_command("999888", "/watch SAP.DE")
@@ -699,6 +747,31 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("82/100", res)
         self.assertIn("Positives Gamma", res)
         self.assertIn("Stärker als SPY", res)
+
+    def test_cmd_check_with_macro_shield(self):
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "entry_price": 215.0,
+            "invalidation_price": 208.0,
+            "target_1": 229.0,
+            "target_2": 242.0,
+            "confluence_score": 82,
+            "grade_badge": "⭐ Grade A",
+            "volume_profile": {"market_location": "inside_value_area"},
+            "relative_strength": {"mansfield_rs": 4.5},
+            "options_gex": {"regime": "positive_gamma"},
+        }
+        self.mock_macro.evaluate_macro_shield.return_value = {
+            "risk_level": "RED_ALERT",
+            "trading_halted": True,
+            "badge": "🛑 TRADING HALTED",
+            "warning": "FOMC Zinsentscheid in 20m!",
+            "next_catalyst": {"title": "FOMC Rate Decision", "proximity_minutes": 20},
+        }
+        res = self.service.handle_command("999888", "/check SAP.DE")
+        self.assertIn("360° INSTITUTIONAL CHECK: SAP.DE", res)
+        self.assertIn("Makro- &amp; FOMC-Shield:", res)
+        self.assertIn("🛑 TRADING HALTED", res)
+        self.assertIn("FOMC Zinsentscheid in 20m!", res)
 
     def test_cmd_stop(self):
         self.mock_asymmetric.generate_trade_setup.return_value = {
@@ -1054,6 +1127,118 @@ class TestPortfolioManagerScaleOut(unittest.TestCase):
                     os.remove(tmp_path)
                 except Exception:
                     pass
+
+
+
+class TestMacroShieldService(unittest.TestCase):
+    def setUp(self):
+        self.svc = MacroShieldService()
+
+    def test_get_upcoming_catalysts(self):
+        cats = self.svc.get_upcoming_catalysts(days_ahead=30)
+        self.assertIsInstance(cats, list)
+        self.assertGreater(len(cats), 0)
+        first = cats[0]
+        self.assertIn("title", first)
+        self.assertIn("category", first)
+        self.assertIn("proximity_minutes", first)
+        self.assertIn("affected_assets", first)
+        self.assertIsInstance(first["proximity_minutes"], int)
+
+    def test_evaluate_macro_shield_structure(self):
+        res = self.svc.evaluate_macro_shield("NVDA")
+        self.assertIn("risk_level", res)
+        self.assertIn("trading_halted", res)
+        self.assertIn("badge", res)
+        self.assertIn("safe", res)
+        self.assertIn("upcoming_catalysts", res)
+
+    def test_evaluate_macro_shield_red_alert_window(self):
+        from datetime import datetime, timezone, timedelta
+        now_utc = datetime.now(timezone.utc)
+        # Mock catalyst 15 minutes ahead
+        fake_cat = {
+            "title": "FOMC Rate Decision",
+            "category": "CENTRAL_BANK",
+            "region": "US",
+            "impact": "HIGH",
+            "datetime_utc": now_utc + timedelta(minutes=15),
+            "affected_assets": ["NVDA", "SPY"],
+            "minutes_until": 15,
+            "proximity_minutes": 15,
+        }
+        with patch.object(self.svc, "get_upcoming_catalysts", return_value=[
+            {
+                **fake_cat,
+                "date_formatted": "Heute",
+                "time_str": "20:00",
+            }
+        ]):
+            res = self.svc.evaluate_macro_shield("NVDA")
+            self.assertEqual(res["risk_level"], "RED_ALERT")
+            self.assertTrue(res["trading_halted"])
+            self.assertFalse(res["safe"])
+            self.assertIn("🔴", res["badge"])
+            self.assertIn("FOMC Rate Decision", res["warning"])
+
+    def test_evaluate_macro_shield_yellow_caution_window(self):
+        from datetime import datetime, timezone, timedelta
+        now_utc = datetime.now(timezone.utc)
+        fake_cat = {
+            "title": "US CPI Inflation",
+            "category": "INFLATION",
+            "region": "US",
+            "impact": "HIGH",
+            "datetime_utc": now_utc + timedelta(minutes=75),
+            "affected_assets": ["NVDA", "SPY"],
+            "minutes_until": 75,
+            "proximity_minutes": 75,
+        }
+        with patch.object(self.svc, "get_upcoming_catalysts", return_value=[
+            {
+                **fake_cat,
+                "date_formatted": "Heute",
+                "time_str": "14:30",
+            }
+        ]):
+            res = self.svc.evaluate_macro_shield("NVDA")
+            self.assertEqual(res["risk_level"], "YELLOW_CAUTION")
+            self.assertFalse(res["trading_halted"])
+            self.assertFalse(res["safe"])
+            self.assertIn("⚠️", res["badge"])
+
+    def test_format_telegram_macro_card(self):
+        sample_report = {
+            "ticker": "SAP.DE",
+            "risk_level": "RED_ALERT",
+            "trading_halted": True,
+            "badge": "🛑 TRADING HALTED",
+            "warning": "EZB Zinsentscheid in 25 Min!",
+            "next_catalyst": {
+                "title": "EZB Zinsentscheid",
+                "proximity_minutes": 25,
+                "date_formatted": "Heute",
+                "time_str": "14:15",
+                "region": "EU",
+                "category": "CENTRAL_BANK",
+            },
+            "upcoming_catalysts": [
+                {
+                    "title": "EZB Zinsentscheid",
+                    "proximity_minutes": 25,
+                    "date_formatted": "Heute",
+                    "time_str": "14:15",
+                    "region": "EU",
+                    "category": "CENTRAL_BANK",
+                    "affected_assets": ["SAP.DE", "DAX"],
+                }
+            ],
+        }
+        card = self.svc.format_telegram_macro_card(sample_report)
+        self.assertIn("HIGH-IMPACT MAKRO- &amp; NOTENBANK-SHIELD: SAP.DE", card)
+        self.assertIn("TRADING HALTED", card)
+        self.assertIn("EZB Zinsentscheid", card)
+        self.assertIn("in 25 Min", card)
 
 
 if __name__ == "__main__":

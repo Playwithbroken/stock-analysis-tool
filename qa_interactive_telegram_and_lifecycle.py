@@ -219,6 +219,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.mock_signals = MagicMock()
         self.mock_alert = MagicMock()
         self.mock_pm = MagicMock()
+        self.mock_heat = MagicMock()
 
         self.service = TelegramInteractiveService(
             bot_token="test_bot_token",
@@ -229,6 +230,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
             market_regime_service=self.mock_regime,
             relative_strength_service=self.mock_rs,
             trade_lifecycle_service=self.mock_lifecycle,
+            portfolio_heat_service=self.mock_heat,
             trading_signals_service=self.mock_signals,
             alert_service=self.mock_alert,
             portfolio_manager=self.mock_pm,
@@ -654,6 +656,37 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("POC Retest", res)
         self.assertIn("Demand-Zone", res)
         self.assertIn("Neu gepusht:</b> NVDA", res)
+
+    def test_cmd_preflight_clear(self):
+        self.mock_lifecycle.get_active_trades.return_value = []
+        self.mock_heat.evaluate_portfolio_heat.return_value = {
+            "portfolio_heat_pct": 0.5,
+            "max_portfolio_heat_pct": 2.5,
+        }
+        res = self.service.handle_command("999888", "/preflight NVDA")
+        self.assertIn("PRE-FLIGHT RISIKO-CHECK: NVDA", res)
+        self.assertIn("FREIGABE ERTEILT (CLEAR)", res)
+        self.assertIn("Aktuelle Heat: <b>0.50%</b>", res)
+        self.assertIn("Trade-Risiko: <b>+0.75%</b>", res)
+
+    def test_cmd_preflight_cluster_risk(self):
+        self.mock_lifecycle.get_active_trades.return_value = [
+            {"ticker": "MSFT", "status": "OPEN"}
+        ]
+        self.mock_heat.evaluate_portfolio_heat.return_value = {
+            "portfolio_heat_pct": 1.2,
+            "max_portfolio_heat_pct": 2.5,
+        }
+        self.mock_heat.compute_correlation_matrix.return_value = {
+            "matrix": {
+                "NVDA": {"MSFT": 0.82},
+                "MSFT": {"NVDA": 0.82},
+            }
+        }
+        res = self.service.handle_command("999888", "/preflight NVDA")
+        self.assertIn("PRE-FLIGHT RISIKO-CHECK: NVDA", res)
+        self.assertIn("ERHÖHTES CLUSTER-RISIKO", res)
+        self.assertIn("Korrelation r=0.82 mit offener Position <b>MSFT</b>", res)
 
 
 if __name__ == "__main__":

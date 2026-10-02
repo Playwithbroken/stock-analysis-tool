@@ -259,6 +259,12 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, f"Berechne Stops für {ticker}...")
             res = self._cmd_stop([ticker])
             self.send_message(chat_id, res)
+
+        elif cb.startswith("preflight:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Pre-Flight Risikocheck für {ticker}...")
+            res = self._cmd_preflight([ticker])
+            self.send_message(chat_id, res, reply_markup=self._build_inline_keyboard(ticker))
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -338,6 +344,8 @@ class TelegramInteractiveService:
                 return self._cmd_check(args)
             elif cmd in ("/stop", "/stops"):
                 return self._cmd_stop(args)
+            elif cmd in ("/preflight", "/checkrisk", "/shield"):
+                return self._cmd_preflight(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -357,6 +365,7 @@ class TelegramInteractiveService:
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
             "• <code>/check TICKER</code> – 360° Institutional Check &amp; Multi-Faktor Radar (z.B. <code>/check SAP.DE</code>)\n"
             "• <code>/stop TICKER</code> – Struktur-Stop Rechner (VAL, Put Wall, AVWAP, Invalidation)\n"
+            "• <code>/preflight TICKER</code> – Pre-Flight Risikocheck (Portfolio Heat &amp; Cluster-Korrelation)\n"
             "• <code>/sizing TICKER</code> – Positionsgrößen- &amp; Risikorechner (1.0% bis 2.0% Risk)\n"
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/close TICKER</code> – Offene Position direkt schließen &amp; PnL sichern (z.B. <code>/close NVDA</code>)\n"
@@ -417,7 +426,10 @@ class TelegramInteractiveService:
                     {"text": "🛡️ Stops", "callback_data": f"stop:{ticker}"},
                 ],
                 [
+                    {"text": "🛡️ Pre-Flight", "callback_data": f"preflight:{ticker}"},
                     {"text": "⚖️ Sizing", "callback_data": f"sizing:{ticker}"},
+                ],
+                [
                     {"text": "🛡️ Portfolio Heat", "callback_data": "heat"},
                 ],
             ]
@@ -1785,6 +1797,82 @@ class TelegramInteractiveService:
         )
         return "\n".join(lines)
 
+    def _cmd_preflight(self, args: List[str]) -> str:
+        """Pre-flight risk & correlation check before opening a trade."""
+        if not args:
+            return (
+                "🛡️ <b>Pre-Flight Risikocheck</b>\n"
+                "Prüft Portfolio Heat &amp; Cluster-Korrelation vor Ordererteilung.\n\n"
+                "<b>Syntax:</b> <code>/preflight TICKER</code> (z.B. <code>/preflight NVDA</code> oder <code>/preflight SAP.DE</code>)"
+            )
+        ticker = args[0].upper().strip()
+        if not self.heat_service:
+            return "⚠️ Portfolio Heat Service nicht initialisiert."
+
+        active = self.lifecycle_service.get_active_trades() if self.lifecycle_service else []
+        heat = self.heat_service.evaluate_portfolio_heat(active, portfolio_capital=50000.0)
+        current_heat = heat.get("portfolio_heat_pct", 0.0)
+        max_heat = heat.get("max_portfolio_heat_pct", 2.5)
+
+        proposed_risk = 0.75
+        projected_heat = round(current_heat + proposed_risk, 2)
+        is_overheated = projected_heat > max_heat
+
+        open_syms = [t["ticker"] for t in active if t.get("status") in ("OPEN", "TARGET_1_HIT")]
+        corr_warnings = []
+        if open_syms:
+            test_list = list(dict.fromkeys(open_syms + [ticker]))
+            matrix_res = self.heat_service.compute_correlation_matrix(test_list)
+            matrix = matrix_res.get("matrix", {})
+            for osym in open_syms:
+                if osym == ticker:
+                    continue
+                c = matrix.get(ticker, {}).get(osym) or matrix.get(osym, {}).get(ticker) or 0.0
+                if c >= 0.70:
+                    level = "🔴 KRITISCH" if c >= 0.85 else "⚠️ HOCH"
+                    corr_warnings.append(f"• {level}: Korrelation r={c:.2f} mit offener Position <b>{osym}</b>")
+
+        if is_overheated:
+            verdict_badge = "🔴 <b>ABGELEHNT (HEAT LIMIT)</b>"
+            verdict_desc = f"Projizierte Portfolio Heat ({projected_heat:.2f}%) überschreitet das Limit von {max_heat:.2f}%."
+        elif corr_warnings:
+            verdict_badge = "⚠️ <b>ERHÖHTES CLUSTER-RISIKO</b>"
+            verdict_desc = "Trade möglich, aber hohes Klumpenrisiko durch korrelierende Positionen!"
+        else:
+            verdict_badge = "🟢 <b>FREIGABE ERTEILT (CLEAR)</b>"
+            verdict_desc = f"Portfolio Heat bleibt im grünen Bereich ({projected_heat:.2f}% &lt;= {max_heat:.2f}%). Keine Korrelationskonflikte."
+
+        lines = [
+            f"🛡️ <b>PRE-FLIGHT RISIKO-CHECK: {ticker}</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"• <b>Status:</b> {verdict_badge}",
+            f"• <b>Urteil:</b> {verdict_desc}",
+            "",
+            "📊 <b>Portfolio Heat Analyse:</b>",
+            f"• Aktuelle Heat: <b>{current_heat:.2f}%</b> ({len(open_syms)} offene Positionen)",
+            f"• Trade-Risiko: <b>+{proposed_risk:.2f}%</b>",
+            f"• Projizierte Heat: <b>{projected_heat:.2f}%</b> / Max {max_heat:.2f}%",
+        ]
+
+        if corr_warnings:
+            lines.extend([
+                "",
+                "🔗 <b>Cluster-Korrelationswarnungen:</b>",
+            ] + corr_warnings)
+        else:
+            lines.extend([
+                "",
+                "🔗 <b>Cluster-Korrelation:</b>",
+                "• 🟢 Keine unzulässigen Korrelationen mit bestehenden Positionen.",
+            ])
+
+        lines.extend([
+            "",
+            f"💡 <i>Tipp: Mit <code>/paper {ticker}</code> buchen oder <code>/edge {ticker}</code> für Entry/Stop aufrufen.</i>"
+        ])
+
+        return "\n".join(lines)
+
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""
         default_list = [
@@ -1892,7 +1980,7 @@ class TelegramInteractiveService:
                         response_text = self.handle_command(chat_id, text)
                         if response_text:
                             reply_markup = None
-                            if text.startswith("/edge"):
+                            if text.startswith("/edge") or text.startswith("/check") or text.startswith("/stop") or text.startswith("/preflight"):
                                 parts = text.split()
                                 tk = parts[1].upper() if len(parts) > 1 else ""
                                 if tk:

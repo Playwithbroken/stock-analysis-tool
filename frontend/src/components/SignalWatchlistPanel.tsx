@@ -567,6 +567,22 @@ export default function SignalWatchlistPanel({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/api/trading/journal/export?format=csv"
+              download="trading_journal.csv"
+              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-colors hover:bg-slate-50 flex items-center gap-1.5"
+              title="Vollständiges Journal als CSV herunterladen"
+            >
+              📥 Journal (CSV)
+            </a>
+            <a
+              href="/api/trading/journal/export?format=markdown"
+              download="trading_journal.md"
+              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-colors hover:bg-slate-50 flex items-center gap-1.5"
+              title="Vollständiges Journal als Markdown herunterladen"
+            >
+              📖 Journal (MD)
+            </a>
             <button
               onClick={runCombinedScan}
               disabled={scannerLoading}
@@ -958,6 +974,83 @@ export default function SignalWatchlistPanel({
                 </div>
               </div>
             </div>
+
+            {/* Pre-Flight Risk & Portfolio Heat Card */}
+            {radarData.preflight ? (
+              <div className={`rounded-2xl border p-4 space-y-3 ${
+                radarData.preflight.status === "CRITICAL"
+                  ? "border-red-500/30 bg-red-500/10"
+                  : radarData.preflight.status === "WARNING"
+                  ? "border-amber-500/30 bg-amber-500/10"
+                  : "border-emerald-500/20 bg-emerald-500/5"
+              }`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">
+                      {radarData.preflight.status === "CRITICAL" ? "🔴" : radarData.preflight.status === "WARNING" ? "⚠️" : "🟢"}
+                    </span>
+                    <div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                        Pre-Flight Risikocheck &amp; Portfolio Heat Shield
+                      </div>
+                      <div className="text-sm font-black text-slate-900">
+                        {radarData.preflight.status === "CRITICAL"
+                          ? "Trade abgelehnt: Portfolio Heat Limit überschritten"
+                          : radarData.preflight.status === "WARNING"
+                          ? "Erhöhtes Cluster-Risiko: Stark korrelierende Positionen aktiv"
+                          : "Freigabe erteilt (Clear): Portfolio Heat & Korrelation im grünen Bereich"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-black/5 bg-white px-3 py-1.5 text-center">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                        Heat Status
+                      </div>
+                      <div className="text-xs font-black text-slate-900">
+                        {radarData.preflight.current_heat_pct?.toFixed(2)}% ➔ {radarData.preflight.projected_heat_pct?.toFixed(2)}%
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-black/5 bg-white px-3 py-1.5 text-center">
+                      <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                        Max Heat
+                      </div>
+                      <div className="text-xs font-black text-slate-900">
+                        {radarData.preflight.max_heat_pct?.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {radarData.preflight.correlated_positions?.length ? (
+                  <div className="rounded-xl border border-black/5 bg-white p-3 space-y-1.5">
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-800">
+                      🔗 Stark korrelierende aktive Positionen (Klumpenrisiko):
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {radarData.preflight.correlated_positions.map((cp: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between text-xs rounded-lg bg-amber-500/10 px-2.5 py-1.5">
+                          <span className="font-extrabold text-amber-950">{cp.open_ticker}</span>
+                          <span className="font-black text-amber-900">r = {cp.correlation?.toFixed(2)} ({cp.cluster_risk})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {radarData.preflight.warnings?.length ? (
+                  <div className="space-y-1 text-xs font-semibold text-slate-700">
+                    {radarData.preflight.warnings.map((w: string, idx: number) => (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <span>•</span>
+                        <span>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {/* Action Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

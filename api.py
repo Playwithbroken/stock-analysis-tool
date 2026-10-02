@@ -10265,10 +10265,12 @@ async def get_trading_radar(ticker: str):
             raise HTTPException(status_code=400, detail="Ticker parameter required.")
         chk = await get_trading_institutional_check(sym)
         stp = await get_trading_structural_stops(sym)
+        pre = await get_trading_preflight_check(sym)
         return convert_numpy_types({
             "ticker": sym,
             "check": chk,
             "stops": stp,
+            "preflight": pre,
         })
     except HTTPException:
         raise
@@ -10285,6 +10287,175 @@ async def get_trading_combined_scanner():
         service = get_trading_signals_service()
         res = await asyncio.to_thread(service.scan_combined_fvg_and_volume_retests, watchlist)
         return convert_numpy_types(res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/preflight-check/{ticker}")
+async def get_trading_preflight_check(ticker: str, capital: float = 50000.0, risk_pct: float = 0.75):
+    """
+    Evaluates Portfolio Heat and Cross-Correlation before opening a new position.
+    Protects against cluster risk and over-leveraging.
+    """
+    try:
+        sym = ticker.strip().upper()
+        if not sym:
+            raise HTTPException(status_code=400, detail="Ticker parameter required.")
+
+        lifecycle_svc = get_trade_lifecycle_service()
+        trades = lifecycle_svc.get_active_trades() if lifecycle_svc else []
+        heat_svc = get_portfolio_heat_service()
+
+        heat_report = await asyncio.to_thread(heat_svc.evaluate_portfolio_heat, trades, capital)
+        current_heat = heat_report.get("portfolio_heat_pct", 0.0)
+        max_heat = heat_report.get("max_portfolio_heat_pct", 2.5)
+
+        # Pairwise correlation with currently open positions
+        open_syms = [t["ticker"] for t in trades if t.get("status") in ("OPEN", "TARGET_1_HIT")]
+        corr_check = []
+        if open_syms and heat_svc:
+            test_list = list(dict.fromkeys(open_syms + [sym]))
+            matrix_res = await asyncio.to_thread(heat_svc.compute_correlation_matrix, test_list)
+            matrix = matrix_res.get("matrix", {})
+            for osym in open_syms:
+                if osym == sym:
+                    continue
+                c = matrix.get(sym, {}).get(osym) or matrix.get(osym, {}).get(sym) or 0.0
+                if c >= 0.70:
+                    corr_check.append({
+                        "open_ticker": osym,
+                        "correlation": round(float(c), 2),
+                        "cluster_risk": "CRITICAL" if c >= 0.85 else "HIGH",
+                        "warning": f"Hohe Korrelation ({c:.2f}) zu aktiver Position {osym}!"
+                    })
+
+        projected_heat = round(current_heat + risk_pct, 2)
+        is_overheated = projected_heat > max_heat
+        has_cluster_risk = len(corr_check) > 0
+
+        status = "CRITICAL" if is_overheated else ("WARNING" if has_cluster_risk else "SAFE")
+        warnings = []
+        if is_overheated:
+            warnings.append(f"Portfolio-Überhitzung: Projiziertes Gesamtrisiko ({projected_heat:.2f}%) überschreitet Limit ({max_heat:.2f}%).")
+        if has_cluster_risk:
+            warnings.append(f"Cluster-Risiko: {len(corr_check)} aktive Position(en) korrelieren stark mit {sym}.")
+
+        return convert_numpy_types({
+            "ticker": sym,
+            "status": status,
+            "can_execute": not is_overheated,
+            "current_heat_pct": current_heat,
+            "proposed_risk_pct": risk_pct,
+            "projected_heat_pct": projected_heat,
+            "max_heat_pct": max_heat,
+            "correlated_positions": corr_check,
+            "warnings": warnings,
+            "open_positions_count": len(open_syms),
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/journal/export")
+async def export_trading_journal(format: str = "csv"):
+    """
+    Exports the complete Paper Trading Journal as CSV or Markdown.
+    Includes timestamps, entry/exit prices, R-multiples, realized PnL, and notes.
+    """
+    try:
+        import csv
+        import io
+
+        pm = get_portfolio_manager()
+        trades = pm.list_paper_trades(limit=500) if hasattr(pm, "list_paper_trades") else []
+
+        if format.lower() == "markdown":
+            md_lines = [
+                "# 📖 TRADING JOURNAL EXPORT",
+                f"*Exportiert am {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*",
+                "",
+                "| Ticker | Richtung | Status | Einstieg | Exit | Menge | Realisiert | R-Multiple | Exit-Grund |",
+                "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
+            ]
+            total_pnl = 0.0
+            wins = 0
+            closed_count = 0
+
+            for t in trades:
+                sym = str(t.get("ticker") or "").upper()
+                status = str(t.get("status") or "").upper()
+                direction = str(t.get("direction") or "long").upper()
+                entry = float(t.get("entry_price") or 0.0)
+                exit_p = float(t.get("closed_price") or entry)
+                qty = float(t.get("quantity") or 1.0)
+                pnl = (exit_p - entry) * qty if status == "CLOSED" else 0.0
+                r_mult = t.get("r_multiple") or ("+2.0R" if status == "CLOSED" and pnl > 0 else "")
+                reason = t.get("exit_reason") or t.get("notes") or ""
+
+                if status == "CLOSED":
+                    closed_count += 1
+                    total_pnl += pnl
+                    if pnl > 0:
+                        wins += 1
+
+                md_lines.append(
+                    f"| **{sym}** | {direction} | {status} | {entry:.2f} | {exit_p:.2f} | {int(qty)} | {pnl:+,.2f} | {r_mult} | {reason} |"
+                )
+
+            win_rate = (wins / closed_count * 100) if closed_count > 0 else 0.0
+            md_lines.extend([
+                "",
+                "## 📊 Gesamt-Statistik",
+                f"- **Geschlossene Trades:** {closed_count}",
+                f"- **Win Rate:** {win_rate:.1f}%",
+                f"- **Realisierter Gesamt-PnL:** {total_pnl:+,.2f} €",
+            ])
+            return Response(
+                content="\n".join(md_lines),
+                media_type="text/markdown",
+                headers={"Content-Disposition": "attachment; filename=trading_journal.md"}
+            )
+
+        else:
+            # Default CSV export
+            out = io.StringIO()
+            writer = csv.writer(out)
+            writer.writerow([
+                "Trade ID", "Ticker", "Asset Class", "Direction", "Status",
+                "Entry Price", "Exit Price", "Stop Price", "Target Price",
+                "Quantity", "Realized PnL", "Opened At", "Closed At",
+                "Exit Reason", "Notes"
+            ])
+            for t in trades:
+                status = str(t.get("status") or "").upper()
+                entry = float(t.get("entry_price") or 0.0)
+                exit_p = float(t.get("closed_price") or entry)
+                qty = float(t.get("quantity") or 1.0)
+                pnl = round((exit_p - entry) * qty, 2) if status == "CLOSED" else 0.0
+                writer.writerow([
+                    t.get("id"),
+                    t.get("ticker"),
+                    t.get("asset_class", "equity"),
+                    t.get("direction", "long"),
+                    status,
+                    entry,
+                    exit_p,
+                    t.get("stop_price"),
+                    t.get("target_price"),
+                    qty,
+                    pnl,
+                    t.get("opened_at"),
+                    t.get("closed_at"),
+                    t.get("exit_reason"),
+                    t.get("notes"),
+                ])
+            return Response(
+                content=out.getvalue(),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=trading_journal.csv"}
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

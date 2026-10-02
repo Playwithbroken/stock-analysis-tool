@@ -318,6 +318,10 @@ class TelegramInteractiveService:
                 return self._cmd_journal()
             elif cmd in ("/sizing", "/size", "/risk"):
                 return self._cmd_sizing(args)
+            elif cmd in ("/movers", "/top", "/ranking"):
+                return self._cmd_movers()
+            elif cmd in ("/recap", "/eod"):
+                return self._cmd_recap()
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -343,6 +347,8 @@ class TelegramInteractiveService:
             "• <code>/depot</code> – Aktueller Depotstand, Cash &amp; Performance\n"
             "• <code>/journal</code> – Letzte abgeschlossene Trades &amp; Performance-Historie\n\n"
             "📋 <b>Watchlist &amp; Markt-Updates:</b>\n"
+            "• <code>/movers</code> – Watchlist-Tagesgewinner &amp; Verlierer im Ranking\n"
+            "• <code>/recap</code> – Schneller Session-Abschlussbericht &amp; Performance-Überblick\n"
             "• <code>/brief</code> – Sofortiges institutionelles Markt-Briefing abrufen\n"
             "• <code>/brief [europe|usa|close]</code> – Gezieltes Session-Briefing\n"
             "• <code>/watchlist</code> – Alle 18 überwachten EU- und US-Aktien anzeigen\n"
@@ -1411,6 +1417,132 @@ class TelegramInteractiveService:
             f"⚡ <b>Aggressiv (2.0% Risiko = -{r2_budget:,.0f} €):</b>\n"
             f"  ➔ <b>{shares_2} Aktien</b> (Positionsvolumen: ~{cap_2:,.2f} {c_sym})\n\n"
             f"💡 <i>Regel: Niemals mehr als 2.0% Gesamtrisiko pro Einzeltrade riskieren!</i>"
+        )
+
+    def _cmd_movers(self) -> str:
+        """Displays 1-day watchlist performance ranking (top gainers & decliners)."""
+        tickers = self._get_watchlist_tickers()
+        if not tickers:
+            return "ℹ️ Watchlist ist leer."
+
+        movers_data: List[Dict[str, Any]] = []
+        if yf:
+            try:
+                batch_syms = " ".join(tickers)
+                t_batch = yf.Tickers(batch_syms)
+                for sym in tickers:
+                    try:
+                        tk = t_batch.tickers.get(sym)
+                        if not tk:
+                            continue
+                        fi = getattr(tk, "fast_info", None)
+                        if fi:
+                            spot = fi.get("lastPrice") or fi.get("regularMarketPrice") or 0.0
+                            prev = fi.get("regularMarketPreviousClose") or spot
+                            if spot and prev:
+                                chg_pct = ((spot - prev) / prev) * 100.0
+                                movers_data.append({
+                                    "ticker": sym,
+                                    "spot": spot,
+                                    "chg_pct": chg_pct,
+                                })
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.warning("Error fetching movers: %s", e)
+
+        if not movers_data:
+            return "⚠️ Konnte aktuell keine Live-Mover-Kurse abrufen (evtl. Datenquelle temporär belegt)."
+
+        movers_data.sort(key=lambda x: x["chg_pct"], reverse=True)
+
+        lines = [
+            f"🏆 <b>WATCHLIST MARKT-MOVER ({len(movers_data)} Titel)</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        gainers = [m for m in movers_data if m["chg_pct"] >= 0]
+        losers = [m for m in movers_data if m["chg_pct"] < 0]
+
+        if gainers:
+            lines.append("🚀 <b>Gewinner:</b>")
+            for m in gainers[:5]:
+                sym = m["ticker"]
+                is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+                c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+                lines.append(
+                    f"• <b>{sym}</b>: {c_sym}{m['spot']:.2f} (<b>+{m['chg_pct']:.2f}%</b>) 🟢"
+                )
+            lines.append("")
+
+        if losers:
+            lines.append("🔻 <b>Verlierer / Rücksetzer:</b>")
+            for m in reversed(losers[-5:]):
+                sym = m["ticker"]
+                is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+                c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+                lines.append(
+                    f"• <b>{sym}</b>: {c_sym}{m['spot']:.2f} (<b>{m['chg_pct']:.2f}%</b>) 🔴"
+                )
+            lines.append("")
+
+        lines.append(
+            "💡 <i>Tipp: Rufe mit <code>/edge TICKER</code> sofort ein Setup für die stärksten Mover ab.</i>"
+        )
+        return "\n".join(lines)
+
+    def _cmd_recap(self) -> str:
+        """Generates an end-of-day market recap and performance summary."""
+        macro_text = ""
+        if self.regime_service:
+            try:
+                macro = self.regime_service.get_market_regime()
+                stance = macro.get("stance", "NEUTRAL")
+                vix = macro.get("vix", {}).get("value", 16.0)
+                icon = "🟢" if stance == "RISK_ON" else ("🟡" if stance == "NEUTRAL" else "🔴")
+                macro_text = f"• <b>Makro-Regime:</b> {icon} <b>{stance}</b> | VIX: <b>{vix:.2f}</b>\n"
+            except Exception:
+                pass
+
+        depot_text = ""
+        if self.portfolio_manager:
+            try:
+                equity = 50000.0
+                starting = 50000.0
+                if self.paper_service and hasattr(self.paper_service, "build_demo_account_snapshot"):
+                    snap = self.paper_service.build_demo_account_snapshot()
+                    equity = float(snap.get("equity") or 50000.0)
+                    starting = float(snap.get("starting_capital") or 50000.0)
+                pnl = equity - starting
+                pnl_pct = (pnl / starting * 100) if starting > 0 else 0.0
+                sign = "+" if pnl >= 0 else ""
+                emoji = "🟢" if pnl >= 0 else "🔴"
+                depot_text = f"• <b>Paper Depot:</b> <b>{equity:,.2f} EUR</b> ({sign}{pnl:,.2f} € / {sign}{pnl_pct:.2f}%) {emoji}\n"
+            except Exception:
+                pass
+
+        active_trades_count = 0
+        if self.lifecycle_service:
+            try:
+                active_trades_count = len([
+                    t for t in self.lifecycle_service.get_active_trades()
+                    if t.get("status") in ("OPEN", "TARGET_1_HIT")
+                ])
+            except Exception:
+                pass
+
+        return (
+            f"🌆 <b>MARKT- &amp; SESSION-RECAP</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{macro_text}"
+            f"{depot_text}"
+            f"• <b>Offene überwachte Setups:</b> <b>{active_trades_count} aktiv</b>\n\n"
+            f"📊 <b>Schnellzugriff:</b>\n"
+            f"• <code>/movers</code> – Ranking der Tagesgewinner &amp; Verlierer\n"
+            f"• <code>/calendar</code> – Termine &amp; Earnings für morgen\n"
+            f"• <code>/journal</code> – Realisierte Trades im Journal prüfen\n"
+            f"• <code>/edge</code> – Frische A+/A Setups für die nächste Session\n\n"
+            f"🛡️ <i>Disziplin ist der Schlüssel zum langfristigen Trading-Erfolg.</i>"
         )
 
     def _get_watchlist_tickers(self) -> List[str]:

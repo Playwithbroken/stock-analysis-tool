@@ -515,6 +515,17 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("Standard (1.5% Risiko = -750 €)", res)
         self.assertIn("75 Aktien", res)
 
+    def test_cmd_recap(self):
+        self.mock_regime.get_market_regime.return_value = {
+            "stance": "RISK_ON",
+            "vix": {"value": 14.8},
+        }
+        res = self.service.handle_command("999888", "/recap")
+        self.assertIn("SESSION-RECAP", res)
+        self.assertIn("RISK_ON", res)
+        self.assertIn("14.80", res)
+        self.assertIn("Schnellzugriff", res)
+
 
 if __name__ == "__main__":
     unittest.main()

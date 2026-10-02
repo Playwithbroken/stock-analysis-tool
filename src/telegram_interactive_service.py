@@ -247,6 +247,18 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, f"Berechne Position Sizing für {ticker}...")
             res = self._cmd_sizing([ticker])
             self.send_message(chat_id, res)
+
+        elif cb.startswith("check:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"360° Check für {ticker}...")
+            res = self._cmd_check([ticker])
+            self.send_message(chat_id, res, reply_markup=self._build_inline_keyboard(ticker))
+
+        elif cb.startswith("stop:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Berechne Stops für {ticker}...")
+            res = self._cmd_stop([ticker])
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -322,6 +334,10 @@ class TelegramInteractiveService:
                 return self._cmd_movers()
             elif cmd in ("/recap", "/eod"):
                 return self._cmd_recap()
+            elif cmd in ("/check", "/info"):
+                return self._cmd_check(args)
+            elif cmd in ("/stop", "/stops"):
+                return self._cmd_stop(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -339,6 +355,8 @@ class TelegramInteractiveService:
             "⚡ <b>Trading &amp; Order Management:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop &amp; Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/check TICKER</code> – 360° Institutional Check &amp; Multi-Faktor Radar (z.B. <code>/check SAP.DE</code>)\n"
+            "• <code>/stop TICKER</code> – Struktur-Stop Rechner (VAL, Put Wall, AVWAP, Invalidation)\n"
             "• <code>/sizing TICKER</code> – Positionsgrößen- &amp; Risikorechner (1.0% bis 2.0% Risk)\n"
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/close TICKER</code> – Offene Position direkt schließen &amp; PnL sichern (z.B. <code>/close NVDA</code>)\n"
@@ -393,6 +411,10 @@ class TelegramInteractiveService:
                 [
                     {"text": "🕳️ FVG & Zonen", "callback_data": f"fvg:{ticker}"},
                     {"text": "🧭 MTF Sync", "callback_data": f"mtf:{ticker}"},
+                ],
+                [
+                    {"text": "🔍 360° Check", "callback_data": f"check:{ticker}"},
+                    {"text": "🛡️ Stops", "callback_data": f"stop:{ticker}"},
                 ],
                 [
                     {"text": "⚖️ Sizing", "callback_data": f"sizing:{ticker}"},
@@ -1544,6 +1566,151 @@ class TelegramInteractiveService:
             f"• <code>/edge</code> – Frische A+/A Setups für die nächste Session\n\n"
             f"🛡️ <i>Disziplin ist der Schlüssel zum langfristigen Trading-Erfolg.</i>"
         )
+
+    def _cmd_check(self, args: List[str]) -> str:
+        """360-degree institutional checklist card for any ticker."""
+        if not args:
+            return (
+                "🔍 <b>360° Institutional Check</b>\n"
+                "Bitte einen Ticker angeben: z.B. <code>/check NVDA</code> oder <code>/check SAP.DE</code>"
+            )
+        ticker = args[0].upper().strip()
+        if not self.asymmetric_service:
+            return "⚠️ Asymmetric Trade Service nicht initialisiert."
+
+        setup = self.asymmetric_service.generate_trade_setup(ticker)
+        if not setup:
+            return f"❌ Konnte keinen 360°-Check für <b>{ticker}</b> durchführen (keine Kursdaten)."
+
+        spot = float(setup.get("entry_price") or 0.0)
+        score = setup.get("confluence_score", 50)
+        grade_badge = setup.get("grade_badge", "B")
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        # 1. Volume Profile
+        vp = setup.get("volume_profile") or {}
+        loc = vp.get("market_location", "Neutral")
+        loc_str = "🟢 Im Value-Bereich" if "inside" in loc else ("🚀 Über VAH (Ausbruch)" if "above" in loc else "⚠️ Unter VAL (Discount)")
+
+        # 2. Options GEX
+        gex = setup.get("options_gex")
+        if gex:
+            gex_reg = gex.get("regime", "neutral")
+            gex_str = "🟢 Positives Gamma (Dämpfung/Support)" if gex_reg == "positive_gamma" else "⚡ Negatives Gamma (Hohe Volatilität)"
+        else:
+            gex_str = "⚪ Keine US-Optionen (Aktie)"
+
+        # 3. Relative Strength
+        rs = setup.get("relative_strength")
+        if rs:
+            mans = rs.get("mansfield_rs", 0.0)
+            rs_str = f"🟢 Stärker als SPY (+{mans:.1f}%)" if mans > 0 else f"🔴 Schwächer als SPY ({mans:.1f}%)"
+        else:
+            rs_str = "⚪ Neutral"
+
+        # 4. AVWAP
+        avwap = setup.get("anchored_vwap")
+        if avwap:
+            bias = avwap.get("institutional_bias", "NEUTRAL")
+            avwap_str = "🟢 Bullish (> YTD AVWAP)" if "BULLISH" in bias else "🔴 Bearish (< YTD AVWAP)"
+        else:
+            avwap_str = "⚪ Neutral"
+
+        # 5. Earnings Shield
+        earn = setup.get("earnings_info")
+        if earn and earn.get("days_until") is not None and earn.get("days_until") <= 5:
+            earn_str = f"⚠️ {earn.get('warning', 'Quartalszahlen stehen an!')}"
+        else:
+            earn_str = "🟢 Keine Quartalszahlen in den nächsten 5 Tagen"
+
+        # 6. Whale Flow
+        whale = setup.get("whale_flow")
+        whale_str = f"🐋 {whale.get('bias', 'Neutral')}" if whale else "⚪ Neutral"
+
+        return (
+            f"🔍 <b>360° INSTITUTIONAL CHECK: {ticker}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Aktueller Kurs:</b> {c_sym}{spot:.2f}\n"
+            f"• <b>Confluence Score:</b> <b>{score}/100</b> ({grade_badge})\n\n"
+            f"📊 <b>Multi-Faktor Radar:</b>\n"
+            f"• <b>Volume Profile:</b> {loc_str}\n"
+            f"• <b>Optionen GEX:</b> {gex_str}\n"
+            f"• <b>Relative Stärke vs SPY:</b> {rs_str}\n"
+            f"• <b>Institutioneller AVWAP:</b> {avwap_str}\n"
+            f"• <b>Whale / Dark Pool Flow:</b> {whale_str}\n"
+            f"• <b>Earnings Shield:</b> {earn_str}\n\n"
+            f"🎯 <b>Edge-Einstieg &amp; Stop:</b>\n"
+            f"• Entry: {c_sym}{setup.get('entry_price', 0):.2f} | Stop: {c_sym}{setup.get('invalidation_price', 0):.2f}\n"
+            f"• Ziel 1: {c_sym}{setup.get('target_1', 0):.2f} | Ziel 2: {c_sym}{setup.get('target_2', 0):.2f}\n\n"
+            f"💡 <i>Tipp: Tippe <code>/edge {ticker}</code> für das vollständige Setup oder <code>/sizing {ticker}</code> für dein Risikolimit.</i>"
+        )
+
+    def _cmd_stop(self, args: List[str]) -> str:
+        """Calculates multi-structural stop-loss levels and recommended invalidation."""
+        if not args:
+            return (
+                "🛡️ <b>Struktur-Stop Rechner</b>\n"
+                "Berechnet Stop-Levels basierend auf ATR, Volume Profile, GEX Put Wall und AVWAP.\n\n"
+                "<b>Syntax:</b> <code>/stop NVDA</code> oder <code>/stop SAP.DE</code>"
+            )
+        ticker = args[0].upper().strip()
+        if not self.asymmetric_service:
+            return "⚠️ Asymmetric Trade Service nicht initialisiert."
+
+        setup = self.asymmetric_service.generate_trade_setup(ticker)
+        if not setup:
+            return f"❌ Konnte keine Stop-Daten für <b>{ticker}</b> ermitteln."
+
+        spot = float(setup.get("entry_price") or 0.0)
+        hard_stop = float(setup.get("invalidation_price") or spot * 0.95)
+        dist_hard = ((spot - hard_stop) / spot * 100) if spot > 0 else 0.0
+
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        vp = setup.get("volume_profile") or {}
+        val = vp.get("val") or (spot * 0.97)
+        dist_val = ((spot - val) / spot * 100) if spot > 0 else 0.0
+
+        gex = setup.get("options_gex")
+        pw = gex.get("put_wall") if gex else None
+
+        avwap = setup.get("anchored_vwap") or {}
+        ytd_vwap = avwap.get("ytd", {}).get("avwap") if isinstance(avwap, dict) and "ytd" in avwap else None
+
+        lines = [
+            f"🛡️ <b>STRUKTURELLE STOP-LOSS LEVEL: {ticker}</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"• <b>Aktueller Kurs:</b> {c_sym}{spot:.2f}\n",
+            f"🎯 <b>1. Empfohlener Edge-Stop (Invalidation):</b>",
+            f"  ➔ <b>{c_sym}{hard_stop:.2f}</b> (-{dist_hard:.1f}%) 🛡️",
+            f"  <i>Schützt den Trade knapp unterhalb der lokalen Marktstruktur.</i>\n",
+            f"📊 <b>2. Volume Profile Stop (Unterhalb VAL):</b>",
+            f"  ➔ <b>{c_sym}{val:.2f}</b> (-{dist_val:.1f}%)",
+            f"  <i>Verlässt der Kurs die 70%-Value-Area nach unten, ist die Long-These gebrochen.</i>\n",
+        ]
+
+        if pw and pw < spot:
+            dist_pw = ((spot - pw) / spot * 100)
+            lines.extend([
+                f"⚡ <b>3. Options Put Wall Stop (Institutioneller Boden):</b>",
+                f"  ➔ <b>{c_sym}{pw:.2f}</b> (-{dist_pw:.1f}%)",
+                f"  <i>Größte Put-Konzentration; MM müssen hier stützend kaufen.</i>\n",
+            ])
+
+        if ytd_vwap and ytd_vwap < spot:
+            dist_vwap = ((spot - ytd_vwap) / spot * 100)
+            lines.extend([
+                f"⚓ <b>4. YTD AVWAP Stop (Fonds-Benchmark):</b>",
+                f"  ➔ <b>{c_sym}{ytd_vwap:.2f}</b> (-{dist_vwap:.1f}%)",
+                f"  <i>Durchschnittlicher Einstiegspreis aller institutionellen Käufer seit Jahresbeginn.</i>\n",
+            ])
+
+        lines.append(
+            f"💡 <i>Tipp: Setze den Trailing-Stop nach Ziel 1 mit <code>/be {ticker}</code> sofort auf Einstand ({c_sym}{spot:.2f}).</i>"
+        )
+        return "\n".join(lines)
 
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""

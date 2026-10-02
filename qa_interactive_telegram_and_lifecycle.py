@@ -526,6 +526,39 @@ class TestTelegramInteractiveService(unittest.TestCase):
         self.assertIn("14.80", res)
         self.assertIn("Schnellzugriff", res)
 
+    def test_cmd_check(self):
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "entry_price": 215.0,
+            "invalidation_price": 208.0,
+            "target_1": 229.0,
+            "target_2": 242.0,
+            "confluence_score": 82,
+            "grade_badge": "⭐ Grade A",
+            "volume_profile": {"market_location": "inside_value_area"},
+            "relative_strength": {"mansfield_rs": 4.5},
+            "options_gex": {"regime": "positive_gamma"},
+        }
+        res = self.service.handle_command("999888", "/check SAP.DE")
+        self.assertIn("360° INSTITUTIONAL CHECK: SAP.DE", res)
+        self.assertIn("€215.00", res)
+        self.assertIn("82/100", res)
+        self.assertIn("Positives Gamma", res)
+        self.assertIn("Stärker als SPY", res)
+
+    def test_cmd_stop(self):
+        self.mock_asymmetric.generate_trade_setup.return_value = {
+            "entry_price": 120.0,
+            "invalidation_price": 114.0,
+            "volume_profile": {"val": 115.0},
+            "options_gex": {"put_wall": 110.0},
+        }
+        res = self.service.handle_command("999888", "/stop NVDA")
+        self.assertIn("STRUKTURELLE STOP-LOSS LEVEL: NVDA", res)
+        self.assertIn("$120.00", res)
+        self.assertIn("$114.00", res)
+        self.assertIn("$115.00", res)
+        self.assertIn("$110.00", res)
+
 
 if __name__ == "__main__":
     unittest.main()

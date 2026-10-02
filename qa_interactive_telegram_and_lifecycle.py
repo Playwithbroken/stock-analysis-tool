@@ -48,6 +48,12 @@ class TestTradeLifecycleService(unittest.TestCase):
         mock_cfg.telegram_bot_token = "mock_token"
         mock_cfg.telegram_chat_id = "12345"
         self.mock_alert_svc.get_config.return_value = mock_cfg
+        self.patcher = patch("src.trade_lifecycle_service.requests.post")
+        self.mock_post = self.patcher.start()
+        self.mock_post.return_value.ok = True
+
+    def tearDown(self):
+        self.patcher.stop()
 
     def test_trade_registration(self):
         ticket = {
@@ -156,6 +162,50 @@ class TestTradeLifecycleService(unittest.TestCase):
             call_args = self.mock_alert_svc._send_notifications.call_args[0]
             events = call_args[1]
             self.assertIn("STOP-LOSS ERREICHT: TSLA", events[0]["line"])
+
+    def test_stop_proximity_warning(self):
+        ticket = {
+            "ticker": "TSLA",
+            "entry_price": 200.0,
+            "invalidation_price": 190.0,
+            "target_1": 220.0,
+            "target_2": 235.0,
+            "risk_per_share": 10.0,
+        }
+        self.service.register_trade(ticket)
+
+        # Price drops to 191.0 (only 0.52% above stop 190.0)
+        with patch.object(self.service, "_fetch_current_price", return_value=191.0):
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(len(eval_res["actions"]), 1)
+            self.assertEqual(eval_res["actions"][0]["action"], "STOP_PROXIMITY")
+
+            call_args = self.mock_alert_svc._send_notifications.call_args[0]
+            events = call_args[1]
+            self.assertIn("STOP-LOSS WARNUNG: TSLA", events[0]["line"])
+            self.assertIn("$190.00", events[0]["line"])
+
+    def test_target_1_proximity_alert(self):
+        ticket = {
+            "ticker": "SAP.DE",
+            "entry_price": 210.0,
+            "invalidation_price": 202.0,
+            "target_1": 225.0,
+            "target_2": 235.0,
+            "risk_per_share": 8.0,
+        }
+        self.service.register_trade(ticket)
+
+        # Price rises to 224.0 (only 0.45% below target_1 225.0)
+        with patch.object(self.service, "_fetch_current_price", return_value=224.0):
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(len(eval_res["actions"]), 1)
+            self.assertEqual(eval_res["actions"][0]["action"], "TARGET_1_PROXIMITY")
+
+            call_args = self.mock_alert_svc._send_notifications.call_args[0]
+            events = call_args[1]
+            self.assertIn("ZIEL 1 IN REICHWEITE: SAP.DE", events[0]["line"])
+            self.assertIn("€225.00", events[0]["line"])
 
 
 class TestTelegramInteractiveService(unittest.TestCase):

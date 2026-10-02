@@ -16,6 +16,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -134,7 +136,38 @@ class TradeLifecycleService:
             is_eu = any(symbol.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
             c_sym = "€" if is_eu else ("£" if symbol.endswith(".L") else "$")
 
-            # 1. Target 1 Reached
+            # 1. Advance Notice: Target 1 Proximity Alert (within 0.75% of Target 1)
+            if (
+                status == "OPEN"
+                and spot < target_1
+                and ((target_1 - spot) / spot) <= 0.0075
+                and "TARGET_1_PROXIMITY" not in events_fired
+            ):
+                events_fired.append("TARGET_1_PROXIMITY")
+                actions.append({"ticker": symbol, "action": "TARGET_1_PROXIMITY", "price": spot})
+                if alert_service:
+                    dist_pct = ((target_1 - spot) / spot) * 100.0
+                    tg_msg = (
+                        f"🎯 <b>ZIEL 1 IN REICHWEITE: {symbol} ({c_sym}{spot:.2f})</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Der Kurs steht unmittelbar vor deinem 2.0R Kursziel von <b>{c_sym}{target_1:.2f}</b> (nur noch +{dist_pct:.2f}%)!\n\n"
+                        f"• <b>Einstieg:</b> {c_sym}{entry:.2f}\n"
+                        f"• <b>Aktueller Kurs:</b> {c_sym}{spot:.2f}\n"
+                        f"• <b>Ziel 1:</b> {c_sym}{target_1:.2f}\n\n"
+                        f"⚡ <b>Empfohlene Vorbereitung:</b>\n"
+                        f"Halte dich bereit für eine 50% Teilgewinn-Mitnahme oder ziehe den Stop mit 1-Tap auf Einstand ({c_sym}{entry:.2f}) nach."
+                    )
+                    kb = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🛡️ Stop auf Breakeven", "callback_data": f"be:{symbol}"},
+                                {"text": "🚪 Position schließen", "callback_data": f"close:{symbol}"},
+                            ]
+                        ]
+                    }
+                    self._dispatch_tg(alert_service, symbol, f"target_1_prox:{symbol}", tg_msg, reply_markup=kb)
+
+            # 2. Target 1 Reached
             if status == "OPEN" and spot >= target_1 and "TARGET_1_HIT" not in events_fired:
                 trade["status"] = "TARGET_1_HIT"
                 # Move trailing stop to Breakeven
@@ -170,9 +203,21 @@ class TradeLifecycleService:
                         f"🛡️ <i>Der Trade ist ab sofort risikofrei abgesichert. Die restlichen 50% "
                         f"laufen weiter Richtung Ziel 2 ({c_sym}{target_2:.2f}).</i>"
                     )
-                    self._dispatch_tg(alert_service, symbol, f"target_1:{symbol}", tg_msg)
+                    kb = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🛡️ Breakeven bestätigt", "callback_data": f"be:{symbol}"},
+                                {"text": "🚪 Position schließen", "callback_data": f"close:{symbol}"},
+                            ],
+                            [
+                                {"text": "🔍 360° Check", "callback_data": f"check:{symbol}"},
+                                {"text": "📖 Journal", "callback_data": "journal"},
+                            ]
+                        ]
+                    }
+                    self._dispatch_tg(alert_service, symbol, f"target_1:{symbol}", tg_msg, reply_markup=kb)
 
-            # 2. Target 2 Reached
+            # 3. Target 2 Reached
             elif status == "TARGET_1_HIT" and spot >= target_2 and "TARGET_2_HIT" not in events_fired:
                 trade["status"] = "TARGET_2_HIT"
                 events_fired.append("TARGET_2_HIT")
@@ -188,9 +233,50 @@ class TradeLifecycleService:
                         f"Restliche Position vollständig schließen oder Hard Trailing Stop "
                         f"unter das 9 EMA Tief legen."
                     )
-                    self._dispatch_tg(alert_service, symbol, f"target_2:{symbol}", tg_msg)
+                    kb = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🚪 Position schließen", "callback_data": f"close:{symbol}"},
+                                {"text": "📖 Journal", "callback_data": "journal"},
+                            ]
+                        ]
+                    }
+                    self._dispatch_tg(alert_service, symbol, f"target_2:{symbol}", tg_msg, reply_markup=kb)
 
-            # 3. Stop-Loss / Invalidation
+            # 4. Stop-Loss Proximity Warning (within 0.75% of Stop)
+            elif (
+                spot > stop
+                and ((spot - stop) / spot) <= 0.0075
+                and "STOP_PROXIMITY" not in events_fired
+            ):
+                events_fired.append("STOP_PROXIMITY")
+                actions.append({"ticker": symbol, "action": "STOP_PROXIMITY", "price": spot})
+                if alert_service:
+                    dist_pct = ((spot - stop) / spot) * 100.0
+                    tg_msg = (
+                        f"🚨 <b>STOP-LOSS WARNUNG: {symbol} ({c_sym}{spot:.2f})</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Der Kurs nähert sich gefährlich dem Invalidation Stop!\n\n"
+                        f"• <b>Aktueller Kurs:</b> {c_sym}{spot:.2f}\n"
+                        f"• <b>Stop-Loss Level:</b> {c_sym}{stop:.2f}\n"
+                        f"• <b>Verbleibender Puffer:</b> nur noch <b>{dist_pct:.2f}%</b>!\n\n"
+                        f"⚡ <b>Empfohlene Aktion:</b>\n"
+                        f"Trade jetzt engmaschig beobachten oder Position vorzeitig mit 1-Tap glattstellen."
+                    )
+                    kb = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🚪 Position sofort schließen", "callback_data": f"close:{symbol}"},
+                                {"text": "🛡️ Stops prüfen", "callback_data": f"stop:{symbol}"},
+                            ],
+                            [
+                                {"text": "🔍 360° Check", "callback_data": f"check:{symbol}"},
+                            ]
+                        ]
+                    }
+                    self._dispatch_tg(alert_service, symbol, f"stop_prox:{symbol}", tg_msg, reply_markup=kb)
+
+            # 5. Stop-Loss / Invalidation
             elif spot <= stop and "STOPPED_OUT" not in events_fired:
                 trade["status"] = "STOPPED_OUT"
                 events_fired.append("STOPPED_OUT")
@@ -213,7 +299,15 @@ class TradeLifecycleService:
                         f"{reason}\n\n"
                         f"💡 <i>Position glattstellen. Kapital für das nächste Setup freigeben.</i>"
                     )
-                    self._dispatch_tg(alert_service, symbol, f"stop_out:{symbol}", tg_msg)
+                    kb = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "📖 Trading Journal", "callback_data": "journal"},
+                                {"text": "🔍 Neues Setup suchen", "callback_data": "scan"},
+                            ]
+                        ]
+                    }
+                    self._dispatch_tg(alert_service, symbol, f"stop_out:{symbol}", tg_msg, reply_markup=kb)
 
         self._save_trades()
         return {"status": "ok", "evaluated": len(active), "actions": actions}
@@ -260,12 +354,16 @@ class TradeLifecycleService:
 
             status_desc = "🟢 WARTET AUF ZIEL 1" if status == "OPEN" else "🎯 ZIEL 1 ERREICHT (Stop auf BE)"
 
+            dist_stop = ((last - stop) / last * 100.0) if last > 0 else 0.0
+            dist_t1 = ((t1 - last) / last * 100.0) if last > 0 else 0.0
+
             lines.append(
                 f"\n• <b>{sym}</b> ({badge})\n"
                 f"  Status: <b>{status_desc}</b> ({r_str})\n"
                 f"  Einstieg: {c_sym}{entry:.2f} | Aktuell: <b>{c_sym}{last:.2f}</b>\n"
-                f"  Ziel 1: {c_sym}{t1:.2f} | Ziel 2: {c_sym}{t2:.2f}\n"
-                f"  Trailing Stop: <b>{c_sym}{stop:.2f}</b>"
+                f"  ➔ Puffer zum Stop: <b>{c_sym}{stop:.2f}</b> ({dist_stop:+.1f}%) 🛡️\n"
+                f"  ➔ Abstand zu Ziel 1: <b>{c_sym}{t1:.2f}</b> ({dist_t1:+.1f}%) 🎯\n"
+                f"  Ziel 2: {c_sym}{t2:.2f}"
             )
 
         return "\n".join(lines)
@@ -288,9 +386,17 @@ class TradeLifecycleService:
             pass
         return None
 
-    def _dispatch_tg(self, alert_service: Any, symbol: str, event_id: str, html_text: str) -> None:
-        """Helper to send telegram notification through alert service."""
+    def _dispatch_tg(
+        self,
+        alert_service: Any,
+        symbol: str,
+        event_id: str,
+        html_text: str,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Helper to send telegram notification with optional inline buttons."""
         try:
+            config = alert_service.get_config()
             date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             event_key = f"lifecycle:{event_id}:{date_str}"
             event = {
@@ -299,10 +405,26 @@ class TradeLifecycleService:
                 "title": f"Trade Lifecycle: {symbol}",
                 "line": html_text,
             }
-            config = alert_service.get_config()
             alert_service._validate_telegram_config(config)
             alert_service._send_notifications(config, [event], subject=f"Broker Freund: {symbol}")
             if self.portfolio_manager:
                 self.portfolio_manager.mark_signal_events_sent([event])
+
+            # If interactive buttons provided, send directly to Telegram chat
+            bot_token = getattr(config, "telegram_bot_token", None)
+            chat_id = getattr(config, "telegram_chat_id", None)
+            if reply_markup and bot_token and chat_id and getattr(config, "telegram_enabled", False):
+                try:
+                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    payload: Dict[str, Any] = {
+                        "chat_id": chat_id,
+                        "text": html_text[:4096],
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True,
+                        "reply_markup": reply_markup,
+                    }
+                    requests.post(url, json=payload, timeout=10)
+                except Exception as req_err:
+                    logger.debug("Failed sending Telegram interactive buttons: %s", req_err)
         except Exception as exc:
             logger.error("Failed to dispatch trade lifecycle alert for %s: %s", symbol, exc)

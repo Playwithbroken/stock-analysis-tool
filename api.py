@@ -1579,6 +1579,15 @@ def get_macro_shield_service():
         _macro_shield_service = _get_macro()
     return _macro_shield_service
 
+_audio_briefing_service = None
+
+def get_audio_briefing_service():
+    global _audio_briefing_service
+    if _audio_briefing_service is None:
+        from src.audio_briefing_service import get_audio_briefing_service as _get_audio
+        _audio_briefing_service = _get_audio()
+    return _audio_briefing_service
+
 def get_telegram_interactive_service():
     global _telegram_interactive_service
     if _telegram_interactive_service is None:
@@ -1606,6 +1615,7 @@ def get_telegram_interactive_service():
             position_sizing_service=get_position_sizing_service(),
             market_breadth_service=get_market_breadth_service(),
             macro_shield_service=get_macro_shield_service(),
+            audio_briefing_service=get_audio_briefing_service(),
         )
     return _telegram_interactive_service
 
@@ -10766,6 +10776,63 @@ async def get_trading_macro_shield(ticker: Optional[str] = None):
         service = get_macro_shield_service()
         data = await asyncio.to_thread(service.evaluate_macro_shield, ticker)
         return convert_numpy_types(data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/macro-pre-alerts")
+async def get_trading_macro_pre_alerts(send_telegram: bool = False):
+    """Scans and evaluates 60-minute and 15-minute macro blackout pre-alerts."""
+    try:
+        service = get_macro_shield_service()
+        pm = get_portfolio_manager()
+        open_trades = pm.list_paper_trades(limit=50) if hasattr(pm, "list_paper_trades") else []
+        alerts = await asyncio.to_thread(service.check_macro_pre_alerts, open_trades)
+
+        dispatched = 0
+        if send_telegram and alerts:
+            tg = get_telegram_interactive_service()
+            cfg = get_email_alert_service().get_config()
+            chat_id = cfg.telegram_chat_id
+            if tg and chat_id:
+                for al in alerts:
+                    if tg.send_message(chat_id, al["text"]):
+                        dispatched += 1
+
+        return convert_numpy_types({
+            "status": "ok",
+            "active_alerts_count": len(alerts),
+            "dispatched_telegram": dispatched,
+            "alerts": alerts,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trading/voice-briefing")
+async def trigger_voice_briefing(send_telegram: bool = True):
+    """Generates an institutional spoken audio daily brief (MP3) and delivers it to Telegram."""
+    try:
+        audio_svc = get_audio_briefing_service()
+        morning_svc = get_morning_brief_service()
+        brief_data = morning_svc.get_brief_fast() if morning_svc else None
+
+        audio_bytes, script = await asyncio.to_thread(audio_svc.generate_daily_briefing_audio, brief_data)
+        sent = False
+        if send_telegram:
+            tg = get_telegram_interactive_service()
+            cfg = get_email_alert_service().get_config()
+            chat_id = cfg.telegram_chat_id
+            if tg and chat_id:
+                caption = "🎙️ <b>Institutionelles Audio-Briefing</b>\nMarktlage, Makro-Events & Top-Setups"
+                sent = await asyncio.to_thread(tg.send_voice, chat_id, audio_bytes, caption)
+
+        return convert_numpy_types({
+            "status": "ok",
+            "audio_size_bytes": len(audio_bytes),
+            "script": script,
+            "sent_to_telegram": sent,
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

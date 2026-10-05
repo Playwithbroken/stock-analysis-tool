@@ -18,3 +18,4 @@ python-dotenv>=1.0.0
 feedparser>=6.0.0
 pywebpush>=2.3.0
 py-vapid>=1.9.0
+gTTS>=2.5.4

@@ -157,6 +157,8 @@ export default function SignalWatchlistPanel({
   const [macroLoading, setMacroLoading] = useState<boolean>(false);
   const [showMacro, setShowMacro] = useState<boolean>(false);
 
+  const [voiceLoading, setVoiceLoading] = useState<boolean>(false);
+
   const [tradeActionMessage, setTradeActionMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -317,6 +319,28 @@ export default function SignalWatchlistPanel({
       console.error("Macro shield fetch error:", err);
     } finally {
       setMacroLoading(false);
+    }
+  };
+
+  const handleTriggerVoice = async () => {
+    setVoiceLoading(true);
+    setTradeActionMessage(null);
+    try {
+      const res = await fetch("/api/trading/voice-briefing?send_telegram=true", { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        setTradeActionMessage(
+          json.sent_to_telegram
+            ? "🎙️ Audio-Briefing erfolgreich generiert und direkt an Telegram gesendet!"
+            : "🎙️ Audio-Briefing generiert! (Telegram nicht konfiguriert)"
+        );
+      } else {
+        setTradeActionMessage(`❌ Audio-Briefing Fehler: ${json.detail || "Konnte nicht erstellt werden"}`);
+      }
+    } catch (err: any) {
+      setTradeActionMessage(`❌ Fehler: ${err.message}`);
+    } finally {
+      setVoiceLoading(false);
     }
   };
 
@@ -755,6 +779,14 @@ export default function SignalWatchlistPanel({
               className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-rose-900 shadow-sm transition-colors hover:bg-rose-500/20 disabled:opacity-50"
             >
               {macroLoading ? "Prüfe Makro..." : "🏛️ Makro & FOMC Shield"}
+            </button>
+            <button
+              onClick={handleTriggerVoice}
+              disabled={voiceLoading}
+              className="rounded-xl border border-purple-500/20 bg-purple-500/10 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-purple-900 shadow-sm transition-colors hover:bg-purple-500/20 disabled:opacity-50"
+              title="Institutionelles Sprach-Briefing generieren & an Telegram senden"
+            >
+              {voiceLoading ? "Generiere Audio..." : "🎙️ Audio Briefing"}
             </button>
             <button
               onClick={runCombinedScan}

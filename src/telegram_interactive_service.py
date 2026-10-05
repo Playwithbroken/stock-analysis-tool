@@ -55,6 +55,7 @@ class TelegramInteractiveService:
         position_sizing_service: Optional[Any] = None,
         market_breadth_service: Optional[Any] = None,
         macro_shield_service: Optional[Any] = None,
+        audio_briefing_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -80,6 +81,7 @@ class TelegramInteractiveService:
         self.sizing_service = position_sizing_service
         self.breadth_service = market_breadth_service
         self.macro_service = macro_shield_service
+        self.audio_service = audio_briefing_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -124,6 +126,36 @@ class TelegramInteractiveService:
             return True
         except Exception as exc:
             logger.error("Failed to send Telegram message to %s: %s", chat_id, exc)
+            return False
+
+    def send_voice(
+        self,
+        chat_id: str,
+        voice_bytes: bytes,
+        caption: Optional[str] = None,
+        filename: str = "daily_briefing.mp3",
+    ) -> bool:
+        """Sends an audio / voice message to Telegram."""
+        if not self.bot_token or not voice_bytes:
+            return False
+        url_voice = f"https://api.telegram.org/bot{self.bot_token}/sendVoice"
+        files = {"voice": (filename, voice_bytes, "audio/mpeg")}
+        data: Dict[str, Any] = {"chat_id": chat_id}
+        if caption:
+            data["caption"] = caption[:1024]
+            data["parse_mode"] = "HTML"
+
+        try:
+            res = requests.post(url_voice, data=data, files=files, timeout=30)
+            if not res.ok:
+                # Fallback to sendAudio
+                url_audio = f"https://api.telegram.org/bot{self.bot_token}/sendAudio"
+                files_audio = {"audio": (filename, voice_bytes, "audio/mpeg")}
+                res = requests.post(url_audio, data=data, files=files_audio, timeout=30)
+            res.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.error("Failed to send Telegram voice/audio to %s: %s", chat_id, exc)
             return False
 
     def answer_callback_query(
@@ -308,6 +340,10 @@ class TelegramInteractiveService:
             args = [parts[1]] if len(parts) > 1 else []
             res = self._cmd_macro(args)
             self.send_message(chat_id, res)
+        elif cb in ("voice", "audio") or cb.startswith("voice:"):
+            self.answer_callback_query(callback_query_id, "🎙️ Generiere gesprochenes Audio-Briefing...")
+            res = self._cmd_voice(chat_id, [])
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -397,6 +433,8 @@ class TelegramInteractiveService:
                 return self._cmd_breadth()
             elif cmd in ("/macro", "/fomc", "/notenbank", "/makro"):
                 return self._cmd_macro(args)
+            elif cmd in ("/voice", "/audio", "/podcast", "/memo", "/brief_audio"):
+                return self._cmd_voice(chat_id, args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -428,6 +466,7 @@ class TelegramInteractiveService:
             "• <code>/depot</code> – Aktueller Depotstand, Cash &amp; Performance\n"
             "• <code>/journal</code> – Letzte abgeschlossene Trades &amp; Performance-Historie\n\n"
             "📋 <b>Watchlist &amp; Markt-Updates:</b>\n"
+            "• <code>/voice</code> – 🎙️ Audio Daily Briefing / Sprachnachricht anhören (MP3)\n"
             "• <code>/movers</code> – Watchlist-Tagesgewinner &amp; Verlierer im Ranking\n"
             "• <code>/recap</code> – Schneller Session-Abschlussbericht &amp; Performance-Überblick\n"
             "• <code>/recap [xetra|us]</code> – Gezielter XETRA- (17:35) oder Wall Street-Recap (22:05)\n"
@@ -2167,9 +2206,71 @@ class TelegramInteractiveService:
         if not svc:
             from src.macro_shield_service import get_macro_shield_service
             svc = get_macro_shield_service()
+
+        # Subcommand /macro alert or /macro test: Scans active pre-alerts
+        if args and args[0].lower() in ("alert", "alerts", "warn", "warning", "pre", "test"):
+            open_trades = []
+            if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+                try:
+                    open_trades = self.portfolio_manager.list_paper_trades(limit=50)
+                except Exception:
+                    pass
+            alerts = svc.check_macro_pre_alerts(open_trades=open_trades)
+            if not alerts:
+                return (
+                    "🟢 <b>MAKRO PRE-ALERTS SCANNER</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "• Keine akuten Makro-Gefahren im 60m / 15m Zeitfenster.\n"
+                    "• Trading-Ampel steht auf <b>CLEAR</b>."
+                )
+            alert_texts = [al["text"] for al in alerts]
+            return "\n\n".join(alert_texts)
+
         ticker = args[0].upper().strip() if args else None
         report = svc.evaluate_macro_shield(ticker)
         return svc.format_telegram_macro_card(report)
+
+    def _cmd_voice(self, chat_id: str, args: List[str]) -> str:
+        """Generates and delivers a spoken audio morning brief / voice memo via Telegram."""
+        if not self.audio_service:
+            try:
+                from src.audio_briefing_service import get_audio_briefing_service
+                self.audio_service = get_audio_briefing_service()
+            except Exception as e:
+                logger.warning("Could not load AudioBriefingService: %s", e)
+
+        brief_data = None
+        if self.morning_brief_service:
+            try:
+                brief_data = self.morning_brief_service.get_brief_fast()
+            except Exception as e:
+                logger.debug("Failed to get brief_fast for audio: %s", e)
+
+        if not self.audio_service:
+            return "⚠️ Audio Briefing Service nicht verfügbar (gTTS fehlt)."
+
+        try:
+            audio_bytes, script = self.audio_service.generate_daily_briefing_audio(brief_data)
+            caption = (
+                "🎙️ <b>Institutionelles Audio-Briefing</b>\n"
+                "Marktlage, Makro-Events & Top-Setups"
+            )
+            sent = self.send_voice(chat_id, audio_bytes, caption=caption)
+            if sent:
+                return (
+                    f"🎙️ <b>Audio-Briefing als Sprachnachricht gesendet!</b>\n\n"
+                    f"📝 <b>Gesprochenes Briefing:</b>\n<i>\"{script}\"</i>"
+                )
+            else:
+                return (
+                    f"🎙️ <b>Audio-Briefing generiert:</b>\n\n"
+                    f"📝 <b>Gesprochener Text:</b>\n<i>\"{script}\"</i>\n\n"
+                    f"⚠️ <i>Telegram Sprachversand fehlgeschlagen (bitte Bot-Token prüfen).</i>"
+                )
+        except Exception as exc:
+            logger.error("Audio briefing failed: %s", exc)
+            return f"❌ Fehler beim Erstellen der Sprachnachricht: {html.escape(str(exc))}"
+
 
     def _get_watchlist_tickers(self) -> List[str]:
         """Fetches watchlist tickers from portfolio manager or falls back to leaders."""

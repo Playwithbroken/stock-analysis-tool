@@ -47,7 +47,7 @@ class TestScalableImportAndFullPaper(unittest.TestCase):
         self.assertEqual(cfg["target_gross_exposure_pct"], 90.0)
         self.assertEqual(cfg["max_gross_exposure_pct"], 96.0)
         self.assertEqual(cfg["max_equity_exposure_pct"], 95.0)
-        self.assertEqual(cfg["max_open_trades"], 16)
+        self.assertEqual(cfg["max_open_trades"], 24)
 
         old_env = os.environ.get("PAPER_CAPITAL_PROFILE")
         try:
@@ -58,7 +58,7 @@ class TestScalableImportAndFullPaper(unittest.TestCase):
             self.assertEqual(account["max_position_value"], 125_000.0)
             self.assertEqual(account["max_gross_exposure_value"], 480_000.0)
             self.assertEqual(account["capital_deployment"]["target_gross_exposure_value"], 450_000.0)
-            self.assertEqual(account["open_trade_slots"], 16)
+            self.assertEqual(account["open_trade_slots"], 24)
         finally:
             if old_env is not None:
                 os.environ["PAPER_CAPITAL_PROFILE"] = old_env

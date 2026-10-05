@@ -433,6 +433,104 @@ class MacroShieldService:
 
         return "\n".join(lines)
 
+    def check_macro_pre_alerts(
+        self,
+        open_trades: Optional[List[Dict[str, Any]]] = None,
+        reference_dt: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Evaluates upcoming catalysts and generates automated pre-alerts:
+        - 60-Minuten-Vorwarnung (CAUTION): Stop-Loss prüfen, Spreads beachten.
+        - 15-Minuten-Blackout (RED_ALERT): Trading-Halt aktiv, Whipsaw-Schutz.
+        """
+        ref = reference_dt or datetime.now()
+        catalysts = self.get_upcoming_catalysts(days_ahead=2, reference_dt=ref)
+        alerts: List[Dict[str, Any]] = []
+
+        open_tickers = [
+            str(t.get("ticker", "")).upper()
+            for t in (open_trades or [])
+            if t.get("status") in ("open", "active") or not t.get("status")
+        ]
+
+        for cat in catalysts:
+            m = cat.get("minutes_until") if cat.get("minutes_until") is not None else cat.get("proximity_minutes", 9999)
+            cat_id = cat.get("id", "macro_event")
+            date_str = cat.get("date", ref.strftime("%Y-%m-%d"))
+            cat_title = cat.get("title", "High-Impact Katalysator")
+            flag = cat.get("flag", "🏛️")
+            time_str = cat.get("time_str", "14:30")
+            affected = cat.get("affected_assets", [])
+
+            # Check if any open positions are directly affected
+            matching_positions = [
+                ticker for ticker in open_tickers
+                if any(ticker == a or ticker.startswith(a.split(".")[0]) for a in affected)
+                or (cat.get("region") == "US" and not any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS"]))
+                or (cat.get("region") in ("EU", "DE") and any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS"]))
+            ]
+
+            # 1. 15-Minuten-Blackout-Alarm (0 bis 18 Min.)
+            if 0 <= m <= 18:
+                alert_key = f"macro_pre:{cat_id}:15m:{date_str}"
+                msg_lines = [
+                    f"🛑 <b>MAKRO-ALARM: TRADING-BLACKOUT IN {m} MINUTEN!</b>",
+                    "━━━━━━━━━━━━━━━━━━━━",
+                    f"• <b>Event:</b> {flag} <b>{cat_title}</b>",
+                    f"• <b>Uhrzeit:</b> <b>{time_str} MEZ</b> (in ca. {m} Min.)",
+                    "• <b>Status:</b> <b>TRADING HALTED</b> – Neueröffnungen gesperrt!",
+                ]
+                if matching_positions:
+                    pos_str = ", ".join(matching_positions)
+                    msg_lines.append(f"• ⚠️ <b>Betroffene offene Positionen:</b> <code>{pos_str}</code>")
+                    msg_lines.append("  ➔ <i>Empfehlung: Stops strikt halten oder Teilverkauf vorab sichern.</i>")
+                else:
+                    msg_lines.append("• <i>Keine direkt betroffenen offenen Positionen im Risiko.</i>")
+
+                msg_lines.append("")
+                msg_lines.append("🛡️ <i>Der Edge-Trading-Circuit-Breaker ist aktiv.</i>")
+
+                alerts.append({
+                    "alert_key": alert_key,
+                    "window": "15m",
+                    "catalyst_id": cat_id,
+                    "title": cat_title,
+                    "minutes_until": m,
+                    "trading_halted": True,
+                    "affected_tickers": matching_positions,
+                    "text": "\n".join(msg_lines),
+                })
+
+            # 2. 60-Minuten-Vorwarnung (45 bis 65 Min.)
+            elif 45 <= m <= 65:
+                alert_key = f"macro_pre:{cat_id}:60m:{date_str}"
+                msg_lines = [
+                    f"⚠️ <b>MAKRO-VORWARNUNG: HIGH-IMPACT EVENT IN {m} MINUTEN</b>",
+                    "━━━━━━━━━━━━━━━━━━━━",
+                    f"• <b>Event:</b> {flag} <b>{cat_title}</b>",
+                    f"• <b>Uhrzeit:</b> <b>{time_str} MEZ</b>",
+                    f"• <b>Bedeutung:</b> {cat.get('description', 'Erhöhte Volatilität erwartet.')}",
+                ]
+                if matching_positions:
+                    pos_str = ", ".join(matching_positions)
+                    msg_lines.append(f"• <b>Deine offenen Positionen:</b> <code>{pos_str}</code>")
+                    msg_lines.append("  ➔ <i>Tipp: Prüfe Stop-Loss oder sichere Gewinne via <code>/scale <ticker></code> ab.</i>")
+                else:
+                    msg_lines.append("• <i>Beobachte Index-Spreads und neue Signal-Setups.</i>")
+
+                alerts.append({
+                    "alert_key": alert_key,
+                    "window": "60m",
+                    "catalyst_id": cat_id,
+                    "title": cat_title,
+                    "minutes_until": m,
+                    "trading_halted": False,
+                    "affected_tickers": matching_positions,
+                    "text": "\n".join(msg_lines),
+                })
+
+        return alerts
+
 
 # Global singleton instance
 _macro_shield_instance: Optional[MacroShieldService] = None

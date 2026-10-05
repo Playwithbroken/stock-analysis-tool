@@ -14,6 +14,7 @@ from src.market_breadth_service import MarketBreadthService
 from src.performance_metrics import calculate_trading_journal_metrics
 from src.storage import PortfolioManager
 from src.macro_shield_service import MacroShieldService
+from src.audio_briefing_service import AudioBriefingService
 
 
 class TestOpeningRangeBreakoutService(unittest.TestCase):
@@ -311,6 +312,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
             "next_catalyst": None,
             "upcoming_catalysts": [],
         }
+        self.mock_audio = MagicMock()
 
         self.service = TelegramInteractiveService(
             bot_token="test_bot_token",
@@ -329,6 +331,7 @@ class TestTelegramInteractiveService(unittest.TestCase):
             position_sizing_service=self.mock_sizing,
             market_breadth_service=self.mock_breadth,
             macro_shield_service=self.mock_macro,
+            audio_briefing_service=self.mock_audio,
         )
 
     def test_authorization_security(self):
@@ -544,6 +547,41 @@ class TestTelegramInteractiveService(unittest.TestCase):
             mock_send.assert_called_once()
             sent_text = mock_send.call_args[0][1]
             self.assertIn("HIGH-IMPACT MAKRO- &amp; NOTENBANK-SHIELD: AAPL", sent_text)
+
+    def test_cmd_macro_alert(self):
+        self.mock_macro.check_macro_pre_alerts.return_value = [
+            {"text": "🛑 <b>MAKRO-ALARM: TRADING-BLACKOUT IN 15 MINUTEN!</b>", "window": "15m"}
+        ]
+        res = self.service.handle_command("999888", "/macro alert")
+        self.assertIn("MAKRO-ALARM: TRADING-BLACKOUT", res)
+        self.mock_macro.check_macro_pre_alerts.assert_called_once()
+
+    def test_cmd_voice(self):
+        self.mock_audio.generate_daily_briefing_audio.return_value = (
+            b"fake_mp3_bytes",
+            "Guten Morgen! Hier ist dein institutionelles Audio-Briefing."
+        )
+        with patch.object(self.service, "send_voice", return_value=True) as mock_send_v:
+            res = self.service.handle_command("999888", "/voice")
+            self.assertIn("Audio-Briefing als Sprachnachricht gesendet", res)
+            mock_send_v.assert_called_once()
+            call_args = mock_send_v.call_args[0]
+            self.assertEqual(call_args[0], "999888")
+            self.assertEqual(call_args[1], b"fake_mp3_bytes")
+
+    def test_callback_voice(self):
+        self.mock_audio.generate_daily_briefing_audio.return_value = (
+            b"fake_mp3_bytes",
+            "Guten Morgen! Hier ist dein institutionelles Audio-Briefing."
+        )
+        with patch.object(self.service, "send_voice", return_value=True) as mock_send_v, \
+             patch.object(self.service, "send_message") as mock_send_m, \
+             patch.object(self.service, "answer_callback_query") as mock_ans:
+            self.service.handle_callback_query("999888", "voice:today", "cq_v123")
+            mock_ans.assert_called_once()
+            mock_send_v.assert_called_once()
+            mock_send_m.assert_called_once()
+            self.assertIn("Audio-Briefing als Sprachnachricht gesendet", mock_send_m.call_args[0][1])
 
     def test_cmd_watch_and_unwatch(self):
         res_watch = self.service.handle_command("999888", "/watch SAP.DE")
@@ -1239,6 +1277,76 @@ class TestMacroShieldService(unittest.TestCase):
         self.assertIn("TRADING HALTED", card)
         self.assertIn("EZB Zinsentscheid", card)
         self.assertIn("in 25 Min", card)
+
+    def test_check_macro_pre_alerts(self):
+        with patch.object(self.svc, "get_upcoming_catalysts", return_value=[
+            {
+                "id": "fomc_decision",
+                "title": "FOMC Rate Decision",
+                "category": "CENTRAL_BANK",
+                "region": "US",
+                "impact": "CRITICAL",
+                "time_str": "20:00",
+                "minutes_until": 12,
+                "affected_assets": ["SPY", "NVDA"],
+                "flag": "🏛️",
+            },
+            {
+                "id": "us_cpi",
+                "title": "US CPI Inflation",
+                "category": "INFLATION",
+                "region": "US",
+                "impact": "HIGH",
+                "time_str": "14:30",
+                "minutes_until": 55,
+                "affected_assets": ["SPY"],
+                "flag": "📈",
+            }
+        ]):
+            open_trades = [{"ticker": "NVDA", "status": "open"}]
+            alerts = self.svc.check_macro_pre_alerts(open_trades=open_trades)
+            self.assertEqual(len(alerts), 2)
+
+            al_15 = next(a for a in alerts if a["window"] == "15m")
+            self.assertTrue(al_15["trading_halted"])
+            self.assertIn("TRADING-BLACKOUT IN 12 MINUTEN", al_15["text"])
+            self.assertIn("NVDA", al_15["affected_tickers"])
+
+            al_60 = next(a for a in alerts if a["window"] == "60m")
+            self.assertFalse(al_60["trading_halted"])
+            self.assertIn("MAKRO-VORWARNUNG", al_60["text"])
+
+
+class TestAudioBriefingService(unittest.TestCase):
+    def setUp(self):
+        self.svc = AudioBriefingService()
+
+    def test_clean_for_speech(self):
+        raw = "<b>SAP.DE</b> &amp; NVDA +12% mit R:R 3:1"
+        cleaned = self.svc._clean_for_speech(raw)
+        self.assertIn("S A P", cleaned)
+        self.assertIn("Nvidia", cleaned)
+        self.assertIn("Chance-Risiko-Verhältnis", cleaned)
+        self.assertNotIn("<b>", cleaned)
+        self.assertNotIn("&amp;", cleaned)
+
+    def test_build_spoken_script(self):
+        brief_data = {
+            "market_regime": {"stance": "RISK_ON", "vix": {"value": 15.2}},
+            "economic_calendar": [{"title": "FOMC Rate Decision", "time": "20:00"}],
+            "trade_ideas": [{"ticker": "NVDA", "setup_name": "VAH Breakout"}],
+        }
+        script = self.svc.build_spoken_script(brief_data)
+        self.assertIn("Guten Morgen!", script)
+        self.assertIn("Risk-On", script)
+        self.assertIn("15.2", script)
+        self.assertIn("Nvidia", script)
+        self.assertIn("F O M C", script)
+
+    def test_generate_audio_mp3(self):
+        audio_bytes = self.svc.generate_audio_mp3("Test Audio Briefing.")
+        self.assertIsInstance(audio_bytes, bytes)
+        self.assertGreater(len(audio_bytes), 1000)
 
 
 if __name__ == "__main__":

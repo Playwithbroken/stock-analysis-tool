@@ -1798,22 +1798,16 @@ class TelegramInteractiveService:
             except Exception:
                 pass
 
-        lines = [
-            title,
-            "━━━━━━━━━━━━━━━━━━━━",
-            f"{macro_text.strip()}",
-            f"{depot_text.strip()}",
-            f"• <b>Offene überwachte Setups:</b> <b>{active_trades_count} aktiv</b>",
-        ]
+        active_str = f"• <b>Offene überwachte Setups:</b> <b>{active_trades_count} aktiv</b>\n"
         if active_lines:
-            lines.extend(active_lines)
+            active_str += "\n".join(active_lines) + "\n"
 
         return (
             f"{title}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{macro_text}"
             f"{depot_text}"
-            f"• <b>Offene überwachte Setups:</b> <b>{active_trades_count} aktiv</b>\n\n"
+            f"{active_str}\n"
             f"📊 <b>Schnellzugriff:</b>\n"
             f"• <code>/movers</code> – Ranking der Tagesgewinner &amp; Verlierer\n"
             f"• <code>/calendar</code> – Termine &amp; Earnings für morgen\n"

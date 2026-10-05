@@ -1348,6 +1348,24 @@ class TestAudioBriefingService(unittest.TestCase):
         self.assertIsInstance(audio_bytes, bytes)
         self.assertGreater(len(audio_bytes), 1000)
 
+    def test_telegram_preformatted_html_not_escaped(self):
+        from src.email_alert_service import EmailAlertService
+        alert_svc = EmailAlertService(MagicMock(), MagicMock())
+        cfg = MagicMock()
+        cfg.telegram_enabled = True
+        cfg.telegram_bot_token = "123:ABC"
+        cfg.telegram_chat_id = "999"
+        sent_messages = []
+        alert_svc._tg_post = lambda token, chat, text: sent_messages.append(text)
+
+        event = {"category": "session_recap", "line": "🇪🇺 <b>XETRA CLOSE RECAP</b>\n• <code>/movers</code>"}
+        alert_svc._send_telegram(cfg, [event], "Recap")
+
+        self.assertEqual(len(sent_messages), 1)
+        self.assertIn("<b>XETRA CLOSE RECAP</b>", sent_messages[0])
+        self.assertNotIn("&lt;b&gt;", sent_messages[0])
+        self.assertIn("<code>/movers</code>", sent_messages[0])
+
 
 if __name__ == "__main__":
     unittest.main()

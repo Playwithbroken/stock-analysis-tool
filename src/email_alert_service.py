@@ -4707,7 +4707,8 @@ class EmailAlertService:
         ):
             return False
 
-        lines = [f"<b>{self._tg_esc(subject)}</b>", ""]
+        is_standalone_recap = len(events) == 1 and events[0].get("category") == "session_recap"
+        lines = [] if is_standalone_recap else [f"<b>{self._tg_esc(subject)}</b>", ""]
         current_section = ""
         for event in events[:30]:
             line = (event.get("line") or "").strip()
@@ -4745,7 +4746,10 @@ class EmailAlertService:
                 lines.append(self._render_telegram_paper_trade_closed_alert(event))
                 lines.append("")
                 continue
-            if event.get("category") == "trading_edge":
+            # Preformatted HTML cards (session recap, ORB breakouts, trading edge) should NOT be escaped
+            if event.get("category") in ("trading_edge", "session_recap", "orb_breakout") or (
+                "<b>" in line or "<code>" in line or "<i>" in line
+            ):
                 lines.append(line)
                 lines.append("")
                 continue

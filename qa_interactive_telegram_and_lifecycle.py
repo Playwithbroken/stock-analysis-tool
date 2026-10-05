@@ -1412,8 +1412,32 @@ class TestQualityCompounderService(unittest.TestCase):
         self.assertIn("Piotroski F-Score", res_single)
         self.assertIn("ROIC vs. WACC", res_single)
 
+    def test_telegram_superinvestor_and_psychology_commands(self):
+        from src.telegram_interactive_service import TelegramInteractiveService
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="12345",
+            quality_compounder_service=self.service,
+        )
+        # Test /13f general overview
+        res_13f = bot.handle_command("12345", "/13f")
+        self.assertIn("13F SUPERINVESTOR PORTFOLIO RADAR", res_13f)
+        self.assertIn("Warren Buffett", res_13f)
+
+        # Test /13f specific ticker
+        res_ticker = bot.handle_command("12345", "/13f NVDA")
+        self.assertIn("13F SUPERINVESTOR BACKING: NVDA", res_ticker)
+        self.assertIn("Stanley Druckenmiller", res_ticker)
+
+        # Test /psychology tilt shield
+        res_psy = bot.handle_command("12345", "/psychology")
+        self.assertIn("TRADING PSYCHOLOGY &amp; TILT SHIELD", res_psy)
+        self.assertIn("Mentaler Status", res_psy)
+        self.assertIn("Die 4 Goldenen Psychologie-Gesetze", res_psy)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

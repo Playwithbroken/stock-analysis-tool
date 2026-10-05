@@ -296,6 +296,17 @@ class TelegramInteractiveService:
             res = self._cmd_compounder([ticker])
             self.send_message(chat_id, res)
 
+        elif cb.startswith("13f:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"13F Superinvestor Radar für {ticker}...")
+            res = self._cmd_superinvestor([ticker])
+            self.send_message(chat_id, res)
+
+        elif cb == "psychology":
+            self.answer_callback_query(callback_query_id, "Lade Trading Psychology Status...")
+            res = self._cmd_psychology()
+            self.send_message(chat_id, res)
+
         elif cb.startswith("check:"):
             ticker = cb.split(":", 1)[1].upper()
             self.answer_callback_query(callback_query_id, f"360° Check für {ticker}...")
@@ -445,6 +456,10 @@ class TelegramInteractiveService:
                 return self._cmd_voice(chat_id, args)
             elif cmd in ("/compounder", "/quality", "/multibagger", "/piotroski"):
                 return self._cmd_compounder(args)
+            elif cmd in ("/13f", "/superinvestor", "/guru", "/whales"):
+                return self._cmd_superinvestor(args)
+            elif cmd in ("/psychology", "/tilt", "/mental", "/mindset"):
+                return self._cmd_psychology()
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -464,6 +479,8 @@ class TelegramInteractiveService:
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
             "• <code>/compounder</code> – Institutional Multi-Bagger Ranking (Piotroski &amp; ROIC)\n"
             "• <code>/compounder TICKER</code> – 360° Bilanz-, Burggraben- &amp; Z-Score Check (z.B. <code>/compounder NVDA</code>)\n"
+            "• <code>/13f</code> – 13F Superinvestor Radar (Buffett, Burry, Druckenmiller, Li Lu)\n"
+            "• <code>/psychology</code> – Trading Psychology &amp; Tilt Shield (Loss Streak Guard)\n"
             "• <code>/check TICKER</code> – 360° Institutional Check &amp; Multi-Faktor Radar (z.B. <code>/check SAP.DE</code>)\n"
             "• <code>/stop TICKER</code> – Struktur-Stop Rechner (VAL, Put Wall, AVWAP, Invalidation)\n"
             "• <code>/preflight TICKER</code> – Pre-Flight Risikocheck (Portfolio Heat &amp; Cluster-Korrelation)\n"
@@ -546,6 +563,10 @@ class TelegramInteractiveService:
                     {"text": "🏛️ Makro- & FOMC-Shield", "callback_data": f"macro:{ticker}"},
                     {"text": "💎 Compounder Radar", "callback_data": f"compounder:{ticker}"},
                 ],
+                [
+                    {"text": "🏛️ 13F Superinvestor", "callback_data": f"13f:{ticker}"},
+                    {"text": "🧠 Tilt & Psychologie", "callback_data": "psychology"},
+                ],
             ]
         }
 
@@ -568,6 +589,7 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "🎯 Setups & Trailing Stop", "callback_data": "track"},
+                    {"text": "🧠 Tilt Shield", "callback_data": "psychology"},
                 ],
             ]
         }
@@ -1910,6 +1932,22 @@ class TelegramInteractiveService:
         if macro_warn:
             macro_str += f"\n  ➔ <i>{macro_warn}</i>"
 
+        # 8. 13F Superinvestor Backing
+        gurus = []
+        try:
+            from src.superinvestor_service import SuperinvestorService
+            gurus = SuperinvestorService.get_superinvestors_for_ticker(ticker)
+        except Exception:
+            pass
+
+        if gurus:
+            top_guru = gurus[0]
+            guru_str = f"• <b>13F Superinvestor:</b> 🏛️ {top_guru['investor_name']} ({top_guru['weight_pct']}% Depot / {top_guru['action']})"
+            if len(gurus) > 1:
+                guru_str += f" + {len(gurus)-1} weitere"
+        else:
+            guru_str = "• <b>13F Superinvestor:</b> ⚪ Keine Top-Hedgefonds-Meldung"
+
         return (
             f"🔍 <b>360° INSTITUTIONAL CHECK: {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -1922,7 +1960,8 @@ class TelegramInteractiveService:
             f"• <b>Institutioneller AVWAP:</b> {avwap_str}\n"
             f"• <b>Whale / Dark Pool Flow:</b> {whale_str}\n"
             f"• <b>Earnings Shield:</b> {earn_str}\n"
-            f"{macro_str}\n\n"
+            f"{macro_str}\n"
+            f"{guru_str}\n\n"
             f"🎯 <b>Edge-Einstieg &amp; Stop:</b>\n"
             f"• Entry: {c_sym}{setup.get('entry_price', 0):.2f} | Stop: {c_sym}{setup.get('invalidation_price', 0):.2f}\n"
             f"• Ziel 1: {c_sym}{setup.get('target_1', 0):.2f} | Ziel 2: {c_sym}{setup.get('target_2', 0):.2f}\n\n"
@@ -2308,6 +2347,98 @@ class TelegramInteractiveService:
         ticker = args[0].upper().strip()
         data = self.compounder_service.analyze_compounder(ticker)
         return self.compounder_service.format_telegram_compounder_card(data)
+
+    def _cmd_superinvestor(self, args: List[str]) -> str:
+        """Shows 13F holdings of legendary superinvestors (Buffett, Burry, Druckenmiller, etc.)."""
+        try:
+            from src.superinvestor_service import SUPERINVESTORS, SuperinvestorService
+        except Exception as e:
+            return f"⚠️ Superinvestor Service nicht verfügbar: {html.escape(str(e))}"
+
+        if args:
+            ticker = args[0].upper().strip()
+            matches = SuperinvestorService.get_superinvestors_for_ticker(ticker)
+            if not matches:
+                return (
+                    f"🏛️ <b>13F SUPERINVESTOR RADAR: {ticker}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"ℹ️ Aktuell keine 13F-Meldungen unter den beobachteten Superinvestoren "
+                    f"(Buffett, Burry, Druckenmiller, Ackman, Li Lu, Terry Smith, Cathie Wood).\n\n"
+                    f"💡 <i>Tipp: Nutze <code>/compounder {ticker}</code> für fundamentale Bilanzqualität.</i>"
+                )
+            lines = [
+                f"🏛️ <b>13F SUPERINVESTOR BACKING: {ticker}</b>",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+            for m in matches:
+                act_emoji = "🟢" if m["action"] in ("BOUGHT", "NEW") else ("🟡" if m["action"] == "MAINTAINED" else "🔴")
+                lines.append(f"• <b>{m['investor_name']}</b> ({m['firm']}):")
+                lines.append(f"  {act_emoji} <b>{m['weight_pct']}%</b> Portfolio | Status: <b>{m['action']}</b>")
+                lines.append(f"  <i>\"{m['comment']}\"</i>\n")
+            lines.append("⚡ <i>Institutionelle Rückendeckung bestätigt langfristiges Potenzial.</i>")
+            return "\n".join(lines)
+
+        # Overview of all tracked superinvestors
+        lines = [
+            "🏛️ <b>13F SUPERINVESTOR PORTFOLIO RADAR</b>",
+            "Beobachtete Hedgefonds-Legenden &amp; Top-Picks:",
+            "━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for inv in SUPERINVESTORS:
+            top_picks = ", ".join(list(inv.get("holdings", {}).keys())[:4])
+            lines.append(f"• <b>{inv['name']}</b> ({inv['firm']})")
+            lines.append(f"  Stil: <i>{inv['style']}</i>")
+            lines.append(f"  Top-Holdings: <code>{top_picks}</code>\n")
+        lines.append("💡 <i>Tipp: Tippe <code>/13f TICKER</code> für die Superinvestoren einer Aktie (z.B. <code>/13f GOOGL</code>).</i>")
+        return "\n".join(lines)
+
+    def _cmd_psychology(self) -> str:
+        """Evaluates psychological state, win/loss streak, and mental capital protection."""
+        trades = []
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            trades = [t for t in self.portfolio_manager.list_paper_trades(limit=50) if t.get("status") == "closed"]
+
+        loss_streak = 0
+        recent_results = []
+        for t in trades[:10]:
+            pnl = float(t.get("realized_pnl") or t.get("pnl") or 0.0)
+            if pnl > 0:
+                recent_results.append("🟢 W")
+            else:
+                recent_results.append("🔴 L")
+
+        for t in trades:
+            pnl = float(t.get("realized_pnl") or t.get("pnl") or 0.0)
+            if pnl <= 0:
+                loss_streak += 1
+            else:
+                break
+
+        tilt_status = "🟢 KÜHLER KOPF (Optimaler Fokus)"
+        tilt_action = "✅ Volle Disziplin. Maximal 1.0% bis 1.5% Risiko pro Trade."
+        if loss_streak >= 2:
+            tilt_status = "🔴 TILT-GEFAHR (Mentaler Circuit Breaker aktiv)"
+            tilt_action = "⚠️ 2+ Verlust-Trades in Folge! Risiko sofort auf 0.25x reduzieren oder 4h Pause einlegen."
+        elif loss_streak == 1:
+            tilt_status = "🟡 ERHÖHTE VORSICHT (1 Verlust)"
+            tilt_action = "Achte streng auf A+ Confluence und überspringe B-Setups."
+
+        results_str = " ".join(recent_results) if recent_results else "Noch keine geschlossenen Trades"
+
+        return (
+            "🧠 <b>TRADING PSYCHOLOGY &amp; TILT SHIELD</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Mentaler Status:</b> <b>{tilt_status}</b>\n"
+            f"• <b>Verlust-Serie:</b> <b>{loss_streak} in Folge</b>\n"
+            f"• <b>Letzte Trades:</b> {results_str}\n\n"
+            f"🛡️ <b>Handlungs-Regel:</b>\n"
+            f"{tilt_action}\n\n"
+            "📜 <b>Die 4 Goldenen Psychologie-Gesetze:</b>\n"
+            "1. <b>Kein Revenge Trading:</b> Nach einem Verlust niemals die Positionsgröße erhöhen.\n"
+            "2. <b>Stops sind heilig:</b> Ein Stop-Loss wird NIEMALS nach unten verschoben.\n"
+            "3. <b>Gewinne absichern:</b> Bei Target 1 (R:R &gt; 2:1) Teilverkauf &amp; Rest auf Breakeven.\n"
+            "4. <b>Akzeptiere Verluste:</b> Verluste sind Betriebskosten des profitablen Tradings."
+        )
 
 
     def _get_watchlist_tickers(self) -> List[str]:

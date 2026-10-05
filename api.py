@@ -1617,12 +1617,18 @@ def get_telegram_interactive_service():
             macro_shield_service=get_macro_shield_service(),
             audio_briefing_service=get_audio_briefing_service(),
             quality_compounder_service=get_quality_compounder_service(),
+            asymmetric_options_leaps_service=get_asymmetric_options_leaps_service(),
         )
     return _telegram_interactive_service
 
 
 def get_quality_compounder_service():
     from src.quality_compounder_service import get_quality_compounder_service as _get_svc
+    return _get_svc()
+
+
+def get_asymmetric_options_leaps_service():
+    from src.asymmetric_options_leaps_service import get_asymmetric_options_leaps_service as _get_svc
     return _get_svc()
 
 
@@ -10870,6 +10876,33 @@ async def get_quality_compounder_check_endpoint(ticker: str):
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/leaps-strategy/{ticker}")
+async def get_leaps_strategy_endpoint(ticker: str, spot_price: Optional[float] = None):
+    """Calculates DITM LEAPS Call stock replacement strategy (Delta ~0.80)."""
+    try:
+        svc = get_asymmetric_options_leaps_service()
+        spot = spot_price
+        if not spot or spot <= 0:
+            lifecycle = get_trade_lifecycle_service()
+            spot = lifecycle._fetch_current_price(ticker) if lifecycle else None
+        if not spot or spot <= 0:
+            defaults = {
+                "NVDA": 135.0, "MSFT": 425.0, "AAPL": 225.0, "GOOGL": 175.0,
+                "AMZN": 185.0, "META": 580.0, "PLTR": 42.0, "TSLA": 250.0,
+                "SAP.DE": 215.0, "RHM.DE": 510.0, "ASML": 780.0, "ASML.AS": 780.0,
+            }
+            spot = defaults.get(ticker.upper().strip(), 100.0)
+
+        data = await asyncio.to_thread(svc.calculate_leaps_strategy, ticker, spot)
+        return convert_numpy_types({
+            "status": "ok",
+            "strategy": data,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 

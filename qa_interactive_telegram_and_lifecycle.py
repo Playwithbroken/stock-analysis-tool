@@ -1435,9 +1435,43 @@ class TestQualityCompounderService(unittest.TestCase):
         self.assertIn("Mentaler Status", res_psy)
         self.assertIn("Die 4 Goldenen Psychologie-Gesetze", res_psy)
 
+        # Test /routine executive pre-market checklist
+        res_routine = bot.handle_command("12345", "/routine")
+        self.assertIn("DAILY EXECUTIVE TRADING ROUTINE", res_routine)
+        self.assertIn("Makro-Shield Check", res_routine)
+        self.assertIn("Eisernes Risikobudget heute", res_routine)
+
+        # Test /leaps calculation
+        res_leaps = bot.handle_command("12345", "/leaps NVDA")
+        self.assertIn("LEAPS ASYMMETRIE-RECHNER: NVDA", res_leaps)
+        self.assertIn("Empfohlener Strike", res_leaps)
+        self.assertIn("Effektiver Hebel", res_leaps)
+
+
+class TestAsymmetricOptionsLeapsService(unittest.TestCase):
+    def setUp(self):
+        from src.asymmetric_options_leaps_service import AsymmetricOptionsLeapsService
+        self.service = AsymmetricOptionsLeapsService()
+
+    def test_calculate_leaps_strategy(self):
+        res = self.service.calculate_leaps_strategy("NVDA", spot_price=135.0)
+        self.assertEqual(res["ticker"], "NVDA")
+        self.assertGreater(res["delta"], 0.70)
+        self.assertGreater(res["effective_leverage"], 2.0)
+        self.assertGreater(res["capital_saved_pct"], 50.0)
+        self.assertEqual(len(res["scenarios"]), 4)
+
+    def test_format_telegram_leaps_card(self):
+        res = self.service.calculate_leaps_strategy("SAP.DE", spot_price=215.0)
+        card = self.service.format_telegram_leaps_card(res)
+        self.assertIn("LEAPS ASYMMETRIE-RECHNER: SAP.DE", card)
+        self.assertIn("Stock Replacement Strategy", card)
+        self.assertIn("€", card)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

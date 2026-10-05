@@ -1616,8 +1616,14 @@ def get_telegram_interactive_service():
             market_breadth_service=get_market_breadth_service(),
             macro_shield_service=get_macro_shield_service(),
             audio_briefing_service=get_audio_briefing_service(),
+            quality_compounder_service=get_quality_compounder_service(),
         )
     return _telegram_interactive_service
+
+
+def get_quality_compounder_service():
+    from src.quality_compounder_service import get_quality_compounder_service as _get_svc
+    return _get_svc()
 
 
 def _get_paper_news_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
@@ -10835,6 +10841,36 @@ async def trigger_voice_briefing(send_telegram: bool = True):
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/quality-compounders")
+async def get_quality_compounders_endpoint(limit: int = 10):
+    """Scans and ranks institutional quality compounders (Piotroski, ROIC, Altman Z, Moat)."""
+    try:
+        svc = get_quality_compounder_service()
+        results = await asyncio.to_thread(svc.scan_universe_top_compounders, None, limit)
+        return convert_numpy_types({
+            "status": "ok",
+            "count": len(results),
+            "compounders": results,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trading/quality-check/{ticker}")
+async def get_quality_compounder_check_endpoint(ticker: str):
+    """Runs 360-degree quality compounder check for a single ticker."""
+    try:
+        svc = get_quality_compounder_service()
+        analysis = await asyncio.to_thread(svc.analyze_compounder, ticker)
+        return convert_numpy_types({
+            "status": "ok",
+            "analysis": analysis,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/api/trading/journal-metrics")

@@ -56,6 +56,7 @@ class TelegramInteractiveService:
         market_breadth_service: Optional[Any] = None,
         macro_shield_service: Optional[Any] = None,
         audio_briefing_service: Optional[Any] = None,
+        quality_compounder_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -82,6 +83,7 @@ class TelegramInteractiveService:
         self.breadth_service = market_breadth_service
         self.macro_service = macro_shield_service
         self.audio_service = audio_briefing_service
+        self.compounder_service = quality_compounder_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -288,6 +290,12 @@ class TelegramInteractiveService:
             res = self._cmd_sizing([ticker])
             self.send_message(chat_id, res)
 
+        elif cb.startswith("compounder:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Compounder Check für {ticker}...")
+            res = self._cmd_compounder([ticker])
+            self.send_message(chat_id, res)
+
         elif cb.startswith("check:"):
             ticker = cb.split(":", 1)[1].upper()
             self.answer_callback_query(callback_query_id, f"360° Check für {ticker}...")
@@ -435,6 +443,8 @@ class TelegramInteractiveService:
                 return self._cmd_macro(args)
             elif cmd in ("/voice", "/audio", "/podcast", "/memo", "/brief_audio"):
                 return self._cmd_voice(chat_id, args)
+            elif cmd in ("/compounder", "/quality", "/multibagger", "/piotroski"):
+                return self._cmd_compounder(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -452,6 +462,8 @@ class TelegramInteractiveService:
             "⚡ <b>Trading &amp; Order Management:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop &amp; Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/compounder</code> – Institutional Multi-Bagger Ranking (Piotroski &amp; ROIC)\n"
+            "• <code>/compounder TICKER</code> – 360° Bilanz-, Burggraben- &amp; Z-Score Check (z.B. <code>/compounder NVDA</code>)\n"
             "• <code>/check TICKER</code> – 360° Institutional Check &amp; Multi-Faktor Radar (z.B. <code>/check SAP.DE</code>)\n"
             "• <code>/stop TICKER</code> – Struktur-Stop Rechner (VAL, Put Wall, AVWAP, Invalidation)\n"
             "• <code>/preflight TICKER</code> – Pre-Flight Risikocheck (Portfolio Heat &amp; Cluster-Korrelation)\n"
@@ -532,6 +544,7 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "🏛️ Makro- & FOMC-Shield", "callback_data": f"macro:{ticker}"},
+                    {"text": "💎 Compounder Radar", "callback_data": f"compounder:{ticker}"},
                 ],
             ]
         }
@@ -2264,6 +2277,37 @@ class TelegramInteractiveService:
         except Exception as exc:
             logger.error("Audio briefing failed: %s", exc)
             return f"❌ Fehler beim Erstellen der Sprachnachricht: {html.escape(str(exc))}"
+
+    def _cmd_compounder(self, args: List[str]) -> str:
+        """Analyzes multi-bagger quality compounder metrics (Piotroski, ROIC, Altman Z)."""
+        if not self.compounder_service:
+            try:
+                from src.quality_compounder_service import get_quality_compounder_service
+                self.compounder_service = get_quality_compounder_service()
+            except Exception as e:
+                return f"⚠️ Quality Compounder Service nicht verfügbar: {html.escape(str(e))}"
+
+        if not args or args[0].lower() in ("top", "all", "ranking", "screener"):
+            top_list = self.compounder_service.scan_universe_top_compounders(limit=8)
+            lines = [
+                "🏆 <b>INSTITUTIONAL COMPOUNDER SCREENER</b>",
+                "Multi-Bagger Ranking (Piotroski, ROIC, Moat &amp; Z-Score)",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+            for i, c in enumerate(top_list, 1):
+                tk = c["ticker"]
+                score = c["compounder_score"]
+                f_score = c["piotroski"]["score"]
+                roic = c["roic_metrics"]["roic_pct"]
+                badge = c["roic_metrics"]["badge"]
+                lines.append(f"<b>{i}. {tk}</b> – <b>{score:.1f}/100</b> | F-Score: <b>{f_score}/9</b> | ROIC: <b>{roic}%</b> ({badge})")
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append("💡 <i>Tipp: Tippe <code>/compounder TICKER</code> für die 360°-Analyse eines Einzelwerts.</i>")
+            return "\n".join(lines)
+
+        ticker = args[0].upper().strip()
+        data = self.compounder_service.analyze_compounder(ticker)
+        return self.compounder_service.format_telegram_compounder_card(data)
 
 
     def _get_watchlist_tickers(self) -> List[str]:

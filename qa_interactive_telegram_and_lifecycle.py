@@ -1367,6 +1367,53 @@ class TestAudioBriefingService(unittest.TestCase):
         self.assertIn("<code>/movers</code>", sent_messages[0])
 
 
+class TestQualityCompounderService(unittest.TestCase):
+    def setUp(self):
+        from src.quality_compounder_service import QualityCompounderService
+        self.service = QualityCompounderService()
+
+    def test_calculate_piotroski_score(self):
+        res = self.service.calculate_piotroski_score("NVDA")
+        self.assertIn("score", res)
+        self.assertGreaterEqual(res["score"], 7)
+        self.assertEqual(res["max_score"], 9)
+        self.assertIn("checks", res)
+
+    def test_calculate_roic_metrics(self):
+        res = self.service.calculate_roic_metrics("NVDA")
+        self.assertGreater(res["roic_pct"], 20.0)
+        self.assertTrue(res["is_value_creator"])
+        self.assertIn("MOAT", res["moat_rating"])
+
+    def test_calculate_altman_z_score(self):
+        res = self.service.calculate_altman_z_score("NVDA")
+        self.assertGreater(res["z_score"], 2.99)
+        self.assertTrue(res["is_safe"])
+
+    def test_analyze_compounder(self):
+        analysis = self.service.analyze_compounder("MSFT")
+        self.assertEqual(analysis["ticker"], "MSFT")
+        self.assertGreaterEqual(analysis["compounder_score"], 75.0)
+        self.assertIn("classification", analysis)
+
+    def test_telegram_compounder_commands(self):
+        from src.telegram_interactive_service import TelegramInteractiveService
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="12345",
+            quality_compounder_service=self.service,
+        )
+        res_top = bot.handle_command("12345", "/compounder top")
+        self.assertIn("INSTITUTIONAL COMPOUNDER SCREENER", res_top)
+        self.assertIn("NVDA", res_top)
+
+        res_single = bot.handle_command("12345", "/compounder NVDA")
+        self.assertIn("COMPOUNDER RADAR: NVDA", res_single)
+        self.assertIn("Piotroski F-Score", res_single)
+        self.assertIn("ROIC vs. WACC", res_single)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

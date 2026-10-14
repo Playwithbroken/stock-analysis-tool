@@ -2964,6 +2964,8 @@ async def startup_event():
     global _background_task_watchdog_task
     try:
         get_portfolio_manager().ensure_default_watch_items(min_count=5)
+        if not get_portfolio_manager().get_app_setting("telegram_alert_profile"):
+            get_portfolio_manager().set_app_setting("telegram_alert_profile", "smart_digest")
         _cache_forget("signals:")
         _cache_forget("radar_bootstrap:")
         _cache_forget("morning_brief:")

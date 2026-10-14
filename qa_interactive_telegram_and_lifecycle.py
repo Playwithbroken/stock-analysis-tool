@@ -120,7 +120,7 @@ class TestRelativeStrengthService(unittest.TestCase):
 class TestTradeLifecycleService(unittest.TestCase):
     def setUp(self):
         self.mock_pm = MagicMock()
-        self.mock_pm.get_app_setting.return_value = ""
+        self.mock_pm.get_app_setting.side_effect = lambda k: "trade_pro" if k == "telegram_alert_profile" else ""
         self.service = TradeLifecycleService(self.mock_pm)
         self.mock_alert_svc = MagicMock()
         mock_cfg = MagicMock()
@@ -286,6 +286,71 @@ class TestTradeLifecycleService(unittest.TestCase):
             events = call_args[1]
             self.assertIn("ZIEL 1 IN REICHWEITE: SAP.DE", events[0]["line"])
             self.assertIn("€225.00", events[0]["line"])
+
+    def test_smart_digest_profile_suppresses_proximity_but_delivers_hits_and_stops(self):
+        self.mock_pm.get_app_setting.side_effect = lambda k: "smart_digest" if k == "telegram_alert_profile" else ""
+        ticket = {
+            "ticker": "NVDA",
+            "entry_price": 100.0,
+            "invalidation_price": 95.0,
+            "target_1": 110.0,
+            "target_2": 120.0,
+            "risk_per_share": 5.0,
+        }
+        self.service.register_trade(ticket)
+
+        # 1. Proximity to Target 1 (109.5 is within 0.75% of 110.0) -> action recorded, NO telegram alert sent
+        self.mock_alert_svc.reset_mock()
+        with patch.object(self.service, "_fetch_current_price", return_value=109.5):
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(eval_res["actions"][0]["action"], "TARGET_1_PROXIMITY")
+            self.mock_alert_svc._send_notifications.assert_not_called()
+
+        # 2. Target 1 Reached (110.5) -> Telegram alert IS sent
+        self.mock_alert_svc.reset_mock()
+        with patch.object(self.service, "_fetch_current_price", return_value=110.5):
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(eval_res["actions"][0]["action"], "TARGET_1_HIT")
+            self.mock_alert_svc._send_notifications.assert_called_once()
+            call_args = self.mock_alert_svc._send_notifications.call_args[0]
+            self.assertIn("TARGET 1 ERREICHT: NVDA", call_args[1][0]["line"])
+
+        # 3. Stopped Out (drops to 99.0 after trailing stop moved to 100.0) -> Telegram alert IS sent
+        self.mock_alert_svc.reset_mock()
+        with patch.object(self.service, "_fetch_current_price", return_value=99.0):
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(eval_res["actions"][0]["action"], "STOPPED_OUT")
+            self.mock_alert_svc._send_notifications.assert_called_once()
+            call_args = self.mock_alert_svc._send_notifications.call_args[0]
+            self.assertIn("STOP-LOSS ERREICHT: NVDA", call_args[1][0]["line"])
+
+    def test_silent_profile_suppresses_targets_but_delivers_emergency_stop(self):
+        self.mock_pm.get_app_setting.side_effect = lambda k: "silent" if k == "telegram_alert_profile" else ""
+        ticket = {
+            "ticker": "AAPL",
+            "entry_price": 200.0,
+            "invalidation_price": 190.0,
+            "target_1": 220.0,
+            "target_2": 235.0,
+            "risk_per_share": 10.0,
+        }
+        self.service.register_trade(ticket)
+
+        # 1. Target 1 reached -> suppressed in silent profile
+        self.mock_alert_svc.reset_mock()
+        with patch.object(self.service, "_fetch_current_price", return_value=221.0):
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(eval_res["actions"][0]["action"], "TARGET_1_HIT")
+            self.mock_alert_svc._send_notifications.assert_not_called()
+
+        # 2. Emergency stop -> ALWAYS delivered even in silent profile
+        self.mock_alert_svc.reset_mock()
+        with patch.object(self.service, "_fetch_current_price", return_value=195.0): # trailing stop is at entry 200
+            eval_res = self.service.evaluate_active_trades(self.mock_alert_svc)
+            self.assertEqual(eval_res["actions"][0]["action"], "STOPPED_OUT")
+            self.mock_alert_svc._send_notifications.assert_called_once()
+            call_args = self.mock_alert_svc._send_notifications.call_args[0]
+            self.assertIn("STOP-LOSS ERREICHT: AAPL", call_args[1][0]["line"])
 
 
 class TestTelegramInteractiveService(unittest.TestCase):
@@ -1467,6 +1532,82 @@ class TestAsymmetricOptionsLeapsService(unittest.TestCase):
         self.assertIn("LEAPS ASYMMETRIE-RECHNER: SAP.DE", card)
         self.assertIn("Stock Replacement Strategy", card)
         self.assertIn("€", card)
+
+
+class TestAlertProfilesAndEcoSleep(unittest.TestCase):
+    def test_is_market_active_hours(self):
+        from api import is_market_active_hours
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Europe/Berlin")
+
+        # Monday morning
+        self.assertFalse(is_market_active_hours(datetime(2026, 10, 12, 7, 59, tzinfo=tz)))
+        self.assertTrue(is_market_active_hours(datetime(2026, 10, 12, 8, 0, tzinfo=tz)))
+        self.assertTrue(is_market_active_hours(datetime(2026, 10, 12, 15, 30, tzinfo=tz)))
+        self.assertTrue(is_market_active_hours(datetime(2026, 10, 12, 22, 15, tzinfo=tz)))
+        self.assertFalse(is_market_active_hours(datetime(2026, 10, 12, 22, 16, tzinfo=tz)))
+
+        # Friday night into weekend
+        self.assertTrue(is_market_active_hours(datetime(2026, 10, 16, 22, 15, tzinfo=tz)))
+        self.assertFalse(is_market_active_hours(datetime(2026, 10, 16, 22, 16, tzinfo=tz)))
+        self.assertFalse(is_market_active_hours(datetime(2026, 10, 17, 14, 0, tzinfo=tz))) # Saturday
+        self.assertFalse(is_market_active_hours(datetime(2026, 10, 18, 19, 0, tzinfo=tz))) # Sunday
+
+    def test_alerts_command_and_profile_switching(self):
+        mock_pm = MagicMock()
+        settings_store = {}
+        mock_pm.get_app_setting.side_effect = lambda k: settings_store.get(k, "")
+        mock_pm.set_app_setting.side_effect = lambda k, v: settings_store.update({k: v})
+
+        bot = TelegramInteractiveService(
+            bot_token="test_token",
+            allowed_chat_ids="12345",
+            portfolio_manager=mock_pm,
+        )
+
+        # 1. Default /alerts display
+        res = bot.handle_command("12345", "/alerts")
+        self.assertIn("TELEGRAM BENACHRICHTIGUNGS-PROFIL", res)
+        self.assertIn("Smart Digest", res)
+        self.assertIn("Trade Pro", res)
+        self.assertIn("Silent", res)
+
+        # 2. Keyboard reflects default smart_digest
+        kb = bot._build_alerts_keyboard()
+        buttons_text = [btn["text"] for row in kb["inline_keyboard"] for btn in row]
+        self.assertIn("🟢 Smart Digest (Aktiv)", buttons_text)
+        self.assertIn("⚡ Trade Pro", buttons_text)
+        self.assertIn("🔕 Silent", buttons_text)
+
+        # 3. Direct switch via argument
+        res_tp = bot.handle_command("12345", "/alerts trade_pro")
+        self.assertIn("BENACHRICHTIGUNGS-PROFIL AKTUALISIERT", res_tp)
+        self.assertIn("Trade Pro", res_tp)
+        self.assertEqual(settings_store.get("telegram_alert_profile"), "trade_pro")
+
+        # Keyboard now reflects trade_pro as active
+        kb_tp = bot._build_alerts_keyboard()
+        buttons_tp = [btn["text"] for row in kb_tp["inline_keyboard"] for btn in row]
+        self.assertIn("⚡ Trade Pro (Aktiv)", buttons_tp)
+
+        # 4. Switch via callback query
+        with patch.object(bot, "send_message") as mock_send, patch.object(bot, "answer_callback_query") as mock_ans:
+            bot.handle_callback_query("12345", "alert_profile:silent", "cb_123")
+            mock_ans.assert_called_once()
+            self.assertEqual(settings_store.get("telegram_alert_profile"), "silent")
+            mock_send.assert_called_once()
+            self.assertIn("Silent", mock_send.call_args[0][1])
+
+        # 5. Switch back to smart_digest via callback query
+        with patch.object(bot, "send_message") as mock_send, patch.object(bot, "answer_callback_query") as mock_ans:
+            bot.handle_callback_query("12345", "alert_profile:smart_digest", "cb_456")
+            mock_ans.assert_called_once()
+            self.assertEqual(settings_store.get("telegram_alert_profile"), "smart_digest")
+
+        # 6. Verify /help includes /alerts
+        help_text = bot._cmd_help()
+        self.assertIn("/alerts", help_text)
 
 
 if __name__ == "__main__":

@@ -360,6 +360,19 @@ class EmailAlertService:
         if not force and event_key in self.portfolio_manager.get_sent_signal_event_keys():
             return {"status": "deduplicated", "sent": 0, "event_key": event_key}
 
+        if not force:
+            profile = "smart_digest"
+            if self.portfolio_manager and hasattr(self.portfolio_manager, "get_app_setting"):
+                prof = self.portfolio_manager.get_app_setting("telegram_alert_profile")
+                if prof:
+                    profile = str(prof).strip().lower()
+            if profile == "silent":
+                return {"status": "suppressed_by_profile", "sent": 0, "profile": profile}
+            if profile == "smart_digest":
+                grade = str(ticket.get("grade") or "").upper()
+                if grade not in ("A+", "A*"):
+                    return {"status": "suppressed_by_profile", "sent": 0, "grade": grade, "profile": profile}
+
         text = ticket.get("telegram_html") or ""
         if not text:
             return {"status": "blocked", "sent": 0, "message": "telegram_html fehlt im Ticket."}

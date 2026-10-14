@@ -102,6 +102,18 @@ class TradeLifecycleService:
         self._save_trades()
         return {"status": "registered", "ticker": symbol, "trade": trade_record}
 
+    def _get_alert_profile(self) -> str:
+        """Returns the active alert profile (smart_digest, trade_pro, silent)."""
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "get_app_setting"):
+            try:
+                prof = self.portfolio_manager.get_app_setting("telegram_alert_profile")
+                if prof:
+                    return str(prof).strip().lower()
+            except Exception:
+                pass
+        import os
+        return os.getenv("TELEGRAM_ALERT_PROFILE", "smart_digest").strip().lower()
+
     def evaluate_active_trades(self, alert_service: Optional[Any] = None) -> Dict[str, Any]:
         """
         Polls current prices of active trades and triggers Telegram notifications
@@ -115,6 +127,7 @@ class TradeLifecycleService:
         if not active:
             return {"status": "ok", "evaluated": 0, "actions": []}
 
+        profile = self._get_alert_profile()
         actions: List[Dict[str, Any]] = []
 
         for trade in active:
@@ -137,6 +150,7 @@ class TradeLifecycleService:
             c_sym = "€" if is_eu else ("£" if symbol.endswith(".L") else "$")
 
             # 1. Advance Notice: Target 1 Proximity Alert (within 0.75% of Target 1)
+            # Suppressed in smart_digest and silent profiles to eliminate noise
             if (
                 status == "OPEN"
                 and spot < target_1
@@ -145,7 +159,7 @@ class TradeLifecycleService:
             ):
                 events_fired.append("TARGET_1_PROXIMITY")
                 actions.append({"ticker": symbol, "action": "TARGET_1_PROXIMITY", "price": spot})
-                if alert_service:
+                if alert_service and profile not in ("smart_digest", "silent"):
                     dist_pct = ((target_1 - spot) / spot) * 100.0
                     tg_msg = (
                         f"🎯 <b>ZIEL 1 IN REICHWEITE: {symbol} ({c_sym}{spot:.2f})</b>\n"
@@ -192,7 +206,7 @@ class TradeLifecycleService:
                     except Exception as e:
                         logger.debug("Failed syncing paper trade on Target 1: %s", e)
 
-                if alert_service:
+                if alert_service and profile != "silent":
                     tg_msg = (
                         f"🎯 <b>TARGET 1 ERREICHT: {symbol} ({c_sym}{spot:.2f})</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -225,7 +239,7 @@ class TradeLifecycleService:
 
                 actions.append({"ticker": symbol, "action": "TARGET_2_HIT", "price": spot})
 
-                if alert_service:
+                if alert_service and profile != "silent":
                     tg_msg = (
                         f"🚀 <b>TARGET 2 ERREICHT: {symbol} ({c_sym}{spot:.2f})</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -245,6 +259,7 @@ class TradeLifecycleService:
                     self._dispatch_tg(alert_service, symbol, f"target_2:{symbol}", tg_msg, reply_markup=kb)
 
             # 4. Stop-Loss Proximity Warning (within 0.75% of Stop)
+            # Suppressed in smart_digest and silent profiles to eliminate noise
             elif (
                 spot > stop
                 and ((spot - stop) / spot) <= 0.0075
@@ -252,7 +267,7 @@ class TradeLifecycleService:
             ):
                 events_fired.append("STOP_PROXIMITY")
                 actions.append({"ticker": symbol, "action": "STOP_PROXIMITY", "price": spot})
-                if alert_service:
+                if alert_service and profile not in ("smart_digest", "silent"):
                     dist_pct = ((spot - stop) / spot) * 100.0
                     tg_msg = (
                         f"🚨 <b>STOP-LOSS WARNUNG: {symbol} ({c_sym}{spot:.2f})</b>\n"

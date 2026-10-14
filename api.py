@@ -2033,9 +2033,13 @@ def _run_trading_edge_scanner_cycle() -> Dict[str, Any]:
 
     # 2. Watchlist Setups Auto-Scan & Dispatch
     try:
+        profile = str(manager.get_app_setting("telegram_alert_profile") or os.getenv("TELEGRAM_ALERT_PROFILE", "smart_digest")).strip().lower()
+        if profile == "silent":
+            return {"status": "skipped", "reason": "silent_profile"}
         items = manager.get_signal_watch_items()
         watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
-        res = signals_service.scan_and_dispatch_edge_alerts(alert_service, watchlist=watchlist, min_grade=("A+", "A"))
+        min_grade = ("A+",) if profile == "smart_digest" else ("A+", "A")
+        res = signals_service.scan_and_dispatch_edge_alerts(alert_service, watchlist=watchlist, min_grade=min_grade)
 
         # 3. Automatic Paper-Trader Bridge: Auto-open Grade A+ setups in Demo Account
         auto_opened_paper_trades = []
@@ -2079,6 +2083,8 @@ def _run_trading_edge_scanner_cycle() -> Dict[str, Any]:
         except Exception as e:
             print(f"Auto paper trade bridging error: {e}")
 
+        import gc
+        gc.collect()
         return res
     except Exception as exc:
         print(f"Trading edge auto-scanner failed: {exc}")
@@ -2266,10 +2272,39 @@ async def _scheduler_startup_catchup() -> None:
             pass
 
 
+def is_market_active_hours(dt: Optional[datetime] = None) -> bool:
+    """
+    Checks if European or US stock markets are active.
+    Active window: Monday through Friday, 08:00 to 22:15 CET (Europe/Berlin).
+    Outside this window (nights and weekends), markets are closed and background
+    polling loops switch to Eco-Sleep mode to cut Railway compute and prevent wasted CPU.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))
+    except Exception:
+        tz = timezone.utc
+
+    now = dt or datetime.now(tz)
+    if now.weekday() >= 5:
+        return False
+
+    hour = now.hour
+    minute = now.minute
+    if hour < 8:
+        return False
+    if hour > 22 or (hour == 22 and minute > 15):
+        return False
+    return True
+
+
 def _scheduler_loop_interval_minutes() -> int:
     signal_minutes = _safe_int_env("SIGNAL_ALERTS_INTERVAL_MINUTES", 15, minimum=1)
     brief_minutes = _safe_int_env("BRIEF_SCHEDULER_INTERVAL_MINUTES", 5, minimum=1)
-    return min(signal_minutes, brief_minutes)
+    base = min(signal_minutes, brief_minutes)
+    if not is_market_active_hours():
+        return max(30, base)
+    return base
 
 
 def _safe_int_env(name: str, default: int, minimum: int | None = None) -> int:
@@ -2290,12 +2325,17 @@ async def _brief_warmup_loop():
         max(0, _safe_int_env("BRIEF_WARMUP_INITIAL_DELAY_SECONDS", 1, minimum=0))
     )
     while True:
+        active = is_market_active_hours()
         try:
-            await _warm_brief_once()
+            if active:
+                await _warm_brief_once()
+                import gc
+                gc.collect()
         except Exception as e:
             print(f"Brief warmup loop error: {e}")
-        interval_seconds = int(os.getenv("BRIEF_WARMUP_INTERVAL_SECONDS", "300"))
-        await asyncio.sleep(max(60, interval_seconds))
+        default_interval = 900 if active else 1800
+        interval_seconds = _safe_int_env("BRIEF_WARMUP_INTERVAL_SECONDS", default_interval, minimum=60)
+        await asyncio.sleep(interval_seconds)
 
 
 async def _run_paper_outcome_cycle(*, force_alerts: bool) -> Dict[str, Any]:
@@ -2645,6 +2685,7 @@ async def _trading_session_automation_loop() -> None:
     print("Autonomous Trading Session Daemon started.")
 
     while True:
+        active = is_market_active_hours()
         try:
             alert_svc = get_email_alert_service()
 
@@ -2675,13 +2716,14 @@ async def _trading_session_automation_loop() -> None:
                 bot_svc = get_telegram_interactive_service()
                 cfg = alert_svc.get_config()
                 has_tg = bool(cfg.telegram_enabled and cfg.telegram_bot_token and cfg.telegram_chat_id)
+                profile = str(pm.get_app_setting("telegram_alert_profile") or os.getenv("TELEGRAM_ALERT_PROFILE", "smart_digest")).strip().lower()
 
                 # A. 09:30 CET: European 15m ORB Scanner
                 eu_key = f"orb_eu_auto_scan:{today_str}"
                 if (hour == 9 and 30 <= minute <= 35) and eu_key not in sent_keys:
                     eu_tickers = ["SAP.DE", "RHM.DE", "ASML.AS", "ALV.DE", "SIE.DE", "BMW.DE", "BAYN.DE"]
                     scan_res = await asyncio.to_thread(orb_svc.scan_watchlist_orb, eu_tickers, 15)
-                    if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg:
+                    if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg and profile != "silent":
                         card = orb_svc.format_telegram_orb_scan_summary(scan_res)
                         event = {"event_key": eu_key, "category": "orb_breakout", "title": "ORB Breakout Scan (15m)", "line": card}
                         alert_svc._send_notifications(cfg, [event], subject="Broker Freund: 15m ORB Breakouts")
@@ -2694,7 +2736,7 @@ async def _trading_session_automation_loop() -> None:
                 if (hour == 16 and 0 <= minute <= 5) and us_key not in sent_keys:
                     us_tickers = ["NVDA", "MSFT", "AAPL", "AMZN", "PLTR", "TSLA", "META", "GOOGL", "AVGO", "GLD"]
                     scan_res = await asyncio.to_thread(orb_svc.scan_watchlist_orb, us_tickers, 30)
-                    if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg:
+                    if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg and profile != "silent":
                         card = orb_svc.format_telegram_orb_scan_summary(scan_res)
                         event = {"event_key": us_key, "category": "orb_breakout", "title": "ORB Breakout Scan (30m)", "line": card}
                         alert_svc._send_notifications(cfg, [event], subject="Broker Freund: 30m ORB Breakouts")
@@ -2702,13 +2744,14 @@ async def _trading_session_automation_loop() -> None:
                         pm.mark_signal_events_sent([{"event_key": us_key}])
                     print(f"Autonomous US 30m ORB scan executed for {today_str}")
 
-                # C. 17:35 CET: XETRA Close Session Recap
+                # C. 17:35 CET: XETRA Close Session Recap (only in trade_pro profile to avoid duplicate recaps)
                 xetra_recap_key = f"xetra_close_recap_auto:{today_str}"
                 if (hour == 17 and 35 <= minute <= 40) and xetra_recap_key not in sent_keys:
-                    recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["xetra"])
-                    if recap_msg and has_tg:
-                        event = {"event_key": xetra_recap_key, "category": "session_recap", "title": "XETRA Session Close", "line": recap_msg}
-                        alert_svc._send_notifications(cfg, [event], subject="Broker Freund: XETRA Session Recap")
+                    if profile == "trade_pro":
+                        recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["xetra"])
+                        if recap_msg and has_tg:
+                            event = {"event_key": xetra_recap_key, "category": "session_recap", "title": "XETRA Session Close", "line": recap_msg}
+                            alert_svc._send_notifications(cfg, [event], subject="Broker Freund: XETRA Session Recap")
                     if hasattr(pm, "mark_signal_events_sent"):
                         pm.mark_signal_events_sent([{"event_key": xetra_recap_key}])
                     print(f"Autonomous XETRA close recap executed for {today_str}")
@@ -2716,10 +2759,11 @@ async def _trading_session_automation_loop() -> None:
                 # D. 22:05 CET: US Wall Street Close Recap
                 us_recap_key = f"us_close_recap_auto:{today_str}"
                 if (hour == 22 and 5 <= minute <= 10) and us_recap_key not in sent_keys:
-                    recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["us"])
-                    if recap_msg and has_tg:
-                        event = {"event_key": us_recap_key, "category": "session_recap", "title": "Wall Street Session Close", "line": recap_msg}
-                        alert_svc._send_notifications(cfg, [event], subject="Broker Freund: Wall Street Session Recap")
+                    if profile != "silent":
+                        recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["us"])
+                        if recap_msg and has_tg:
+                            event = {"event_key": us_recap_key, "category": "session_recap", "title": "Wall Street Session Close", "line": recap_msg}
+                            alert_svc._send_notifications(cfg, [event], subject="Broker Freund: Wall Street Session Recap")
                     if hasattr(pm, "mark_signal_events_sent"):
                         pm.mark_signal_events_sent([{"event_key": us_recap_key}])
                     print(f"Autonomous Wall Street close recap executed for {today_str}")
@@ -2727,7 +2771,9 @@ async def _trading_session_automation_loop() -> None:
         except Exception as daemon_err:
             print(f"Trading session daemon cycle warning: {daemon_err}")
 
-        await asyncio.sleep(30)
+        # Eco-sleep: 60s when market is active, 300s when market is closed (nights & weekends)
+        sleep_sec = 60 if active else 300
+        await asyncio.sleep(_safe_int_env("SESSION_AUTOMATION_INTERVAL_SECONDS", sleep_sec, minimum=15))
 
 
 async def _market_safety_loop() -> None:
@@ -2758,7 +2804,9 @@ async def _broker_reconciliation_loop() -> None:
                     }
                 ),
             )
-        await asyncio.sleep(_safe_int_env("BROKER_RECONCILIATION_INTERVAL_SECONDS", 30, minimum=10))
+        active = is_market_active_hours()
+        default_reconcile = 180 if active else 600
+        await asyncio.sleep(_safe_int_env("BROKER_RECONCILIATION_INTERVAL_SECONDS", default_reconcile, minimum=10))
 
 
 async def _background_task_watchdog_loop():
@@ -2854,10 +2902,11 @@ def _is_alert_in_cooldown(last_triggered_at: Optional[str], cooldown_minutes: in
 async def _price_alert_loop():
     await asyncio.sleep(8)
     while True:
+        active = is_market_active_hours()
         try:
             manager = get_portfolio_manager()
             alerts = await asyncio.to_thread(manager.list_price_alerts, True)
-            if alerts:
+            if alerts and active:
                 symbols = sorted({str(alert.get("symbol", "")).upper() for alert in alerts if alert.get("symbol")})
                 snapshot = await asyncio.to_thread(get_realtime_market_service().build_snapshot, symbols)
                 quote_map = {
@@ -2906,7 +2955,9 @@ async def _price_alert_loop():
         except Exception as e:
             print(f"Price alert loop error: {e}")
 
-        await asyncio.sleep(15)
+        # Eco-sleep: 60s when market is active, 300s when market is closed (was 15s 24/7)
+        sleep_sec = 60 if active else 300
+        await asyncio.sleep(_safe_int_env("PRICE_ALERT_INTERVAL_SECONDS", sleep_sec, minimum=10))
 
 @app.on_event("startup")
 async def startup_event():

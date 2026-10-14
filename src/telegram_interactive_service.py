@@ -376,6 +376,32 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "🎙️ Generiere gesprochenes Audio-Briefing...")
             res = self._cmd_voice(chat_id, [])
             self.send_message(chat_id, res)
+        elif cb.startswith("alert_profile:"):
+            prof = cb.split(":", 1)[1].strip().lower()
+            labels = {
+                "smart_digest": "🟢 Smart Digest (Empfohlen)",
+                "trade_pro": "⚡ Trade Pro",
+                "silent": "🔕 Silent",
+            }
+            if self.portfolio_manager and hasattr(self.portfolio_manager, "set_app_setting"):
+                self.portfolio_manager.set_app_setting("telegram_alert_profile", prof)
+            label = labels.get(prof, prof)
+            self.answer_callback_query(callback_query_id, f"Profil auf {label} umgestellt!")
+            confirm_msg = (
+                f"✅ <b>BENACHRICHTIGUNGS-PROFIL AKTUALISIERT</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"Neuer Modus: <b>{label}</b>\n\n"
+                f"<i>Die Änderung ist sofort live aktiv. Du kannst das Profil jederzeit mit /alerts anpassen.</i>"
+            )
+            self.send_message(chat_id, confirm_msg, reply_markup=self._build_alerts_keyboard())
+        elif cb == "alerts":
+            self.answer_callback_query(callback_query_id, "Lade Benachrichtigungs-Profile...")
+            res = self._cmd_alerts([])
+            self.send_message(chat_id, res, reply_markup=self._build_alerts_keyboard())
+        elif cb == "edge":
+            self.answer_callback_query(callback_query_id, "Lade Top Trading Edge Setups...")
+            res = self._cmd_edge([], chat_id=chat_id)
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -477,6 +503,8 @@ class TelegramInteractiveService:
                 return self._cmd_leaps(args)
             elif cmd in ("/routine", "/prep", "/checklist", "/morning_routine"):
                 return self._cmd_routine()
+            elif cmd in ("/alerts", "/alert", "/profile", "/mode"):
+                return self._cmd_alerts(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -538,6 +566,8 @@ class TelegramInteractiveService:
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
             "• <code>/heat</code> – Portfolio Heat &amp; Korrelations-Shield\n"
             "• <code>/macro</code> – High-Impact Makro- &amp; FOMC-Shield (Zinsentscheide &amp; CPI)\n\n"
+            "⚙️ <b>Benachrichtigungen &amp; Cloud-Kosten:</b>\n"
+            "• <code>/alerts</code> – Modus wählen (🟢 Smart Digest, ⚡ Trade Pro, 🔕 Silent)\n\n"
             "💡 <i>Tipp: Bei jedem /edge Setup kannst du einfach auf die interaktiven Buttons tippen!</i>"
         )
 
@@ -616,6 +646,88 @@ class TelegramInteractiveService:
                 ],
             ]
         }
+
+    def _build_alerts_keyboard(self) -> Dict[str, Any]:
+        """Generates inline keyboard for alert profile selection."""
+        current = "smart_digest"
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "get_app_setting"):
+            saved = self.portfolio_manager.get_app_setting("telegram_alert_profile")
+            if saved:
+                current = str(saved).strip().lower()
+
+        sd_text = "🟢 Smart Digest (Aktiv)" if current == "smart_digest" else "🟢 Smart Digest"
+        tp_text = "⚡ Trade Pro (Aktiv)" if current == "trade_pro" else "⚡ Trade Pro"
+        sil_text = "🔕 Silent (Aktiv)" if current == "silent" else "🔕 Silent"
+
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": sd_text, "callback_data": "alert_profile:smart_digest"},
+                    {"text": tp_text, "callback_data": "alert_profile:trade_pro"},
+                ],
+                [
+                    {"text": sil_text, "callback_data": "alert_profile:silent"},
+                ],
+                [
+                    {"text": "⚡ Setups abrufen (/edge)", "callback_data": "edge"},
+                    {"text": "📋 Routine (/routine)", "callback_data": "routine"},
+                ],
+            ]
+        }
+
+    def _cmd_alerts(self, args: Optional[List[str]] = None) -> str:
+        """
+        Displays or updates the active Telegram alert profile:
+        - smart_digest: Crucial trade triggers, 15m macro blackouts, EOD recap (default/recommended)
+        - trade_pro: All individual setup alerts, proximity warnings, ORB scans, session closes
+        - silent: 0 automated pushes except emergency stops/blackouts
+        """
+        valid_profiles = {
+            "smart_digest": ("🟢 Smart Digest", "Empfohlen: Nur echte Trade-Treffer & Tagesabschluss"),
+            "trade_pro": ("⚡ Trade Pro", "Echtzeit: Alle Signale, Proximity-Warnungen & ORB-Scans"),
+            "silent": ("🔕 Silent", "Minimal: Nur Notfall-Stops & Makro-Shield (alles per Befehl)"),
+        }
+
+        if args and args[0].strip().lower() in valid_profiles:
+            new_prof = args[0].strip().lower()
+            if self.portfolio_manager and hasattr(self.portfolio_manager, "set_app_setting"):
+                self.portfolio_manager.set_app_setting("telegram_alert_profile", new_prof)
+            label = valid_profiles[new_prof][0]
+            return (
+                f"✅ <b>BENACHRICHTIGUNGS-PROFIL AKTUALISIERT</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"Neuer Modus: <b>{label}</b>\n\n"
+                f"<i>Die Änderung ist ab sofort live aktiv.</i>"
+            )
+
+        current = "smart_digest"
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "get_app_setting"):
+            saved = self.portfolio_manager.get_app_setting("telegram_alert_profile")
+            if saved and str(saved).strip().lower() in valid_profiles:
+                current = str(saved).strip().lower()
+
+        current_label = valid_profiles[current][0]
+
+        return (
+            f"🔔 <b>TELEGRAM BENACHRICHTIGUNGS-PROFIL</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"Aktueller Modus: <b>{current_label}</b>\n\n"
+            f"💡 <i>Wähle per 1-Tap deinen gewünschten Informations-Modus:</i>\n\n"
+            f"• 🟢 <b>Smart Digest (Empfohlen):</b>\n"
+            f"  - Sofortige Treffer-Alerts: Target 1 & Stop-Loss mit 1-Tap Buttons\n"
+            f"  - 15m Rot-Alarm vor Hochrisiko-Events (FOMC, US-CPI)\n"
+            f"  - Nur absolute Top A+ Setups & 1x EOD Wall Street Recap\n"
+            f"  - Muted: Keine Proximity-Pings & kein Zwischenrauschen\n"
+            f"  <i>➔ Perfekt für den Alltag: 2–4 Benachrichtigungen pro Tag.</i>\n\n"
+            f"• ⚡ <b>Trade Pro:</b>\n"
+            f"  - Maximale Informationsdichte am Bildschirm\n"
+            f"  - Alle Setups (A & A+), Vorwarnungen, 15m/30m ORB Scans & Recaps\n"
+            f"  <i>➔ Für aktive Daytrader am Screen.</i>\n\n"
+            f"• 🔕 <b>Silent (Ruhe-Modus):</b>\n"
+            f"  - 0 automatisches Rauschen\n"
+            f"  - Nur Notfall-Stops & Makro-Blackouts\n"
+            f"  <i>➔ Alle Funktionen 100% interaktiv auf Abruf (/routine, /edge, /check).</i>"
+        )
 
     def _cmd_paper(self, args: List[str]) -> str:
         if not args:
@@ -2671,7 +2783,9 @@ class TelegramInteractiveService:
                         response_text = self.handle_command(chat_id, text)
                         if response_text:
                             reply_markup = None
-                            if text.startswith("/edge") or text.startswith("/check") or text.startswith("/stop") or text.startswith("/preflight") or text.startswith("/orb"):
+                            if text.startswith("/alerts") or text.startswith("/alert") or text.startswith("/profile") or text.startswith("/mode"):
+                                reply_markup = self._build_alerts_keyboard()
+                            elif text.startswith("/edge") or text.startswith("/check") or text.startswith("/stop") or text.startswith("/preflight") or text.startswith("/orb"):
                                 parts = text.split()
                                 tk = parts[1].upper() if len(parts) > 1 else ""
                                 if tk:

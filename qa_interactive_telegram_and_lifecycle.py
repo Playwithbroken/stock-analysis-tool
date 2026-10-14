@@ -1610,6 +1610,342 @@ class TestAlertProfilesAndEcoSleep(unittest.TestCase):
         self.assertIn("/alerts", help_text)
 
 
+class TestChartSnapshotService(unittest.TestCase):
+    def setUp(self):
+        from src.chart_snapshot_service import ChartSnapshotService
+        self.svc = ChartSnapshotService()
+
+    def test_generate_chart_png_success(self):
+        import pandas as pd
+        dates = pd.date_range("2026-08-01", periods=30, freq="D")
+        df = pd.DataFrame({
+            "Open": [100.0 + i for i in range(30)],
+            "High": [102.0 + i for i in range(30)],
+            "Low": [99.0 + i for i in range(30)],
+            "Close": [101.0 + i for i in range(30)],
+            "Volume": [50000 + i * 1000 for i in range(30)],
+        }, index=dates)
+
+        with patch("src.chart_snapshot_service.yf.Ticker") as mock_ticker_cls:
+            mock_ticker = MagicMock()
+            mock_ticker.history.return_value = df
+            mock_ticker_cls.return_value = mock_ticker
+
+            levels = {
+                "entry": 125.0,
+                "stop": 120.0,
+                "target_1": 135.0,
+                "target_2": 142.0,
+            }
+            png = self.svc.generate_chart_png("NVDA", levels=levels)
+            self.assertIsNotNone(png)
+            self.assertTrue(isinstance(png, bytes))
+            self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+
+    def test_generate_chart_png_empty_data(self):
+        import pandas as pd
+        with patch("src.chart_snapshot_service.yf.Ticker") as mock_ticker_cls:
+            mock_ticker = MagicMock()
+            mock_ticker.history.return_value = pd.DataFrame()
+            mock_ticker_cls.return_value = mock_ticker
+
+            png = self.svc.generate_chart_png("INVALID")
+            self.assertIsNone(png)
+
+    def test_send_chart_to_telegram(self):
+        with patch("src.chart_snapshot_service.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_post.return_value = mock_resp
+
+            fake_png = b"\x89PNG\r\n\x1a\nfakeimagebytes"
+            ok = self.svc.send_chart_to_telegram(
+                bot_token="fake_token",
+                chat_id="12345",
+                png_bytes=fake_png,
+                caption="Test Chart",
+            )
+            self.assertTrue(ok)
+            mock_post.assert_called_once()
+            self.assertIn("sendPhoto", mock_post.call_args[0][0])
+
+
+class TestMacroCommodityCryptoService(unittest.TestCase):
+    def setUp(self):
+        from src.macro_commodity_crypto_service import MacroCommodityCryptoService
+        self.svc = MacroCommodityCryptoService()
+
+    def test_fetch_asset_data_and_overviews(self):
+        import pandas as pd
+        dates = pd.date_range("2025-01-01", periods=60, freq="D")
+        df = pd.DataFrame({
+            "Open": [100.0 + i for i in range(60)],
+            "High": [102.0 + i for i in range(60)],
+            "Low": [99.0 + i for i in range(60)],
+            "Close": [101.0 + i for i in range(60)],
+            "Volume": [10000] * 60,
+        }, index=dates)
+
+        with patch("src.macro_commodity_crypto_service.yf.Ticker") as mock_ticker_cls:
+            mock_ticker = MagicMock()
+            mock_ticker.history.return_value = df
+            mock_ticker_cls.return_value = mock_ticker
+
+            data = self.svc._fetch_asset_data("GLD")
+            self.assertIsNotNone(data)
+            self.assertEqual(data["symbol"], "GLD")
+            self.assertIn("trend_state", data)
+            self.assertIn("rsi14", data)
+
+            comm = self.svc.get_commodities_overview()
+            self.assertIn("GLD", comm)
+
+            crypto = self.svc.get_crypto_overview()
+            self.assertIn("BTC-USD", crypto)
+
+    def test_format_commodities_and_crypto_cards(self):
+        sample_comm = {
+            "GLD": {"name": "Gold", "spot": 240.50, "pct_change_1d": 0.85, "badge": "🟢 Stier-Trend", "rsi14": 62.0},
+            "SLV": {"name": "Silver", "spot": 28.20, "pct_change_1d": 1.20, "badge": "🟢 Stier-Trend", "rsi14": 65.0},
+            "USO": {"name": "Oil", "spot": 74.00, "pct_change_1d": -0.50, "badge": "🟡 Momentum-Rebound", "rsi14": 48.0},
+            "UNG": {"name": "Gas", "spot": 18.50, "pct_change_1d": -1.10, "badge": "🔴 Bär-Trend", "rsi14": 38.0},
+            "CPER": {"name": "Copper", "spot": 26.00, "pct_change_1d": 0.40, "badge": "🟢 Stier-Trend", "rsi14": 55.0},
+            "UUP": {"name": "Dollar", "spot": 28.10, "pct_change_1d": -0.20, "badge": "🔴 Bär-Trend", "rsi14": 42.0},
+            "TLT": {"name": "Treasuries", "spot": 92.50, "pct_change_1d": 0.30, "badge": "🟡 Momentum-Rebound", "rsi14": 51.0},
+        }
+        with patch.object(self.svc, "get_commodities_overview", return_value=sample_comm):
+            card = self.svc.format_commodities_card()
+            self.assertIn("ROHSTOFF- &amp; MAKRO-RADAR", card)
+            self.assertIn("Edelmetalle", card)
+            self.assertIn("GLD", card)
+            self.assertIn("Makro-Konfluenz", card)
+
+        sample_crypto = {
+            "BTC-USD": {"name": "Bitcoin", "spot": 64500.0, "pct_change_1d": 2.4, "badge": "🟢 Stier-Trend", "rsi14": 63.0, "ema20": 63000.0, "sma50": 61000.0, "sma200": 58000.0},
+            "ETH-USD": {"name": "Ethereum", "spot": 2650.0, "pct_change_1d": 1.8, "badge": "🟢 Stier-Trend", "rsi14": 59.0, "ema20": 2550.0, "sma50": 2450.0, "sma200": 2300.0},
+            "SOL-USD": {"name": "Solana", "spot": 155.0, "pct_change_1d": 3.5, "badge": "🟢 Stier-Trend", "rsi14": 67.0, "ema20": 145.0, "sma50": 138.0, "sma200": 125.0},
+        }
+        with patch.object(self.svc, "get_crypto_overview", return_value=sample_crypto):
+            card_crypto = self.svc.format_crypto_card()
+            self.assertIn("KRYPTO-RADAR", card_crypto)
+            self.assertIn("Bitcoin", card_crypto)
+            self.assertIn("Ethereum", card_crypto)
+            self.assertIn("Solana", card_crypto)
+
+
+class TestTradingCoachService(unittest.TestCase):
+    def setUp(self):
+        from src.trading_coach_service import TradingCoachService
+        self.mock_pm = MagicMock()
+        self.svc = TradingCoachService(self.mock_pm)
+
+    def test_audit_performance_and_formatting(self):
+        trades = [
+            {
+                "id": "t1",
+                "ticker": "NVDA",
+                "status": "closed",
+                "entry_price": 100.0,
+                "stop_price": 95.0,
+                "quantity": 10,
+                "realized_pnl": 100.0,
+                "setup_type": "breakout",
+            },
+            {
+                "id": "t2",
+                "ticker": "SAP.DE",
+                "status": "closed",
+                "entry_price": 200.0,
+                "stop_price": 190.0,
+                "quantity": 10,
+                "realized_pnl": 20.0,
+                "setup_type": "breakout",
+            },
+            {
+                "id": "t3",
+                "ticker": "AAPL",
+                "status": "closed",
+                "entry_price": 150.0,
+                "stop_price": 145.0,
+                "quantity": 10,
+                "realized_pnl": -80.0,
+                "setup_type": "reversal",
+            },
+        ]
+        self.mock_pm.list_paper_trades.return_value = trades
+
+        audit = self.svc.audit_performance()
+        self.assertEqual(audit["closed_trades"], 3)
+        self.assertAlmostEqual(audit["win_rate"], 66.67, delta=0.5)
+        self.assertGreater(audit["profit_factor"], 1.0)
+        self.assertGreater(len(audit["flaws"]), 0)
+        self.assertTrue(any("Disziplin-Bruch" in f for f in audit["flaws"]))
+        self.assertTrue(any("zu früh" in f for f in audit["flaws"]))
+
+        card = self.svc.format_coach_card()
+        self.assertIn("KI-TRADING-COACH &amp; DISZIPLIN-AUDIT", card)
+        self.assertIn("Winrate:", card)
+        self.assertIn("Erkannte Schwachstellen:", card)
+        self.assertIn("Gewinnbringendste Setups:", card)
+
+
+class TestEarningsExpectedMoveService(unittest.TestCase):
+    def setUp(self):
+        from src.earnings_expected_move_service import EarningsExpectedMoveService
+        self.svc = EarningsExpectedMoveService()
+
+    def test_calculate_expected_move_atr_fallback(self):
+        import pandas as pd
+        dates = pd.date_range("2026-09-01", periods=20, freq="D")
+        df = pd.DataFrame({
+            "Open": [100.0] * 20,
+            "High": [105.0] * 20,
+            "Low": [98.0] * 20,
+            "Close": [102.0] * 20,
+            "Volume": [10000] * 20,
+        }, index=dates)
+
+        with patch("src.earnings_expected_move_service.yf.Ticker") as mock_ticker_cls:
+            mock_ticker = MagicMock()
+            mock_ticker.fast_info = {"lastPrice": 100.0}
+            mock_ticker.history.return_value = df
+            mock_ticker.calendar = {"Earnings Date": ["2026-11-15"]}
+            mock_ticker.options = []
+            mock_ticker_cls.return_value = mock_ticker
+
+            res = self.svc.calculate_expected_move("NVDA")
+            self.assertIsNotNone(res)
+            self.assertEqual(res["symbol"], "NVDA")
+            self.assertGreater(res["expected_move"], 0)
+            self.assertIn("upper_bound", res)
+            self.assertIn("lower_bound", res)
+            self.assertIn("hazard_badge", res)
+
+            card = self.svc.format_earnings_card("NVDA")
+            self.assertIn("EARNINGS EXPECTED-MOVE: NVDA", card)
+            self.assertIn("Implizierte Schwankung", card)
+            self.assertIn("Erwarteter Preiskorridor", card)
+            self.assertIn("IV-Crush Risiko:", card)
+
+
+class TestInstitutionalExpansionsTelegramIntegration(unittest.TestCase):
+    def setUp(self):
+        self.mock_chart = MagicMock()
+        self.mock_macro = MagicMock()
+        self.mock_coach = MagicMock()
+        self.mock_earnings = MagicMock()
+        self.mock_pm = MagicMock()
+
+        self.bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+            chart_snapshot_service=self.mock_chart,
+            macro_commodity_crypto_service=self.mock_macro,
+            trading_coach_service=self.mock_coach,
+            earnings_expected_move_service=self.mock_earnings,
+            portfolio_manager=self.mock_pm,
+        )
+
+    def test_cmd_chart(self):
+        # 1. Without args
+        res_no_arg = self.bot.handle_command("999888", "/chart")
+        self.assertIn("Visual Chart Snapshot", res_no_arg)
+
+        # 2. With ticker
+        self.mock_chart.generate_chart_png.return_value = b"\x89PNG\r\n\x1a\nfakeimage"
+        with patch.object(self.bot, "send_photo", return_value=True) as mock_send_photo:
+            res = self.bot.handle_command("999888", "/chart NVDA")
+            self.assertEqual(res, "")
+            mock_send_photo.assert_called_once()
+            self.assertEqual(mock_send_photo.call_args[0][0], "999888")
+
+    def test_cmd_commodities(self):
+        self.mock_macro.format_commodities_card.return_value = "🪙 <b>ROHSTOFF- &amp; MAKRO-RADAR</b>"
+        res = self.bot.handle_command("999888", "/commodities")
+        self.assertIn("ROHSTOFF- &amp; MAKRO-RADAR", res)
+
+    def test_cmd_crypto(self):
+        self.mock_macro.format_crypto_card.return_value = "🪙 <b>KRYPTO-RADAR</b>"
+        res = self.bot.handle_command("999888", "/crypto")
+        self.assertIn("KRYPTO-RADAR", res)
+
+    def test_cmd_coach(self):
+        self.mock_coach.format_coach_card.return_value = "🧠 <b>KI-TRADING-COACH</b>"
+        res = self.bot.handle_command("999888", "/coach")
+        self.assertIn("KI-TRADING-COACH", res)
+
+    def test_cmd_earnings(self):
+        # 1. Without args
+        res_no_arg = self.bot.handle_command("999888", "/earnings")
+        self.assertIn("Earnings Expected-Move", res_no_arg)
+
+        # 2. With ticker
+        self.mock_earnings.format_earnings_card.return_value = "⚡ <b>EARNINGS EXPECTED-MOVE: NVDA</b>"
+        res = self.bot.handle_command("999888", "/earnings NVDA")
+        self.assertIn("EARNINGS EXPECTED-MOVE: NVDA", res)
+
+    def test_cmd_export_csv(self):
+        self.mock_pm.list_paper_trades.return_value = [
+            {
+                "id": "t1",
+                "ticker": "NVDA",
+                "direction": "long",
+                "setup_type": "breakout",
+                "entry_price": 100.0,
+                "exit_price": 120.0,
+                "quantity": 10.0,
+                "realized_pnl": 200.0,
+                "return_pct": 20.0,
+                "status": "closed",
+                "closed_at": "2026-10-01T12:00:00",
+            }
+        ]
+        with patch.object(self.bot, "send_document", return_value=True) as mock_send_doc:
+            res = self.bot.handle_command("999888", "/export")
+            self.assertIn("TRADE-JOURNAL EXPORT ERSTELLT", res)
+            mock_send_doc.assert_called_once()
+            self.assertEqual(mock_send_doc.call_args[0][0], "999888")
+            self.assertIn("trades_export_", mock_send_doc.call_args[1]["filename"])
+
+    def test_callbacks_for_new_features(self):
+        with patch.object(self.bot, "send_message") as mock_send, \
+             patch.object(self.bot, "answer_callback_query") as mock_ans, \
+             patch.object(self.bot, "send_photo", return_value=True) as mock_photo, \
+             patch.object(self.bot, "send_document", return_value=True) as mock_doc:
+
+            # 1. chart:NVDA
+            self.mock_chart.generate_chart_png.return_value = b"\x89PNG\r\n\x1a\nfakeimage"
+            self.bot.handle_callback_query("999888", "chart:NVDA", "cb_chart")
+            mock_ans.assert_called_with("cb_chart", "Generiere Chart für NVDA...")
+            mock_photo.assert_called_once()
+
+            # 2. earnings:NVDA
+            self.mock_earnings.format_earnings_card.return_value = "⚡ <b>EARNINGS EXPECTED-MOVE: NVDA</b>"
+            self.bot.handle_callback_query("999888", "earnings:NVDA", "cb_earn")
+            mock_ans.assert_called_with("cb_earn", "Berechne Earnings Expected Move für NVDA...")
+            self.assertIn("EARNINGS EXPECTED-MOVE", mock_send.call_args[0][1])
+
+            # 3. commodities
+            self.mock_macro.format_commodities_card.return_value = "🪙 <b>ROHSTOFF-RADAR</b>"
+            self.bot.handle_callback_query("999888", "commodities", "cb_comm")
+            self.assertIn("ROHSTOFF-RADAR", mock_send.call_args[0][1])
+
+            # 4. crypto
+            self.mock_macro.format_crypto_card.return_value = "🪙 <b>KRYPTO-RADAR</b>"
+            self.bot.handle_callback_query("999888", "crypto", "cb_cry")
+            self.assertIn("KRYPTO-RADAR", mock_send.call_args[0][1])
+
+            # 5. coach
+            self.mock_coach.format_coach_card.return_value = "🧠 <b>KI-COACH</b>"
+            self.bot.handle_callback_query("999888", "coach", "cb_coach")
+            self.assertIn("KI-COACH", mock_send.call_args[0][1])
+
+            # 6. export
+            self.mock_pm.list_paper_trades.return_value = []
+            self.bot.handle_callback_query("999888", "export", "cb_exp")
+            mock_doc.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
 

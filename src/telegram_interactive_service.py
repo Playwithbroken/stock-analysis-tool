@@ -58,6 +58,10 @@ class TelegramInteractiveService:
         audio_briefing_service: Optional[Any] = None,
         quality_compounder_service: Optional[Any] = None,
         asymmetric_options_leaps_service: Optional[Any] = None,
+        chart_snapshot_service: Optional[Any] = None,
+        macro_commodity_crypto_service: Optional[Any] = None,
+        trading_coach_service: Optional[Any] = None,
+        earnings_expected_move_service: Optional[Any] = None,
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
@@ -86,6 +90,42 @@ class TelegramInteractiveService:
         self.audio_service = audio_briefing_service
         self.compounder_service = quality_compounder_service
         self.leaps_service = asymmetric_options_leaps_service
+
+        if chart_snapshot_service:
+            self.chart_service = chart_snapshot_service
+        else:
+            try:
+                from src.chart_snapshot_service import ChartSnapshotService
+                self.chart_service = ChartSnapshotService(self.asymmetric_service)
+            except Exception:
+                self.chart_service = None
+
+        if macro_commodity_crypto_service:
+            self.macro_assets_service = macro_commodity_crypto_service
+        else:
+            try:
+                from src.macro_commodity_crypto_service import MacroCommodityCryptoService
+                self.macro_assets_service = MacroCommodityCryptoService()
+            except Exception:
+                self.macro_assets_service = None
+
+        if trading_coach_service:
+            self.coach_service = trading_coach_service
+        else:
+            try:
+                from src.trading_coach_service import TradingCoachService
+                self.coach_service = TradingCoachService(self.portfolio_manager)
+            except Exception:
+                self.coach_service = None
+
+        if earnings_expected_move_service:
+            self.earnings_service = earnings_expected_move_service
+        else:
+            try:
+                from src.earnings_expected_move_service import EarningsExpectedMoveService
+                self.earnings_service = EarningsExpectedMoveService()
+            except Exception:
+                self.earnings_service = None
 
         self._last_update_id: int = 0
         self._is_running: bool = False
@@ -130,6 +170,57 @@ class TelegramInteractiveService:
             return True
         except Exception as exc:
             logger.error("Failed to send Telegram message to %s: %s", chat_id, exc)
+            return False
+
+    def send_photo(
+        self,
+        chat_id: str,
+        photo_bytes: bytes,
+        caption: Optional[str] = None,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Sends a PNG photo/chart to Telegram."""
+        if not self.bot_token or not photo_bytes:
+            return False
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+        files = {"photo": ("chart.png", photo_bytes, "image/png")}
+        data: Dict[str, Any] = {"chat_id": chat_id}
+        if caption:
+            data["caption"] = caption[:1024]
+            data["parse_mode"] = "HTML"
+        if reply_markup:
+            import json
+            data["reply_markup"] = json.dumps(reply_markup)
+        try:
+            res = requests.post(url, data=data, files=files, timeout=30)
+            res.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.error("Failed to send Telegram photo to %s: %s", chat_id, exc)
+            return False
+
+    def send_document(
+        self,
+        chat_id: str,
+        file_bytes: bytes,
+        filename: str = "export.csv",
+        caption: Optional[str] = None,
+    ) -> bool:
+        """Sends a document / CSV file to Telegram."""
+        if not self.bot_token or not file_bytes:
+            return False
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
+        files = {"document": (filename, file_bytes, "text/csv")}
+        data: Dict[str, Any] = {"chat_id": chat_id}
+        if caption:
+            data["caption"] = caption[:1024]
+            data["parse_mode"] = "HTML"
+        try:
+            res = requests.post(url, data=data, files=files, timeout=30)
+            res.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.error("Failed to send Telegram document to %s: %s", chat_id, exc)
             return False
 
     def send_voice(
@@ -402,6 +493,34 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "Lade Top Trading Edge Setups...")
             res = self._cmd_edge([], chat_id=chat_id)
             self.send_message(chat_id, res)
+        elif cb.startswith("chart:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Generiere Chart für {ticker}...")
+            res = self._cmd_chart(chat_id, [ticker])
+            if res:
+                self.send_message(chat_id, res)
+        elif cb.startswith("earnings:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"Berechne Earnings Expected Move für {ticker}...")
+            res = self._cmd_earnings([ticker])
+            self.send_message(chat_id, res, reply_markup=self._build_inline_keyboard(ticker))
+        elif cb in ("commodities", "gold", "oil"):
+            self.answer_callback_query(callback_query_id, "Lade Rohstoff- & Makro-Radar...")
+            res = self._cmd_commodities()
+            self.send_message(chat_id, res)
+        elif cb in ("crypto", "btc", "eth"):
+            self.answer_callback_query(callback_query_id, "Lade Krypto-Radar...")
+            res = self._cmd_crypto()
+            self.send_message(chat_id, res)
+        elif cb in ("coach", "audit"):
+            self.answer_callback_query(callback_query_id, "Lade KI-Trading-Coach Audit...")
+            res = self._cmd_coach()
+            self.send_message(chat_id, res)
+        elif cb == "export":
+            self.answer_callback_query(callback_query_id, "Erstelle Trade-Export...")
+            res = self._cmd_export(chat_id)
+            if res:
+                self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -505,6 +624,18 @@ class TelegramInteractiveService:
                 return self._cmd_routine()
             elif cmd in ("/alerts", "/alert", "/profile", "/mode"):
                 return self._cmd_alerts(args)
+            elif cmd in ("/chart", "/candle", "/graph", "/bild"):
+                return self._cmd_chart(chat_id, args)
+            elif cmd in ("/commodities", "/gold", "/oil", "/rohstoffe", "/metals"):
+                return self._cmd_commodities()
+            elif cmd in ("/crypto", "/btc", "/krypto", "/bitcoin"):
+                return self._cmd_crypto()
+            elif cmd in ("/coach", "/audit", "/fehler", "/review"):
+                return self._cmd_coach()
+            elif cmd in ("/earnings", "/expectedmove", "/ivcrush", "/zahlen"):
+                return self._cmd_earnings(args)
+            elif cmd in ("/export", "/csv", "/download_trades", "/steuer"):
+                return self._cmd_export(chat_id)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -522,12 +653,15 @@ class TelegramInteractiveService:
             "⚡ <b>Trading &amp; Order Management:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop &amp; Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/chart TICKER</code> – 📸 Visual Candlestick-Chart mit 9/21 EMA &amp; Trade-Levels\n"
+            "• <code>/earnings TICKER</code> – ⚡ Implied Expected-Move &amp; IV-Crush Rechner\n"
             "• <code>/routine</code> – Tägliche 5-Punkte Pre-Market Executive Checkliste\n"
             "• <code>/compounder</code> – Institutional Multi-Bagger Ranking (Piotroski &amp; ROIC)\n"
             "• <code>/compounder TICKER</code> – 360° Bilanz-, Burggraben- &amp; Z-Score Check (z.B. <code>/compounder NVDA</code>)\n"
             "• <code>/leaps TICKER</code> – Stock Replacement &amp; Hebel-Rechner (Delta ~0.80 LEAPS)\n"
             "• <code>/13f</code> – 13F Superinvestor Radar (Buffett, Burry, Druckenmiller, Li Lu)\n"
             "• <code>/psychology</code> – Trading Psychology &amp; Tilt Shield (Loss Streak Guard)\n"
+            "• <code>/coach</code> – 🧠 KI-Trading-Coach Audit, Fehler-Scanner &amp; Expectancy-Check\n"
             "• <code>/check TICKER</code> – 360° Institutional Check &amp; Multi-Faktor Radar (z.B. <code>/check SAP.DE</code>)\n"
             "• <code>/stop TICKER</code> – Struktur-Stop Rechner (VAL, Put Wall, AVWAP, Invalidation)\n"
             "• <code>/preflight TICKER</code> – Pre-Flight Risikocheck (Portfolio Heat &amp; Cluster-Korrelation)\n"
@@ -540,8 +674,11 @@ class TelegramInteractiveService:
             "• <code>/scale TICKER [50]</code> – 50% Teilgewinnmitnahme &amp; Rest auf Breakeven sichern\n"
             "• <code>/track</code> – Aktive Setups &amp; Trailing-Stops im Blick\n"
             "• <code>/depot</code> – Aktueller Depotstand, Cash &amp; Performance\n"
-            "• <code>/journal</code> – Letzte abgeschlossene Trades &amp; Performance-Historie\n\n"
-            "📋 <b>Watchlist &amp; Markt-Updates:</b>\n"
+            "• <code>/journal</code> – Letzte abgeschlossene Trades &amp; Performance-Historie\n"
+            "• <code>/export</code> – 📑 Trade-Journal als CSV-Download für Excel / Steuer\n\n"
+            "📋 <b>Watchlist, Rohstoffe &amp; Krypto:</b>\n"
+            "• <code>/commodities</code> – 🪙 Gold, Silber, WTI-Öl, Erdgas &amp; Kupfer Trend-Radar\n"
+            "• <code>/crypto</code> – ₿ Bitcoin, Ethereum &amp; Solana 24/7 Trendfolge-Check\n"
             "• <code>/voice</code> – 🎙️ Audio Daily Briefing / Sprachnachricht anhören (MP3)\n"
             "• <code>/movers</code> – Watchlist-Tagesgewinner &amp; Verlierer im Ranking\n"
             "• <code>/recap</code> – Schneller Session-Abschlussbericht &amp; Performance-Überblick\n"
@@ -575,6 +712,10 @@ class TelegramInteractiveService:
         """Generates interactive one-tap action buttons for a ticker."""
         return {
             "inline_keyboard": [
+                [
+                    {"text": "📸 Chart ansehen", "callback_data": f"chart:{ticker}"},
+                    {"text": "⚡ Earnings Move", "callback_data": f"earnings:{ticker}"},
+                ],
                 [
                     {"text": "📝 In Paper Trader buchen", "callback_data": f"paper:{ticker}"},
                     {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
@@ -2696,6 +2837,105 @@ class TelegramInteractiveService:
             return tickers if tickers else default_list
         except Exception:
             return default_list
+
+    def _cmd_chart(self, chat_id: str, args: List[str]) -> str:
+        """Generates and uploads a visual dark-themed candlestick chart directly to Telegram."""
+        if not args:
+            return (
+                "📸 <b>Visual Chart Snapshot</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "<code>/chart NVDA</code> oder <code>/chart SAP.DE</code>\n\n"
+                "💡 <i>Zeigt Candlesticks, 9/21 EMAs, Volume & Asymmetric Trade Levels direkt als Bild.</i>"
+            )
+        ticker = args[0].upper().strip()
+        if not self.chart_service:
+            return "⚠️ Chart-Service aktuell nicht verfügbar."
+        png = self.chart_service.generate_chart_png(ticker)
+        if not png:
+            return f"⚠️ Konnte kein Chart-Bild für <b>{ticker}</b> generieren. Bitte Symbol prüfen."
+
+        caption = f"📊 <b>Chart Snapshot: {ticker}</b> (9 EMA, 21 EMA & Volume)"
+        sent = self.send_photo(chat_id, png, caption=caption, reply_markup=self._build_inline_keyboard(ticker))
+        if sent:
+            return ""
+        return f"⚠️ Konnte Bild für {ticker} nicht an Telegram übertragen."
+
+    def _cmd_commodities(self) -> str:
+        """Displays institutional commodities & macro anchors overview."""
+        if not self.macro_assets_service:
+            return "⚠️ Rohstoff-Radar aktuell nicht verfügbar."
+        return self.macro_assets_service.format_commodities_card()
+
+    def _cmd_crypto(self) -> str:
+        """Displays 24/7 crypto trend radar."""
+        if not self.macro_assets_service:
+            return "⚠️ Krypto-Radar aktuell nicht verfügbar."
+        return self.macro_assets_service.format_crypto_card()
+
+    def _cmd_coach(self) -> str:
+        """Displays AI trading coach performance and behavioral audit."""
+        if not self.coach_service:
+            return "⚠️ KI-Coach aktuell nicht verfügbar."
+        return self.coach_service.format_coach_card()
+
+    def _cmd_earnings(self, args: List[str]) -> str:
+        """Calculates expected move and IV crush risk for upcoming earnings."""
+        if not args:
+            return (
+                "⚡ <b>Earnings Expected-Move &amp; IV-Crush Rechner</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "<code>/earnings NVDA</code> oder <code>/earnings SAP.DE</code>\n\n"
+                "💡 <i>Berechnet die vom Markt implizierte Schwankung (Straddle) und warnt vor IV-Implosion.</i>"
+            )
+        ticker = args[0].upper().strip()
+        if not self.earnings_service:
+            return "⚠️ Earnings-Service aktuell nicht verfügbar."
+        return self.earnings_service.format_earnings_card(ticker)
+
+    def _cmd_export(self, chat_id: str) -> str:
+        """Exports trading journal as CSV file for Excel and tax accounting."""
+        if not self.portfolio_manager or not hasattr(self.portfolio_manager, "list_paper_trades"):
+            return "⚠️ Portfolio Manager nicht verfügbar für Export."
+
+        trades = self.portfolio_manager.list_paper_trades(limit=500)
+        closed = [t for t in trades if str(t.get("status") or "").lower() == "closed"]
+
+        lines = [
+            "Trade_ID,Ticker,Direction,Setup_Type,Entry_Price,Exit_Price,Quantity,Realized_PnL,Return_Pct,Closed_At"
+        ]
+        for t in closed:
+            tid = str(t.get("id") or "")
+            tk = str(t.get("ticker") or "")
+            dir_ = str(t.get("direction") or "long")
+            stype = str(t.get("setup_type") or "")
+            entry = float(t.get("entry_price") or 0.0)
+            exit_ = float(t.get("exit_price") or 0.0)
+            qty = float(t.get("quantity") or 1.0)
+            pnl = float(t.get("realized_pnl") or t.get("pnl") or 0.0)
+            ret_pct = float(t.get("return_pct") or 0.0)
+            closed_at = str(t.get("closed_at") or t.get("updated_at") or "")
+            lines.append(f"{tid},{tk},{dir_},{stype},{entry:.2f},{exit_:.2f},{qty:.1f},{pnl:.2f},{ret_pct:.2f}%,{closed_at}")
+
+        csv_content = "\n".join(lines)
+        csv_bytes = csv_content.encode("utf-8")
+
+        tot_pnl = sum(float(t.get("realized_pnl") or t.get("pnl") or 0.0) for t in closed)
+        wins = [t for t in closed if float(t.get("realized_pnl") or t.get("pnl") or 0.0) > 0]
+        wr = (len(wins) / len(closed) * 100.0) if closed else 0.0
+
+        filename = f"trades_export_{datetime.now().strftime('%Y%m%d')}.csv"
+        self.send_document(chat_id, csv_bytes, filename=filename, caption="📑 <b>Trade-Journal CSV Export</b>")
+
+        sgn = "+" if tot_pnl >= 0 else ""
+        return (
+            f"📑 <b>TRADE-JOURNAL EXPORT ERSTELLT</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Beendete Trades:</b> {len(closed)}\n"
+            f"• <b>Gesamtertrag:</b> <b>{sgn}${tot_pnl:,.2f}</b>\n"
+            f"• <b>Winrate:</b> <b>{wr:.1f}%</b>\n\n"
+            f"📥 <i>Die CSV-Datei wurde dir soeben als Download gesendet. "
+            f"Du kannst sie direkt in Excel, Apple Numbers oder Steuersoftware importieren.</i>"
+        )
 
     async def run_listener_loop(self) -> None:
         """

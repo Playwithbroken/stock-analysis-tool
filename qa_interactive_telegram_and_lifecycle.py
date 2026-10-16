@@ -2113,6 +2113,64 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
         self.assertIn("Gast-Zugang entfernt", res_rm)
         self.assertFalse(bot.is_authorized("777888"))
 
+    def test_reentry_pyramiding_ordersheet_and_trackrecord(self):
+        mock_pm = MagicMock()
+        mock_pm.get_app_setting.return_value = ""
+        mock_pm.list_paper_trades.return_value = []
+        mock_alert = MagicMock()
+        svc = TradeLifecycleService(portfolio_manager=mock_pm)
+
+        ticket = {
+            "ticker": "NVDA",
+            "entry_price": 100.0,
+            "invalidation_price": 95.0,
+            "target_1": 110.0,
+            "target_2": 118.0,
+            "risk_per_share": 5.0,
+            "recommended_shares": 20,
+        }
+        svc.register_trade(ticket)
+
+        # 1. Simulate Stop-Hunt: price dips to 94.0 -> STOPPED_OUT
+        with patch.object(svc, "_fetch_current_price", return_value=94.0):
+            res_stop = svc.evaluate_active_trades(mock_alert)
+            self.assertEqual(res_stop["actions"][0]["action"], "STOPPED_OUT")
+
+        # 2. Simulate Shakeout-Reclaim: price reclaims 100.50 (>= 100.0 entry) -> RE_ENTRY_SIGNAL!
+        with patch.object(svc, "_fetch_current_price", return_value=100.50):
+            res_reclaim = svc.evaluate_active_trades(mock_alert)
+            self.assertEqual(len(res_reclaim["actions"]), 1)
+            self.assertEqual(res_reclaim["actions"][0]["action"], "RE_ENTRY_SIGNAL")
+            self.assertEqual(res_reclaim["actions"][0]["reclaim_entry"], 100.0)
+
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+            trade_lifecycle_service=svc,
+            portfolio_manager=mock_pm,
+        )
+
+        # 3. /reentry command
+        res_reentry_cmd = bot.handle_command("999888", "/reentry")
+        self.assertIn("SECOND-CHANCE RE-ENTRY RADAR", res_reentry_cmd)
+        self.assertIn("NVDA", res_reentry_cmd)
+
+        # 4. /add NVDA (Free-Roll Pyramiding)
+        res_pyr = bot.handle_command("999888", "/add NVDA")
+        self.assertIn("FREE-ROLL PYRAMIDING PLAN: NVDA", res_pyr)
+        self.assertIn("0€-Risiko-Stop", res_pyr)
+
+        # 5. /order NVDA (Broker Order-Spickzettel)
+        res_ord = bot.handle_command("999888", "/order NVDA")
+        self.assertIn("BROKER ORDER-SPICKZETTEL: NVDA", res_ord)
+        self.assertIn("Limit-Kauf (Limit Buy)", res_ord)
+        self.assertIn("Atmungs-Puffer", res_ord)
+
+        # 6. /trackrecord (Privacy-safe Scorecard)
+        res_tr = bot.handle_command("999888", "/trackrecord")
+        self.assertIn("VERIFIED TRACK-RECORD", res_tr)
+        self.assertIn("Durch -0.25R Atmungs-Puffer gerettet", res_tr)
+
 
 if __name__ == "__main__":
     unittest.main()

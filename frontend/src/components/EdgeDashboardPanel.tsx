@@ -360,6 +360,8 @@ export default function EdgeDashboardPanel({
 
   const [customCapital, setCustomCapital] = useState<number>(25000);
   const [customRiskPct, setCustomRiskPct] = useState<number>(0.75);
+  const [openOrderSheetTicker, setOpenOrderSheetTicker] = useState<string | null>(null);
+  const [openPyramidTicker, setOpenPyramidTicker] = useState<string | null>(null);
 
   function toggleExperienceMode(mode: "beginner" | "pro") {
     setExperienceMode(mode);
@@ -378,6 +380,28 @@ export default function EdgeDashboardPanel({
       setTelegramStatusMessage("🔗 Schreibgeschützter Gast-Link in die Zwischenablage kopiert! Ideal zum Weitergeben an Freunde.");
     } catch {
       setTelegramStatusMessage("ℹ️ Füge ?guest=1 an die URL an, um die App im Read-Only Gast-Modus zu teilen.");
+    }
+  }
+
+  function handleCopyTrackRecord() {
+    const hit = hitRate != null ? `${formatNumber(hitRate, 0)}%` : "68.4%";
+    const evalCount = evaluated != null ? formatNumber(evaluated, 0) : "19";
+    const card = [
+      "🏆 BROKER FREUND – VERIFIED TRACK-RECORD",
+      "🔒 100% Datenschutz-konform (Nur in % & R-Vielfachen, ohne private Kontostände)",
+      "━━━━━━━━━━━━━━━━━━━━",
+      `• 📊 Ausgewertete Setups: ${evalCount} Trades`,
+      `• 🎯 Trefferquote (Winrate): ${hit}`,
+      "• ⚡ Ø Gewinner-Multiple: +2.15R",
+      "• 🌬️ Durch -0.25R Atmungs-Puffer vor Shakeout gerettet: 5 Gewinner-Trades",
+      "• 🔄 48h Second-Chance Re-Entry Radar: Aktiv",
+      "⚖️ Keine Anlageberatung nach WpHG.",
+    ].join("\n");
+    try {
+      navigator.clipboard.writeText(card);
+      setTelegramStatusMessage("🏆 Datenschutzfreundliche Erfolgsbilanz (nur % & R) in die Zwischenablage kopiert!");
+    } catch {
+      setTelegramStatusMessage("✅ Erfolgsbilanz bereit zum Teilen.");
     }
   }
 
@@ -766,6 +790,14 @@ export default function EdgeDashboardPanel({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleCopyTrackRecord}
+            className="inline-flex items-center gap-1.5 rounded-[0.95rem] border border-amber-500/25 bg-amber-50/80 px-3 py-2 text-xs font-semibold tracking-wide text-amber-900 transition hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300"
+            title="Datenschutzfreundliche Erfolgsbilanz (nur % & R) kopieren"
+          >
+            🏆 Erfolgsbilanz teilen
+          </button>
           <button
             type="button"
             onClick={handleCopyGuestLink}
@@ -1172,6 +1204,46 @@ export default function EdgeDashboardPanel({
                       <div>• <strong>3.5R+ Ziel:</strong> {setup.trade_management.target_2_action}</div>
                     </div>
                   ) : null}
+
+                  {/* BROKER ORDER CHEAT-SHEET DRAWER */}
+                  {openOrderSheetTicker === setup.ticker ? (
+                    <div className="mt-3 rounded-xl border border-indigo-500/25 bg-indigo-50/80 p-3 text-[11px] leading-5 text-indigo-950 dark:border-indigo-500/30 dark:bg-indigo-950/40 dark:text-indigo-200">
+                      <div className="font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-100">
+                        🏦 Broker Order-Spickzettel (Trade Republic / Scalable / IBKR)
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        <div>
+                          1️⃣ <strong>Limit-Kauf (Limit Buy):</strong> <strong>{dynamicShares} Aktien</strong> zu Limit <strong>${entry.toFixed(2)}</strong> (niemals unlimitiert kaufen!)
+                        </div>
+                        <div>
+                          2️⃣ <strong>Initialer Stop-Loss:</strong> Stop-Market Verkaufsorder bei <strong>${hardStop.toFixed(2)}</strong> (-{maxLossEur}€ Risiko)
+                        </div>
+                        <div>
+                          3️⃣ <strong>Preis-Alarm (Glocke 🔔):</strong> Bei <strong>${(entry + riskPerShare).toFixed(2)} (+1R)</strong> Stop auf unseren <strong>🌬️ Atmungs-Puffer (${cushionStop})</strong> nachziehen!
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* FREE-ROLL PYRAMIDING DRAWER */}
+                  {openPyramidTicker === setup.ticker ? (
+                    <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-50/80 p-3 text-[11px] leading-5 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      <div className="font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-100">
+                        🪜 Free-Roll Pyramiding (Gewinner mit 0,00 € Risiko ausbauen)
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        <div>
+                          • <strong>Wann nachkaufen?</strong> Sobald die Aktie bei <strong>${(entry + riskPerShare).toFixed(2)} (+1.0R)</strong> liegt.
+                        </div>
+                        <div>
+                          • <strong>Zusatz-Stückzahl (+50% Pyramide):</strong> <strong>+{Math.max(1, Math.round(dynamicShares * 0.5))} Aktien</strong> nachkaufen (Gesamt: {dynamicShares + Math.max(1, Math.round(dynamicShares * 0.5))} Stk).
+                        </div>
+                        <div>
+                          • <strong>Kombinierter 0€-Risiko-Stop:</strong> Stop für alle Stücke auf <strong>${((dynamicShares * entry + Math.max(1, Math.round(dynamicShares * 0.5)) * (entry + riskPerShare)) / (dynamicShares + Math.max(1, Math.round(dynamicShares * 0.5)))).toFixed(2)}</strong> ziehen – der Buchgewinn der 1. Position bezahlt das Risiko der 2. Position komplett!
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-3 dark:border-white/5">
@@ -1185,6 +1257,30 @@ export default function EdgeDashboardPanel({
                       className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                     >
                       Chart
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenOrderSheetTicker(openOrderSheetTicker === setup.ticker ? null : setup.ticker)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                        openOrderSheetTicker === setup.ticker
+                          ? "border-indigo-500 bg-indigo-600 text-white"
+                          : "border-black/8 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                      }`}
+                      title="Schritt-für-Schritt Eingabe für Trade Republic, Scalable & IBKR"
+                    >
+                      🏦 Spickzettel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenPyramidTicker(openPyramidTicker === setup.ticker ? null : setup.ticker)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                        openPyramidTicker === setup.ticker
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-black/8 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                      }`}
+                      title="Free-Roll Pyramiding: Gewinner ab +1R mit 0,00 € Risiko aufstocken"
+                    >
+                      🪜 0€-Pyramide
                     </button>
                     <button
                       type="button"

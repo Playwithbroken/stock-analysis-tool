@@ -2171,9 +2171,100 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
         self.assertIn("VERIFIED TRACK-RECORD", res_tr)
         self.assertIn("Durch -0.25R Atmungs-Puffer gerettet", res_tr)
 
+    def test_playbook_bayesian_self_learning_and_german_tools(self):
+        from datetime import datetime, timezone
+        from src.trading_coach_service import TradingCoachService, INSTITUTIONAL_PRO_STRATEGIES
+        from src.asymmetric_trade_service import get_wkn_isin, compute_german_net_tax, evaluate_entry_timing
+
+        # 1. Verify all 8 Pro Strategies are registered and Bayesian self-learning adapts weights
+        self.assertEqual(len(INSTITUTIONAL_PRO_STRATEGIES), 8)
+        mock_pm = MagicMock()
+        mock_pm.get_app_setting.return_value = ""
+        mock_pm.list_paper_trades.return_value = [
+            {
+                "ticker": "NVDA",
+                "status": "closed",
+                "setup_type": "institutional_edge_vah_breakout_vcp",
+                "entry_price": 100.0,
+                "stop_price": 95.0,
+                "quantity": 10,
+                "realized_pnl": 175.0,  # +3.5R winner
+            },
+            {
+                "ticker": "SAP.DE",
+                "status": "closed",
+                "setup_type": "institutional_edge_avwap_poc_continuation",
+                "entry_price": 200.0,
+                "stop_price": 192.0,
+                "quantity": 5,
+                "realized_pnl": 100.0,  # +2.5R winner
+            },
+        ]
+        coach = TradingCoachService(portfolio_manager=mock_pm)
+        weights = coach.get_adaptive_strategy_weights()
+        self.assertEqual(len(weights), 8)
+        self.assertGreater(weights["vcp_pocket_pivot"]["posterior_expectancy_r"], 0.85)
+        self.assertGreater(weights["vcp_pocket_pivot"]["score_delta"], 0)
+
+        eval_adj = coach.evaluate_setup_learning_adjustment(
+            setup_name="Value Area High (VAH) Breakout & Expansion",
+            has_positive_gex=True,
+            has_avwap_support=True,
+            has_strong_rs=True,
+        )
+        self.assertGreater(eval_adj["score_adjustment"], 0)
+        self.assertGreaterEqual(len(eval_adj["active_strategies"]), 3)
+        self.assertIn("Pro-Playbook", eval_adj["summary_badge"])
+
+        # 2. Verify German WKN/ISIN, Net Tax (26.375%), and Anti-FOMO Timing
+        wkn_nvda = get_wkn_isin("NVDA")
+        self.assertEqual(wkn_nvda["wkn"], "918422")
+        self.assertEqual(wkn_nvda["isin"], "US67066G1040")
+
+        tax = compute_german_net_tax(gross_tp1_eur=400.0, gross_tp2_eur=700.0, gross_risk_eur=200.0)
+        self.assertLess(tax["net_tp1_eur"], 400.0)
+        self.assertGreater(tax["tax_shield_credit_eur"], 50.0)
+        self.assertLess(tax["effective_net_risk_eur"], 200.0)
+
+        # Simulate US opening bell 15:35 CEST (13:35 UTC in summer) + chasing (> +0.40R above entry)
+        us_open_dt = datetime(2026, 7, 15, 13, 35, tzinfo=timezone.utc)
+        timing = evaluate_entry_timing("NVDA", spot=104.0, entry_price=100.0, risk_per_share=5.0, now_utc=us_open_dt)
+        self.assertEqual(timing["session_status"], "WAIT_OPEN_VOLATILITY")
+        self.assertTrue(timing["is_chasing"])
+        self.assertIn("ANTI-FOMO WARNUNG", timing["chasing_badge"])
+
+        # 3. Verify Telegram commands (/playbook, /strategie, /timing, /wkn, /netto)
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+            trading_coach_service=coach,
+            portfolio_manager=mock_pm,
+        )
+
+        res_pb = bot.handle_command("999888", "/playbook")
+        self.assertIn("PROFI-STRATEGIE-PLAYBOOK", res_pb)
+        self.assertIn("Minervini VCP", res_pb)
+        self.assertIn("Wyckoff Spring", res_pb)
+
+        res_strat = bot.handle_command("999888", "/strategie")
+        self.assertIn("30-SEKUNDEN STRATEGIE-GUIDE", res_strat)
+        self.assertIn("-0.25R", res_strat)
+
+        res_tim = bot.handle_command("999888", "/timing NVDA")
+        self.assertIn("HANDELSZEIT-AMPEL &amp; ANTI-FOMO CHECK", res_tim)
+
+        res_wkn = bot.handle_command("999888", "/wkn SAP.DE")
+        self.assertIn("716460", res_wkn)
+        self.assertIn("DE0007164600", res_wkn)
+
+        res_net = bot.handle_command("999888", "/netto NVDA")
+        self.assertIn("DEUTSCHER NETTO-STEUERRECHNER", res_net)
+        self.assertIn("VERLUSTVERRECHNUNGSTOPF-VORTEIL", res_net)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

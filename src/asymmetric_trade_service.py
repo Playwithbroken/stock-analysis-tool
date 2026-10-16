@@ -28,6 +28,7 @@ from src.anchored_vwap_service import AnchoredVWAPService
 from src.whale_flow_service import WhaleFlowService
 from src.liquidity_zone_service import LiquidityZoneService
 from src.multi_timeframe_service import MultiTimeframeService
+from src.trading_coach_service import TradingCoachService
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,219 @@ try:
     import yfinance as yf  # type: ignore
 except Exception:  # pragma: no cover
     yf = None  # type: ignore
+
+
+GERMAN_WKN_ISIN_REGISTRY: Dict[str, Dict[str, str]] = {
+    "NVDA": {"wkn": "918422", "isin": "US67066G1040", "name": "NVIDIA Corp."},
+    "AAPL": {"wkn": "865985", "isin": "US0378331005", "name": "Apple Inc."},
+    "MSFT": {"wkn": "870747", "isin": "US5949181045", "name": "Microsoft Corp."},
+    "AMZN": {"wkn": "906866", "isin": "US0231351067", "name": "Amazon.com Inc."},
+    "META": {"wkn": "A1JWVX", "isin": "US30303M1027", "name": "Meta Platforms Inc."},
+    "GOOGL": {"wkn": "A14Y6F", "isin": "US02079K3059", "name": "Alphabet Inc. (Class A)"},
+    "GOOG": {"wkn": "A14Y6H", "isin": "US02079K1079", "name": "Alphabet Inc. (Class C)"},
+    "TSLA": {"wkn": "A1CX3T", "isin": "US88160R1014", "name": "Tesla Inc."},
+    "PLTR": {"wkn": "A2QA4J", "isin": "US69608A1088", "name": "Palantir Technologies"},
+    "AMD": {"wkn": "863186", "isin": "US0079031078", "name": "Advanced Micro Devices"},
+    "AVGO": {"wkn": "A2JG9Z", "isin": "US11135F1012", "name": "Broadcom Inc."},
+    "NFLX": {"wkn": "552484", "isin": "US64110L1061", "name": "Netflix Inc."},
+    "LLY": {"wkn": "858560", "isin": "US5324571083", "name": "Eli Lilly and Co."},
+    "BRK-B": {"wkn": "A0YJQ2", "isin": "US0846707026", "name": "Berkshire Hathaway B"},
+    "JPM": {"wkn": "850628", "isin": "US46625H1005", "name": "JPMorgan Chase & Co."},
+    "V": {"wkn": "A0NC7B", "isin": "US92826C8394", "name": "Visa Inc."},
+    "MA": {"wkn": "A0F602", "isin": "US57636Q1040", "name": "Mastercard Inc."},
+    "CRM": {"wkn": "A0B87V", "isin": "US79466L3024", "name": "Salesforce Inc."},
+    "ORCL": {"wkn": "871460", "isin": "US68389X1054", "name": "Oracle Corp."},
+    "COIN": {"wkn": "A2QP7J", "isin": "US19260Q1076", "name": "Coinbase Global"},
+    "MSTR": {"wkn": "722713", "isin": "US5949724083", "name": "Strategy (MicroStrategy)"},
+    "SMCI": {"wkn": "A0MKJF", "isin": "US86800U1043", "name": "Super Micro Computer"},
+    "ARM": {"wkn": "A3EUCD", "isin": "US0420682058", "name": "Arm Holdings plc"},
+    "MU": {"wkn": "869020", "isin": "US5951121038", "name": "Micron Technology"},
+    "INTC": {"wkn": "855681", "isin": "US4581401001", "name": "Intel Corp."},
+    "QCOM": {"wkn": "883121", "isin": "US7475251036", "name": "Qualcomm Inc."},
+    "UBER": {"wkn": "A2PHHG", "isin": "US90353T1007", "name": "Uber Technologies"},
+    "PANW": {"wkn": "A1JZ0Q", "isin": "US6974351057", "name": "Palo Alto Networks"},
+    "CRWD": {"wkn": "A2PK2R", "isin": "US22788C1053", "name": "CrowdStrike Holdings"},
+    "NOW": {"wkn": "A1JX4P", "isin": "US81762P1021", "name": "ServiceNow Inc."},
+    "SNOW": {"wkn": "A2QB38", "isin": "US8334451098", "name": "Snowflake Inc."},
+    "SHOP": {"wkn": "A14TJP", "isin": "CA82509L1076", "name": "Shopify Inc."},
+    "SAP.DE": {"wkn": "716460", "isin": "DE0007164600", "name": "SAP SE"},
+    "SAP": {"wkn": "716460", "isin": "DE0007164600", "name": "SAP SE"},
+    "RHM.DE": {"wkn": "703000", "isin": "DE0007030009", "name": "Rheinmetall AG"},
+    "SIE.DE": {"wkn": "723610", "isin": "DE0007236101", "name": "Siemens AG"},
+    "ALV.DE": {"wkn": "840400", "isin": "DE0008404005", "name": "Allianz SE"},
+    "MUV2.DE": {"wkn": "843002", "isin": "DE0008430026", "name": "Münchener Rück"},
+    "IFX.DE": {"wkn": "623100", "isin": "DE0006231004", "name": "Infineon Technologies"},
+    "DTG.DE": {"wkn": "DTR0CK", "isin": "DE000DTR0CK8", "name": "Daimler Truck Holding"},
+    "DTE.DE": {"wkn": "555750", "isin": "DE0005557508", "name": "Deutsche Telekom AG"},
+    "MBG.DE": {"wkn": "710000", "isin": "DE0007100000", "name": "Mercedes-Benz Group"},
+    "BMW.DE": {"wkn": "519000", "isin": "DE0005190003", "name": "BMW AG"},
+    "ADS.DE": {"wkn": "A1EWWW", "isin": "DE000A1EWWW0", "name": "adidas AG"},
+    "DBK.DE": {"wkn": "514000", "isin": "DE0005140008", "name": "Deutsche Bank AG"},
+    "CBK.DE": {"wkn": "CBK100", "isin": "DE000CBK1001", "name": "Commerzbank AG"},
+    "ENR.DE": {"wkn": "ENER6Y", "isin": "DE000ENER6Y0", "name": "Siemens Energy AG"},
+    "ASML.AS": {"wkn": "A1J4U4", "isin": "NL0010273215", "name": "ASML Holding N.V."},
+    "ASML": {"wkn": "A1J4U4", "isin": "NL0010273215", "name": "ASML Holding N.V."},
+    "MC.PA": {"wkn": "853292", "isin": "FR0000121014", "name": "LVMH Moët Hennessy"},
+    "NOVO-B.CO": {"wkn": "A3EU6F", "isin": "DK0062498333", "name": "Novo Nordisk A/S"},
+    "NVO": {"wkn": "A3EU6F", "isin": "DK0062498333", "name": "Novo Nordisk A/S"},
+}
+
+
+def get_wkn_isin(ticker: str) -> Dict[str, str]:
+    """Resolves a ticker symbol to its German WKN and ISIN for Trade Republic / Scalable / ING."""
+    sym = str(ticker or "").strip().upper()
+    if sym in GERMAN_WKN_ISIN_REGISTRY:
+        info = GERMAN_WKN_ISIN_REGISTRY[sym]
+        return {
+            "ticker": sym,
+            "wkn": info["wkn"],
+            "isin": info["isin"],
+            "name": info["name"],
+            "found": "true",
+        }
+    base = sym.split(".")[0]
+    if base in GERMAN_WKN_ISIN_REGISTRY:
+        info = GERMAN_WKN_ISIN_REGISTRY[base]
+        return {
+            "ticker": sym,
+            "wkn": info["wkn"],
+            "isin": info["isin"],
+            "name": info["name"],
+            "found": "true",
+        }
+    return {
+        "ticker": sym,
+        "wkn": f"Suche: {base}",
+        "isin": f"Ticker {sym}",
+        "name": sym,
+        "found": "false",
+    }
+
+
+def compute_german_net_tax(
+    gross_tp1_eur: float,
+    gross_tp2_eur: float,
+    gross_risk_eur: float,
+    order_fee_eur: float = 1.0,
+) -> Dict[str, float]:
+    """
+    Calculates German net profit after 26.375% Abgeltungsteuer + Soli and broker order fees
+    (e.g., 1.00 € per execution at Trade Republic / Scalable Capital), plus Verlustverrechnungstopf credit.
+    """
+    tax_rate = 0.26375  # 25% Abgeltungsteuer + 5.5% Solidaritätszuschlag
+    roundtrip_fee = round(order_fee_eur * 2.0, 2)
+
+    taxable_tp1 = max(0.0, gross_tp1_eur - roundtrip_fee)
+    tax_tp1 = round(taxable_tp1 * tax_rate, 2)
+    net_tp1 = round(max(0.0, gross_tp1_eur - tax_tp1 - roundtrip_fee), 2)
+
+    taxable_tp2 = max(0.0, gross_tp2_eur - roundtrip_fee)
+    tax_tp2 = round(taxable_tp2 * tax_rate, 2)
+    net_tp2 = round(max(0.0, gross_tp2_eur - tax_tp2 - roundtrip_fee), 2)
+
+    gross_loss_with_fee = round(abs(gross_risk_eur) + roundtrip_fee, 2)
+    tax_shield_credit = round(gross_loss_with_fee * tax_rate, 2)
+    effective_net_risk = round(gross_loss_with_fee - tax_shield_credit, 2)
+
+    gross_buffer_loss = round(abs(gross_risk_eur) * 0.25 + roundtrip_fee, 2)
+    net_buffer_loss = round(gross_buffer_loss * (1.0 - tax_rate), 2)
+
+    return {
+        "tax_rate_pct": 26.375,
+        "roundtrip_fee_eur": roundtrip_fee,
+        "gross_tp1_eur": round(gross_tp1_eur, 2),
+        "tax_tp1_eur": tax_tp1,
+        "net_tp1_eur": net_tp1,
+        "gross_tp2_eur": round(gross_tp2_eur, 2),
+        "tax_tp2_eur": tax_tp2,
+        "net_tp2_eur": net_tp2,
+        "gross_risk_eur": round(abs(gross_risk_eur), 2),
+        "tax_shield_credit_eur": tax_shield_credit,
+        "effective_net_risk_eur": effective_net_risk,
+        "gross_buffer_025r_eur": gross_buffer_loss,
+        "net_buffer_025r_eur": net_buffer_loss,
+    }
+
+
+def evaluate_entry_timing(
+    ticker: str,
+    spot: Optional[float] = None,
+    entry_price: Optional[float] = None,
+    risk_per_share: Optional[float] = None,
+    now_utc: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """
+    Evaluates intraday execution timing (German XETRA & US Wall Street opening spread traps)
+    and checks whether the current price is already extended above Entry (Anti-FOMO / Anti-Chasing).
+    """
+    dt = now_utc or datetime.now(timezone.utc)
+    # Approximate CET/CEST (UTC+2 in summer, UTC+1 in winter)
+    month = dt.month
+    cet_offset = 2 if 4 <= month <= 10 else 1
+    cet_hour = (dt.hour + cet_offset) % 24
+    cet_min = dt.minute
+    cet_Minutes = cet_hour * 60 + cet_min
+    is_weekend = dt.weekday() >= 5
+
+    sym = str(ticker or "").strip().upper()
+    is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+
+    if is_weekend:
+        session_status = "WEEKEND_CLOSED"
+        session_badge = "🟡 Wochenende (Börse geschlossen – Limit-Order für Montagvormittag ab 09:15 Uhr planen)"
+        spread_quality = "Börse geschlossen"
+    elif 9 * 60 <= cet_Minutes < 9 * 60 + 15:
+        session_status = "WAIT_OPEN_VOLATILITY"
+        session_badge = "🔴 XETRA-Eröffnung (09:00–09:15 Uhr): Hohe Spreads & Stop-Hunts! 15 Min warten!"
+        spread_quality = "Breit (Amateur-Hour)"
+    elif not is_eu and (15 * 60 + 30 <= cet_Minutes < 15 * 60 + 45):
+        session_status = "WAIT_OPEN_VOLATILITY"
+        session_badge = "🔴 US-Eröffnung (15:30–15:45 Uhr): Wall-Street Stop-Hunt Phase! Bis 15:45 Uhr warten!"
+        spread_quality = "Extrem volatil (Eröffnungs-Shakeout)"
+    elif not is_eu and (9 * 60 + 15 <= cet_Minutes < 15 * 60 + 30):
+        session_status = "PRE_US_OPEN"
+        session_badge = "🟡 US-Vorbörse auf XETRA/Tradegate: Leicht erhöhter Spread – streng mit Limit-Order arbeiten (Optimum ab 15:45 Uhr)"
+        spread_quality = "Mittel (Vorbörslich US)"
+    elif (9 * 60 + 15 <= cet_Minutes <= 17 * 60 + 30) or (not is_eu and 15 * 60 + 45 <= cet_Minutes <= 21 * 60 + 50):
+        session_status = "PRIME_INSTITUTIONAL"
+        session_badge = "🟢 Prime-Handelsfenster: Maximale Liquidität & engste institutionelle Spreads"
+        spread_quality = "Exzellent (Enge Spreads)"
+    else:
+        session_status = "AFTER_HOURS"
+        session_badge = "🟡 Randhandelszeit / After-Hours: Verbreiterte Spreads – niemals Market-Orders nutzen!"
+        spread_quality = "Erhöht (Randzeit)"
+
+    extension_r = 0.0
+    is_chasing = False
+    chasing_badge = "✅ Kurs im optimalen Einstiegs-Korridor (Kein FOMO-Chasing)"
+    if spot and entry_price and risk_per_share and risk_per_share > 0:
+        extension_r = round((spot - entry_price) / risk_per_share, 2)
+        if extension_r > 0.40:
+            is_chasing = True
+            chasing_badge = (
+                f"🚫 ANTI-FOMO WARNUNG: Kurs ist bereits +{extension_r:.2f}R über Entry davongelaufen! "
+                f"Nicht hinterherspringen – Kauflimit stur bei {entry_price:.2f} belassen!"
+            )
+        elif extension_r < -0.35:
+            chasing_badge = (
+                f"⏳ Geduld: Kurs notiert {extension_r:+.2f}R unter Trigger – erst bei Rückeroberung von {entry_price:.2f} aktiv werden."
+            )
+        else:
+            chasing_badge = (
+                f"🟢 Perfekter Einstiegs-Korridor ({extension_r:+.2f}R vom Entry) – Limit-Order direkt ausführbar."
+            )
+
+    return {
+        "ticker": sym,
+        "cet_time": f"{cet_hour:02d}:{cet_min:02d} Uhr",
+        "session_status": session_status,
+        "session_badge": session_badge,
+        "spread_quality": spread_quality,
+        "extension_r": extension_r,
+        "is_chasing": is_chasing,
+        "chasing_badge": chasing_badge,
+        "best_window_hint": "09:15–11:30 Uhr & 15:45–17:30 Uhr (DE/EU) | 15:45–17:30 Uhr & 20:00–21:45 Uhr (US)",
+    }
 
 
 class AsymmetricTradeService:
@@ -48,6 +262,8 @@ class AsymmetricTradeService:
         whale_flow_service: Optional[WhaleFlowService] = None,
         liquidity_zone_service: Optional[LiquidityZoneService] = None,
         multi_timeframe_service: Optional[MultiTimeframeService] = None,
+        coach_service: Optional[TradingCoachService] = None,
+        portfolio_manager: Optional[Any] = None,
     ) -> None:
         self.options_service = options_service or OptionsEdgeService()
         self.volume_service = volume_service or VolumeProfileService()
@@ -57,6 +273,7 @@ class AsymmetricTradeService:
         self.whale_service = whale_flow_service or WhaleFlowService()
         self.liquidity_service = liquidity_zone_service or LiquidityZoneService()
         self.mtf_service = multi_timeframe_service or MultiTimeframeService()
+        self.coach_service = coach_service or TradingCoachService(portfolio_manager=portfolio_manager)
 
     def generate_trade_setup(
         self,
@@ -300,6 +517,25 @@ class AsymmetricTradeService:
                 confluence_score -= 15
                 confluence_factors.append(earnings_info["warning"])
 
+            # Institutional Pro-Strategy Playbook & Bayesian Self-Learning Adjustment
+            pro_playbook = None
+            if self.coach_service:
+                try:
+                    pro_playbook = self.coach_service.evaluate_setup_learning_adjustment(
+                        setup_name=setup_name,
+                        has_positive_gex=bool(gex and gex_regime == "positive_gamma"),
+                        has_avwap_support=bool(avwap_data and (avwap_data.get("retests") or avwap_data.get("institutional_bias") == "BULLISH_ACCEPTANCE")),
+                        has_fvg_demand=bool(fvg_data and (fvg_data.get("in_demand_zone") or fvg_data.get("confluence_bonus", 0) > 0)),
+                        has_strong_rs=bool(rs_data and float(rs_data.get("mansfield_rs") or 0.0) >= 3.0),
+                        has_whale_expansion=bool(whale_data and whale_data.get("is_whale_activity")),
+                    )
+                    if pro_playbook:
+                        adj = int(pro_playbook.get("score_adjustment") or 0)
+                        confluence_score += adj
+                        confluence_factors.append(pro_playbook["summary_badge"])
+                except Exception as e:
+                    logger.debug("Playbook learning adjustment error: %s", e)
+
             confluence_score = max(10, min(100, confluence_score))
             if confluence_score >= 85:
                 grade = "A+"
@@ -335,6 +571,22 @@ class AsymmetricTradeService:
             is_eu = any(symbol.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
             curr_sym = "€" if is_eu else ("£" if symbol.endswith(".L") else "$")
 
+            # German WKN / ISIN, Anti-FOMO Entry Timing & German Net Tax (26.375%)
+            wkn_info = get_wkn_isin(symbol)
+            entry_timing = evaluate_entry_timing(
+                ticker=symbol,
+                spot=spot,
+                entry_price=entry_price,
+                risk_per_share=risk_per_share,
+            )
+            gross_tp1_eur = round((target_1 - entry_price) * recommended_shares, 2)
+            gross_tp2_eur = round((target_2 - entry_price) * recommended_shares, 2)
+            german_tax = compute_german_net_tax(
+                gross_tp1_eur=gross_tp1_eur,
+                gross_tp2_eur=gross_tp2_eur,
+                gross_risk_eur=actual_risk_amount,
+            )
+
             # 7. Trade Management Guidance
             trade_management = {
                 "target_1_action": f"Bei {curr_sym}{target_1:.2f} (2.0R): 50% Teilgewinn sichern, Hard Stop auf Breakeven ({curr_sym}{entry_price:.2f}) nachziehen.",
@@ -367,13 +619,23 @@ class AsymmetricTradeService:
                 f"</code>"
             )
 
+            wkn_line = (
+                f"🇩🇪 <b>WKN:</b> <code>{wkn_info['wkn']}</code> | <b>ISIN:</b> <code>{wkn_info['isin']}</code>\n"
+                if wkn_info.get("found") == "true"
+                else f"🇩🇪 <b>Ticker-Suche im Broker:</b> <code>{symbol}</code>\n"
+            )
+
             tg_html = (
                 f"🎯 <b>TRADING EDGE SETUP: {symbol}</b> ({grade_badge})\n"
+                f"{wkn_line}"
                 f"<b>Typ:</b> {setup_name}\n"
                 f"<b>Score:</b> {confluence_score}/100 ({grade_title})\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"💡 <b>Katalysator &amp; Logik:</b>\n{catalyst}\n\n"
                 f"📊 <b>Konfluenz-Faktoren:</b>\n{factors_text}\n\n"
+                f"⏳ <b>Timing &amp; Anti-FOMO Check:</b>\n"
+                f"• {entry_timing['session_badge']}\n"
+                f"• {entry_timing['chasing_badge']}\n\n"
                 f"📈 <b>Institutionelle Roadmap:</b>\n"
                 f"{ascii_roadmap}\n\n"
                 f"🏛️ <b>Key Level Referenz:</b>\n"
@@ -388,11 +650,13 @@ class AsymmetricTradeService:
                 f"📱 <b>Position Sizing ({actual_risk_pct:.2f}% Kontorisiko):</b>\n"
                 f"• <b>Stückzahl:</b> <b>{recommended_shares}</b> Aktien\n"
                 f"• <b>Kapitalbedarf:</b> ~{total_position_capital:,.2f} EUR\n"
-                f"• <b>Max. Risiko beim Stop:</b> -{actual_risk_amount:,.2f} EUR\n"
+                f"• <b>Max. Risiko beim Stop:</b> -{actual_risk_amount:,.2f} EUR (Netto nach Verlusttopf: ~-{german_tax['effective_net_risk_eur']:,.2f} EUR)\n"
+                f"• <b>Netto-Gewinn nach 26,38% Abgeltungsteuer:</b> Ziel 1: <b>+{german_tax['net_tp1_eur']:,.2f} EUR</b> | Ziel 2: <b>+{german_tax['net_tp2_eur']:,.2f} EUR</b>\n"
             )
 
             ticket = {
                 "ticker": symbol,
+                "wkn_isin": wkn_info,
                 "setup_name": setup_name,
                 "catalyst_description": catalyst,
                 "direction": direction,
@@ -416,6 +680,9 @@ class AsymmetricTradeService:
                 "chart_overlay_levels": chart_overlay_levels,
                 "trade_management": trade_management,
                 "earnings_info": earnings_info,
+                "entry_timing": entry_timing,
+                "german_tax": german_tax,
+                "pro_playbook": pro_playbook,
                 "volume_profile": {
                     "poc": poc,
                     "vah": vah,

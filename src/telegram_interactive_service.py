@@ -616,6 +616,30 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "🏆 Lade Verified Track-Record & Puffer-Bilanz...")
             res = self._cmd_trackrecord()
             self.send_message(chat_id, res)
+        elif cb in ("playbook", "brain", "strategien"):
+            self.answer_callback_query(callback_query_id, "🧠 Lade Profi-Strategie-Playbook & KI-Gedächtnis...")
+            res = self._cmd_playbook()
+            self.send_message(chat_id, res)
+        elif cb in ("strategie", "guide", "onboarding"):
+            self.answer_callback_query(callback_query_id, "🎓 Lade 30-Sekunden Strategie-Guide...")
+            res = self._cmd_strategie()
+            self.send_message(chat_id, res)
+        elif cb == "timing" or cb.startswith("timing:"):
+            parts = cb.split(":", 1)
+            t_args = [parts[1].upper()] if len(parts) > 1 and parts[1] else []
+            self.answer_callback_query(callback_query_id, "⏳ Prüfe Handelszeit-Ampel & Anti-FOMO...")
+            res = self._cmd_timing(t_args)
+            self.send_message(chat_id, res)
+        elif cb.startswith("wkn:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"🇩🇪 Lade WKN & ISIN für {ticker}...")
+            res = self._cmd_wkn([ticker])
+            self.send_message(chat_id, res)
+        elif cb.startswith("netto:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"💶 Berechne Netto nach 26,38% Steuer für {ticker}...")
+            res = self._cmd_netto([ticker])
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -648,7 +672,7 @@ class TelegramInteractiveService:
                     "🔒 <b>Gast-Modus (Schreibgeschützt)</b>\n"
                     "━━━━━━━━━━━━━━━━━━━━\n"
                     "Du nutzt Broker Freund im <b>Read-Only Gast-Zugang</b>.\n"
-                    "Alle Live-Analysen (<code>/menu</code>, <code>/edge</code>, <code>/check</code>, <code>/chart</code>, <code>/share</code>, <code>/order</code>, <code>/trackrecord</code>) stehen dir frei zur Verfügung.\n\n"
+                    "Alle Live-Analysen (<code>/menu</code>, <code>/edge</code>, <code>/playbook</code>, <code>/strategie</code>, <code>/timing</code>, <code>/wkn</code>, <code>/netto</code>, <code>/order</code>, <code>/trackrecord</code>) stehen dir frei zur Verfügung.\n\n"
                     "<i>Das Ausführen von Trades oder Ändern von Systemeinstellungen ist dem Admin vorbehalten.</i>"
                 )
 
@@ -669,6 +693,16 @@ class TelegramInteractiveService:
                 return self._cmd_order_cheatsheet(args)
             elif cmd in ("/trackrecord", "/performance", "/bilanz", "/winrate"):
                 return self._cmd_trackrecord()
+            elif cmd in ("/playbook", "/brain", "/strategien", "/lernen"):
+                return self._cmd_playbook()
+            elif cmd in ("/strategie", "/guide", "/anleitung", "/onboarding", "/regelwerk"):
+                return self._cmd_strategie()
+            elif cmd in ("/timing", "/fomo", "/uhrzeit", "/session"):
+                return self._cmd_timing(args)
+            elif cmd in ("/wkn", "/isin"):
+                return self._cmd_wkn(args)
+            elif cmd in ("/netto", "/abgeltung", "/tax", "/net"):
+                return self._cmd_netto(args)
             elif cmd == "/edge":
                 return self._cmd_edge(args, chat_id=chat_id)
             elif cmd == "/gex":
@@ -782,6 +816,11 @@ class TelegramInteractiveService:
             "⚡ <b>Trading &amp; Order Management:</b>\n"
             "• <code>/edge</code> – Top Grade A+/A Setups mit Entry, Stop &amp; Zielen\n"
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
+            "• <code>/playbook</code> – 🧠 Alle 8 verinnerlichten Profi-Strategien &amp; Bayes-KI-Lerngedächtnis\n"
+            "• <code>/strategie</code> – 🎓 30-Sekunden Strategie-Guide (Stop, -0.25R Puffer &amp; Teilgewinn erklärt)\n"
+            "• <code>/timing [TICKER]</code> – ⏳ Anti-FOMO &amp; Handelszeit-Ampel (Spread- &amp; Chasing-Check)\n"
+            "• <code>/wkn TICKER</code> – 🇩🇪 WKN &amp; ISIN Direkt-Kopierer für Trade Republic / Scalable / ING\n"
+            "• <code>/netto TICKER</code> – 💶 Deutscher Netto-Rechner (nach 26,375 % Abgeltungsteuer &amp; Verlusttopf)\n"
             "• <code>/order TICKER</code> – 🏦 Copy-Paste Broker-Spickzettel (Trade Republic / Scalable / IBKR)\n"
             "• <code>/reentry</code> – 🔄 48h Second-Chance Re-Entry Radar (Shakeout-Reclaim nach Stop-Hunt)\n"
             "• <code>/add TICKER</code> – 🪜 Free-Roll Pyramiding (Gewinner mit 0,00 € Zusatz-Risiko ausbauen)\n"
@@ -847,7 +886,7 @@ class TelegramInteractiveService:
         )
 
     def _build_main_menu_keyboard(self) -> Dict[str, Any]:
-        """Generates a clean 8-tile thumb-friendly main menu keyboard for beginners and pros."""
+        """Generates a clean 4-row thumb-friendly main menu keyboard for beginners and pros."""
         return {
             "inline_keyboard": [
                 [
@@ -855,12 +894,14 @@ class TelegramInteractiveService:
                     {"text": "💼 Mein Depot & Puffer", "callback_data": "depot"},
                 ],
                 [
-                    {"text": "🔄 Second-Chance Re-Entry", "callback_data": "reentry"},
-                    {"text": "🏆 Erfolgsbilanz (Share)", "callback_data": "trackrecord"},
+                    {"text": "🧠 8 Profi-Playbooks", "callback_data": "playbook"},
+                    {"text": "🎓 30s Strategie-Guide", "callback_data": "strategie"},
+                    {"text": "🔄 Re-Entry Radar", "callback_data": "reentry"},
                 ],
                 [
-                    {"text": "🌍 Markt-Ampel & Breite", "callback_data": "breadth"},
-                    {"text": "🪙 Gold, Öl & Krypto", "callback_data": "commodities"},
+                    {"text": "⏳ Handelszeit & FOMO", "callback_data": "timing"},
+                    {"text": "🏆 Erfolgsbilanz", "callback_data": "trackrecord"},
+                    {"text": "🌍 Markt-Ampel", "callback_data": "breadth"},
                 ],
                 [
                     {"text": "🎙️ Audio-Briefing (MP3)", "callback_data": "voice"},
@@ -880,6 +921,14 @@ class TelegramInteractiveService:
                 [
                     {"text": "🏦 Broker-Spickzettel", "callback_data": f"order:{ticker}"},
                     {"text": "🪜 Gewinner aufstocken", "callback_data": f"pyramid:{ticker}"},
+                ],
+                [
+                    {"text": "🇩🇪 WKN / ISIN", "callback_data": f"wkn:{ticker}"},
+                    {"text": "💶 Netto nach Steuer", "callback_data": f"netto:{ticker}"},
+                ],
+                [
+                    {"text": "⏳ Timing & Anti-FOMO", "callback_data": f"timing:{ticker}"},
+                    {"text": "🧠 Profi-Playbook (KI)", "callback_data": "playbook"},
                 ],
                 [
                     {"text": "⚡ Earnings Move", "callback_data": f"earnings:{ticker}"},
@@ -3473,11 +3522,13 @@ class TelegramInteractiveService:
                 "🏦 <b>Broker Order-Spickzettel (Trade Republic / Scalable / IBKR)</b>\n"
                 "Bitte gib ein Ticker-Symbol an, z.B.:\n"
                 "<code>/order NVDA</code> oder <code>/order SAP.DE</code>\n\n"
-                "💡 <i>Zeigt dir und deinen Freunden Schritt für Schritt, welchen Ordertyp, welches Limit und welchen Stop-Loss ihr in eurer Broker-App eintippen müsst.</i>"
+                "💡 <i>Zeigt dir und deinen Freunden Schritt für Schritt WKN/ISIN, Ordertyp, Limit, Stop-Loss und Netto-Gewinn nach deutscher Steuer.</i>"
             )
         ticker = args[0].upper().strip()
         is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
         c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        from src.asymmetric_trade_service import get_wkn_isin, compute_german_net_tax, evaluate_entry_timing
 
         setup = None
         if self.asymmetric_service:
@@ -3496,10 +3547,21 @@ class TelegramInteractiveService:
         t2 = float((setup or {}).get("target_2") or round(entry + 3.5 * risk_per_share, 2))
         shares = int((setup or {}).get("recommended_shares") or max(1, int(187.5 / risk_per_share)))
 
+        wkn_info = get_wkn_isin(ticker)
+        timing_info = evaluate_entry_timing(ticker, spot=entry, entry_price=entry, risk_per_share=risk_per_share)
+        tax_info = compute_german_net_tax(
+            gross_tp1_eur=(t1 - entry) * shares,
+            gross_tp2_eur=(t2 - entry) * shares,
+            gross_risk_eur=risk_per_share * shares,
+        )
+
         return (
-            f"🏦 <b>BROKER ORDER-SPICKZETTEL: {html.escape(ticker)}</b>\n"
-            f"<i>Schritt-für-Schritt Eingabe für Trade Republic, Scalable Capital &amp; IBKR</i>\n"
+            f"🏦 <b>BROKER ORDER-SPICKZETTEL: {html.escape(ticker)} ({html.escape(wkn_info['name'])})</b>\n"
+            f"<i>Schritt-für-Schritt Eingabe für Trade Republic, Scalable Capital, ING &amp; IBKR</i>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🇩🇪 <b>Direkt-Kopieren für die Broker-Suche:</b>\n"
+            f"   • <b>WKN:</b> <code>{html.escape(wkn_info['wkn'])}</code> | <b>ISIN:</b> <code>{html.escape(wkn_info['isin'])}</code>\n"
+            f"   • <b>Handelszeit-Check:</b> {timing_info['session_badge']}\n\n"
             f"1️⃣ <b>SCHRITT 1: KAUF-ORDER (Immer als LIMIT-ORDER!)</b>\n"
             f"   • Ordertyp in der App wählen: <b>Limit-Kauf (Limit Buy)</b>\n"
             f"   • Stückzahl: <b>{shares} Aktien</b>\n"
@@ -3510,7 +3572,155 @@ class TelegramInteractiveService:
             f"   • Stop-Preis eingeben: <b>{c_sym}{hard_stop:.2f}</b> (-1.0R Hard-Stop)\n\n"
             f"3️⃣ <b>SCHRITT 3: PREIS-ALARME (GLOCKE 🔔) IN DER APP SETZEN</b>\n"
             f"   • 🔔 <b>Alarm 1 (+1.0R = {c_sym}{plus_1r_trigger:.2f}):</b> Sobald erreicht, Stop-Loss von {c_sym}{hard_stop:.2f} auf unseren <b>🌬️ Atmungs-Puffer ({c_sym}{cushion_stop:.2f})</b> hochziehen!\n"
-            f"   • 🔔 <b>Alarm 2 (Ziel 1 = {c_sym}{t1:.2f}):</b> Hier <b>50% ({max(1, shares // 2)} Stk) verkaufen</b> &amp; Rest für Ziel 2 (<b>{c_sym}{t2:.2f}</b>) laufen lassen!"
+            f"   • 🔔 <b>Alarm 2 (Ziel 1 = {c_sym}{t1:.2f}):</b> Hier <b>50% ({max(1, shares // 2)} Stk) verkaufen</b> &amp; Rest für Ziel 2 (<b>{c_sym}{t2:.2f}</b>) laufen lassen!\n\n"
+            f"💶 <b>DEUTSCHER NETTO-AUSZAHLUNGS-CHECK (nach 26,375 % Steuer &amp; 2 € Gebühr):</b>\n"
+            f"   • Netto bei Ziel 1 (2.0R): <b>+{tax_info['net_tp1_eur']:,.2f} €</b> <i>(Brutto: +{tax_info['gross_tp1_eur']:,.2f} €)</i>\n"
+            f"   • Netto bei Ziel 2 (3.5R): <b>+{tax_info['net_tp2_eur']:,.2f} €</b> <i>(Brutto: +{tax_info['gross_tp2_eur']:,.2f} €)</i>\n"
+            f"   • Effektives Risiko beim -0.25R Puffer (nach Verlusttopf): nur <b>-{tax_info['net_buffer_025r_eur']:,.2f} €</b>"
+        )
+
+    def _cmd_playbook(self) -> str:
+        """Displays the 8 internalized Institutional Pro Strategies & Bayesian Self-Learning Memory."""
+        if self.coach_service and hasattr(self.coach_service, "format_playbook_brain_card"):
+            return self.coach_service.format_playbook_brain_card()
+        from src.trading_coach_service import TradingCoachService
+        return TradingCoachService(self.portfolio_manager).format_playbook_brain_card()
+
+    def _cmd_strategie(self) -> str:
+        """Displays the 30-Second Plain-German Strategy & Anti-Shakeout Onboarding Guide for beginners and friends."""
+        return (
+            "🎓 <b>DER 30-SEKUNDEN STRATEGIE-GUIDE (FÜR EINSTEIGER &amp; PROS)</b>\n"
+            "<i>Warum wir langfristig gewinnen, selbst wenn nicht jeder Trade aufgeht:</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "1️⃣ <b>SCHRITT 1: EINSTIEG AM SUPPORT MIT -1.0R SICHERHEITSNETZ</b>\n"
+            "   • Wir kaufen nie blind ins Blaue, sondern dort, wo Großbanken (Volume Profile POC/VAL, Anchored VWAP &amp; Put-Walls) den Kurs stützen.\n"
+            "   • Dein maximales Verlustrisiko (<b>1.0R</b>) ist vor dem Kauf fest auf ca. <b>0,75 % deines Kontos</b> begrenzt.\n\n"
+            "2️⃣ <b>SCHRITT 2: DER -0.25R SMART ATMUNGS-PUFFER (UNSER GEHEIMREZEPT 🌬️)</b>\n"
+            "   • <b>Das typische Anfänger-Problem:</b> Wer seinen Stop bei +1.0R sofort stur auf den Einstiegspreis (0,00 € Breakeven) zieht, wird oft durch einen kurzen Market-Maker-Dip (Stop-Hunt) mit 0 € Gewinn rausgeworfen – genau 5 Minuten bevor die Aktie +15 % explodiert!\n"
+            "   • <b>Unsere Profi-Lösung:</b> Bei <b>+1.0R</b> ziehen wir den Stop auf <b>-0.25R (Atmungs-Puffer)</b>. Du reduzierst dein Risiko um <b>75 %</b> (nur noch ein winziger Mini-Verlust im Worst Case), gibst der Aktie aber genug Luft zum Atmen für die große Haupt-Rallye!\n"
+            "   • Falls ein echter Shakeout passiert und der Kurs innerhalb von 48h wieder über den Entry zieht, meldet sich automatisch unser <b>🔄 Second-Chance Re-Entry Radar (<code>/reentry</code>)</b>.\n\n"
+            "3️⃣ <b>SCHRITT 3: BEI +2.0R ERNTE EINSAMMELN &amp; RUNNER LAUFEN LASSEN 🚀</b>\n"
+            "   • Bei <b>Ziel 1 (+2.0R)</b> verkaufen wir <b>50 % der Position</b> (Gewinn ist fest auf dem Konto!) und ziehen den Stop für die restlichen 50 % auf den echten Einstieg (Breakeven) nach.\n"
+            "   • Ab jetzt hast du einen <b>100 % risikofreien Runner</b> bis <b>Ziel 2 (+3.5R+)</b>!\n\n"
+            "🧠 <b>UND LERNT DER TRADER DARAUS?</b>\n"
+            "   • Ja! Alle <b>8 Profi-Strategien</b> (Minervini VCP, Brian Shannon AVWAP, ICT Fair Value Gaps, SpotGamma GEX, Weinstein Stage 2, Qullamaggie ORB, Piotroski Quality &amp; Wyckoff Spring) werten deine abgeschlossenen Trades per Bayes-Statistik aus (<code>/playbook</code>) und gewichten den Setup-Score automatisch nach!"
+        )
+
+    def _cmd_timing(self, args: Optional[List[str]] = None) -> str:
+        """Evaluates intraday execution timing (XETRA & US Opening spread traps) and Anti-FOMO chasing distance."""
+        from src.asymmetric_trade_service import evaluate_entry_timing
+
+        ticker = args[0].upper().strip() if args else "NVDA"
+        spot = None
+        entry = None
+        risk = None
+
+        if args and self.asymmetric_service:
+            try:
+                setup = self.asymmetric_service.generate_trade_setup(ticker)
+                if isinstance(setup, dict):
+                    entry = float(setup.get("entry_price") or 0.0)
+                    stop = float(setup.get("invalidation_price") or 0.0)
+                    risk = max(0.01, abs(entry - stop))
+                    spot = entry
+            except Exception:
+                pass
+
+        info = evaluate_entry_timing(ticker=ticker, spot=spot, entry_price=entry, risk_per_share=risk)
+        return (
+            f"⏳ <b>HANDELSZEIT-AMPEL &amp; ANTI-FOMO CHECK ({html.escape(ticker)})</b>\n"
+            f"<i>Schutz vor überteuerten Spreads &amp; emotionalem Hinterherspringen</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"• 🕒 <b>Aktuelle Marktzeit (MEZ/MESZ):</b> <b>{info['cet_time']}</b>\n"
+            f"• 🚦 <b>Session-Status:</b> {info['session_badge']}\n"
+            f"• 📐 <b>Spread-Qualität:</b> <b>{info['spread_quality']}</b>\n"
+            f"• 🎯 <b>Anti-Chasing Check:</b> {info['chasing_badge']}\n\n"
+            "🏛️ <b>Die goldenen Uhrzeit-Regeln der Profis:</b>\n"
+            "• 🚫 <b>09:00–09:15 Uhr (XETRA Start):</b> Niemals kaufen! Market Maker stellen breite Spreads und fischen Stop-Orders ab.\n"
+            "• 🚫 <b>15:30–15:45 Uhr (US Wall Street Start):</b> „Amateur Hour“ – erst die erste 15-Minuten-Kerze abwarten!\n"
+            "• 🟢 <b>Beste Kauf-Zeitfenster:</b>\n"
+            "  – <b>EU-Aktien (XETRA):</b> <code>09:15–11:30 Uhr</code> &amp; <code>15:45–17:25 Uhr</code>\n"
+            "  – <b>US-Aktien (NYSE/Nasdaq):</b> <code>15:45–17:30 Uhr</code> &amp; <code>20:00–21:45 Uhr</code>\n"
+            "• 💡 <i>Tipp: Nutze bei jedem Kauf konsequent eine <b>Limit-Order</b> (siehe <code>/order {html.escape(ticker)}</code>).</i>"
+        )
+
+    def _cmd_wkn(self, args: List[str]) -> str:
+        """Resolves a ticker symbol to its German WKN and ISIN for one-tap copying into German brokers."""
+        if not args:
+            return (
+                "🇩🇪 <b>WKN &amp; ISIN Direkt-Kopierer (Trade Republic / Scalable / ING)</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "<code>/wkn NVDA</code>, <code>/wkn SAP.DE</code> oder <code>/wkn RHM.DE</code>"
+            )
+        ticker = args[0].upper().strip()
+        from src.asymmetric_trade_service import get_wkn_isin
+        info = get_wkn_isin(ticker)
+        return (
+            f"🇩🇪 <b>WKN &amp; ISIN FÜR DEUTSCHE BROKER: {html.escape(info['ticker'])}</b>\n"
+            f"<i>Tippe einfach auf den Code zum Kopieren für Trade Republic, Scalable Capital, ING oder Comdirect:</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"• 🏢 <b>Unternehmen:</b> <b>{html.escape(info['name'])}</b>\n"
+            f"• 🔢 <b>WKN (6-stellig):</b> <code>{html.escape(info['wkn'])}</code>\n"
+            f"• 🌍 <b>ISIN (12-stellig):</b> <code>{html.escape(info['isin'])}</code>\n"
+            f"• 📈 <b>US/Börsen-Ticker:</b> <code>{html.escape(info['ticker'])}</code>\n\n"
+            f"💡 <i>Für den kompletten Kauf- &amp; Stop-Loss-Plan tippe <code>/order {html.escape(info['ticker'])}</code>.</i>"
+        )
+
+    def _cmd_netto(self, args: List[str]) -> str:
+        """Calculates German net profit after 26.375% Abgeltungsteuer + Soli, fees, and Verlustverrechnungstopf shield."""
+        if not args:
+            return (
+                "💶 <b>Deutscher Netto-Steuerrechner (26,375 % Abgeltungsteuer + Soli)</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "<code>/netto NVDA</code> oder <code>/netto SAP.DE</code>"
+            )
+        ticker = args[0].upper().strip()
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        from src.asymmetric_trade_service import compute_german_net_tax, get_wkn_isin
+
+        setup = None
+        if self.asymmetric_service:
+            try:
+                setup = self.asymmetric_service.generate_trade_setup(ticker)
+            except Exception:
+                setup = None
+
+        entry = float((setup or {}).get("entry_price") or 100.0)
+        stop = float((setup or {}).get("invalidation_price") or round(entry * 0.96, 2))
+        risk_per_share = max(0.01, round(abs(entry - stop), 2))
+        t1 = float((setup or {}).get("target_1") or round(entry + 2.0 * risk_per_share, 2))
+        t2 = float((setup or {}).get("target_2") or round(entry + 3.5 * risk_per_share, 2))
+        shares = int((setup or {}).get("recommended_shares") or max(1, int(187.5 / risk_per_share)))
+
+        gross_tp1 = round((t1 - entry) * shares, 2)
+        gross_tp2 = round((t2 - entry) * shares, 2)
+        gross_risk = round(risk_per_share * shares, 2)
+
+        tax = compute_german_net_tax(
+            gross_tp1_eur=gross_tp1,
+            gross_tp2_eur=gross_tp2,
+            gross_risk_eur=gross_risk,
+        )
+        wkn_info = get_wkn_isin(ticker)
+
+        return (
+            f"💶 <b>DEUTSCHER NETTO-STEUERRECHNER: {html.escape(ticker)} ({shares} Aktien)</b>\n"
+            f"<i>Inkl. 25 % Abgeltungsteuer + 5,5 % Soli (26,375 %) &amp; 2,00 € Ordergebühren</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🇩🇪 <b>WKN:</b> <code>{html.escape(wkn_info['wkn'])}</code> | <b>ISIN:</b> <code>{html.escape(wkn_info['isin'])}</code>\n\n"
+            f"🎯 <b>ZIEL 1 (+2.0R @ {c_sym}{t1:.2f}):</b>\n"
+            f"   • Brutto-Gewinn: +{tax['gross_tp1_eur']:,.2f} €\n"
+            f"   • Abgeltungsteuer &amp; Gebühr: -{tax['tax_tp1_eur'] + tax['roundtrip_fee_eur']:,.2f} €\n"
+            f"   • 🟢 <b>Echter Netto-Gewinn auf dem Konto: +{tax['net_tp1_eur']:,.2f} €</b>\n\n"
+            f"🚀 <b>ZIEL 2 (+3.5R+ @ {c_sym}{t2:.2f}):</b>\n"
+            f"   • Brutto-Gewinn: +{tax['gross_tp2_eur']:,.2f} €\n"
+            f"   • Abgeltungsteuer &amp; Gebühr: -{tax['tax_tp2_eur'] + tax['roundtrip_fee_eur']:,.2f} €\n"
+            f"   • 🟢 <b>Echter Netto-Gewinn auf dem Konto: +{tax['net_tp2_eur']:,.2f} €</b>\n\n"
+            f"🛡️ <b>VERLUSTVERRECHNUNGSTOPF-VORTEIL (STEUERSCHILD):</b>\n"
+            f"   • <b>Bei -1.0R Hard-Stop ({c_sym}{stop:.2f}):</b> Brutto -{tax['gross_risk_eur']:,.2f} € ➔ Steuergutschrift im Aktien-Verlusttopf: <b>+{tax['tax_shield_credit_eur']:,.2f} €</b> (Effektives Netto-Risiko: <b>-{tax['effective_net_risk_eur']:,.2f} €</b>)\n"
+            f"   • <b>Bei -0.25R Atmungs-Puffer:</b> Effektives Netto-Risiko nach Verlusttopf nur <b>-{tax['net_buffer_025r_eur']:,.2f} €</b>!"
         )
 
     def _cmd_trackrecord(self) -> str:

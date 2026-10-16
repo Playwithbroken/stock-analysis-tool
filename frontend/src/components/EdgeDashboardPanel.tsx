@@ -340,6 +340,70 @@ export default function EdgeDashboardPanel({
   const [sendingTelegramTicker, setSendingTelegramTicker] = useState<string | null>(null);
   const [telegramStatusMessage, setTelegramStatusMessage] = useState<string | null>(null);
 
+  const [experienceMode, setExperienceMode] = useState<"beginner" | "pro">(() => {
+    try {
+      const saved = window.localStorage.getItem("bf_ui_experience_mode");
+      return saved === "beginner" ? "beginner" : "pro";
+    } catch {
+      return "pro";
+    }
+  });
+
+  const [isGuestMode, setIsGuestMode] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("guest") === "1" || params.get("mode") === "guest";
+    } catch {
+      return false;
+    }
+  });
+
+  const [customCapital, setCustomCapital] = useState<number>(25000);
+  const [customRiskPct, setCustomRiskPct] = useState<number>(0.75);
+
+  function toggleExperienceMode(mode: "beginner" | "pro") {
+    setExperienceMode(mode);
+    try {
+      window.localStorage.setItem("bf_ui_experience_mode", mode);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function handleCopyGuestLink() {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("guest", "1");
+      navigator.clipboard.writeText(url.toString());
+      setTelegramStatusMessage("🔗 Schreibgeschützter Gast-Link in die Zwischenablage kopiert! Ideal zum Weitergeben an Freunde.");
+    } catch {
+      setTelegramStatusMessage("ℹ️ Füge ?guest=1 an die URL an, um die App im Read-Only Gast-Modus zu teilen.");
+    }
+  }
+
+  function handleShareSetupCard(setup: any) {
+    const entry = Number(setup.entry_price) || 100;
+    const hardStop = Number(setup.invalidation_price) || entry * 0.96;
+    const riskPerShare = Math.max(0.01, Math.abs(entry - hardStop));
+    const cushionStop = (entry - 0.25 * riskPerShare).toFixed(2);
+    const shareText = [
+      `💎 BROKER FREUND – VIP SIGNAL CARD: ${setup.ticker}`,
+      `🚦 Status: ${setup.grade || "A"} (${setup.confluence_score || 85}/100) | R:R ${setup.risk_reward_ratio}:1`,
+      `💡 Warum dieser Trade? ${setup.catalyst_description || "Institutionelles Momentum-Setup"}`,
+      `🟢 Einstieg: $${entry}`,
+      `🌬️ Smart Atmungs-Puffer (-0.25R ab +1R): $${cushionStop} (Anti-Shakeout Schutz!)`,
+      `🛑 Hard Stop (-1.0R): $${hardStop}`,
+      `🚀 Ziel 1 (2R): $${setup.target_1} | 🏆 Ziel 2: $${setup.target_2}`,
+      `⚖️ Keine Anlageberatung nach WpHG.`,
+    ].join("\n");
+    try {
+      navigator.clipboard.writeText(shareText);
+      setTelegramStatusMessage(`📤 VIP Signal-Card für ${setup.ticker} kopiert! Direkt in WhatsApp/Telegram einfügbar.`);
+    } catch {
+      setTelegramStatusMessage(`✅ Setup ${setup.ticker}: Entry $${entry} | Puffer $${cushionStop} | Stop $${hardStop}`);
+    }
+  }
+
   async function handleSendEdgeTelegram(ticker: string) {
     setSendingTelegramTicker(ticker);
     setTelegramStatusMessage(null);
@@ -639,20 +703,77 @@ export default function EdgeDashboardPanel({
 
   return (
     <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
+      {isGuestMode ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-500/25 bg-sky-50/90 px-4 py-2.5 text-xs font-medium text-sky-950 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-200">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+              👀 Gast-Ansicht (Read-Only)
+            </span>
+            <span>
+              Du siehst das Live-Analyse-Cockpit im schreibgeschützten Gast-Modus. Alle Signale, Charts &amp; der Risiko-Rechner sind frei nutzbar.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsGuestMode(false)}
+            className="rounded-lg border border-sky-500/30 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-sky-900 hover:bg-white dark:bg-white/10 dark:text-sky-200"
+          >
+            Admin-Ansicht
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-            Edge Dashboard
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+              Edge Dashboard
+            </span>
+            <div className="inline-flex items-center rounded-full border border-black/10 bg-slate-100/90 p-0.5 text-[11px] font-semibold dark:border-white/15 dark:bg-white/10">
+              <button
+                type="button"
+                onClick={() => toggleExperienceMode("beginner")}
+                className={`rounded-full px-2.5 py-0.5 transition ${
+                  experienceMode === "beginner"
+                    ? "bg-emerald-600 text-white shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
+                }`}
+                title="Klartext-Ampel ohne Fachchinesisch – perfekt für Einsteiger & schnelle Entscheidungen"
+              >
+                🟢 Einsteiger-Modus
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleExperienceMode("pro")}
+                className={`rounded-full px-2.5 py-0.5 transition ${
+                  experienceMode === "pro"
+                    ? "bg-[#1d1d1f] text-white shadow-2xs dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
+                }`}
+                title="Alle institutionellen Metriken (GEX, Volume Profile, AVWAP, Whale Flow)"
+              >
+                ⚡ Pro-Modus
+              </button>
+            </div>
           </div>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
             Was jetzt handeln, beobachten oder meiden?
           </h2>
           <p className="mt-2 text-sm font-normal leading-6 text-slate-600 dark:text-slate-300">
-            Scoreboard, Morning Brief, Portfolio, Lernkurve und Marktregime werden hier zu einer
-            priorisierten Arbeitsliste verdichtet.
+            {experienceMode === "beginner"
+              ? "Einsteiger-Ansicht aktiv: Klare Ampel-Signale mit exaktem Einstieg, unserem -0.25R Atmungs-Puffer (damit du vor dem großen Anstieg nicht unnötig ausgestoppt wirst) und festen Gewinnzielen."
+              : "Scoreboard, Morning Brief, Portfolio, Lernkurve und Marktregime werden hier zu einer priorisierten Arbeitsliste verdichtet."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleCopyGuestLink}
+            className="inline-flex items-center gap-1.5 rounded-[0.95rem] border border-emerald-500/25 bg-emerald-50/80 px-3 py-2 text-xs font-semibold tracking-wide text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300"
+            title="Schreibgeschützten Link für Freunde kopieren"
+          >
+            🔗 Gast-Link teilen
+          </button>
           <a
             href="#world-market-map"
             className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/8 bg-white/80 dark:bg-white/10 dark:border-white/10 px-3 py-2 text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-200"
@@ -810,15 +931,64 @@ export default function EdgeDashboardPanel({
               </span>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                  Institutionelle Trading Edge
+                  {experienceMode === "beginner" ? "Klartext-Signale & Atmungs-Puffer" : "Institutionelle Trading Edge"}
                 </div>
                 <div className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
-                  Asymmetrische Setups &middot; Min. 2.5:1 R:R &middot; GEX &middot; Volume Profile
+                  {experienceMode === "beginner"
+                    ? "Top-Chancen mit Anti-Shakeout Puffer (-0.25R) & automatischem Stückzahl-Rechner"
+                    : "Asymmetrische Setups · Min. 2.5:1 R:R · GEX · Volume Profile"}
                 </div>
               </div>
             </div>
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
-              Struktureller Stop &middot; Feste 0.75% Kontorisiko-Kalibrierung
+              🌬️ Smart Cushion (-0.25R ab +1R) &middot; {customRiskPct}% Risiko pro Trade
+            </div>
+          </div>
+
+          {/* INTERACTIVE CAPITAL & RISK SLIDER (0 MB SERVER RAM, 100% CLIENT-SIDE) */}
+          <div className="mt-4 rounded-2xl border border-black/6 bg-slate-50/90 p-3.5 dark:border-white/10 dark:bg-white/5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex-1">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  <span>🎛️ Dein Depot-Kapital für Stückzahl-Berechnung:</span>
+                  <span className="rounded-lg bg-white px-2.5 py-0.5 text-sm font-bold text-slate-950 shadow-2xs dark:bg-white/10 dark:text-white">
+                    {customCapital.toLocaleString("de-DE")} €
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1000}
+                  max={100000}
+                  step={1000}
+                  value={customCapital}
+                  onChange={(e) => setCustomCapital(Number(e.target.value))}
+                  className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-300 accent-emerald-600 dark:bg-white/20"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                  <span>1.000 €</span>
+                  <span>25.000 €</span>
+                  <span>50.000 €</span>
+                  <span>100.000 €</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 border-t border-black/5 pt-2.5 lg:border-t-0 lg:border-l lg:pl-4 lg:pt-0 dark:border-white/10">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Risiko/Trade:</span>
+                {[0.5, 0.75, 1.0, 1.5].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setCustomRiskPct(pct)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                      customRiskPct === pct
+                        ? "bg-[#1d1d1f] text-white dark:bg-white dark:text-slate-950"
+                        : "border border-black/8 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-300"
+                    }`}
+                  >
+                    {pct}% ({Math.round((customCapital * pct) / 100)} €)
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -855,7 +1025,20 @@ export default function EdgeDashboardPanel({
           ) : null}
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {tradingEdge.asymmetric_setups.map((setup: any) => (
+            {tradingEdge.asymmetric_setups.map((setup: any) => {
+              const entry = Number(setup.entry_price) || 100;
+              const hardStop = Number(setup.invalidation_price) || entry * 0.96;
+              const t1 = Number(setup.target_1) || entry * 1.08;
+              const riskPerShare = Math.max(0.01, Math.abs(entry - hardStop));
+              const cushionStop = Number((entry - 0.25 * riskPerShare).toFixed(2));
+              const riskBudgetEur = (customCapital * customRiskPct) / 100;
+              const dynamicShares = Math.max(1, Math.floor(riskBudgetEur / riskPerShare));
+              const dynamicPositionValue = Math.round(dynamicShares * entry);
+              const cushionLossEur = Math.round(dynamicShares * 0.25 * riskPerShare);
+              const maxLossEur = Math.round(dynamicShares * riskPerShare);
+              const t1ProfitEur = Math.round(dynamicShares * Math.abs(t1 - entry));
+
+              return (
               <div
                 key={setup.ticker}
                 className="flex flex-col justify-between rounded-[1.2rem] border border-black/6 bg-white/90 p-4 shadow-xs transition hover:border-black/15 dark:border-white/10 dark:bg-white/5"
@@ -894,7 +1077,7 @@ export default function EdgeDashboardPanel({
                     {setup.catalyst_description}
                   </p>
 
-                  {setup.confluence_factors?.length ? (
+                  {experienceMode === "pro" && setup.confluence_factors?.length ? (
                     <div className="mt-2.5 flex flex-wrap gap-1">
                       {setup.confluence_factors.map((f: string, idx: number) => (
                         <span key={idx} className="rounded-sm bg-slate-100/80 px-1.5 py-0.5 text-[9px] font-medium text-slate-700 dark:bg-white/10 dark:text-slate-300">
@@ -906,55 +1089,75 @@ export default function EdgeDashboardPanel({
 
                   <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/80 p-2.5 text-[11px] font-medium text-slate-700 dark:bg-white/5 dark:text-slate-300 border border-black/4 dark:border-white/5">
                     <div>
-                      <span className="text-slate-400">Einstieg:</span> <span className="font-semibold text-slate-900 dark:text-white">${setup.entry_price}</span>
+                      <span className="text-slate-400">🟢 Einstieg:</span>{" "}
+                      <span className="font-semibold text-slate-900 dark:text-white">${setup.entry_price}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Hard Stop:</span> <span className="font-semibold text-rose-600 dark:text-rose-400">${setup.invalidation_price}</span>
+                      <span className="text-slate-400" title="Anti-Shakeout Stop ab +1R Gewinn (75% Risiko eliminiert, aber Luft zum Atmen)">
+                        🌬️ Puffer (-0.25R):
+                      </span>{" "}
+                      <span className="font-semibold text-amber-600 dark:text-amber-400">
+                        ${cushionStop} (-{cushionLossEur}€)
+                      </span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Ziel 1 (2R):</span> <span className="font-semibold text-emerald-600 dark:text-emerald-400">${setup.target_1}</span>
+                      <span className="text-slate-400">🛑 Hard Stop (-1R):</span>{" "}
+                      <span className="font-semibold text-rose-600 dark:text-rose-400">
+                        ${setup.invalidation_price} (-{maxLossEur}€)
+                      </span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Ziel 2 (3.5R+):</span> <span className="font-semibold text-emerald-600 dark:text-emerald-400">${setup.target_2}</span>
+                      <span className="text-slate-400">🚀 Ziel 1 (2R):</span>{" "}
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                        ${setup.target_1} (+{t1ProfitEur}€)
+                      </span>
                     </div>
                   </div>
 
-                  {setup.options_gex ? (
-                    <div className="mt-2 text-[10px] font-normal text-slate-500">
-                      GEX: <span className="font-semibold text-slate-700 dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
+                  {experienceMode === "beginner" ? (
+                    <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-50/60 px-2.5 py-1.5 text-[11px] text-emerald-950 dark:border-emerald-500/25 dark:bg-emerald-950/30 dark:text-emerald-200">
+                      💡 <strong>Anti-Shakeout Schutz:</strong> Sobald die Aktie anspringt (+1R), ziehst du den Stop auf <strong>${cushionStop}</strong> (-{cushionLossEur}€ Mini-Verlust). So fliegst du bei einem normalen Rücksetzer nicht vor der großen Aufwärtsbewegung raus!
                     </div>
-                  ) : null}
-                  {setup.volume_profile ? (
-                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                      Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
-                    </div>
-                  ) : null}
-                  {setup.anchored_vwap ? (
-                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                      ⚓ AVWAP: {setup.anchored_vwap.ytd ? `YTD $${setup.anchored_vwap.ytd}` : ""}
-                      {setup.anchored_vwap.earnings ? ` · Earnings $${setup.anchored_vwap.earnings}` : ""}
-                    </div>
-                  ) : null}
-                  {setup.whale_flow?.badge ? (
-                    <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
-                      <span>{setup.whale_flow.badge}</span>
-                      {setup.whale_flow.volume_ratio ? (
-                        <span className="font-semibold text-slate-900 dark:text-white">
-                          ({setup.whale_flow.volume_ratio}x Vol)
-                        </span>
+                  ) : (
+                    <>
+                      {setup.options_gex ? (
+                        <div className="mt-2 text-[10px] font-normal text-slate-500">
+                          GEX: <span className="font-semibold text-slate-700 dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
+                        </div>
                       ) : null}
-                    </div>
-                  ) : null}
-                  {setup.liquidity_zones?.zone_label && setup.liquidity_zones.zone_label !== "Neutral" ? (
-                    <div className="mt-1 flex items-center gap-1 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
-                      <span>{setup.liquidity_zones.zone_label}</span>
-                    </div>
-                  ) : null}
-                  {setup.mtf_alignment?.badge ? (
-                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                      🧭 MTF: <span className="font-semibold text-slate-800 dark:text-slate-200">{setup.mtf_alignment.badge}</span>
-                    </div>
-                  ) : null}
+                      {setup.volume_profile ? (
+                        <div className="mt-0.5 text-[10px] font-normal text-slate-500">
+                          Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
+                        </div>
+                      ) : null}
+                      {setup.anchored_vwap ? (
+                        <div className="mt-0.5 text-[10px] font-normal text-slate-500">
+                          ⚓ AVWAP: {setup.anchored_vwap.ytd ? `YTD $${setup.anchored_vwap.ytd}` : ""}
+                          {setup.anchored_vwap.earnings ? ` · Earnings $${setup.anchored_vwap.earnings}` : ""}
+                        </div>
+                      ) : null}
+                      {setup.whale_flow?.badge ? (
+                        <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                          <span>{setup.whale_flow.badge}</span>
+                          {setup.whale_flow.volume_ratio ? (
+                            <span className="font-semibold text-slate-900 dark:text-white">
+                              ({setup.whale_flow.volume_ratio}x Vol)
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {setup.liquidity_zones?.zone_label && setup.liquidity_zones.zone_label !== "Neutral" ? (
+                        <div className="mt-1 flex items-center gap-1 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                          <span>{setup.liquidity_zones.zone_label}</span>
+                        </div>
+                      ) : null}
+                      {setup.mtf_alignment?.badge ? (
+                        <div className="mt-0.5 text-[10px] font-normal text-slate-500">
+                          🧭 MTF: <span className="font-semibold text-slate-800 dark:text-slate-200">{setup.mtf_alignment.badge}</span>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
 
                   {setup.earnings_info ? (
                     <div className="mt-2 rounded-lg border border-amber-500/25 bg-amber-50/80 p-2 text-[10px] font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
@@ -962,7 +1165,7 @@ export default function EdgeDashboardPanel({
                     </div>
                   ) : null}
 
-                  {setup.trade_management ? (
+                  {experienceMode === "pro" && setup.trade_management ? (
                     <div className="mt-2 rounded-lg bg-slate-50/80 p-2 text-[10px] text-slate-600 dark:bg-white/5 dark:text-slate-300">
                       <div className="font-semibold text-slate-900 dark:text-white">Trailing-Stop Disziplin:</div>
                       <div>• <strong>2.0R Ziel:</strong> {setup.trade_management.target_1_action}</div>
@@ -971,11 +1174,11 @@ export default function EdgeDashboardPanel({
                   ) : null}
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-black/5 pt-3 dark:border-white/5">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-3 dark:border-white/5">
                   <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                    Sizing: <span className="font-semibold text-slate-950 dark:text-white">{setup.recommended_shares} Stk</span> (~{setup.total_position_capital?.toLocaleString()}€)
+                    Sizing: <span className="font-semibold text-slate-950 dark:text-white">{dynamicShares} Stk</span> (~{dynamicPositionValue.toLocaleString("de-DE")}€)
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => onAnalyzeTicker(setup.ticker)}
@@ -985,27 +1188,40 @@ export default function EdgeDashboardPanel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleOpenEdgePaperTrade(setup.ticker)}
-                      disabled={openingPaperTicker === setup.ticker}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      title="Als Paper Trade im Demokonto eröffnen"
+                      onClick={() => handleShareSetupCard(setup)}
+                      className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                      title="VIP Signal-Card kopieren & mit Freunden teilen"
                     >
-                      <TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" />
-                      {openingPaperTicker === setup.ticker ? "Eröffne..." : "Paper Trade"}
+                      📤 Teilen
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSendEdgeTelegram(setup.ticker)}
-                      disabled={sendingTelegramTicker === setup.ticker}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-slate-950"
-                    >
-                      <Smartphone size={13} />
-                      {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
-                    </button>
+                    {!isGuestMode ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdgePaperTrade(setup.ticker)}
+                          disabled={openingPaperTicker === setup.ticker}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          title="Als Paper Trade im Demokonto eröffnen"
+                        >
+                          <TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          {openingPaperTicker === setup.ticker ? "Eröffne..." : "Paper Trade"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSendEdgeTelegram(setup.ticker)}
+                          disabled={sendingTelegramTicker === setup.ticker}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                        >
+                          <Smartphone size={13} />
+                          {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}

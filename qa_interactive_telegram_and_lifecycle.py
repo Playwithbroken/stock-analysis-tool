@@ -2041,6 +2041,78 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
         res_clean = bot.handle_command("999888", "/ram clean")
         self.assertIn("Sofort-Bereinigung durchgeführt", res_clean)
 
+    def test_menu_share_and_guest_mode(self):
+        mock_pm = MagicMock()
+        mock_pm.get_app_setting.return_value = ""
+        mock_asym = MagicMock()
+        mock_asym.generate_trade_setup.return_value = {
+            "ticker": "NVDA",
+            "entry_price": 130.0,
+            "invalidation_price": 122.0,
+            "target_1": 146.0,
+            "target_2": 158.0,
+            "grade": "A+",
+            "confluence_score": 92,
+            "direction": "BULLISH LONG",
+            "catalyst_summary": "Institutioneller Ausbruch über Call-Wall.",
+        }
+
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+            asymmetric_trade_service=mock_asym,
+            portfolio_manager=mock_pm,
+        )
+
+        # 1. /menu command & 8-tile keyboard
+        res_menu = bot.handle_command("999888", "/menu")
+        self.assertIn("INTERAKTIVES HAUPTMENÜ", res_menu)
+        self.assertIn("Admin-Vollzugriff", res_menu)
+        kb = bot._build_main_menu_keyboard()
+        self.assertEqual(len(kb["inline_keyboard"]), 4)
+
+        # 2. /share NVDA command & share:NVDA callback
+        res_share = bot.handle_command("999888", "/share NVDA")
+        self.assertIn("VIP SIGNAL CARD: NVDA", res_share)
+        self.assertIn("Atmungs-Puffer (-0.25R ab +1R)", res_share)
+        # 130.0 - 0.25 * (130 - 122) = 128.00
+        self.assertIn("$128.00", res_share)
+
+        with patch.object(bot, "send_message") as mock_send, \
+             patch.object(bot, "answer_callback_query") as mock_ans:
+            bot.handle_callback_query("999888", "share:NVDA", "cb_share")
+            mock_ans.assert_called_once()
+            self.assertIn("VIP SIGNAL CARD: NVDA", mock_send.call_args[0][1])
+
+        # 3. /guest add, read-only enforcement, and /guest remove
+        res_add = bot.handle_command("999888", "/guest add 777888")
+        self.assertIn("Gast-Zugang aktiviert", res_add)
+        self.assertTrue(bot.is_guest("777888"))
+        self.assertTrue(bot.is_authorized("777888"))
+
+        # Guest can use /menu and /share
+        guest_menu = bot.handle_command("777888", "/menu")
+        self.assertIn("Gast-Modus (Read-Only)", guest_menu)
+        guest_share = bot.handle_command("777888", "/share NVDA")
+        self.assertIn("VIP SIGNAL CARD: NVDA", guest_share)
+
+        # Guest is blocked from write commands (/paper, /close, /guest)
+        guest_paper = bot.handle_command("777888", "/paper NVDA")
+        self.assertIn("Gast-Modus (Schreibgeschützt)", guest_paper)
+        guest_admin = bot.handle_command("777888", "/guest add 111222")
+        self.assertIn("Gast-Modus (Schreibgeschützt)", guest_admin)
+
+        # Guest is blocked from write callbacks (paper:NVDA)
+        with patch.object(bot, "answer_callback_query") as mock_ans:
+            bot.handle_callback_query("777888", "paper:NVDA", "cb_guest_paper")
+            mock_ans.assert_called_once()
+            self.assertIn("Gast-Modus", mock_ans.call_args[0][1])
+
+        # Admin revokes guest access
+        res_rm = bot.handle_command("999888", "/guest remove 777888")
+        self.assertIn("Gast-Zugang entfernt", res_rm)
+        self.assertFalse(bot.is_authorized("777888"))
+
 
 if __name__ == "__main__":
     unittest.main()

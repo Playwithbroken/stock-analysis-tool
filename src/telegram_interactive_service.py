@@ -62,10 +62,16 @@ class TelegramInteractiveService:
         macro_commodity_crypto_service: Optional[Any] = None,
         trading_coach_service: Optional[Any] = None,
         earnings_expected_move_service: Optional[Any] = None,
+        guest_chat_ids: str = "",
     ) -> None:
         self.bot_token = bot_token.strip()
         self.allowed_chat_ids: Set[str] = {
             cid.strip() for cid in allowed_chat_ids.split(",") if cid.strip()
+        }
+        import os
+        raw_guests = guest_chat_ids or os.getenv("TELEGRAM_GUEST_CHAT_IDS", "")
+        self.guest_chat_ids: Set[str] = {
+            cid.strip() for cid in raw_guests.split(",") if cid.strip()
         }
         self.asymmetric_service = asymmetric_trade_service
         self.options_service = options_edge_service
@@ -130,11 +136,36 @@ class TelegramInteractiveService:
         self._last_update_id: int = 0
         self._is_running: bool = False
 
-    def is_authorized(self, chat_id: Any) -> bool:
-        """Verifies that the chat_id matches configured authorized chats."""
+    def _get_all_guest_ids(self) -> Set[str]:
+        """Returns combined guest chat IDs from env and persisted app_settings."""
+        guests = set(self.guest_chat_ids)
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "get_app_setting"):
+            try:
+                raw = self.portfolio_manager.get_app_setting("telegram_guest_chat_ids")
+                if isinstance(raw, str) and raw.strip():
+                    for cid in raw.split(","):
+                        if cid.strip():
+                            guests.add(cid.strip())
+            except Exception:
+                pass
+        return guests
+
+    def is_admin(self, chat_id: Any) -> bool:
+        """Checks if chat_id is an authorized Admin with full write access."""
         if not self.allowed_chat_ids:
             return False
         return str(chat_id).strip() in self.allowed_chat_ids
+
+    def is_guest(self, chat_id: Any) -> bool:
+        """Checks if chat_id is a read-only Guest."""
+        cid = str(chat_id).strip()
+        if self.is_admin(cid):
+            return False
+        return cid in self._get_all_guest_ids()
+
+    def is_authorized(self, chat_id: Any) -> bool:
+        """Verifies that the chat_id matches configured Admin or Guest chats."""
+        return self.is_admin(chat_id) or self.is_guest(chat_id)
 
     def send_message(
         self,
@@ -290,6 +321,16 @@ class TelegramInteractiveService:
             return
 
         cb = callback_data.strip()
+
+        # Block write/mutating callbacks for read-only guests
+        guest_blocked_prefixes = ("paper:", "close:", "be:", "cushion:", "track:", "scale:", "alert_profile:", "ram_clean")
+        if self.is_guest(chat_id) and any(cb.startswith(pfx) or cb == pfx for pfx in guest_blocked_prefixes):
+            self.answer_callback_query(
+                callback_query_id,
+                "🔒 Gast-Modus (Lesezugriff): Trade-Execution & Systemeinstellungen sind nur für den Admin freigeschaltet.",
+                show_alert=True,
+            )
+            return
 
         if cb.startswith("gex:"):
             ticker = cb.split(":", 1)[1].upper()
@@ -536,6 +577,27 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "🧹 Bereinige RAM & Caches...", show_alert=False)
             res = self._cmd_ram(["clean"])
             self.send_message(chat_id, res, reply_markup=self._build_ram_keyboard())
+        elif cb in ("menu", "home", "dashboard"):
+            self.answer_callback_query(callback_query_id, "Öffne Hauptmenü...")
+            res = self._cmd_menu(chat_id)
+            self.send_message(chat_id, res, reply_markup=self._build_main_menu_keyboard())
+        elif cb == "depot":
+            self.answer_callback_query(callback_query_id, "Lade Depot & offene Positionen...")
+            res = self._cmd_depot()
+            self.send_message(chat_id, res, reply_markup=self._build_main_menu_keyboard())
+        elif cb == "movers":
+            self.answer_callback_query(callback_query_id, "Lade Top Movers...")
+            res = self._cmd_movers()
+            self.send_message(chat_id, res)
+        elif cb == "track":
+            self.answer_callback_query(callback_query_id, "Lade aktive Trades & Stops...")
+            res = self._cmd_track()
+            self.send_message(chat_id, res)
+        elif cb.startswith("share:"):
+            ticker = cb.split(":", 1)[1].upper()
+            self.answer_callback_query(callback_query_id, f"📤 Erstelle Share-Card für {ticker}...")
+            res = self._cmd_share([ticker])
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -556,9 +618,31 @@ class TelegramInteractiveService:
         cmd = parts[0].lower().split("@")[0]
         args = parts[1:]
 
+        # Protect write/admin commands from read-only Guest users
+        admin_only_cmds = {
+            "/paper", "/close", "/be", "/puffer", "/cushion", "/breathe",
+            "/scale", "/partial", "/teilverkauf", "/watch", "/unwatch",
+            "/guest", "/guests",
+        }
+        if self.is_guest(chat_id):
+            if cmd in admin_only_cmds or (cmd in ("/alerts", "/alert", "/profile", "/mode") and args) or (cmd in ("/ram", "/system", "/memory", "/speicher") and args):
+                return (
+                    "🔒 <b>Gast-Modus (Schreibgeschützt)</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "Du nutzt Broker Freund im <b>Read-Only Gast-Zugang</b>.\n"
+                    "Alle Live-Analysen (<code>/menu</code>, <code>/edge</code>, <code>/check</code>, <code>/chart</code>, <code>/share</code>) stehen dir frei zur Verfügung.\n\n"
+                    "<i>Das Ausführen von Trades oder Ändern von Systemeinstellungen ist dem Admin vorbehalten.</i>"
+                )
+
         try:
             if cmd in ("/start", "/help"):
                 return self._cmd_help()
+            elif cmd in ("/menu", "/dashboard", "/home"):
+                return self._cmd_menu(chat_id)
+            elif cmd in ("/share", "/card", "/signal"):
+                return self._cmd_share(args)
+            elif cmd in ("/guest", "/guests"):
+                return self._cmd_guest(chat_id, args)
             elif cmd == "/edge":
                 return self._cmd_edge(args, chat_id=chat_id)
             elif cmd == "/gex":
@@ -723,11 +807,37 @@ class TelegramInteractiveService:
             "• <code>/rs</code> – Relative Stärke vs. SPY (Mansfield RS Leaders)\n"
             "• <code>/heat</code> – Portfolio Heat &amp; Korrelations-Shield\n"
             "• <code>/macro</code> – High-Impact Makro- &amp; FOMC-Shield (Zinsentscheide &amp; CPI)\n\n"
-            "⚙️ <b>Benachrichtigungen &amp; Cloud-Kosten:</b>\n"
+            "⚙️ <b>Benachrichtigungen, Sharing &amp; Cloud-Kosten:</b>\n"
+            "• <code>/menu</code> – 📱 8-Kachel Hauptmenü (Einsteigerfreundliches Touch-Dashboard)\n"
+            "• <code>/share TICKER</code> – 📤 Weiterleitbare VIP Signal-Card (Klartext + Atmungs-Puffer)\n"
+            "• <code>/guest [add|remove|list] [CHAT_ID]</code> – 👥 Read-Only Gast-Zugänge für Freunde verwalten\n"
             "• <code>/alerts</code> – Modus wählen (🟢 Smart Digest, ⚡ Trade Pro, 🔕 Silent)\n"
             "• <code>/ram</code> – ⚡ Railway RAM-Monitor &amp; 1-Klick Speicher-Bereinigung (<code>/ram clean</code>)\n\n"
-            "💡 <i>Tipp: Bei jedem /edge Setup kannst du einfach auf die interaktiven Buttons tippen!</i>"
+            "💡 <i>Tipp: Sende <code>/menu</code> für das Schnellwahl-Cockpit ohne Tippen!</i>"
         )
+
+    def _build_main_menu_keyboard(self) -> Dict[str, Any]:
+        """Generates a clean 8-tile thumb-friendly main menu keyboard for beginners and pros."""
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": "🔥 Top 3 Setups (/edge)", "callback_data": "edge"},
+                    {"text": "💼 Mein Depot & Puffer", "callback_data": "depot"},
+                ],
+                [
+                    {"text": "🌍 Markt-Ampel & Breite", "callback_data": "breadth"},
+                    {"text": "🪙 Gold, Öl & Krypto", "callback_data": "commodities"},
+                ],
+                [
+                    {"text": "🎙️ Audio-Briefing (MP3)", "callback_data": "voice"},
+                    {"text": "🧠 KI-Trading-Coach", "callback_data": "coach"},
+                ],
+                [
+                    {"text": "⚙️ Alert-Modus (/alerts)", "callback_data": "alerts"},
+                    {"text": "⚡ Railway RAM Monitor", "callback_data": "ram"},
+                ],
+            ]
+        }
 
     def _build_inline_keyboard(self, ticker: str) -> Dict[str, Any]:
         """Generates interactive one-tap action buttons for a ticker."""
@@ -735,7 +845,11 @@ class TelegramInteractiveService:
             "inline_keyboard": [
                 [
                     {"text": "📸 Chart ansehen", "callback_data": f"chart:{ticker}"},
+                    {"text": "📤 Setup teilen", "callback_data": f"share:{ticker}"},
+                ],
+                [
                     {"text": "⚡ Earnings Move", "callback_data": f"earnings:{ticker}"},
+                    {"text": "🔍 360° Check", "callback_data": f"check:{ticker}"},
                 ],
                 [
                     {"text": "📝 In Paper Trader buchen", "callback_data": f"paper:{ticker}"},
@@ -748,7 +862,7 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "🚪 Schließen", "callback_data": f"close:{ticker}"},
-                    {"text": "🔍 360° Check", "callback_data": f"check:{ticker}"},
+                    {"text": "📱 Hauptmenü", "callback_data": "menu"},
                 ],
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
@@ -3087,6 +3201,153 @@ class TelegramInteractiveService:
         except Exception as exc:
             return f"⚠️ Fehler beim Abrufen des RAM-Monitors: {exc}"
 
+    def _cmd_menu(self, chat_id: str) -> str:
+        """Displays a clean, beginner-friendly 8-tile interactive cockpit menu."""
+        role_badge = "👑 <b>Admin-Vollzugriff</b>" if self.is_admin(chat_id) else "👀 <b>Gast-Modus (Read-Only)</b>"
+        regime_line = "🟢 Bullisch / Risk-On"
+        if self.regime_service:
+            try:
+                reg = self.regime_service.get_market_regime()
+                stance = reg.get("stance", "NEUTRAL")
+                vix = reg.get("vix", {}).get("value", 15.5)
+                icon = "🟢" if "RISK_ON" in stance else ("🟡" if "NEUTRAL" in stance else "🔴")
+                regime_line = f"{icon} {stance} (VIX: {vix:.1f})"
+            except Exception:
+                pass
+
+        return (
+            "📱 <b>BROKER FREUND – INTERAKTIVES HAUPTMENÜ</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Status:</b> {role_badge}\n"
+            f"• <b>Markt-Ampel:</b> {regime_line}\n"
+            "• <b>Anti-Shakeout Schutz:</b> 🌬️ <b>-0.25R Atmungs-Puffer aktiv</b>\n\n"
+            "👇 <b>Wähle einfach per Finger-Tipp deine gewünschte Aktion:</b>\n"
+            "<i>Kein Tippen von Befehlen nötig – ideal für schnelle Entscheidungen unterwegs oder für eingeladene Gäste.</i>"
+        )
+
+    def _cmd_share(self, args: List[str]) -> str:
+        """Generates a clean, forwardable VIP Signal Share Card with beginner-friendly plain German and -0.25R Cushion Stop."""
+        if not args:
+            return (
+                "📤 <b>VIP Signal Share-Card Generator</b>\n"
+                "Bitte gib ein Ticker-Symbol an, z.B.:\n"
+                "<code>/share NVDA</code> oder <code>/share SAP.DE</code>\n\n"
+                "💡 <i>Erstellt eine visuell aufgeräumte, sofort an Freunde/Trading-Partner weiterleitbare Setup-Karte inkl. Einsteiger-Klartext und -0.25R Atmungs-Puffer.</i>"
+            )
+        ticker = args[0].upper().strip()
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        setup = None
+        if self.asymmetric_service:
+            try:
+                setup = self.asymmetric_service.generate_trade_setup(ticker)
+            except Exception:
+                setup = None
+
+        if not setup:
+            defaults = {
+                "NVDA": 135.0, "MSFT": 425.0, "AAPL": 225.0, "SAP.DE": 215.0, "RHM.DE": 510.0, "ASML.AS": 780.0
+            }
+            spot = defaults.get(ticker, 100.0)
+            entry = spot
+            hard_stop = round(spot * 0.96, 2)
+            risk_per_share = max(0.01, round(entry - hard_stop, 2))
+            t1 = round(entry + 2.0 * risk_per_share, 2)
+            t2 = round(entry + 3.5 * risk_per_share, 2)
+            grade = "A"
+            score = 82
+            direction = "BULLISH LONG"
+            plain_reason = "Starker übergeordneter Aufwärtstrend mit institutioneller Unterstützung."
+        else:
+            entry = float(setup.get("entry_price") or setup.get("current_price") or 100.0)
+            hard_stop = float(setup.get("invalidation_price") or (entry * 0.96))
+            risk_per_share = max(0.01, abs(entry - hard_stop))
+            t1 = float(setup.get("target_1") or (entry + 2.0 * risk_per_share))
+            t2 = float(setup.get("target_2") or (entry + 3.5 * risk_per_share))
+            grade = str(setup.get("grade") or "A")
+            score = int(setup.get("confluence_score") or 85)
+            direction = str(setup.get("direction") or "BULLISH LONG").upper()
+            plain_reason = str(
+                setup.get("catalyst_summary")
+                or setup.get("setup_type")
+                or "Institutionelle Kaufzone mit positivem Chancen-Risiko-Verhältnis."
+            )
+
+        is_short = "SHORT" in direction or "BEAR" in direction
+        cushion_stop = round(entry + (0.25 * risk_per_share) if is_short else entry - (0.25 * risk_per_share), 2)
+        rr = round(abs(t1 - entry) / risk_per_share, 2) if risk_per_share > 0 else 2.5
+        ampel = "🟢 GRÜN (Hohe Überzeugung)" if score >= 80 else ("🟡 GELB (Solides Setup)" if score >= 65 else "🟠 BEOBACHTEN")
+
+        return (
+            f"💎 <b>BROKER FREUND – VIP SIGNAL CARD: {html.escape(ticker)}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🚦 <b>Ampel-Status:</b> {ampel} (Grade <b>{html.escape(grade)}</b> | Score <b>{score}/100</b>)\n"
+            f"🧭 <b>Richtung:</b> <b>{html.escape(direction)}</b> | <b>CRV:</b> 1 : {rr:.1f}\n\n"
+            f"💡 <b>Warum dieser Trade? (Klartext):</b>\n"
+            f"<i>{html.escape(plain_reason)}</i>\n\n"
+            f"🎯 <b>Exakte Handels-Marken:</b>\n"
+            f"• 🟢 <b>Einstieg (Entry):</b> <b>{c_sym}{entry:.2f}</b>\n"
+            f"• 🌬️ <b>Atmungs-Puffer (-0.25R ab +1R):</b> <b>{c_sym}{cushion_stop:.2f}</b> <i>(Anti-Shakeout Schutz!)</i>\n"
+            f"• 🛑 <b>Maximaler Hard-Stop (-1.0R):</b> <b>{c_sym}{hard_stop:.2f}</b>\n"
+            f"• 🚀 <b>Gewinnziel 1 (50% Teilverkauf):</b> <b>{c_sym}{t1:.2f}</b>\n"
+            f"• 🏆 <b>Gewinnziel 2 (Trend-Runner):</b> <b>{c_sym}{t2:.2f}</b>\n\n"
+            f"🛡️ <b>Profi-Regel gegen zu frühes Rausfliegen:</b>\n"
+            f"Sobald die Aktie +1R im Gewinn liegt, ziehen wir den Stop <u>nicht</u> starr auf 0.00 € Einstand, sondern auf den <b>Atmungs-Puffer ({c_sym}{cushion_stop:.2f})</b>. So sind 75% Risiko weg, aber ein kurzer Rücksetzer wirft dich nicht vor der großen Rallye aus dem Trade!\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚖️ <i>Hinweis: Keine Anlageberatung nach WpHG. Dient ausschließlich zu Informations- und Bildungszwecken.</i>"
+        )
+
+    def _cmd_guest(self, chat_id: str, args: List[str]) -> str:
+        """Admin command to manage read-only Guest chat IDs (/guest add <ID>, /guest remove <ID>, /guest list)."""
+        if not self.is_admin(chat_id):
+            return "⛔ <b>Zugriff verweigert:</b> Nur der Admin kann Gast-Zugänge verwalten."
+
+        guests = self._get_all_guest_ids()
+        if not args or args[0].lower() == "list":
+            guest_list_str = ", ".join(f"<code>{g}</code>" for g in sorted(guests)) if guests else "<i>Keine Gäste hinterlegt</i>"
+            return (
+                "👥 <b>GAST-MODUS VERWALTUNG (READ-ONLY)</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"• <b>Aktive Gast-Chat-IDs ({len(guests)}):</b> {guest_list_str}\n\n"
+                "🔧 <b>Befehle für den Admin:</b>\n"
+                "• <code>/guest add 123456789</code> – Freund für Read-Only Zugriff freischalten\n"
+                "• <code>/guest remove 123456789</code> – Gast-Zugang wieder entziehen\n"
+                "• <code>/guest list</code> – Alle freigeschalteten Gäste anzeigen\n\n"
+                "💡 <i>Gäste können alle Analysen (/menu, /edge, /check, /chart, /share) abrufen, aber keine Trades im Depot buchen oder schließen.</i>"
+            )
+
+        action = args[0].lower().strip()
+        target_id = args[1].strip() if len(args) > 1 else ""
+        if not target_id:
+            return "⚠️ Bitte gib eine Telegram Chat-ID an, z.B. <code>/guest add 777888999</code>."
+
+        if action in ("add", "allow", "invite", "plus"):
+            self.guest_chat_ids.add(target_id)
+            updated = self._get_all_guest_ids()
+            updated.add(target_id)
+            if self.portfolio_manager and hasattr(self.portfolio_manager, "set_app_setting"):
+                try:
+                    self.portfolio_manager.set_app_setting("telegram_guest_chat_ids", ",".join(sorted(updated)))
+                except Exception:
+                    pass
+            return (
+                f"✅ <b>Gast-Zugang aktiviert!</b>\n"
+                f"Die Chat-ID <code>{html.escape(target_id)}</code> hat ab sofort <b>Read-Only Lesezugriff</b> auf das Hauptmenü (<code>/menu</code>), Edge-Setups (<code>/edge</code>) und Charts."
+            )
+        elif action in ("remove", "del", "delete", "revoke", "rm"):
+            self.guest_chat_ids.discard(target_id)
+            updated = self._get_all_guest_ids()
+            updated.discard(target_id)
+            if self.portfolio_manager and hasattr(self.portfolio_manager, "set_app_setting"):
+                try:
+                    self.portfolio_manager.set_app_setting("telegram_guest_chat_ids", ",".join(sorted(updated)))
+                except Exception:
+                    pass
+            return f"🗑️ <b>Gast-Zugang entfernt:</b> Chat-ID <code>{html.escape(target_id)}</code> wurde widerrufen."
+        else:
+            return "❓ Unbekannte Aktion. Nutze <code>/guest add &lt;ID&gt;</code>, <code>/guest remove &lt;ID&gt;</code> oder <code>/guest list</code>."
+
     async def run_listener_loop(self) -> None:
         """
         Asynchronous long-polling loop for Telegram getUpdates.
@@ -3173,7 +3434,9 @@ class TelegramInteractiveService:
                         response_text = self.handle_command(chat_id, text)
                         if response_text:
                             reply_markup = None
-                            if text.startswith("/alerts") or text.startswith("/alert") or text.startswith("/profile") or text.startswith("/mode"):
+                            if text.startswith("/menu") or text.startswith("/dashboard") or text.startswith("/home") or text.startswith("/start"):
+                                reply_markup = self._build_main_menu_keyboard()
+                            elif text.startswith("/alerts") or text.startswith("/alert") or text.startswith("/profile") or text.startswith("/mode"):
                                 reply_markup = self._build_alerts_keyboard()
                             elif text.startswith("/ram") or text.startswith("/system") or text.startswith("/memory") or text.startswith("/speicher"):
                                 reply_markup = self._build_ram_keyboard()

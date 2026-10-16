@@ -18,9 +18,35 @@ from src.financial_units import normalize_dividend_yield_pct, ratio_to_pct, rela
 class DataFetcher:
     """Fetches all required data for stock analysis."""
     
-    # Class-level cache
+    # Class-level bounded cache
     _global_cache = {}
     _cache_ttl = 300  # 5 minutes
+    _max_cache_entries = 40
+
+    @classmethod
+    def prune_cache(cls, clear_all: bool = False) -> int:
+        """Evicts expired or excess entries from _global_cache to cap RAM usage."""
+        if clear_all:
+            count = len(cls._global_cache)
+            cls._global_cache.clear()
+            return count
+        now = datetime.now()
+        removed = 0
+        for k in list(cls._global_cache.keys()):
+            try:
+                _, ts = cls._global_cache[k]
+                if (now - ts).total_seconds() >= cls._cache_ttl:
+                    cls._global_cache.pop(k, None)
+                    removed += 1
+            except Exception:
+                cls._global_cache.pop(k, None)
+                removed += 1
+        while len(cls._global_cache) > cls._max_cache_entries:
+            oldest_key = next(iter(cls._global_cache))
+            cls._global_cache.pop(oldest_key, None)
+            removed += 1
+        return removed
+
     _etf_info_overrides: Dict[str, Dict[str, Any]] = {
         "SPY": {
             "longName": "SPDR S&P 500 ETF Trust",
@@ -78,6 +104,7 @@ class DataFetcher:
 
         if self.ticker in self._etf_info_overrides:
             val = self._etf_info_overrides[self.ticker]
+            DataFetcher.prune_cache()
             DataFetcher._global_cache[cache_key] = (val, now)
             return val
         
@@ -88,6 +115,7 @@ class DataFetcher:
             if not val:
                 print(f"Warning: No info returned for {self.ticker}")
                 val = {}
+            DataFetcher.prune_cache()
             DataFetcher._global_cache[cache_key] = (val, now)
             return val
         except Exception as e:
@@ -98,7 +126,12 @@ class DataFetcher:
         """Get current price and price changes derived from a single 1y history fetch."""
         try:
             if self._history_1y is None:
-                self._history_1y = self.stock.history(period="1y")
+                raw_hist = self.stock.history(period="1y")
+                try:
+                    from src.memory_optimizer import SharedMarketDataPool
+                    self._history_1y = SharedMarketDataPool.compact_dataframe(raw_hist)
+                except Exception:
+                    self._history_1y = raw_hist
             
             hist = self._history_1y
             if hist.empty:

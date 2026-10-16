@@ -1946,6 +1946,102 @@ class TestInstitutionalExpansionsTelegramIntegration(unittest.TestCase):
             mock_doc.assert_called_once()
 
 
+class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
+    def test_smart_cushion_1r_lifecycle(self):
+        mock_pm = MagicMock()
+        mock_pm.get_app_setting.return_value = ""
+        mock_alert = MagicMock()
+        svc = TradeLifecycleService(portfolio_manager=mock_pm)
+
+        ticket = {
+            "ticker": "NVDA",
+            "entry_price": 100.0,
+            "invalidation_price": 90.0,
+            "target_1": 120.0,
+            "target_2": 135.0,
+            "risk_per_share": 10.0,
+        }
+        svc.register_trade(ticket)
+
+        # Price reaches +1.0R (110.0), well below Target 1 (120.0)
+        with patch.object(svc, "_fetch_current_price", return_value=110.0):
+            res = svc.evaluate_active_trades(mock_alert)
+            self.assertEqual(len(res["actions"]), 1)
+            self.assertEqual(res["actions"][0]["action"], "SMART_CUSHION_1R")
+
+            trade = svc.get_active_trades()[0]
+            # Stop moved from 90.0 (-1.0R) to 97.50 (-0.25R breathing cushion, NOT 100.0 rigid breakeven!)
+            self.assertEqual(trade["trailing_stop"], 97.50)
+            self.assertIn("SMART_CUSHION_1R", trade["events_fired"])
+            mock_alert._send_notifications.assert_called_once()
+            msg_line = mock_alert._send_notifications.call_args[0][1][0]["line"]
+            self.assertIn("SMART ATMUNGS-PUFFER AKTIVIERT (+1.0R)", msg_line)
+            self.assertIn("$97.50", msg_line)
+
+    def test_cmd_puffer_and_callback_cushion(self):
+        mock_lifecycle = MagicMock()
+        active_trade = {
+            "ticker": "SAP.DE",
+            "status": "OPEN",
+            "entry_price": 200.0,
+            "invalidation_price": 192.0,
+            "trailing_stop": 192.0,
+            "risk_per_share": 8.0,
+        }
+        mock_lifecycle.get_active_trades.return_value = [active_trade]
+
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+            trade_lifecycle_service=mock_lifecycle,
+        )
+
+        # 1. Command /puffer SAP.DE -> Stop should move to 200 - (0.25 * 8) = 198.00
+        res = bot.handle_command("999888", "/puffer SAP.DE")
+        self.assertIn("SMART ATMUNGS-PUFFER AKTIVIERT: SAP.DE", res)
+        self.assertIn("€198.00", res)
+        self.assertEqual(active_trade["trailing_stop"], 198.00)
+
+        # 2. Callback cushion:SAP.DE
+        active_trade["trailing_stop"] = 192.0
+        with patch.object(bot, "send_message") as mock_send, \
+             patch.object(bot, "answer_callback_query") as mock_ans:
+            bot.handle_callback_query("999888", "cushion:SAP.DE", "cb_cush")
+            mock_ans.assert_called_once()
+            mock_send.assert_called_once()
+            self.assertEqual(active_trade["trailing_stop"], 198.00)
+
+    def test_memory_optimizer_and_ram_command(self):
+        import pandas as pd
+        import numpy as np
+        from src.memory_optimizer import SharedMarketDataPool, trim_process_memory
+
+        df = pd.DataFrame({
+            "Open": np.array([100.0, 101.0], dtype=np.float64),
+            "High": np.array([102.0, 103.0], dtype=np.float64),
+            "Low": np.array([99.0, 100.0], dtype=np.float64),
+            "Close": np.array([101.0, 102.0], dtype=np.float64),
+            "Dividends": [0.0, 0.0],
+        })
+        compacted = SharedMarketDataPool.compact_dataframe(df)
+        self.assertNotIn("Dividends", compacted.columns)
+        self.assertEqual(compacted["Close"].dtype, np.float32)
+
+        trim_res = trim_process_memory(aggressive=True)
+        self.assertIn("before_mb", trim_res)
+        self.assertIn("gc_collected_objects", trim_res)
+
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+        )
+        res_ram = bot.handle_command("999888", "/ram")
+        self.assertIn("RAILWAY RAM- &amp; KOSTEN-MONITOR", res_ram)
+
+        res_clean = bot.handle_command("999888", "/ram clean")
+        self.assertIn("Sofort-Bereinigung durchgeführt", res_clean)
+
+
 if __name__ == "__main__":
     unittest.main()
 

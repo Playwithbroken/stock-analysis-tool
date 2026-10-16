@@ -149,6 +149,8 @@ class TradeLifecycleService:
             is_eu = any(symbol.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
             c_sym = "€" if is_eu else ("£" if symbol.endswith(".L") else "$")
 
+            risk = float(trade.get("risk_per_share") or abs(entry - stop) or 0.0)
+
             # 1. Advance Notice: Target 1 Proximity Alert (within 0.75% of Target 1)
             # Suppressed in smart_digest and silent profiles to eliminate noise
             if (
@@ -169,20 +171,86 @@ class TradeLifecycleService:
                         f"• <b>Aktueller Kurs:</b> {c_sym}{spot:.2f}\n"
                         f"• <b>Ziel 1:</b> {c_sym}{target_1:.2f}\n\n"
                         f"⚡ <b>Empfohlene Vorbereitung:</b>\n"
-                        f"Halte dich bereit für eine 50% Teilgewinn-Mitnahme oder ziehe den Stop mit 1-Tap auf Einstand ({c_sym}{entry:.2f}) nach."
+                        f"Halte dich bereit für eine 50% Teilgewinn-Mitnahme oder sichere mit dem Atmungs-Puffer (-0.25R) ab."
                     )
                     kb = {
                         "inline_keyboard": [
                             [
+                                {"text": "🌬️ Atmungs-Puffer (-0.25R)", "callback_data": f"cushion:{symbol}"},
                                 {"text": "🛡️ Stop auf Breakeven", "callback_data": f"be:{symbol}"},
+                            ],
+                            [
                                 {"text": "🚪 Position schließen", "callback_data": f"close:{symbol}"},
                             ]
                         ]
                     }
                     self._dispatch_tg(alert_service, symbol, f"target_1_prox:{symbol}", tg_msg, reply_markup=kb)
 
+            # 1b. Smart Breathing Cushion (+1.0R reached):
+            # Instead of a rigid 0.0R Breakeven that gets shaken out on normal retests,
+            # tighten stop to -0.25R (cuts 75% of initial risk while leaving room to breathe for the rally!)
+            elif (
+                status == "OPEN"
+                and risk > 0
+                and spot >= (entry + 1.0 * risk)
+                and spot < target_1
+                and ((target_1 - spot) / spot) > 0.0075
+                and "SMART_CUSHION_1R" not in events_fired
+            ):
+                cushion_stop = round(entry - (0.25 * risk), 2)
+                if cushion_stop > stop:
+                    trade["trailing_stop"] = cushion_stop
+                events_fired.append("SMART_CUSHION_1R")
+                actions.append({
+                    "ticker": symbol,
+                    "action": "SMART_CUSHION_1R",
+                    "price": spot,
+                    "trailing_stop": trade["trailing_stop"],
+                })
+
+                # Sync paper trade trailing stop if open
+                if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+                    try:
+                        open_pts = self.portfolio_manager.list_paper_trades(limit=100)
+                        for pt in open_pts:
+                            if str(pt.get("ticker") or "").upper() == symbol and str(pt.get("status") or "").lower() == "open":
+                                tid = pt.get("id")
+                                if tid and hasattr(self.portfolio_manager, "update_paper_trade_journal"):
+                                    self.portfolio_manager.update_paper_trade_journal(
+                                        trade_id=tid,
+                                        notes=f"+1.0R erreicht! Smart Atmungs-Puffer (-0.25R = {c_sym}{cushion_stop:.2f}) aktiviert – 75% Risiko reduziert, Puffer gegen Shakeouts.",
+                                    )
+                    except Exception as e:
+                        logger.debug("Failed syncing paper trade on Smart Cushion: %s", e)
+
+                if alert_service and profile != "silent":
+                    tg_msg = (
+                        f"🌬️ <b>SMART ATMUNGS-PUFFER AKTIVIERT (+1.0R): {symbol} ({c_sym}{spot:.2f})</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Dein Trade liegt <b>+1.0R im Gewinn</b> und der Aufwärtstrend ist intakt!\n\n"
+                        f"• <b>Einstieg:</b> {c_sym}{entry:.2f}\n"
+                        f"• <b>Alter Stop (-1.0R):</b> {c_sym}{stop:.2f}\n"
+                        f"• <b>Neuer Puffer-Stop (-0.25R):</b> <b>{c_sym}{cushion_stop:.2f}</b> 🛡️\n\n"
+                        f"💡 <b>Warum -0.25R statt 0.0R Breakeven?</b>\n"
+                        f"75% deines ursprünglichen Risikos sind jetzt eliminiert! Durch den kleinen Puffer von -0.25R "
+                        f"wirst du bei einem normalen Rücksetzer an den Einstiegskurs <b>nicht vorzeitig ausgestoppt</b>, "
+                        f"bevor die große Bewegung zu Ziel 1 ({c_sym}{target_1:.2f}) und Ziel 2 ({c_sym}{target_2:.2f}) startet."
+                    )
+                    kb = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🌬️ Puffer (-0.25R) lassen", "callback_data": f"cushion:{symbol}"},
+                                {"text": "🛡️ Strikt Breakeven (0.0R)", "callback_data": f"be:{symbol}"},
+                            ],
+                            [
+                                {"text": "🔍 360° Check", "callback_data": f"check:{symbol}"},
+                            ]
+                        ]
+                    }
+                    self._dispatch_tg(alert_service, symbol, f"smart_cushion:{symbol}", tg_msg, reply_markup=kb)
+
             # 2. Target 1 Reached
-            if status == "OPEN" and spot >= target_1 and "TARGET_1_HIT" not in events_fired:
+            elif status == "OPEN" and spot >= target_1 and "TARGET_1_HIT" not in events_fired:
                 trade["status"] = "TARGET_1_HIT"
                 # Move trailing stop to Breakeven
                 trade["trailing_stop"] = entry
@@ -207,13 +275,15 @@ class TradeLifecycleService:
                         logger.debug("Failed syncing paper trade on Target 1: %s", e)
 
                 if alert_service and profile != "silent":
+                    cushion_price = round(entry - (0.25 * risk), 2) if risk > 0 else entry
                     tg_msg = (
                         f"🎯 <b>TARGET 1 ERREICHT: {symbol} ({c_sym}{spot:.2f})</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
                         f"Dein 2.0R Kursziel von <b>{c_sym}{target_1:.2f}</b> wurde erreicht!\n\n"
                         f"⚡ <b>Empfohlene Aktion jetzt:</b>\n"
                         f"1. <b>50% der Position schließen</b> (Gewinn sichern!)\n"
-                        f"2. <b>Stop-Loss auf Breakeven ({c_sym}{entry:.2f}) nachziehen</b>\n\n"
+                        f"2. <b>Stop-Loss auf Breakeven ({c_sym}{entry:.2f}) nachziehen</b>\n"
+                        f"   <i>(Oder bei starkem Trend mit <code>/puffer {symbol}</code> auf {c_sym}{cushion_price:.2f} (-0.25R) lassen, um der Restposition Luft für Ziel 2 zu geben!)</i>\n\n"
                         f"🛡️ <i>Der Trade ist ab sofort risikofrei abgesichert. Die restlichen 50% "
                         f"laufen weiter Richtung Ziel 2 ({c_sym}{target_2:.2f}).</i>"
                     )
@@ -221,10 +291,11 @@ class TradeLifecycleService:
                         "inline_keyboard": [
                             [
                                 {"text": "✂️ 50% Teilverkauf", "callback_data": f"scale:{symbol}:50"},
+                                {"text": "🌬️ Puffer (-0.25R)", "callback_data": f"cushion:{symbol}"},
                                 {"text": "🛡️ Breakeven", "callback_data": f"be:{symbol}"},
-                                {"text": "🚪 Schließen", "callback_data": f"close:{symbol}"},
                             ],
                             [
+                                {"text": "🚪 Schließen", "callback_data": f"close:{symbol}"},
                                 {"text": "🔍 360° Check", "callback_data": f"check:{symbol}"},
                                 {"text": "📖 Journal", "callback_data": "journal"},
                             ]

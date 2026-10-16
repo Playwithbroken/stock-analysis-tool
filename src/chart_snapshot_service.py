@@ -15,14 +15,9 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-try:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.dates as mdates
-    import matplotlib.pyplot as plt
-except Exception as e:  # pragma: no cover
-    logger.debug("matplotlib import error: %s", e)
-    plt = None  # type: ignore
+import gc
+
+plt = None  # Lazy-loaded on demand to save ~50 MB baseline RAM
 
 try:
     import yfinance as yf
@@ -30,6 +25,21 @@ except Exception:  # pragma: no cover
     yf = None  # type: ignore
 
 import requests
+
+
+def _get_plt():
+    global plt
+    if plt is not None:
+        return plt
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as _plt
+        plt = _plt
+        return plt
+    except Exception as e:  # pragma: no cover
+        logger.debug("matplotlib import error: %s", e)
+        return None
 
 
 class ChartSnapshotService:
@@ -46,7 +56,8 @@ class ChartSnapshotService:
         Generates dark-themed candlestick chart image for a symbol.
         Returns PNG bytes or None if data unavailable.
         """
-        if not plt or not yf:
+        active_plt = _get_plt()
+        if not active_plt or not yf:
             logger.warning("ChartSnapshotService requires matplotlib and yfinance.")
             return None
 
@@ -179,16 +190,28 @@ class ChartSnapshotService:
             # Export PNG
             buf = io.BytesIO()
             fig.savefig(buf, format="png", bbox_inches="tight", dpi=130, facecolor=fig.get_facecolor())
-            plt.close(fig)
-            return buf.getvalue()
+            fig.clf()
+            active_plt.close(fig)
+            active_plt.close("all")
+            png_bytes = buf.getvalue()
+            buf.close()
+            del df
+            gc.collect()
+            try:
+                from src.memory_optimizer import _call_linux_malloc_trim
+                _call_linux_malloc_trim()
+            except Exception:
+                pass
+            return png_bytes
 
         except Exception as exc:
             logger.error("Error generating chart for %s: %s", symbol, exc, exc_info=True)
-            if plt:
+            if active_plt:
                 try:
-                    plt.close("all")
+                    active_plt.close("all")
                 except Exception:
                     pass
+            gc.collect()
             return None
 
     def send_chart_to_telegram(

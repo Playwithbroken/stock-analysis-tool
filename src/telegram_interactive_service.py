@@ -521,6 +521,21 @@ class TelegramInteractiveService:
             res = self._cmd_export(chat_id)
             if res:
                 self.send_message(chat_id, res)
+        elif cb.startswith("cushion:"):
+            ticker = cb.split(":", 1)[1].upper()
+            res = self._execute_cushion_stop(ticker)
+            self.answer_callback_query(
+                callback_query_id, f"🌬️ Atmungs-Puffer (-0.25R) für {ticker} gesetzt!", show_alert=True
+            )
+            self.send_message(chat_id, res)
+        elif cb == "ram":
+            self.answer_callback_query(callback_query_id, "Lade Railway RAM- & Systemstatus...")
+            res = self._cmd_ram([])
+            self.send_message(chat_id, res, reply_markup=self._build_ram_keyboard())
+        elif cb == "ram_clean":
+            self.answer_callback_query(callback_query_id, "🧹 Bereinige RAM & Caches...", show_alert=False)
+            res = self._cmd_ram(["clean"])
+            self.send_message(chat_id, res, reply_markup=self._build_ram_keyboard())
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -570,6 +585,8 @@ class TelegramInteractiveService:
                 return self._cmd_close(args)
             elif cmd == "/be":
                 return self._cmd_be(args)
+            elif cmd in ("/puffer", "/cushion", "/breathe"):
+                return self._cmd_cushion(args)
             elif cmd == "/watchlist":
                 return self._cmd_watchlist()
             elif cmd == "/watch":
@@ -636,6 +653,8 @@ class TelegramInteractiveService:
                 return self._cmd_earnings(args)
             elif cmd in ("/export", "/csv", "/download_trades", "/steuer"):
                 return self._cmd_export(chat_id)
+            elif cmd in ("/ram", "/system", "/memory", "/speicher"):
+                return self._cmd_ram(args)
             else:
                 return (
                     f"❓ Unbekannter Befehl: <code>{html.escape(cmd)}</code>\n\n"
@@ -670,6 +689,7 @@ class TelegramInteractiveService:
             "• <code>/sizing TICKER</code> – Positionsgrößen- &amp; Risikorechner (1.0% bis 2.0% Risk)\n"
             "• <code>/paper TICKER</code> – Setup direkt ins Paper Depot buchen (z.B. <code>/paper NVDA</code>)\n"
             "• <code>/close TICKER</code> – Offene Position direkt schließen &amp; PnL sichern (z.B. <code>/close NVDA</code>)\n"
+            "• <code>/puffer TICKER</code> – 🌬️ Smart Atmungs-Puffer (-0.25R Mini-Risiko gegen Shakeouts)\n"
             "• <code>/be TICKER</code> – Stop-Loss auf Breakeven (Einstand) nachziehen\n"
             "• <code>/scale TICKER [50]</code> – 50% Teilgewinnmitnahme &amp; Rest auf Breakeven sichern\n"
             "• <code>/track</code> – Aktive Setups &amp; Trailing-Stops im Blick\n"
@@ -704,7 +724,8 @@ class TelegramInteractiveService:
             "• <code>/heat</code> – Portfolio Heat &amp; Korrelations-Shield\n"
             "• <code>/macro</code> – High-Impact Makro- &amp; FOMC-Shield (Zinsentscheide &amp; CPI)\n\n"
             "⚙️ <b>Benachrichtigungen &amp; Cloud-Kosten:</b>\n"
-            "• <code>/alerts</code> – Modus wählen (🟢 Smart Digest, ⚡ Trade Pro, 🔕 Silent)\n\n"
+            "• <code>/alerts</code> – Modus wählen (🟢 Smart Digest, ⚡ Trade Pro, 🔕 Silent)\n"
+            "• <code>/ram</code> – ⚡ Railway RAM-Monitor &amp; 1-Klick Speicher-Bereinigung (<code>/ram clean</code>)\n\n"
             "💡 <i>Tipp: Bei jedem /edge Setup kannst du einfach auf die interaktiven Buttons tippen!</i>"
         )
 
@@ -721,9 +742,13 @@ class TelegramInteractiveService:
                     {"text": "🎯 Setup Tracken", "callback_data": f"track:{ticker}"},
                 ],
                 [
+                    {"text": "🌬️ Puffer (-0.25R)", "callback_data": f"cushion:{ticker}"},
                     {"text": "🛡️ Breakeven", "callback_data": f"be:{ticker}"},
                     {"text": "✂️ 50% Teilverkauf", "callback_data": f"scale:{ticker}:50"},
+                ],
+                [
                     {"text": "🚪 Schließen", "callback_data": f"close:{ticker}"},
+                    {"text": "🔍 360° Check", "callback_data": f"check:{ticker}"},
                 ],
                 [
                     {"text": "⚡ GEX Levels", "callback_data": f"gex:{ticker}"},
@@ -738,28 +763,24 @@ class TelegramInteractiveService:
                     {"text": "🧭 MTF Sync", "callback_data": f"mtf:{ticker}"},
                 ],
                 [
-                    {"text": "🔍 360° Check", "callback_data": f"check:{ticker}"},
                     {"text": "🛡️ Stops", "callback_data": f"stop:{ticker}"},
-                ],
-                [
                     {"text": "⚡ ORB Breakout", "callback_data": f"orb:{ticker}"},
+                ],
+                [
                     {"text": "🛡️ Pre-Flight", "callback_data": f"preflight:{ticker}"},
-                ],
-                [
                     {"text": "⚖️ Sizing & Kelly", "callback_data": f"sizing:{ticker}"},
+                ],
+                [
                     {"text": "🌐 Marktbreite", "callback_data": "breadth"},
-                ],
-                [
                     {"text": "🏛️ Makro- & FOMC-Shield", "callback_data": f"macro:{ticker}"},
-                    {"text": "💎 Compounder Radar", "callback_data": f"compounder:{ticker}"},
                 ],
                 [
+                    {"text": "💎 Compounder Radar", "callback_data": f"compounder:{ticker}"},
                     {"text": "🏛️ 13F Superinvestor", "callback_data": f"13f:{ticker}"},
-                    {"text": "🧠 Tilt & Psychologie", "callback_data": "psychology"},
                 ],
                 [
                     {"text": "🚀 LEAPS Hebel-Rechner", "callback_data": f"leaps:{ticker}"},
-                    {"text": "📋 Trading Routine", "callback_data": "routine"},
+                    {"text": "🧠 Tilt & Psychologie", "callback_data": "psychology"},
                 ],
             ]
         }
@@ -769,7 +790,10 @@ class TelegramInteractiveService:
         return {
             "inline_keyboard": [
                 [
+                    {"text": "🌬️ Puffer (-0.25R)", "callback_data": f"cushion:{ticker}"},
                     {"text": "🛡️ Breakeven", "callback_data": f"be:{ticker}"},
+                ],
+                [
                     {"text": "✂️ 50% Teilverkauf", "callback_data": f"scale:{ticker}:50"},
                     {"text": "🚪 Schließen", "callback_data": f"close:{ticker}"},
                 ],
@@ -784,6 +808,20 @@ class TelegramInteractiveService:
                 [
                     {"text": "🎯 Setups & Trailing Stop", "callback_data": "track"},
                     {"text": "🧠 Tilt Shield", "callback_data": "psychology"},
+                ],
+            ]
+        }
+
+    def _build_ram_keyboard(self) -> Dict[str, Any]:
+        """Generates inline keyboard for RAM & cache management."""
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": "🧹 RAM sofort bereinigen", "callback_data": "ram_clean"},
+                    {"text": "🔄 Status aktualisieren", "callback_data": "ram"},
+                ],
+                [
+                    {"text": "⚙️ Alert-Profile (/alerts)", "callback_data": "alerts"},
                 ],
             ]
         }
@@ -2224,6 +2262,20 @@ class TelegramInteractiveService:
         else:
             guru_str = "• <b>13F Superinvestor:</b> ⚪ Keine Top-Hedgefonds-Meldung"
 
+        # 9. Self-Learning Journal Edge Feedback (0 MB extra RAM)
+        journal_badge = None
+        if self.coach_service and hasattr(self.coach_service, "get_setup_edge_badge"):
+            try:
+                journal_badge = self.coach_service.get_setup_edge_badge(setup.get("setup_name", ""))
+            except Exception:
+                journal_badge = None
+        journal_line = f"• <b>Journal-Lernfilter:</b> {journal_badge}\n" if journal_badge else ""
+
+        entry_p = float(setup.get("entry_price") or 0.0)
+        stop_p = float(setup.get("invalidation_price") or 0.0)
+        risk_p = abs(entry_p - stop_p) if entry_p > stop_p else (entry_p * 0.03)
+        cushion_p = round(entry_p - 0.25 * risk_p, 2)
+
         return (
             f"🔍 <b>360° INSTITUTIONAL CHECK: {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -2237,9 +2289,11 @@ class TelegramInteractiveService:
             f"• <b>Whale / Dark Pool Flow:</b> {whale_str}\n"
             f"• <b>Earnings Shield:</b> {earn_str}\n"
             f"{macro_str}\n"
-            f"{guru_str}\n\n"
+            f"{guru_str}\n"
+            f"{journal_line}\n"
             f"🎯 <b>Edge-Einstieg &amp; Stop:</b>\n"
-            f"• Entry: {c_sym}{setup.get('entry_price', 0):.2f} | Stop: {c_sym}{setup.get('invalidation_price', 0):.2f}\n"
+            f"• Entry: {c_sym}{entry_p:.2f} | Stop (-1.0R): {c_sym}{stop_p:.2f}\n"
+            f"• Atmungs-Puffer (-0.25R): <b>{c_sym}{cushion_p:.2f}</b> (<code>/puffer {ticker}</code>)\n"
             f"• Ziel 1: {c_sym}{setup.get('target_1', 0):.2f} | Ziel 2: {c_sym}{setup.get('target_2', 0):.2f}\n\n"
             f"💡 <i>Tipp: Tippe <code>/edge {ticker}</code> für das vollständige Setup oder <code>/sizing {ticker}</code> für dein Risikolimit.</i>"
         )
@@ -2937,6 +2991,102 @@ class TelegramInteractiveService:
             f"Du kannst sie direkt in Excel, Apple Numbers oder Steuersoftware importieren.</i>"
         )
 
+    def _cmd_cushion(self, args: List[str]) -> str:
+        """Sets a Smart Breathing Cushion Stop (-0.25R) so normal retests don't shake out a bullish trade."""
+        if not args:
+            return (
+                "🌬️ <b>Smart Atmungs-Puffer (-0.25R Anti-Shakeout Stop)</b>\n"
+                "Bitte gib einen Ticker an: z.B. <code>/puffer NVDA</code> oder <code>/puffer SAP.DE</code>\n\n"
+                "💡 <i>Reduziert dein Risiko um 75% (nur noch -0.25R kleiner Verlust-Puffer), "
+                "lässt dem Trade aber Luft zum Atmen, damit du bei bullischer Analyse nicht durch "
+                "einen normalen Rücksetzer auf Einstand vor der großen Aufwärtsbewegung rausfliegst!</i>"
+            )
+        ticker = args[0].upper().strip()
+        return self._execute_cushion_stop(ticker)
+
+    def _execute_cushion_stop(self, ticker: str, cushion_r: float = -0.25) -> str:
+        """Moves trailing stop to -0.25R (Smart Cushion) instead of rigid 0.0R Breakeven."""
+        updated_any = False
+        entry_price = 0.0
+        initial_stop = 0.0
+        risk_per_share = 0.0
+
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+
+        if self.lifecycle_service:
+            active_trades = self.lifecycle_service.get_active_trades()
+            matched = next(
+                (t for t in active_trades if t["ticker"].upper() == ticker and t.get("status") in ("OPEN", "TARGET_1_HIT")),
+                None,
+            )
+            if matched:
+                entry_price = float(matched.get("entry_price") or 0.0)
+                initial_stop = float(matched.get("invalidation_price") or matched.get("trailing_stop") or 0.0)
+                risk_per_share = float(matched.get("risk_per_share") or abs(entry_price - initial_stop) or (entry_price * 0.03))
+                cushion_price = round(entry_price + (cushion_r * risk_per_share), 2)
+                matched["trailing_stop"] = cushion_price
+                self.lifecycle_service._save_trades()
+                updated_any = True
+
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                open_trades = [
+                    t for t in self.portfolio_manager.list_paper_trades(limit=150)
+                    if str(t.get("ticker") or "").upper() == ticker and str(t.get("status") or "").lower() == "open"
+                ]
+                for pt in open_trades:
+                    if not entry_price:
+                        entry_price = float(pt.get("entry_price") or 0.0)
+                    if not initial_stop:
+                        initial_stop = float(pt.get("stop_price") or (entry_price * 0.96))
+                    if not risk_per_share:
+                        risk_per_share = abs(entry_price - initial_stop) or (entry_price * 0.03)
+                    cushion_price = round(entry_price + (cushion_r * risk_per_share), 2)
+                    tid = pt.get("id")
+                    if tid and hasattr(self.portfolio_manager, "update_paper_trade_journal"):
+                        self.portfolio_manager.update_paper_trade_journal(
+                            trade_id=tid,
+                            notes=f"Smart Atmungs-Puffer (-0.25R = {c_sym}{cushion_price:.2f}) aktiviert.",
+                        )
+                    updated_any = True
+            except Exception as pe:
+                logger.warning("Error updating paper trade for cushion stop: %s", pe)
+
+        if not updated_any:
+            return (
+                f"ℹ️ Kein aktiver Trade für <b>{ticker}</b> gefunden.\n"
+                f"Prüfe deine offenen Trades mit <code>/track</code> oder buche ein Setup mit <code>/paper {ticker}</code>."
+            )
+
+        cushion_price = round(entry_price + (cushion_r * risk_per_share), 2)
+        return (
+            f"🌬️ <b>SMART ATMUNGS-PUFFER AKTIVIERT: {ticker}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Einstiegskurs:</b> {c_sym}{entry_price:.2f}\n"
+            f"• <b>Neuer Puffer-Stop (-0.25R):</b> <b>{c_sym}{cushion_price:.2f}</b> 🛡️\n"
+            f"• <b>Risiko-Reduktion:</b> <b>75% des ursprünglichen Risikos eliminiert!</b>\n\n"
+            f"💡 <b>Anti-Shakeout Schutz aktiv:</b>\n"
+            f"Durch diesen kleinen Verlust-Puffer (-0.25R statt starrem 0.0R Breakeven) hat die Aktie Luft zum Atmen "
+            f"und du verpasst die große Aufwärtsbewegung nicht, falls der Kurs den Einstieg noch einmal kurz testet!"
+        )
+
+    def _cmd_ram(self, args: List[str]) -> str:
+        """Displays live Railway RAM consumption and optionally triggers immediate cleanup."""
+        try:
+            from src.memory_optimizer import (
+                format_memory_telegram_card,
+                get_memory_status_report,
+                trim_process_memory,
+            )
+            cleaned = None
+            if args and args[0].lower().strip() in ("clean", "clear", "gc", "trim", "free", "reset"):
+                cleaned = trim_process_memory(aggressive=True)
+            report = get_memory_status_report()
+            return format_memory_telegram_card(report, cleaned_result=cleaned)
+        except Exception as exc:
+            return f"⚠️ Fehler beim Abrufen des RAM-Monitors: {exc}"
+
     async def run_listener_loop(self) -> None:
         """
         Asynchronous long-polling loop for Telegram getUpdates.
@@ -3025,6 +3175,8 @@ class TelegramInteractiveService:
                             reply_markup = None
                             if text.startswith("/alerts") or text.startswith("/alert") or text.startswith("/profile") or text.startswith("/mode"):
                                 reply_markup = self._build_alerts_keyboard()
+                            elif text.startswith("/ram") or text.startswith("/system") or text.startswith("/memory") or text.startswith("/speicher"):
+                                reply_markup = self._build_ram_keyboard()
                             elif text.startswith("/edge") or text.startswith("/check") or text.startswith("/stop") or text.startswith("/preflight") or text.startswith("/orb"):
                                 parts = text.split()
                                 tk = parts[1].upper() if len(parts) > 1 else ""

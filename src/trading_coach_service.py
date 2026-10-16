@@ -90,7 +90,10 @@ class TradingCoachService:
 
             # Flaw detection: Winner cut too early (< 0.8R)
             if 0 < r_mult < 0.8:
-                flaws.append(f"Gewinn zu früh geschlossen: {t.get('ticker')} bei nur +{r_mult}R (Ziel 1 ist 2.0R).")
+                flaws.append(
+                    f"Gewinn zu früh geschlossen: {t.get('ticker')} bei nur +{r_mult}R (Ziel 1 ist 2.0R) – "
+                    f"nutze -0.25R Atmungs-Puffer statt zu engem Stop!"
+                )
 
         total_closed = len(closed)
         win_count = len(wins)
@@ -119,6 +122,12 @@ class TradingCoachService:
         elif avg_win_r < avg_loss_r:
             advice.append("🛑 Asymmetrie verletzt: Deine durchschnittlichen Verluste sind größer als deine Gewinne.")
 
+        if any("zu früh" in f for f in flaws):
+            advice.append(
+                "🌬️ Anti-Shakeout-Regel: Lass starken Aufwärtstrends einen kleinen Verlust-Puffer (-0.25R mit /puffer), "
+                "damit du vor dem großen Ausbruch nicht durch kurze Rücksetzer ausgestoppt wirst!"
+            )
+
         if ranked_setups and ranked_setups[0][1] > 0:
             best_setup = ranked_setups[0][0].replace("_", " ").title()
             advice.append(f"💎 Fokussiere dein Setup '{best_setup}' – hier erzielst du den größten Ertrag.")
@@ -135,6 +144,31 @@ class TradingCoachService:
             "flaws": flaws[:3],
             "advice": advice,
         }
+
+    def get_setup_edge_badge(self, setup_name: str = "") -> Optional[str]:
+        """
+        Returns a self-learning badge based on the user's historical journal winrate
+        and setup profitability (0 extra RAM, reads SQLite).
+        """
+        audit = self.audit_performance()
+        if audit.get("closed_trades", 0) < 2:
+            return None
+
+        wr = float(audit.get("win_rate", 0.0))
+        exp_r = float(audit.get("expectancy_r", 0.0))
+        top_setups = dict(audit.get("top_setups") or [])
+
+        norm_name = str(setup_name or "").lower()
+        for stype, pnl in top_setups.items():
+            if stype.lower() in norm_name or norm_name in stype.lower():
+                if pnl > 0:
+                    return f"🔥 <b>Dein Top-Setup im Journal</b> (Historisch +${pnl:,.0f} | Expectancy {exp_r:+.2f}R)"
+                elif pnl < 0:
+                    return f"⚠️ <b>Journal-Warnung:</b> Dieses Setup war zuletzt im Minus (${pnl:,.0f}) – nur mit A+ Konfluenz handeln!"
+
+        if wr >= 55.0 and exp_r > 0:
+            return f"🔥 <b>Journal-Edge Aktiv:</b> Deine aktuelle Winrate liegt bei <b>{wr:.0f}%</b> ({exp_r:+.2f}R/Trade)"
+        return None
 
     def format_coach_card(self) -> str:
         """Formats an executive German Telegram coaching report."""

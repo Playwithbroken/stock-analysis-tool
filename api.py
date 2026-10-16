@@ -277,8 +277,20 @@ def _cache_get_stale(key: str, max_age_seconds: int) -> Any | None:
     return cloned
 
 
+_MAX_RESPONSE_CACHE_ENTRIES = 45
+
+
 def _cache_set(key: str, payload: Any) -> Any:
-    _RESPONSE_CACHE[key] = (datetime.utcnow(), copy.deepcopy(payload))
+    now = datetime.utcnow()
+    if len(_RESPONSE_CACHE) >= _MAX_RESPONSE_CACHE_ENTRIES:
+        for k in list(_RESPONSE_CACHE.keys()):
+            ts, _ = _RESPONSE_CACHE[k]
+            if (now - ts).total_seconds() > 600:
+                _RESPONSE_CACHE.pop(k, None)
+        while len(_RESPONSE_CACHE) >= _MAX_RESPONSE_CACHE_ENTRIES:
+            oldest_key = next(iter(_RESPONSE_CACHE))
+            _RESPONSE_CACHE.pop(oldest_key, None)
+    _RESPONSE_CACHE[key] = (now, copy.deepcopy(payload))
     return payload
 
 
@@ -2814,6 +2826,11 @@ async def _background_task_watchdog_loop():
     while True:
         try:
             _ensure_background_tasks()
+            try:
+                from src.memory_optimizer import trim_process_memory
+                trim_process_memory(aggressive=False)
+            except Exception:
+                pass
             get_portfolio_manager().set_app_setting(
                 "background_task_watchdog_seen_at",
                 datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))).isoformat(),

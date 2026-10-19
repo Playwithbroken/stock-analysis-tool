@@ -640,6 +640,18 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, f"💶 Berechne Netto nach 26,38% Steuer für {ticker}...")
             res = self._cmd_netto([ticker])
             self.send_message(chat_id, res)
+        elif cb in ("steuer", "freibetrag", "verlusttopf"):
+            self.answer_callback_query(callback_query_id, "🇩🇪 Lade Deutsches Steuer-Cockpit...")
+            res = self._cmd_steuer()
+            self.send_message(chat_id, res)
+        elif cb in ("disziplin", "rache", "tiltbreaker"):
+            self.answer_callback_query(callback_query_id, "🛡️ Prüfe Prop-Desk Tilt- & Rache-Trading-Schutz...")
+            res = self._cmd_disziplin()
+            self.send_message(chat_id, res)
+        elif cb in ("dropdown", "setmenu", "commands"):
+            self.answer_callback_query(callback_query_id, "📋 Synchronisiere Telegram Befehls-Dropdown...")
+            res = self._cmd_dropdown()
+            self.send_message(chat_id, res)
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
@@ -681,6 +693,8 @@ class TelegramInteractiveService:
                 return self._cmd_help()
             elif cmd in ("/menu", "/dashboard", "/home"):
                 return self._cmd_menu(chat_id)
+            elif cmd in ("/dropdown", "/setmenu", "/commands", "/befehle"):
+                return self._cmd_dropdown()
             elif cmd in ("/share", "/card", "/signal"):
                 return self._cmd_share(args)
             elif cmd in ("/guest", "/guests"):
@@ -892,7 +906,7 @@ class TelegramInteractiveService:
         )
 
     def _build_main_menu_keyboard(self) -> Dict[str, Any]:
-        """Generates a clean 4-row thumb-friendly main menu keyboard for beginners and pros."""
+        """Generates a clean 5-row thumb-friendly main menu keyboard for beginners and pros."""
         return {
             "inline_keyboard": [
                 [
@@ -905,13 +919,18 @@ class TelegramInteractiveService:
                     {"text": "🔄 Re-Entry Radar", "callback_data": "reentry"},
                 ],
                 [
+                    {"text": "🇩🇪 Steuer-Cockpit", "callback_data": "steuer"},
+                    {"text": "🛡️ Disziplin & Tilt", "callback_data": "disziplin"},
                     {"text": "⏳ Handelszeit & FOMO", "callback_data": "timing"},
-                    {"text": "🏆 Erfolgsbilanz", "callback_data": "trackrecord"},
-                    {"text": "🌍 Markt-Ampel", "callback_data": "breadth"},
                 ],
                 [
-                    {"text": "🎙️ Audio-Briefing (MP3)", "callback_data": "voice"},
-                    {"text": "⚙️ Alerts & RAM Monitor", "callback_data": "ram"},
+                    {"text": "🏆 Erfolgsbilanz", "callback_data": "trackrecord"},
+                    {"text": "🌍 Markt-Ampel", "callback_data": "breadth"},
+                    {"text": "🎙️ Audio-Briefing", "callback_data": "voice"},
+                ],
+                [
+                    {"text": "☰ Befehls-Dropdown aktivieren", "callback_data": "dropdown"},
+                    {"text": "⚙️ Alerts & RAM", "callback_data": "ram"},
                 ],
             ]
         }
@@ -4018,6 +4037,117 @@ class TelegramInteractiveService:
             "💡 <i>Warum das wichtig ist: 80% aller Kontoverluste entstehen nicht durch schlechte Strategie, sondern durch den Versuch, nach 2 Stop-Outs den Verlust sofort mit doppeltem Risiko zurückzuholen (Revenge Trading).</i>"
         )
 
+    @staticmethod
+    def get_bot_command_dropdown_list() -> List[Dict[str, str]]:
+        """
+        Returns the curated list of Telegram slash-commands for the native '[ ☰ Menü ]'
+        dropdown button at the bottom-left of the Telegram chat bar.
+        """
+        return [
+            {"command": "menu", "description": "📱 1-Klick Hauptmenü & Schnellwahl-Cockpit"},
+            {"command": "edge", "description": "🔥 Top A+/A Setups (oder /edge TICKER)"},
+            {"command": "depot", "description": "💼 Paper-Depot Status inkl. 🇩🇪 Steuer & Freibetrag"},
+            {"command": "steuer", "description": "🇩🇪 Steuer-Cockpit (1.000€ Freibetrag & Verlusttopf)"},
+            {"command": "disziplin", "description": "🛡️ Prop-Desk Rache-Trading- & Tilt-Schutz"},
+            {"command": "playbook", "description": "🧠 8 Profi-Strategien & KI-Lerngedächtnis"},
+            {"command": "strategie", "description": "🎓 30-Sekunden Guide (-0.25R Puffer erklärt)"},
+            {"command": "order", "description": "🏦 Broker-Spickzettel (WKN, Limit, Stop & Netto)"},
+            {"command": "wkn", "description": "🇩🇪 WKN & ISIN Direkt-Kopierer (/wkn TICKER)"},
+            {"command": "netto", "description": "💶 Netto-Rechner nach 26,38% Steuer (/netto TICKER)"},
+            {"command": "timing", "description": "⏳ Handelszeit-Ampel & Anti-FOMO (/timing TICKER)"},
+            {"command": "reentry", "description": "🔄 48h Wyckoff Second-Chance Re-Entry Radar"},
+            {"command": "add", "description": "🪜 Gewinner risikofrei aufstocken (/add TICKER)"},
+            {"command": "track", "description": "🎯 Aktive Trades, Trailing Stops & Live-Risiko"},
+            {"command": "puffer", "description": "🌬️ Stop auf -0.25R Atmungs-Puffer (/puffer TICKER)"},
+            {"command": "be", "description": "🛡️ Stop-Loss auf Einstand / Breakeven (/be TICKER)"},
+            {"command": "scale", "description": "✂️ 50% Teilgewinn sichern (/scale TICKER)"},
+            {"command": "paper", "description": "📝 Trade ins Paper-Depot buchen (/paper TICKER)"},
+            {"command": "close", "description": "🚪 Offene Position glattstellen (/close TICKER)"},
+            {"command": "journal", "description": "📖 Trading-Journal inkl. Einzel-Steuerabrechnung"},
+            {"command": "trackrecord", "description": "🏆 Teilbare Erfolgsbilanz (nur % & R, anonym)"},
+            {"command": "share", "description": "📤 Weiterleitbare VIP Signal-Card (/share TICKER)"},
+            {"command": "chart", "description": "📸 Live-Chart mit Entry, Stop & Zielen (/chart TICKER)"},
+            {"command": "check", "description": "🔍 360°-Schnellcheck für eine Aktie (/check TICKER)"},
+            {"command": "preflight", "description": "🚦 5-Punkte Risiko-Check vor Kauf (/preflight TICKER)"},
+            {"command": "sizing", "description": "⚖️ Positionsgrößen-Rechner (/sizing TICKER)"},
+            {"command": "scan", "description": "📡 Live-Scan der gesamten Watchlist starten"},
+            {"command": "watchlist", "description": "📋 Überwachte US- & DAX-Leader anzeigen"},
+            {"command": "breadth", "description": "🌍 Marktbreite, VIX & Sektor-Rotation"},
+            {"command": "macro", "description": "🏛️ Notenbank-, CPI- & Makro-Schutzschild"},
+            {"command": "earnings", "description": "⚡ Options Expected Move vor Zahlen (/earnings TICKER)"},
+            {"command": "voice", "description": "🎙️ Gesprochenes KI-Audio-Briefing (MP3)"},
+            {"command": "coach", "description": "🧠 KI-Trading-Coach & Fehler-Diagnose"},
+            {"command": "alerts", "description": "🔔 Benachrichtigungs-Modus (Smart, Pro, Silent)"},
+            {"command": "ram", "description": "⚡ Railway RAM-Monitor & Speicher-Bereinigung"},
+            {"command": "help", "description": "❓ Komplette Befehlsübersicht anzeigen"},
+        ]
+
+    def register_telegram_command_dropdown(self) -> bool:
+        """
+        Registers the native Telegram '[ ☰ Menü ]' command dropdown via setMyCommands
+        and pins the Commands Menu Button via setChatMenuButton.
+        """
+        if not self.bot_token:
+            return False
+
+        base_url = f"https://api.telegram.org/bot{self.bot_token}"
+        commands = self.get_bot_command_dropdown_list()
+        ok_any = False
+
+        # Register for default scope, German locale, and all_private_chats so iOS/Android/Desktop show it immediately
+        scopes = [
+            {"commands": commands},
+            {"commands": commands, "language_code": "de"},
+            {"commands": commands, "scope": {"type": "all_private_chats"}},
+            {"commands": commands, "scope": {"type": "all_private_chats"}, "language_code": "de"},
+        ]
+        for payload in scopes:
+            try:
+                res = requests.post(f"{base_url}/setMyCommands", json=payload, timeout=10)
+                if res.status_code == 200:
+                    ok_any = True
+            except Exception as exc:
+                logger.debug("setMyCommands warning: %s", exc)
+
+        # Explicitly set the bottom-left chat menu button to 'commands'
+        try:
+            res_btn = requests.post(
+                f"{base_url}/setChatMenuButton",
+                json={"menu_button": {"type": "commands"}},
+                timeout=10,
+            )
+            if res_btn.status_code == 200:
+                ok_any = True
+        except Exception as exc:
+            logger.debug("setChatMenuButton warning: %s", exc)
+
+        return ok_any
+
+    def _cmd_dropdown(self) -> str:
+        """Synchronizes and displays the native Telegram '[ ☰ Menü ]' command dropdown list."""
+        commands = self.get_bot_command_dropdown_list()
+        synced = self.register_telegram_command_dropdown()
+        status_badge = (
+            "✅ <b>Live mit Telegram synchronisiert!</b>"
+            if synced
+            else "📋 <b>Dropdown-Liste bereit</b> (Synchronisation beim Bot-Start aktiv)"
+        )
+        preview_lines = [
+            f"• <code>/{c['command']}</code> – {html.escape(c['description'])}"
+            for c in commands[:16]
+        ]
+        return (
+            "☰ <b>TELEGRAM BEFEHLS-DROPDOWN-MENÜ</b>\n"
+            f"{status_badge}\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 <b>So nutzt du das Dropdown in Telegram:</b>\n"
+            "1️⃣ Tippe unten links neben dem Texteingabefeld auf den blauen Button <b>[ ☰ Menü ]</b> (oder tippe einfach ein <code>/</code> ein).\n"
+            "2️⃣ Es klappt sofort die scrollbare Auswahlliste mit allen <b>36 Befehlen</b> auf – ein Fingertipp genügt!\n\n"
+            "🔝 <b>Wichtigste Schnellwahl-Befehle im Dropdown:</b>\n"
+            + "\n".join(preview_lines)
+            + f"\n<i>... und {len(commands) - 16} weitere Profi-Befehle direkt im [ ☰ Menü ]!</i>"
+        )
+
     async def run_listener_loop(self) -> None:
         """
         Asynchronous long-polling loop for Telegram getUpdates.
@@ -4035,6 +4165,13 @@ class TelegramInteractiveService:
             await asyncio.to_thread(requests.post, f"{base_url}/deleteWebhook", json={"drop_pending_updates": False}, timeout=10)
         except Exception as e:
             logger.debug("deleteWebhook attempt: %s", e)
+
+        # 1b. Register native Telegram '[ ☰ Menü ]' command dropdown & menu button on startup
+        try:
+            await asyncio.to_thread(self.register_telegram_command_dropdown)
+            logger.info("Telegram native command dropdown menu (setMyCommands + setChatMenuButton) registered.")
+        except Exception as menu_err:
+            logger.debug("register_telegram_command_dropdown warning: %s", menu_err)
 
         # 2. Sync to latest update_id so stale messages are ignored on boot
         try:

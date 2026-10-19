@@ -2367,6 +2367,23 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
         self.assertIn("PROP-DESK DISZIPLIN", res_dis)
         self.assertIn("TILT-SCHUTZ AKTIV", res_dis)
 
+        # 4. Verify Telegram native command dropdown menu (setMyCommands + setChatMenuButton)
+        cmd_list = bot.get_bot_command_dropdown_list()
+        self.assertGreaterEqual(len(cmd_list), 30)
+        cmd_names = [c["command"] for c in cmd_list]
+        self.assertIn("menu", cmd_names)
+        self.assertIn("steuer", cmd_names)
+        self.assertIn("disziplin", cmd_names)
+        self.assertIn("playbook", cmd_names)
+
+        with patch("src.telegram_interactive_service.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_post.return_value = mock_resp
+            res_dd = bot.handle_command("999888", "/dropdown")
+            self.assertIn("TELEGRAM BEFEHLS-DROPDOWN-MENÜ", res_dd)
+            self.assertIn("Live mit Telegram synchronisiert", res_dd)
+
 
 if __name__ == "__main__":
     unittest.main()

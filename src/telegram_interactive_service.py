@@ -1311,17 +1311,52 @@ class TelegramInteractiveService:
             friction_entry = (entry_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0)
             friction_exit = (exit_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0)
             total_friction = friction_entry + friction_exit + commission_total
-            net_pnl = gross_pnl - total_friction
+
+            from src.performance_metrics import calculate_paper_trade_german_tax_step, get_current_tax_loss_pool
+            pool_before = 0.0
+            try:
+                all_pt = self.portfolio_manager.list_paper_trades(limit=250)
+                if isinstance(all_pt, list):
+                    pool_info = get_current_tax_loss_pool(all_pt, exclude_trade_id=trade_id)
+                    pool_before = float(pool_info.get("loss_pool_balance", 0.0))
+            except Exception:
+                pool_before = 0.0
+
+            tax_step = calculate_paper_trade_german_tax_step(
+                gross_pnl=gross_pnl,
+                friction=total_friction,
+                current_loss_pool=pool_before,
+            )
+            net_before_tax = tax_step["pnl_before_tax"]
+            tax_paid = tax_step["tax_paid_eur"]
+            net_pnl = tax_step["net_after_tax"]
+            loss_used = tax_step["loss_pool_used"]
+            loss_added = tax_step["loss_pool_added"]
+            pool_after = tax_step["loss_pool_after"]
+
             net_pct = (net_pnl / (entry_p * qty) * 100.0) if (entry_p * qty) > 0 else 0.0
 
             sign_gross = "+" if gross_pnl >= 0 else ""
+            sign_pre = "+" if net_before_tax >= 0 else ""
             sign_net = "+" if net_pnl >= 0 else ""
             emoji_net = "🟢" if net_pnl >= 0 else "🔴"
+
+            tax_line = f"• <b>🇩🇪 Steuer (26,38% Abgeltung + Soli):</b> -{c_sym}{tax_paid:,.2f}"
+            if loss_used > 0:
+                tax_line += f" (<i>{c_sym}{loss_used:,.2f} steuerfrei über Verlusttopf verrechnet!</i>)"
+            elif loss_added > 0:
+                tax_line += f" (<i>+{c_sym}{loss_added:,.2f} in Aktien-Verlusttopf gebucht</i>)"
+
+            pool_line = f"• <b>🏦 Aktien-Verlustverrechnungstopf:</b> {c_sym}{pool_after:,.2f} (Steuerfrei-Guthaben)"
+
             closed_reports.append(
                 f"• <b>Ausstieg:</b> {c_sym}{exit_p:.2f} (Einstieg: {c_sym}{entry_p:.2f})\n"
                 f"• <b>Menge:</b> {int(qty)} Stück | <b>Brutto:</b> {sign_gross}{c_sym}{gross_pnl:,.2f}\n"
                 f"• <b>Reibung (Spread &amp; Slippage):</b> -{c_sym}{total_friction:,.2f}\n"
-                f"• <b>Netto-Ergebnis:</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}"
+                f"• <b>Ergebnis vor Steuer:</b> {sign_pre}{c_sym}{net_before_tax:,.2f}\n"
+                f"{tax_line}\n"
+                f"{pool_line}\n"
+                f"• <b>💰 Netto-Ergebnis (nach Gebühren &amp; Steuer):</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}"
             )
 
         detail_text = "\n\n".join(closed_reports) if closed_reports else f"• Lifecycle-Tracking für <b>{ticker}</b> beendet."
@@ -1329,7 +1364,7 @@ class TelegramInteractiveService:
             f"🚪 <b>POSITION GESCHLOSSEN: {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{detail_text}\n\n"
-            f"✅ <i>Position im Paper Depot glattgestellt und Risikomonitoring beendet. Dein Demokonto wurde aktualisiert.</i>"
+            f"✅ <i>Position im Paper Depot inkl. 26,375 % Abgeltungsteuer &amp; Verlustverrechnungstopf abgerechnet.</i>"
         )
 
     def _cmd_be(self, args: List[str]) -> str:
@@ -1514,7 +1549,7 @@ class TelegramInteractiveService:
             return f"❌ Fehler beim Erstellen des Briefings ({session}): {exc}"
 
     def _cmd_depot(self) -> str:
-        """Provides a complete overview of the Paper Trading Depot & Performance."""
+        """Provides a complete overview of the Paper Trading Depot & Performance including German taxes."""
         if not self.portfolio_manager:
             return "⚠️ Portfolio Manager nicht initialisiert."
 
@@ -1529,23 +1564,35 @@ class TelegramInteractiveService:
                 cash = float(snap.get("cash") or 50000.0)
                 starting = float(snap.get("starting_capital") or 50000.0)
 
-            total_pnl = equity - starting
-            pnl_pct = (total_pnl / starting * 100) if starting > 0 else 0.0
-
+            all_trades_raw = self.portfolio_manager.list_paper_trades(limit=250)
+            all_trades = all_trades_raw if isinstance(all_trades_raw, list) else []
             open_trades = [
-                t for t in self.portfolio_manager.list_paper_trades(limit=150)
-                if str(t.get("status") or "").lower() == "open"
+                t for t in all_trades
+                if isinstance(t, dict) and str(t.get("status") or "").lower() == "open"
             ]
             closed_trades = [
-                t for t in self.portfolio_manager.list_paper_trades(limit=250)
-                if str(t.get("status") or "").lower() == "closed"
+                t for t in all_trades
+                if isinstance(t, dict) and str(t.get("status") or "").lower() == "closed"
             ]
+
+            from src.performance_metrics import calculate_trading_journal_metrics
+            j_metrics = calculate_trading_journal_metrics(closed_trades, starting_capital=starting)
+            total_tax_paid = float(j_metrics.get("total_tax_paid", 0.0))
+            tax_loss_pool = float(j_metrics.get("tax_loss_pool", 0.0))
+            total_fric = float(j_metrics.get("total_friction", 0.0))
+
+            # Net equity after deducting cumulative German taxes & friction
+            net_equity = round(equity - total_tax_paid, 2)
+            total_pnl_pre_tax = equity - starting
+            total_pnl_net = net_equity - starting
+            pnl_pct_net = (total_pnl_net / starting * 100) if starting > 0 else 0.0
 
             wins = [t for t in closed_trades if float(t.get("realized_pnl") or 0.0) > 0]
             win_rate = (len(wins) / len(closed_trades) * 100) if closed_trades else 0.0
 
-            sign = "+" if total_pnl >= 0 else ""
-            pnl_emoji = "🟢" if total_pnl >= 0 else "🔴"
+            sign_pre = "+" if total_pnl_pre_tax >= 0 else ""
+            sign_net = "+" if total_pnl_net >= 0 else ""
+            pnl_emoji = "🟢" if total_pnl_net >= 0 else "🔴"
 
             pos_lines = []
             if open_trades:
@@ -1560,15 +1607,18 @@ class TelegramInteractiveService:
                 pos_lines.append("  <i>Keine offenen Positionen aktiv.</i>")
 
             return (
-                f"💼 <b>BROKER FREUND – PAPER DEPOT STATUS</b>\n"
+                f"💼 <b>BROKER FREUND – PAPER DEPOT STATUS (INKL. STEUER)</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"• <b>Gesamtwert:</b> <b>{equity:,.2f} EUR</b>\n"
-                f"• <b>Verfügbares Cash:</b> {cash:,.2f} EUR\n"
-                f"• <b>Gesamtertrag (PnL):</b> <b>{sign}{total_pnl:,.2f} EUR ({sign}{pnl_pct:.2f}%)</b> {pnl_emoji}\n"
+                f"• <b>💰 Netto-Depotwert (nach Steuer):</b> <b>{net_equity:,.2f} EUR</b>\n"
+                f"• <b>Brutto-Depotwert (vor Steuer):</b> {equity:,.2f} EUR (Cash: {cash:,.2f} EUR)\n"
+                f"• <b>Ertrag vor Steuer:</b> {sign_pre}{total_pnl_pre_tax:,.2f} EUR (Gebühren/Spread: -{total_fric:,.2f} EUR)\n"
+                f"• <b>🇩🇪 Gezahlte Abgeltungsteuer (26,38%):</b> -{total_tax_paid:,.2f} EUR\n"
+                f"• <b>🏦 Aktien-Verlustverrechnungstopf:</b> {tax_loss_pool:,.2f} EUR (Steuerfrei-Puffer)\n"
+                f"• <b>💰 Echtes Netto-Ergebnis:</b> <b>{sign_net}{total_pnl_net:,.2f} EUR ({sign_net}{pnl_pct_net:.2f}%)</b> {pnl_emoji}\n"
                 f"• <b>Abgeschlossene Trades:</b> {len(closed_trades)} (Win Rate: {win_rate:.0f}%)\n\n"
                 f"📊 <b>Offene Positionen ({len(open_trades)}):</b>\n"
                 + "\n".join(pos_lines) + "\n\n"
-                f"💡 <i>Tipp: Nutze <code>/track</code> für Trailing Stops oder <code>/edge</code> für neue Setups.</i>"
+                f"💡 <i>Tipp: Nutze <code>/journal</code> für die Einzel-Steuerabrechnung oder <code>/track</code> für aktive Stops.</i>"
             )
         except Exception as exc:
             return f"❌ Fehler beim Laden des Depots: {exc}"
@@ -2058,14 +2108,16 @@ class TelegramInteractiveService:
         return "\n".join(lines)
 
     def _cmd_journal(self) -> str:
-        """Displays recent closed trades and performance history from the paper journal."""
+        """Displays recent closed trades and performance history from the paper journal including German taxes."""
         if not self.portfolio_manager or not hasattr(self.portfolio_manager, "list_paper_trades"):
             return "⚠️ Portfolio Manager nicht initialisiert."
 
         try:
+            all_raw = self.portfolio_manager.list_paper_trades(limit=150)
+            all_list = all_raw if isinstance(all_raw, list) else []
             closed = [
-                t for t in self.portfolio_manager.list_paper_trades(limit=150)
-                if str(t.get("status") or "").lower() == "closed"
+                t for t in all_list
+                if isinstance(t, dict) and str(t.get("status") or "").lower() == "closed"
             ]
             if not closed:
                 return (
@@ -2075,48 +2127,67 @@ class TelegramInteractiveService:
                     "Öffne Positionen mit <code>/paper TICKER</code> oder schließe aktive Trades mit <code>/close TICKER</code>."
                 )
 
+            from src.performance_metrics import calculate_trading_journal_metrics, calculate_paper_trade_german_tax_step
+            j_metrics = calculate_trading_journal_metrics(closed, starting_capital=50000.0)
+            total_tax_paid = float(j_metrics.get("total_tax_paid", 0.0))
+            tax_loss_pool = float(j_metrics.get("tax_loss_pool", 0.0))
+            net_after_tax_total = float(j_metrics.get("net_pnl_after_tax", 0.0))
+            net_before_tax_total = float(j_metrics.get("net_pnl_before_tax", 0.0))
+
             lines = [
-                f"📖 <b>TRADING JOURNAL (Letzte {min(len(closed), 6)} Trades)</b>",
+                f"📖 <b>TRADING JOURNAL (Letzte {min(len(closed), 6)} Trades inkl. 🇩🇪 Steuer)</b>",
                 "━━━━━━━━━━━━━━━━━━━━",
             ]
 
-            total_pnl = 0.0
             wins = 0
 
             for t in closed[:6]:
                 sym = str(t.get("ticker") or "").upper()
                 is_eu = any(sym.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
                 c_sym = "€" if is_eu else ("£" if sym.endswith(".L") else "$")
+                spread_pct = 0.08 if is_eu else 0.04
+                slippage_pct = 0.03 if is_eu else 0.02
+                comm = 2.0 if is_eu else 1.0
 
                 entry = float(t.get("entry_price") or 0.0)
                 exit_p = float(t.get("closed_price") or entry)
                 qty = float(t.get("quantity") or 1.0)
-                pnl = (exit_p - entry) * qty
-                pnl_pct = ((exit_p - entry) / entry * 100) if entry > 0 else 0.0
-                pnl_formatted = f"+{c_sym}{pnl:,.2f}" if pnl >= 0 else f"-{c_sym}{abs(pnl):,.2f}"
+                gross = (exit_p - entry) * qty
+                fric = (entry * qty + exit_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0) + comm
+                t_step = calculate_paper_trade_german_tax_step(gross_pnl=gross, friction=fric, current_loss_pool=0.0)
+                net_after_tax = t_step["net_after_tax"]
+                tax_eur = t_step["tax_paid_eur"]
+
+                gross_formatted = f"+{c_sym}{gross:,.2f}" if gross >= 0 else f"-{c_sym}{abs(gross):,.2f}"
+                pnl_pct = (net_after_tax / (entry * qty) * 100) if (entry * qty) > 0 else 0.0
+                pnl_formatted = f"+{c_sym}{net_after_tax:,.2f}" if net_after_tax >= 0 else f"-{c_sym}{abs(net_after_tax):,.2f}"
                 pct_formatted = f"+{pnl_pct:.2f}%" if pnl_pct >= 0 else f"{pnl_pct:.2f}%"
-                emoji = "🟢" if pnl >= 0 else "🔴"
-                if pnl > 0:
+                emoji = "🟢" if net_after_tax >= 0 else "🔴"
+                if net_after_tax > 0:
                     wins += 1
-                total_pnl += pnl
 
                 dt = str(t.get("closed_at") or t.get("opened_at") or "")[:10]
                 reason = t.get("exit_reason") or "Manual Close"
                 reason_clean = "Manuell geschlossen" if "manual" in reason.lower() else ("Target erreicht" if "target" in reason.lower() else reason)
+                tax_tag = f"Steuer: -{c_sym}{tax_eur:.2f}" if tax_eur > 0 else f"Verlusttopf: +{c_sym}{abs(net_after_tax):.2f}"
 
                 lines.append(
-                    f"• <b>{sym}</b> ({dt}): <b>{pnl_formatted} ({pct_formatted})</b> {emoji}\n"
-                    f"  {int(qty)} Stk. @ {c_sym}{entry:.2f} ➔ {c_sym}{exit_p:.2f} | <i>{reason_clean}</i>"
+                    f"• <b>{sym}</b> ({dt}): <b>{pnl_formatted} Netto ({pct_formatted})</b> [Brutto: {gross_formatted}] {emoji}\n"
+                    f"  {int(qty)} Stk. @ {c_sym}{entry:.2f} ➔ {c_sym}{exit_p:.2f} | 🇩🇪 {tax_tag} | <i>{reason_clean}</i>"
                 )
 
             win_rate = (wins / len(closed[:6]) * 100) if closed else 0.0
-            tot_formatted = f"+{total_pnl:,.2f} €" if total_pnl >= 0 else f"-{abs(total_pnl):,.2f} €"
-            tot_emoji = "🟢" if total_pnl >= 0 else "🔴"
+            pre_formatted = f"+{net_before_tax_total:,.2f} €" if net_before_tax_total >= 0 else f"-{abs(net_before_tax_total):,.2f} €"
+            tot_formatted = f"+{net_after_tax_total:,.2f} €" if net_after_tax_total >= 0 else f"-{abs(net_after_tax_total):,.2f} €"
+            tot_emoji = "🟢" if net_after_tax_total >= 0 else "🔴"
 
             lines.append("━━━━━━━━━━━━━━━━━━━━")
             lines.append(
-                f"📊 <b>Journal-Statistik:</b> Win-Rate: <b>{win_rate:.0f}%</b> | Realisiert: <b>{tot_formatted}</b> {tot_emoji}\n\n"
-                f"💡 <i>Tipp: Analysiere neue Chancen mit <code>/edge</code> oder berechne dein Risiko mit <code>/sizing TICKER</code>.</i>"
+                f"📊 <b>Journal-Bilanz (inkl. 26,375% Abgeltungsteuer + Soli):</b>\n"
+                f"• Win-Rate: <b>{win_rate:.0f}%</b> | <b>Vor Steuer:</b> {pre_formatted}\n"
+                f"• <b>🇩🇪 Abgeführte Steuer:</b> -{total_tax_paid:,.2f} € | <b>🏦 Verlusttopf:</b> {tax_loss_pool:,.2f} €\n"
+                f"• <b>💰 Echtes Netto (Bankkonto):</b> <b>{tot_formatted}</b> {tot_emoji}\n\n"
+                f"💡 <i>Tipp: Analysiere neue Chancen mit <code>/edge</code> oder prüfe dein Netto-Depot mit <code>/depot</code>.</i>"
             )
             return "\n".join(lines)
         except Exception as exc:
@@ -2744,16 +2815,42 @@ class TelegramInteractiveService:
         c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
         spread_pct = 0.08 if is_eu else 0.04
         slippage_pct = 0.03 if is_eu else 0.02
-        commission_total = 1.0 if is_eu else 0.0
+        commission_total = 1.0
 
         gross_pnl = (exit_p - entry_p) * closed_qty
         friction = (exit_p * closed_qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0) + commission_total
-        net_pnl = gross_pnl - friction
+
+        from src.performance_metrics import calculate_paper_trade_german_tax_step, get_current_tax_loss_pool
+        pool_before = 0.0
+        try:
+            all_pt = self.portfolio_manager.list_paper_trades(limit=250)
+            if isinstance(all_pt, list):
+                pool_info = get_current_tax_loss_pool(all_pt)
+                pool_before = float(pool_info.get("loss_pool_balance", 0.0))
+        except Exception:
+            pool_before = 0.0
+
+        tax_step = calculate_paper_trade_german_tax_step(
+            gross_pnl=gross_pnl,
+            friction=friction,
+            current_loss_pool=pool_before,
+        )
+        net_before_tax = tax_step["pnl_before_tax"]
+        tax_paid = tax_step["tax_paid_eur"]
+        net_pnl = tax_step["net_after_tax"]
+        loss_used = tax_step["loss_pool_used"]
+        pool_after = tax_step["loss_pool_after"]
+
         net_pct = (net_pnl / (entry_p * closed_qty) * 100.0) if (entry_p * closed_qty) > 0 else 0.0
 
         sign_gross = "+" if gross_pnl >= 0 else ""
+        sign_pre = "+" if net_before_tax >= 0 else ""
         sign_net = "+" if net_pnl >= 0 else ""
         emoji_net = "🟢" if net_pnl >= 0 else "🔴"
+
+        tax_line = f"• <b>🇩🇪 Steuer (26,38% Abgeltung + Soli):</b> -{c_sym}{tax_paid:,.2f}"
+        if loss_used > 0:
+            tax_line += f" (<i>{c_sym}{loss_used:,.2f} steuerfrei über Verlusttopf verrechnet!</i>)"
 
         return (
             f"✂️ <b>TEILVERKAUF ({int(fraction*100)}% SCALE-OUT): {ticker}</b>\n"
@@ -2761,8 +2858,11 @@ class TelegramInteractiveService:
             f"• <b>Teilausstieg:</b> {c_sym}{exit_p:.2f} (Einstieg: {c_sym}{entry_p:.2f})\n"
             f"• <b>Verkaufte Menge:</b> {closed_qty} Stück (Verbleibend: <b>{rem_qty} Stück</b>)\n"
             f"• <b>Realisierter Brutto-Gewinn:</b> {sign_gross}{c_sym}{gross_pnl:,.2f}\n"
-            f"• <b>Reibung (Spread &amp; Slippage):</b> -{c_sym}{friction:,.2f}\n"
-            f"• <b>Netto-Gewinn gesichert:</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}\n\n"
+            f"• <b>Reibung (Spread, Slippage &amp; Ordergebühr):</b> -{c_sym}{friction:,.2f}\n"
+            f"• <b>Gewinn vor Steuer:</b> {sign_pre}{c_sym}{net_before_tax:,.2f}\n"
+            f"{tax_line}\n"
+            f"• <b>🏦 Aktien-Verlustverrechnungstopf:</b> {c_sym}{pool_after:,.2f}\n"
+            f"• <b>💰 Echtes Netto gesichert (nach Steuer):</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}\n\n"
             f"🛡️ <b>Risikofreier Free-Trade:</b>\n"
             f"Der Stop-Loss für die restlichen <b>{rem_qty} Aktien</b> ist ab sofort fest auf Einstand (<b>{c_sym}{entry_p:.2f}</b>) arretiert!\n"
             f"Kein Verlustrisiko mehr auf diesem Trade."

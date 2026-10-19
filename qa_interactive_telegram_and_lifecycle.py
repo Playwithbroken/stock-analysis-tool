@@ -2261,6 +2261,52 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
         self.assertIn("DEUTSCHER NETTO-STEUERRECHNER", res_net)
         self.assertIn("VERLUSTVERRECHNUNGSTOPF-VORTEIL", res_net)
 
+    def test_paper_trade_german_tax_and_loss_pool(self):
+        from src.performance_metrics import calculate_paper_trade_german_tax_step, calculate_trading_journal_metrics
+
+        # Step 1: A losing trade of -200 EUR builds up +200 EUR in the Aktien-Verlustverrechnungstopf
+        step_loss = calculate_paper_trade_german_tax_step(gross_pnl=-195.0, friction=5.0, current_loss_pool=0.0)
+        self.assertEqual(step_loss["pnl_before_tax"], -200.0)
+        self.assertEqual(step_loss["tax_paid_eur"], 0.0)
+        self.assertEqual(step_loss["loss_pool_after"], 200.0)
+        self.assertEqual(step_loss["net_after_tax"], -200.0)
+
+        # Step 2: Next winning trade of +500 EUR uses the 200 EUR Verlusttopf tax-free, paying 26.375% only on 300 EUR
+        step_win = calculate_paper_trade_german_tax_step(gross_pnl=505.0, friction=5.0, current_loss_pool=200.0)
+        self.assertEqual(step_win["pnl_before_tax"], 500.0)
+        self.assertEqual(step_win["loss_pool_used"], 200.0)
+        self.assertEqual(step_win["loss_pool_after"], 0.0)
+        self.assertEqual(step_win["taxable_gain"], 300.0)
+        self.assertAlmostEqual(step_win["tax_paid_eur"], 79.13, places=1)
+        self.assertAlmostEqual(step_win["net_after_tax"], 420.87, places=1)
+
+        # Step 3: Verify sequential journal metrics across multiple closed paper trades
+        trades = [
+            {
+                "id": 1,
+                "ticker": "SAP.DE",
+                "status": "closed",
+                "entry_price": 200.0,
+                "closed_price": 190.0,
+                "quantity": 10,
+                "closed_at": "2026-10-01T10:00:00Z",
+            },
+            {
+                "id": 2,
+                "ticker": "NVDA",
+                "status": "closed",
+                "entry_price": 100.0,
+                "closed_price": 130.0,
+                "quantity": 10,
+                "closed_at": "2026-10-02T10:00:00Z",
+            },
+        ]
+        m = calculate_trading_journal_metrics(trades, starting_capital=50000.0)
+        self.assertGreater(m["total_loss_pool_used"], 100.0)
+        self.assertEqual(m["tax_loss_pool"], 0.0)
+        self.assertGreater(m["total_tax_paid"], 0.0)
+        self.assertLess(m["net_pnl_after_tax"], m["net_pnl_before_tax"])
+
 
 if __name__ == "__main__":
     unittest.main()

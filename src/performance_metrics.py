@@ -87,6 +87,12 @@ def calculate_trading_journal_metrics(
             "gross_loss": 0.0,
             "total_friction": 0.0,
             "net_pnl": 0.0,
+            "net_pnl_before_tax": 0.0,
+            "total_tax_paid": 0.0,
+            "tax_loss_pool": 0.0,
+            "total_loss_pool_used": 0.0,
+            "net_pnl_after_tax": 0.0,
+            "tax_rate_pct": 26.375,
             "avg_win": 0.0,
             "avg_loss": 0.0,
             "profit_factor": 0.0,
@@ -97,22 +103,47 @@ def calculate_trading_journal_metrics(
             "max_drawdown_pct": 0.0,
             "starting_capital": starting_capital,
             "current_equity": starting_capital,
-            "equity_curve": [{"trade_num": 0, "date": "Start", "equity": starting_capital, "pnl": 0.0, "drawdown_pct": 0.0}],
+            "current_equity_after_tax": starting_capital,
+            "equity_curve": [{
+                "trade_num": 0,
+                "date": "Start",
+                "equity": starting_capital,
+                "equity_after_tax": starting_capital,
+                "pnl": 0.0,
+                "trade_tax_paid": 0.0,
+                "trade_net_after_tax": 0.0,
+                "loss_pool_balance": 0.0,
+                "drawdown_pct": 0.0,
+            }],
         }
 
     wins_list = []
     losses_list = []
     be_count = 0
     total_fric = 0.0
-    processed_trades = []
+    total_tax_paid = 0.0
+    loss_pool = 0.0
+    total_loss_pool_used = 0.0
 
     cum_net_pnl = 0.0
+    cum_net_after_tax = 0.0
     equity = starting_capital
+    equity_after_tax = starting_capital
     peak_equity = starting_capital
     max_dd_amount = 0.0
     max_dd_pct = 0.0
 
-    curve = [{"trade_num": 0, "date": "Start", "equity": starting_capital, "pnl": 0.0, "drawdown_pct": 0.0}]
+    curve = [{
+        "trade_num": 0,
+        "date": "Start",
+        "equity": starting_capital,
+        "equity_after_tax": starting_capital,
+        "pnl": 0.0,
+        "trade_tax_paid": 0.0,
+        "trade_net_after_tax": 0.0,
+        "loss_pool_balance": 0.0,
+        "drawdown_pct": 0.0,
+    }]
 
     for idx, t in enumerate(closed, 1):
         ticker = str(t.get("ticker") or "").upper().strip()
@@ -128,7 +159,17 @@ def calculate_trading_journal_metrics(
 
         gross = (exit_p - entry) * qty
         fric = (entry * qty + exit_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0) + comm
-        net = round(gross - fric, 2)
+        tax_step = calculate_paper_trade_german_tax_step(
+            gross_pnl=gross,
+            friction=fric,
+            current_loss_pool=loss_pool,
+        )
+        net = tax_step["pnl_before_tax"]
+        trade_tax = tax_step["tax_paid_eur"]
+        net_after_tax = tax_step["net_after_tax"]
+        loss_pool = tax_step["loss_pool_after"]
+        total_loss_pool_used += tax_step["loss_pool_used"]
+        total_tax_paid += trade_tax
         total_fric += fric
 
         if net > 0.01:
@@ -139,7 +180,9 @@ def calculate_trading_journal_metrics(
             be_count += 1
 
         cum_net_pnl += net
+        cum_net_after_tax += net_after_tax
         equity = round(starting_capital + cum_net_pnl, 2)
+        equity_after_tax = round(starting_capital + cum_net_after_tax, 2)
         if equity > peak_equity:
             peak_equity = equity
 
@@ -155,8 +198,13 @@ def calculate_trading_journal_metrics(
             "date": date_str,
             "ticker": ticker,
             "trade_net_pnl": net,
+            "trade_tax_paid": trade_tax,
+            "trade_net_after_tax": net_after_tax,
+            "loss_pool_balance": loss_pool,
             "cumulative_pnl": round(cum_net_pnl, 2),
+            "cumulative_pnl_after_tax": round(cum_net_after_tax, 2),
             "equity": equity,
+            "equity_after_tax": equity_after_tax,
             "drawdown_pct": round(dd_pct, 2),
         })
 
@@ -187,6 +235,12 @@ def calculate_trading_journal_metrics(
         "gross_loss": round(gross_loss_sum, 2),
         "total_friction": round(total_fric, 2),
         "net_pnl": round(cum_net_pnl, 2),
+        "net_pnl_before_tax": round(cum_net_pnl, 2),
+        "total_tax_paid": round(total_tax_paid, 2),
+        "tax_loss_pool": round(loss_pool, 2),
+        "total_loss_pool_used": round(total_loss_pool_used, 2),
+        "net_pnl_after_tax": round(cum_net_after_tax, 2),
+        "tax_rate_pct": 26.375,
         "avg_win": round(avg_win, 2),
         "avg_loss": round(avg_loss, 2),
         "profit_factor": profit_factor,
@@ -197,6 +251,90 @@ def calculate_trading_journal_metrics(
         "max_drawdown_pct": round(max_dd_pct, 2),
         "starting_capital": starting_capital,
         "current_equity": equity,
+        "current_equity_after_tax": equity_after_tax,
         "equity_curve": curve,
     }
+
+
+def calculate_paper_trade_german_tax_step(
+    gross_pnl: float,
+    friction: float,
+    current_loss_pool: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Calculates German capital gains tax (25% Abgeltungsteuer + 5.5% Soli = 26.375%)
+    and sequential Aktien-Verlustverrechnungstopf (Stock Loss Offset Pool) for a Paper Trade.
+    """
+    gross_val = float(gross_pnl or 0.0)
+    fric_val = max(0.0, float(friction or 0.0))
+    pnl_before_tax = round(gross_val - fric_val, 2)
+    pool_before = round(max(0.0, float(current_loss_pool or 0.0)), 2)
+
+    if pnl_before_tax < 0:
+        loss_pool_used = 0.0
+        loss_pool_added = round(abs(pnl_before_tax), 2)
+        pool_after = round(pool_before + loss_pool_added, 2)
+        taxable_gain = 0.0
+        abgeltungsteuer_eur = 0.0
+        soli_eur = 0.0
+        tax_paid_eur = 0.0
+        net_after_tax = pnl_before_tax
+    else:
+        loss_pool_used = round(min(pnl_before_tax, pool_before), 2)
+        loss_pool_added = 0.0
+        pool_after = round(max(0.0, pool_before - loss_pool_used), 2)
+        taxable_gain = round(max(0.0, pnl_before_tax - loss_pool_used), 2)
+        abgeltungsteuer_eur = round(taxable_gain * 0.25, 2)
+        soli_eur = round(taxable_gain * 0.01375, 2)
+        tax_paid_eur = round(abgeltungsteuer_eur + soli_eur, 2)
+        net_after_tax = round(pnl_before_tax - tax_paid_eur, 2)
+
+    return {
+        "gross_pnl": round(gross_val, 2),
+        "friction": round(fric_val, 2),
+        "pnl_before_tax": pnl_before_tax,
+        "loss_pool_before": pool_before,
+        "loss_pool_used": loss_pool_used,
+        "loss_pool_added": loss_pool_added,
+        "loss_pool_after": pool_after,
+        "taxable_gain": taxable_gain,
+        "abgeltungsteuer_eur": abgeltungsteuer_eur,
+        "soli_eur": soli_eur,
+        "tax_paid_eur": tax_paid_eur,
+        "net_after_tax": net_after_tax,
+        "tax_rate_pct": 26.375,
+    }
+
+
+def get_current_tax_loss_pool(
+    trades: List[Dict[str, Any]],
+    exclude_trade_id: int | None = None,
+) -> Dict[str, Any]:
+    """
+    Computes the current German Aktien-Verlustverrechnungstopf balance across all closed paper trades.
+    Optionally excludes `exclude_trade_id` to retrieve the pool state immediately prior to closing that trade.
+    """
+    if not isinstance(trades, list):
+        return {
+            "loss_pool_balance": 0.0,
+            "total_tax_paid": 0.0,
+            "total_loss_pool_used": 0.0,
+            "net_pnl_before_tax": 0.0,
+            "net_pnl_after_tax": 0.0,
+        }
+
+    filtered = [
+        t for t in trades
+        if isinstance(t, dict)
+        and (exclude_trade_id is None or t.get("id") != exclude_trade_id)
+    ]
+    metrics = calculate_trading_journal_metrics(filtered, starting_capital=10000.0)
+    return {
+        "loss_pool_balance": float(metrics.get("tax_loss_pool", 0.0)),
+        "total_tax_paid": float(metrics.get("total_tax_paid", 0.0)),
+        "total_loss_pool_used": float(metrics.get("total_loss_pool_used", 0.0)),
+        "net_pnl_before_tax": float(metrics.get("net_pnl_before_tax", 0.0)),
+        "net_pnl_after_tax": float(metrics.get("net_pnl_after_tax", 0.0)),
+    }
+
 

@@ -2306,6 +2306,66 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
         self.assertEqual(m["tax_loss_pool"], 0.0)
         self.assertGreater(m["total_tax_paid"], 0.0)
         self.assertLess(m["net_pnl_after_tax"], m["net_pnl_before_tax"])
+        self.assertGreater(m["freibetrag_used_eur"], 0.0)
+        self.assertLess(m["freibetrag_remaining_eur"], 1000.0)
+        self.assertGreater(m["tax_saved_via_freibetrag_eur"], 0.0)
+
+    def test_freibetrag_autofx_and_tilt_breaker(self):
+        from src.performance_metrics import convert_paper_trade_fx, evaluate_daily_tilt_breaker
+        from src.telegram_interactive_service import TelegramInteractiveService
+
+        # 1. Verify EUR/USD Auto-FX conversion for US vs EU tickers
+        fx_us = convert_paper_trade_fx("NVDA", 108.50, notional_local=1085.0)
+        self.assertTrue(fx_us["is_foreign_currency"])
+        self.assertEqual(fx_us["currency"], "USD")
+        self.assertGreater(fx_us["fx_fee_eur"], 0.0)
+        self.assertLess(fx_us["amount_eur"], 100.0)
+
+        fx_eu = convert_paper_trade_fx("SAP.DE", 200.0, notional_local=2000.0)
+        self.assertFalse(fx_eu["is_foreign_currency"])
+        self.assertEqual(fx_eu["amount_eur"], 200.0)
+
+        # 2. Verify Prop-Desk Tilt-Breaker (RED after 2 losses on same day)
+        tilt_trades = [
+            {
+                "id": 10,
+                "ticker": "NVDA",
+                "status": "closed",
+                "entry_price": 120.0,
+                "closed_price": 115.0,
+                "quantity": 10,
+                "closed_at": "2026-10-19T10:00:00Z",
+            },
+            {
+                "id": 11,
+                "ticker": "AMD",
+                "status": "closed",
+                "entry_price": 150.0,
+                "closed_price": 144.0,
+                "quantity": 10,
+                "closed_at": "2026-10-19T11:00:00Z",
+            },
+        ]
+        tilt = evaluate_daily_tilt_breaker(tilt_trades, starting_capital=50000.0)
+        self.assertEqual(tilt["tilt_status"], "RED")
+        self.assertTrue(tilt["is_locked"])
+        self.assertEqual(tilt["recommended_risk_pct"], 0.0)
+
+        # 3. Verify /steuer and /disziplin Telegram commands
+        mock_pm = MagicMock()
+        mock_pm.list_paper_trades.return_value = tilt_trades
+        bot = TelegramInteractiveService(
+            bot_token="fake_token",
+            allowed_chat_ids="999888",
+            portfolio_manager=mock_pm,
+        )
+        res_st = bot.handle_command("999888", "/steuer")
+        self.assertIn("DEUTSCHES STEUER-COCKPIT", res_st)
+        self.assertIn("1.000 € SPARER-PAUSCHBETRAG", res_st)
+
+        res_dis = bot.handle_command("999888", "/disziplin")
+        self.assertIn("PROP-DESK DISZIPLIN", res_dis)
+        self.assertIn("TILT-SCHUTZ AKTIV", res_dis)
 
 
 if __name__ == "__main__":

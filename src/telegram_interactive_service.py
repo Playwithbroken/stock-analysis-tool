@@ -703,6 +703,10 @@ class TelegramInteractiveService:
                 return self._cmd_wkn(args)
             elif cmd in ("/netto", "/abgeltung", "/tax", "/net"):
                 return self._cmd_netto(args)
+            elif cmd in ("/steuer", "/freibetrag", "/verlusttopf", "/steuertopf"):
+                return self._cmd_steuer()
+            elif cmd in ("/disziplin", "/rache", "/tiltbreaker", "/cooldown"):
+                return self._cmd_disziplin()
             elif cmd == "/edge":
                 return self._cmd_edge(args, chat_id=chat_id)
             elif cmd == "/gex":
@@ -795,7 +799,7 @@ class TelegramInteractiveService:
                 return self._cmd_coach()
             elif cmd in ("/earnings", "/expectedmove", "/ivcrush", "/zahlen"):
                 return self._cmd_earnings(args)
-            elif cmd in ("/export", "/csv", "/download_trades", "/steuer"):
+            elif cmd in ("/export", "/csv", "/download_trades"):
                 return self._cmd_export(chat_id)
             elif cmd in ("/ram", "/system", "/memory", "/speicher"):
                 return self._cmd_ram(args)
@@ -818,6 +822,8 @@ class TelegramInteractiveService:
             "• <code>/edge TICKER</code> – Ad-hoc Setup mit One-Tap Buttons (z.B. <code>/edge NVDA</code>)\n"
             "• <code>/playbook</code> – 🧠 Alle 8 verinnerlichten Profi-Strategien &amp; Bayes-KI-Lerngedächtnis\n"
             "• <code>/strategie</code> – 🎓 30-Sekunden Strategie-Guide (Stop, -0.25R Puffer &amp; Teilgewinn erklärt)\n"
+            "• <code>/steuer</code> – 🇩🇪 Steuer-Cockpit (1.000 € Freibetrag, Aktien-Verlusttopf &amp; 26,38% Abgeltungsteuer)\n"
+            "• <code>/disziplin</code> – 🛡️ Prop-Desk Tilt-Schutz &amp; Rache-Trading-Ampel\n"
             "• <code>/timing [TICKER]</code> – ⏳ Anti-FOMO &amp; Handelszeit-Ampel (Spread- &amp; Chasing-Check)\n"
             "• <code>/wkn TICKER</code> – 🇩🇪 WKN &amp; ISIN Direkt-Kopierer für Trade Republic / Scalable / ING\n"
             "• <code>/netto TICKER</code> – 💶 Deutscher Netto-Rechner (nach 26,375 % Abgeltungsteuer &amp; Verlusttopf)\n"
@@ -1196,18 +1202,41 @@ class TelegramInteractiveService:
             except Exception as le:
                 logger.warning("Lifecycle registration warning: %s", le)
 
-        # 5. Return formatted confirmation
+        # 5. Return formatted confirmation with EUR/USD Auto-FX & Prop-Desk Tilt-Breaker check
         pos_cap = float(setup.get("total_position_capital") or (qty * entry_price))
+        from src.performance_metrics import convert_paper_trade_fx, evaluate_daily_tilt_breaker
+
+        fx_info = convert_paper_trade_fx(ticker, entry_price, notional_local=pos_cap)
+        fx_line = ""
+        if fx_info["is_foreign_currency"]:
+            fx_line = (
+                f"• <b>💱 Broker Auto-FX ({fx_info['currency']} ➔ EUR @ {fx_info['fx_rate']:.3f}):</b> "
+                f"~<b>{fx_info['amount_eur']:.2f} €</b>/Aktie (inkl. 0,15 % FX-Spread: -{fx_info['fx_fee_eur']:.2f} €)\n"
+            )
+
+        tilt_banner = ""
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                all_pt = self.portfolio_manager.list_paper_trades(limit=150)
+                if isinstance(all_pt, list):
+                    tilt = evaluate_daily_tilt_breaker(all_pt)
+                    if tilt["tilt_status"] in ("RED", "YELLOW"):
+                        tilt_banner = f"\n{tilt['tilt_badge']}\n<i>{tilt['coach_rule']}</i>\n"
+            except Exception:
+                pass
+
         return (
             f"📝 <b>PAPER TRADE GEBUCHT: {ticker}</b> ({grade_badge})\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"• <b>Menge:</b> {int(qty)} Stück (~{pos_cap:,.0f}€)\n"
             f"• <b>Einstieg:</b> ${entry_price:.2f}\n"
+            f"{fx_line}"
             f"• <b>Hard Stop:</b> ${stop_price:.2f}\n"
             f"• <b>Ziel 1 (2.0R):</b> ${target_price:.2f}\n"
             f"• <b>Ziel 2 (3.5R+):</b> ${target_2:.2f}\n"
             f"• <b>R:R Verhältnis:</b> {rr:.1f}:1\n"
-            f"• <b>Konfluenz:</b> {confluence_score:.0f}/100 Pkt.\n\n"
+            f"• <b>Konfluenz:</b> {confluence_score:.0f}/100 Pkt.\n"
+            f"{tilt_banner}\n"
             f"🛡️ <i>Trade ist im Demokonto eingebucht und wird vom Lifecycle Engine (Trailing Stop & Breakeven) aktiv überwacht.</i>"
         )
 
@@ -1312,20 +1341,28 @@ class TelegramInteractiveService:
             friction_exit = (exit_p * qty) * ((spread_pct / 2.0 + slippage_pct) / 100.0)
             total_friction = friction_entry + friction_exit + commission_total
 
-            from src.performance_metrics import calculate_paper_trade_german_tax_step, get_current_tax_loss_pool
+            from src.performance_metrics import (
+                calculate_paper_trade_german_tax_step,
+                get_current_tax_loss_pool,
+                convert_paper_trade_fx,
+            )
             pool_before = 0.0
+            fb_before = 1000.0
             try:
                 all_pt = self.portfolio_manager.list_paper_trades(limit=250)
                 if isinstance(all_pt, list):
                     pool_info = get_current_tax_loss_pool(all_pt, exclude_trade_id=trade_id)
                     pool_before = float(pool_info.get("loss_pool_balance", 0.0))
+                    fb_before = float(pool_info.get("freibetrag_remaining_eur", 1000.0))
             except Exception:
                 pool_before = 0.0
+                fb_before = 1000.0
 
             tax_step = calculate_paper_trade_german_tax_step(
                 gross_pnl=gross_pnl,
                 friction=total_friction,
                 current_loss_pool=pool_before,
+                current_freibetrag=fb_before,
             )
             net_before_tax = tax_step["pnl_before_tax"]
             tax_paid = tax_step["tax_paid_eur"]
@@ -1333,6 +1370,9 @@ class TelegramInteractiveService:
             loss_used = tax_step["loss_pool_used"]
             loss_added = tax_step["loss_pool_added"]
             pool_after = tax_step["loss_pool_after"]
+            fb_used = tax_step["freibetrag_used"]
+            fb_after = tax_step["freibetrag_after"]
+            net_with_fb = tax_step["net_after_freibetrag"]
 
             net_pct = (net_pnl / (entry_p * qty) * 100.0) if (entry_p * qty) > 0 else 0.0
 
@@ -1347,7 +1387,21 @@ class TelegramInteractiveService:
             elif loss_added > 0:
                 tax_line += f" (<i>+{c_sym}{loss_added:,.2f} in Aktien-Verlusttopf gebucht</i>)"
 
-            pool_line = f"• <b>🏦 Aktien-Verlustverrechnungstopf:</b> {c_sym}{pool_after:,.2f} (Steuerfrei-Guthaben)"
+            pool_line = (
+                f"• <b>🏦 Aktien-Verlustverrechnungstopf:</b> {c_sym}{pool_after:,.2f} | "
+                f"<b>1.000€ Freibetrag Rest:</b> {fb_after:,.2f} €"
+            )
+            if fb_used > 0:
+                pool_line += f" (<i>+{c_sym}{net_with_fb:,.2f} steuerfrei mit Freistellungsauftrag!</i>)"
+
+            fx_close = convert_paper_trade_fx(ticker, net_pnl, notional_local=(exit_p * qty))
+            fx_close_line = ""
+            if fx_close["is_foreign_currency"]:
+                sign_eur = "+" if fx_close["amount_eur"] >= 0 else ""
+                fx_close_line = (
+                    f"\n• <b>💱 Euro-Gutschrift ({fx_close['currency']}/EUR @ {fx_close['fx_rate']:.3f} inkl. 0,15% FX):</b> "
+                    f"<b>{sign_eur}{fx_close['amount_eur']:,.2f} €</b>"
+                )
 
             closed_reports.append(
                 f"• <b>Ausstieg:</b> {c_sym}{exit_p:.2f} (Einstieg: {c_sym}{entry_p:.2f})\n"
@@ -1357,6 +1411,7 @@ class TelegramInteractiveService:
                 f"{tax_line}\n"
                 f"{pool_line}\n"
                 f"• <b>💰 Netto-Ergebnis (nach Gebühren &amp; Steuer):</b> <b>{sign_net}{c_sym}{net_pnl:,.2f} ({sign_net}{net_pct:.2f}%)</b> {emoji_net}"
+                f"{fx_close_line}"
             )
 
         detail_text = "\n\n".join(closed_reports) if closed_reports else f"• Lifecycle-Tracking für <b>{ticker}</b> beendet."
@@ -1364,7 +1419,7 @@ class TelegramInteractiveService:
             f"🚪 <b>POSITION GESCHLOSSEN: {ticker}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{detail_text}\n\n"
-            f"✅ <i>Position im Paper Depot inkl. 26,375 % Abgeltungsteuer &amp; Verlustverrechnungstopf abgerechnet.</i>"
+            f"✅ <i>Position im Paper Depot inkl. 26,375 % Abgeltungsteuer, Verlusttopf &amp; 1.000 € Freibetrag abgerechnet.</i>"
         )
 
     def _cmd_be(self, args: List[str]) -> str:
@@ -1575,11 +1630,14 @@ class TelegramInteractiveService:
                 if isinstance(t, dict) and str(t.get("status") or "").lower() == "closed"
             ]
 
-            from src.performance_metrics import calculate_trading_journal_metrics
+            from src.performance_metrics import calculate_trading_journal_metrics, evaluate_daily_tilt_breaker
             j_metrics = calculate_trading_journal_metrics(closed_trades, starting_capital=starting)
             total_tax_paid = float(j_metrics.get("total_tax_paid", 0.0))
             tax_loss_pool = float(j_metrics.get("tax_loss_pool", 0.0))
+            fb_rem = float(j_metrics.get("freibetrag_remaining_eur", 1000.0))
+            fb_saved = float(j_metrics.get("tax_saved_via_freibetrag_eur", 0.0))
             total_fric = float(j_metrics.get("total_friction", 0.0))
+            tilt = evaluate_daily_tilt_breaker(closed_trades, starting_capital=starting)
 
             # Net equity after deducting cumulative German taxes & friction
             net_equity = round(equity - total_tax_paid, 2)
@@ -1614,11 +1672,13 @@ class TelegramInteractiveService:
                 f"• <b>Ertrag vor Steuer:</b> {sign_pre}{total_pnl_pre_tax:,.2f} EUR (Gebühren/Spread: -{total_fric:,.2f} EUR)\n"
                 f"• <b>🇩🇪 Gezahlte Abgeltungsteuer (26,38%):</b> -{total_tax_paid:,.2f} EUR\n"
                 f"• <b>🏦 Aktien-Verlustverrechnungstopf:</b> {tax_loss_pool:,.2f} EUR (Steuerfrei-Puffer)\n"
+                f"• <b>🎁 1.000€ Freistellungsauftrag Rest:</b> {fb_rem:,.2f} EUR (Steuerersparnis: +{fb_saved:,.2f} EUR)\n"
                 f"• <b>💰 Echtes Netto-Ergebnis:</b> <b>{sign_net}{total_pnl_net:,.2f} EUR ({sign_net}{pnl_pct_net:.2f}%)</b> {pnl_emoji}\n"
+                f"• <b>🛡️ Disziplin-Status:</b> {tilt['tilt_badge']}\n"
                 f"• <b>Abgeschlossene Trades:</b> {len(closed_trades)} (Win Rate: {win_rate:.0f}%)\n\n"
                 f"📊 <b>Offene Positionen ({len(open_trades)}):</b>\n"
                 + "\n".join(pos_lines) + "\n\n"
-                f"💡 <i>Tipp: Nutze <code>/journal</code> für die Einzel-Steuerabrechnung oder <code>/track</code> für aktive Stops.</i>"
+                f"💡 <i>Tipp: Tippe <code>/steuer</code> für das Steuer-Cockpit oder <code>/disziplin</code> für den Rache-Trading-Schutz.</i>"
             )
         except Exception as exc:
             return f"❌ Fehler beim Laden des Depots: {exc}"
@@ -3875,6 +3935,87 @@ class TelegramInteractiveService:
             f"{winners_lines}\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "📤 <i>Diese Karte kannst du bedenkenlos an Freunde weiterleiten – dein Euro-Depotwert bleibt 100% privat!</i>"
+        )
+
+    def _cmd_steuer(self) -> str:
+        """Displays the German Broker Tax Cockpit (§ 20 EStG: Aktien-Verlustverrechnungstopf, 1.000€ Sparer-Pauschbetrag, 26.375% Abgeltungsteuer)."""
+        all_trades: List[Dict[str, Any]] = []
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                raw = self.portfolio_manager.list_paper_trades(limit=250)
+                if isinstance(raw, list):
+                    all_trades = [t for t in raw if isinstance(t, dict)]
+            except Exception:
+                all_trades = []
+
+        closed = [t for t in all_trades if str(t.get("status") or "").lower() == "closed"]
+        from src.performance_metrics import calculate_trading_journal_metrics
+        m = calculate_trading_journal_metrics(closed, starting_capital=50000.0)
+
+        pre_tax = float(m.get("net_pnl_before_tax", 0.0))
+        loss_pool = float(m.get("tax_loss_pool", 0.0))
+        loss_used = float(m.get("total_loss_pool_used", 0.0))
+        fb_limit = float(m.get("freibetrag_limit_eur", 1000.0))
+        fb_used = float(m.get("freibetrag_used_eur", 0.0))
+        fb_rem = float(m.get("freibetrag_remaining_eur", 1000.0))
+        fb_saved = float(m.get("tax_saved_via_freibetrag_eur", 0.0))
+        tax_std = float(m.get("total_tax_paid", 0.0))
+        tax_eff = float(m.get("effective_tax_after_freibetrag", 0.0))
+        net_with_fb = float(m.get("net_pnl_with_freibetrag", 0.0))
+        total_tax_shield_eur = round((loss_used * 0.26375) + fb_saved, 2)
+
+        sign_pre = "+" if pre_tax >= 0 else ""
+        sign_net = "+" if net_with_fb >= 0 else ""
+
+        return (
+            "🇩🇪 <b>DEUTSCHES STEUER-COCKPIT (§ 20 EStG)</b>\n"
+            "<i>Exakte Broker-Steuersimulation wie bei Trade Republic / Scalable / ING</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "🏛️ <b>1. STUFE: AKTIEN-VERLUSTVERRECHNUNGSTOPF</b>\n"
+            f"   • <b>Aktuelles Verlusttopf-Guthaben:</b> <b>{loss_pool:,.2f} €</b> <i>(nächste Gewinne bis dahin 100% steuerfrei!)</i>\n"
+            f"   • <b>Bereits verrechnete Verluste:</b> {loss_used:,.2f} €\n\n"
+            "🎁 <b>2. STUFE: 1.000 € SPARER-PAUSCHBETRAG (FREISTELLUNGSAUFTRAG)</b>\n"
+            f"   • <b>Freistellungsauftrag genutzt:</b> {fb_used:,.2f} € / {fb_limit:,.2f} €\n"
+            f"   • <b>Verbleibender Freibetrag:</b> <b>{fb_rem:,.2f} €</b>\n"
+            f"   • <b>Direkte Steuerersparnis durch Freibetrag:</b> <b>+{fb_saved:,.2f} €</b>\n\n"
+            "💶 <b>3. STUFE: ABGELTUNGSTEUER (25%) + SOLI (5,5% = 26,375%)</b>\n"
+            f"   • <b>Ergebnis vor Steuern (nach Gebühren):</b> {sign_pre}{pre_tax:,.2f} €\n"
+            f"   • <b>Reguläre Steuer (ohne Freibetrag):</b> -{tax_std:,.2f} €\n"
+            f"   • <b>Effektive Steuer (mit 1.000€ Freibetrag):</b> <b>-{tax_eff:,.2f} €</b>\n"
+            f"   • 🛡️ <b>Gesamte Steuer-Ersparnis (Topf + Freibetrag):</b> <b>+{total_tax_shield_eur:,.2f} €</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 <b>ECHTES BANKKONTO-NETTO: {sign_net}{net_with_fb:,.2f} €</b>\n"
+            "💡 <i>Tipp: Nutze <code>/export</code> für den CSV-Steuerexport oder <code>/netto TICKER</code> vor jedem Trade.</i>"
+        )
+
+    def _cmd_disziplin(self) -> str:
+        """Displays the Prop-Desk Daily Loss Limit & Anti-Revenge-Trading Breaker."""
+        all_trades: List[Dict[str, Any]] = []
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                raw = self.portfolio_manager.list_paper_trades(limit=250)
+                if isinstance(raw, list):
+                    all_trades = [t for t in raw if isinstance(t, dict)]
+            except Exception:
+                all_trades = []
+
+        from src.performance_metrics import evaluate_daily_tilt_breaker
+        tilt = evaluate_daily_tilt_breaker(all_trades, starting_capital=50000.0)
+        sign_pnl = "+" if tilt["latest_day_pnl_eur"] >= 0 else ""
+        sign_r = "+" if tilt["latest_day_r"] >= 0 else ""
+
+        return (
+            "🛡️ <b>PROP-DESK DISZIPLIN &amp; RACHE-TRADING-SCHUTZ</b>\n"
+            "<i>Institutionelles Daily-Loss-Limit gegen emotionale Overtrading-Fehler</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🚦 <b>Aktueller Status:</b> <b>{tilt['tilt_badge']}</b>\n\n"
+            f"• 📅 <b>Letzter Handelstag ({tilt['latest_day_date']}):</b> {tilt['latest_day_trades']} Trades ({tilt['latest_day_losses']} Verluste)\n"
+            f"• 📉 <b>Tages-Ergebnis:</b> <b>{sign_pnl}{tilt['latest_day_pnl_eur']:,.2f} € ({sign_r}{tilt['latest_day_r']:.2f}R)</b>\n"
+            f"• 🔄 <b>Aktuelle Verlust-Serie in Folge:</b> {tilt['consecutive_losses']} Trades\n"
+            f"• ⚖️ <b>Freigegebenes Risiko nächster Trade:</b> <b>{tilt['recommended_risk_pct']:.1f}% vom Depot ({tilt['recommended_risk_pct']:.1f}R)</b>\n\n"
+            "🧠 <b>VERBINDLICHE PROP-DESK ANWEISUNG:</b>\n"
+            f"{tilt['coach_rule']}\n\n"
+            "💡 <i>Warum das wichtig ist: 80% aller Kontoverluste entstehen nicht durch schlechte Strategie, sondern durch den Versuch, nach 2 Stop-Outs den Verlust sofort mit doppeltem Risiko zurückzuholen (Revenge Trading).</i>"
         )
 
     async def run_listener_loop(self) -> None:

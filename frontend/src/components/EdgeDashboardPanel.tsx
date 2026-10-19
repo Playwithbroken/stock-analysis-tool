@@ -957,6 +957,46 @@ export default function EdgeDashboardPanel({
         </div>
       ) : null}
 
+      {/* GERMAN BROKER TAX COCKPIT (§ 20 EStG) & PROP-DESK TILT BREAKER BANNER */}
+      {showNetAfterTax ? (
+        <div className="mt-4 rounded-[1.25rem] border border-emerald-500/30 bg-emerald-50/60 p-4 shadow-xs dark:border-emerald-500/30 dark:bg-emerald-950/25">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-800 dark:text-emerald-300">
+              🇩🇪 Deutsches Broker-Steuer-Cockpit (§ 20 EStG) &amp; 💱 Auto-FX Simulation aktiv
+            </div>
+            <span className="rounded-md bg-emerald-600/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-200">
+              Telegram: /steuer &middot; /disziplin &middot; /netto
+            </span>
+          </div>
+          <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 text-[11px]">
+            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
+              <div className="font-bold text-slate-900 dark:text-white">1️⃣ Aktien-Verlusttopf</div>
+              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+                Verluste (auch kleine <strong>-0,25R Puffer-Exits</strong>) wandern 1:1 in den Verlusttopf und machen den nächsten Gewinn steuerfrei.
+              </div>
+            </div>
+            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
+              <div className="font-bold text-slate-900 dark:text-white">2️⃣ 1.000 € Sparer-Pauschbetrag</div>
+              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+                Dein jährlicher <strong>Freistellungsauftrag (1.000 €)</strong> wird im Paper-Depot vor der Abgeltungsteuer automatisch ausgeschöpft.
+              </div>
+            </div>
+            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
+              <div className="font-bold text-slate-900 dark:text-white">3️⃣ 26,375 % Steuer &amp; 0,15 % FX</div>
+              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+                Erst danach greifen 25 % Abgeltungsteuer + 5,5 % Soli sowie 0,15 % Währungs-Spread bei US-Aktien ($ ➔ €).
+              </div>
+            </div>
+            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
+              <div className="font-bold text-slate-900 dark:text-white">🛡️ Rache-Trading Tilt-Schutz</div>
+              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+                Prop-Desk Regel: Nach <strong>2 Tagesverlusten</strong> oder <strong>-2.0R</strong> warnt der Tilt-Breaker automatisch vor emotionalen Trades.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {briefDecisionBlocked ? (
         <div className="mt-5 flex items-start gap-3 rounded-[1.15rem] border border-red-500/20 bg-red-500/8 p-4 text-red-900">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />

@@ -571,4 +571,261 @@ def evaluate_daily_tilt_breaker(
     }
 
 
+def analyze_tax_loss_harvesting(
+    trades: List[Dict[str, Any]],
+    spot_lookup: Dict[str, float] | None = None,
+) -> Dict[str, Any]:
+    """
+    Analyzes closed and open paper trades for German Tax-Loss Harvesting (Steuer-Ernte)
+    and 1.000 EUR Sparer-Pauschbetrag year-end optimization (§ 20 EStG).
+    """
+    if not isinstance(trades, list):
+        trades = []
+    spots = spot_lookup if isinstance(spot_lookup, dict) else {}
+
+    closed = [
+        t for t in trades
+        if isinstance(t, dict) and str(t.get("status") or "").lower() == "closed"
+    ]
+    open_trades = [
+        t for t in trades
+        if isinstance(t, dict) and str(t.get("status") or "").lower() == "open"
+    ]
+
+    m = calculate_trading_journal_metrics(closed, starting_capital=50000.0)
+    tax_paid = float(m.get("total_tax_paid", 0.0))
+    eff_tax_paid = float(m.get("effective_tax_after_freibetrag", 0.0))
+    loss_pool = float(m.get("tax_loss_pool", 0.0))
+    fb_rem = float(m.get("freibetrag_remaining_eur", 1000.0))
+
+    loss_candidates: List[Dict[str, Any]] = []
+    gain_candidates: List[Dict[str, Any]] = []
+
+    for ot in open_trades:
+        sym = str(ot.get("ticker") or "ASSET").upper().strip()
+        ep = float(ot.get("entry_price") or 0.0)
+        qty = float(ot.get("quantity") or 1.0)
+        sp = float(spots.get(sym) or ot.get("current_price") or ep)
+        if ep <= 0 or qty <= 0:
+            continue
+
+        unrealized = round((sp - ep) * qty, 2)
+        if unrealized < -5.0:
+            abs_loss = abs(unrealized)
+            potential_refund = round(min(tax_paid, abs_loss * 0.26375), 2) if tax_paid > 0 else 0.0
+            future_shield = round(abs_loss * 0.26375, 2)
+            loss_candidates.append({
+                "ticker": sym,
+                "qty": int(qty),
+                "entry_price": ep,
+                "spot_price": sp,
+                "unrealized_loss_eur": unrealized,
+                "immediate_tax_refund_eur": potential_refund,
+                "loss_pool_credit_eur": abs_loss,
+                "future_tax_shield_eur": future_shield,
+            })
+        elif unrealized > 5.0:
+            tax_free_capacity = round(loss_pool + fb_rem, 2)
+            tax_free_harvest = round(min(unrealized, tax_free_capacity), 2)
+            tax_saved = round(tax_free_harvest * 0.26375, 2)
+            gain_candidates.append({
+                "ticker": sym,
+                "qty": int(qty),
+                "entry_price": ep,
+                "spot_price": sp,
+                "unrealized_gain_eur": unrealized,
+                "tax_free_harvest_eur": tax_free_harvest,
+                "tax_saved_eur": tax_saved,
+            })
+
+    total_refundable_now = round(sum(c["immediate_tax_refund_eur"] for c in loss_candidates), 2)
+    return {
+        "total_tax_paid_eur": tax_paid,
+        "effective_tax_after_freibetrag_eur": eff_tax_paid,
+        "loss_pool_balance_eur": loss_pool,
+        "freibetrag_remaining_eur": fb_rem,
+        "loss_harvest_candidates": loss_candidates,
+        "freibetrag_harvest_candidates": gain_candidates,
+        "total_immediate_refund_potential_eur": total_refundable_now,
+    }
+
+
+def evaluate_weekend_gap_exposure(
+    open_trades: List[Dict[str, Any]],
+    spot_lookup: Dict[str, float] | None = None,
+) -> Dict[str, Any]:
+    """
+    Evaluates open paper/lifecycle trades for Friday & Holiday Weekend Gap Risk.
+    """
+    if not isinstance(open_trades, list):
+        open_trades = []
+    spots = spot_lookup if isinstance(spot_lookup, dict) else {}
+
+    assessments: List[Dict[str, Any]] = []
+    high_risk_count = 0
+    safe_count = 0
+
+    for t in open_trades:
+        if not isinstance(t, dict):
+            continue
+        status = str(t.get("status") or "open").lower()
+        if status not in ("open", "target_1_hit"):
+            continue
+
+        sym = str(t.get("ticker") or "ASSET").upper().strip()
+        ep = float(t.get("entry_price") or 0.0)
+        stop = float(t.get("stop_price") or t.get("invalidation_price") or t.get("trailing_stop") or (ep * 0.96))
+        qty = float(t.get("quantity") or 10.0)
+        sp = float(spots.get(sym) or t.get("current_price") or t.get("last_price") or ep)
+
+        risk_per_share = max(0.01, abs(ep - (ep * 0.96 if abs(ep - stop) < 0.01 else stop)))
+        current_r = round((sp - ep) / risk_per_share, 2) if ep > 0 else 0.0
+        cushion_stop = round(ep - 0.25 * risk_per_share, 2)
+
+        if current_r >= 1.0:
+            action_code = "SAFE_HOLD"
+            badge = "🟢 SICHER HALTEN (Gewinnpuffer ≥ +1.0R)"
+            instruction = f"Stop auf -0.25R Puffer ({cushion_stop:.2f}) oder Einstand ({ep:.2f}) sichern – risikofrei übers Wochenende halten."
+            safe_count += 1
+        elif current_r >= 0.25:
+            action_code = "PARTIAL_TRIM"
+            badge = "🟡 TEIL-SICHERUNG (+0.25R bis +1.0R)"
+            instruction = f"Kleiner Puffer vorhanden ({current_r:+.2f}R). Vor Freitag 21:30 Uhr Stop auf -0.25R ({cushion_stop:.2f}) nachziehen."
+        else:
+            action_code = "HIGH_GAP_RISK"
+            badge = "🔴 GAP-RISIKO (Kein Gewinnpuffer vor Wochenende)"
+            instruction = f"Position bei {current_r:+.2f}R nahe Einstieg. Vor Freitag 21:30 Uhr 50% reduzieren ({max(1, int(qty // 2))} Stk.), um Wochenend-Gap-Risiko zu halbieren!"
+            high_risk_count += 1
+
+        assessments.append({
+            "ticker": sym,
+            "qty": int(qty),
+            "entry_price": ep,
+            "spot_price": sp,
+            "current_r": current_r,
+            "cushion_stop": cushion_stop,
+            "action_code": action_code,
+            "badge": badge,
+            "instruction": instruction,
+        })
+
+    return {
+        "total_open": len(assessments),
+        "safe_hold_count": safe_count,
+        "high_gap_risk_count": high_risk_count,
+        "assessments": assessments,
+    }
+
+
+def simulate_what_if_scenarios_eur(
+    ticker: str,
+    entry_price: float,
+    stop_price: float,
+    target_1: float,
+    target_2: float,
+    investment_eur: float = 2000.0,
+    loss_pool_eur: float = 0.0,
+    freibetrag_eur: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Simulates a concrete EUR investment (e.g. 2.000 EUR) across 3 real-world outcomes:
+    1) Target 1 (+2.0R) & Target 2 (+3.5R+) hit -> Net EUR after fees, FX, Verlusttopf, Freibetrag & 26.375% tax
+    2) Pullback after +1.0R -> Smart -0.25R Breathing Cushion exit (saves 75% of risk!)
+    3) Immediate Hard Stop (-1.0R) -> Full loss + Verlustverrechnungstopf tax shield credit
+    """
+    sym = str(ticker or "ASSET").upper().strip()
+    inv_eur = max(100.0, float(investment_eur or 2000.0))
+    ep = max(0.01, float(entry_price or 100.0))
+    sp = float(stop_price or (ep * 0.96))
+    t1 = float(target_1 or (ep * 1.08))
+    t2 = float(target_2 or (ep * 1.14))
+
+    fx_entry = convert_paper_trade_fx(sym, ep, notional_local=ep)
+    ep_eur = max(0.01, float(fx_entry["amount_eur"] or ep))
+    fx_rate = float(fx_entry["fx_rate"] or 1.0)
+    is_fx = bool(fx_entry["is_foreign_currency"])
+
+    shares = max(1, int(round(inv_eur / ep_eur)))
+    actual_invested_eur = round(shares * ep_eur, 2)
+
+    risk_per_share_eur = max(0.01, abs(ep - sp) / fx_rate)
+    reward_t1_per_share_eur = max(0.01, abs(t1 - ep) / fx_rate)
+    reward_t2_per_share_eur = max(0.01, abs(t2 - ep) / fx_rate)
+
+    # Roundtrip friction: 2.00 EUR order fee + 0.30% roundtrip FX/spread on foreign stocks
+    base_friction_eur = round(2.0 + (actual_invested_eur * 0.003 if is_fx else actual_invested_eur * 0.001), 2)
+
+    # Scenario 1A: Target 1 (+2.0R)
+    gross_t1_eur = round(shares * reward_t1_per_share_eur, 2)
+    step_t1 = calculate_paper_trade_german_tax_step(
+        gross_pnl=gross_t1_eur,
+        friction=base_friction_eur,
+        current_loss_pool=loss_pool_eur,
+        current_freibetrag=freibetrag_eur,
+    )
+
+    # Scenario 1B: Target 2 (+3.5R+)
+    gross_t2_eur = round(shares * reward_t2_per_share_eur, 2)
+    step_t2 = calculate_paper_trade_german_tax_step(
+        gross_pnl=gross_t2_eur,
+        friction=base_friction_eur,
+        current_loss_pool=loss_pool_eur,
+        current_freibetrag=freibetrag_eur,
+    )
+
+    # Scenario 2: Smart -0.25R Breathing Cushion Exit
+    cushion_price = round(ep - 0.25 * abs(ep - sp), 2)
+    gross_cushion_loss_eur = -round(shares * (0.25 * risk_per_share_eur), 2)
+    step_cushion = calculate_paper_trade_german_tax_step(
+        gross_pnl=gross_cushion_loss_eur,
+        friction=base_friction_eur,
+        current_loss_pool=loss_pool_eur,
+        current_freibetrag=freibetrag_eur,
+    )
+    cushion_tax_shield_eur = round(abs(step_cushion["pnl_before_tax"]) * 0.26375, 2)
+    cushion_effective_net_eur = -round(abs(step_cushion["pnl_before_tax"]) - cushion_tax_shield_eur, 2)
+
+    # Scenario 3: Full -1.0R Hard Stop
+    gross_stop_loss_eur = -round(shares * risk_per_share_eur, 2)
+    step_stop = calculate_paper_trade_german_tax_step(
+        gross_pnl=gross_stop_loss_eur,
+        friction=base_friction_eur,
+        current_loss_pool=loss_pool_eur,
+        current_freibetrag=freibetrag_eur,
+    )
+    stop_tax_shield_eur = round(abs(step_stop["pnl_before_tax"]) * 0.26375, 2)
+    stop_effective_net_eur = -round(abs(step_stop["pnl_before_tax"]) - stop_tax_shield_eur, 2)
+
+    saved_by_cushion_eur = round(abs(step_stop["pnl_before_tax"]) - abs(step_cushion["pnl_before_tax"]), 2)
+
+    return {
+        "ticker": sym,
+        "requested_investment_eur": inv_eur,
+        "shares": shares,
+        "actual_invested_eur": actual_invested_eur,
+        "entry_price": ep,
+        "cushion_price": cushion_price,
+        "stop_price": sp,
+        "target_1": t1,
+        "target_2": t2,
+        "friction_eur": base_friction_eur,
+        "target_1_gross_eur": gross_t1_eur,
+        "target_1_tax_eur": step_t1["tax_paid_eur"],
+        "target_1_net_eur": step_t1["net_after_tax"],
+        "target_1_net_with_freibetrag_eur": step_t1["net_after_freibetrag"],
+        "target_2_gross_eur": gross_t2_eur,
+        "target_2_tax_eur": step_t2["tax_paid_eur"],
+        "target_2_net_eur": step_t2["net_after_tax"],
+        "target_2_net_with_freibetrag_eur": step_t2["net_after_freibetrag"],
+        "cushion_loss_before_shield_eur": step_cushion["pnl_before_tax"],
+        "cushion_tax_shield_eur": cushion_tax_shield_eur,
+        "cushion_effective_net_eur": cushion_effective_net_eur,
+        "saved_by_cushion_eur": saved_by_cushion_eur,
+        "hard_stop_loss_before_shield_eur": step_stop["pnl_before_tax"],
+        "hard_stop_tax_shield_eur": stop_tax_shield_eur,
+        "hard_stop_effective_net_eur": stop_effective_net_eur,
+    }
+
+
+
 

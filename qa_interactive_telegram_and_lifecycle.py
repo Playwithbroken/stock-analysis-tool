@@ -2384,11 +2384,68 @@ class TestSmartCushionAndMemoryOptimizer(unittest.TestCase):
             self.assertIn("TELEGRAM BEFEHLS-DROPDOWN-MENÜ", res_dd)
             self.assertIn("Live mit Telegram synchronisiert", res_dd)
 
+        # 5. Verify /tastatur, /taxharvest, /sim, and /weekend
+        kb_reply = bot._build_persistent_reply_keyboard()
+        self.assertTrue(kb_reply.get("is_persistent"))
+        self.assertEqual(len(kb_reply.get("keyboard", [])), 3)
+        self.assertEqual(bot.resolve_reply_keyboard_shortcut("🇩🇪 Steuer-Cockpit"), "/steuer")
+        self.assertEqual(bot.resolve_reply_keyboard_shortcut("🔥 Top 3 Setups"), "/edge")
+
+        res_tast = bot.handle_command("999888", "/tastatur")
+        self.assertIn("PERMANENTE 6-TASTEN SCHNELLWAHL AKTIVIERT", res_tast)
+        res_tast_off = bot.handle_command("999888", "/tastatur aus")
+        self.assertIn("AUSGEBLENDET", res_tast_off)
+
+        # Test Tax-Loss Harvesting & Weekend Gap Exposure with open & closed positions
+        mixed_trades = [
+            {
+                "id": 1,
+                "ticker": "SAP.DE",
+                "status": "closed",
+                "entry_price": 200.0,
+                "closed_price": 240.0,
+                "quantity": 50,
+                "closed_at": "2026-10-18T10:00:00Z",
+            },
+            {
+                "id": 2,
+                "ticker": "NVDA",
+                "status": "open",
+                "entry_price": 130.0,
+                "current_price": 122.0,
+                "stop_price": 124.0,
+                "quantity": 20,
+            },
+            {
+                "id": 3,
+                "ticker": "RHM.DE",
+                "status": "open",
+                "entry_price": 500.0,
+                "current_price": 535.0,
+                "stop_price": 485.0,
+                "quantity": 10,
+            },
+        ]
+        mock_pm.list_paper_trades.return_value = mixed_trades
+
+        res_th = bot.handle_command("999888", "/taxharvest")
+        self.assertIn("TAX-LOSS HARVESTING", res_th)
+        self.assertIn("Sofortiger Cash-Refund", res_th)
+        self.assertIn("NVDA", res_th)
+
+        res_wk = bot.handle_command("999888", "/weekend")
+        self.assertIn("WOCHENEND-GAP-SCHUTZ", res_wk)
+        self.assertIn("NVDA", res_wk)
+        self.assertIn("RHM.DE", res_wk)
+
+        res_sim = bot.handle_command("999888", "/sim NVDA 2000")
+        self.assertIn("ECHTGELD-SIMULATOR: NVDA", res_sim)
+        self.assertIn("2,000 € Einsatz", res_sim)
+        self.assertIn("SZENARIO 1", res_sim)
+        self.assertIn("SZENARIO 2", res_sim)
+        self.assertIn("SZENARIO 3", res_sim)
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
 

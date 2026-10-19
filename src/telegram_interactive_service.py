@@ -644,10 +644,29 @@ class TelegramInteractiveService:
             self.answer_callback_query(callback_query_id, "🇩🇪 Lade Deutsches Steuer-Cockpit...")
             res = self._cmd_steuer()
             self.send_message(chat_id, res)
+        elif cb in ("taxharvest", "steuerernte"):
+            self.answer_callback_query(callback_query_id, "💰 Prüfe Tax-Loss Harvesting & Freibetrags-Retter...")
+            res = self._cmd_taxharvest()
+            self.send_message(chat_id, res)
         elif cb in ("disziplin", "rache", "tiltbreaker"):
             self.answer_callback_query(callback_query_id, "🛡️ Prüfe Prop-Desk Tilt- & Rache-Trading-Schutz...")
             res = self._cmd_disziplin()
             self.send_message(chat_id, res)
+        elif cb in ("weekend", "freitag", "gapschutz"):
+            self.answer_callback_query(callback_query_id, "🕯️ Prüfe Freitags- & Wochenend-Gap-Risiko...")
+            res = self._cmd_weekend()
+            self.send_message(chat_id, res)
+        elif cb.startswith("sim:"):
+            parts = cb.split(":")
+            tk = parts[1].upper() if len(parts) > 1 else "NVDA"
+            amt = parts[2] if len(parts) > 2 else "2000"
+            self.answer_callback_query(callback_query_id, f"🧮 Simuliere {amt}€ Trade für {tk}...")
+            res = self._cmd_sim([tk, amt])
+            self.send_message(chat_id, res)
+        elif cb in ("tastatur", "keyboard"):
+            self.answer_callback_query(callback_query_id, "📲 Aktiviere permanente Schnellwahl-Tastatur...")
+            res = self._cmd_tastatur([])
+            self.send_message(chat_id, res, reply_markup=self._build_persistent_reply_keyboard())
         elif cb in ("dropdown", "setmenu", "commands"):
             self.answer_callback_query(callback_query_id, "📋 Synchronisiere Telegram Befehls-Dropdown...")
             res = self._cmd_dropdown()
@@ -655,16 +674,32 @@ class TelegramInteractiveService:
         else:
             self.answer_callback_query(callback_query_id, "Befehl empfangen.")
 
+    @staticmethod
+    def resolve_reply_keyboard_shortcut(text: str) -> str:
+        """Maps persistent bottom ReplyKeyboard button taps to their slash command."""
+        raw = str(text or "").strip()
+        shortcut_map = {
+            "🔥 Top 3 Setups": "/edge",
+            "💼 Mein Depot": "/depot",
+            "🇩🇪 Steuer-Cockpit": "/steuer",
+            "🛡️ Disziplin & Tilt": "/disziplin",
+            "🔄 Re-Entry Radar": "/reentry",
+            "🧠 8 Playbooks": "/playbook",
+            "🕯️ Weekend-Schutz": "/weekend",
+            "📱 Hauptmenü": "/menu",
+        }
+        return shortcut_map.get(raw, raw)
+
     def handle_command(self, chat_id: str, text: str) -> str:
         """
-        Parses and handles slash commands from Telegram.
+        Parses and handles slash commands (or persistent ReplyKeyboard button taps) from Telegram.
         Returns the formatted response string.
         """
         if not self.is_authorized(chat_id):
             logger.warning("Unauthorized access attempt from chat_id=%s", chat_id)
             return "⛔ <b>Zugriff verweigert.</b> Dieser Bot ist privat konfiguriert."
 
-        raw = text.strip()
+        raw = self.resolve_reply_keyboard_shortcut(text).strip()
         parts = raw.split()
         if not parts:
             return self._cmd_help()
@@ -684,7 +719,7 @@ class TelegramInteractiveService:
                     "🔒 <b>Gast-Modus (Schreibgeschützt)</b>\n"
                     "━━━━━━━━━━━━━━━━━━━━\n"
                     "Du nutzt Broker Freund im <b>Read-Only Gast-Zugang</b>.\n"
-                    "Alle Live-Analysen (<code>/menu</code>, <code>/edge</code>, <code>/playbook</code>, <code>/strategie</code>, <code>/timing</code>, <code>/wkn</code>, <code>/netto</code>, <code>/order</code>, <code>/trackrecord</code>) stehen dir frei zur Verfügung.\n\n"
+                    "Alle Live-Analysen (<code>/menu</code>, <code>/edge</code>, <code>/playbook</code>, <code>/strategie</code>, <code>/timing</code>, <code>/wkn</code>, <code>/netto</code>, <code>/sim</code>, <code>/order</code>, <code>/trackrecord</code>) stehen dir frei zur Verfügung.\n\n"
                     "<i>Das Ausführen von Trades oder Ändern von Systemeinstellungen ist dem Admin vorbehalten.</i>"
                 )
 
@@ -695,6 +730,8 @@ class TelegramInteractiveService:
                 return self._cmd_menu(chat_id)
             elif cmd in ("/dropdown", "/setmenu", "/commands", "/befehle"):
                 return self._cmd_dropdown()
+            elif cmd in ("/tastatur", "/keyboard", "/keys", "/schnellwahl"):
+                return self._cmd_tastatur(args)
             elif cmd in ("/share", "/card", "/signal"):
                 return self._cmd_share(args)
             elif cmd in ("/guest", "/guests"):
@@ -719,6 +756,12 @@ class TelegramInteractiveService:
                 return self._cmd_netto(args)
             elif cmd in ("/steuer", "/freibetrag", "/verlusttopf", "/steuertopf"):
                 return self._cmd_steuer()
+            elif cmd in ("/taxharvest", "/steuerernte", "/jahresende"):
+                return self._cmd_taxharvest()
+            elif cmd in ("/sim", "/simulator", "/waswaerewenn"):
+                return self._cmd_sim(args)
+            elif cmd in ("/weekend", "/freitag", "/gapschutz", "/overnight"):
+                return self._cmd_weekend()
             elif cmd in ("/disziplin", "/rache", "/tiltbreaker", "/cooldown"):
                 return self._cmd_disziplin()
             elif cmd == "/edge":
@@ -905,8 +948,30 @@ class TelegramInteractiveService:
             "💡 <i>Tipp: Sende <code>/menu</code> für das Schnellwahl-Cockpit ohne Tippen!</i>"
         )
 
+    def _build_persistent_reply_keyboard(self) -> Dict[str, Any]:
+        """Generates a persistent 6-button bottom ReplyKeyboardMarkup pinned below the Telegram text bar."""
+        return {
+            "keyboard": [
+                [
+                    {"text": "🔥 Top 3 Setups"},
+                    {"text": "💼 Mein Depot"},
+                ],
+                [
+                    {"text": "🇩🇪 Steuer-Cockpit"},
+                    {"text": "🛡️ Disziplin & Tilt"},
+                ],
+                [
+                    {"text": "🔄 Re-Entry Radar"},
+                    {"text": "🧠 8 Playbooks"},
+                ],
+            ],
+            "resize_keyboard": True,
+            "is_persistent": True,
+            "input_field_placeholder": "Befehl tippen oder Schnellwahl-Taste drücken...",
+        }
+
     def _build_main_menu_keyboard(self) -> Dict[str, Any]:
-        """Generates a clean 5-row thumb-friendly main menu keyboard for beginners and pros."""
+        """Generates a clean thumb-friendly main menu keyboard for beginners and pros."""
         return {
             "inline_keyboard": [
                 [
@@ -920,16 +985,17 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "🇩🇪 Steuer-Cockpit", "callback_data": "steuer"},
+                    {"text": "💰 Steuer-Optimierer", "callback_data": "taxharvest"},
+                    {"text": "🕯️ Wochenend-Schutz", "callback_data": "weekend"},
+                ],
+                [
                     {"text": "🛡️ Disziplin & Tilt", "callback_data": "disziplin"},
                     {"text": "⏳ Handelszeit & FOMO", "callback_data": "timing"},
-                ],
-                [
                     {"text": "🏆 Erfolgsbilanz", "callback_data": "trackrecord"},
-                    {"text": "🌍 Markt-Ampel", "callback_data": "breadth"},
-                    {"text": "🎙️ Audio-Briefing", "callback_data": "voice"},
                 ],
                 [
-                    {"text": "☰ Befehls-Dropdown aktivieren", "callback_data": "dropdown"},
+                    {"text": "📲 6-Tasten Schnellwahl", "callback_data": "tastatur"},
+                    {"text": "☰ Befehls-Dropdown", "callback_data": "dropdown"},
                     {"text": "⚙️ Alerts & RAM", "callback_data": "ram"},
                 ],
             ]
@@ -945,11 +1011,12 @@ class TelegramInteractiveService:
                 ],
                 [
                     {"text": "🏦 Broker-Spickzettel", "callback_data": f"order:{ticker}"},
-                    {"text": "🪜 Gewinner aufstocken", "callback_data": f"pyramid:{ticker}"},
+                    {"text": "🧮 2.000€ Simulation", "callback_data": f"sim:{ticker}:2000"},
                 ],
                 [
                     {"text": "🇩🇪 WKN / ISIN", "callback_data": f"wkn:{ticker}"},
                     {"text": "💶 Netto nach Steuer", "callback_data": f"netto:{ticker}"},
+                    {"text": "🪜 Gewinner aufstocken", "callback_data": f"pyramid:{ticker}"},
                 ],
                 [
                     {"text": "⏳ Timing & Anti-FOMO", "callback_data": f"timing:{ticker}"},
@@ -4004,7 +4071,245 @@ class TelegramInteractiveService:
             f"   • 🛡️ <b>Gesamte Steuer-Ersparnis (Topf + Freibetrag):</b> <b>+{total_tax_shield_eur:,.2f} €</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 <b>ECHTES BANKKONTO-NETTO: {sign_net}{net_with_fb:,.2f} €</b>\n"
-            "💡 <i>Tipp: Nutze <code>/export</code> für den CSV-Steuerexport oder <code>/netto TICKER</code> vor jedem Trade.</i>"
+            "💡 <i>Tipp: Nutze <code>/taxharvest</code> für den Steuer-Rückhol-Radar, <code>/sim TICKER</code> für die 2.000€-Simulation oder <code>/export</code> für CSV.</i>"
+        )
+
+    def _cmd_tastatur(self, args: Optional[List[str]] = None) -> str:
+        """Activates or deactivates the persistent 6-button bottom ReplyKeyboardMarkup."""
+        args_list = [str(a).lower().strip() for a in (args or [])]
+        if args_list and args_list[0] in ("aus", "off", "hide", "remove"):
+            return (
+                "📲 <b>SCHNELLEINGABE-TASTATUR AUSGEBLENDET</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "Die 6 Schnellwahl-Tasten am unteren Bildschirmrand wurden ausgeblendet.\n"
+                "💡 <i>Mit <code>/tastatur</code> oder im <code>/menu</code> kannst du sie jederzeit mit einem Tipp wieder einblenden!</i>"
+            )
+        return (
+            "📲 <b>PERMANENTE 6-TASTEN SCHNELLWAHL AKTIVIERT</b>\n"
+            "<i>Deine wichtigsten Profi-Werkzeuge ab sofort dauerhaft unten am Smartphone-Rand</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "Ab sofort musst du keine Befehle mehr tippen – ein Daumen-Tipp unten genügt:\n"
+            "• <b>🔥 Top 3 Setups</b> → Öffnet sofort die besten A+/A Signale (<code>/edge</code>)\n"
+            "• <b>💼 Mein Depot</b> → Echtzeit-P&amp;L inkl. 🇩🇪 Steuertopf &amp; Freibetrag (<code>/depot</code>)\n"
+            "• <b>🇩🇪 Steuer-Cockpit</b> → Verlusttopf, 1.000€ Freibetrag &amp; Abgeltungsteuer (<code>/steuer</code>)\n"
+            "• <b>🛡️ Disziplin &amp; Tilt</b> → Prop-Desk Rache-Trading-Schutz (<code>/disziplin</code>)\n"
+            "• <b>🔄 Re-Entry Radar</b> → 48h Wyckoff-Wiedereinstieg nach Stop-Out (<code>/reentry</code>)\n"
+            "• <b>🧠 8 Playbooks</b> → Live-Winrate der 8 Profi-Strategien (<code>/playbook</code>)\n\n"
+            "💡 <i>Tipp: Zum Ausblenden einfach <code>/tastatur aus</code> senden.</i>"
+        )
+
+    def _cmd_taxharvest(self) -> str:
+        """Displays the German Tax-Loss Harvesting & 1.000€ Sparer-Pauschbetrag Year-End Optimizer."""
+        all_trades: List[Dict[str, Any]] = []
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                raw = self.portfolio_manager.list_paper_trades(limit=250)
+                if isinstance(raw, list):
+                    all_trades = [t for t in raw if isinstance(t, dict)]
+            except Exception:
+                all_trades = []
+
+        spot_lookup: Dict[str, float] = {}
+        open_trades = [t for t in all_trades if str(t.get("status") or "").lower() == "open"]
+        if self.asymmetric_service:
+            for t in open_trades[:12]:
+                tk = str(t.get("ticker") or "").upper()
+                if tk and tk not in spot_lookup:
+                    try:
+                        spot_val = self.asymmetric_service._fetch_live_spot(tk)
+                        if spot_val and spot_val > 0:
+                            spot_lookup[tk] = float(spot_val)
+                    except Exception:
+                        pass
+
+        from src.performance_metrics import analyze_tax_loss_harvesting
+        harv = analyze_tax_loss_harvesting(all_trades, spot_lookup=spot_lookup)
+
+        losers = harv.get("loss_harvest_candidates") or []
+        winners = harv.get("freibetrag_harvest_candidates") or []
+
+        loser_lines = []
+        for l_item in losers[:5]:
+            loser_lines.append(
+                f"   • <b>{html.escape(l_item['ticker'])}</b> ({l_item['qty']} Stk.): Aktuell <b>{l_item['unrealized_loss_eur']:,.2f} €</b> → "
+                f"Sofort-Erstattung: <b>+{l_item['immediate_tax_refund_eur']:,.2f} €</b> | Steuer-Schild: <b>+{l_item['future_tax_shield_eur']:,.2f} €</b>"
+            )
+        losers_text = "\n".join(loser_lines) if loser_lines else "   • 🎉 <i>Aktuell keine offenen Buchverluste im Depot!</i>"
+
+        winner_lines = []
+        for w_item in winners[:5]:
+            winner_lines.append(
+                f"   • <b>{html.escape(w_item['ticker'])}</b> ({w_item['qty']} Stk.): Aktuell <b>+{w_item['unrealized_gain_eur']:,.2f} €</b> → "
+                f"Steuerfrei erntbar: <b>+{w_item['tax_free_harvest_eur']:,.2f} €</b> (Spart <b>+{w_item['tax_saved_eur']:,.2f} €</b> Steuer!)"
+            )
+        winners_text = "\n".join(winner_lines) if winner_lines else "   • <i>Keine offenen Buchgewinne für Freibetrags-Ernte vorgemerkt.</i>"
+
+        eff_tax_paid = float(harv.get("effective_tax_after_freibetrag_eur", harv.get("total_tax_paid_eur", 0.0)))
+        immediate_refund = float(harv.get("total_immediate_refund_potential_eur", 0.0))
+        fb_rem = float(harv.get("freibetrag_remaining_eur", 1000.0))
+        loss_pool_bal = float(harv.get("loss_pool_balance_eur", 0.0))
+
+        if immediate_refund > 0:
+            rec_text = (
+                f"Durch gezieltes Glattstellen der Verlustposition(en) erhältst du sofort <b>+{immediate_refund:,.2f} €</b> "
+                "bereits gezahlte Abgeltungsteuer vom Broker aufs Verrechnungskonto zurück!"
+            )
+        elif fb_rem > 50 and winners:
+            rec_text = (
+                f"Du hast noch <b>{fb_rem:,.2f} €</b> ungenutzten Sparer-Pauschbetrag! "
+                "Realisiere vor dem 31.12. Teilgewinne, damit der Freibetrag nicht ersatzlos verfällt."
+            )
+        else:
+            rec_text = "Dein Steuertopf und Freibetrag sind aktuell optimal ausbalanciert – kein manueller Eingriff nötig."
+
+        return (
+            "💰 <b>DEUTSCHER TAX-LOSS HARVESTING &amp; FREIBETRAGS-OPTIMIERER</b>\n"
+            "<i>Steuerrückerstattung vom Finanzamt &amp; 1.000 € Sparer-Pauschbetrag optimal ausschöpfen</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "🏦 <b>1. SOFORTIGE STEUER-RÜCKERSTATTUNG (VERLUSTVERRECHNUNG):</b>\n"
+            f"   • <b>Bereits gezahlte Abgeltungsteuer (rückholbar):</b> <b>{eff_tax_paid:,.2f} €</b>\n"
+            f"   • <b>Aktueller Aktien-Verlusttopf:</b> {loss_pool_bal:,.2f} €\n"
+            f"   • 💵 <b>Sofortiger Cash-Refund bei Glattstellung:</b> <b>+{immediate_refund:,.2f} €</b>\n\n"
+            "📉 <b>Offene Positionen mit Steuer-Schild-Potenzial:</b>\n"
+            f"{losers_text}\n\n"
+            "🎁 <b>2. 1.000 € SPARER-PAUSCHBETRAG (JAHRESEND-RETTER):</b>\n"
+            f"   • <b>Noch ungenutzter Freibetrag:</b> <b>{fb_rem:,.2f} €</b> <i>(verfällt am 31.12. ersatzlos!)</i>\n"
+            f"{winners_text}\n\n"
+            "🧠 <b>KONKRETE HANDLUNGSEMPFEHLUNG:</b>\n"
+            f"👉 {rec_text}"
+        )
+
+    def _cmd_sim(self, args: List[str]) -> str:
+        """Runs the 'Was-wäre-wenn' Real-Money Euro Simulator across 3 outcomes (Target, -0.25R Cushion, -1.0R Stop)."""
+        ticker = args[0].upper().strip() if args else "NVDA"
+        investment_eur = 2000.0
+        if len(args) > 1:
+            try:
+                val = float(str(args[1]).replace("€", "").replace(",", ".").strip())
+                if val >= 50.0:
+                    investment_eur = val
+            except Exception:
+                investment_eur = 2000.0
+
+        setup = None
+        if self.asymmetric_service:
+            try:
+                setup = self.asymmetric_service.generate_trade_setup(ticker)
+            except Exception:
+                setup = None
+
+        entry = float((setup or {}).get("entry_price") or 100.0)
+        stop = float((setup or {}).get("invalidation_price") or round(entry * 0.96, 2))
+        risk_per_share = max(0.01, round(abs(entry - stop), 2))
+        t1 = float((setup or {}).get("target_1") or round(entry + 2.0 * risk_per_share, 2))
+        t2 = float((setup or {}).get("target_2") or round(entry + 3.5 * risk_per_share, 2))
+
+        # Pull current Verlusttopf & remaining Freibetrag from paper journal for realistic simulation
+        loss_pool_eur = 0.0
+        fb_rem_eur = 1000.0
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                raw = self.portfolio_manager.list_paper_trades(limit=250)
+                if isinstance(raw, list):
+                    closed = [t for t in raw if isinstance(t, dict) and str(t.get("status") or "").lower() == "closed"]
+                    from src.performance_metrics import calculate_trading_journal_metrics
+                    jm = calculate_trading_journal_metrics(closed, starting_capital=50000.0)
+                    loss_pool_eur = float(jm.get("tax_loss_pool", 0.0))
+                    fb_rem_eur = float(jm.get("freibetrag_remaining_eur", 1000.0))
+            except Exception:
+                pass
+
+        from src.performance_metrics import simulate_what_if_scenarios_eur
+        from src.asymmetric_trade_service import get_wkn_isin
+
+        sim = simulate_what_if_scenarios_eur(
+            ticker=ticker,
+            entry_price=entry,
+            stop_price=stop,
+            target_1=t1,
+            target_2=t2,
+            investment_eur=investment_eur,
+            loss_pool_eur=loss_pool_eur,
+            freibetrag_eur=fb_rem_eur,
+        )
+        wkn_info = get_wkn_isin(ticker)
+        is_eu = any(ticker.endswith(sfx) for sfx in [".DE", ".F", ".AS", ".PA", ".MI", ".MC"])
+        c_sym = "€" if is_eu else ("£" if ticker.endswith(".L") else "$")
+        fx_note = " (inkl. EUR/USD Auto-FX 0,15%)" if not is_eu else ""
+        inv_shown = float(sim.get("requested_investment_eur", investment_eur))
+
+        return (
+            f"🧮 <b>„WAS-WÄRE-WENN“ ECHTGELD-SIMULATOR: {html.escape(sim['ticker'])}</b>\n"
+            f"<i>Exakte 3-Szenarien-Rechnung für <b>{inv_shown:,.0f} € Einsatz</b>{fx_note}</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🇩🇪 <b>WKN:</b> <code>{html.escape(wkn_info['wkn'])}</code> | <b>ISIN:</b> <code>{html.escape(wkn_info['isin'])}</code>\n"
+            f"🛒 <b>Stückzahl für {inv_shown:,.0f} €:</b> <b>{sim['shares']} Aktien</b> (Effektiv: {sim['actual_invested_eur']:,.2f} €)\n"
+            f"📍 <b>Einstieg:</b> {c_sym}{sim['entry_price']:.2f} | <b>Stop (-1.0R):</b> {c_sym}{sim['stop_price']:.2f} | <b>Puffer (-0.25R):</b> {c_sym}{sim['cushion_price']:.2f}\n\n"
+            f"🟢 <b>SZENARIO 1: VOLLE RALLYE AUF ZIEL 1 &amp; ZIEL 2 (NETTO NACH STEUER)</b>\n"
+            f"   • 🎯 <b>Bei Ziel 1 ({c_sym}{sim['target_1']:.2f}):</b> Brutto +{sim['target_1_gross_eur']:,.2f} € → <b>+{sim['target_1_net_with_freibetrag_eur']:,.2f} € Netto</b> (nach Steuer &amp; Freibetrag)\n"
+            f"   • 🚀 <b>Bei Ziel 2 ({c_sym}{sim['target_2']:.2f}):</b> Brutto +{sim['target_2_gross_eur']:,.2f} € → <b>+{sim['target_2_net_with_freibetrag_eur']:,.2f} € Netto</b> (nach Steuer &amp; Freibetrag)\n\n"
+            f"🌬️ <b>SZENARIO 2: RÜCKSETZER NACH +1R → ATMUNGS-PUFFER (-0.25R) GREIFT</b>\n"
+            f"   • <b>Ergebnis bei Stop am Puffer ({c_sym}{sim['cushion_price']:.2f}):</b> <b>{sim['cushion_loss_before_shield_eur']:,.2f} €</b> (inkl. Gebühren)\n"
+            f"   • 🛡️ <b>Gerettetes Kapital ggü. Voll-Stop:</b> <b>+{sim['saved_by_cushion_eur']:,.2f} € (75% Risiko gespart!)</b>\n"
+            f"   • 🏛️ <b>Steuer-Gutschein im Verlusttopf:</b> +{sim['cushion_tax_shield_eur']:,.2f} €\n\n"
+            f"🔴 <b>SZENARIO 3: SOFORTIGER VOLL-STOP BEI -1.0R ({c_sym}{sim['stop_price']:.2f})</b>\n"
+            f"   • <b>Maximaler Verlust:</b> <b>{sim['hard_stop_loss_before_shield_eur']:,.2f} €</b>\n"
+            f"   • 🏛️ <b>Steuer-Ersparnis nächster Gewinn (Verlusttopf):</b> <b>+{sim['hard_stop_tax_shield_eur']:,.2f} €</b>\n"
+            f"   • 💡 <b>Wirtschaftlicher Netto-Verlust nach Steuer-Schild:</b> <b>{sim['hard_stop_effective_net_eur']:,.2f} €</b>\n\n"
+            f"💡 <i>Anderen Betrag testen? Tippe z.B. <code>/sim {html.escape(sim['ticker'])} 5000</code>!</i>"
+        )
+
+    def _cmd_weekend(self) -> str:
+        """Evaluates all open positions for Friday/Weekend overnight gap risk and recommends holds vs trims."""
+        all_trades: List[Dict[str, Any]] = []
+        if self.portfolio_manager and hasattr(self.portfolio_manager, "list_paper_trades"):
+            try:
+                raw = self.portfolio_manager.list_paper_trades(limit=250)
+                if isinstance(raw, list):
+                    all_trades = [t for t in raw if isinstance(t, dict)]
+            except Exception:
+                all_trades = []
+
+        open_trades = [t for t in all_trades if str(t.get("status") or "").lower() == "open"]
+        spot_lookup: Dict[str, float] = {}
+        if self.asymmetric_service:
+            for t in open_trades[:12]:
+                tk = str(t.get("ticker") or "").upper()
+                if tk and tk not in spot_lookup:
+                    try:
+                        spot_val = self.asymmetric_service._fetch_live_spot(tk)
+                        if spot_val and spot_val > 0:
+                            spot_lookup[tk] = float(spot_val)
+                    except Exception:
+                        pass
+
+        from src.performance_metrics import evaluate_weekend_gap_exposure
+        wk = evaluate_weekend_gap_exposure(open_trades, spot_lookup=spot_lookup)
+
+        pos_lines = []
+        for p in wk.get("assessments") or []:
+            pos_lines.append(
+                f"• <b>{html.escape(p['ticker'])}</b> ({p['qty']} Stk. | {p['current_r']:+.2f}R | Spot: {p['spot_price']:.2f} | Puffer-Stop: {p['cushion_stop']:.2f})\n"
+                f"  └ {p['badge']}\n"
+                f"  └ 👉 <i>{p['instruction']}</i>"
+            )
+        pos_block = (
+            "\n\n".join(pos_lines)
+            if pos_lines
+            else "🎉 <b>Keine offenen Positionen im Depot – 100% Cash &amp; 0,00 € Wochenend-Gap-Risiko!</b>"
+        )
+
+        return (
+            "🕯️ <b>FREITAGS- &amp; WOCHENEND-GAP-SCHUTZ (OVERNIGHT SHIELD)</b>\n"
+            "<i>Institutioneller Schutz vor Wochenend-Nachrichten, Geopolitik &amp; Montags-Gaps</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"• 📂 <b>Offene Positionen:</b> {wk['total_open']}\n"
+            f"• 🟢 <b>Sicher über Wochenende haltbar (≥ +1.0R Puffer):</b> <b>{wk['safe_hold_count']}</b>\n"
+            f"• 🔴 <b>Hohes Montags-Gap-Risiko (&lt; +0.25R):</b> <b>{wk['high_gap_risk_count']}</b>\n\n"
+            "📋 <b>POSITIONS-CHECK FÜR FREITAGABEND:</b>\n"
+            f"{pos_block}\n\n"
+            "🏛️ <b>PROFI-REGEL FÜR DAS WOCHENENDE:</b>\n"
+            "👉 <i>Halte niemals frische Positionen ohne Gewinnpuffer (&lt; +0.25R) ungeschützt über das Wochenende! Gewinner mit ≥ +1.0R Puffer dürfen mit -0.25R Puffer-Stop weiterlaufen.</i>"
         )
 
     def _cmd_disziplin(self) -> str:
@@ -4045,9 +4350,13 @@ class TelegramInteractiveService:
         """
         return [
             {"command": "menu", "description": "📱 1-Klick Hauptmenü & Schnellwahl-Cockpit"},
+            {"command": "tastatur", "description": "📲 Permanente 6-Tasten Schnellwahl unten einblenden"},
             {"command": "edge", "description": "🔥 Top A+/A Setups (oder /edge TICKER)"},
             {"command": "depot", "description": "💼 Paper-Depot Status inkl. 🇩🇪 Steuer & Freibetrag"},
             {"command": "steuer", "description": "🇩🇪 Steuer-Cockpit (1.000€ Freibetrag & Verlusttopf)"},
+            {"command": "taxharvest", "description": "💰 Steuer-Rückhol-Radar & 1.000€ Freibetrags-Retter"},
+            {"command": "sim", "description": "🧮 Was-wäre-wenn Euro-Simulator (/sim NVDA 2000)"},
+            {"command": "weekend", "description": "🕯️ Freitags- & Wochenend-Gap-Schutz für offene Trades"},
             {"command": "disziplin", "description": "🛡️ Prop-Desk Rache-Trading- & Tilt-Schutz"},
             {"command": "playbook", "description": "🧠 8 Profi-Strategien & KI-Lerngedächtnis"},
             {"command": "strategie", "description": "🎓 30-Sekunden Guide (-0.25R Puffer erklärt)"},
@@ -4142,7 +4451,7 @@ class TelegramInteractiveService:
             "━━━━━━━━━━━━━━━━━━━━\n"
             "💡 <b>So nutzt du das Dropdown in Telegram:</b>\n"
             "1️⃣ Tippe unten links neben dem Texteingabefeld auf den blauen Button <b>[ ☰ Menü ]</b> (oder tippe einfach ein <code>/</code> ein).\n"
-            "2️⃣ Es klappt sofort die scrollbare Auswahlliste mit allen <b>36 Befehlen</b> auf – ein Fingertipp genügt!\n\n"
+            f"2️⃣ Es klappt sofort die scrollbare Auswahlliste mit allen <b>{len(commands)} Befehlen</b> auf – ein Fingertipp genügt!\n\n"
             "🔝 <b>Wichtigste Schnellwahl-Befehle im Dropdown:</b>\n"
             + "\n".join(preview_lines)
             + f"\n<i>... und {len(commands) - 16} weitere Profi-Befehle direkt im [ ☰ Menü ]!</i>"
@@ -4225,14 +4534,15 @@ class TelegramInteractiveService:
                             self.handle_callback_query(chat_id, data, cq_id)
                             continue
 
-                        # Handle Standard Message Slash Commands
+                        # Handle Standard Message Slash Commands & Persistent ReplyKeyboard Button Taps
                         msg = update.get("message")
                         if not msg or not isinstance(msg, dict):
                             continue
 
                         chat = msg.get("chat") or {}
                         chat_id = str(chat.get("id") or "")
-                        text = msg.get("text") or ""
+                        raw_text = msg.get("text") or ""
+                        text = self.resolve_reply_keyboard_shortcut(raw_text)
 
                         if not text.startswith("/"):
                             continue
@@ -4243,6 +4553,13 @@ class TelegramInteractiveService:
                             reply_markup = None
                             if text.startswith("/menu") or text.startswith("/dashboard") or text.startswith("/home") or text.startswith("/start"):
                                 reply_markup = self._build_main_menu_keyboard()
+                            elif text.startswith("/tastatur") or text.startswith("/keyboard") or text.startswith("/buttons"):
+                                parts = text.split()
+                                arg0 = parts[1].lower() if len(parts) > 1 else ""
+                                if arg0 in ("aus", "off", "hide", "remove"):
+                                    reply_markup = {"remove_keyboard": True}
+                                else:
+                                    reply_markup = self._build_persistent_reply_keyboard()
                             elif text.startswith("/alerts") or text.startswith("/alert") or text.startswith("/profile") or text.startswith("/mode"):
                                 reply_markup = self._build_alerts_keyboard()
                             elif text.startswith("/ram") or text.startswith("/system") or text.startswith("/memory") or text.startswith("/speicher"):

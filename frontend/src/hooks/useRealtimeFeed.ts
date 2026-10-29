@@ -264,11 +264,12 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     if (!wsDisabledRef.current) connect();
     fetchSnapshot();
     pollTimer = window.setInterval(() => {
-      const stale = !lastFrameRef.current || Date.now() - lastFrameRef.current > 12000;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      const stale = !lastFrameRef.current || Date.now() - lastFrameRef.current > 14000;
       if (stale) {
         fetchSnapshot();
       }
-    }, 10000);
+    }, 15000);
 
     return () => {
       closed = true;

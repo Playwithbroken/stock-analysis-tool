@@ -144,13 +144,17 @@ class DiscoveryService:
             "PANW", "SNPS", "ASML", "LRCX", "ADI", "MELI", "CDNS", "KLAC", "PDD", "PYPL"
         ]
         self.paper_equity_universe = [
-            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "AVGO", "JPM",
-            "V", "LLY", "UNH", "XOM", "COST", "WMT", "CAT", "GE",
-            "PANW", "AMD", "NFLX", "KO", "PG", "JNJ", "ABBV", "CVX",
+            # US Mega & Large Cap Tech / AI / Semis
+            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "AVGO", "AMD", "NFLX", "CRM", "ORCL", "NOW", "PANW", "CRWD", "MU", "QCOM", "AMAT", "LRCX", "KLAC",
+            # US Financials, Industrials, Energy, Healthcare & Consumer
+            "JPM", "GS", "V", "MA", "BRK-B", "LLY", "UNH", "JNJ", "ABBV", "ISRG", "VRTX", "XOM", "CVX", "COST", "WMT", "KO", "PG", "CAT", "GE", "RTX", "HON", "UNP",
+            # Europe / DAX / MDAX & Global Leaders
+            "SAP.DE", "SIE.DE", "ALV.DE", "RHM.DE", "AIR.PA", "ASML", "MC.PA", "NVO", "TSM", "MELI",
         ]
         self.paper_small_cap_universe = [
             "RKLB", "LUNR", "PATH", "OKLO", "S", "IONQ",
             "RGTI", "ASTS", "HIMS", "ENVX", "JOBY", "ACHR",
+            "SOFI", "HOOD", "CELH", "DUOL", "UPST", "CAVA",
         ]
 
     def _moonshot_fallbacks(self) -> List[Dict[str, Any]]:
@@ -580,70 +584,178 @@ class DiscoveryService:
     async def get_paper_equity_candidates(self) -> List[Dict[str, Any]]:
         """Return a deterministic, diversified stock universe with observable quality and trend data.
 
-        This feed intentionally does not depend on insider or politician filings. Values are
-        cached for ten minutes and remain research snapshots rather than executable quotes.
+        Uses a 3-stage institutional funnel:
+          Stage 1: Vectorized batch history download via SharedMarketDataPool (float32) + SPY benchmark RS.
+          Stage 2: Compute technical edge metrics (RS vs SPY, Down-Day Resilience, VCP contraction, RVOL).
+          Stage 3: Enrich top candidates with cached fundamentals (12h TTL) and bounded concurrency.
         """
         import asyncio
+        from src.memory_optimizer import get_shared_pool
 
         cached = self.__class__._equity_candidate_cache
         now = datetime.now()
         if cached and (now - cached[1]).total_seconds() < 600:
             return cached[0]
 
-        async def fetch_candidate(ticker: str) -> Optional[Dict[str, Any]]:
-            def fetch() -> Optional[Dict[str, Any]]:
-                try:
-                    stock = yf.Ticker(ticker)
-                    history = stock.history(period="6mo", interval="1d", auto_adjust=True)
-                    if history is None or history.empty or len(history) < 55:
-                        return None
-                    closes = history["Close"].dropna()
-                    volumes = history["Volume"].dropna()
-                    if len(closes) < 55:
-                        return None
-                    last = float(closes.iloc[-1])
-                    previous = float(closes.iloc[-2])
-                    close_20 = float(closes.iloc[-21])
-                    close_60 = float(closes.iloc[-61]) if len(closes) >= 61 else float(closes.iloc[0])
-                    sma_20 = float(closes.tail(20).mean())
-                    sma_50 = float(closes.tail(50).mean())
-                    daily_returns = closes.pct_change().dropna().tail(60)
-                    volatility = float(daily_returns.std() * (252 ** 0.5) * 100) if len(daily_returns) >= 20 else None
-                    recent_volume = float(volumes.tail(5).mean()) if len(volumes) >= 5 else 0.0
-                    base_volume = float(volumes.tail(25).head(20).mean()) if len(volumes) >= 25 else 0.0
-                    info = stock.info or {}
-                    return {
-                        "ticker": ticker,
-                        "name": info.get("longName") or info.get("shortName") or ticker,
-                        "sector": info.get("sector") or "Unknown",
-                        "market_cap": info.get("marketCap"),
-                        "price": last,
-                        "change_1d": ((last / previous) - 1.0) * 100 if previous else None,
-                        "change_1m": ((last / close_20) - 1.0) * 100 if close_20 else None,
-                        "change_3m": ((last / close_60) - 1.0) * 100 if close_60 else None,
-                        "above_sma20": last > sma_20,
-                        "above_sma50": last > sma_50,
-                        "volume_ratio": (recent_volume / base_volume) if base_volume > 0 else None,
-                        "volatility_annual_pct": volatility,
-                        "revenue_growth_pct": (
-                            float(info.get("revenueGrowth")) * 100 if isinstance(info.get("revenueGrowth"), (int, float)) else None
-                        ),
-                        "earnings_growth_pct": (
-                            float(info.get("earningsGrowth")) * 100 if isinstance(info.get("earningsGrowth"), (int, float)) else None
-                        ),
-                        "profit_margin_pct": (
-                            float(info.get("profitMargins")) * 100 if isinstance(info.get("profitMargins"), (int, float)) else None
-                        ),
-                        "source_label": "Yahoo Finance market/fundamental snapshot",
-                        "data_as_of": history.index[-1].isoformat() if hasattr(history.index[-1], "isoformat") else None,
-                    }
-                except Exception:
-                    return None
-
-            return await asyncio.to_thread(fetch)
-
         research_universe = list(dict.fromkeys([*self.paper_equity_universe, *self.paper_small_cap_universe]))
-        rows = [row for row in await asyncio.gather(*(fetch_candidate(ticker) for ticker in research_universe)) if row]
+        pool = get_shared_pool()
+
+        # Stage 1: Batch fetch histories (including SPY for benchmark relative strength)
+        batch_symbols = ["SPY", *research_universe]
+        histories = await asyncio.to_thread(
+            pool.get_batch_history,
+            batch_symbols,
+            "6mo",
+            "1d",
+            300,
+        )
+
+        spy_df = histories.get("SPY")
+        spy_change_1m = 0.0
+        spy_change_3m = 0.0
+        spy_down_days_mask = None
+        if spy_df is not None and not getattr(spy_df, "empty", True) and "Close" in spy_df.columns:
+            spy_closes = spy_df["Close"].dropna()
+            if len(spy_closes) >= 21:
+                spy_change_1m = ((float(spy_closes.iloc[-1]) / float(spy_closes.iloc[-21])) - 1.0) * 100.0
+            if len(spy_closes) >= 61:
+                spy_change_3m = ((float(spy_closes.iloc[-1]) / float(spy_closes.iloc[-61])) - 1.0) * 100.0
+            spy_rets = spy_closes.pct_change().tail(30)
+            spy_down_days_mask = spy_rets[spy_rets < -0.0025].index
+
+        # Stage 2: Fast in-memory technical evaluation
+        stage1_rows: List[Dict[str, Any]] = []
+        for ticker in research_universe:
+            try:
+                history = histories.get(ticker)
+                if history is None or getattr(history, "empty", True) or len(history) < 55:
+                    continue
+                closes = history["Close"].dropna()
+                volumes = history["Volume"].dropna() if "Volume" in history.columns else closes * 0
+                if len(closes) < 55:
+                    continue
+                last = float(closes.iloc[-1])
+                previous = float(closes.iloc[-2])
+                close_20 = float(closes.iloc[-21])
+                close_60 = float(closes.iloc[-61]) if len(closes) >= 61 else float(closes.iloc[0])
+                sma_20 = float(closes.tail(20).mean())
+                sma_50 = float(closes.tail(50).mean())
+                daily_returns = closes.pct_change().dropna().tail(60)
+                volatility = float(daily_returns.std() * (252 ** 0.5) * 100) if len(daily_returns) >= 20 else None
+                recent_volume = float(volumes.tail(5).mean()) if len(volumes) >= 5 else 0.0
+                base_volume = float(volumes.tail(25).head(20).mean()) if len(volumes) >= 25 else 0.0
+
+                change_1d = ((last / previous) - 1.0) * 100.0 if previous else 0.0
+                change_1m = ((last / close_20) - 1.0) * 100.0 if close_20 else 0.0
+                change_3m = ((last / close_60) - 1.0) * 100.0 if close_60 else 0.0
+                vol_ratio = (recent_volume / base_volume) if base_volume > 0 else 1.0
+
+                # Institutional Edge Metrics:
+                # 1. Benchmark Relative Strength (Alpha vs SPY)
+                rs_alpha_1m = round(change_1m - spy_change_1m, 2)
+                rs_alpha_3m = round(change_3m - spy_change_3m, 2)
+
+                # 2. Down-Day Resilience (Win rate & outperformance on days SPY fell)
+                down_day_resilience = 0.0
+                if spy_down_days_mask is not None and len(spy_down_days_mask) >= 3:
+                    stock_rets_30 = closes.pct_change().tail(35)
+                    common_idx = stock_rets_30.index.intersection(spy_down_days_mask)
+                    if len(common_idx) >= 2:
+                        green_on_red = sum(1 for dt in common_idx if float(stock_rets_30.loc[dt]) >= -0.0005)
+                        down_day_resilience = round((green_on_red / len(common_idx)) * 100.0, 1)
+
+                # 3. Volatility Contraction / Pocket Pivot check (5d range vs 20d range)
+                vcp_tightness = False
+                if len(daily_returns) >= 20:
+                    std_5d = float(daily_returns.tail(5).std() or 0)
+                    std_20d = float(daily_returns.tail(20).std() or 1)
+                    if std_20d > 0 and (std_5d / std_20d) <= 0.72 and last >= sma_20:
+                        vcp_tightness = True
+
+                tech_rank_score = (
+                    (change_1m * 1.2)
+                    + (rs_alpha_1m * 1.4)
+                    + (rs_alpha_3m * 0.6)
+                    + (12.0 if last > sma_20 else -8.0)
+                    + (14.0 if last > sma_50 else -10.0)
+                    + min(10.0, max(-4.0, (vol_ratio - 1.0) * 8.0))
+                    + (6.0 if vcp_tightness else 0.0)
+                    + (down_day_resilience * 0.08)
+                )
+
+                stage1_rows.append({
+                    "ticker": ticker,
+                    "price": last,
+                    "change_1d": change_1d,
+                    "change_1m": change_1m,
+                    "change_3m": change_3m,
+                    "rs_alpha_1m": rs_alpha_1m,
+                    "rs_alpha_3m": rs_alpha_3m,
+                    "down_day_resilience_pct": down_day_resilience,
+                    "vcp_tightness": vcp_tightness,
+                    "above_sma20": last > sma_20,
+                    "above_sma50": last > sma_50,
+                    "volume_ratio": vol_ratio,
+                    "volatility_annual_pct": volatility,
+                    "tech_rank_score": round(tech_rank_score, 2),
+                    "data_as_of": history.index[-1].isoformat() if hasattr(history.index[-1], "isoformat") else None,
+                })
+            except Exception:
+                continue
+
+        # Sort by technical edge and only fetch uncached live fundamentals for the top 16 (cached ones are instant for all)
+        stage1_rows.sort(key=lambda r: float(r.get("tech_rank_score") or 0), reverse=True)
+        live_fetch_allowed = {r["ticker"] for r in stage1_rows[:16]} | set(self.paper_small_cap_universe[:8])
+        sem = asyncio.Semaphore(4)
+
+        async def enrich_fundamentals(row: Dict[str, Any]) -> Dict[str, Any]:
+            ticker = row["ticker"]
+            info = pool.get_cached_fundamentals(ticker)
+            if info is None and ticker in live_fetch_allowed:
+                async with sem:
+                    def _load_info() -> Dict[str, Any]:
+                        try:
+                            raw_info = yf.Ticker(ticker).info or {}
+                            if raw_info:
+                                pool.set_cached_fundamentals(ticker, raw_info)
+                            return raw_info
+                        except Exception:
+                            return {}
+                    info = await asyncio.to_thread(_load_info)
+            info = info or {}
+            is_small_universe = ticker in self.paper_small_cap_universe
+            default_mcap = 2_800_000_000 if is_small_universe else 85_000_000_000
+            return {
+                "ticker": ticker,
+                "name": info.get("longName") or info.get("shortName") or UNIVERSE_NAMES.get(ticker) or ticker,
+                "sector": info.get("sector") or ("Technology" if ticker in self.tech_universe else "Diversified"),
+                "market_cap": info.get("marketCap") or default_mcap,
+                "price": row["price"],
+                "change_1d": row["change_1d"],
+                "change_1m": row["change_1m"],
+                "change_3m": row["change_3m"],
+                "rs_alpha_1m": row["rs_alpha_1m"],
+                "rs_alpha_3m": row["rs_alpha_3m"],
+                "down_day_resilience_pct": row["down_day_resilience_pct"],
+                "vcp_tightness": row["vcp_tightness"],
+                "above_sma20": row["above_sma20"],
+                "above_sma50": row["above_sma50"],
+                "volume_ratio": row["volume_ratio"],
+                "volatility_annual_pct": row["volatility_annual_pct"],
+                "revenue_growth_pct": (
+                    float(info.get("revenueGrowth")) * 100 if isinstance(info.get("revenueGrowth"), (int, float)) else None
+                ),
+                "earnings_growth_pct": (
+                    float(info.get("earningsGrowth")) * 100 if isinstance(info.get("earningsGrowth"), (int, float)) else None
+                ),
+                "profit_margin_pct": (
+                    float(info.get("profitMargins")) * 100 if isinstance(info.get("profitMargins"), (int, float)) else None
+                ),
+                "source_label": "Yahoo Finance market/fundamental snapshot",
+                "data_as_of": row["data_as_of"],
+            }
+
+        rows = [row for row in await asyncio.gather(*(enrich_fundamentals(r) for r in stage1_rows)) if row]
         self.__class__._equity_candidate_cache = (rows, now)
         return rows
 
@@ -941,6 +1053,7 @@ class DiscoveryService:
 
     async def get_sentiment_heatmap(self) -> List[Dict[str, Any]]:
         """Identify global market sentiment per sector and include top stocks."""
+        import asyncio
         sectors_config = {
             "Artificial Intelligence": ["NVDA", "PLTR", "ARM", "AI"],
             "Semiconductors": ["AMD", "TSM", "AVGO", "SMCI"],
@@ -954,29 +1067,39 @@ class DiscoveryService:
             "Healthcare": ["JNJ", "PFE", "UNH", "ABBV"],
             "Industrials": ["CAT", "HON", "BA", "GE"]
         }
+        unique_tickers = list(dict.fromkeys(t for tickers in sectors_config.values() for t in tickers))
+        sem = asyncio.Semaphore(6)
+
+        async def _load_one(t: str) -> tuple[str, Optional[Dict[str, Any]], Dict[str, Any]]:
+            async with sem:
+                def _sync_fetch():
+                    try:
+                        fetcher = DataFetcher(t)
+                        price_data = fetcher.get_price_data()
+                        info = fetcher.info or {}
+                        return price_data, info
+                    except Exception:
+                        return None, {}
+                p_data, inf = await asyncio.to_thread(_sync_fetch)
+                return t, p_data, inf
+
+        fetched_list = await asyncio.gather(*(_load_one(t) for t in unique_tickers))
+        ticker_map = {t: (p_data, inf) for t, p_data, inf in fetched_list}
+
         heatmap = []
         for sector, tickers in sectors_config.items():
             sentiments = []
             top_stocks = []
             
             for t in tickers:
-                try:
-                    fetcher = DataFetcher(t)
-                    price_data = fetcher.get_price_data()
-                    info = fetcher.info or {}
-                except Exception:
-                    price_data = None
-                    info = {}
-                
-                # Mock average sentiment
-                # Simplified: logic based on price change + news volume
+                price_data, info = ticker_map.get(t, (None, {}))
                 change = price_data.get("change_1w", 0) if price_data else None
                 if change is None:
                     top_stocks.append({
                         "ticker": t,
                         "price": None,
                         "change_1w": 0,
-                        "name": info.get("shortName", t),
+                        "name": info.get("shortName") or UNIVERSE_NAMES.get(t) or t,
                         "fallback": True,
                     })
                     continue
@@ -987,7 +1110,7 @@ class DiscoveryService:
                     "ticker": t,
                     "price": price_data.get("current_price") if price_data else None,
                     "change_1w": change,
-                    "name": info.get("shortName", t)
+                    "name": info.get("shortName") or UNIVERSE_NAMES.get(t) or t
                 })
             if not sentiments:
                 continue

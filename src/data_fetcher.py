@@ -107,6 +107,15 @@ class DataFetcher:
             DataFetcher.prune_cache()
             DataFetcher._global_cache[cache_key] = (val, now)
             return val
+
+        try:
+            from src.memory_optimizer import get_shared_pool
+            cached_fund = get_shared_pool().get_cached_fundamentals(self.ticker)
+            if cached_fund:
+                DataFetcher._global_cache[cache_key] = (cached_fund, now)
+                return cached_fund
+        except Exception:
+            pass
         
         try:
             # yfinance info can be slow or hang
@@ -115,6 +124,12 @@ class DataFetcher:
             if not val:
                 print(f"Warning: No info returned for {self.ticker}")
                 val = {}
+            else:
+                try:
+                    from src.memory_optimizer import get_shared_pool
+                    get_shared_pool().set_cached_fundamentals(self.ticker, val)
+                except Exception:
+                    pass
             DataFetcher.prune_cache()
             DataFetcher._global_cache[cache_key] = (val, now)
             return val
@@ -290,6 +305,13 @@ class DataFetcher:
 
             before = closes[closes.index < event_time]
             after = closes[closes.index >= event_time]
+            if after.empty and len(before) >= 2:
+                # If news was published within the currently forming 15m bar (0-20m ago),
+                # use the prior bar as pre-news baseline and the current bar as live reaction.
+                lag_sec = (event_time - closes.index[-1]).total_seconds()
+                if 0 <= lag_sec <= 1800:
+                    after = closes.iloc[-1:]
+                    before = before.iloc[:-1]
             if before.empty or after.empty:
                 return {"error": "Publication is outside the available intraday window"}
             baseline_time = before.index[-1]
@@ -867,6 +889,150 @@ class DataFetcher:
             print(f"Error fetching upcoming earnings for {self.ticker}: {e}")
             return None
     
+    def get_extended_hours_reaction(self) -> Dict[str, Any]:
+        """Fetch real-time 5m extended-hours (Pre-Market / After-Hours / Intraday) reaction and Long/Short levels."""
+        cache_key = f"ext_reaction:{self.ticker}"
+        cached = _short_cache_get(cache_key, 60.0)
+        if cached is not None:
+            return cached
+
+        result: Dict[str, Any] = {
+            "ticker": self.ticker,
+            "available": False,
+            "session_phase": "regular",
+            "last_price": None,
+            "regular_close": None,
+            "extended_change_pct": 0.0,
+            "impulse_15m_pct": 0.0,
+            "volume_spike_ratio": 1.0,
+            "vwap": None,
+            "session_high": None,
+            "session_low": None,
+            "long_setup": None,
+            "short_setup": None,
+        }
+        try:
+            df = self.stock.history(period="5d", interval="5m", prepost=True)
+            if df is None or df.empty or "Close" not in df.columns:
+                _short_cache_set(cache_key, result)
+                return result
+
+            closes = pd.to_numeric(df["Close"], errors="coerce").dropna()
+            if closes.empty:
+                _short_cache_set(cache_key, result)
+                return result
+
+            last_price = float(closes.iloc[-1])
+            last_ts = closes.index[-1]
+            session_phase = "regular"
+            try:
+                from zoneinfo import ZoneInfo
+                et_ts = last_ts.tz_convert(ZoneInfo("America/New_York")) if getattr(last_ts, "tzinfo", None) else last_ts
+                hm = et_ts.hour * 60 + et_ts.minute
+                if hm >= 16 * 60:
+                    session_phase = "after_hours"
+                elif hm < 9 * 60 + 30:
+                    session_phase = "pre_market"
+            except Exception:
+                pass
+
+            regular_close = None
+            try:
+                from zoneinfo import ZoneInfo
+                et_index = df.index.tz_convert(ZoneInfo("America/New_York"))
+                reg_mask = (et_index.hour * 60 + et_index.minute >= 9 * 60 + 30) & (
+                    et_index.hour * 60 + et_index.minute <= 16 * 60
+                )
+                reg_closes = pd.to_numeric(df.loc[reg_mask, "Close"], errors="coerce").dropna()
+                if not reg_closes.empty:
+                    if session_phase == "regular" and len(reg_closes) > 78:
+                        prior_day = et_index[reg_mask][-1].date()
+                        prior_mask = reg_mask & (et_index.date < prior_day)
+                        prior_closes = pd.to_numeric(df.loc[prior_mask, "Close"], errors="coerce").dropna()
+                        if not prior_closes.empty:
+                            regular_close = float(prior_closes.iloc[-1])
+                    if regular_close is None:
+                        regular_close = float(reg_closes.iloc[-1])
+            except Exception:
+                pass
+
+            if not regular_close or regular_close <= 0:
+                regular_close = float(closes.iloc[-min(len(closes), 12)])
+
+            ext_change_pct = ((last_price - regular_close) / regular_close) * 100.0 if regular_close > 0 else 0.0
+            ref_idx = max(0, len(closes) - 4)
+            ref_price = float(closes.iloc[ref_idx])
+            impulse_15m_pct = ((last_price - ref_price) / ref_price) * 100.0 if ref_price > 0 else 0.0
+
+            recent_slice = df.tail(24)
+            highs = pd.to_numeric(recent_slice.get("High", closes), errors="coerce").dropna()
+            lows = pd.to_numeric(recent_slice.get("Low", closes), errors="coerce").dropna()
+            vols = pd.to_numeric(recent_slice.get("Volume", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+
+            session_high = float(highs.tail(12).max()) if not highs.empty else last_price
+            session_low = float(lows.tail(12).min()) if not lows.empty else last_price
+
+            vwap = last_price
+            if not vols.empty and float(vols.tail(12).sum()) > 0:
+                recent_c = pd.to_numeric(recent_slice["Close"], errors="coerce").tail(12).fillna(last_price)
+                recent_v = vols.tail(12)
+                vwap = float((recent_c * recent_v).sum() / max(float(recent_v.sum()), 1.0))
+
+            vol_spike = 1.0
+            if len(vols) >= 6:
+                last_3_vol = float(vols.tail(3).mean())
+                base_vol = float(vols.iloc[:-3].replace(0, np.nan).median() or 0.0)
+                if base_vol > 0:
+                    vol_spike = round(min(25.0, last_3_vol / base_vol), 2)
+
+            band = max(last_price * 0.008, abs(session_high - session_low) * 0.35, 0.25)
+            long_entry = round(max(last_price, vwap) * 1.0015, 2)
+            long_stop = round(min(vwap, session_low, last_price - band), 2)
+            long_risk = max(long_entry - long_stop, last_price * 0.01)
+            long_t1 = round(long_entry + long_risk * 1.6, 2)
+            long_t2 = round(long_entry + long_risk * 2.8, 2)
+
+            short_entry = round(min(last_price, vwap) * 0.9985, 2)
+            short_stop = round(max(vwap, session_high, last_price + band), 2)
+            short_risk = max(short_stop - short_entry, last_price * 0.01)
+            short_t1 = round(max(0.01, short_entry - short_risk * 1.6), 2)
+            short_t2 = round(max(0.01, short_entry - short_risk * 2.8), 2)
+
+            result = {
+                "ticker": self.ticker,
+                "available": True,
+                "session_phase": session_phase,
+                "last_price": round(last_price, 2),
+                "regular_close": round(regular_close, 2),
+                "extended_change_pct": round(ext_change_pct, 2),
+                "impulse_15m_pct": round(impulse_15m_pct, 2),
+                "volume_spike_ratio": vol_spike,
+                "vwap": round(vwap, 2),
+                "session_high": round(session_high, 2),
+                "session_low": round(session_low, 2),
+                "long_setup": {
+                    "direction": "LONG",
+                    "entry_trigger": f"Long ueber ${long_entry:.2f} (VWAP ${vwap:.2f} halten)",
+                    "entry_price": long_entry,
+                    "stop_loss": long_stop,
+                    "target_1": long_t1,
+                    "target_2": long_t2,
+                },
+                "short_setup": {
+                    "direction": "SHORT",
+                    "entry_trigger": f"Short unter ${short_entry:.2f} (VWAP ${vwap:.2f} Reject / Breakdown)",
+                    "entry_price": short_entry,
+                    "stop_loss": short_stop,
+                    "target_1": short_t1,
+                    "target_2": short_t2,
+                },
+            }
+        except Exception:
+            pass
+
+        _short_cache_set(cache_key, result)
+        return result
+
     def get_insider_transactions(self) -> list:
         """Fetch Form 4 insider transactions."""
         try:

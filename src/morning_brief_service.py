@@ -114,20 +114,17 @@ class MorningBriefService:
         "BMW.DE", "TTWO",
     ]
 
-    # Free RSS feeds for real-time headlines
+    # Free RSS feeds for real-time headlines (parallelized with 3s timeout; dead feeds.reuters.com removed)
     RSS_FEEDS = [
         ("https://www.federalreserve.gov/feeds/press_monetary.xml", "Federal Reserve Board"),
         ("https://www.bls.gov/feed/bls_latest.rss", "U.S. Bureau of Labor Statistics"),
         ("https://www.bea.gov/rss/rss.xml", "U.S. Bureau of Economic Analysis"),
-        ("https://feeds.reuters.com/reuters/businessNews", "Reuters"),
-        ("https://feeds.reuters.com/reuters/technologyNews", "Reuters"),
-        ("https://feeds.reuters.com/news/economy", "Reuters"),
         ("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147", "CNBC"),
         ("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135", "CNBC"),
+        ("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362", "CNBC"),
         ("https://feeds.marketwatch.com/marketwatch/topstories/", "MarketWatch"),
         ("https://feeds.marketwatch.com/marketwatch/marketpulse/", "MarketWatch"),
         ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance"),
-        ("https://www.investing.com/rss/news.rss", "Investing.com"),
     ]
     DEFAULT_BRIEF_TIMEZONE = "Europe/Berlin"
     CONTRARIAN_PUBLISHERS = {"CNBC", "Bloomberg", "Reuters", "MarketWatch", "Barron's", "Barrons", "WSJ"}
@@ -555,7 +552,7 @@ class MorningBriefService:
         earnings_calendar = self._collect_earnings_calendar(watchlist_snapshot)
         if not earnings_calendar:
             earnings_calendar = self._build_earnings_watch_fallback(watchlist_snapshot)
-        earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings)
+        earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings, top_news=top_news, fast=False)
         economic_calendar = self._build_economic_calendar(event_layer)
         opening_timeline = self._build_opening_timeline(
             [asia, europe, usa],
@@ -568,7 +565,7 @@ class MorningBriefService:
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
         congress_watch = self._build_congress_watch(action_board)
         learning_bias = self._build_learning_bias()
-        trade_setups = self._build_trade_setups(action_board, top_news, market_movers, learning_bias)
+        trade_setups = self._build_trade_setups(action_board, top_news, market_movers, learning_bias, earnings_results=earnings_results)
         setup_board = self._build_setup_board(trade_setups)
         prediction_signals = self._build_prediction_signals(polymarket_events)
 
@@ -674,6 +671,13 @@ class MorningBriefService:
             and self._is_usable_brief(self._cache)
             and (now - self._cache_time).total_seconds() < self._ttl_seconds
         ):
+            last_overlay = getattr(self, "_last_breaking_overlay_ts", None) or self._cache_time
+            if (now - last_overlay).total_seconds() >= 45:
+                self._last_breaking_overlay_ts = now
+                try:
+                    self._overlay_breaking_news_and_earnings(self._cache, watchlist_snapshot)
+                except Exception:
+                    pass
             return self._prepare_brief_for_delivery(self._cache, watchlist_snapshot)
 
         watchlist_tickers = [
@@ -741,7 +745,8 @@ class MorningBriefService:
         action_board = self._build_action_board(top_news, event_layer, watchlist_snapshot, narrative["macro_regime"])
         congress_watch = self._build_congress_watch(action_board)
         learning_bias = self._build_learning_bias()
-        trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []}, learning_bias)
+        earnings_results = self._collect_earnings_results(watchlist_snapshot, earnings_calendar, broad_earnings, top_news=top_news, fast=True)
+        trade_setups = self._build_trade_setups(action_board, top_news, {"gainers": [], "losers": []}, learning_bias, earnings_results=earnings_results)
         setup_board = self._build_setup_board(trade_setups)
 
         brief = {
@@ -781,7 +786,7 @@ class MorningBriefService:
             "economic_calendar": economic_calendar,
             "earnings_calendar": earnings_calendar,
             "broad_earnings": broad_earnings[:12],
-            "earnings_results": [],
+            "earnings_results": earnings_results,
             "opening_timeline": opening_timeline,
             "action_board": action_board,
             "congress_watch": congress_watch,
@@ -1148,12 +1153,33 @@ class MorningBriefService:
         """Fetch fresh headlines from free RSS feeds (Reuters, CNBC, MarketWatch, etc.)"""
         if not _HAS_FEEDPARSER:
             return []
+        now_ts = perf_time.time()
+        rss_cache = getattr(self, "_rss_fast_cache", None)
+        rss_cache_ts = float(getattr(self, "_rss_fast_cache_ts", 0.0) or 0.0)
+        if rss_cache is not None and (now_ts - rss_cache_ts) < 40.0:
+            return list(rss_cache)
+
         items: List[Dict[str, Any]] = []
         seen_reports: set[tuple[str, str]] = set()
-        for feed_url, feed_publisher in self.RSS_FEEDS:
+
+        def _fetch_single_feed(feed_pair: tuple[str, str]):
+            f_url, f_pub = feed_pair
             try:
-                parsed = feedparser.parse(feed_url, request_headers={"User-Agent": "Mozilla/5.0"})
-                for entry in (parsed.entries or [])[:5]:
+                resp = requests.get(f_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3.0)
+                if resp.status_code != 200 or not resp.content:
+                    return f_pub, []
+                parsed = feedparser.parse(resp.content)
+                return f_pub, list((parsed.entries or [])[:6])
+            except Exception:
+                return f_pub, []
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            feed_results = list(pool.map(_fetch_single_feed, self.RSS_FEEDS))
+
+        for feed_publisher, entries in feed_results:
+            try:
+                for entry in entries:
                     title = (entry.get("title") or "").strip()
                     link = entry.get("link") or ""
                     report_key = (self._news_identity(title), self._extract_domain(link) or feed_publisher.lower())
@@ -1226,7 +1252,46 @@ class MorningBriefService:
                     items.append(self._enrich_news_item(news_item))
             except Exception:
                 continue
+        self._rss_fast_cache = list(items)
+        self._rss_fast_cache_ts = now_ts
         return items
+
+    def _overlay_breaking_news_and_earnings(
+        self,
+        cached_brief: Dict[str, Any],
+        watchlist_snapshot: Dict[str, Any] | None = None,
+    ) -> None:
+        """Ultra-fast (<0.6s) breaking RSS news & earnings flash delta overlay onto cached brief."""
+        fresh_rss = self._collect_rss_news()
+        if not fresh_rss:
+            return
+        existing_news = list(cached_brief.get("top_news") or [])
+        existing_ids = {self._news_identity(str(item.get("title") or "")) for item in existing_news}
+        new_headlines = [
+            item for item in fresh_rss
+            if item.get("title") and self._news_identity(str(item.get("title") or "")) not in existing_ids
+        ]
+        if not new_headlines:
+            return
+        confirmed_new = self._attach_news_market_confirmation(new_headlines, fast=True)
+        confirmed_new = self._attach_news_primary_sources(confirmed_new, fast=True)
+        confirmed_new = self._attach_news_decision_readiness(confirmed_new)
+        merged_news = (confirmed_new + existing_news)[:18]
+        cached_brief["top_news"] = merged_news
+        cached_brief["event_layer"] = self._build_event_layer(merged_news)
+        cached_brief["event_pings"] = self._build_event_pings(cached_brief["event_layer"]) or cached_brief.get("event_pings", [])
+
+        # If any new headline mentions earnings/revenue/guidance, immediately refresh earnings_results cache
+        earnings_kw = ("earnings", "revenue", "umsatz", "eps", "guidance", "outlook", "beats", "misses", "sales", "quartalszahlen")
+        if any(any(k in str(h.get("title") or "").lower() for k in earnings_kw) for h in confirmed_new):
+            self._earnings_results_cache = None
+            cached_brief["earnings_results"] = self._collect_earnings_results(
+                watchlist_snapshot,
+                cached_brief.get("earnings_calendar"),
+                cached_brief.get("broad_earnings"),
+                top_news=merged_news,
+                fast=True,
+            )
 
     def _collect_news(self, extra_tickers: List[str] | None = None, fast: bool = False) -> List[Dict[str, Any]]:
         started = perf_time.perf_counter()
@@ -2783,6 +2848,7 @@ class MorningBriefService:
         news: List[Dict[str, Any]],
         market_movers: Dict[str, List[Dict[str, Any]]] | None = None,
         learning_bias: Dict[str, Any] | None = None,
+        earnings_results: List[Dict[str, Any]] | None = None,
     ) -> List[Dict[str, Any]]:
         learning_bias = learning_bias or {"source": {}, "setup_type": {}, "summary": []}
         source_lookup: Dict[str, Dict[str, Any]] = {}
@@ -2792,6 +2858,62 @@ class MorningBriefService:
                 source_lookup[ticker] = item
 
         scored: List[Dict[str, Any]] = []
+        for er in (earnings_results or [])[:6]:
+            if str(er.get("freshness") or "") != "fresh":
+                continue
+            days_since = er.get("days_since")
+            if isinstance(days_since, int) and days_since > 2:
+                continue
+            symbol = str(er.get("ticker") or "").upper()
+            trade_dir = str(er.get("trade_direction") or "").upper()
+            status = str(er.get("status") or "").lower()
+            if not symbol or trade_dir not in {"LONG", "SHORT"}:
+                continue
+            is_short = trade_dir == "SHORT"
+            ext_pct = er.get("extended_change_pct")
+            ext_str = f" ({ext_pct:+.2f}% Live-Reaktion)" if isinstance(ext_pct, (int, float)) and abs(ext_pct) >= 0.3 else ""
+            rev_yoy = er.get("revenue_yoy")
+            rev_str = f", Umsatz {float(rev_yoy)*100:+.1f}% YoY" if isinstance(rev_yoy, (int, float)) and abs(float(rev_yoy)) <= 5 else (
+                f", Umsatz {float(rev_yoy):+.1f}% YoY" if isinstance(rev_yoy, (int, float)) else ""
+            )
+            learning_adjustment = self._learning_adjustment(learning_bias, "earnings_flash", "earnings")
+            conf = 84 if abs(float(ext_pct or 0.0)) >= 2.5 or abs(float(er.get("eps_surprise_pct") or 0.0)) >= 5 else 78
+            scored.append(
+                {
+                    "symbol": symbol,
+                    "thesis": (
+                        f"LIVE EARNINGS/UMSATZ {'MISS / SHORT' if is_short else 'BEAT / LONG'}: "
+                        f"{er.get('summary') or ''}{rev_str}{ext_str}".strip()
+                    ),
+                    "trigger": er.get("entry_trigger") or (
+                        "Short unter VWAP / erstem Breakdown nach Zahlen-Miss."
+                        if is_short
+                        else "Long ueber VWAP / erstem Pullback-Hold nach Zahlen-Beat."
+                    ),
+                    "invalidation": (
+                        f"Stop-Loss ueber ${er['stop_loss']:.2f} (Reclaim von VWAP/Session-High invalidiert Short)."
+                        if is_short and isinstance(er.get("stop_loss"), (int, float))
+                        else f"Stop-Loss unter ${er['stop_loss']:.2f} (Verlust von VWAP/Session-Low invalidiert Long)."
+                        if not is_short and isinstance(er.get("stop_loss"), (int, float))
+                        else "Invalidiert bei vollem Reversal der Earnings-Kerze."
+                    ),
+                    "window": "sofort / Extended Hours + Open",
+                    "confidence": conf,
+                    "decision_quality": "high conviction" if conf >= 80 else "selective",
+                    "size_guidance": "normal risk" if conf >= 82 else "reduced risk",
+                    "expected_move": f"{max(2.5, abs(float(ext_pct or 3.0))):.1f}-6.0%",
+                    "catalysts": ["earnings_release", status, trade_dir.lower()],
+                    "setup_type": "earnings_flash",
+                    "learning_adjustment": learning_adjustment,
+                    "direction": "short" if is_short else "long",
+                    "trade_direction": trade_dir,
+                    "entry_price": er.get("entry_price"),
+                    "stop_loss": er.get("stop_loss"),
+                    "target_1": er.get("target_1"),
+                    "target_2": er.get("target_2"),
+                    "_score": round(92.0 + float(learning_adjustment.get("score_delta") or 0), 2),
+                }
+            )
         for item in action_board:
             ticker = str(item.get("ticker") or "").upper()
             if not ticker:
@@ -2935,7 +3057,11 @@ class MorningBriefService:
             direction = str(setup.get("direction") or "").lower()
             quality = str(setup.get("decision_quality") or "").lower()
             confidence = int(setup.get("confidence") or 0)
-            if direction in {"short", "watch-short", "hedge", "rebound_or_avoid"}:
+            if direction in {"hedge", "rebound_or_avoid"} or (direction == "watch-short" and confidence < 75):
+                target_bucket = "avoid"
+            elif direction == "short" and confidence >= 75:
+                target_bucket = "now" if (quality == "high conviction" and confidence >= 80) else "next"
+            elif direction == "short":
                 target_bucket = "avoid"
             elif quality == "high conviction" and confidence >= 80:
                 target_bucket = "now"
@@ -2947,6 +3073,10 @@ class MorningBriefService:
             buckets[target_bucket].append(
                 {
                     "symbol": setup.get("symbol"),
+                    "direction": setup.get("direction"),
+                    "trade_direction": setup.get("trade_direction") or (
+                        "SHORT" if "short" in direction else "LONG" if "long" in direction else "WATCH"
+                    ),
                     "thesis": setup.get("thesis"),
                     "trigger": setup.get("trigger"),
                     "invalidation": setup.get("invalidation"),
@@ -2956,6 +3086,10 @@ class MorningBriefService:
                     "expected_move": setup.get("expected_move"),
                     "rank": setup.get("rank"),
                     "window": setup.get("window"),
+                    "entry_price": setup.get("entry_price"),
+                    "stop_loss": setup.get("stop_loss"),
+                    "target_1": setup.get("target_1"),
+                    "target_2": setup.get("target_2"),
                 }
             )
         return buckets
@@ -3564,8 +3698,47 @@ class MorningBriefService:
         watchlist_snapshot: Dict[str, Any] | None,
         earnings_calendar: List[Dict[str, Any]] | None = None,
         broad_earnings: List[Dict[str, Any]] | None = None,
+        top_news: List[Dict[str, Any]] | None = None,
+        fast: bool = False,
     ) -> List[Dict[str, Any]]:
-        tickers: List[str] = []
+        now_utc = datetime.now(timezone.utc)
+        cache_attr = getattr(self, "_earnings_results_cache", None)
+        cache_ts = getattr(self, "_earnings_results_cache_ts", None)
+        if fast and cache_attr is not None and cache_ts is not None:
+            if (now_utc - cache_ts).total_seconds() < 180:
+                return list(cache_attr)
+
+        # Extract breaking earnings/revenue news per ticker from top_news
+        breaking_news_by_ticker: Dict[str, Dict[str, Any]] = {}
+        earnings_keywords = (
+            "earnings", "revenue", "umsatz", "quartalszahlen", "eps", "guidance",
+            "outlook", "beats", "misses", "sales", "q1", "q2", "q3", "q4", "fy",
+            "prognose", "gewinn",
+        )
+        positive_kw = ("beat", "beats", "tops", "raises", "strong", "surges", "jumps", "soars", "uebertrifft", "erhoeht", "rekord")
+        negative_kw = ("miss", "misses", "cuts", "lowers", "weak", "slumps", "drops", "plunges", "falls", "verfehlt", "senkt", "warnung")
+
+        for item in (top_news or []):
+            t = str(item.get("ticker") or "").upper().strip()
+            title = str(item.get("title") or "")
+            title_l = title.lower()
+            if not t or not title:
+                continue
+            if any(kw in title_l for kw in earnings_keywords):
+                pos_hits = sum(1 for k in positive_kw if k in title_l)
+                neg_hits = sum(1 for k in negative_kw if k in title_l)
+                inferred_status = "beat" if pos_hits > neg_hits else "miss" if neg_hits > pos_hits else "inline"
+                if t not in breaking_news_by_ticker:
+                    breaking_news_by_ticker[t] = {
+                        "title": title,
+                        "status": inferred_status,
+                        "source_url": item.get("source_url") or item.get("link") or "",
+                        "published_at": item.get("published_at"),
+                        "has_revenue_mention": any(rk in title_l for rk in ("revenue", "umsatz", "sales", "erlöse")),
+                        "has_guidance_mention": any(gk in title_l for gk in ("guidance", "outlook", "prognose", "forecast")),
+                    }
+
+        tickers: List[str] = list(breaking_news_by_ticker.keys())
         if watchlist_snapshot:
             for item in watchlist_snapshot.get("items", []):
                 if item.get("kind") == "ticker":
@@ -3593,75 +3766,154 @@ class MorningBriefService:
             seen.add(normalized)
             unique_tickers.append(normalized)
 
+        imminent_earnings_tickers: set[str] = set()
+        for source in list(earnings_calendar or [])[:8] + list(broad_earnings or [])[:8]:
+            t_sym = str(source.get("ticker") or "").upper().strip()
+            days_u = source.get("days_until")
+            if t_sym and (days_u in {-1, 0, 1} or str(source.get("date") or "").startswith(now_utc.strftime("%Y-%m-%d"))):
+                imminent_earnings_tickers.add(t_sym)
+
         results: List[Dict[str, Any]] = []
         stale_references: List[Dict[str, Any]] = []
         max_age_days = int(os.getenv("BRIEF_EARNINGS_RESULT_MAX_AGE_DAYS", "10"))
         stale_max_age_days = int(os.getenv("BRIEF_EARNINGS_RESULT_STALE_MAX_AGE_DAYS", "420"))
-        for ticker in unique_tickers[:10]:
+        scan_limit = 6 if fast else 10
+        for ticker in unique_tickers[:scan_limit]:
             try:
                 fetcher = DataFetcher(ticker)
+                news_flash = breaking_news_by_ticker.get(ticker)
                 history = fetcher.get_earnings_history()
                 reported_rows = [
                     row for row in history
                     if row.get("reported_eps") is not None or row.get("eps_surprise_pct") is not None
                 ]
                 latest = reported_rows[0] if reported_rows else (history[0] if history else None)
-                if not latest:
-                    continue
-                period_dt = self._parse_earnings_period(latest.get("period"))
-                if period_dt is None:
-                    continue
-                now_utc = datetime.now(timezone.utc)
-                days_since = (now_utc.date() - period_dt.date()).days
-                if days_since < 0:
+
+                period_dt = self._parse_earnings_period(latest.get("period")) if latest else None
+                days_since = (now_utc.date() - period_dt.date()).days if period_dt is not None else None
+
+                # Only fetch 5m extended-hours data when ticker has breaking earnings news, imminent earnings window, or fresh release (<=2d)
+                should_check_ext = bool(
+                    news_flash
+                    or ticker in imminent_earnings_tickers
+                    or (days_since is not None and 0 <= days_since <= 2)
+                )
+                ext_reaction = fetcher.get_extended_hours_reaction() if should_check_ext else {"available": False}
+                ext_pct = float(ext_reaction.get("extended_change_pct") or 0.0) if ext_reaction.get("available") else 0.0
+                impulse_15m = float(ext_reaction.get("impulse_15m_pct") or 0.0) if ext_reaction.get("available") else 0.0
+                vol_spike = float(ext_reaction.get("volume_spike_ratio") or 1.0) if ext_reaction.get("available") else 1.0
+
+                # Detect live earnings/revenue release when news_flash or sharp extended-hours reaction occurs
+                is_live_flash = bool(
+                    news_flash
+                    or (abs(ext_pct) >= 2.2 and vol_spike >= 1.8)
+                    or (days_since is not None and 0 <= days_since <= 1)
+                )
+                if is_live_flash and (days_since is None or days_since < 0 or days_since > 2):
+                    if news_flash or (abs(ext_pct) >= 3.0 and vol_spike >= 2.2):
+                        period_dt = now_utc
+                        days_since = 0
+
+                if period_dt is None or days_since is None or days_since < 0:
                     continue
 
-                surprise = latest.get("eps_surprise_pct")
-                reported = latest.get("reported_eps")
-                estimate = latest.get("eps_estimate")
-                if surprise is None and reported is None and estimate is None:
+                surprise = latest.get("eps_surprise_pct") if latest else None
+                reported = latest.get("reported_eps") if latest else None
+                estimate = latest.get("eps_estimate") if latest else None
+
+                status = (latest.get("status") if latest else None) or self._earnings_result_status(surprise)
+                if days_since == 0 and status == "inline":
+                    if news_flash and news_flash.get("status") in {"beat", "miss"}:
+                        status = news_flash["status"]
+                    elif ext_pct >= 2.0:
+                        status = "beat"
+                    elif ext_pct <= -2.0:
+                        status = "miss"
+
+                if surprise is None and reported is None and estimate is None and not news_flash and abs(ext_pct) < 2.0:
                     continue
 
-                status = latest.get("status") or self._earnings_result_status(surprise)
-                fundamentals = fetcher.get_fundamentals() or {}
+                fundamentals = {} if (fast and days_since > 2) else (fetcher.get_fundamentals() or {})
                 trends = ((fundamentals.get("financial_statements") or {}).get("trends") or {})
                 revenue_yoy = trends.get("quarterly_revenue_yoy")
-                guidance_signal = fetcher.get_guidance_signal() or {}
+                guidance_signal = {} if (fast and days_since > 2) else (fetcher.get_guidance_signal() or {})
                 guidance_sentiment = str(guidance_signal.get("sentiment") or "unknown").lower()
+                if news_flash and guidance_sentiment == "unknown":
+                    if news_flash.get("status") == "beat":
+                        guidance_sentiment = "positive"
+                    elif news_flash.get("status") == "miss":
+                        guidance_sentiment = "negative"
+
                 action_hint, summary = self._earnings_result_action(
                     status,
                     surprise,
                     revenue_yoy,
                     guidance_sentiment,
+                    extended_change_pct=ext_pct,
                 )
+
+                # Determine explicit LONG / SHORT trade setup
+                trade_direction = "WATCH"
+                active_setup = None
+                if status == "beat" and ext_pct >= -0.5 and guidance_sentiment != "negative":
+                    trade_direction = "LONG"
+                    active_setup = ext_reaction.get("long_setup")
+                elif status == "miss" or guidance_sentiment == "negative" or ext_pct <= -1.8:
+                    trade_direction = "SHORT"
+                    active_setup = ext_reaction.get("short_setup")
+                elif ext_pct >= 1.8:
+                    trade_direction = "LONG"
+                    active_setup = ext_reaction.get("long_setup")
+
                 freshness = "fresh" if days_since <= max_age_days else "stale_reference"
                 if freshness == "stale_reference":
                     if days_since > stale_max_age_days:
                         continue
                     action_hint = "stale_reference_only"
+                    trade_direction = "WATCH"
                     summary = (
                         f"Letzte bekannte Zahlen sind {days_since} Tage alt. "
                         f"Nicht als frisches Setup nutzen; nur Kontext fuer Qualitaet, Bewertung und naechste Earnings-Erwartung. "
                         f"{summary}"
                     )
+                elif news_flash and news_flash.get("title"):
+                    summary = f"FLASH: {news_flash['title']} — {summary}"
+
                 info = fetcher.info or {}
                 row = {
                     "ticker": ticker,
                     "company": info.get("shortName") or info.get("longName") or ticker,
-                    "period": latest.get("period"),
+                    "period": (latest.get("period") if latest else None) or period_dt.strftime("%Y-%m-%d"),
                     "reported_at": period_dt.isoformat(),
                     "days_since": days_since,
                     "reported_eps": reported,
                     "eps_estimate": estimate,
                     "eps_surprise_pct": surprise,
                     "revenue_yoy": revenue_yoy,
-                    "guidance_label": guidance_signal.get("label"),
+                    "guidance_label": guidance_signal.get("label") or (
+                        "Guidance erhoeht" if guidance_sentiment == "positive" else "Guidance gesenkt" if guidance_sentiment == "negative" else None
+                    ),
                     "guidance_sentiment": guidance_sentiment,
                     "status": status,
                     "freshness": freshness,
                     "action_hint": action_hint,
+                    "trade_direction": trade_direction,
+                    "session_phase": ext_reaction.get("session_phase", "regular"),
+                    "last_price": ext_reaction.get("last_price"),
+                    "extended_change_pct": round(ext_pct, 2),
+                    "impulse_15m_pct": round(impulse_15m, 2),
+                    "volume_spike_ratio": vol_spike,
+                    "vwap": ext_reaction.get("vwap"),
+                    "entry_trigger": (active_setup or {}).get("entry_trigger"),
+                    "entry_price": (active_setup or {}).get("entry_price"),
+                    "stop_loss": (active_setup or {}).get("stop_loss"),
+                    "target_1": (active_setup or {}).get("target_1"),
+                    "target_2": (active_setup or {}).get("target_2"),
+                    "long_setup": ext_reaction.get("long_setup"),
+                    "short_setup": ext_reaction.get("short_setup"),
                     "summary": summary,
-                    "source": "yfinance_earnings_dates",
+                    "source_url": (news_flash or {}).get("source_url") or "",
+                    "source": "live_earnings_flash" if (news_flash or days_since == 0) else "yfinance_earnings_dates",
                 }
                 if freshness == "fresh":
                     results.append(row)
@@ -3673,14 +3925,19 @@ class MorningBriefService:
         def sort_key(item: Dict[str, Any]) -> tuple:
             surprise = item.get("eps_surprise_pct")
             surprise_abs = abs(float(surprise)) if isinstance(surprise, (int, float)) else 0.0
-            status_rank = {"beat": 3, "miss": 2, "inline": 1}.get(str(item.get("status")), 0)
-            return (status_rank, surprise_abs)
+            ext_abs = abs(float(item.get("extended_change_pct") or 0.0))
+            is_today = 1 if (item.get("days_since") is not None and int(item.get("days_since")) <= 1) else 0
+            status_rank = {"beat": 3, "miss": 3, "inline": 1}.get(str(item.get("status")), 0)
+            return (is_today, status_rank, max(surprise_abs, ext_abs))
 
         results.sort(key=sort_key, reverse=True)
-        if results:
-            return results[:6]
-        stale_references.sort(key=sort_key, reverse=True)
-        return stale_references[:4]
+        final_rows = results[:6] if results else stale_references[:4]
+        if not results:
+            stale_references.sort(key=sort_key, reverse=True)
+            final_rows = stale_references[:4]
+        self._earnings_results_cache = list(final_rows)
+        self._earnings_results_cache_ts = now_utc
+        return final_rows
 
     def _parse_earnings_period(self, value: Any) -> datetime | None:
         if not value:
@@ -3710,45 +3967,47 @@ class MorningBriefService:
         surprise: Any,
         revenue_yoy: Any = None,
         guidance_sentiment: str = "unknown",
+        extended_change_pct: float = 0.0,
     ) -> tuple[str, str]:
         surprise_value = float(surprise) if isinstance(surprise, (int, float)) else 0.0
         revenue_value = float(revenue_yoy) if isinstance(revenue_yoy, (int, float)) else None
+        ext_val = float(extended_change_pct) if isinstance(extended_change_pct, (int, float)) else 0.0
         has_positive_revenue = revenue_value is not None and revenue_value >= 0.08
         has_negative_revenue = revenue_value is not None and revenue_value < 0
 
-        if status == "beat" and surprise_value >= 8 and guidance_sentiment == "positive":
+        if status == "beat" and (surprise_value >= 8 or ext_val >= 2.5) and guidance_sentiment == "positive":
             return (
                 "constructive_if_follow_through",
-                "Deutlicher EPS-Beat mit positiver Guidance. Kauf nur bei sauberem Preis-Follow-through, nicht blind in den ersten Spike.",
+                "LONG-Setup: Deutlicher EPS-/Umsatz-Beat mit positiver Guidance. Long bei VWAP-Hold oder Breakout ueber den ersten 5m-Impuls.",
             )
-        if status == "beat" and (has_positive_revenue or guidance_sentiment == "positive"):
+        if status == "beat" and (has_positive_revenue or guidance_sentiment == "positive" or ext_val >= 1.5):
             return (
                 "constructive_watch",
-                "EPS ueber Erwartung. Setup wird konstruktiver, weil Guidance oder Umsatztrend mitziehen. Jetzt nur noch Preisreaktion bestaetigen.",
+                "LONG-Setup: EPS ueber Erwartung, Umsatz/Guidance konstruktiv. Einstieg Long bei Bestaetigung ueber VWAP.",
             )
         if status == "beat":
             return (
                 "watch_pullback_or_follow_through",
-                "EPS-Beat ohne klare Guidance-Bestaetigung. Kein Chase, erst Reaktion und Umsatztrend bestaetigen.",
+                "EPS-Beat ohne klare Guidance-Bestaetigung. Long nur bei sauberem Pullback-Hold ueber VWAP; bei Abverkauf unter VWAP Short-Reversal pruefen.",
             )
-        if status == "miss" and (guidance_sentiment == "negative" or has_negative_revenue):
+        if status == "miss" and (guidance_sentiment == "negative" or has_negative_revenue or ext_val <= -2.0):
             return (
-                "avoid_until_repair",
-                "EPS-Miss plus schwache Guidance oder negatives Umsatzmomentum. Kein Kauf, bis Management und Preisstruktur die Schaeden reparieren.",
+                "short_breakdown_or_vwap_reject",
+                "SHORT-Setup: EPS-/Umsatz-Miss plus schwache Guidance oder Abverkauf. Short unter VWAP / Breakdown des ersten 5m-Tiefs (Stop ueber VWAP).",
             )
         if status == "miss":
             return (
                 "caution_until_repair",
-                "EPS unter Erwartung. Erst beobachten, bis Management-Ausblick und Kursstruktur wieder Stabilitaet zeigen.",
+                "SHORT-Watch / Kein Long: EPS unter Erwartung. Short bei VWAP-Reject und Bruch des Intraday-Supports; Long meiden.",
             )
         if guidance_sentiment == "positive" and has_positive_revenue:
             return (
                 "constructive_watch",
-                "EPS nahe Erwartung, aber Guidance und Umsatztrend bleiben stabil. Watchlist-Kandidat statt aggressiver Einstieg.",
+                "EPS nahe Erwartung, aber Guidance und Umsatztrend stabil. Long-Watch bei Ausbruch ueber VWAP.",
             )
         return (
             "needs_guidance_confirmation",
-            "EPS nahe Erwartung. Kein Upgrade ohne starke Guidance, Umsatzbeschleunigung oder klare Marktreaktion.",
+            "EPS nahe Erwartung. Richtung ueber VWAP und Preis-Reaktion handeln (ueber VWAP Long, unter VWAP Short).",
         )
 
     def _build_economic_calendar(self, event_layer: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

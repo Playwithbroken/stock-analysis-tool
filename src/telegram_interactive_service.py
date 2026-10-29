@@ -97,44 +97,53 @@ class TelegramInteractiveService:
         self.compounder_service = quality_compounder_service
         self.leaps_service = asymmetric_options_leaps_service
 
-        if chart_snapshot_service:
-            self.chart_service = chart_snapshot_service
-        else:
-            try:
-                from src.chart_snapshot_service import ChartSnapshotService
-                self.chart_service = ChartSnapshotService(self.asymmetric_service)
-            except Exception:
-                self.chart_service = None
-
-        if macro_commodity_crypto_service:
-            self.macro_assets_service = macro_commodity_crypto_service
-        else:
-            try:
-                from src.macro_commodity_crypto_service import MacroCommodityCryptoService
-                self.macro_assets_service = MacroCommodityCryptoService()
-            except Exception:
-                self.macro_assets_service = None
-
-        if trading_coach_service:
-            self.coach_service = trading_coach_service
-        else:
-            try:
-                from src.trading_coach_service import TradingCoachService
-                self.coach_service = TradingCoachService(self.portfolio_manager)
-            except Exception:
-                self.coach_service = None
-
-        if earnings_expected_move_service:
-            self.earnings_service = earnings_expected_move_service
-        else:
-            try:
-                from src.earnings_expected_move_service import EarningsExpectedMoveService
-                self.earnings_service = EarningsExpectedMoveService()
-            except Exception:
-                self.earnings_service = None
+        self._chart_service = chart_snapshot_service
+        self._macro_assets_service = macro_commodity_crypto_service
+        self._coach_service = trading_coach_service
+        self._earnings_service = earnings_expected_move_service
 
         self._last_update_id: int = 0
         self._is_running: bool = False
+
+    @property
+    def chart_service(self) -> Any:
+        if self._chart_service is None:
+            try:
+                from src.chart_snapshot_service import ChartSnapshotService
+                self._chart_service = ChartSnapshotService(self.asymmetric_service)
+            except Exception:
+                self._chart_service = None
+        return self._chart_service
+
+    @property
+    def macro_assets_service(self) -> Any:
+        if self._macro_assets_service is None:
+            try:
+                from src.macro_commodity_crypto_service import MacroCommodityCryptoService
+                self._macro_assets_service = MacroCommodityCryptoService()
+            except Exception:
+                self._macro_assets_service = None
+        return self._macro_assets_service
+
+    @property
+    def coach_service(self) -> Any:
+        if self._coach_service is None:
+            try:
+                from src.trading_coach_service import TradingCoachService
+                self._coach_service = TradingCoachService(self.portfolio_manager)
+            except Exception:
+                self._coach_service = None
+        return self._coach_service
+
+    @property
+    def earnings_service(self) -> Any:
+        if self._earnings_service is None:
+            try:
+                from src.earnings_expected_move_service import EarningsExpectedMoveService
+                self._earnings_service = EarningsExpectedMoveService()
+            except Exception:
+                self._earnings_service = None
+        return self._earnings_service
 
     def _get_all_guest_ids(self) -> Set[str]:
         """Returns combined guest chat IDs from env and persisted app_settings."""
@@ -4510,9 +4519,9 @@ class TelegramInteractiveService:
                     params={
                         "offset": self._last_update_id + 1,
                         "limit": 10,
-                        "timeout": 15,
+                        "timeout": 25,
                     },
-                    timeout=25,
+                    timeout=35,
                 )
 
                 if poll_res.status_code == 200:

@@ -112,7 +112,8 @@ class SignalScoreService:
     def _score_equity_signals(self, signals: List[Dict[str, Any]], weights: Dict[str, float]) -> List[Dict[str, Any]]:
         scored = []
         for signal in signals:
-            event = next((item for item in signal.get("events", []) if item.get("shares")), None)
+            events = [item for item in signal.get("events", []) if item.get("shares")]
+            event = next(iter(events), None)
             if not event:
                 continue
             source_quality = 94
@@ -126,10 +127,21 @@ class SignalScoreService:
             if event.get("action") == "buy":
                 conviction += 15
             shares = float(event.get("shares") or 0)
-            if shares > 100000:
+            price_est = float(event.get("price") or event.get("transaction_price") or 0)
+            dollar_val = float(event.get("value") or (shares * price_est) or 0)
+            if dollar_val >= 500_000 or shares > 100000:
                 conviction += 10
-            elif shares > 10000:
+            elif dollar_val >= 100_000 or shares > 10000:
                 conviction += 5
+            # Cluster-buying edge: multiple distinct insiders buying within the filing window
+            distinct_buyers = {
+                str(ev.get("owner_name") or "").strip().lower()
+                for ev in events
+                if ev.get("action") == "buy" and ev.get("owner_name")
+            }
+            if len(distinct_buyers) >= 2:
+                conviction += 8
+                timing_quality = min(98, timing_quality + 5)
             total = self._weighted_total(source_quality, timing_quality, min(conviction, 100), weights)
             scored.append(
                 {
@@ -254,11 +266,20 @@ class SignalScoreService:
 
             timing = 45.0 + max(-18, min(20, change_1m * 1.8)) + max(-10, min(15, change_3m * 0.45))
             timing += max(-5, min(10, (volume_ratio - 1.0) * 12))
+            rs_alpha_1m = item.get("rs_alpha_1m")
+            if isinstance(rs_alpha_1m, (int, float)):
+                timing += max(-6, min(9, float(rs_alpha_1m) * 0.7))
+            if item.get("vcp_tightness"):
+                timing += 5.0
+
             conviction = 42.0
             conviction += 14 if item.get("above_sma20") else -10
             conviction += 16 if item.get("above_sma50") else -12
             if isinstance(volatility, (int, float)):
                 conviction += 8 if float(volatility) <= 35 else -8 if float(volatility) >= 65 else 0
+            down_res = item.get("down_day_resilience_pct")
+            if isinstance(down_res, (int, float)) and float(down_res) >= 55.0:
+                conviction += min(7.0, (float(down_res) - 50.0) * 0.25)
             total = self._weighted_total(
                 max(15, min(98, quality)),
                 max(15, min(98, timing)),

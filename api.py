@@ -5,6 +5,7 @@ Provides REST API endpoints for stock analysis.
 
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, Any, List, Optional
@@ -148,6 +149,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["Content-Type"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=900, compresslevel=5)
 
 
 @app.middleware("http")
@@ -247,13 +249,17 @@ def _cache_get(key: str, ttl_seconds: int) -> Any | None:
     if age_seconds > ttl_seconds:
         _RESPONSE_CACHE.pop(key, None)
         return None
-    cloned = copy.deepcopy(payload)
-    if isinstance(cloned, dict):
-        meta = cloned.setdefault("meta", {})
-        if isinstance(meta, dict):
-            meta["cached"] = True
-            meta["cache_age_seconds"] = int(age_seconds)
-    return cloned
+    if isinstance(payload, dict):
+        cloned = dict(payload)
+        raw_meta = cloned.get("meta")
+        meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+        meta["cached"] = True
+        meta["cache_age_seconds"] = int(age_seconds)
+        cloned["meta"] = meta
+        return cloned
+    if isinstance(payload, list):
+        return list(payload)
+    return payload
 
 
 def _cache_get_stale(key: str, max_age_seconds: int) -> Any | None:
@@ -264,20 +270,24 @@ def _cache_get_stale(key: str, max_age_seconds: int) -> Any | None:
     age_seconds = (datetime.utcnow() - created_at).total_seconds()
     if age_seconds > max_age_seconds:
         return None
-    cloned = copy.deepcopy(payload)
-    if isinstance(cloned, dict):
-        meta = cloned.setdefault("meta", {})
-        if isinstance(meta, dict):
-            meta["cached"] = True
-            meta["cache_age_seconds"] = int(age_seconds)
-            meta["mode"] = "fallback"
-            meta["stale"] = True
-            meta["source"] = f"{meta.get('source') or 'history'}_stale_cache"
-            meta["fallback_reason"] = "provider_unavailable"
-    return cloned
+    if isinstance(payload, dict):
+        cloned = dict(payload)
+        raw_meta = cloned.get("meta")
+        meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+        meta["cached"] = True
+        meta["cache_age_seconds"] = int(age_seconds)
+        meta["mode"] = "fallback"
+        meta["stale"] = True
+        meta["source"] = f"{meta.get('source') or 'history'}_stale_cache"
+        meta["fallback_reason"] = "provider_unavailable"
+        cloned["meta"] = meta
+        return cloned
+    if isinstance(payload, list):
+        return list(payload)
+    return payload
 
 
-_MAX_RESPONSE_CACHE_ENTRIES = 45
+_MAX_RESPONSE_CACHE_ENTRIES = 65
 
 
 def _cache_set(key: str, payload: Any) -> Any:
@@ -290,7 +300,8 @@ def _cache_set(key: str, payload: Any) -> Any:
         while len(_RESPONSE_CACHE) >= _MAX_RESPONSE_CACHE_ENTRIES:
             oldest_key = next(iter(_RESPONSE_CACHE))
             _RESPONSE_CACHE.pop(oldest_key, None)
-    _RESPONSE_CACHE[key] = (now, copy.deepcopy(payload))
+    stored = dict(payload) if isinstance(payload, dict) else list(payload) if isinstance(payload, list) else payload
+    _RESPONSE_CACHE[key] = (now, stored)
     return payload
 
 
@@ -1645,18 +1656,20 @@ def get_asymmetric_options_leaps_service():
 
 
 def _get_paper_news_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
-    """Reuse a recent brief or build a fast one without making news a hard dependency."""
+    """Reuse fast brief with 45s breaking-news & earnings flash overlay for Paper Learning."""
+    try:
+        brief = get_morning_brief_service().get_brief_fast(snapshot, False)
+        if isinstance(brief, dict) and (brief.get("top_news") or brief.get("earnings_results")):
+            return brief
+    except Exception:
+        pass
     cached = _cache_get(
         "morning_brief:full",
         _safe_int_env("PAPER_TRADING_NEWS_CONTEXT_MAX_AGE_SECONDS", 3600, minimum=60),
     )
     if isinstance(cached, dict):
         return cached
-    try:
-        brief = get_morning_brief_service().get_brief_fast(snapshot)
-        return brief if isinstance(brief, dict) else {}
-    except Exception:
-        return {}
+    return {}
 
 
 async def _refresh_scalable_readonly_context() -> Dict[str, Any]:
@@ -1948,16 +1961,22 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
             print(f"Scheduler step warning: {message}")
             get_portfolio_manager().set_app_setting("brief_scheduler_last_step_error", message)
 
-    if _env_enabled("SIGNAL_ALERTS_ENABLED", "false"):
+    now_tick_ts = time.time()
+    active_market = is_market_active_hours()
+
+    if _env_enabled("SIGNAL_ALERTS_ENABLED", "false") and (include_missed or active_market):
         await run_step(
             "Signal alert scan",
             lambda: get_email_alert_service().check_and_send_alerts(False),
         )
-    if _env_enabled("CRITICAL_MARKET_ALERTS_ENABLED", "true"):
-        await run_step(
-            "Critical market alert scan",
-            lambda: get_email_alert_service().check_and_send_critical_market_alerts(False),
-        )
+    if _env_enabled("CRITICAL_MARKET_ALERTS_ENABLED", "true") and (include_missed or active_market):
+        last_crit = float(getattr(_run_scheduler_tick, "_last_crit_ts", 0.0) or 0.0)
+        if include_missed or (now_tick_ts - last_crit) >= 300.0:
+            _run_scheduler_tick._last_crit_ts = now_tick_ts
+            await run_step(
+                "Critical market alert scan",
+                lambda: get_email_alert_service().check_and_send_critical_market_alerts(False),
+            )
     if _env_enabled("DAILY_OVERVIEW_ENABLED", "false"):
         await run_step(
             "Daily overview delivery",
@@ -1976,17 +1995,29 @@ async def _run_scheduler_tick(include_missed: bool = False) -> None:
         lambda: get_email_alert_service().send_scheduled_open_briefs(include_missed),
     )
     if _env_enabled("APP_DAILY_BACKUP_ENABLED", "true"):
-        await run_step("Daily database backup", _run_backup_cycle)
+        last_bk = float(getattr(_run_scheduler_tick, "_last_backup_check_ts", 0.0) or 0.0)
+        if include_missed or (now_tick_ts - last_bk) >= 1800.0:
+            _run_scheduler_tick._last_backup_check_ts = now_tick_ts
+            await run_step("Daily database backup", _run_backup_cycle)
     if _env_enabled("OPERATIONAL_ALERTS_ENABLED", "true"):
-        await run_step("Operational health alerts", _run_operational_alert_cycle)
-    if _env_enabled("EDGE_SCANNER_ALERTS_ENABLED", "true"):
-        await run_step("Trading edge auto-scanner", _run_trading_edge_scanner_cycle)
-    if _env_enabled("TRADE_LIFECYCLE_ENABLED", "true"):
+        last_op = float(getattr(_run_scheduler_tick, "_last_op_alert_ts", 0.0) or 0.0)
+        if include_missed or (now_tick_ts - last_op) >= 900.0:
+            _run_scheduler_tick._last_op_alert_ts = now_tick_ts
+            await run_step("Operational health alerts", _run_operational_alert_cycle)
+    if _env_enabled("EDGE_SCANNER_ALERTS_ENABLED", "true") and (include_missed or active_market):
+        last_edge = float(getattr(_run_scheduler_tick, "_last_edge_scan_ts", 0.0) or 0.0)
+        if include_missed or (now_tick_ts - last_edge) >= 1200.0:
+            _run_scheduler_tick._last_edge_scan_ts = now_tick_ts
+            await run_step("Trading edge auto-scanner", _run_trading_edge_scanner_cycle)
+    if _env_enabled("TRADE_LIFECYCLE_ENABLED", "true") and include_missed:
         await run_step(
             "Trade lifecycle & trailing stops",
             lambda: get_trade_lifecycle_service().evaluate_active_trades(get_email_alert_service()),
         )
-    await run_step("Production soak observation", _record_production_soak_observation)
+    last_soak = float(getattr(_run_scheduler_tick, "_last_soak_ts", 0.0) or 0.0)
+    if include_missed or (now_tick_ts - last_soak) >= 900.0:
+        _run_scheduler_tick._last_soak_ts = now_tick_ts
+        await run_step("Production soak observation", _record_production_soak_observation)
 
 
 def _setting_datetime(key: str) -> datetime | None:
@@ -2059,7 +2090,7 @@ def _run_trading_edge_scanner_cycle() -> Dict[str, Any]:
             paper_svc = get_paper_trading_service()
             existing_open = {
                 str(t.get("ticker") or "").upper()
-                for t in paper_svc._enrich_trades(manager.list_paper_trades(limit=150))
+                for t in manager.list_paper_trades(status="open", limit=40)
                 if t.get("status") == "open"
             }
             # For each newly dispatched setup
@@ -2166,7 +2197,7 @@ def _record_production_soak_observation() -> Dict[str, Any]:
         backup_error=manager.get_app_setting("database_backup_last_error"),
         restore_error=manager.get_app_setting("database_restore_test_last_error"),
         provider_metrics=provider_metrics_snapshot(),
-        sent_events=manager.get_sent_signal_events(limit=5000),
+        sent_events=manager.get_sent_signal_events(limit=400),
     )
 
 
@@ -2334,7 +2365,7 @@ async def _brief_warmup_loop():
     if not _env_enabled("BRIEF_WARMUP_ENABLED", "true"):
         return
     await asyncio.sleep(
-        max(0, _safe_int_env("BRIEF_WARMUP_INITIAL_DELAY_SECONDS", 1, minimum=0))
+        max(0, _safe_int_env("BRIEF_WARMUP_INITIAL_DELAY_SECONDS", 15, minimum=0))
     )
     while True:
         active = is_market_active_hours()
@@ -2345,8 +2376,8 @@ async def _brief_warmup_loop():
                 gc.collect()
         except Exception as e:
             print(f"Brief warmup loop error: {e}")
-        default_interval = 900 if active else 1800
-        interval_seconds = _safe_int_env("BRIEF_WARMUP_INTERVAL_SECONDS", default_interval, minimum=60)
+        default_interval = 1800 if active else 3600
+        interval_seconds = _safe_int_env("BRIEF_WARMUP_INTERVAL_SECONDS", default_interval, minimum=120)
         await asyncio.sleep(interval_seconds)
 
 
@@ -2377,56 +2408,59 @@ async def _run_paper_outcome_cycle(*, force_alerts: bool) -> Dict[str, Any]:
 async def _forecast_learning_loop():
     if not _env_enabled("FORECAST_LEARNING_ENABLED", "true"):
         return
-    await asyncio.sleep(20)
+    await asyncio.sleep(45)
     while True:
+        active = is_market_active_hours()
         try:
-            result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
-            paper_cycle = await _run_paper_outcome_cycle(force_alerts=False)
-            paper_result = {
-                key: value
-                for key, value in paper_cycle.items()
-                if key not in {"checked_at", "paper_learning_alerts"}
-            }
-            paper_alert_result = paper_cycle.get("paper_learning_alerts") or {}
-            paper_news_source_revalidation = await asyncio.to_thread(_run_paper_news_source_revalidation)
-            paper_managed_exits = await asyncio.to_thread(_run_paper_managed_exits)
-            paper_autopilot_result = await asyncio.to_thread(
-                _run_scheduled_paper_learning_autopilot,
-                bool(paper_managed_exits.get("closed")),
-            )
-            paper_capital_rotation = get_paper_trading_service().build_capital_rotation_summary(
-                paper_managed_exits,
-                paper_autopilot_result,
-            )
-            paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
-            paper_account_status_alerts = await asyncio.to_thread(
-                _send_paper_account_status_alerts,
-                paper_capital_rotation,
-            )
-            get_portfolio_manager().set_app_setting(
-                "forecast_learning_last_result",
-                json.dumps(
-                    {
-                        "checked_at": datetime.utcnow().isoformat(),
-                        **result,
-                        "paper_trades": paper_result,
-                        "paper_learning_alerts": paper_alert_result,
-                        "paper_learning_autopilot": paper_autopilot_result,
-                        "paper_capital_rotation": paper_capital_rotation,
-                        "paper_news_source_revalidation": paper_news_source_revalidation,
-                        "paper_management_alerts": paper_management_alerts,
-                        "paper_account_status_alerts": paper_account_status_alerts,
-                        "paper_managed_exits": paper_managed_exits,
-                    }
-                ),
-            )
+            if active:
+                result = await asyncio.to_thread(get_forecast_learning_service().evaluate_due_forecasts)
+                paper_cycle = await _run_paper_outcome_cycle(force_alerts=False)
+                paper_result = {
+                    key: value
+                    for key, value in paper_cycle.items()
+                    if key not in {"checked_at", "paper_learning_alerts"}
+                }
+                paper_alert_result = paper_cycle.get("paper_learning_alerts") or {}
+                paper_news_source_revalidation = await asyncio.to_thread(_run_paper_news_source_revalidation)
+                paper_managed_exits = await asyncio.to_thread(_run_paper_managed_exits)
+                paper_autopilot_result = await asyncio.to_thread(
+                    _run_scheduled_paper_learning_autopilot,
+                    bool(paper_managed_exits.get("closed")),
+                )
+                paper_capital_rotation = get_paper_trading_service().build_capital_rotation_summary(
+                    paper_managed_exits,
+                    paper_autopilot_result,
+                )
+                paper_management_alerts = await asyncio.to_thread(_send_paper_trade_management_alerts)
+                paper_account_status_alerts = await asyncio.to_thread(
+                    _send_paper_account_status_alerts,
+                    paper_capital_rotation,
+                )
+                get_portfolio_manager().set_app_setting(
+                    "forecast_learning_last_result",
+                    json.dumps(
+                        {
+                            "checked_at": datetime.utcnow().isoformat(),
+                            **result,
+                            "paper_trades": paper_result,
+                            "paper_learning_alerts": paper_alert_result,
+                            "paper_learning_autopilot": paper_autopilot_result,
+                            "paper_capital_rotation": paper_capital_rotation,
+                            "paper_news_source_revalidation": paper_news_source_revalidation,
+                            "paper_management_alerts": paper_management_alerts,
+                            "paper_account_status_alerts": paper_account_status_alerts,
+                            "paper_managed_exits": paper_managed_exits,
+                        }
+                    ),
+                )
         except Exception as e:
             print(f"Forecast learning loop error: {e}")
             try:
                 get_portfolio_manager().set_app_setting("forecast_learning_loop_error", str(e))
             except Exception:
                 pass
-        interval_minutes = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", 30, minimum=5)
+        default_interval = 60 if active else 240
+        interval_minutes = _safe_int_env("FORECAST_OUTCOME_INTERVAL_MINUTES", default_interval, minimum=15)
         await asyncio.sleep(interval_minutes * 60)
 
 
@@ -2458,13 +2492,13 @@ def _send_paper_account_status_alerts(
         return {"status": "disabled", "message": "Paper-Konto-Status-Alerts sind deaktiviert."}
     try:
         service = get_paper_trading_service()
-        trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=300))
+        trades = service._enrich_trades(get_portfolio_manager().list_paper_trades(limit=60))
         open_trades = [trade for trade in trades if trade.get("status") == "open"]
         demo_account = service._build_demo_account(trades, [])
         service._attach_period_performance(demo_account, trades)
         readiness = StrategyLibrary.build_readiness(
             trades,
-            get_portfolio_manager().list_paper_trade_outcomes(limit=800),
+            get_portfolio_manager().list_paper_trade_outcomes(limit=200),
         )
         evidence_campaign = StrategyLibrary.build_evidence_campaign(readiness)
         strategy_candidate_coverage: List[Dict[str, Any]] = []
@@ -2701,13 +2735,14 @@ async def _trading_session_automation_loop() -> None:
         try:
             alert_svc = get_email_alert_service()
 
-            # 1. Real-time Trade Lifecycle Evaluation
-            try:
-                lifecycle_svc = get_trade_lifecycle_service()
-                if lifecycle_svc:
-                    await asyncio.to_thread(lifecycle_svc.evaluate_active_trades, alert_svc)
-            except Exception as life_err:
-                print(f"Session daemon lifecycle check warning: {life_err}")
+            # 1. Real-time Trade Lifecycle Evaluation (only during active market hours to save Railway CPU)
+            if active:
+                try:
+                    lifecycle_svc = get_trade_lifecycle_service()
+                    if lifecycle_svc:
+                        await asyncio.to_thread(lifecycle_svc.evaluate_active_trades, alert_svc)
+                except Exception as life_err:
+                    print(f"Session daemon lifecycle check warning: {life_err}")
 
             # 2. Local CET / Berlin Time Calculation
             try:
@@ -2724,8 +2759,6 @@ async def _trading_session_automation_loop() -> None:
             if weekday < 5:  # Monday to Friday
                 pm = get_portfolio_manager()
                 sent_keys = pm.get_sent_signal_event_keys() if hasattr(pm, "get_sent_signal_event_keys") else set()
-                orb_svc = get_opening_range_breakout_service()
-                bot_svc = get_telegram_interactive_service()
                 cfg = alert_svc.get_config()
                 has_tg = bool(cfg.telegram_enabled and cfg.telegram_bot_token and cfg.telegram_chat_id)
                 profile = str(pm.get_app_setting("telegram_alert_profile") or os.getenv("TELEGRAM_ALERT_PROFILE", "smart_digest")).strip().lower()
@@ -2733,6 +2766,7 @@ async def _trading_session_automation_loop() -> None:
                 # A. 09:30 CET: European 15m ORB Scanner
                 eu_key = f"orb_eu_auto_scan:{today_str}"
                 if (hour == 9 and 30 <= minute <= 35) and eu_key not in sent_keys:
+                    orb_svc = get_opening_range_breakout_service()
                     eu_tickers = ["SAP.DE", "RHM.DE", "ASML.AS", "ALV.DE", "SIE.DE", "BMW.DE", "BAYN.DE"]
                     scan_res = await asyncio.to_thread(orb_svc.scan_watchlist_orb, eu_tickers, 15)
                     if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg and profile != "silent":
@@ -2746,6 +2780,7 @@ async def _trading_session_automation_loop() -> None:
                 # B. 16:00 CET: US 30m ORB Scanner
                 us_key = f"orb_us_auto_scan:{today_str}"
                 if (hour == 16 and 0 <= minute <= 5) and us_key not in sent_keys:
+                    orb_svc = get_opening_range_breakout_service()
                     us_tickers = ["NVDA", "MSFT", "AAPL", "AMZN", "PLTR", "TSLA", "META", "GOOGL", "AVGO", "GLD"]
                     scan_res = await asyncio.to_thread(orb_svc.scan_watchlist_orb, us_tickers, 30)
                     if scan_res and scan_res.get("breakouts_count", 0) > 0 and has_tg and profile != "silent":
@@ -2760,6 +2795,7 @@ async def _trading_session_automation_loop() -> None:
                 xetra_recap_key = f"xetra_close_recap_auto:{today_str}"
                 if (hour == 17 and 35 <= minute <= 40) and xetra_recap_key not in sent_keys:
                     if profile == "trade_pro":
+                        bot_svc = get_telegram_interactive_service()
                         recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["xetra"])
                         if recap_msg and has_tg:
                             event = {"event_key": xetra_recap_key, "category": "session_recap", "title": "XETRA Session Close", "line": recap_msg}
@@ -2772,6 +2808,7 @@ async def _trading_session_automation_loop() -> None:
                 us_recap_key = f"us_close_recap_auto:{today_str}"
                 if (hour == 22 and 5 <= minute <= 10) and us_recap_key not in sent_keys:
                     if profile != "silent":
+                        bot_svc = get_telegram_interactive_service()
                         recap_msg = await asyncio.to_thread(bot_svc._cmd_recap, ["us"])
                         if recap_msg and has_tg:
                             event = {"event_key": us_recap_key, "category": "session_recap", "title": "Wall Street Session Close", "line": recap_msg}
@@ -2780,11 +2817,22 @@ async def _trading_session_automation_loop() -> None:
                         pm.mark_signal_events_sent([{"event_key": us_recap_key}])
                     print(f"Autonomous Wall Street close recap executed for {today_str}")
 
+                # E. Real-Time Breaking News, Earnings/Umsatz & Critical Flash Check (07:00-23:00 CET, every 60s via lightweight RSS overlay)
+                if 7 <= hour <= 22 and profile != "silent":
+                    last_flash_ts = float(getattr(alert_svc, "_last_realtime_flash_check_ts", 0.0) or 0.0)
+                    now_ts = time.time()
+                    if (now_ts - last_flash_ts) >= 60.0:
+                        alert_svc._last_realtime_flash_check_ts = now_ts
+                        flash_res = await asyncio.to_thread(alert_svc.check_and_send_critical_market_alerts, False)
+                        if isinstance(flash_res, dict) and int(flash_res.get("sent") or 0) > 0:
+                            # Immediately trigger Paper Learning on the fresh breaking news / earnings release
+                            await asyncio.to_thread(_run_scheduled_paper_learning_autopilot, True)
+
         except Exception as daemon_err:
             print(f"Trading session daemon cycle warning: {daemon_err}")
 
-        # Eco-sleep: 60s when market is active, 300s when market is closed (nights & weekends)
-        sleep_sec = 60 if active else 300
+        # Eco-sleep: 60s when market is active, 600s (10m) when market is closed (nights & weekends)
+        sleep_sec = 60 if active else 600
         await asyncio.sleep(_safe_int_env("SESSION_AUTOMATION_INTERVAL_SECONDS", sleep_sec, minimum=15))
 
 
@@ -2884,15 +2932,15 @@ async def _warm_brief_once() -> Dict[str, Any]:
         asyncio.to_thread(get_morning_brief_service().get_brief_fast, snapshot, True),
         timeout=float(os.getenv("BRIEF_WARMUP_TIMEOUT_SECONDS", "60")),
     )
-    try:
-        trading_edge = await asyncio.wait_for(
-            asyncio.to_thread(get_morning_brief_service().get_trading_edge, snapshot),
-            timeout=float(os.getenv("BRIEF_WARMUP_EDGE_TIMEOUT_SECONDS", "18")),
-        )
-        _cache_set(TRADING_EDGE_CACHE_KEY, trading_edge or {})
-    except Exception:
-        # Trading Edge is heavy and optional for delivery. The brief cache is still useful without it.
-        pass
+    if _env_enabled("BRIEF_WARMUP_INCLUDE_TRADING_EDGE", "false"):
+        try:
+            trading_edge = await asyncio.wait_for(
+                asyncio.to_thread(get_morning_brief_service().get_trading_edge, snapshot),
+                timeout=float(os.getenv("BRIEF_WARMUP_EDGE_TIMEOUT_SECONDS", "18")),
+            )
+            _cache_set(TRADING_EDGE_CACHE_KEY, trading_edge or {})
+        except Exception:
+            pass
     elapsed_ms = int((datetime.now(ZoneInfo(os.getenv("BRIEF_SCHEDULE_TIMEZONE", "Europe/Berlin"))) - started).total_seconds() * 1000)
     return {
         "status": "ok",
@@ -7837,6 +7885,23 @@ async def get_notification_status():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/alerts/live-feed")
+async def get_live_web_alerts_feed(since_ms: int = 0, limit: int = 15):
+    """Live push feed for open website tabs (Telegram + Open Website Push parity, no Email)."""
+    try:
+        svc = get_email_alert_service()
+        alerts = svc.get_live_web_alerts(since_ms=since_ms, limit=limit)
+        return {
+            "channel": "telegram_and_live_web_push",
+            "email_disabled": True,
+            "count": len(alerts),
+            "server_time_ms": int(time.time() * 1000),
+            "alerts": alerts,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/settings/profile")
 async def get_workspace_profile():
     try:
@@ -11081,10 +11146,11 @@ async def get_realtime_snapshot(symbols: str):
         requested = [item.strip() for item in symbols.split(",") if item.strip()]
         normalized = sorted({item.upper() for item in requested})
         cache_key = f"realtime:snapshot:{','.join(normalized)}"
-        cached = _cache_get(cache_key, int(os.getenv("REALTIME_SNAPSHOT_CACHE_TTL_SECONDS", "5")))
+        default_ttl = "10" if is_market_active_hours() else "60"
+        cached = _cache_get(cache_key, int(os.getenv("REALTIME_SNAPSHOT_CACHE_TTL_SECONDS", default_ttl)))
         if cached is not None:
             return convert_numpy_types(cached)
-        payload = get_realtime_market_service().build_snapshot(normalized)
+        payload = await asyncio.to_thread(get_realtime_market_service().build_snapshot, normalized)
         if isinstance(payload, dict):
             payload.setdefault("connection_state", "snapshot")
         return convert_numpy_types(_cache_set(cache_key, payload))

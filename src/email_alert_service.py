@@ -2397,30 +2397,69 @@ class EmailAlertService:
         for item in (brief.get("earnings_results") or [])[:10]:
             ticker = str(item.get("ticker") or "").upper()
             status = str(item.get("status") or "").lower()
-            if not ticker or status not in {"beat", "miss"}:
+            freshness = str(item.get("freshness") or "fresh").lower()
+            days_since = item.get("days_since")
+            if not ticker or freshness != "fresh":
+                continue
+            if isinstance(days_since, int) and days_since > 2:
+                continue
+            ext_pct = float(item.get("extended_change_pct") or 0.0) if isinstance(item.get("extended_change_pct"), (int, float)) else 0.0
+            if status not in {"beat", "miss"} and abs(ext_pct) < 2.0:
                 continue
             revenue_yoy = item.get("revenue_yoy")
             guidance_label = str(item.get("guidance_label") or "").lower()
+            trade_dir = str(item.get("trade_direction") or ("SHORT" if status == "miss" or ext_pct <= -1.8 else "LONG")).upper()
             portfolio_hit = ticker in portfolio_tickers
             watchlist_hit = ticker in watchlist_tickers
-            important = portfolio_hit or watchlist_hit or status == "miss" or "raise" in guidance_label or "cut" in guidance_label
+            important = (
+                portfolio_hit
+                or watchlist_hit
+                or status in {"beat", "miss"}
+                or abs(ext_pct) >= 2.0
+                or "raise" in guidance_label
+                or "cut" in guidance_label
+            )
             if not important:
                 continue
-            event_key = f"critical-earnings-result:{today}:{ticker}:{status}:{guidance_label[:24]}"
+            event_key = f"critical-earnings-result:{today}:{ticker}:{status}:{trade_dir}:{guidance_label[:18]}"
             if event_key in sent_keys:
                 continue
-            direction = "↑" if status == "beat" and "cut" not in guidance_label else "↓" if status == "miss" or "cut" in guidance_label else "→"
-            revenue_label = f"{float(revenue_yoy):+.1f}% YoY Umsatz" if isinstance(revenue_yoy, (int, float)) else "Umsatz offen"
-            scope = "Portfolio" if portfolio_hit else "Watchlist" if watchlist_hit else "Earnings"
+            direction_arrow = "🟢 LONG" if trade_dir == "LONG" else "🔴 SHORT" if trade_dir == "SHORT" else "→ WATCH"
+            if isinstance(revenue_yoy, (int, float)):
+                rev_val = float(revenue_yoy) * 100.0 if abs(float(revenue_yoy)) <= 5.0 else float(revenue_yoy)
+                revenue_label = f"{rev_val:+.1f}% YoY Umsatz"
+            else:
+                revenue_label = "Umsatz-Release"
+            ext_label = f" | Kursreaktion {ext_pct:+.2f}%" if abs(ext_pct) >= 0.2 else ""
+            trigger_str = str(item.get("entry_trigger") or "").strip()
+            stop_val = item.get("stop_loss")
+            t1_val = item.get("target_1")
+            levels_str = ""
+            if trigger_str:
+                levels_str = f" | Setup: {trigger_str}"
+                if isinstance(stop_val, (int, float)):
+                    levels_str += f", Stop ${float(stop_val):.2f}"
+                if isinstance(t1_val, (int, float)):
+                    levels_str += f", Ziel ${float(t1_val):.2f}"
+            scope = "Portfolio" if portfolio_hit else "Watchlist" if watchlist_hit else "Live Earnings"
             events.append(
                 {
                     "event_key": event_key,
                     "category": "critical_earnings_result",
-                    "title": f"{ticker} Earnings {status}",
-                    "line": f"{direction} {scope} | {ticker}: {status.upper()} | {revenue_label} | Guidance {guidance_label or 'offen'}",
+                    "ticker": ticker,
+                    "trade_direction": trade_dir,
+                    "reaction_pct": round(ext_pct, 2),
+                    "entry_trigger": trigger_str,
+                    "stop_loss": stop_val,
+                    "target_1": t1_val,
+                    "title": f"{ticker} {trade_dir} ({status.upper()})",
+                    "line": (
+                        f"{direction_arrow} | {scope} {ticker}: {status.upper()} | "
+                        f"{revenue_label}{ext_label} | Guidance {guidance_label or 'offen'}{levels_str}"
+                    ),
                     "source_url": item.get("source_url") or item.get("url") or "",
-                    "source_label": "Earnings results",
-                    "priority": 4 if portfolio_hit else 8,
+                    "source_label": "Live Earnings & Umsatz Flash",
+                    "priority": 3 if portfolio_hit else 5,
                 }
             )
 
@@ -3654,6 +3693,92 @@ class EmailAlertService:
             return (4, line)
         return (5, line)
 
+    def _record_live_web_alerts(self, events: List[Dict[str, Any]], subject: str) -> None:
+        """Persist recent alerts in a lightweight ring buffer for open website tabs (Push / Live Toast)."""
+        if not events:
+            return
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            raw = self.portfolio_manager.get_app_setting("live_web_alerts_v1")
+            existing: List[Dict[str, Any]] = json.loads(raw) if raw else []
+            if not isinstance(existing, list):
+                existing = []
+        except Exception:
+            existing = []
+
+        seen_ids = {str(item.get("id") or "") for item in existing}
+        new_items: List[Dict[str, Any]] = []
+        for idx, ev in enumerate(events[:12]):
+            line_raw = str(ev.get("line") or "").strip()
+            if not line_raw or self._is_section_heading(line_raw):
+                continue
+            clean_line = unescape(re.sub(r"<[^>]*>", "", line_raw)).strip()
+            ev_id = str(ev.get("event_key") or f"web-alert:{int(time.time()*1000)}:{idx}")
+            if ev_id in seen_ids:
+                continue
+            seen_ids.add(ev_id)
+            trade_dir = str(ev.get("trade_direction") or (
+                "SHORT" if ("🔴 SHORT" in clean_line or "SHORT-Setup" in clean_line)
+                else "LONG" if ("🟢 LONG" in clean_line or "LONG-Setup" in clean_line)
+                else ""
+            )).upper()
+            new_items.append(
+                {
+                    "id": ev_id,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "timestamp_ms": int(time.time() * 1000),
+                    "subject": subject,
+                    "category": ev.get("category") or "signal",
+                    "ticker": ev.get("ticker") or "",
+                    "trade_direction": trade_dir,
+                    "reaction_pct": ev.get("reaction_pct"),
+                    "entry_trigger": ev.get("entry_trigger") or "",
+                    "stop_loss": ev.get("stop_loss"),
+                    "target_1": ev.get("target_1"),
+                    "title": ev.get("title") or subject,
+                    "message": clean_line[:360],
+                    "source_url": ev.get("source_url") or "",
+                    "source_label": ev.get("source_label") or "",
+                }
+            )
+
+        if not new_items:
+            return
+        combined = (new_items + existing)[:30]
+        try:
+            self.portfolio_manager.set_app_setting("live_web_alerts_v1", json.dumps(combined, ensure_ascii=False))
+        except Exception:
+            pass
+
+        # Also dispatch Web Push to any subscribed open browsers
+        try:
+            if self.push_service and getattr(self.push_service, "subscriptions", None):
+                top = new_items[0]
+                dir_tag = f" [{top['trade_direction']}]" if top.get("trade_direction") else ""
+                push_title = f"⚡ {top.get('title') or subject}{dir_tag}"[:90]
+                push_body = top.get("message", "")[:200]
+                self.push_service.send_notification(
+                    title=push_title,
+                    body=push_body,
+                    tag=top.get("id") or "live-alert",
+                    url=top.get("source_url") or "/",
+                )
+        except Exception:
+            pass
+
+    def get_live_web_alerts(self, since_ms: int = 0, limit: int = 20) -> List[Dict[str, Any]]:
+        """Return recent live alerts for open website push/toast notifications."""
+        try:
+            raw = self.portfolio_manager.get_app_setting("live_web_alerts_v1")
+            items = json.loads(raw) if raw else []
+            if not isinstance(items, list):
+                return []
+            if since_ms > 0:
+                items = [row for row in items if int(row.get("timestamp_ms") or 0) > since_ms]
+            return items[: max(1, min(int(limit or 20), 30))]
+        except Exception:
+            return []
+
     def _send_notifications(
         self,
         config: "EmailAlertConfig",
@@ -3663,6 +3788,9 @@ class EmailAlertService:
     ) -> bool:
         errors: List[str] = []
         delivered = False
+
+        # Always record into live website alert feed & browser push for open tabs
+        self._record_live_web_alerts(events, subject)
 
         if telegram:
             try:
@@ -3680,40 +3808,8 @@ class EmailAlertService:
         events: List[Dict[str, Any]],
         subject: str,
     ) -> bool:
-        if not (config.smtp_host and config.smtp_from and config.smtp_to):
-            return False
-        msg = EmailMessage()
-        msg["From"] = config.smtp_from
-        msg["To"] = config.smtp_to
-        msg["Subject"] = subject
-
-        lines = [subject, ""]
-        for event in events:
-            line = (event.get("line") or "").strip()
-            if not line:
-                lines.append("")
-                continue
-            if self._is_section_heading(line):
-                lines.append(line)
-                continue
-            lines.append(f"- {line}")
-            if event.get("conviction_score") is not None:
-                lines.append(f"  A-Setup Score: {event['conviction_score']}")
-            if event.get("source_label"):
-                lines.append(f"  Quelle: {event['source_label']}")
-            if event.get("source_url"):
-                lines.append(f"  Link: {event['source_url']}")
-        lines.extend(["", f"Erstellt am {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
-        msg.set_content("\n".join(lines))
-        msg.add_alternative(self._build_html_email(subject, events), subtype="html")
-
-        with smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=30) as server:
-            if config.smtp_starttls:
-                server.starttls()
-            if config.smtp_user:
-                server.login(config.smtp_user, config.smtp_password)
-            server.send_message(msg)
-        return True
+        """Email alerts are permanently disabled in favor of Telegram and Live Website Push."""
+        return False
 
     def _tg_post(self, token: str, chat_id: str, text: str, disable_preview: bool = True) -> None:
         """Send a single Telegram message (HTML parse mode)."""
@@ -4289,11 +4385,12 @@ class EmailAlertService:
                 icon = "BEAT" if status == "beat" else "MISS" if status == "miss" else "INLINE"
                 action_hint = str(item.get("action_hint") or "").strip().lower()
                 trade_label = {
-                    "constructive_if_follow_through": "Trade: nur Long bei Follow-through",
-                    "constructive_watch": "Trade: konstruktiv, Reaktion bestaetigen",
-                    "watch_pullback_or_follow_through": "Trade: kein Chase, nur Pullback oder Follow-through",
-                    "avoid_until_repair": "Trade: vermeiden bis Reparatur",
-                    "caution_until_repair": "Trade: vorsichtig, erst Stabilisierung",
+                    "constructive_if_follow_through": "Trade: LONG bei Follow-through / VWAP-Hold",
+                    "constructive_watch": "Trade: LONG konstruktiv, Reaktion bestaetigen",
+                    "watch_pullback_or_follow_through": "Trade: kein Chase, Long bei Pullback / Short bei VWAP-Verlust",
+                    "short_breakdown_or_vwap_reject": "Trade: SHORT unter VWAP / Breakdown",
+                    "avoid_until_repair": "Trade: SHORT-Watch / Long vermeiden bis Reparatur",
+                    "caution_until_repair": "Trade: SHORT bei VWAP-Reject / Long meiden",
                     "needs_guidance_confirmation": "Trade: erst Guidance/Preis bestaetigen",
                 }.get(action_hint, "")
                 surprise = item.get("eps_surprise_pct")

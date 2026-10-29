@@ -38,17 +38,147 @@ except Exception:  # pragma: no cover
 
 class SharedMarketDataPool:
     """
-    Bounded LRU cache for yfinance history DataFrames.
-    Compacts float64 -> float32 and strips unused columns to cut RAM usage by >50%.
+    Bounded LRU cache for yfinance history DataFrames + long-TTL fundamentals cache.
+    Compacts float64 -> float32 and strips unused columns to cut RAM usage by >50%,
+    while enabling vectorized batch downloads across the full market universe.
     """
 
-    MAX_ITEMS = 35
-    DEFAULT_TTL_SECONDS = 180  # 3 minutes shared across services
+    MAX_ITEMS = 90
+    DEFAULT_TTL_SECONDS = 240  # 4 minutes shared across services
+    FUNDAMENTALS_MAX_ITEMS = 160
+    FUNDAMENTALS_TTL_SECONDS = 43200  # 12 hours for company fundamentals
 
     def __init__(self) -> None:
         self._pool: "OrderedDict[str, Tuple[float, Any]]" = OrderedDict()
+        self._fundamentals_pool: "OrderedDict[str, Tuple[float, Dict[str, Any]]]" = OrderedDict()
         self.hits: int = 0
         self.misses: int = 0
+        self.fund_hits: int = 0
+        self.fund_misses: int = 0
+
+    def get_cached_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
+        sym = str(symbol).strip().upper()
+        if not sym or sym not in self._fundamentals_pool:
+            return None
+        ts, data = self._fundamentals_pool[sym]
+        if (time.monotonic() - ts) <= self.FUNDAMENTALS_TTL_SECONDS and isinstance(data, dict):
+            self._fundamentals_pool.move_to_end(sym)
+            self.fund_hits += 1
+            return data
+        self._fundamentals_pool.pop(sym, None)
+        return None
+
+    def set_cached_fundamentals(self, symbol: str, data: Dict[str, Any]) -> None:
+        sym = str(symbol).strip().upper()
+        if not sym or not isinstance(data, dict):
+            return
+        compact_keys = (
+            "longName", "shortName", "sector", "industry", "currency", "quoteType",
+            "marketCap", "revenueGrowth", "earningsGrowth", "profitMargins",
+            "operatingMargins", "returnOnEquity", "freeCashflow", "debtToEquity",
+            "trailingPE", "forwardPE", "priceToBook", "dividendYield", "payoutRatio",
+            "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "beta", "totalAssets",
+            "annualReportExpenseRatio", "category", "fundFamily",
+        )
+        compacted = {k: data[k] for k in compact_keys if k in data and data[k] is not None}
+        if not compacted:
+            compacted = dict(list(data.items())[:25])
+        self._fundamentals_pool[sym] = (time.monotonic(), compacted)
+        self._fundamentals_pool.move_to_end(sym)
+        while len(self._fundamentals_pool) > self.FUNDAMENTALS_MAX_ITEMS:
+            self._fundamentals_pool.popitem(last=False)
+
+    def get_batch_history(
+        self,
+        symbols: list[str],
+        period: str = "6mo",
+        interval: str = "1d",
+        ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    ) -> Dict[str, Any]:
+        """
+        Fetches multiple symbols in a single vectorized yf.download HTTP batch
+        for any cache misses, populating the shared float32 LRU pool with minimal CPU.
+        """
+        if not yf or not pd:
+            return {}
+
+        cleaned = []
+        for s in symbols:
+            sym = str(s or "").strip().upper()
+            if sym and sym not in cleaned:
+                cleaned.append(sym)
+        if not cleaned:
+            return {}
+
+        now = time.monotonic()
+        result: Dict[str, Any] = {}
+        missing: list[str] = []
+
+        for sym in cleaned:
+            key = f"{sym}:{period}:{interval}"
+            if key in self._pool:
+                ts, df = self._pool[key]
+                if (now - ts) <= ttl_seconds and df is not None and not getattr(df, "empty", True):
+                    self._pool.move_to_end(key)
+                    self.hits += 1
+                    result[sym] = df
+                    continue
+                else:
+                    self._pool.pop(key, None)
+            missing.append(sym)
+
+        if not missing:
+            return result
+
+        chunk_size = 30
+        for idx in range(0, len(missing), chunk_size):
+            chunk = missing[idx : idx + chunk_size]
+            self.misses += len(chunk)
+            try:
+                if len(chunk) == 1:
+                    sym = chunk[0]
+                    df = yf.Ticker(sym).history(period=period, interval=interval, auto_adjust=True)
+                    if df is not None and not df.empty:
+                        df = self.compact_dataframe(df)
+                        key = f"{sym}:{period}:{interval}"
+                        self._pool[key] = (now, df)
+                        self._pool.move_to_end(key)
+                        result[sym] = df
+                else:
+                    raw = yf.download(
+                        tickers=" ".join(chunk),
+                        period=period,
+                        interval=interval,
+                        group_by="ticker",
+                        auto_adjust=True,
+                        progress=False,
+                        threads=False,
+                    )
+                    if raw is not None and not raw.empty:
+                        is_multi = isinstance(raw.columns, pd.MultiIndex)
+                        for sym in chunk:
+                            try:
+                                sub_df = raw[sym].dropna(how="all") if is_multi and sym in raw.columns.get_level_values(0) else None
+                                if sub_df is not None and not sub_df.empty and "Close" in sub_df.columns:
+                                    sub_df = self.compact_dataframe(sub_df.copy())
+                                    key = f"{sym}:{period}:{interval}"
+                                    self._pool[key] = (now, sub_df)
+                                    self._pool.move_to_end(key)
+                                    result[sym] = sub_df
+                            except Exception:
+                                continue
+            except Exception as exc:
+                logger.debug("SharedMarketDataPool batch download fallback: %s", exc)
+                for sym in chunk:
+                    if sym not in result:
+                        single = self.get_history(sym, period=period, interval=interval, ttl_seconds=ttl_seconds)
+                        if single is not None:
+                            result[sym] = single
+
+            while len(self._pool) > self.MAX_ITEMS:
+                self._pool.popitem(last=False)
+
+        return result
 
     def get_history(
         self,

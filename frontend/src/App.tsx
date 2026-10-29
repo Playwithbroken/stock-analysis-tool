@@ -692,12 +692,82 @@ function AppContent() {
     [decisionBrief],
   );
 
+  const [liveWebAlerts, setLiveWebAlerts] = useState<any[]>([]);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<string[]>([]);
+  const [browserPushPermission, setBrowserPushPermission] = useState<string>(() =>
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported",
+  );
+
+  const requestBrowserPushPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      const perm = await Notification.requestPermission();
+      setBrowserPushPermission(perm);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!auth.authenticated) return;
+    let cancelled = false;
+    const seenIdsKey = "broker_freund_notified_web_alerts_v1";
+    const pollLiveAlerts = async () => {
+      if (isPageHidden()) return;
+      try {
+        const res = await fetch("/api/alerts/live-feed?limit=8");
+        if (!res.ok) return;
+        const payload = await res.json();
+        const items = Array.isArray(payload?.alerts) ? payload.alerts : [];
+        if (cancelled) return;
+        setLiveWebAlerts(items);
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          let notified: string[] = [];
+          try {
+            notified = JSON.parse(sessionStorage.getItem(seenIdsKey) || "[]");
+          } catch {
+            notified = [];
+          }
+          let changed = false;
+          for (const item of items.slice(0, 3)) {
+            const id = String(item?.id || "");
+            if (!id || notified.includes(id)) continue;
+            notified.push(id);
+            changed = true;
+            const dirLabel = item?.trade_direction ? ` [${item.trade_direction}]` : "";
+            try {
+              new Notification(`⚡ ${item?.title || "Live Markt-Signal"}${dirLabel}`, {
+                body: String(item?.message || ""),
+                tag: id,
+              });
+            } catch {
+              // ignore notification error
+            }
+          }
+          if (changed) {
+            sessionStorage.setItem(seenIdsKey, JSON.stringify(notified.slice(-40)));
+          }
+        }
+      } catch {
+        // ignore transient network errors
+      }
+    };
+    const cancelInitial = scheduleIdleAfter(pollLiveAlerts, 900);
+    const interval = window.setInterval(pollLiveAlerts, 25000);
+    return () => {
+      cancelled = true;
+      cancelInitial();
+      window.clearInterval(interval);
+    };
+  }, [auth.authenticated]);
+
   useEffect(() => {
     if (!auth.authenticated) return;
 
     let cancelled = false;
 
     const loadWatchlist = async () => {
+      if (isPageHidden()) return;
       try {
         const payload = await fetchJsonWithRetry<WatchlistSnapshot>("/api/signals/watchlist", undefined, {
           retries: 0,
@@ -726,6 +796,7 @@ function AppContent() {
     if (!auth.authenticated) return;
     let cancelled = false;
     const loadSignalContext = async () => {
+      if (isPageHidden()) return;
       try {
         const payload = await fetchJsonWithRetry<any>("/api/signals/scoreboard", undefined, {
           retries: 1,
@@ -740,7 +811,7 @@ function AppContent() {
         }
       }
     };
-    const cancelIdle = scheduleIdleAfter(loadSignalContext, 1200);
+    const cancelIdle = scheduleIdleAfter(loadSignalContext, 1800);
     const interval = window.setInterval(loadSignalContext, 120000);
     return () => {
       cancelled = true;
@@ -754,6 +825,7 @@ function AppContent() {
 
     let cancelled = false;
     const loadLearningContext = async () => {
+      if (isPageHidden()) return;
       try {
         const payload = await fetchJsonWithRetry<any>("/api/learning/forecasts", undefined, {
           retries: 1,
@@ -785,55 +857,38 @@ function AppContent() {
 
     const warmBackgroundData = async () => {
       if (isPageHidden() || shouldReduceBackgroundWork()) return;
+      // Only preload UI screen chunks on idle; avoid hitting heavy backend discovery
+      // endpoints (/stars, /sentiment-heatmap) until the user opens the Markets tab.
       const ticker = analysis?.ticker?.toUpperCase();
-      const historyPath = ticker
-        ? `/api/history/${encodeURIComponent(ticker)}?period=1mo&interval=1d`
-        : null;
-      const paths = [
-        "/api/discovery/stars",
-        "/api/discovery/sentiment-heatmap",
-        "/api/radar/bootstrap?limit=8",
-        historyPath,
-      ].filter(Boolean) as string[];
-
-      for (const path of paths) {
-        if (cancelled || isPageHidden()) break;
-        await fetchJsonWithRetry<any>(path, { signal: controller.signal }, {
+      if (ticker && activeTab === "analyze") {
+        const historyPath = `/api/history/${encodeURIComponent(ticker)}?period=1mo&interval=1d`;
+        await fetchJsonWithRetry<any>(historyPath, { signal: controller.signal }, {
           retries: 0,
           retryDelayMs: 250,
           timeoutMs: 9000,
         }).catch(() => undefined);
-        await wait(250);
       }
       if (cancelled) return;
       preloadLazyScreens();
     };
 
-    const warmVisibleData = () => {
+    const cancelIdle = scheduleIdleAfter(() => {
       void warmBackgroundData();
-    };
-
-    const cancelIdle = scheduleIdleAfter(warmVisibleData, 6500);
-
-    const interval = window.setInterval(() => {
-      if (!isPageHidden()) {
-        warmVisibleData();
-      }
-    }, 600000);
+    }, 3500);
 
     return () => {
       cancelled = true;
       controller.abort();
       cancelIdle();
-      window.clearInterval(interval);
     };
-  }, [auth.authenticated, analysis?.ticker]);
+  }, [auth.authenticated, analysis?.ticker, activeTab]);
 
   useEffect(() => {
     if (!auth.authenticated) return;
     let cancelled = false;
 
     const loadRegions = async () => {
+      if (isPageHidden()) return;
       try {
         const payload = await fetchJsonWithRetry<any>("/api/market/regions", undefined, {
           retries: 1,
@@ -849,10 +904,13 @@ function AppContent() {
       }
     };
 
-    void loadRegions();
-    const interval = window.setInterval(loadRegions, 60000);
+    const cancelIdle = scheduleIdleAfter(() => {
+      void loadRegions();
+    }, 900);
+    const interval = window.setInterval(loadRegions, 90000);
     return () => {
       cancelled = true;
+      cancelIdle();
       window.clearInterval(interval);
     };
   }, [auth.authenticated, briefReloadTick]);
@@ -865,6 +923,7 @@ function AppContent() {
     let retryDelayMs = 12000;
 
     const loadGlobalBrief = async () => {
+      if (isPageHidden()) return;
       let displayableBriefLoaded = false;
       let currentBriefLoaded = false;
       const requestId = briefRequestIdRef.current + 1;
@@ -884,6 +943,9 @@ function AppContent() {
           });
           if (!cancelled && briefRequestIdRef.current === requestId) {
             setGlobalBrief(fastPayload);
+            if (fastPayload?.regions) {
+              setRegionalSnapshot((prev: any) => prev || { regions: fastPayload.regions, macro: fastPayload.macro });
+            }
             setSelectedGeoRegion(fastPayload?.regions?.europe?.label || fastPayload?.regions?.usa?.label || "Europe");
             const fastState = getBriefLoadState(fastPayload);
             displayableBriefLoaded = fastState.displayable;
@@ -894,24 +956,29 @@ function AppContent() {
           console.warn("Fast morning brief load failed, continuing to full fetch:", fastErr);
         }
 
-        await new Promise((resolve) => window.setTimeout(resolve, 300));
-        const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
-          retries: 2,
-          retryDelayMs: 800,
-          timeoutMs: 35000,
-        });
-        if (!cancelled && briefRequestIdRef.current === requestId) {
-          const fullState = getBriefLoadState(payload);
-          const fullBriefDisplayable = fullState.displayable;
-          const fullBriefCurrent = fullState.current;
-          if (fullBriefCurrent || !displayableBriefLoaded) {
-            setGlobalBrief(payload);
-            setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
+        // Only trigger the heavy un-cached brief build if fast brief wasn't already current
+        if (!currentBriefLoaded) {
+          await new Promise((resolve) => window.setTimeout(resolve, 300));
+          const payload = await fetchJsonWithRetry<any>("/api/market/morning-brief", undefined, {
+            retries: 2,
+            retryDelayMs: 800,
+            timeoutMs: 35000,
+          });
+          if (!cancelled && briefRequestIdRef.current === requestId) {
+            const fullState = getBriefLoadState(payload);
+            const fullBriefDisplayable = fullState.displayable;
+            const fullBriefCurrent = fullState.current;
+            if (fullBriefCurrent || !displayableBriefLoaded) {
+              setGlobalBrief(payload);
+              setSelectedGeoRegion(payload?.regions?.europe?.label || payload?.regions?.usa?.label || "Europe");
+            }
+            displayableBriefLoaded = displayableBriefLoaded || fullBriefDisplayable;
+            currentBriefLoaded = currentBriefLoaded || fullBriefCurrent;
+            if (currentBriefLoaded) retryDelayMs = 12000;
+            setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "error");
           }
-          displayableBriefLoaded = displayableBriefLoaded || fullBriefDisplayable;
-          currentBriefLoaded = currentBriefLoaded || fullBriefCurrent;
-          if (currentBriefLoaded) retryDelayMs = 12000;
-          setGlobalBriefStatus(displayableBriefLoaded ? "ready" : "error");
+        } else {
+          retryDelayMs = 12000;
         }
       } catch {
         if (!cancelled && briefRequestIdRef.current === requestId && !displayableBriefLoaded) {
@@ -1645,6 +1712,117 @@ function AppContent() {
         }`}
       >
         {mobileMarketTape}
+        {(() => {
+          const freshEarningsAlerts = ((decisionBrief?.earnings_results as any[]) || [])
+            .filter((er) => er && er.freshness === "fresh" && (er.days_since ?? 99) <= 1 && (er.trade_direction === "LONG" || er.trade_direction === "SHORT"))
+            .map((er) => ({
+              id: `er-flash-${er.ticker}-${er.period || "live"}`,
+              ticker: er.ticker,
+              trade_direction: er.trade_direction,
+              title: `${er.ticker} Earnings/Umsatz Flash (${String(er.status || "").toUpperCase()})`,
+              message: er.summary || "",
+              entry_trigger: er.entry_trigger || "",
+              stop_loss: er.stop_loss,
+              target_1: er.target_1,
+              reaction_pct: er.extended_change_pct,
+            }));
+          const combinedAlerts = [...liveWebAlerts, ...freshEarningsAlerts].filter(
+            (a, idx, arr) =>
+              a &&
+              a.id &&
+              !dismissedAlertIds.includes(String(a.id)) &&
+              arr.findIndex((x) => x?.id === a.id || (x?.ticker && x.ticker === a.ticker && x?.trade_direction === a.trade_direction)) === idx,
+          );
+          if (combinedAlerts.length === 0 && browserPushPermission !== "default") return null;
+          const topAlert = combinedAlerts[0];
+          const isShort = topAlert?.trade_direction === "SHORT";
+          const isLong = topAlert?.trade_direction === "LONG";
+          return (
+            <div className="mb-4 space-y-2">
+              {topAlert ? (
+                <div
+                  className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-sm ${
+                    isShort
+                      ? "border-rose-500/40 bg-rose-500/[0.08] text-slate-900 dark:border-rose-500/35 dark:bg-rose-950/30 dark:text-white"
+                      : isLong
+                        ? "border-emerald-500/40 bg-emerald-500/[0.08] text-slate-900 dark:border-emerald-500/35 dark:bg-emerald-950/30 dark:text-white"
+                        : "border-indigo-500/30 bg-indigo-500/[0.06] text-slate-900 dark:border-indigo-500/30 dark:bg-indigo-950/25 dark:text-white"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white ${
+                          isShort ? "bg-rose-600" : isLong ? "bg-emerald-600" : "bg-indigo-600"
+                        }`}
+                      >
+                        {isShort ? "🔴 LIVE SHORT-SIGNAL" : isLong ? "🟢 LIVE LONG-SIGNAL" : "⚡ LIVE PUSH-SIGNAL"}
+                      </span>
+                      <span className="text-xs font-extrabold">{topAlert.title}</span>
+                      {typeof topAlert.reaction_pct === "number" && Math.abs(topAlert.reaction_pct) >= 0.2 ? (
+                        <span className={`text-xs font-black ${topAlert.reaction_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                          ({topAlert.reaction_pct >= 0 ? "+" : ""}{topAlert.reaction_pct.toFixed(2)}% Live)
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-700 dark:text-slate-200">{topAlert.message}</p>
+                    {topAlert.entry_trigger ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-bold">
+                        <span>Trigger: {topAlert.entry_trigger}</span>
+                        {typeof topAlert.stop_loss === "number" ? <span>Stop: ${topAlert.stop_loss.toFixed(2)}</span> : null}
+                        {typeof topAlert.target_1 === "number" ? <span>Ziel 1: ${topAlert.target_1.toFixed(2)}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {browserPushPermission === "default" ? (
+                      <button
+                        type="button"
+                        onClick={requestBrowserPushPermission}
+                        className="rounded-xl border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-extrabold text-slate-800 hover:bg-white dark:border-white/15 dark:bg-white/10 dark:text-white"
+                      >
+                        🔔 Browser-Push aktivieren
+                      </button>
+                    ) : null}
+                    {topAlert.ticker ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab("analyze");
+                          handleSearch(String(topAlert.ticker));
+                        }}
+                        className="rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-black dark:bg-white dark:text-slate-950"
+                      >
+                        {topAlert.ticker} handeln / Chart
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setDismissedAlertIds((prev) => [...prev, String(topAlert.id)])}
+                      className="rounded-lg px-2 py-1 text-xs font-bold opacity-60 hover:opacity-100"
+                      title="Ausblenden"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ) : browserPushPermission === "default" ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-500/25 bg-indigo-500/[0.05] px-4 py-2.5 text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    ⚡ Echtzeit-Alerts laufen über <strong>Telegram</strong> + <strong>Live Website-Push</strong> (E-Mail deaktiviert). Aktiviere Browser-Push für sofortige Popups bei offenen Tabs:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={requestBrowserPushPermission}
+                    className="rounded-xl bg-indigo-600 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-indigo-700"
+                  >
+                    🔔 Browser-Push jetzt erlauben
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })()}
         {activeTab === "dashboard" ? (
           <div className="space-y-8">
             {shouldShowOnboardingNudge ? (

@@ -26,6 +26,14 @@ class RealtimeMarketService:
         cleaned = cleaned[: self.MAX_SYMBOLS]
 
         now = datetime.now(timezone.utc)
+        # Pre-warm missing non-streaming symbols in a single batch to avoid per-ticker HTTP/CPU spikes
+        non_streaming = [s for s in cleaned if self._build_stream_quote(s) is None]
+        if len(non_streaming) > 1:
+            try:
+                from src.memory_optimizer import get_shared_pool
+                get_shared_pool().get_batch_history(non_streaming, period="1mo", interval="1d", ttl_seconds=60)
+            except Exception:
+                pass
         quotes = [item for item in (self._build_quote(symbol) for symbol in cleaned) if item]
         stale_seconds: Dict[str, int] = {}
         for quote in quotes:
@@ -70,36 +78,59 @@ class RealtimeMarketService:
         if stream_quote is not None:
             return stream_quote
         try:
-            fetcher = DataFetcher(symbol)
-            price_data = fetcher.get_price_data()
-            info = fetcher.info
-            volatility = fetcher.get_volatility_data()
-            news = fetcher.get_news()
+            from src.memory_optimizer import get_shared_pool
+            pool = get_shared_pool()
+            df = pool.get_history(symbol, period="1mo", interval="1d", ttl_seconds=60)
+            if df is not None and not getattr(df, "empty", True) and "Close" in df.columns:
+                closes = df["Close"].dropna()
+                if not closes.empty:
+                    current_price = float(closes.iloc[-1])
+                    change_1w = (((current_price / float(closes.iloc[-6])) - 1.0) * 100.0) if len(closes) >= 6 and float(closes.iloc[-6]) != 0 else None
+                    change_1m = (((current_price / float(closes.iloc[0])) - 1.0) * 100.0) if len(closes) >= 2 and float(closes.iloc[0]) != 0 else None
+                    vol_ratio = None
+                    if "Volume" in df.columns:
+                        vols = df["Volume"].dropna()
+                        if len(vols) >= 6:
+                            avg_vol = float(vols.iloc[:-1].tail(15).mean())
+                            if avg_vol > 0:
+                                vol_ratio = float(vols.iloc[-1]) / avg_vol
+                    cached_info = pool.get_cached_fundamentals(symbol) or DataFetcher._etf_info_overrides.get(symbol) or {}
+                    currency = cached_info.get("currency") or ("EUR" if symbol.endswith(".DE") or symbol.endswith(".PA") else "USD")
+                    return {
+                        "symbol": symbol,
+                        "price": round(current_price, 4),
+                        "change_1w": self._safe_round(change_1w),
+                        "change_1m": self._safe_round(change_1m),
+                        "volume_ratio": self._safe_round(vol_ratio),
+                        "asset_class": self._infer_asset_class(symbol, cached_info),
+                        "currency": currency,
+                        "headline": None,
+                        "publisher": None,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "source": "yfinance",
+                        "feed": "research_fallback",
+                        "streaming": False,
+                    }
 
-            price = (
-                price_data.get("current_price")
-                or info.get("currentPrice")
-                or info.get("regularMarketPrice")
-            )
+            fetcher = DataFetcher(symbol)
+            price_data = fetcher.get_price_data_fast()
+            price = price_data.get("current_price")
+            if price is None:
+                price_data = fetcher.get_price_data()
+                price = price_data.get("current_price")
             if price is None:
                 return None
-
-            headline = None
-            publisher = None
-            if news:
-                headline = news[0].get("title")
-                publisher = news[0].get("publisher")
 
             return {
                 "symbol": symbol,
                 "price": round(float(price), 4),
                 "change_1w": self._safe_round(price_data.get("change_1w")),
                 "change_1m": self._safe_round(price_data.get("change_1m")),
-                "volume_ratio": self._safe_round(volatility.get("volume_ratio")),
-                "asset_class": self._infer_asset_class(symbol, info),
-                "currency": info.get("currency") or price_data.get("currency") or "USD",
-                "headline": headline,
-                "publisher": publisher,
+                "volume_ratio": None,
+                "asset_class": self._infer_asset_class(symbol, {}),
+                "currency": price_data.get("currency") or ("EUR" if symbol.endswith(".DE") else "USD"),
+                "headline": None,
+                "publisher": None,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "source": "yfinance",
                 "feed": "research_fallback",

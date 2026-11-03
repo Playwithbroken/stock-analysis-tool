@@ -45,12 +45,14 @@ class SignalScoreService:
         }
         filing_equities = self._score_equity_signals(snapshot.get("ticker_signals", []), weights)
         politics = self._score_politician_signals(snapshot.get("politician_signals", []), weights)
-        equity_rows, etf_rows, crypto_rows = await asyncio.gather(
+        equity_rows, etf_rows, crypto_rows, sector_rotation = await asyncio.gather(
             self.discovery_service.get_paper_equity_candidates(),
             self.discovery_service.get_etfs(),
             self.discovery_service.get_cryptos(),
+            self.discovery_service.get_sector_rotation_matrix(),
         )
-        market_equities = self._score_market_equities(equity_rows, weights)
+        market_equities = self._score_market_equities(equity_rows, weights, sector_rotation)
+        short_equities = self._score_short_equities(equity_rows, weights, sector_rotation)
         small_cap_equities = [
             item
             for item in market_equities
@@ -85,7 +87,9 @@ class SignalScoreService:
             "top_ideas": top_ideas,
             "equities": equities[:8],
             "market_equities": market_equities[:12],
+            "short_equities": short_equities[:8],
             "small_cap_equities": small_cap_equities[:8],
+            "sector_rotation": sector_rotation,
             "politics": politics[:8],
             "etfs": etfs[:8],
             "crypto": crypto[:8],
@@ -234,8 +238,14 @@ class SignalScoreService:
             )
         return sorted(scored, key=lambda item: item["total_score"], reverse=True)
 
-    def _score_market_equities(self, items: List[Dict[str, Any]], weights: Dict[str, float]) -> List[Dict[str, Any]]:
+    def _score_market_equities(
+        self,
+        items: List[Dict[str, Any]],
+        weights: Dict[str, float],
+        sector_rotation: Dict[str, Any] | None = None,
+    ) -> List[Dict[str, Any]]:
         scored: List[Dict[str, Any]] = []
+        sector_mods = (sector_rotation or {}).get("sector_modifiers") or {}
         for item in items:
             ticker = str(item.get("ticker") or "").upper()
             price = item.get("price")
@@ -249,6 +259,8 @@ class SignalScoreService:
             profit_margin = item.get("profit_margin_pct")
             market_cap = float(item.get("market_cap") or 0)
             volatility = item.get("volatility_annual_pct")
+            sector_name = str(item.get("sector") or "").strip().lower()
+            sector_mod = float(sector_mods.get(sector_name) or 0.0)
 
             quality = 48.0
             if market_cap >= 200_000_000_000:
@@ -271,6 +283,7 @@ class SignalScoreService:
                 timing += max(-6, min(9, float(rs_alpha_1m) * 0.7))
             if item.get("vcp_tightness"):
                 timing += 5.0
+            timing += sector_mod
 
             conviction = 42.0
             conviction += 14 if item.get("above_sma20") else -10
@@ -280,6 +293,7 @@ class SignalScoreService:
             down_res = item.get("down_day_resilience_pct")
             if isinstance(down_res, (int, float)) and float(down_res) >= 55.0:
                 conviction += min(7.0, (float(down_res) - 50.0) * 0.25)
+            conviction += sector_mod * 0.8
             total = self._weighted_total(
                 max(15, min(98, quality)),
                 max(15, min(98, timing)),
@@ -319,6 +333,54 @@ class SignalScoreService:
                         ),
                         "research_only": True,
                     },
+                }
+            )
+        return sorted(scored, key=lambda item: float(item.get("total_score") or 0), reverse=True)
+
+    def _score_short_equities(
+        self,
+        items: List[Dict[str, Any]],
+        weights: Dict[str, float],
+        sector_rotation: Dict[str, Any] | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Identify institutional relative-weakness & breakdown SHORT candidates below SMA20/SMA50."""
+        scored: List[Dict[str, Any]] = []
+        sector_mods = (sector_rotation or {}).get("sector_modifiers") or {}
+        for item in items:
+            ticker = str(item.get("ticker") or "").upper()
+            price = item.get("price")
+            if not ticker or not isinstance(price, (int, float)) or float(price) <= 0:
+                continue
+            if item.get("above_sma20") or item.get("above_sma50"):
+                continue
+            change_1m = float(item.get("change_1m") or 0)
+            rs_alpha_1m = float(item.get("rs_alpha_1m") or 0)
+            if change_1m >= -1.5 and rs_alpha_1m >= -2.5:
+                continue
+            volume_ratio = float(item.get("volume_ratio") or 1.0)
+            sector_name = str(item.get("sector") or "").strip().lower()
+            sector_mod = float(sector_mods.get(sector_name) or 0.0)
+            short_timing = 55.0 + min(25.0, abs(min(0.0, rs_alpha_1m)) * 1.8) + max(-4.0, min(10.0, (volume_ratio - 1.0) * 10.0))
+            if sector_mod < 0:
+                short_timing += abs(sector_mod)
+            short_conviction = 62.0 + min(20.0, abs(min(0.0, change_1m)) * 1.2)
+            total = self._weighted_total(75.0, min(96.0, short_timing), min(96.0, short_conviction), weights)
+            scored.append(
+                {
+                    "ticker": ticker,
+                    "label": item.get("name") or ticker,
+                    "headline": f"Relative-Weakness Breakdown SHORT: {item.get('sector') or 'Equity'}",
+                    "source_quality": 75.0,
+                    "timing_quality": round(min(96.0, short_timing), 1),
+                    "conviction_score": round(min(96.0, short_conviction), 1),
+                    "total_score": total,
+                    "source_label": "Institutional Relative-Weakness Scanner",
+                    "action": "short",
+                    "signal_type": "relative_weakness_breakdown_short",
+                    "trade_date": item.get("data_as_of"),
+                    "delay_days": 0,
+                    "detail": f"SHORT-Breakdown unter SMA20/50 | RS-Alpha 1M {rs_alpha_1m:+.1f}% vs. SPY | RVOL x{volume_ratio:.2f}",
+                    "market_evidence": item,
                 }
             )
         return sorted(scored, key=lambda item: float(item.get("total_score") or 0), reverse=True)

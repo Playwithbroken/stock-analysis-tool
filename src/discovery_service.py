@@ -779,6 +779,114 @@ class DiscoveryService:
             pass
         return rows
 
+    async def get_sector_rotation_matrix(self) -> Dict[str, Any]:
+        """Compute institutional sector & asset-class money-flow matrix (RS vs SPY + RVOL) with SQLite cache."""
+        import asyncio
+        from src.memory_optimizer import get_shared_pool
+
+        try:
+            from src.storage import PortfolioManager
+            cached = PortfolioManager().get_market_scanner_cache("sector_rotation_matrix", max_age_seconds=900)
+            if isinstance(cached, dict) and cached.get("sectors"):
+                return cached
+        except Exception:
+            pass
+
+        sector_etfs = [
+            ("XLK", "Technology"),
+            ("SMH", "Semiconductors"),
+            ("XLF", "Financial Services"),
+            ("XLE", "Energy"),
+            ("XLV", "Healthcare"),
+            ("XLI", "Industrials"),
+            ("XLY", "Consumer Cyclical"),
+            ("XLP", "Consumer Defensive"),
+            ("XLC", "Communication Services"),
+            ("XLU", "Utilities"),
+            ("XLB", "Basic Materials"),
+            ("XLRE", "Real Estate"),
+            ("IWM", "Small Caps"),
+            ("EWG", "Europe / DAX"),
+            ("GLD", "Gold / Commodities"),
+            ("BTC-USD", "Crypto"),
+        ]
+        symbols = ["SPY", *[sym for sym, _ in sector_etfs]]
+        pool = get_shared_pool()
+        histories = await asyncio.to_thread(pool.get_batch_history, symbols, "3mo", "1d", 600)
+
+        spy_df = histories.get("SPY")
+        spy_1w = 0.0
+        spy_1m = 0.0
+        if spy_df is not None and not getattr(spy_df, "empty", True) and "Close" in spy_df.columns:
+            sc = spy_df["Close"].dropna()
+            if len(sc) >= 6:
+                spy_1w = ((float(sc.iloc[-1]) / float(sc.iloc[-6])) - 1.0) * 100.0
+            if len(sc) >= 21:
+                spy_1m = ((float(sc.iloc[-1]) / float(sc.iloc[-21])) - 1.0) * 100.0
+
+        rows: List[Dict[str, Any]] = []
+        sector_modifiers: Dict[str, float] = {}
+        for etf_sym, sector_name in sector_etfs:
+            df = histories.get(etf_sym)
+            if df is None or getattr(df, "empty", True) or "Close" not in df.columns:
+                continue
+            closes = df["Close"].dropna()
+            if len(closes) < 21:
+                continue
+            vols = df["Volume"].dropna() if "Volume" in df.columns else closes * 0
+            last = float(closes.iloc[-1])
+            c_1w = ((last / float(closes.iloc[-6])) - 1.0) * 100.0 if len(closes) >= 6 else 0.0
+            c_1m = ((last / float(closes.iloc[-21])) - 1.0) * 100.0
+            sma_20 = float(closes.tail(20).mean())
+            rec_vol = float(vols.tail(5).mean()) if len(vols) >= 5 else 0.0
+            base_vol = float(vols.tail(25).head(20).mean()) if len(vols) >= 25 else 0.0
+            vol_ratio = round(rec_vol / base_vol, 2) if base_vol > 0 else 1.0
+            rs_1w = round(c_1w - spy_1w, 2)
+            rs_1m = round(c_1m - spy_1m, 2)
+            flow_score = round((rs_1m * 1.3) + (rs_1w * 1.1) + ((vol_ratio - 1.0) * 8.0) + (4.0 if last >= sma_20 else -4.0), 2)
+            if flow_score >= 3.0 and last >= sma_20:
+                flow_status = "INFLOW_LEADER"
+                mod = 5.0
+            elif flow_score <= -3.0 and last < sma_20:
+                flow_status = "OUTFLOW_LAGGARD"
+                mod = -6.0
+            else:
+                flow_status = "NEUTRAL"
+                mod = 0.0
+            sector_modifiers[sector_name.lower()] = mod
+            rows.append({
+                "etf": etf_sym,
+                "sector": sector_name,
+                "price": round(last, 2),
+                "change_1w": round(c_1w, 2),
+                "change_1m": round(c_1m, 2),
+                "rs_alpha_1w": rs_1w,
+                "rs_alpha_1m": rs_1m,
+                "volume_ratio": vol_ratio,
+                "above_sma20": last >= sma_20,
+                "flow_score": flow_score,
+                "flow_status": flow_status,
+                "score_modifier": mod,
+            })
+
+        rows.sort(key=lambda r: float(r.get("flow_score") or 0.0), reverse=True)
+        payload = {
+            "updated_at": datetime.utcnow().isoformat(),
+            "benchmark": "SPY",
+            "spy_change_1w": round(spy_1w, 2),
+            "spy_change_1m": round(spy_1m, 2),
+            "inflow_leaders": [r["sector"] for r in rows if r["flow_status"] == "INFLOW_LEADER"][:4],
+            "outflow_laggards": [r["sector"] for r in rows if r["flow_status"] == "OUTFLOW_LAGGARD"][:4],
+            "sector_modifiers": sector_modifiers,
+            "sectors": rows,
+        }
+        try:
+            from src.storage import PortfolioManager
+            PortfolioManager().set_market_scanner_cache("sector_rotation_matrix", payload)
+        except Exception:
+            pass
+        return payload
+
     def _score_future_star_news(self, news: List[Dict[str, Any]]) -> Dict[str, Any]:
         positive_terms = {
             "beat", "growth", "contract", "partnership", "approval", "launch", "guidance",

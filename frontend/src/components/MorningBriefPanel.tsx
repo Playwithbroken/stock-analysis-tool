@@ -1200,6 +1200,21 @@ export default function MorningBriefPanel({
                     >
                       {setup.symbol}
                     </button>
+                    {(() => {
+                      const rawDir = String(setup.trade_direction || setup.order_ticket?.direction || setup.direction || "").toUpperCase();
+                      const isShort = rawDir.includes("SHORT") || rawDir.includes("HEDGE");
+                      const isLong = rawDir.includes("LONG") || rawDir === "BUY";
+                      if (!isShort && !isLong) return null;
+                      return (
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-white ${
+                            isShort ? "bg-rose-600" : "bg-emerald-600"
+                          }`}
+                        >
+                          {isShort ? "🔴 SHORT" : "🟢 LONG"}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-black/8 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
@@ -1228,6 +1243,43 @@ export default function MorningBriefPanel({
                   }`}>
                     Learning-Bias {Number(setup.learning_adjustment.score_delta) > 0 ? "+" : ""}
                     {setup.learning_adjustment.score_delta}: {setup.learning_adjustment.reason}
+                  </div>
+                ) : null}
+                {(setup.order_ticket?.entry_price || setup.entry_price) ? (
+                  <div className="mt-3 rounded-[0.95rem] border border-slate-900/10 bg-slate-900/[0.03] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-700">
+                        Order-Ticket ({setup.order_ticket?.order_type || "LIMIT"} · CRV {setup.order_ticket?.risk_reward_ratio ?? "2.0"}R · {setup.order_ticket?.suggested_risk_pct ?? 1.0}% Risiko)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ot = setup.order_ticket || setup;
+                          const dir = String(ot.direction || setup.trade_direction || "LONG").toUpperCase();
+                          const text = `${setup.symbol} ${dir} (${ot.order_type || "LIMIT"}) | Entry: $${Number(ot.entry_price || setup.entry_price).toFixed(2)} | Stop-Loss: $${Number(ot.stop_loss || setup.stop_loss).toFixed(2)} | Ziel 1: $${Number(ot.target_1 || setup.target_1).toFixed(2)} | Ziel 2: $${Number(ot.target_2 || setup.target_2).toFixed(2)} | CRV: ${ot.risk_reward_ratio ?? 2.0}R | Trigger: ${setup.trigger || ""}`;
+                          if (navigator?.clipboard?.writeText) {
+                            navigator.clipboard.writeText(text).catch(() => {});
+                          }
+                        }}
+                        className="rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-800 hover:bg-slate-900 hover:text-white"
+                      >
+                        📋 Ticket kopieren
+                      </button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-bold sm:grid-cols-4">
+                      <div className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-slate-800">
+                        Entry: ${Number(setup.order_ticket?.entry_price ?? setup.entry_price).toFixed(2)}
+                      </div>
+                      <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 text-rose-700">
+                        Stop: ${Number(setup.order_ticket?.stop_loss ?? setup.stop_loss).toFixed(2)}
+                      </div>
+                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1.5 text-emerald-700">
+                        Ziel 1: ${Number(setup.order_ticket?.target_1 ?? setup.target_1).toFixed(2)}
+                      </div>
+                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1.5 text-emerald-700">
+                        Ziel 2: ${Number(setup.order_ticket?.target_2 ?? setup.target_2).toFixed(2)}
+                      </div>
+                    </div>
                   </div>
                 ) : null}
                 <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
@@ -2663,12 +2715,33 @@ export default function MorningBriefPanel({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => onAnalyze(item.ticker)}
-                      className="text-sm font-black text-slate-900"
-                    >
-                      {item.ticker}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onAnalyze(item.ticker)}
+                        className="text-sm font-black text-slate-900"
+                      >
+                        {item.ticker}
+                      </button>
+                      {(item.trade_direction === "LONG" || item.trade_direction === "SHORT") && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white ${
+                            item.trade_direction === "SHORT" ? "bg-rose-600" : "bg-emerald-600"
+                          }`}
+                        >
+                          {item.trade_direction === "SHORT" ? "🔴 SHORT" : "🟢 LONG"}
+                        </span>
+                      )}
+                      {typeof item.extended_change_pct === "number" && Math.abs(item.extended_change_pct) >= 0.2 ? (
+                        <span
+                          className={`text-[10px] font-black ${
+                            item.extended_change_pct >= 0 ? "text-emerald-700" : "text-rose-700"
+                          }`}
+                        >
+                          {item.extended_change_pct >= 0 ? "+" : ""}
+                          {item.extended_change_pct.toFixed(2)}% Live
+                        </span>
+                      ) : null}
+                    </div>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
                       item.status === "beat"
                         ? "bg-emerald-500/10 text-emerald-700"
@@ -2715,6 +2788,19 @@ export default function MorningBriefPanel({
                     </div>
                   )}
                   <div className="mt-3 text-xs leading-6 text-slate-600">{item.summary}</div>
+                  {item.freshness === "fresh" && (item.trade_direction === "LONG" || item.trade_direction === "SHORT") && typeof item.entry_price === "number" ? (
+                    <div className="mt-3 rounded-[0.95rem] border border-black/8 bg-white/85 p-2.5 text-[10px] font-bold text-slate-700">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>Entry: ${Number(item.entry_price).toFixed(2)}</span>
+                        {typeof item.stop_loss === "number" ? <span className="text-rose-700">Stop: ${Number(item.stop_loss).toFixed(2)}</span> : null}
+                        {typeof item.target_1 === "number" ? <span className="text-emerald-700">Ziel 1: ${Number(item.target_1).toFixed(2)}</span> : null}
+                        {typeof item.target_2 === "number" ? <span className="text-emerald-700">Ziel 2: ${Number(item.target_2).toFixed(2)}</span> : null}
+                      </div>
+                      {item.entry_trigger ? (
+                        <div className="mt-1 text-[10px] font-normal text-slate-500">{item.entry_trigger}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

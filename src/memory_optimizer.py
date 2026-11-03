@@ -387,11 +387,28 @@ def trim_process_memory(aggressive: bool = False) -> Dict[str, Any]:
     else:
         evicted += _SHARED_POOL.prune()
 
-    # 2. Prune DataFetcher._global_cache
+    # 2. Prune DataFetcher._global_cache and PaperTradingService._GLOBAL_MARKET_HISTORY_CACHE
     try:
         from src.data_fetcher import DataFetcher
         if hasattr(DataFetcher, "prune_cache"):
             evicted += DataFetcher.prune_cache(clear_all=aggressive)
+    except Exception:
+        pass
+
+    try:
+        if "src.paper_trading_service" in sys.modules:
+            pts = sys.modules["src.paper_trading_service"].PaperTradingService
+            cache = getattr(pts, "_GLOBAL_MARKET_HISTORY_CACHE", None)
+            if isinstance(cache, dict):
+                if aggressive:
+                    evicted += len(cache)
+                    cache.clear()
+                else:
+                    now_m = time.monotonic()
+                    for k in list(cache.keys()):
+                        if now_m - float((cache.get(k) or {}).get("stored_at") or 0) > 180.0:
+                            cache.pop(k, None)
+                            evicted += 1
     except Exception:
         pass
 

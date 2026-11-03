@@ -1727,7 +1727,11 @@ class PaperTradingService:
 
         equity_candidates: List[Dict[str, Any]] = []
         seen_equity_tickers: set[str] = set()
-        for item in [*scoreboard.get("equities", [])[:6], *scoreboard.get("small_cap_equities", [])[:8]]:
+        for item in [
+            *scoreboard.get("equities", [])[:6],
+            *scoreboard.get("small_cap_equities", [])[:8],
+            *scoreboard.get("short_equities", [])[:4],
+        ]:
             ticker = str(item.get("ticker") or "").upper().strip()
             if not ticker or ticker in seen_equity_tickers:
                 continue
@@ -1740,6 +1744,7 @@ class PaperTradingService:
             direction = "long" if item.get("action") == "buy" else "short"
             score = float(item.get("total_score") or 0)
             broad_equity = item.get("signal_type") == "broad_equity_quality_momentum"
+            short_breakdown = item.get("signal_type") == "relative_weakness_breakdown_short"
             market_cap = float((item.get("market_evidence") or {}).get("market_cap") or 0)
             small_cap_candidate = bool(broad_equity and 0 < market_cap < 5_000_000_000)
             market_fields = self._market_reference_fields(item.get("ticker"))
@@ -1749,15 +1754,33 @@ class PaperTradingService:
                     "ticker": item.get("ticker"),
                     "asset_class": "equity",
                     "direction": direction,
-                    "setup_type": "small_cap_discovery" if small_cap_candidate else "equity_quality_momentum" if broad_equity else "insider_follow",
-                    "title": "Small-Cap Discovery" if small_cap_candidate else "Aktien-Qualität und Momentum" if broad_equity else "Insider follow-through",
+                    "setup_type": (
+                        "small_cap_discovery"
+                        if small_cap_candidate
+                        else "equity_quality_momentum"
+                        if (broad_equity or short_breakdown)
+                        else "insider_follow"
+                    ),
+                    "title": (
+                        "Small-Cap Discovery"
+                        if small_cap_candidate
+                        else "Relative-Weakness Short Breakdown"
+                        if short_breakdown
+                        else "Aktien-Qualität und Momentum"
+                        if broad_equity
+                        else "Insider follow-through"
+                    ),
                     "headline": item.get("headline"),
                     "source_label": item.get("source_label"),
                     "score": score,
-                    "risk_buffer_pct": 4.0 if broad_equity else 3.5 if direction == "long" else 4.0,
-                    "reward_buffer_pct": 8.5 if broad_equity else 7.5,
-                    "max_holding_days": 15 if broad_equity else 10,
+                    "risk_buffer_pct": 4.0 if (broad_equity or short_breakdown) else 3.5 if direction == "long" else 4.0,
+                    "reward_buffer_pct": 8.5 if (broad_equity or short_breakdown) else 7.5,
+                    "max_holding_days": 15 if (broad_equity or short_breakdown) else 10,
                     "thesis": (
+                        f"Institutionelles Relative-Weakness Short-Setup unter SMA20/50 ({item.get('detail') or 'Breakdown'}). "
+                        "Nur handeln, wenn Verkaufsdruck und Schwäche gegenüber SPY anhalten."
+                        if short_breakdown
+                        else
                         "Breiter Aktien-Screen bestätigt Qualität, Trend über 20/50 Tage und beobachtbare Marktteilnahme. "
                         "Nur handeln, wenn Kurs und Volumen am Entry weiter bestätigen; Research-Snapshot ist keine Ausführungsquote."
                         if broad_equity
@@ -1766,12 +1789,14 @@ class PaperTradingService:
                         f"Use only if price holds after filing delay of {item.get('delay_days') if item.get('delay_days') is not None else 'offen'} days."
                     ),
                     "tags": (
-                        (["equity", "small cap", "discovery", "momentum"] if small_cap_candidate else ["equity", "quality", "momentum", "diversified scanner"])
+                        ["equity", "short", "relative weakness", "breakdown"]
+                        if short_breakdown
+                        else (["equity", "small cap", "discovery", "momentum"] if small_cap_candidate else ["equity", "quality", "momentum", "diversified scanner"])
                         if broad_equity
                         else ["long" if direction == "long" else "short", "official filing", "equity"]
                     ),
-                    "market_evidence": item.get("market_evidence") if broad_equity else None,
-                    "data_quality": item.get("data_quality") if broad_equity else None,
+                    "market_evidence": item.get("market_evidence") if (broad_equity or short_breakdown) else None,
+                    "data_quality": item.get("data_quality") if (broad_equity or short_breakdown) else None,
                     "asset_evidence": {
                         **(item.get("market_evidence") or {}),
                         "data_quality": item.get("data_quality"),
@@ -7941,10 +7966,11 @@ class PaperTradingService:
         except Exception:
             return {}
 
+    _GLOBAL_MARKET_HISTORY_CACHE: Dict[str, Dict[str, Any]] = {}
+
     def _load_market_history(self, ticker: str):
-        cache = getattr(self, "_market_history_cache", None)
-        if not isinstance(cache, dict):
-            cache = {}
+        cache = self.__class__._GLOBAL_MARKET_HISTORY_CACHE
+        if not isinstance(getattr(self, "_market_history_cache", None), dict):
             self._market_history_cache = cache
 
         cache_key = str(ticker).strip().upper()
@@ -7974,11 +8000,19 @@ class PaperTradingService:
             except Exception:
                 history = None
         if history is not None and not history.empty:
+            try:
+                from src.memory_optimizer import SharedMarketDataPool
+                history = SharedMarketDataPool.compact_dataframe(history)
+            except Exception:
+                pass
             cache[cache_key] = {
                 "stored_at": now_monotonic,
                 "history": history,
                 "interval": interval,
             }
+            while len(cache) > 80:
+                oldest_key = next(iter(cache))
+                cache.pop(oldest_key, None)
         return history, interval
 
     def _get_last_price(self, ticker: Optional[str]) -> Optional[float]:

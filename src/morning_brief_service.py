@@ -3044,12 +3044,70 @@ class MorningBriefService:
                 existing_symbols.add(symbol)
 
         scored.sort(key=lambda row: (row["_score"], row["confidence"]), reverse=True)
-        for index, row in enumerate(scored, start=1):
+        top_scored = scored[:5]
+        for index, row in enumerate(top_scored, start=1):
             row["rank"] = index
             row["rank_score"] = round(float(row.get("_score") or 0), 2)
             row["setup_id"] = f"{row.get('symbol','UNK')}-{index}"
             row.pop("_score", None)
-        return scored[:5]
+            row["order_ticket"] = self._build_order_ticket_for_setup(row)
+        return top_scored
+
+    def _build_order_ticket_for_setup(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        raw_dir = str(row.get("trade_direction") or row.get("direction") or "").lower()
+        is_short = "short" in raw_dir or "hedge" in raw_dir
+        trade_dir = "SHORT" if is_short else "LONG" if ("long" in raw_dir or raw_dir in {"buy", "watch-long"}) else "LONG"
+        entry = row.get("entry_price")
+        if not isinstance(entry, (int, float)) or entry <= 0:
+            mover = row.get("market_mover") or {}
+            entry = mover.get("price")
+        if not isinstance(entry, (int, float)) or entry <= 0:
+            try:
+                from src.memory_optimizer import get_shared_pool
+                sym = str(row.get("symbol") or "").strip().upper()
+                df = get_shared_pool()._pool.get(f"{sym}:6mo:1d", (0, None))[1]
+                if df is not None and not getattr(df, "empty", True) and "Close" in df.columns:
+                    entry = float(df["Close"].dropna().iloc[-1])
+            except Exception:
+                entry = None
+
+        stop = row.get("stop_loss")
+        t1 = row.get("target_1")
+        t2 = row.get("target_2")
+        if isinstance(entry, (int, float)) and entry > 0:
+            entry = round(float(entry), 2)
+            if not isinstance(stop, (int, float)) or stop <= 0:
+                stop = round(entry * (1.022 if is_short else 0.978), 2)
+            if not isinstance(t1, (int, float)) or t1 <= 0:
+                t1 = round(entry * (0.955 if is_short else 1.045), 2)
+            if not isinstance(t2, (int, float)) or t2 <= 0:
+                t2 = round(entry * (0.925 if is_short else 1.075), 2)
+            row["entry_price"] = entry
+            row["stop_loss"] = stop
+            row["target_1"] = t1
+            row["target_2"] = t2
+            risk = abs(entry - float(stop))
+            reward = abs(float(t1) - entry)
+            rr = round(reward / risk, 2) if risk > 0 else 2.0
+        else:
+            rr = 2.0
+
+        conf = int(row.get("confidence") or 65)
+        risk_pct = 1.0 if conf >= 80 else 0.5
+        return {
+            "symbol": row.get("symbol"),
+            "direction": trade_dir,
+            "order_type": "STOP_LIMIT" if row.get("setup_type") == "earnings_flash" else "LIMIT",
+            "entry_price": entry,
+            "stop_loss": stop,
+            "target_1": t1,
+            "target_2": t2,
+            "risk_reward_ratio": rr,
+            "suggested_risk_pct": risk_pct,
+            "window": row.get("window") or "today / next session",
+            "trigger": row.get("trigger"),
+            "invalidation": row.get("invalidation"),
+        }
 
     def _build_setup_board(self, trade_setups: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         buckets: Dict[str, List[Dict[str, Any]]] = {"now": [], "next": [], "avoid": []}
@@ -3090,6 +3148,7 @@ class MorningBriefService:
                     "stop_loss": setup.get("stop_loss"),
                     "target_1": setup.get("target_1"),
                     "target_2": setup.get("target_2"),
+                    "order_ticket": setup.get("order_ticket"),
                 }
             )
         return buckets

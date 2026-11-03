@@ -561,6 +561,20 @@ def init_db():
     )
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_incidents_status_time ON integration_incidents(status, opened_at DESC)')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS instrument_fundamentals_cache (
+        symbol TEXT PRIMARY KEY,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        updated_at TEXT NOT NULL
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS market_scanner_cache (
+        cache_key TEXT PRIMARY KEY,
+        payload_json TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL
+    )
+    ''')
     for broker_order_column, broker_order_type in (
         ("filled_quantity", "REAL NOT NULL DEFAULT 0"),
         ("filled_avg_price", "REAL"),
@@ -2681,3 +2695,100 @@ class PortfolioManager:
         updated = dict(cursor.fetchone())
         conn.close()
         return updated
+
+    def get_cached_fundamentals(self, symbol: str, max_age_hours: int = 168) -> Optional[Dict[str, Any]]:
+        """Retrieve persistent company fundamentals from SQLite (default 7-day / 168h TTL)."""
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT payload_json, updated_at FROM instrument_fundamentals_cache WHERE symbol = ?',
+                (sym,),
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if not row:
+                return None
+            updated_at = datetime.fromisoformat(str(row["updated_at"]).replace("Z", "+00:00"))
+            now = datetime.now(updated_at.tzinfo) if updated_at.tzinfo else datetime.utcnow()
+            if (now - updated_at).total_seconds() > max_age_hours * 3600:
+                return None
+            data = json.loads(row["payload_json"] or "{}")
+            return data if isinstance(data, dict) and data else None
+        except Exception:
+            return None
+
+    def set_cached_fundamentals(self, symbol: str, payload: Dict[str, Any]) -> None:
+        """Persist compacted company fundamentals into SQLite for fast restarts and minimal Yahoo API calls."""
+        sym = str(symbol or "").strip().upper()
+        if not sym or not isinstance(payload, dict) or not payload:
+            return
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO instrument_fundamentals_cache (symbol, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(symbol) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                ''',
+                (sym, json.dumps(payload, default=str), datetime.utcnow().isoformat()),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+    def get_market_scanner_cache(self, cache_key: str, max_age_seconds: int = 900) -> Optional[Any]:
+        """Retrieve persistent scanner snapshot from SQLite so server restarts have 0ms cold-start."""
+        key = str(cache_key or "").strip()
+        if not key:
+            return None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT payload_json, updated_at FROM market_scanner_cache WHERE cache_key = ?',
+                (key,),
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if not row:
+                return None
+            updated_at = datetime.fromisoformat(str(row["updated_at"]).replace("Z", "+00:00"))
+            now = datetime.now(updated_at.tzinfo) if updated_at.tzinfo else datetime.utcnow()
+            if (now - updated_at).total_seconds() > max_age_seconds:
+                return None
+            return json.loads(row["payload_json"] or "null")
+        except Exception:
+            return None
+
+    def set_market_scanner_cache(self, cache_key: str, payload: Any) -> None:
+        """Persist scanner snapshot into SQLite."""
+        key = str(cache_key or "").strip()
+        if not key or payload is None:
+            return
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO market_scanner_cache (cache_key, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(cache_key) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                ''',
+                (key, json.dumps(payload, default=str), datetime.utcnow().isoformat()),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass

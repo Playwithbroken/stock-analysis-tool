@@ -58,14 +58,27 @@ class SharedMarketDataPool:
 
     def get_cached_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
         sym = str(symbol).strip().upper()
-        if not sym or sym not in self._fundamentals_pool:
+        if not sym:
             return None
-        ts, data = self._fundamentals_pool[sym]
-        if (time.monotonic() - ts) <= self.FUNDAMENTALS_TTL_SECONDS and isinstance(data, dict):
-            self._fundamentals_pool.move_to_end(sym)
-            self.fund_hits += 1
-            return data
-        self._fundamentals_pool.pop(sym, None)
+        if sym in self._fundamentals_pool:
+            ts, data = self._fundamentals_pool[sym]
+            if (time.monotonic() - ts) <= self.FUNDAMENTALS_TTL_SECONDS and isinstance(data, dict):
+                self._fundamentals_pool.move_to_end(sym)
+                self.fund_hits += 1
+                return data
+            self._fundamentals_pool.pop(sym, None)
+        try:
+            from src.storage import PortfolioManager
+            persisted = PortfolioManager().get_cached_fundamentals(sym, max_age_hours=168)
+            if isinstance(persisted, dict) and persisted:
+                self._fundamentals_pool[sym] = (time.monotonic(), persisted)
+                self._fundamentals_pool.move_to_end(sym)
+                while len(self._fundamentals_pool) > self.FUNDAMENTALS_MAX_ITEMS:
+                    self._fundamentals_pool.popitem(last=False)
+                self.fund_hits += 1
+                return persisted
+        except Exception:
+            pass
         return None
 
     def set_cached_fundamentals(self, symbol: str, data: Dict[str, Any]) -> None:
@@ -87,6 +100,27 @@ class SharedMarketDataPool:
         self._fundamentals_pool.move_to_end(sym)
         while len(self._fundamentals_pool) > self.FUNDAMENTALS_MAX_ITEMS:
             self._fundamentals_pool.popitem(last=False)
+        try:
+            from src.storage import PortfolioManager
+            PortfolioManager().set_cached_fundamentals(sym, compacted)
+        except Exception:
+            pass
+
+    def fetch_batch_latest_prices(self, symbols: list[str], ttl_seconds: int = 180) -> Dict[str, float]:
+        """Batch-fetch latest close prices for multiple symbols in a single vectorized request."""
+        histories = self.get_batch_history(symbols, period="5d", interval="1d", ttl_seconds=ttl_seconds)
+        prices: Dict[str, float] = {}
+        for sym, df in histories.items():
+            try:
+                if df is not None and not getattr(df, "empty", True) and "Close" in df.columns:
+                    closes = df["Close"].dropna()
+                    if not closes.empty:
+                        price = float(closes.iloc[-1])
+                        if price > 0:
+                            prices[sym] = price
+            except Exception:
+                continue
+        return prices
 
     def get_batch_history(
         self,

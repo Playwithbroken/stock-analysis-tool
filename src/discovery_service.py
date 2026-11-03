@@ -597,6 +597,15 @@ class DiscoveryService:
         if cached and (now - cached[1]).total_seconds() < 600:
             return cached[0]
 
+        try:
+            from src.storage import PortfolioManager
+            persisted_rows = PortfolioManager().get_market_scanner_cache("paper_equity_candidates", max_age_seconds=600)
+            if isinstance(persisted_rows, list) and persisted_rows:
+                self.__class__._equity_candidate_cache = (persisted_rows, now)
+                return persisted_rows
+        except Exception:
+            pass
+
         research_universe = list(dict.fromkeys([*self.paper_equity_universe, *self.paper_small_cap_universe]))
         pool = get_shared_pool()
 
@@ -742,6 +751,7 @@ class DiscoveryService:
                 "above_sma50": row["above_sma50"],
                 "volume_ratio": row["volume_ratio"],
                 "volatility_annual_pct": row["volatility_annual_pct"],
+                "tech_rank_score": row["tech_rank_score"],
                 "revenue_growth_pct": (
                     float(info.get("revenueGrowth")) * 100 if isinstance(info.get("revenueGrowth"), (int, float)) else None
                 ),
@@ -757,6 +767,16 @@ class DiscoveryService:
 
         rows = [row for row in await asyncio.gather(*(enrich_fundamentals(r) for r in stage1_rows)) if row]
         self.__class__._equity_candidate_cache = (rows, now)
+        try:
+            from src.storage import PortfolioManager
+            PortfolioManager().set_market_scanner_cache("paper_equity_candidates", rows)
+        except Exception:
+            pass
+        try:
+            from src.forecast_learning_service import ForecastLearningService
+            await asyncio.to_thread(ForecastLearningService().record_market_scanner_forecasts, rows)
+        except Exception:
+            pass
         return rows
 
     def _score_future_star_news(self, news: List[Dict[str, Any]]) -> Dict[str, Any]:

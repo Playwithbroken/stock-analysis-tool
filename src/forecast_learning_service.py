@@ -105,11 +105,129 @@ class ForecastLearningService:
             "delivery_key": delivery_key,
         }
 
+    def record_market_scanner_forecasts(
+        self,
+        candidates: List[Dict[str, Any]],
+        session_label: str = "market_scanner",
+        max_long: int = 4,
+        max_short: int = 3,
+    ) -> Dict[str, Any]:
+        """Shadow-track top Long & Short anomalies from the whole-market scanner across 1h/24h/72h/120h."""
+        if not isinstance(candidates, list) or not candidates:
+            return {"status": "empty", "recorded": 0, "skipped": 0}
+
+        now = datetime.utcnow()
+        day_bucket = now.strftime("%Y-%m-%d")
+        long_picks = [
+            c for c in candidates
+            if isinstance(c, dict)
+            and (self._safe_float(c.get("tech_rank_score")) or 0.0) >= 24.0
+            and (self._safe_float(c.get("rs_alpha_1m")) or 0.0) >= 2.0
+            and c.get("above_sma20")
+        ][:max_long]
+
+        short_picks = sorted(
+            [
+                c for c in candidates
+                if isinstance(c, dict)
+                and (self._safe_float(c.get("tech_rank_score")) or 0.0) <= -14.0
+                and (self._safe_float(c.get("rs_alpha_1m")) or 0.0) <= -2.5
+                and not c.get("above_sma20")
+            ],
+            key=lambda x: float(x.get("tech_rank_score") or 0.0),
+        )[:max_short]
+
+        recorded = 0
+        skipped = 0
+        for direction, rows in (("long", long_picks), ("short", short_picks)):
+            for row in rows:
+                symbol = str(row.get("ticker") or row.get("symbol") or "").strip().upper()
+                price = self._safe_float(row.get("price"))
+                if not symbol or not price or price <= 0:
+                    skipped += 1
+                    continue
+                setup_type = "scanner_rs_breakout" if direction == "long" else "scanner_rs_breakdown_short"
+                signal_key = f"scanner:{day_bucket}:{symbol}:{direction}:{setup_type}"
+                forecast_id = f"fc_{hashlib.sha1(signal_key.encode('utf-8')).hexdigest()[:16]}"
+                rs_1m = self._safe_float(row.get("rs_alpha_1m")) or 0.0
+                vol_ratio = self._safe_float(row.get("volume_ratio")) or 1.0
+                vcp = bool(row.get("vcp_tightness"))
+                thesis = (
+                    f"Market-Scanner Long-Leader {symbol}: RS-Alpha 1M {rs_1m:+.1f}% vs. SPY, RVOL {vol_ratio:.2f}x"
+                    + (", VCP-Tightness aktiv." if vcp else ".")
+                    if direction == "long"
+                    else f"Market-Scanner Relative-Weakness Short {symbol}: RS-Alpha 1M {rs_1m:+.1f}% vs. SPY unter SMA20 (RVOL {vol_ratio:.2f}x)."
+                )
+                forecast = {
+                    "id": forecast_id,
+                    "signal_key": signal_key,
+                    "symbol": symbol,
+                    "direction": direction,
+                    "setup_type": setup_type,
+                    "session_label": session_label,
+                    "source_label": "market_scanner",
+                    "thesis": self._truncate(thesis, 1000),
+                    "trigger": "Hold above SMA20 / VWAP with relative strength" if direction == "long" else "Breakdown below SMA20 / failed bounce",
+                    "invalidation": "Close below SMA20" if direction == "long" else "Reclaim of SMA20 with volume",
+                    "confidence": min(88.0, max(58.0, 65.0 + abs(rs_1m) * 1.5)),
+                    "rank_score": self._safe_float(row.get("tech_rank_score")) or 65.0,
+                    "expected_move": "2.0-5.0% multi-day scanner anomaly",
+                    "entry_price": price,
+                    "forecast_time": now.isoformat(),
+                    "metadata_json": json.dumps(
+                        {
+                            "rs_alpha_1m": rs_1m,
+                            "rs_alpha_3m": row.get("rs_alpha_3m"),
+                            "volume_ratio": vol_ratio,
+                            "vcp_tightness": vcp,
+                        },
+                        ensure_ascii=True,
+                        default=str,
+                    ),
+                    "created_at": now.isoformat(),
+                }
+                outcomes = [
+                    {
+                        "id": f"{forecast_id}_{hours}h",
+                        "forecast_id": forecast_id,
+                        "horizon_hours": int(hours),
+                        "due_at": (now + timedelta(hours=int(hours))).isoformat(),
+                        "status": "pending",
+                        "result": None,
+                        "checked_at": None,
+                        "exit_price": None,
+                        "performance_pct": None,
+                        "notes": None,
+                    }
+                    for hours in DEFAULT_HORIZONS_HOURS
+                ]
+                if self.portfolio_manager.upsert_signal_forecast(forecast, outcomes):
+                    recorded += 1
+                else:
+                    skipped += 1
+
+        return {"status": "ok", "recorded": recorded, "skipped": skipped}
+
     def evaluate_due_forecasts(self, limit: int = 60) -> Dict[str, Any]:
         due_items = self.portfolio_manager.list_due_signal_forecast_outcomes(limit=limit)
         evaluated = 0
         pending_data = 0
         errors: List[str] = []
+
+        unique_symbols = list(
+            dict.fromkeys(
+                str(item.get("symbol") or "").strip().upper()
+                for item in due_items
+                if item.get("symbol")
+            )
+        )
+        batch_prices: Dict[str, float] = {}
+        if len(unique_symbols) > 1:
+            try:
+                from src.memory_optimizer import get_shared_pool
+                batch_prices = get_shared_pool().fetch_batch_latest_prices(unique_symbols, ttl_seconds=180)
+            except Exception:
+                batch_prices = {}
 
         for item in due_items:
             outcome_id = str(item.get("id") or "")
@@ -117,7 +235,9 @@ class ForecastLearningService:
             entry_price = self._safe_float(item.get("entry_price"))
             if not outcome_id or not symbol or not entry_price:
                 continue
-            current_price = self._get_current_price(symbol)
+            current_price = batch_prices.get(symbol)
+            if current_price is None:
+                current_price = self._get_current_price(symbol)
             checked_at = datetime.utcnow().isoformat()
             if current_price is None:
                 pending_data += 1
@@ -233,6 +353,29 @@ class ForecastLearningService:
                 add(setup)
             if len(collected) >= limit:
                 break
+
+        for er in (brief.get("earnings_results") or [])[:4]:
+            if not isinstance(er, dict) or str(er.get("freshness") or "") != "fresh":
+                continue
+            symbol = str(er.get("ticker") or "").strip().upper()
+            trade_dir = str(er.get("trade_direction") or "").strip().upper()
+            if not symbol or trade_dir not in {"LONG", "SHORT"}:
+                continue
+            add(
+                {
+                    "symbol": symbol,
+                    "direction": "short" if trade_dir == "SHORT" else "long",
+                    "setup_type": "earnings_flash",
+                    "setup_source": "earnings",
+                    "source": "earnings",
+                    "thesis": er.get("summary") or f"Live Earnings/Umsatz {trade_dir} Signal fuer {symbol}.",
+                    "trigger": er.get("entry_trigger") or "Follow extended-hours / opening VWAP reaction.",
+                    "invalidation": f"Stop-Loss {er.get('stop_loss')}" if er.get("stop_loss") else "Full reversal of earnings impulse.",
+                    "confidence": 82,
+                    "rank_score": 90,
+                    "expected_move": "2.5-6.0% post-earnings reaction",
+                }
+            )
 
         congress_limit = 4
         for item in brief.get("congress_watch") or []:
@@ -604,7 +747,9 @@ class ForecastLearningService:
         raw = (action or "").lower()
         if any(token in raw for token in ("buy", "add", "long", "accumulate", "benefit")):
             return "long"
-        if any(token in raw for token in ("sell", "reduce", "short", "hedge", "avoid")):
+        if "short" in raw:
+            return "short"
+        if any(token in raw for token in ("sell", "reduce", "hedge", "avoid")):
             return "hedge"
         return "watch"
 

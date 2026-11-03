@@ -1699,6 +1699,83 @@ export default function EdgeDashboardPanel({
             Relative-Stärke-Daten werden beim nächsten Scan automatisch aktualisiert.
           </div>
         )}
+
+        {Array.isArray(signalScore?.sector_rotation?.sectors) && signalScore.sector_rotation.sectors.length > 0 ? (
+          <div className="mt-4 border-t border-black/6 pt-4 dark:border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300">
+                Ganzmarkt-Sektor-Rotation (Institutional Money Flow vs. SPY)
+              </div>
+              <div className="text-[11px] font-semibold text-slate-500">
+                Zuflüsse: {(signalScore.sector_rotation.inflow_leaders || []).join(", ") || "Neutral"}
+              </div>
+            </div>
+            <div className="mt-2.5 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              {signalScore.sector_rotation.sectors.slice(0, 6).map((sec: any) => {
+                const isLeader = sec.flow_status === "INFLOW_LEADER";
+                const isLaggard = sec.flow_status === "OUTFLOW_LAGGARD";
+                return (
+                  <div
+                    key={sec.etf}
+                    onClick={() => onAnalyzeTicker(sec.etf)}
+                    className={`cursor-pointer rounded-xl border p-2.5 text-xs transition hover:shadow-xs ${
+                      isLeader
+                        ? "border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-950/30"
+                        : isLaggard
+                          ? "border-rose-500/30 bg-rose-500/[0.06] dark:bg-rose-950/30"
+                          : "border-black/6 bg-white/80 dark:border-white/10 dark:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span>{sec.etf}</span>
+                      <span className={isLeader ? "text-emerald-600" : isLaggard ? "text-rose-600" : "text-slate-500"}>
+                        {sec.rs_alpha_1m >= 0 ? `+${sec.rs_alpha_1m}%` : `${sec.rs_alpha_1m}%`} RS
+                      </span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                      {sec.sector}
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider">
+                      <span className={isLeader ? "text-emerald-700 dark:text-emerald-400" : isLaggard ? "text-rose-700 dark:text-rose-400" : "text-slate-500"}>
+                        {isLeader ? "🟢 INFLOW" : isLaggard ? "🔴 OUTFLOW" : "⚪ NEUTRAL"}
+                      </span>
+                      <span className="text-slate-400">RVOL {sec.volume_ratio}x</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {Array.isArray(signalScore?.short_equities) && signalScore.short_equities.length > 0 ? (
+          <div className="mt-4 border-t border-black/6 pt-4 dark:border-white/10">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-400">
+                🔴 Institutionelle Short-Breakdown Kandidaten (Relative Schwäche unter SMA20/50)
+              </div>
+            </div>
+            <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+              {signalScore.short_equities.slice(0, 4).map((item: any) => (
+                <div
+                  key={`short-${item.ticker}`}
+                  onClick={() => onAnalyzeTicker(item.ticker)}
+                  className="cursor-pointer rounded-xl border border-rose-500/25 bg-rose-500/[0.05] p-3 transition hover:border-rose-500/50 dark:bg-rose-950/25"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black text-slate-900 dark:text-white">{item.ticker}</span>
+                    <span className="rounded-md bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
+                      🔴 SHORT ({item.total_score})
+                    </span>
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    {item.detail}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="edge-decision-strip mt-5 grid gap-4 xl:grid-cols-3">

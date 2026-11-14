@@ -761,9 +761,9 @@ h6,
 
   --apple-blue: #2997ff;
   --apple-blue-hover: #409cff;
-  --accent: #2997ff;
-  --accent-strong: #409cff;
-  --accent-soft: rgba(41, 151, 255, 0.14);
+  --accent: #0071e3;
+  --accent-strong: #0077ed;
+  --accent-soft: rgba(41, 151, 255, 0.16);
 
   --bg-base: #000000;
   --bg-canvas: #000000;
@@ -1940,8 +1940,107 @@ h6,
 
 [data-theme="dark"] .apple-pill-btn-active,
 [data-theme="dark"] .apple-pill-btn-primary {
-  background: #2997ff;
-  border-color: #2997ff;
+  background: #0071e3;
+  border-color: #0071e3;
   color: #ffffff;
 }
+
+/* ─── Dark Mode Contrast Guarantees (No unreadable gray-on-gray or white-on-white) ─── */
+[data-theme="dark"] .bg-\[\#f5f5f7\],
+[data-theme="dark"] .bg-\[\#e8e8ed\],
+[data-theme="dark"] .bg-slate-50\/70,
+[data-theme="dark"] .bg-slate-50\/80,
+[data-theme="dark"] .bg-slate-50\/90,
+[data-theme="dark"] .bg-slate-100\/80,
+[data-theme="dark"] .bg-slate-100\/90,
+[data-theme="dark"] .bg-slate-200,
+[data-theme="dark"] .bg-slate-200\/70,
+[data-theme="dark"] .bg-black\/\[0\.02\],
+[data-theme="dark"] .bg-black\/\[0\.03\],
+[data-theme="dark"] .bg-black\/\[0\.04\],
+[data-theme="dark"] .surface-panel .bg-\[\#f5f5f7\],
+[data-theme="dark"] .surface-panel .bg-\[\#e8e8ed\],
+[data-theme="dark"] .surface-panel .bg-slate-50\/70,
+[data-theme="dark"] .surface-panel .bg-slate-50\/80,
+[data-theme="dark"] .surface-panel .bg-slate-50\/90,
+[data-theme="dark"] .surface-panel .bg-slate-100\/80,
+[data-theme="dark"] .surface-panel .bg-slate-100\/90,
+[data-theme="dark"] .surface-panel .bg-slate-200,
+[data-theme="dark"] .surface-panel .bg-slate-200\/70 {
+  background-color: rgba(44, 44, 46, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+[data-theme="dark"] .text-\[\#1d1d1f\],
+[data-theme="dark"] .text-\[\#333336\],
+[data-theme="dark"] .surface-panel .text-\[\#1d1d1f\],
+[data-theme="dark"] .surface-panel .text-\[\#333336\] {
+  color: #f5f5f7 !important;
+}
+
+[data-theme="dark"] .text-\[\#6e6e73\],
+[data-theme="dark"] .surface-panel .text-\[\#6e6e73\],
+[data-theme="dark"] .text-slate-600,
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .surface-panel .text-slate-600,
+[data-theme="dark"] .surface-panel .text-slate-500 {
+  color: #d2d2d7 !important;
+}
+
+[data-theme="dark"] .text-\[\#86868b\],
+[data-theme="dark"] .surface-panel .text-\[\#86868b\],
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .surface-panel .text-slate-400 {
+  color: #aeaeb2 !important;
+}
+
+/* Primary accent buttons: always Apple System Blue with crisp white text */
+.bg-\[var\(--accent\)\],
+[data-theme="dark"] .bg-\[var\(--accent\)\],
+[data-theme="dark"] .surface-panel .bg-\[var\(--accent\)\] {
+  background-color: #0071e3 !important;
+  color: #ffffff !important;
+}
+
+.bg-\[var\(--accent\)\] *,
+[data-theme="dark"] .bg-\[var\(--accent\)\] * {
+  color: #ffffff !important;
+}
+
+/* High-contrast light/white buttons in Dark Mode: always dark #1d1d1f ink on #f5f5f7 surface */
+[data-theme="dark"] button.dark\:bg-white,
+[data-theme="dark"] a.dark\:bg-white,
+[data-theme="dark"] .surface-panel button.dark\:bg-white,
+[data-theme="dark"] .surface-panel a.dark\:bg-white,
+[data-theme="dark"] button.bg-\[\#101114\],
+[data-theme="dark"] .surface-panel button.bg-\[\#101114\] {
+  background-color: #f5f5f7 !important;
+  color: #1d1d1f !important;
+}
+
+[data-theme="dark"] button.dark\:bg-white *,
+[data-theme="dark"] a.dark\:bg-white *,
+[data-theme="dark"] .surface-panel button.dark\:bg-white *,
+[data-theme="dark"] .surface-panel a.dark\:bg-white *,
+[data-theme="dark"] button.bg-\[\#101114\] *,
+[data-theme="dark"] .surface-panel button.bg-\[\#101114\] * {
+  color: #1d1d1f !important;
+}
+
+/* Opaque frosted dock for mobile/tablet bottom navigation so background buttons never bleed through */
+.mobile-tabbar {
+  max-width: 28rem !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: saturate(180%) blur(24px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14) !important;
+}
+
+[data-theme="dark"] .mobile-tabbar {
+  background: rgba(28, 28, 30, 0.97) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.65) !important;
+}
+
 

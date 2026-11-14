@@ -1604,7 +1604,7 @@ function AppContent() {
     <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
       <a href="#main-content" className="skip-link">Zum Hauptinhalt springen</a>
       <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
-        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] xl:hidden">
+        <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] lg:hidden">
           <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#101114] text-white">
@@ -1675,7 +1675,7 @@ function AppContent() {
           </div>
         </div>
 
-        <div className="layout-shell hidden px-3 pb-2 pt-2 xl:block sm:px-6 xl:px-8 2xl:px-10">
+        <div className="layout-shell hidden px-3 pb-2 pt-2 lg:block sm:px-6 xl:px-8 2xl:px-10">
           <div className="app-shell app-shell-header app-shell-header-compact rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
             <div className="grid items-center gap-3 lg:grid-cols-[minmax(12rem,1fr)_auto_max-content]">
               <div className="flex min-w-0 items-center gap-3">
@@ -2420,17 +2420,17 @@ function AppContent() {
         )}
       </main>
 
-      <nav aria-label="Hauptnavigation" className="mobile-tabbar fixed inset-x-2 z-50 mx-auto w-auto max-w-md rounded-[1.35rem] p-1.5 xl:hidden">
+      <nav aria-label="Hauptnavigation" className="mobile-tabbar fixed inset-x-2 z-50 mx-auto w-auto max-w-md rounded-[1.35rem] p-1.5 lg:hidden">
         <div className="grid grid-cols-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => selectTab(item.id)}
               aria-current={activeTab === item.id ? "page" : undefined}
-              className={`mobile-tabbar-button rounded-[0.95rem] px-1.5 py-2.5 text-center text-[9px] font-extrabold uppercase tracking-[0.12em] transition-all ${
+              className={`mobile-tabbar-button rounded-[0.95rem] px-1.5 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.1em] transition-all ${
                 activeTab === item.id
-                  ? "bg-[#101114] text-white dark:bg-white dark:text-black"
-                  : "text-slate-500 hover:bg-black/[0.04] dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                  ? "bg-[#0071e3] text-white shadow-2xs"
+                  : "text-[#1d1d1f] hover:bg-black/[0.05] dark:text-[#d2d2d7] dark:hover:bg-white/10 dark:hover:text-white"
               }`}
             >
               {item.short}

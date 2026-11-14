@@ -909,14 +909,14 @@ export default function PortfolioView({
             {isScalableManagedPortfolio ? (
               <button
                 onClick={() => setShowScalableImportModal(true)}
-                className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                className="rounded-full bg-[#0071e3] px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-xs transition-colors hover:bg-[#0077ed]"
               >
                 Scalable Positionen importieren
               </button>
             ) : currentPortfolio ? (
               <button
                 onClick={() => setShowAddHoldingModal(true)}
-                className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                className="rounded-full bg-[#0071e3] px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-xs transition-colors hover:bg-[#0077ed]"
               >
                 Position hinzufügen
               </button>
@@ -959,7 +959,7 @@ export default function PortfolioView({
               <button
                 type="button"
                 onClick={() => setShowScalableImportModal(true)}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[var(--accent-strong)] shadow-sm"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#0071e3] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white shadow-xs transition-colors hover:bg-[#0077ed]"
               >
                 <Plus className="h-4 w-4" />
                 CSV / Depot importieren
@@ -968,7 +968,7 @@ export default function PortfolioView({
                 type="button"
                 onClick={handleLoadScalableSample}
                 disabled={scalableSyncing}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-45"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/12 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-45"
               >
                 <Sparkles className="h-4 w-4" />
                 Musterdepot laden
@@ -978,7 +978,7 @@ export default function PortfolioView({
                   type="button"
                   onClick={syncScalablePortfolio}
                   disabled={!scalableStatus.enabled || scalableSyncing}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[1.2rem] bg-[#1d1d1f] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-black/10 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c] disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
                   {scalableSyncing ? "Prüfe …" : "CLI Sync"}
@@ -1018,10 +1018,10 @@ export default function PortfolioView({
             <button
               key={portfolio.id}
               onClick={() => setSelectedPortfolio(portfolio.id)}
-              className={`rounded-full px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] transition-all ${
+              className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition-all ${
                 selectedPortfolio === portfolio.id
-                  ? "bg-[var(--accent)] text-white shadow-[0_14px_30px_rgba(15,118,110,0.16)]"
-                  : "border border-black/8 bg-white text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                  ? "bg-[#0071e3] text-white shadow-xs"
+                  : "border border-black/8 bg-[#f5f5f7] text-[#1d1d1f] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c]"
               }`}
             >
               {portfolio.name} ({portfolio.holdings.length})

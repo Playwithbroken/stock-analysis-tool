@@ -1499,6 +1499,136 @@ class ScalableIntegrationService:
             "snapshot": snap,
         }
 
+    def upload_cli_session(self, files: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Store uploaded scalable-cli session/key files under XDG dirs, verify with whoami, and sync."""
+        if not self.enabled:
+            raise ScalableIntegrationError(
+                "integration_disabled",
+                "Scalable-Integration ist deaktiviert. Setze SCALABLE_INTEGRATION_ENABLED=true.",
+            )
+        if not files or not isinstance(files, list):
+            raise ScalableIntegrationError(
+                "session_upload_empty",
+                "Keine Session-Dateien übergeben. Bitte mindestens session.json hochladen.",
+            )
+        if len(files) > 10:
+            raise ScalableIntegrationError(
+                "session_upload_too_many",
+                "Maximal 10 Session-Dateien pro Upload erlaubt.",
+            )
+
+        import base64
+
+        safe_name_re = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+        allowed_exts = {".json", ".toml", ".pem", ".key", ".der", ".p8", ""}
+        parsed_files: List[Tuple[str, bytes]] = []
+        total_bytes = 0
+
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            raw_name = str(item.get("filename") or "").strip()
+            if not raw_name or "/" in raw_name or "\\" in raw_name or ".." in raw_name:
+                raise ScalableIntegrationError(
+                    "invalid_filename",
+                    f"Ungültiger Dateiname: {raw_name or '(leer)'}",
+                )
+            if not safe_name_re.fullmatch(raw_name):
+                raise ScalableIntegrationError(
+                    "invalid_filename",
+                    f"Dateiname enthält nicht erlaubte Zeichen: {raw_name}",
+                )
+            ext = Path(raw_name).suffix.lower()
+            if ext not in allowed_exts:
+                raise ScalableIntegrationError(
+                    "invalid_file_type",
+                    f"Dateityp {ext} wird nicht unterstützt (erlaubt: .json, .toml, .pem, .key).",
+                )
+            encoding = str(item.get("encoding") or "utf-8").strip().lower()
+            raw_content = item.get("content") or ""
+            if encoding == "base64":
+                try:
+                    data = base64.b64decode(raw_content, validate=True)
+                except Exception as exc:
+                    raise ScalableIntegrationError(
+                        "invalid_file_content",
+                        f"Base64-Inhalt für {raw_name} ist ungültig.",
+                    ) from exc
+            else:
+                data = str(raw_content).encode("utf-8")
+
+            if raw_name.lower().endswith(".json"):
+                try:
+                    json.loads(data.decode("utf-8"))
+                except Exception as exc:
+                    raise ScalableIntegrationError(
+                        "invalid_json",
+                        f"{raw_name} enthält kein gültiges JSON.",
+                    ) from exc
+
+            total_bytes += len(data)
+            if total_bytes > 1024 * 1024:
+                raise ScalableIntegrationError(
+                    "session_upload_too_large",
+                    "Session-Upload darf insgesamt maximal 1 MB groß sein.",
+                )
+            parsed_files.append((raw_name, data))
+
+        if not parsed_files:
+            raise ScalableIntegrationError(
+                "session_upload_empty",
+                "Keine gültigen Session-Dateien gefunden.",
+            )
+
+        xdg_config = Path(os.getenv("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "scalable-cli"
+        xdg_data = Path(os.getenv("XDG_DATA_HOME") or (Path.home() / ".local" / "share")) / "scalable-cli"
+        xdg_state = Path(os.getenv("XDG_STATE_HOME") or (Path.home() / ".local" / "state")) / "scalable-cli"
+        target_dirs = [xdg_config, xdg_data]
+        if os.getenv("XDG_STATE_HOME"):
+            target_dirs.append(xdg_state)
+
+        uploaded_names = {name for name, _ in parsed_files}
+        for d in target_dirs:
+            d.mkdir(parents=True, exist_ok=True)
+            for name, data in parsed_files:
+                dest = d / name
+                dest.write_bytes(data)
+                try:
+                    os.chmod(dest, 0o600)
+                except OSError:
+                    pass
+
+        # Ensure file-based session backend is configured when config.toml wasn't uploaded
+        if "config.toml" not in uploaded_names:
+            cfg_path = xdg_config / "config.toml"
+            existing_cfg = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
+            if "session_backend" not in existing_cfg:
+                addition = '\n[auth]\nsession_backend = "file"\n'
+                cfg_path.write_text((existing_cfg.rstrip() + addition).lstrip(), encoding="utf-8")
+                try:
+                    os.chmod(cfg_path, 0o600)
+                except OSError:
+                    pass
+
+        # Verify CLI session immediately with whoami, then run full broker sync
+        whoami_payload = self.cli.run("whoami")
+        if self.cli.installed():
+            try:
+                snapshot = self.sync()
+            except ScalableIntegrationError:
+                snapshot = self.snapshot()
+        else:
+            snapshot = self.snapshot()
+
+        return {
+            "status": "ok",
+            "authenticated": True,
+            "whoami": whoami_payload,
+            "stored_files": sorted(uploaded_names),
+            "snapshot": snapshot,
+            "integration_status": self.status(),
+        }
+
     def refresh_positions_from_market_data(self, *, cli_error_code: Optional[str] = None) -> Dict[str, Any]:
         """Refresh valuations and scores for stored Scalable holdings using live market quotes."""
         now_iso = _utc_now()

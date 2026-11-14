@@ -4162,6 +4162,46 @@ async def import_scalable_positions(req: ScalableImportRequest):
         raise HTTPException(status_code=400, detail={"code": exc.code, "message": exc.public_message})
 
 
+class ScalableSessionFile(BaseModel):
+    filename: str
+    content: str
+    encoding: str = "utf-8"
+
+
+class ScalableSessionUploadRequest(BaseModel):
+    files: Optional[List[ScalableSessionFile]] = None
+    session_json: Optional[str] = None
+
+
+@app.post("/api/integrations/scalable/session")
+async def upload_scalable_cli_session(req: ScalableSessionUploadRequest):
+    """Upload locally authenticated scalable-cli session files, verify whoami, and sync."""
+    service = get_scalable_integration_service()
+    files: List[Dict[str, str]] = [
+        {"filename": f.filename, "content": f.content, "encoding": f.encoding}
+        for f in (req.files or [])
+    ]
+    if req.session_json and req.session_json.strip():
+        files.append({"filename": "session.json", "content": req.session_json.strip(), "encoding": "utf-8"})
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail="Bitte mindestens session.json hochladen oder den JSON-Inhalt einfügen.",
+        )
+    try:
+        result = await asyncio.to_thread(service.upload_cli_session, files)
+        asyncio.create_task(_refresh_scalable_readonly_context())
+        return result
+    except ScalableIntegrationError as exc:
+        status_code = 401 if exc.code in {"no_session", "refresh_relogin_required", "device_locked"} else 400
+        if exc.code in {"integration_disabled", "cli_not_installed", "cli_unavailable", "cli_timeout"}:
+            status_code = 503
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.public_message, "details": exc.details},
+        )
+
+
 @app.post("/api/integrations/scalable/load-sample")
 async def load_sample_scalable_portfolio():
     """Load a realistic sample Scalable Capital portfolio for instant exploration."""

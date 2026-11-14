@@ -1,11 +1,17 @@
 import React, { useState } from "react";
-import { Upload, FileText, Check, X, ShieldCheck, Sparkles } from "lucide-react";
+import { Upload, FileText, Check, X, ShieldCheck, Sparkles, KeyRound } from "lucide-react";
 import useAccessibleDialog from "../hooks/useAccessibleDialog";
 
 interface ScalableImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
+}
+
+interface UploadedSessionFile {
+  filename: string;
+  content: string;
+  encoding: "utf-8" | "base64";
 }
 
 const SAMPLE_DEPOT_TEXT = `SAP.DE 25 182.50
@@ -20,9 +26,11 @@ export default function ScalableImportModal({
   onClose,
   onSuccess,
 }: ScalableImportModalProps) {
-  const [mode, setMode] = useState<"text" | "csv">("text");
+  const [mode, setMode] = useState<"text" | "csv" | "session">("text");
   const [inputText, setInputText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
+  const [sessionFiles, setSessionFiles] = useState<UploadedSessionFile[]>([]);
+  const [sessionJsonText, setSessionJsonText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +56,82 @@ export default function ScalableImportModal({
       setError("Datei konnte nicht gelesen werden.");
     };
     reader.readAsText(file);
+  };
+
+  const handleSessionFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = Array.from(e.target.files || []);
+    if (!fileList.length) return;
+    setError(null);
+    try {
+      const loaded: UploadedSessionFile[] = await Promise.all(
+        fileList.map(
+          (file) =>
+            new Promise<UploadedSessionFile>((resolve, reject) => {
+              const reader = new FileReader();
+              const isText = /\.(json|toml|pem|key)$/i.test(file.name);
+              reader.onload = () => {
+                if (isText) {
+                  resolve({
+                    filename: file.name,
+                    content: String(reader.result || ""),
+                    encoding: "utf-8",
+                  });
+                } else {
+                  const buf = reader.result as ArrayBuffer;
+                  const bytes = new Uint8Array(buf);
+                  let binary = "";
+                  for (let i = 0; i < bytes.byteLength; i += 1) {
+                    binary += String.fromCharCode(bytes[i]);
+                  }
+                  resolve({
+                    filename: file.name,
+                    content: btoa(binary),
+                    encoding: "base64",
+                  });
+                }
+              };
+              reader.onerror = () => reject(new Error(`Datei ${file.name} konnte nicht gelesen werden.`));
+              if (isText) {
+                reader.readAsText(file);
+              } else {
+                reader.readAsArrayBuffer(file);
+              }
+            })
+        )
+      );
+      setSessionFiles(loaded);
+    } catch (err: any) {
+      setError(err?.message || "Session-Dateien konnten nicht gelesen werden.");
+    }
+  };
+
+  const handleSessionSubmit = async () => {
+    if (!sessionFiles.length && !sessionJsonText.trim()) {
+      setError("Bitte wähle deine session.json (und ggf. Key-Datei) aus oder füge den JSON-Inhalt ein.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/scalable/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: sessionFiles,
+          session_json: sessionJsonText.trim() || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail?.message || data.detail || "CLI-Session konnte nicht aktiviert werden.");
+      }
+      await onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Fehler beim Aktivieren der CLI-Session.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleImport = async () => {
@@ -166,6 +250,20 @@ export default function ScalableImportModal({
               CSV Datei-Upload
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => setMode("session")}
+            className={`flex-1 rounded-xl py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] transition-all ${
+              mode === "session"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "border border-black/8 bg-black/[0.02] text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <KeyRound size={14} />
+              CLI Session
+            </span>
+          </button>
         </div>
 
         {mode === "text" ? (
@@ -188,7 +286,7 @@ export default function ScalableImportModal({
               className="w-full rounded-2xl border border-black/8 bg-white dark:border-white/10 dark:bg-[#2c2c2e] p-3 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
           </div>
-        ) : (
+        ) : mode === "csv" ? (
           <div className="mt-4 space-y-3">
             <label className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-black/10 dark:border-white/15 p-6 text-center cursor-pointer hover:border-[var(--accent)] transition-colors">
               <Upload size={28} className="text-slate-400 mb-2" />
@@ -210,6 +308,48 @@ export default function ScalableImportModal({
                 Geladen: {inputText.split("\n").filter(Boolean).length} Zeilen
               </div>
             )}
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-2xl border border-black/8 bg-black/[0.02] p-3.5 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+              <div className="font-bold text-slate-900 dark:text-white">
+                Scalable-CLI-Session lokal erzeugen &amp; hochladen (7 Tage gültig)
+              </div>
+              <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+                <li>
+                  In deiner lokalen <code>scalable-cli/config.toml</code> setzen:{" "}
+                  <code>[auth] session_backend = "file"</code> und <code>signing_key_backend = "file"</code>
+                </li>
+                <li>
+                  Lokal ausführen: <code>sc login --local-read-only</code> (2FA bestätigen)
+                </li>
+                <li>
+                  Erzeugte <code>session.json</code> (und ggf. Key-Datei) hier auswählen oder JSON einfügen:
+                </li>
+              </ol>
+            </div>
+            <label className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-black/10 dark:border-white/15 p-4 text-center cursor-pointer hover:border-[var(--accent)] transition-colors">
+              <KeyRound size={24} className="text-slate-400 mb-1.5" />
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                {sessionFiles.length > 0
+                  ? `${sessionFiles.length} Datei(en) ausgewählt: ${sessionFiles.map((f) => f.filename).join(", ")}`
+                  : "session.json (und ggf. Signing-Key) auswählen"}
+              </div>
+              <input
+                type="file"
+                multiple
+                accept=".json,.toml,.pem,.key,.der,.p8"
+                onChange={handleSessionFilesUpload}
+                className="hidden"
+              />
+            </label>
+            <textarea
+              value={sessionJsonText}
+              onChange={(e) => setSessionJsonText(e.target.value)}
+              placeholder='Optional: Inhalt der session.json direkt hier einfügen ({"access_token": ...})'
+              rows={3}
+              className="w-full rounded-2xl border border-black/8 bg-white dark:border-white/10 dark:bg-[#2c2c2e] p-3 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            />
           </div>
         )}
 
@@ -239,13 +379,22 @@ export default function ScalableImportModal({
             </button>
             <button
               type="button"
-              onClick={handleImport}
-              disabled={loading || !inputText.trim()}
+              onClick={mode === "session" ? handleSessionSubmit : handleImport}
+              disabled={
+                loading ||
+                (mode === "session" ? !sessionFiles.length && !sessionJsonText.trim() : !inputText.trim())
+              }
               className="flex-1 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] text-white hover:bg-[var(--accent-strong)] transition-colors disabled:opacity-50"
             >
               <span className="inline-flex items-center gap-1.5">
                 <Check size={14} />
-                {loading ? "Importiert …" : "Depot importieren"}
+                {loading
+                  ? mode === "session"
+                    ? "Aktiviere …"
+                    : "Importiert …"
+                  : mode === "session"
+                    ? "Session aktivieren"
+                    : "Depot importieren"}
               </span>
             </button>
           </div>

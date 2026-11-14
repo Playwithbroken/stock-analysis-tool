@@ -3569,9 +3569,9 @@ async def auth_logout(response: Response):
 
 
 @app.get("/api/analyze/{ticker}")
-async def analyze_stock(ticker: str) -> Dict[str, Any]:
+async def analyze_stock(ticker: str, fast: bool = False) -> Dict[str, Any]:
     """
-    Analyze a stock or an entire sector.
+    Analyze a stock or an entire sector. Supports fast=True for instant UI render.
     """
     try:
         # Detect if searching for a sector
@@ -3640,21 +3640,31 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-        # Original stock fetch data
+        full_cache_key = f"analyze:v2:{resolved_ticker}:full"
+        fast_cache_key = f"analyze:v2:{resolved_ticker}:fast"
+        cached_full = _cache_get(full_cache_key, 120)
+        if cached_full is not None:
+            return convert_numpy_types(cached_full)
+        if fast:
+            cached_fast = _cache_get(fast_cache_key, 90)
+            if cached_fast is not None:
+                return convert_numpy_types(cached_fast)
+
+        # Fetch stock data in worker thread so FastAPI event loop never blocks
         fetcher = DataFetcher(resolved_ticker)
-        data = fetcher.get_all_data()
+        data = await asyncio.to_thread(fetcher.get_all_data, fast)
 
         price_data = data.get("price_data", {}) or {}
         degraded_price_source = False
 
         # Do not fail hard on transient provider errors: degrade to fast snapshot pricing first.
         if "error" in price_data:
-            fast_price_data = fetcher.get_price_data_fast()
+            fast_price_data = await asyncio.to_thread(fetcher.get_price_data_fast)
             if "error" not in (fast_price_data or {}):
                 data["price_data"] = fast_price_data
                 degraded_price_source = True
             else:
-                info = fetcher.info or {}
+                info = await asyncio.to_thread(lambda: fetcher.info) or {}
                 current_price = info.get("currentPrice") or info.get("regularMarketPrice")
                 fallback_price_data = {
                     "current_price": current_price,
@@ -3739,8 +3749,9 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
             "fetch_time": data.get("fetch_time"),
             "price_data": data.get("price_data"),
             "data_quality": {
-                "price_source": "fast_snapshot" if degraded_price_source else "full",
+                "price_source": "fast_snapshot" if degraded_price_source else ("fast_cached" if fast else "full"),
                 "degraded": degraded_price_source,
+                "fast_mode": bool(fast),
             },
             "volatility": data.get("volatility"),
             "fundamentals": data.get("fundamentals"),
@@ -3786,7 +3797,10 @@ async def analyze_stock(ticker: str) -> Dict[str, Any]:
                 "decision_scope": analysis_payload["decision_scope"],
             },
         )
-        return convert_numpy_types(audited_payload)
+        converted = convert_numpy_types(audited_payload)
+        if not degraded_price_source:
+            _cache_set(fast_cache_key if fast else full_cache_key, converted)
+        return converted
         
     except HTTPException:
         raise
@@ -7934,12 +7948,41 @@ async def save_advisory_profile(req: AdvisoryProfileRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class SuitabilityBatchCheckRequest(BaseModel):
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+
+
 @app.post("/api/advisory/suitability-check")
 async def check_signal_suitability(req: SuitabilityCheckRequest):
     try:
         profile = get_portfolio_manager().get_workspace_profile()
         result = build_suitability_check(profile, req.model_dump(exclude_none=True))
         return convert_numpy_types(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/advisory/suitability-check/batch")
+async def check_signal_suitability_batch(req: SuitabilityBatchCheckRequest):
+    """Evaluate suitability for multiple setup candidates in a single HTTP roundtrip."""
+    try:
+        profile = get_portfolio_manager().get_workspace_profile()
+        results: Dict[str, Any] = {}
+        for raw_item in (req.items or [])[:24]:
+            if not isinstance(raw_item, dict):
+                continue
+            sym = str(raw_item.get("symbol") or raw_item.get("ticker") or "").strip().upper()
+            if not sym:
+                continue
+            try:
+                results[sym] = build_suitability_check(profile, raw_item)
+            except Exception:
+                continue
+        return convert_numpy_types({
+            "status": "ok",
+            "count": len(results),
+            "results": results,
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -8176,6 +8219,151 @@ async def get_radar_bootstrap(limit: int = 8):
         return await build_radar_bootstrap(limit=limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+_DASHBOARD_WARMUP_RUNNING = False
+
+
+async def _warm_dashboard_bootstrap_components() -> None:
+    """Background warmer for scoreboard, trading_edge, and relative_strength caches."""
+    global _DASHBOARD_WARMUP_RUNNING
+    if _DASHBOARD_WARMUP_RUNNING:
+        return
+    _DASHBOARD_WARMUP_RUNNING = True
+    try:
+        items = get_portfolio_manager().get_signal_watch_items()
+        snapshot = _cache_get("signals:watchlist", 300)
+        if snapshot is None:
+            snapshot = await asyncio.to_thread(get_public_signal_service().build_watchlist_snapshot, items)
+            _cache_set("signals:watchlist", snapshot)
+
+        if _cache_get("signals:scoreboard", 300) is None:
+            settings = get_portfolio_manager().get_signal_score_settings()
+            sb = await get_signal_score_service().build_scoreboard(snapshot, settings)
+            _cache_set("signals:scoreboard", sb)
+
+        if _cache_get(TRADING_EDGE_CACHE_KEY, 300) is None:
+            te = await asyncio.to_thread(get_morning_brief_service().get_trading_edge, snapshot)
+            if isinstance(te, dict):
+                _cache_set(TRADING_EDGE_CACHE_KEY, te)
+
+        if _cache_get("dashboard:rs:SPY", 300) is None:
+            watchlist = [str(item.get("value") or "").upper() for item in items if item.get("kind") == "ticker" and item.get("value")]
+            leaders = await asyncio.to_thread(get_relative_strength_service().scan_relative_strength, watchlist, "SPY")
+            _cache_set("dashboard:rs:SPY", {"benchmark": "SPY", "leaders": leaders, "count": len(leaders)})
+    except Exception:
+        pass
+    finally:
+        _DASHBOARD_WARMUP_RUNNING = False
+
+
+@app.get("/api/dashboard/bootstrap")
+async def get_dashboard_bootstrap(fast: bool = True):
+    """Unified, ultra-low-latency bootstrap endpoint for the Edge Dashboard & Overview tab.
+    Returns cached brief, scoreboard, trading_edge, active_trades, relative_strength,
+    learning summary, live_alerts, and precomputed suitability_map in a single HTTP request (< 300ms).
+    """
+    started_at = time.perf_counter()
+    try:
+        pm = get_portfolio_manager()
+        profile = pm.get_workspace_profile()
+    except Exception:
+        profile = {}
+
+    # 1. Brief (cached full or instant fallback)
+    brief = _cache_get("morning_brief:full", 120) or _cache_get_stale("morning_brief:full", 1800)
+    if brief is None:
+        try:
+            service = get_morning_brief_service()
+            brief = _safe_morning_brief_fallback(service, "warming_up")
+        except Exception:
+            brief = _emergency_morning_brief("bootstrap_fallback")
+    brief = attach_scope(brief, research_scope())
+
+    # 2. Scoreboard & Trading Edge & RS (from RAM cache or stale cache)
+    scoreboard = _cache_get("signals:scoreboard", 300) or _cache_get_stale("signals:scoreboard", 3600)
+    trading_edge = _cache_get(TRADING_EDGE_CACHE_KEY, 300) or _cache_get_stale(TRADING_EDGE_CACHE_KEY, 3600)
+    rs_payload = _cache_get("dashboard:rs:SPY", 300) or _cache_get_stale("dashboard:rs:SPY", 3600)
+
+    needs_warmup = scoreboard is None or trading_edge is None or rs_payload is None
+    if needs_warmup:
+        if not fast:
+            try:
+                await asyncio.wait_for(_warm_dashboard_bootstrap_components(), timeout=6.0)
+                scoreboard = _cache_get("signals:scoreboard", 300) or scoreboard
+                trading_edge = _cache_get(TRADING_EDGE_CACHE_KEY, 300) or trading_edge
+                rs_payload = _cache_get("dashboard:rs:SPY", 300) or rs_payload
+            except Exception:
+                pass
+        else:
+            try:
+                asyncio.create_task(_warm_dashboard_bootstrap_components())
+            except Exception:
+                pass
+
+    # 3. Active trades & Learning & Live Alerts
+    try:
+        active_trades = get_trade_lifecycle_service().get_active_trades()
+    except Exception:
+        active_trades = []
+
+    learning = _cache_get("dashboard:learning", 180)
+    if learning is None:
+        try:
+            learning = get_forecast_learning_service().build_dashboard()
+            _cache_set("dashboard:learning", learning)
+        except Exception:
+            learning = {}
+
+    try:
+        live_alerts = get_email_alert_service().get_live_web_alerts(limit=12)
+    except Exception:
+        live_alerts = []
+
+    # 4. Precompute Suitability Map for all visible candidate tickers
+    suitability_map: Dict[str, Any] = {}
+    candidate_rows: List[Dict[str, Any]] = []
+    if isinstance(scoreboard, dict):
+        for r in (scoreboard.get("top_ideas") or scoreboard.get("stocks") or [])[:10]:
+            if isinstance(r, dict):
+                candidate_rows.append(r)
+    if isinstance(brief, dict):
+        for s in (brief.get("trade_setups") or [])[:10]:
+            if isinstance(s, dict):
+                candidate_rows.append(s)
+
+    for item in candidate_rows:
+        sym = str(item.get("symbol") or item.get("ticker") or item.get("value") or "").strip().upper()
+        if not sym or sym in suitability_map:
+            continue
+        try:
+            score_val = float(item.get("total_score") or item.get("score") or item.get("confluence_score") or 65)
+            suitability_map[sym] = build_suitability_check(
+                profile,
+                {
+                    "symbol": sym,
+                    "asset_class": item.get("asset_class") or ("crypto" if "-USD" in sym else "equity"),
+                    "direction": str(item.get("direction") or "bullish").lower(),
+                    "confidence_score": score_val,
+                    "risk_profile": "speculative" if "-USD" in sym else ("balanced" if score_val >= 68 else "speculative"),
+                    "leverage": 1.0,
+                },
+            )
+        except Exception:
+            continue
+
+    return convert_numpy_types({
+        "status": "warming" if needs_warmup else "ready",
+        "latency_ms": round((time.perf_counter() - started_at) * 1000, 1),
+        "brief": brief,
+        "scoreboard": scoreboard,
+        "trading_edge": trading_edge,
+        "active_trades": active_trades,
+        "relative_strength": (rs_payload or {}).get("leaders", []) if isinstance(rs_payload, dict) else [],
+        "learning": learning,
+        "suitability_map": suitability_map,
+        "live_alerts": live_alerts,
+    })
 
 
 @app.get("/api/learning/forecasts")
@@ -11153,6 +11341,16 @@ async def get_realtime_snapshot(symbols: str):
         payload = await asyncio.to_thread(get_realtime_market_service().build_snapshot, normalized)
         if isinstance(payload, dict):
             payload.setdefault("connection_state", "snapshot")
+            new_shocks = payload.pop("new_tape_shocks", None) or []
+            if new_shocks:
+                try:
+                    get_email_alert_service()._record_live_web_alerts(new_shocks, "⚡ Tape-Shock Frühwarnsystem")
+                except Exception:
+                    pass
+            try:
+                payload["live_alerts"] = get_email_alert_service().get_live_web_alerts(limit=6)
+            except Exception:
+                payload["live_alerts"] = []
         return convert_numpy_types(_cache_set(cache_key, payload))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -11192,9 +11390,21 @@ async def websocket_realtime_feed(websocket: WebSocket):
 
     try:
         while True:
-            payload = convert_numpy_types(service.build_snapshot(symbols))
+            raw_snapshot = await asyncio.to_thread(service.build_snapshot, symbols)
+            if isinstance(raw_snapshot, dict):
+                new_shocks = raw_snapshot.pop("new_tape_shocks", None) or []
+                if new_shocks:
+                    try:
+                        get_email_alert_service()._record_live_web_alerts(new_shocks, "⚡ Tape-Shock Frühwarnsystem")
+                    except Exception:
+                        pass
+                try:
+                    raw_snapshot["live_alerts"] = get_email_alert_service().get_live_web_alerts(limit=6)
+                except Exception:
+                    raw_snapshot["live_alerts"] = []
+            payload = convert_numpy_types(raw_snapshot)
             await websocket.send_json(payload)
-            await asyncio.sleep(8)
+            await asyncio.sleep(5)
     except WebSocketDisconnect:
         return
     except Exception:

@@ -7,6 +7,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from urllib.parse import quote
@@ -15,13 +16,32 @@ from bs4 import BeautifulSoup
 from src.financial_units import normalize_dividend_yield_pct, ratio_to_pct, relative_change_pct
 
 
+def _short_cache_get(key: str, ttl_seconds: float = 60.0) -> Any:
+    entry = DataFetcher._global_cache.get(key)
+    if not entry:
+        return None
+    try:
+        val, ts = entry
+        if (datetime.now() - ts).total_seconds() < ttl_seconds:
+            return val
+    except Exception:
+        pass
+    return None
+
+
+def _short_cache_set(key: str, value: Any) -> Any:
+    DataFetcher.prune_cache()
+    DataFetcher._global_cache[key] = (value, datetime.now())
+    return value
+
+
 class DataFetcher:
     """Fetches all required data for stock analysis."""
     
     # Class-level bounded cache
     _global_cache = {}
     _cache_ttl = 300  # 5 minutes
-    _max_cache_entries = 40
+    _max_cache_entries = 240
 
     @classmethod
     def prune_cache(cls, clear_all: bool = False) -> int:
@@ -90,7 +110,45 @@ class DataFetcher:
         self.stock = yf.Ticker(self.ticker)
         self._info = None
         self._history_1y = None
-        
+        self._news = None
+
+    def _ensure_history_1y(self) -> pd.DataFrame:
+        """Load 1y daily history from instance, global cache, SharedMarketDataPool, or yfinance."""
+        if self._history_1y is not None and isinstance(self._history_1y, pd.DataFrame) and not self._history_1y.empty:
+            return self._history_1y
+
+        cache_key = f"hist1y_{self.ticker}"
+        cached = _short_cache_get(cache_key, DataFetcher._cache_ttl)
+        if cached is not None and isinstance(cached, pd.DataFrame) and not cached.empty:
+            self._history_1y = cached
+            return cached
+
+        try:
+            from src.memory_optimizer import get_shared_pool, SharedMarketDataPool
+            pool_df = get_shared_pool().get_history([self.ticker], period="1y").get(self.ticker)
+            if pool_df is not None and isinstance(pool_df, pd.DataFrame) and not pool_df.empty:
+                compacted = SharedMarketDataPool.compact_dataframe(pool_df)
+                self._history_1y = compacted
+                _short_cache_set(cache_key, compacted)
+                return compacted
+        except Exception:
+            pass
+
+        try:
+            raw_hist = yf.Ticker(self.ticker).history(period="1y")
+            try:
+                from src.memory_optimizer import SharedMarketDataPool
+                compacted = SharedMarketDataPool.compact_dataframe(raw_hist)
+            except Exception:
+                compacted = raw_hist
+            self._history_1y = compacted
+            if isinstance(compacted, pd.DataFrame) and not compacted.empty:
+                _short_cache_set(cache_key, compacted)
+            return compacted
+        except Exception:
+            self._history_1y = pd.DataFrame()
+            return self._history_1y
+
     @property
     def info(self) -> Dict:
         """Get stock info with global caching and error handling."""
@@ -120,7 +178,7 @@ class DataFetcher:
         try:
             # yfinance info can be slow or hang
             print(f"Fetching info for {self.ticker}...")
-            val = self.stock.info
+            val = yf.Ticker(self.ticker).info
             if not val:
                 print(f"Warning: No info returned for {self.ticker}")
                 val = {}
@@ -140,24 +198,16 @@ class DataFetcher:
     def get_price_data(self) -> Dict[str, Any]:
         """Get current price and price changes derived from a single 1y history fetch."""
         try:
-            if self._history_1y is None:
-                raw_hist = self.stock.history(period="1y")
-                try:
-                    from src.memory_optimizer import SharedMarketDataPool
-                    self._history_1y = SharedMarketDataPool.compact_dataframe(raw_hist)
-                except Exception:
-                    self._history_1y = raw_hist
-            
-            hist = self._history_1y
-            if hist.empty:
+            hist = self._ensure_history_1y()
+            if hist is None or hist.empty:
                 return {"error": "No price data available"}
             
-            current_price = hist['Close'].iloc[-1]
+            current_price = float(hist['Close'].iloc[-1])
             
             def safe_pct_change(start_idx: int) -> Optional[float]:
                 if len(hist) < abs(start_idx):
                     return None
-                start_val = hist['Close'].iloc[start_idx]
+                start_val = float(hist['Close'].iloc[start_idx])
                 if start_val == 0: return 0
                 return ((current_price / start_val) - 1) * 100
             
@@ -338,19 +388,16 @@ class DataFetcher:
     def get_volatility_data(self) -> Dict[str, Any]:
         """Calculate volatility metrics from cached history."""
         try:
-            if self._history_1y is None:
-                self._history_1y = self.stock.history(period="1y")
-            
-            hist = self._history_1y
-            if hist.empty:
+            hist = self._ensure_history_1y()
+            if hist is None or hist.empty:
                 return {"error": "No data available"}
             
             returns = hist['Close'].pct_change().dropna()
-            volatility_daily = returns.std()
-            volatility_annual = volatility_daily * np.sqrt(252)
+            volatility_daily = float(returns.std())
+            volatility_annual = float(volatility_daily * np.sqrt(252))
             
-            avg_volume = hist['Volume'].mean()
-            current_volume = hist['Volume'].iloc[-1]
+            avg_volume = float(hist['Volume'].mean())
+            current_volume = float(hist['Volume'].iloc[-1])
             volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
             
             return {
@@ -492,31 +539,58 @@ class DataFetcher:
             )
         return trends
     
-    def get_fundamentals(self) -> Dict[str, Any]:
-        """Get fundamental data."""
+    def get_fundamentals(self, include_statements: bool = True) -> Dict[str, Any]:
+        """Get fundamental data with cached financial statements."""
         try:
             info = self.info
-            annual_rows: List[Dict[str, Any]] = []
-            quarterly_rows: List[Dict[str, Any]] = []
-            statement_trends: Dict[str, Any] = {}
-            try:
-                annual_rows = self._build_statement_rows(
-                    getattr(self.stock, "income_stmt", None),
-                    getattr(self.stock, "cashflow", None),
-                    getattr(self.stock, "balance_sheet", None),
-                    limit=5,
-                )
-                quarterly_rows = self._build_statement_rows(
-                    getattr(self.stock, "quarterly_income_stmt", None),
-                    getattr(self.stock, "quarterly_cashflow", None),
-                    getattr(self.stock, "quarterly_balance_sheet", None),
-                    limit=8,
-                )
-                statement_trends = self._calculate_statement_trends(annual_rows, quarterly_rows)
-            except Exception:
-                annual_rows = []
-                quarterly_rows = []
-                statement_trends = {}
+            stmt_cache_key = f"statements_{self.ticker}"
+            cached_stmts = _short_cache_get(stmt_cache_key, 1800.0)
+            if cached_stmts is not None and isinstance(cached_stmts, dict):
+                financial_statements = cached_stmts
+            elif not include_statements:
+                financial_statements = {
+                    "annual": [],
+                    "quarterly": [],
+                    "trends": {},
+                    "coverage": {
+                        "annual_periods": 0,
+                        "quarterly_periods": 0,
+                        "deferred": True,
+                    },
+                }
+            else:
+                annual_rows: List[Dict[str, Any]] = []
+                quarterly_rows: List[Dict[str, Any]] = []
+                statement_trends: Dict[str, Any] = {}
+                try:
+                    t_obj = yf.Ticker(self.ticker)
+                    annual_rows = self._build_statement_rows(
+                        getattr(t_obj, "income_stmt", None),
+                        getattr(t_obj, "cashflow", None),
+                        getattr(t_obj, "balance_sheet", None),
+                        limit=5,
+                    )
+                    quarterly_rows = self._build_statement_rows(
+                        getattr(t_obj, "quarterly_income_stmt", None),
+                        getattr(t_obj, "quarterly_cashflow", None),
+                        getattr(t_obj, "quarterly_balance_sheet", None),
+                        limit=8,
+                    )
+                    statement_trends = self._calculate_statement_trends(annual_rows, quarterly_rows)
+                except Exception:
+                    annual_rows = []
+                    quarterly_rows = []
+                    statement_trends = {}
+                financial_statements = {
+                    "annual": annual_rows,
+                    "quarterly": quarterly_rows,
+                    "trends": statement_trends,
+                    "coverage": {
+                        "annual_periods": len(annual_rows),
+                        "quarterly_periods": len(quarterly_rows),
+                    },
+                }
+                _short_cache_set(stmt_cache_key, financial_statements)
 
             return {
                 "market_cap": info.get("marketCap"),
@@ -556,15 +630,7 @@ class DataFetcher:
                 "total_assets": info.get("totalAssets"),
                 "category": info.get("category"),
                 "fund_family": info.get("fundFamily"),
-                "financial_statements": {
-                    "annual": annual_rows,
-                    "quarterly": quarterly_rows,
-                    "trends": statement_trends,
-                    "coverage": {
-                        "annual_periods": len(annual_rows),
-                        "quarterly_periods": len(quarterly_rows),
-                    },
-                },
+                "financial_statements": financial_statements,
             }
         except Exception as e:
             return {"error": str(e)}
@@ -603,9 +669,14 @@ class DataFetcher:
 
     def get_etf_holdings(self) -> list:
         """Get top holdings for an ETF if available."""
+        cache_key = f"etf_holdings_{self.ticker}"
+        cached = _short_cache_get(cache_key, 1800.0)
+        if cached is not None:
+            return cached
         try:
-            if hasattr(self.stock, 'funds_data') and self.stock.funds_data.top_holdings is not None:
-                holdings = self.stock.funds_data.top_holdings
+            t_obj = yf.Ticker(self.ticker)
+            if hasattr(t_obj, 'funds_data') and t_obj.funds_data.top_holdings is not None:
+                holdings = t_obj.funds_data.top_holdings
                 # Convert to list of dicts for JSON serialization
                 result = []
                 for idx, row in holdings.iterrows():
@@ -614,16 +685,23 @@ class DataFetcher:
                         "name": row.get("Holding Name", ""),
                         "weight": float(row.get("Holding Percent", 0)) * 100 if "Holding Percent" in row else 0
                     })
-                return result[:10]
-            return []
+                return _short_cache_set(cache_key, result[:10])
+            return _short_cache_set(cache_key, [])
         except Exception as e:
             print(f"Error fetching holdings for {self.ticker}: {e}")
             return []
 
     def get_news(self) -> list:
-        """Get recent news for the stock."""
+        """Get recent news for the stock (cached across calls)."""
+        if self._news is not None:
+            return self._news
+        cache_key = f"news_{self.ticker}"
+        cached = _short_cache_get(cache_key, DataFetcher._cache_ttl)
+        if cached is not None:
+            self._news = cached
+            return cached
         try:
-            news = self.stock.news
+            news = yf.Ticker(self.ticker).news
             if news:
                 processed_news = []
                 for item in news[:10]:
@@ -661,9 +739,12 @@ class DataFetcher:
                         "published_at": published_at,
                         "summary": str(summary).strip(),
                     })
-                return processed_news
-            return []
+                self._news = processed_news
+                return _short_cache_set(cache_key, processed_news)
+            self._news = []
+            return _short_cache_set(cache_key, [])
         except Exception:
+            self._news = []
             return []
 
     def get_guidance_signal(self) -> Dict[str, Any]:
@@ -728,14 +809,12 @@ class DataFetcher:
     def get_comparison_data(self, index_ticker: str = "^GSPC") -> Dict[str, Any]:
         """Compare stock performance with S&P 500 from cached history."""
         try:
-            if self._history_1y is None:
-                self._history_1y = self.stock.history(period="1y")
-            
-            if self._history_1y.empty:
+            hist = self._ensure_history_1y()
+            if hist is None or hist.empty:
                 return {"error": "No comparison data available"}
             
             # Simple stock return
-            stock_return = ((self._history_1y['Close'].iloc[-1] / self._history_1y['Close'].iloc[0]) - 1) * 100
+            stock_return = float(((hist['Close'].iloc[-1] / hist['Close'].iloc[0]) - 1) * 100)
             
             # For discovery, we skip the index fetch to save time and return a general status
             return {
@@ -752,15 +831,20 @@ class DataFetcher:
     
     def get_earnings_history(self) -> list:
         """Return recent earnings results with EPS estimate/actual surprise where available."""
+        cache_key = f"earnings_hist_{self.ticker}"
+        cached = _short_cache_get(cache_key, 900.0)
+        if cached is not None:
+            return cached
         try:
+            t_obj = yf.Ticker(self.ticker)
             earnings_dates = None
             try:
-                earnings_dates = self.stock.get_earnings_dates(limit=8)
+                earnings_dates = t_obj.get_earnings_dates(limit=8)
             except Exception:
-                earnings_dates = getattr(self.stock, "earnings_dates", None)
+                earnings_dates = getattr(t_obj, "earnings_dates", None)
 
             if earnings_dates is None or not isinstance(earnings_dates, pd.DataFrame) or earnings_dates.empty:
-                return []
+                return _short_cache_set(cache_key, [])
 
             rows: List[Dict[str, Any]] = []
             for idx, row in earnings_dates.iterrows():
@@ -796,7 +880,7 @@ class DataFetcher:
                         "status": status,
                     }
                 )
-            return rows[:8]
+            return _short_cache_set(cache_key, rows[:8])
         except Exception as e:
             print(f"Error fetching earnings history for {self.ticker}: {e}")
             return []
@@ -1045,24 +1129,30 @@ class DataFetcher:
 
     def get_insider_radar(self) -> Dict[str, Any]:
         """Fetch comprehensive insider transactions, 6m summary, institutions and superinvestors."""
+        cache_key = f"insider_radar_{self.ticker}"
+        cached = _short_cache_get(cache_key, 900.0)
+        if cached is not None:
+            return cached
         try:
             from src.superinvestor_service import SuperinvestorService
-            raw_trans = getattr(self.stock, "insider_transactions", None)
-            raw_purchases = getattr(self.stock, "insider_purchases", None)
-            raw_inst = getattr(self.stock, "institutional_holders", None)
+            t_obj = yf.Ticker(self.ticker)
+            raw_trans = getattr(t_obj, "insider_transactions", None)
+            raw_purchases = getattr(t_obj, "insider_purchases", None)
+            raw_inst = getattr(t_obj, "institutional_holders", None)
 
             transactions = SuperinvestorService.parse_insider_transactions(raw_trans)
             summary = SuperinvestorService.parse_insider_summary(raw_purchases, transactions)
             institutions = SuperinvestorService.parse_institutional_holders(raw_inst)
             superinvestors = SuperinvestorService.get_superinvestors_for_ticker(self.ticker)
 
-            return {
+            payload = {
                 "transactions": transactions,
                 "summary": summary,
                 "institutional_holders": institutions,
                 "superinvestors": superinvestors,
                 "superinvestors_count": len(superinvestors),
             }
+            return _short_cache_set(cache_key, payload)
         except Exception as e:
             print(f"Error fetching insider radar for {self.ticker}: {e}")
             return {
@@ -1202,21 +1292,104 @@ class DataFetcher:
             raise last_error
         return []
 
-    def get_all_data(self) -> Dict[str, Any]:
-        """Fetch all data for comprehensive analysis."""
-        return {
+    def get_all_data(self, fast: bool = False) -> Dict[str, Any]:
+        """Fetch all data for comprehensive analysis in parallel across independent providers."""
+        full_cache_key = f"all_data_full_{self.ticker}"
+        cached_full = _short_cache_get(full_cache_key, 120.0)
+        if cached_full is not None and isinstance(cached_full, dict):
+            return cached_full
+
+        fast_cache_key = f"all_data_fast_{self.ticker}"
+        if fast:
+            cached_fast = _short_cache_get(fast_cache_key, 120.0)
+            if cached_fast is not None and isinstance(cached_fast, dict):
+                return cached_fast
+
+        def _safe_run(fn, fallback):
+            try:
+                return fn()
+            except Exception:
+                return fallback
+
+        default_insider = {
+            "transactions": [],
+            "summary": {"sentiment": "NEUTRAL", "sentiment_label": "Wird geladen" if fast else "Keine Daten", "recent_activity": False},
+            "institutional_holders": [],
+            "superinvestors": [],
+            "superinvestors_count": 0,
+        }
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            f_hist = pool.submit(_safe_run, self._ensure_history_1y, pd.DataFrame())
+            f_info = pool.submit(_safe_run, lambda: self.info, {})
+            f_news = pool.submit(_safe_run, self.get_news, [])
+            if fast:
+                cached_earn = _short_cache_get(f"earnings_hist_{self.ticker}", 900.0)
+                cached_ins = _short_cache_get(f"insider_radar_{self.ticker}", 900.0)
+                f_earn = None
+                f_ins = None
+            else:
+                cached_earn = None
+                cached_ins = None
+                f_earn = pool.submit(_safe_run, self.get_earnings_history, [])
+                f_ins = pool.submit(_safe_run, self.get_insider_radar, default_insider)
+
+            # Wait for core history + info + news first
+            try:
+                f_hist.result(timeout=7.0)
+            except Exception:
+                pass
+            try:
+                info = f_info.result(timeout=6.0) or {}
+            except Exception:
+                info = {}
+            try:
+                news_items = f_news.result(timeout=5.0) or []
+            except Exception:
+                news_items = []
+
+            f_fund = pool.submit(_safe_run, lambda: self.get_fundamentals(include_statements=not fast), {})
+            try:
+                fundamentals = f_fund.result(timeout=6.0 if not fast else 2.0) or {}
+            except Exception:
+                fundamentals = self.get_fundamentals(include_statements=False)
+
+            if f_earn is not None:
+                try:
+                    earnings_history = f_earn.result(timeout=5.0) or []
+                except Exception:
+                    earnings_history = []
+            else:
+                earnings_history = cached_earn if cached_earn is not None else []
+
+            if f_ins is not None:
+                try:
+                    insider_radar = f_ins.result(timeout=5.0) or default_insider
+                except Exception:
+                    insider_radar = default_insider
+            else:
+                insider_radar = cached_ins if cached_ins is not None else default_insider
+
+        payload = {
             "ticker": self.ticker,
-            "company_name": self.info.get("longName", self.ticker),
+            "company_name": info.get("longName") or info.get("shortName") or self.ticker,
             "price_data": self.get_price_data(),
             "volatility": self.get_volatility_data(),
-            "fundamentals": self.get_fundamentals(),
+            "fundamentals": fundamentals,
             "analyst_data": self.get_analyst_data(),
             "short_interest": self.get_short_interest(),
-            "news": self.get_news(),
+            "news": news_items,
             "comparison": self.get_comparison_data(),
-            "earnings_history": self.get_earnings_history(),
+            "earnings_history": earnings_history,
             "guidance_signal": self.get_guidance_signal(),
-            "insider_radar": self.get_insider_radar(),
-            "etf_holdings": self.get_etf_holdings() if self.info.get("quoteType") == "ETF" else [],
+            "insider_radar": insider_radar,
+            "etf_holdings": self.get_etf_holdings() if info.get("quoteType") == "ETF" and not fast else [],
+            "fast_mode": bool(fast),
             "fetch_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
+        if isinstance(payload.get("price_data"), dict) and "error" not in payload["price_data"]:
+            if fast:
+                _short_cache_set(fast_cache_key, payload)
+            else:
+                _short_cache_set(full_cache_key, payload)
+        return payload

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 interface RealtimeQuote {
   symbol: string;
   price: number;
+  change_1d?: number | null;
   change_1w?: number | null;
   change_1m?: number | null;
   volume_ratio?: number | null;
@@ -20,11 +21,13 @@ interface RealtimePayload {
   connection_state?: "live" | "degraded" | "snapshot";
   stale_seconds?: Record<string, number>;
   quotes: RealtimeQuote[];
+  live_alerts?: any[];
+  tape_shocks?: any[];
 }
 
 const WS_UNAVAILABLE_UNTIL_KEY = "brokerfreund:ws-unavailable-until";
-const WS_FAILURE_THRESHOLD = 1;
-const WS_SUSPEND_MS = 6 * 60 * 60 * 1000; // 6h
+const WS_FAILURE_THRESHOLD = 2;
+const WS_SUSPEND_MS = 15 * 60 * 1000; // 15m
 let globalWsFailures = 0;
 let globalWsUnavailable = false;
 
@@ -35,19 +38,15 @@ function buildRealtimeUrl(symbols: string[]) {
 }
 
 function shouldPreferSnapshotOnly() {
-  const host = (window.location.hostname || "").toLowerCase();
-  const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
-  const wsEnabledByEnv = import.meta.env.VITE_ENABLE_REALTIME_WS === "true";
-  const forceWs = (() => {
+  const wsDisabledByEnv = import.meta.env.VITE_ENABLE_REALTIME_WS === "false";
+  const disableWs = (() => {
     try {
-      return localStorage.getItem("brokerfreund:force-ws") === "1";
+      return localStorage.getItem("brokerfreund:disable-ws") === "1";
     } catch {
       return false;
     }
   })();
-  if (forceWs) return false;
-  if (isLocalHost || wsEnabledByEnv) return false;
-  return true;
+  return wsDisabledByEnv || disableWs;
 }
 
 export default function useRealtimeFeed(symbols: string[], enabled = true) {
@@ -63,6 +62,8 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
   const [staleSeconds, setStaleSeconds] = useState<Record<string, number>>({});
   const [transportMode, setTransportMode] = useState<"ws" | "snapshot">("snapshot");
   const [lastError, setLastError] = useState<string | null>(null);
+  const [liveAlerts, setLiveAlerts] = useState<any[]>([]);
+  const [tapeShocks, setTapeShocks] = useState<any[]>([]);
   const lastFrameRef = useRef<number>(0);
   const snapshotSucceededRef = useRef<boolean>(false);
   const reconnectAttemptRef = useRef<number>(0);
@@ -157,6 +158,8 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
         }
         const payload = (await response.json()) as RealtimePayload;
         mergeQuotes(payload.quotes || []);
+        if (Array.isArray(payload.live_alerts)) setLiveAlerts(payload.live_alerts);
+        if (Array.isArray(payload.tape_shocks)) setTapeShocks(payload.tape_shocks);
         setLastUpdated(payload.generated_at);
         setConnectionState(payload.connection_state || "snapshot");
         setStaleSeconds(payload.stale_seconds || {});
@@ -251,6 +254,8 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
           setConnected(true);
           setTransportMode("ws");
           mergeQuotes(payload.quotes || []);
+          if (Array.isArray(payload.live_alerts)) setLiveAlerts(payload.live_alerts);
+          if (Array.isArray(payload.tape_shocks)) setTapeShocks(payload.tape_shocks);
           setLastUpdated(payload.generated_at);
           setConnectionState(payload.connection_state || "live");
           setStaleSeconds(payload.stale_seconds || {});
@@ -282,5 +287,5 @@ export default function useRealtimeFeed(symbols: string[], enabled = true) {
     };
   }, [symbolKey, enabled]);
 
-  return { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError };
+  return { quotes, connected, lastUpdated, connectionState, staleSeconds, transportMode, lastError, liveAlerts, tapeShocks };
 }

@@ -12,9 +12,113 @@ from src.provider_observability import record_provider_result
 
 class RealtimeMarketService:
     MAX_SYMBOLS = 18
+    _price_ring_buffer: Dict[str, List[tuple[float, float]]] = {}
+    _shock_cooldowns: Dict[str, float] = {}
+    _recent_tape_shocks: List[Dict[str, Any]] = []
 
     def __init__(self, event_store: MarketEventStore | None = None):
         self.event_store = event_store or MarketEventStore()
+
+    def detect_intraday_tape_shocks(self, quotes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Detect rapid intraday price shocks (>=2.2% in <=15m) or RVOL volume spikes (>=3.2% 1d + >=2.2x RVOL) before headlines break."""
+        now_ts = time.time()
+        window_sec = 900.0  # 15 minutes
+        cooldown_sec = 1800.0  # 30 minutes per symbol
+        detected: List[Dict[str, Any]] = []
+
+        for q in quotes:
+            symbol = str(q.get("symbol") or "").strip().upper()
+            price = q.get("price")
+            if not symbol or price is None:
+                continue
+            try:
+                p_val = float(price)
+            except (TypeError, ValueError):
+                continue
+            if p_val <= 0:
+                continue
+
+            history = self._price_ring_buffer.get(symbol, [])
+            history = [(ts, px) for ts, px in history if (now_ts - ts) <= window_sec and px > 0]
+            history.append((now_ts, p_val))
+            self._price_ring_buffer[symbol] = history[-25:]
+
+            # Check 1: Short-window price shock (>= 2.2% move within 15m window)
+            short_move_pct = 0.0
+            if len(history) >= 2:
+                anchor_price = history[0][1]
+                if anchor_price > 0:
+                    short_move_pct = ((p_val / anchor_price) - 1.0) * 100.0
+
+            # Check 2: Daily move + RVOL spike (>= 3.2% 1d move with RVOL >= 2.2x)
+            change_1d = q.get("change_1d")
+            vol_ratio = q.get("volume_ratio")
+            day_move_pct = float(change_1d) if isinstance(change_1d, (int, float)) else 0.0
+            rvol_val = float(vol_ratio) if isinstance(vol_ratio, (int, float)) else 0.0
+
+            is_short_shock = abs(short_move_pct) >= 2.2
+            is_rvol_shock = abs(day_move_pct) >= 3.2 and rvol_val >= 2.2
+
+            if not (is_short_shock or is_rvol_shock):
+                continue
+
+            effective_pct = short_move_pct if is_short_shock else day_move_pct
+            direction = "LONG" if effective_pct > 0 else "SHORT"
+            cooldown_key = f"{symbol}:{direction}"
+            last_fired = self._shock_cooldowns.get(cooldown_key, 0.0)
+            if (now_ts - last_fired) < cooldown_sec:
+                continue
+
+            self._shock_cooldowns[cooldown_key] = now_ts
+            stop_dist = max(0.015, min(0.035, abs(effective_pct) / 100.0 * 0.75))
+            if direction == "LONG":
+                stop_loss = round(p_val * (1.0 - stop_dist), 2)
+                target_1 = round(p_val * (1.0 + stop_dist * 2.0), 2)
+                entry_trigger = f"Hold über {p_val:.2f} (VWAP / Intraday-Breakout)"
+            else:
+                stop_loss = round(p_val * (1.0 + stop_dist), 2)
+                target_1 = round(p_val * (1.0 - stop_dist * 2.0), 2)
+                entry_trigger = f"Break unter {p_val:.2f} (Intraday-Rejection)"
+
+            shock_kind = "⚡ TAPE-SCHOCK (15m)" if is_short_shock else "⚡ VOLUMEN-AUSBRUCH"
+            rvol_tag = f" · RVOL {rvol_val:.1f}x" if rvol_val >= 1.3 else ""
+            title = f"{shock_kind}: {symbol} {effective_pct:+.2f}%{rvol_tag}"
+            msg = (
+                f"{symbol} zeigt ungewöhnliche Preis-/Volumenbeschleunigung ({effective_pct:+.2f}%{rvol_tag}) "
+                f"bei {p_val:.2f} {q.get('currency') or 'USD'} — vor oder während erster Schlagzeilen. "
+                f"Setup-Richtung: {direction} | Trigger: {entry_trigger} | Stop: {stop_loss:.2f} | Ziel 1: {target_1:.2f}"
+            )
+            shock_event = {
+                "id": f"tape-shock:{symbol}:{direction}:{int(now_ts // 600)}",
+                "event_key": f"tape-shock:{symbol}:{direction}:{int(now_ts // 600)}",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "timestamp_ms": int(now_ts * 1000),
+                "category": "tape_shock",
+                "subject": "Tape-Shock Frühwarnsystem",
+                "ticker": symbol,
+                "trade_direction": direction,
+                "reaction_pct": round(effective_pct, 2),
+                "volume_ratio": round(rvol_val, 2) if rvol_val > 0 else None,
+                "price": round(p_val, 4),
+                "entry_trigger": entry_trigger,
+                "stop_loss": stop_loss,
+                "target_1": target_1,
+                "title": title,
+                "message": msg,
+                "line": msg,
+                "source_label": "Intraday Tape-Shock Detector",
+                "source_url": "",
+            }
+            detected.append(shock_event)
+
+        if detected:
+            existing_ids = {item.get("id") for item in self._recent_tape_shocks}
+            for item in detected:
+                if item["id"] not in existing_ids:
+                    self._recent_tape_shocks.insert(0, item)
+            self._recent_tape_shocks[:] = self._recent_tape_shocks[:20]
+
+        return detected
 
     def build_snapshot(self, symbols: List[str]) -> Dict[str, Any]:
         started = time.perf_counter()
@@ -55,12 +159,16 @@ class RealtimeMarketService:
         else:
             connection_state = "live"
 
+        new_shocks = self.detect_intraday_tape_shocks(quotes)
+
         result = {
             "type": "realtime_snapshot",
             "generated_at": now.isoformat(),
             "connection_state": connection_state,
             "stale_seconds": stale_seconds,
             "quotes": quotes,
+            "tape_shocks": self._recent_tape_shocks[:6],
+            "new_tape_shocks": new_shocks,
         }
         metric_status = "ok" if connection_state == "live" else "degraded"
         record_provider_result(
@@ -85,6 +193,7 @@ class RealtimeMarketService:
                 closes = df["Close"].dropna()
                 if not closes.empty:
                     current_price = float(closes.iloc[-1])
+                    change_1d = (((current_price / float(closes.iloc[-2])) - 1.0) * 100.0) if len(closes) >= 2 and float(closes.iloc[-2]) != 0 else None
                     change_1w = (((current_price / float(closes.iloc[-6])) - 1.0) * 100.0) if len(closes) >= 6 and float(closes.iloc[-6]) != 0 else None
                     change_1m = (((current_price / float(closes.iloc[0])) - 1.0) * 100.0) if len(closes) >= 2 and float(closes.iloc[0]) != 0 else None
                     vol_ratio = None
@@ -99,6 +208,7 @@ class RealtimeMarketService:
                     return {
                         "symbol": symbol,
                         "price": round(current_price, 4),
+                        "change_1d": self._safe_round(change_1d),
                         "change_1w": self._safe_round(change_1w),
                         "change_1m": self._safe_round(change_1m),
                         "volume_ratio": self._safe_round(vol_ratio),
@@ -124,6 +234,7 @@ class RealtimeMarketService:
             return {
                 "symbol": symbol,
                 "price": round(float(price), 4),
+                "change_1d": self._safe_round(price_data.get("change_1d")),
                 "change_1w": self._safe_round(price_data.get("change_1w")),
                 "change_1m": self._safe_round(price_data.get("change_1m")),
                 "volume_ratio": None,

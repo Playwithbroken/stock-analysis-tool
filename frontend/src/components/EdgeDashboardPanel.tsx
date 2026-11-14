@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle, ArrowRight, Ban, BarChart3, CheckCircle2, Eye, Globe2, Send, ShieldAlert, Smartphone, Target, TrendingUp, Zap } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Portfolio } from "../hooks/usePortfolios";
 import { localizeLearningMessage, localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
 
@@ -13,6 +13,10 @@ interface EdgeDashboardPanelProps {
   portfolios: Portfolio[];
   quotes: Record<string, any>;
   loading?: boolean;
+  bootstrapActiveTrades?: any[];
+  bootstrapRsLeaders?: any[];
+  bootstrapSuitabilityMap?: Record<string, SuitabilitySummary>;
+  onPrefetchTicker?: (ticker: string) => void;
   onAnalyzeTicker: (ticker: string) => void;
   onOpenPortfolio: () => void;
   onOpenMarkets: () => void;
@@ -323,6 +327,10 @@ export default function EdgeDashboardPanel({
   portfolios,
   quotes,
   loading,
+  bootstrapActiveTrades,
+  bootstrapRsLeaders,
+  bootstrapSuitabilityMap,
+  onPrefetchTicker,
   onAnalyzeTicker,
   onOpenPortfolio,
   onOpenMarkets,
@@ -339,6 +347,23 @@ export default function EdgeDashboardPanel({
   const [suitabilityLoading, setSuitabilityLoading] = useState(false);
   const [sendingTelegramTicker, setSendingTelegramTicker] = useState<string | null>(null);
   const [telegramStatusMessage, setTelegramStatusMessage] = useState<string | null>(null);
+  const [filterNearBreakout, setFilterNearBreakout] = useState<boolean>(false);
+  const prefetchTimerRef = useRef<number | null>(null);
+
+  const schedulePrefetch = (ticker: string) => {
+    if (!onPrefetchTicker || !ticker) return;
+    if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+    prefetchTimerRef.current = window.setTimeout(() => {
+      onPrefetchTicker(ticker);
+    }, 150);
+  };
+
+  const cancelPrefetch = () => {
+    if (prefetchTimerRef.current) {
+      window.clearTimeout(prefetchTimerRef.current);
+      prefetchTimerRef.current = null;
+    }
+  };
 
   const [experienceMode, setExperienceMode] = useState<"beginner" | "pro">(() => {
     try {
@@ -527,10 +552,22 @@ export default function EdgeDashboardPanel({
     }
   }
 
-  const [activeTrades, setActiveTrades] = useState<any[]>([]);
-  const [rsLeaders, setRsLeaders] = useState<any[]>([]);
+  const [activeTrades, setActiveTrades] = useState<any[]>(() => bootstrapActiveTrades || []);
+  const [rsLeaders, setRsLeaders] = useState<any[]>(() => bootstrapRsLeaders || []);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (Array.isArray(bootstrapActiveTrades) && bootstrapActiveTrades.length > 0 && activeTrades.length === 0) {
+      setActiveTrades(bootstrapActiveTrades);
+    }
+  }, [bootstrapActiveTrades]);
+
+  useEffect(() => {
+    if (Array.isArray(bootstrapRsLeaders) && bootstrapRsLeaders.length > 0 && rsLeaders.length === 0) {
+      setRsLeaders(bootstrapRsLeaders);
+    }
+  }, [bootstrapRsLeaders]);
 
   async function loadActiveTradesAndRS() {
     try {
@@ -579,7 +616,9 @@ export default function EdgeDashboardPanel({
   }
 
   useEffect(() => {
-    loadActiveTradesAndRS();
+    if ((!bootstrapActiveTrades || bootstrapActiveTrades.length === 0) && (!bootstrapRsLeaders || bootstrapRsLeaders.length === 0)) {
+      loadActiveTradesAndRS();
+    }
   }, []);
 
   useEffect(() => {
@@ -590,42 +629,65 @@ export default function EdgeDashboardPanel({
       setSuitabilityLoading(false);
       return;
     }
-    setSuitabilityLoading(true);
-    Promise.all(
-      checkRows.map(async (row) => {
-        try {
-          const response = await fetch("/api/advisory/suitability-check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              symbol: row.ticker,
-              asset_class: inferAssetClass(row.ticker),
-              action: advisoryAction(row.tone),
-              risk_level: advisoryRiskLevel(row),
-              position_pct: 0,
-              thesis: `${row.label} / ${row.headline} / ${row.nextAction}`,
-            }),
-          });
-          const payload = await response.json().catch(() => null);
-          if (!response.ok || !payload) return null;
-          return [row.key, payload] as const;
-        } catch {
-          return null;
+
+    // Fast path: if bootstrapSuitabilityMap already has all symbols, hydrate immediately
+    if (bootstrapSuitabilityMap && Object.keys(bootstrapSuitabilityMap).length > 0) {
+      const prefilled: Record<string, SuitabilitySummary> = {};
+      let allMatched = true;
+      for (const row of checkRows) {
+        const sym = row.ticker.toUpperCase();
+        if (bootstrapSuitabilityMap[sym]) {
+          prefilled[row.key] = bootstrapSuitabilityMap[sym];
+        } else {
+          allMatched = false;
         }
+      }
+      if (Object.keys(prefilled).length > 0) {
+        setSuitabilityByKey(prefilled);
+      }
+      if (allMatched) {
+        setSuitabilityLoading(false);
+        return;
+      }
+    }
+
+    setSuitabilityLoading(true);
+    fetch("/api/advisory/suitability-check/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: checkRows.map((row) => ({
+          symbol: row.ticker,
+          asset_class: inferAssetClass(row.ticker),
+          action: advisoryAction(row.tone),
+          risk_level: advisoryRiskLevel(row),
+          position_pct: 0,
+          thesis: `${row.label} / ${row.headline} / ${row.nextAction}`,
+        })),
       }),
-    ).then((items) => {
-      if (cancelled) return;
-      const next: Record<string, SuitabilitySummary> = {};
-      items.forEach((item) => {
-        if (item) next[item[0]] = item[1];
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (cancelled) return;
+        const resultsBySymbol: Record<string, SuitabilitySummary> = payload?.results || {};
+        const next: Record<string, SuitabilitySummary> = {};
+        checkRows.forEach((row) => {
+          const sym = row.ticker.toUpperCase();
+          if (resultsBySymbol[sym]) {
+            next[row.key] = resultsBySymbol[sym];
+          }
+        });
+        setSuitabilityByKey(next);
+        setSuitabilityLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setSuitabilityLoading(false);
       });
-      setSuitabilityByKey(next);
-      setSuitabilityLoading(false);
-    });
+
     return () => {
       cancelled = true;
     };
-  }, [suitabilityKey]);
+  }, [suitabilityKey, bootstrapSuitabilityMap]);
 
   const macroPlaybookRows = buildMacroPlaybookRows(globalBrief);
   const actionRows = rows.filter((row) => row.tone === "action").slice(0, 3);
@@ -1141,7 +1203,18 @@ export default function EdgeDashboardPanel({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-normal text-slate-500 dark:text-slate-400">
-              <span>🌬️ Smart Cushion (-0.25R ab +1R)</span>
+              <button
+                type="button"
+                onClick={() => setFilterNearBreakout((prev) => !prev)}
+                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition ${
+                  filterNearBreakout
+                    ? "border-amber-500/40 bg-amber-500 text-slate-950 shadow-2xs"
+                    : "border-black/10 bg-white text-slate-700 hover:bg-amber-50 dark:border-white/15 dark:bg-white/10 dark:text-slate-300"
+                }`}
+                title="Zeigt bevorzugt Setups, deren Live-Kurs weniger als 1,8% vom Entry-Trigger entfernt ist"
+              >
+                🔥 {filterNearBreakout ? "Kurz vor Ausbruch (<1,8% Aktiv)" : "Kurz vor Ausbruch filtern"}
+              </button>
               <span>&middot;</span>
               <button
                 type="button"
@@ -1238,11 +1311,30 @@ export default function EdgeDashboardPanel({
           ) : null}
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {tradingEdge.asymmetric_setups.map((setup: any) => {
+            {(() => {
+              const allSetups: any[] = tradingEdge.asymmetric_setups || [];
+              if (!filterNearBreakout) return allSetups;
+              const nearList = allSetups.filter((s: any) => {
+                const entryP = Number(s.entry_price) || 0;
+                const liveP = toNumber(quotes?.[s.ticker]?.price) ?? toNumber(s.current_price) ?? entryP;
+                if (entryP <= 0 || liveP <= 0) return true;
+                const distPct = Math.abs(((entryP - liveP) / liveP) * 100);
+                return distPct <= 1.8;
+              });
+              return nearList.length > 0 ? nearList : allSetups;
+            })().map((setup: any) => {
               const entry = Number(setup.entry_price) || 100;
               const hardStop = Number(setup.invalidation_price) || entry * 0.96;
               const t1 = Number(setup.target_1) || entry * 1.08;
               const t2 = Number(setup.target_2) || entry * 1.14;
+              const livePrice = toNumber(quotes?.[setup.ticker]?.price) ?? toNumber(setup.current_price) ?? entry;
+              const triggerDistancePct = livePrice > 0 ? ((entry - livePrice) / livePrice) * 100 : 0;
+              const absTriggerDist = Math.abs(triggerDistancePct);
+              const totalRangeSpan = Math.max(0.01, Math.abs(t1 - hardStop));
+              const liveProgressPct = Math.max(4, Math.min(96, ((livePrice - hardStop) / totalRangeSpan) * 100));
+              const entryMarkerPct = Math.max(10, Math.min(90, ((entry - hardStop) / totalRangeSpan) * 100));
+              const isHotBreakout = absTriggerDist <= 0.8;
+              const isAboveTrigger = livePrice >= entry;
               const riskPerShare = Math.max(0.01, Math.abs(entry - hardStop));
               const cushionStop = Number((entry - 0.25 * riskPerShare).toFixed(2));
               const riskBudgetEur = (customCapital * customRiskPct) / 100;
@@ -1264,6 +1356,8 @@ export default function EdgeDashboardPanel({
               return (
               <div
                 key={setup.ticker}
+                onMouseEnter={() => schedulePrefetch(setup.ticker)}
+                onMouseLeave={cancelPrefetch}
                 className="flex flex-col justify-between rounded-[1.2rem] border border-black/6 bg-white/90 p-4 shadow-xs transition hover:border-black/15 dark:border-white/10 dark:bg-white/5"
               >
                 <div>
@@ -1348,6 +1442,48 @@ export default function EdgeDashboardPanel({
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                         ${setup.target_1} (+{displayT1ProfitEur}€ {showNetAfterTax ? "Netto" : ""})
                       </span>
+                    </div>
+                  </div>
+
+                  {/* LIVE TRIGGER-DISTANZ-BALKEN */}
+                  <div className="mt-2 rounded-xl border border-black/5 bg-white/80 px-2.5 py-2 text-[10px] dark:border-white/10 dark:bg-white/5">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">
+                        📍 Live: <strong className="text-slate-950 dark:text-white">${livePrice.toFixed(2)}</strong>
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                          isHotBreakout
+                            ? "bg-amber-500/20 text-amber-800 dark:bg-amber-500/30 dark:text-amber-200 animate-pulse"
+                            : isAboveTrigger
+                              ? "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-200"
+                              : "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-300"
+                        }`}
+                      >
+                        {isHotBreakout
+                          ? `🔥 Kurz vor Ausbruch (${triggerDistancePct >= 0 ? `+${triggerDistancePct.toFixed(2)}%` : `${triggerDistancePct.toFixed(2)}%`} zum Trigger)`
+                          : isAboveTrigger
+                            ? `✅ Im Trigger-Bereich (+${Math.abs(triggerDistancePct).toFixed(2)}% über Einstieg)`
+                            : `⏳ Noch +${Math.abs(triggerDistancePct).toFixed(2)}% bis Trigger`}
+                      </span>
+                    </div>
+                    <div className="relative mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/15">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isAboveTrigger ? "bg-emerald-500" : isHotBreakout ? "bg-amber-500" : "bg-sky-500"
+                        }`}
+                        style={{ width: `${liveProgressPct}%` }}
+                      />
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-slate-900 dark:bg-white"
+                        style={{ left: `${entryMarkerPct}%` }}
+                        title={`Entry-Trigger $${entry.toFixed(2)}`}
+                      />
+                    </div>
+                    <div className="mt-1 flex justify-between text-[9px] font-medium text-slate-400">
+                      <span>🛑 Stop ${hardStop.toFixed(2)}</span>
+                      <span>🎯 Trigger ${entry.toFixed(2)}</span>
+                      <span>🚀 Ziel 1 ${t1.toFixed(2)}</span>
                     </div>
                   </div>
 

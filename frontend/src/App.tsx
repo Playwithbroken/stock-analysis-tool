@@ -620,6 +620,7 @@ function AppContent() {
     connected: headerRealtimeConnected,
     connectionState: headerConnectionState,
     transportMode: headerTransportMode,
+    liveAlerts: wsLiveAlerts,
   } = useRealtimeFeed(favoriteSymbols, auth.authenticated);
   const portfolioSnapshotForChat = useMemo(() => {
     const holdings = safePortfolios.flatMap((portfolio) =>
@@ -694,9 +695,87 @@ function AppContent() {
 
   const [liveWebAlerts, setLiveWebAlerts] = useState<any[]>([]);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<string[]>([]);
+  const [bootstrapActiveTrades, setBootstrapActiveTrades] = useState<any[]>([]);
+  const [bootstrapRsLeaders, setBootstrapRsLeaders] = useState<any[]>([]);
+  const [bootstrapSuitabilityMap, setBootstrapSuitabilityMap] = useState<Record<string, any>>({});
+  const prefetchedTickersRef = useRef<Set<string>>(new Set());
   const [browserPushPermission, setBrowserPushPermission] = useState<string>(() =>
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported",
   );
+
+  useEffect(() => {
+    if (Array.isArray(wsLiveAlerts) && wsLiveAlerts.length > 0) {
+      setLiveWebAlerts((prev) => {
+        const merged = [...wsLiveAlerts, ...prev];
+        return merged.filter((item, index, arr) => item?.id && arr.findIndex((x) => x?.id === item.id) === index).slice(0, 12);
+      });
+    }
+  }, [wsLiveAlerts]);
+
+  // Instant Dashboard Bootstrap: hydrates cached brief, scoreboard, trading_edge, learning, active_trades, RS, and suitability in 1 call
+  useEffect(() => {
+    if (!auth.authenticated) return;
+    let cancelled = false;
+    fetch("/api/dashboard/bootstrap?fast=true")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((boot) => {
+        if (cancelled || !boot) return;
+        if (boot.brief) {
+          setGlobalBrief((prev: any) => prev || boot.brief);
+          setGlobalBriefStatus((prev) => (prev === "loading" ? "ready" : prev));
+          if (boot.brief.regions) {
+            setRegionalSnapshot((prev: any) => prev || { regions: boot.brief.regions, macro: boot.brief.macro });
+          }
+        }
+        if (boot.scoreboard) {
+          setSignalScoreContext((prev: any) => prev || boot.scoreboard);
+        }
+        if (boot.trading_edge) {
+          setTradingEdge((prev: any) => prev || boot.trading_edge);
+          setTradingEdgeLoading(false);
+        }
+        if (boot.learning) {
+          setLearningContext((prev: any) => prev || boot.learning);
+        }
+        if (Array.isArray(boot.active_trades?.trades)) {
+          setBootstrapActiveTrades(boot.active_trades.trades);
+        }
+        if (Array.isArray(boot.relative_strength?.leaders)) {
+          setBootstrapRsLeaders(boot.relative_strength.leaders);
+        }
+        if (boot.suitability_map && typeof boot.suitability_map === "object") {
+          setBootstrapSuitabilityMap(boot.suitability_map);
+        }
+        if (Array.isArray(boot.live_alerts) && boot.live_alerts.length > 0) {
+          setLiveWebAlerts((prev) => (prev.length > 0 ? prev : boot.live_alerts));
+        }
+      })
+      .catch(() => {
+        // fallback to normal individual loaders
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.authenticated]);
+
+  const prefetchTickerDossier = (rawTicker: string) => {
+    const normalized = normalizeTickerInput(rawTicker);
+    if (!normalized || prefetchedTickersRef.current.has(normalized)) return;
+    if (getCachedAnalysis(normalized)) {
+      prefetchedTickersRef.current.add(normalized);
+      return;
+    }
+    prefetchedTickersRef.current.add(normalized);
+    void fetch(`/api/history/${encodeURIComponent(normalized)}?period=6mo&interval=1d`).catch(() => undefined);
+    void fetch(`/api/analyze/${encodeURIComponent(normalized)}?fast=true`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.ticker && !getCachedAnalysis(normalized)) {
+          cacheAnalysis(normalized, data as AnalysisData);
+        }
+      })
+      .catch(() => undefined);
+  };
 
   const requestBrowserPushPermission = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -1244,8 +1323,27 @@ function AppContent() {
       const cached = forceRefresh ? null : getCachedAnalysis(searchTicker);
       if (cached) {
         setAnalysis(cached);
+        setLoading(false);
+        setPendingAnalysisTicker("");
         return;
       }
+
+      // Fast-First Turbo Dossier (<1.5s): render core analysis immediately, then enrich with full dossier
+      try {
+        const fastData = await fetchJsonWithRetry<any>(
+          `/api/analyze/${encodeURIComponent(searchTicker)}?fast=true`,
+          { signal: controller.signal },
+          { retries: 0, retryDelayMs: 250, timeoutMs: 12000 },
+        );
+        if (!controller.signal.aborted && searchRequestIdRef.current === requestId && fastData?.ticker) {
+          setAnalysis(fastData);
+          setLoading(false);
+          setPendingAnalysisTicker("");
+        }
+      } catch {
+        // continue to full analysis fetch
+      }
+
       const data = await fetchJsonWithRetry<any>(
         `/api/analyze/${encodeURIComponent(searchTicker)}`,
         { signal: controller.signal },
@@ -1257,11 +1355,16 @@ function AppContent() {
     } catch (err) {
       if (controller.signal.aborted || searchRequestIdRef.current !== requestId) return;
       const message = err instanceof Error ? err.message : "An error occurred";
-      if (message.toLowerCase().includes("timeout")) {
-        setError(`Die Analyse für ${searchTicker} dauert zu lange. Bitte erneut starten oder den Ticker direkt eingeben.`);
-      } else {
-        setError(`Die Analyse für ${searchTicker} konnte nicht geladen werden. ${message}`);
-      }
+      setAnalysis((prev) => {
+        if (!prev) {
+          if (message.toLowerCase().includes("timeout")) {
+            setError(`Die Analyse für ${searchTicker} dauert zu lange. Bitte erneut starten oder den Ticker direkt eingeben.`);
+          } else {
+            setError(`Die Analyse für ${searchTicker} konnte nicht geladen werden. ${message}`);
+          }
+        }
+        return prev;
+      });
     } finally {
       if (!controller.signal.aborted && searchRequestIdRef.current === requestId) {
         setLoading(false);
@@ -1868,6 +1971,10 @@ function AppContent() {
                   globalBrief={decisionBrief}
                   portfolios={portfolios}
                   quotes={headerQuotes}
+                  bootstrapActiveTrades={bootstrapActiveTrades}
+                  bootstrapRsLeaders={bootstrapRsLeaders}
+                  bootstrapSuitabilityMap={bootstrapSuitabilityMap}
+                  onPrefetchTicker={prefetchTickerDossier}
                   loading={
                     globalBriefStatus === "loading" ||
                     tradingEdgeLoading ||

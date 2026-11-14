@@ -786,12 +786,55 @@ class ScalableIntegrationService:
                 }
             )
         decisive = counts["aligned"] + counts["contrary"]
+        alignment_pct = round(counts["aligned"] / decisive * 100, 1) if decisive else None
+        aligned_tickers: List[str] = []
+        contrary_tickers: List[str] = []
+        for s in samples:
+            t = str(s.get("ticker") or "")
+            if not t:
+                continue
+            if s.get("result") == "aligned" and t not in aligned_tickers:
+                aligned_tickers.append(t)
+            elif s.get("result") == "contrary" and t not in contrary_tickers:
+                contrary_tickers.append(t)
+
+        if decisive == 0:
+            dominant_style = "Noch keine zugeordneten Trades"
+            summary_de = (
+                f"{len(transactions)} Broker-Transaktionen erfasst. Sobald neue Käufe/Verkäufe auf "
+                "Signale folgen, lernt Broker Freund automatisch deinen Entscheidungsstil."
+            )
+        elif alignment_pct is not None and alignment_pct >= 60:
+            dominant_style = "Signal-Treu"
+            summary_de = (
+                f"In {alignment_pct:.0f}% von {decisive} Entscheidungen folgst du den KI-Signalen "
+                f"(u. a. {', '.join(aligned_tickers[:3]) or '–'})."
+            )
+        elif alignment_pct is not None and alignment_pct <= 40:
+            dominant_style = "Konträr / Dip-Käufer"
+            summary_de = (
+                f"In {100 - alignment_pct:.0f}% der Fälle handelst du bewusst antizyklisch gegen die Signale "
+                f"(u. a. {', '.join(contrary_tickers[:3]) or '–'})."
+            )
+        else:
+            dominant_style = "Selektiv / Gemischt"
+            summary_de = (
+                f"Ausgewogenes Verhältnis ({alignment_pct:.0f}% Signal-Treue aus {decisive} "
+                "abgeglichenen Transaktionen)."
+            )
+
         return {
             "status": "ok",
             "counts": {**counts, "decisive": decisive, "total_transactions": len(transactions)},
-            "alignment_rate_pct": round(counts["aligned"] / decisive * 100, 1) if decisive else None,
+            "alignment_rate_pct": alignment_pct,
             "samples": samples[:50],
             "learning_eligible": decisive >= _env_int("SCALABLE_FEEDBACK_MIN_SAMPLES", 20, 5),
+            "learning_insights": {
+                "dominant_style": dominant_style,
+                "summary_de": summary_de,
+                "top_aligned_tickers": aligned_tickers[:5],
+                "top_contrary_tickers": contrary_tickers[:5],
+            },
             "automatic_rule_changes": False,
             "policy": "Nur Messung. Keine automatische Strategie- oder Echtgeldregel wird aus Broker-Transaktionen geändert.",
         }
@@ -1628,6 +1671,146 @@ class ScalableIntegrationService:
             "snapshot": snapshot,
             "integration_status": self.status(),
         }
+
+    _login_lock = threading.Lock()
+    _login_state: Dict[str, Any] = {
+        "status": "idle",
+        "verification_url": None,
+        "user_code": None,
+        "output": "",
+        "error": None,
+        "started_at": None,
+        "process": None,
+    }
+
+    @staticmethod
+    def _ensure_file_session_config() -> None:
+        xdg_config = Path(os.getenv("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "scalable-cli"
+        xdg_config.mkdir(parents=True, exist_ok=True)
+        cfg_path = xdg_config / "config.toml"
+        existing_cfg = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
+        if "session_backend" not in existing_cfg:
+            addition = '\n[auth]\nsession_backend = "file"\nsigning_key_backend = "file"\n'
+            cfg_path.write_text((existing_cfg.rstrip() + addition).lstrip(), encoding="utf-8")
+            try:
+                os.chmod(cfg_path, 0o600)
+            except OSError:
+                pass
+
+    def start_device_login(self) -> Dict[str, Any]:
+        """Start `sc login --local-read-only` on the server and capture OAuth device URL + code."""
+        if not self.enabled:
+            raise ScalableIntegrationError(
+                "integration_disabled",
+                "Scalable-Integration ist deaktiviert. Setze SCALABLE_INTEGRATION_ENABLED=true.",
+            )
+        executable = self.cli.resolved_executable()
+        if not executable:
+            raise ScalableIntegrationError(
+                "cli_not_installed",
+                "Die offizielle Scalable CLI wurde auf dem Server nicht gefunden.",
+            )
+        self.cli.verify_binary(executable)
+        self._ensure_file_session_config()
+
+        with self._login_lock:
+            prev_proc = self._login_state.get("process")
+            if prev_proc is not None and prev_proc.poll() is None:
+                try:
+                    prev_proc.terminate()
+                except OSError:
+                    pass
+            env = os.environ.copy()
+            env["NO_COLOR"] = "1"
+            env["BROWSER"] = "echo"
+            proc = subprocess.Popen(
+                [executable, "login", "--local-read-only"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                shell=False,
+                env=env,
+            )
+            self._login_state = {
+                "status": "pending",
+                "verification_url": None,
+                "user_code": None,
+                "output": "",
+                "error": None,
+                "started_at": _utc_now(),
+                "process": proc,
+            }
+
+        url_re = re.compile(r"https://[^\s\]\)\"'>]+")
+        code_re = re.compile(r"\b([A-Z0-9]{4}-[A-Z0-9]{4})\b")
+
+        def _reader() -> None:
+            lines: List[str] = []
+            try:
+                if proc.stdout is not None:
+                    for raw_line in proc.stdout:
+                        line = raw_line.strip()
+                        if not line:
+                            continue
+                        lines.append(line)
+                        url_m = url_re.search(line)
+                        code_m = code_re.search(line)
+                        with self._login_lock:
+                            self._login_state["output"] = "\n".join(lines[-20:])
+                            if url_m and not self._login_state["verification_url"]:
+                                self._login_state["verification_url"] = url_m.group(0)
+                            if code_m and not self._login_state["user_code"]:
+                                self._login_state["user_code"] = code_m.group(1)
+                rc = proc.wait(timeout=300)
+                if rc == 0:
+                    try:
+                        self.cli.run("whoami")
+                        self.sync()
+                    except Exception:
+                        pass
+                    with self._login_lock:
+                        self._login_state["status"] = "connected"
+                else:
+                    with self._login_lock:
+                        self._login_state["status"] = "error"
+                        self._login_state["error"] = (
+                            self._login_state.get("output")
+                            or f"Scalable Login beendet mit Code {rc}."
+                        )
+            except Exception as exc:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                with self._login_lock:
+                    self._login_state["status"] = "error"
+                    self._login_state["error"] = str(exc)
+
+        threading.Thread(target=_reader, daemon=True).start()
+
+        deadline = time.time() + 6.0
+        while time.time() < deadline:
+            snap = self.get_device_login_status()
+            if snap["verification_url"] or snap["status"] in {"connected", "error"}:
+                return snap
+            time.sleep(0.2)
+        return self.get_device_login_status()
+
+    def get_device_login_status(self) -> Dict[str, Any]:
+        with self._login_lock:
+            state = {
+                "status": self._login_state.get("status", "idle"),
+                "verification_url": self._login_state.get("verification_url"),
+                "user_code": self._login_state.get("user_code"),
+                "output": self._login_state.get("output") or "",
+                "error": self._login_state.get("error"),
+                "started_at": self._login_state.get("started_at"),
+            }
+        if state["status"] == "connected":
+            state["integration_status"] = self.status()
+        return state
 
     def refresh_positions_from_market_data(self, *, cli_error_code: Optional[str] = None) -> Dict[str, Any]:
         """Refresh valuations and scores for stored Scalable holdings using live market quotes."""

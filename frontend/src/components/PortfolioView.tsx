@@ -279,6 +279,11 @@ export default function PortfolioView({
   const [createPortfolioNotice, setCreatePortfolioNotice] = useState<string | null>(null);
   const [refreshingPortfolios, setRefreshingPortfolios] = useState(false);
   const [scalableStatus, setScalableStatus] = useState<ScalableIntegrationStatus | null>(null);
+  const [scalableFeedback, setScalableFeedback] = useState<{
+    counts?: { total_transactions?: number; decisive?: number; aligned?: number; contrary?: number };
+    alignment_rate_pct?: number | null;
+    learning_insights?: { dominant_style?: string; summary_de?: string };
+  } | null>(null);
   const [scalableSyncing, setScalableSyncing] = useState(false);
   const [scalableNotice, setScalableNotice] = useState("");
   const [showScalableImportModal, setShowScalableImportModal] = useState(false);
@@ -363,9 +368,16 @@ export default function PortfolioView({
 
   const fetchScalableStatus = async () => {
     try {
-      const response = await fetch("/api/integrations/scalable/status", { credentials: "same-origin" });
-      if (!response.ok) return;
-      setScalableStatus(await response.json());
+      const [statusRes, fbRes] = await Promise.all([
+        fetch("/api/integrations/scalable/status", { credentials: "same-origin" }),
+        fetch("/api/integrations/scalable/transaction-feedback", { credentials: "same-origin" }),
+      ]);
+      if (statusRes.ok) {
+        setScalableStatus(await statusRes.json());
+      }
+      if (fbRes.ok) {
+        setScalableFeedback(await fbRes.json());
+      }
     } catch {
       // This optional integration must never make the local portfolio unavailable.
     }
@@ -967,6 +979,14 @@ export default function PortfolioView({
                     }`
                   : "Importiere dein Scalable-Depot per CSV oder Schnelleingabe, um Kurse, Gewinne und Scores live zu analysieren."}
               </div>
+              {scalableFeedback?.learning_insights?.summary_de && (scalableFeedback.counts?.total_transactions || 0) > 0 && (
+                <div className="mt-2 rounded-xl border border-black/8 bg-white/60 px-3 py-2 text-xs text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Lern-Erkenntnis ({scalableFeedback.learning_insights.dominant_style}):
+                  </span>{" "}
+                  {scalableFeedback.learning_insights.summary_de}
+                </div>
+              )}
               {scalableNotice && <div className="mt-2 text-xs font-bold text-slate-900 dark:text-white">{scalableNotice}</div>}
             </div>
             <div className="flex flex-wrap items-center gap-2">

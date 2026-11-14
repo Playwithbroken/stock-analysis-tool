@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Upload, FileText, Check, X, ShieldCheck, Sparkles, KeyRound } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Upload, FileText, Check, X, ShieldCheck, Sparkles, KeyRound, ExternalLink, RefreshCw } from "lucide-react";
 import useAccessibleDialog from "../hooks/useAccessibleDialog";
 
 interface ScalableImportModalProps {
@@ -31,8 +31,38 @@ export default function ScalableImportModal({
   const [csvFileName, setCsvFileName] = useState("");
   const [sessionFiles, setSessionFiles] = useState<UploadedSessionFile[]>([]);
   const [sessionJsonText, setSessionJsonText] = useState("");
+  const [oauthState, setOauthState] = useState<{
+    status: "idle" | "pending" | "connected" | "error";
+    verification_url?: string | null;
+    user_code?: string | null;
+    output?: string;
+    error?: string | null;
+  }>({ status: "idle" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || mode !== "session" || oauthState.status !== "pending") return;
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch("/api/integrations/scalable/login/status", { credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setOauthState(data);
+        if (data.status === "connected") {
+          window.clearInterval(timer);
+          await onSuccess();
+          onClose();
+        } else if (data.status === "error") {
+          window.clearInterval(timer);
+          setError(data.error || "Scalable OAuth-Login fehlgeschlagen.");
+        }
+      } catch {
+        // Keep polling while server completes OAuth handshake
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [isOpen, mode, oauthState.status, onClose, onSuccess]);
 
   const dialogRef = useAccessibleDialog<HTMLDivElement>(
     isOpen,
@@ -56,6 +86,32 @@ export default function ScalableImportModal({
       setError("Datei konnte nicht gelesen werden.");
     };
     reader.readAsText(file);
+  };
+
+  const handleStartOAuthLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/scalable/login/start", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail?.message || data.detail || "OAuth-Login konnte nicht gestartet werden.");
+      }
+      setOauthState(data);
+      if (data.status === "connected") {
+        await onSuccess();
+        onClose();
+      } else if (data.status === "error") {
+        setError(data.error || "Scalable OAuth-Login fehlgeschlagen.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Fehler beim Starten des Scalable OAuth-Logins.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSessionFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -311,22 +367,62 @@ export default function ScalableImportModal({
           </div>
         ) : (
           <div className="mt-4 space-y-3">
+            <div className="rounded-2xl border border-[#0071e3]/20 bg-[#0071e3]/6 p-4 dark:border-[#0071e3]/30 dark:bg-[#0071e3]/10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#0071e3] dark:text-[#66b0ff]">
+                    Direkt auf dem Server verbinden (OAuth Device-Code)
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
+                    Startet <code>sc login --local-read-only</code> auf Railway. Du bestätigst nur kurz im Browser mit 2FA.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleStartOAuthLogin}
+                  disabled={loading || oauthState.status === "pending"}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#0071e3] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white shadow-xs transition-colors hover:bg-[#0077ed] disabled:opacity-50"
+                >
+                  <RefreshCw size={13} className={oauthState.status === "pending" ? "animate-spin" : ""} />
+                  {oauthState.status === "pending" ? "Warte auf 2FA …" : "OAuth-Login starten"}
+                </button>
+              </div>
+              {oauthState.status === "pending" && (
+                <div className="mt-3 space-y-2 rounded-xl border border-black/8 bg-white/80 p-3 text-xs dark:border-white/10 dark:bg-[#1c1c1e]/80">
+                  {oauthState.verification_url ? (
+                    <a
+                      href={oauthState.verification_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 font-bold text-[#0071e3] underline break-all"
+                    >
+                      <ExternalLink size={13} />
+                      {oauthState.verification_url}
+                    </a>
+                  ) : (
+                    <div className="text-slate-500 dark:text-slate-400">Generiere Scalable-Anmeldelink …</div>
+                  )}
+                  {oauthState.user_code && (
+                    <div className="font-mono text-sm font-extrabold tracking-widest text-slate-900 dark:text-white">
+                      Code: {oauthState.user_code}
+                    </div>
+                  )}
+                  {!oauthState.verification_url && oauthState.output && (
+                    <pre className="max-h-24 overflow-auto whitespace-pre-wrap text-[11px] text-slate-500 dark:text-slate-400">
+                      {oauthState.output}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="rounded-2xl border border-black/8 bg-black/[0.02] p-3.5 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
               <div className="font-bold text-slate-900 dark:text-white">
-                Scalable-CLI-Session lokal erzeugen &amp; hochladen (7 Tage gültig)
+                Alternative: Lokale session.json hochladen
               </div>
-              <ol className="mt-1.5 list-decimal space-y-1 pl-4">
-                <li>
-                  In deiner lokalen <code>scalable-cli/config.toml</code> setzen:{" "}
-                  <code>[auth] session_backend = "file"</code> und <code>signing_key_backend = "file"</code>
-                </li>
-                <li>
-                  Lokal ausführen: <code>sc login --local-read-only</code> (2FA bestätigen)
-                </li>
-                <li>
-                  Erzeugte <code>session.json</code> (und ggf. Key-Datei) hier auswählen oder JSON einfügen:
-                </li>
-              </ol>
+              <p className="mt-1">
+                Falls du dich auf macOS/Linux mit <code>sc login --local-read-only</code> (<code>session_backend = "file"</code>) angemeldet hast, kannst du hier die <code>session.json</code> hochladen:
+              </p>
             </div>
             <label className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-black/10 dark:border-white/15 p-4 text-center cursor-pointer hover:border-[var(--accent)] transition-colors">
               <KeyRound size={24} className="text-slate-400 mb-1.5" />
@@ -347,7 +443,7 @@ export default function ScalableImportModal({
               value={sessionJsonText}
               onChange={(e) => setSessionJsonText(e.target.value)}
               placeholder='Optional: Inhalt der session.json direkt hier einfügen ({"access_token": ...})'
-              rows={3}
+              rows={2}
               className="w-full rounded-2xl border border-black/8 bg-white dark:border-white/10 dark:bg-[#2c2c2e] p-3 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
           </div>

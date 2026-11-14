@@ -4202,6 +4202,29 @@ async def upload_scalable_cli_session(req: ScalableSessionUploadRequest):
         )
 
 
+@app.post("/api/integrations/scalable/login/start")
+async def start_scalable_device_login():
+    """Start `sc login --local-read-only` OAuth device-code flow on the server."""
+    service = get_scalable_integration_service()
+    try:
+        result = await asyncio.to_thread(service.start_device_login)
+        if result.get("status") == "connected":
+            asyncio.create_task(_refresh_scalable_readonly_context())
+        return result
+    except ScalableIntegrationError as exc:
+        status_code = 503 if exc.code in {"integration_disabled", "cli_not_installed", "cli_unavailable"} else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.public_message, "details": exc.details},
+        )
+
+
+@app.get("/api/integrations/scalable/login/status")
+async def get_scalable_device_login_status():
+    """Poll server-side Scalable OAuth device-code login status."""
+    return await asyncio.to_thread(get_scalable_integration_service().get_device_login_status)
+
+
 @app.post("/api/integrations/scalable/load-sample")
 async def load_sample_scalable_portfolio():
     """Load a realistic sample Scalable Capital portfolio for instant exploration."""

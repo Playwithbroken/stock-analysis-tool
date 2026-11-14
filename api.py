@@ -1696,7 +1696,7 @@ async def _build_scalable_decision_report() -> Dict[str, Any]:
     """Build a fresh, evidence-gated read-only report after a reconciled sync."""
     timeout_seconds = _safe_int_env("SCALABLE_DECISION_TIMEOUT_SECONDS", 120, minimum=30)
     analysis = await asyncio.wait_for(
-        asyncio.to_thread(get_scalable_integration_service().portfolio_analysis),
+        asyncio.to_thread(get_scalable_integration_service().portfolio_analysis, enrich_market_data=True),
         timeout=timeout_seconds,
     )
     items = await asyncio.to_thread(get_portfolio_manager().get_signal_watch_items)
@@ -6071,7 +6071,7 @@ async def analyze_portfolio(request: PortfolioRequest) -> Dict[str, Any]:
         if get_scalable_integration_service().is_managed_portfolio(request.portfolio_id or ""):
             try:
                 return convert_numpy_types(
-                    await asyncio.to_thread(get_scalable_integration_service().portfolio_analysis)
+                    await asyncio.to_thread(get_scalable_integration_service().portfolio_analysis, enrich_market_data=True)
                 )
             except Exception as exc:
                 print(f"Scalable portfolio analysis fallback: {exc}")

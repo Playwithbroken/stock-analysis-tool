@@ -938,10 +938,21 @@ class ScalableIntegrationService:
         conn.commit()
         conn.close()
 
-    def portfolio_analysis(self, *, enrich_market_data: bool = True) -> Dict[str, Any]:
+    def portfolio_analysis(self, *, enrich_market_data: Optional[bool] = None) -> Dict[str, Any]:
         """Build current-value metrics from the reconciled or imported broker snapshot."""
+        from concurrent.futures import ThreadPoolExecutor
+
         snapshot = self.snapshot()
         positions = snapshot.get("positions") or []
+        status_info = snapshot.get("status") or {}
+        if enrich_market_data is None:
+            is_stale = bool(status_info.get("snapshot_stale")) or status_info.get("status") != "ok"
+            has_manual = any(
+                str(r.get("resolution_method") or "") in {"manual_import", "sample_scalable_depot", "live_market_quotes"}
+                for r in positions
+            )
+            enrich_market_data = is_stale or has_manual
+
         if not positions:
             return {
                 "configured": True,
@@ -958,19 +969,13 @@ class ScalableIntegrationService:
                     "avg_score": 0.0,
                     "sector_allocation": {},
                     "cost_basis_complete": True,
-                    "source": snapshot.get("status", {}).get("source") or "scalable_empty",
-                    "as_of": snapshot.get("status", {}).get("valuation_timestamp_utc") or _utc_now(),
-                    "currency": snapshot.get("status", {}).get("currency") or "EUR",
+                    "source": status_info.get("source") or "scalable_empty",
+                    "as_of": status_info.get("valuation_timestamp_utc") or _utc_now(),
+                    "currency": status_info.get("currency") or "EUR",
                 },
             }
-        holdings: List[Dict[str, Any]] = []
-        total_value = Decimal("0")
-        total_cost = Decimal("0")
-        cost_basis_complete = True
-        scores: List[float] = []
-        sector_weights: Dict[str, float] = {}
 
-        for row in positions:
+        def _enrich_single(row: Dict[str, Any]) -> Dict[str, Any]:
             quantity = _decimal(row.get("quantity"), "quantity") or Decimal("0")
             valuation = _decimal(row.get("valuation"), "valuation") or Decimal("0")
             fifo_price = _decimal(row.get("fifo_price"), "fifo_price", optional=True)
@@ -984,11 +989,13 @@ class ScalableIntegrationService:
             recommendation = "HOLD"
             sector = "Broker-Snapshot"
             change_1d = None
+            quote_refreshed = False
 
             if enrich_market_data and ticker:
                 try:
                     from src.data_fetcher import DataFetcher
                     from src.analyzer import StockAnalyzer
+
                     fetcher = DataFetcher(ticker)
                     pdata = fetcher.get_price_data()
                     live_p = pdata.get("current_price") if isinstance(pdata, dict) else None
@@ -996,13 +1003,64 @@ class ScalableIntegrationService:
                         current_price = Decimal(str(round(float(live_p), 4)))
                         valuation = current_price * quantity
                         change_1d = float(pdata.get("change_percent") or 0.0)
-                    analyzer = StockAnalyzer(fetcher)
-                    analysis = analyzer.analyze()
-                    score = int(analysis.get("score") or 0)
-                    recommendation = str(analysis.get("recommendation") or "HOLD")
-                    sector = str(analysis.get("sector") or "Broker-Snapshot")
+                        quote_refreshed = True
+                    info = fetcher.info or {}
+                    if isinstance(info, dict) and info.get("sector"):
+                        sector = str(info.get("sector"))
+                    all_data = fetcher.get_all_data()
+                    analyzer = StockAnalyzer(all_data)
+                    rec = analyzer.generate_recommendation()
+                    score = int(rec.get("total_score") or 0)
+                    rec_obj = rec.get("recommendation")
+                    if isinstance(rec_obj, dict):
+                        recommendation = str(rec_obj.get("action") or "HOLD")
+                    elif rec_obj:
+                        recommendation = str(rec_obj)
                 except Exception:
                     pass
+
+            return {
+                "row": row,
+                "ticker": ticker,
+                "quantity": quantity,
+                "valuation": valuation,
+                "fifo_price": fifo_price,
+                "current_price": current_price,
+                "score": score,
+                "recommendation": recommendation,
+                "sector": sector,
+                "change_1d": change_1d,
+                "quote_refreshed": quote_refreshed,
+            }
+
+        if enrich_market_data and len(positions) > 1:
+            with ThreadPoolExecutor(max_workers=min(6, len(positions))) as pool:
+                enriched_rows = list(pool.map(_enrich_single, positions))
+        else:
+            enriched_rows = [_enrich_single(r) for r in positions]
+
+        holdings: List[Dict[str, Any]] = []
+        total_value = Decimal("0")
+        total_cost = Decimal("0")
+        cost_basis_complete = True
+        scores: List[float] = []
+        sector_weights: Dict[str, float] = {}
+        now_iso = _utc_now()
+        any_quote_refreshed = False
+
+        for item in enriched_rows:
+            row = item["row"]
+            ticker = item["ticker"]
+            quantity = item["quantity"]
+            valuation = item["valuation"]
+            fifo_price = item["fifo_price"]
+            current_price = item["current_price"]
+            score = item["score"]
+            recommendation = item["recommendation"]
+            sector = item["sector"]
+            change_1d = item["change_1d"]
+            if item["quote_refreshed"]:
+                any_quote_refreshed = True
 
             if fifo_price is None:
                 cost_basis_complete = False
@@ -1014,8 +1072,7 @@ class ScalableIntegrationService:
             gain_loss_pct = (valuation / cost_basis - Decimal("1")) * Decimal("100") if cost_basis > 0 else Decimal("0")
             total_value += valuation
             total_cost += cost_basis
-            if score > 0:
-                scores.append(float(score))
+            scores.append(float(score))
             pos_val = float(valuation)
             sector_weights[sector] = sector_weights.get(sector, 0.0) + pos_val
 
@@ -1042,10 +1099,53 @@ class ScalableIntegrationService:
                     "recommendation": recommendation,
                     "valuation": "BROKER_SNAPSHOT",
                     "broker_currency": row["valuation_currency"],
-                    "quote_timestamp_utc": row["quote_timestamp_utc"],
-                    "quote_is_outdated": bool(row["quote_is_outdated"]) if row["quote_is_outdated"] is not None else None,
+                    "quote_timestamp_utc": now_iso if item["quote_refreshed"] else row["quote_timestamp_utc"],
+                    "quote_is_outdated": False if item["quote_refreshed"] else (bool(row["quote_is_outdated"]) if row["quote_is_outdated"] is not None else None),
                 }
             )
+
+        # If the snapshot was stale or in error state and we refreshed live quotes, persist the updated valuations & timestamp
+        if enrich_market_data and any_quote_refreshed and (status_info.get("snapshot_stale") or status_info.get("status") != "ok"):
+            try:
+                conn = self._connect()
+                try:
+                    for item in enriched_rows:
+                        if item["quote_refreshed"]:
+                            conn.execute(
+                                """UPDATE scalable_positions
+                                   SET valuation = ?, quote_mid_price = ?, quote_timestamp_utc = ?,
+                                       quote_is_outdated = 0, synced_at = ?
+                                   WHERE isin = ?""",
+                                (
+                                    str(round(item["valuation"], 2)),
+                                    str(round(item["current_price"], 4)),
+                                    now_iso,
+                                    now_iso,
+                                    item["row"]["isin"],
+                                ),
+                            )
+                    details = dict(status_info.get("details") or {})
+                    details["sync_mode"] = "live_market_quotes"
+                    details["last_live_quote_sync_at"] = now_iso
+                    conn.execute(
+                        """UPDATE scalable_sync_state
+                           SET status = 'ok', last_attempt_at = ?, last_success_at = ?,
+                               error_code = NULL, error_message = NULL,
+                               total_value = ?, valuation_timestamp_utc = ?, details_json = ?
+                           WHERE singleton_id = 1""",
+                        (
+                            now_iso,
+                            now_iso,
+                            str(round(total_value, 2)),
+                            now_iso,
+                            json.dumps(details, ensure_ascii=True, separators=(",", ":")),
+                        ),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            except Exception:
+                pass
 
         gain = total_value - total_cost
         gain_pct = (total_value / total_cost - Decimal("1")) * Decimal("100") if total_cost > 0 else Decimal("0")
@@ -1071,9 +1171,9 @@ class ScalableIntegrationService:
                 "avg_holding_days": None,
                 "sector_allocation": sector_allocation,
                 "cost_basis_complete": cost_basis_complete,
-                "source": snapshot["status"].get("source") or "scalable_reconciled",
-                "as_of": snapshot["status"].get("valuation_timestamp_utc"),
-                "currency": snapshot["status"].get("currency") or "EUR",
+                "source": status_info.get("source") or "scalable_cli_reconciled",
+                "as_of": now_iso if any_quote_refreshed else status_info.get("valuation_timestamp_utc"),
+                "currency": status_info.get("currency") or "EUR",
             },
         }
 
@@ -1338,6 +1438,57 @@ class ScalableIntegrationService:
             "snapshot": snap,
         }
 
+    def refresh_positions_from_market_data(self, *, cli_error_code: Optional[str] = None) -> Dict[str, Any]:
+        """Refresh valuations and scores for stored Scalable holdings using live market quotes."""
+        now_iso = _utc_now()
+        conn = self._connect()
+        try:
+            # Mark stale temporarily so portfolio_analysis persists refreshed live quotes & timestamps
+            conn.execute(
+                """UPDATE scalable_sync_state
+                   SET valuation_timestamp_utc = NULL
+                   WHERE singleton_id = 1"""
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        self.portfolio_analysis(enrich_market_data=True)
+
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT details_json FROM scalable_sync_state WHERE singleton_id = 1"
+            ).fetchone()
+            details: Dict[str, Any] = {}
+            if row and row["details_json"]:
+                try:
+                    details = json.loads(row["details_json"])
+                except Exception:
+                    details = {}
+            details["sync_mode"] = "live_market_quotes"
+            details["last_live_quote_sync_at"] = now_iso
+            if cli_error_code:
+                details["cli_session_status"] = cli_error_code
+            conn.execute(
+                """UPDATE scalable_sync_state
+                   SET status = 'ok', last_attempt_at = ?, last_success_at = ?,
+                       error_code = NULL, error_message = NULL,
+                       valuation_timestamp_utc = COALESCE(valuation_timestamp_utc, ?),
+                       details_json = ?
+                   WHERE singleton_id = 1""",
+                (
+                    now_iso,
+                    now_iso,
+                    now_iso,
+                    json.dumps(details, ensure_ascii=True, separators=(",", ":")),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.snapshot()
+
     def sync(self) -> Dict[str, Any]:
         if not self.enabled:
             raise ScalableIntegrationError(
@@ -1361,6 +1512,16 @@ class ScalableIntegrationService:
             self._commit_snapshot(positions, overview, attempted_at, payload_hash)
             return self.snapshot()
         except ScalableIntegrationError as exc:
+            if exc.code in {
+                "no_session",
+                "refresh_relogin_required",
+                "cli_not_installed",
+                "cli_unavailable",
+                "cli_timeout",
+            }:
+                existing = self.snapshot()
+                if existing.get("positions"):
+                    return self.refresh_positions_from_market_data(cli_error_code=exc.code)
             self._record_failure(attempted_at, exc)
             raise
         finally:

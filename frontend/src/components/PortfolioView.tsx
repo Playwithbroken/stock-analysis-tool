@@ -113,6 +113,12 @@ interface ScalableIntegrationStatus {
   auto_sync_interval_minutes?: number;
   next_sync_due_at?: string | null;
   snapshot_stale?: boolean;
+  details?: {
+    sync_mode?: string;
+    cli_session_status?: string;
+    last_live_quote_sync_at?: string;
+    [key: string]: unknown;
+  } | null;
 }
 
 interface AdvisoryProfile {
@@ -353,7 +359,7 @@ export default function PortfolioView({
       setAnalysis(null);
       setPortfolioVerdict(null);
     }
-  }, [selectedPortfolio, portfolios, scalableStatus]);
+  }, [selectedPortfolio, portfolios, scalableStatus?.managed_portfolio_id]);
 
   const fetchScalableStatus = async () => {
     try {
@@ -655,6 +661,9 @@ export default function PortfolioView({
             purchaseDate: h.purchase_date,
           }));
         }
+        if (isScalable) {
+          void fetchScalableStatus();
+        }
       }
     } catch {
       setAnalysis(null);
@@ -948,6 +957,10 @@ export default function PortfolioView({
               <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
                 {scalableStatus.last_success_at
                   ? `Letzter gültiger Stand: ${new Date(scalableStatus.last_success_at).toLocaleString()}${
+                      scalableStatus.details?.sync_mode === "live_market_quotes"
+                        ? " · Live-Kurse & Scores aktiv (für neue Käufe/Verkäufe CSV oder CLI 2FA nutzen)"
+                        : ""
+                    }${
                       scalableStatus.auto_sync_enabled
                         ? ` · automatisch alle ${scalableStatus.auto_sync_interval_minutes || 15} Minuten`
                         : ""
@@ -974,17 +987,15 @@ export default function PortfolioView({
                 <Sparkles className="h-4 w-4" />
                 Musterdepot laden
               </button>
-              {scalableStatus.cli_installed && (
-                <button
-                  type="button"
-                  onClick={syncScalablePortfolio}
-                  disabled={!scalableStatus.enabled || scalableSyncing}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-black/10 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c] disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
-                  {scalableSyncing ? "Prüfe …" : "CLI Sync"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={syncScalablePortfolio}
+                disabled={!scalableStatus.enabled || scalableSyncing}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-black/10 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <RefreshCw className={`h-4 w-4 ${scalableSyncing ? "animate-spin" : ""}`} />
+                {scalableSyncing ? "Synchronisiere …" : "Live-Sync"}
+              </button>
             </div>
           </div>
         )}

@@ -1603,9 +1603,9 @@ function AppContent() {
   return (
     <div className="min-h-screen pb-20 text-[var(--text-primary)] md:pb-8">
       <a href="#main-content" className="skip-link">Zum Hauptinhalt springen</a>
-      <header className="sticky top-0 z-50 header-gradient backdrop-blur-xl">
+      <header className="sticky top-0 z-50 pointer-events-none bg-transparent">
         <div className="mobile-topbar-shell px-3 pb-2 pt-[calc(0.55rem+env(safe-area-inset-top))] lg:hidden">
-          <div className="mobile-topbar flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
+          <div className="mobile-topbar pointer-events-auto flex h-[54px] items-center justify-between gap-2 rounded-[1.15rem] px-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#101114] text-white">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1676,7 +1676,7 @@ function AppContent() {
         </div>
 
         <div className="layout-shell hidden px-3 pb-2 pt-2 lg:block sm:px-6 xl:px-8 2xl:px-10">
-          <div className="app-shell app-shell-header app-shell-header-compact rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
+          <div className="app-shell app-shell-header app-shell-header-compact pointer-events-auto rounded-[1.4rem] px-3 py-2.5 sm:rounded-[1.7rem] sm:px-4">
             <div className="grid items-center gap-3 lg:grid-cols-[minmax(12rem,1fr)_auto_max-content]">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-[0.9rem] bg-[#101114] text-white">

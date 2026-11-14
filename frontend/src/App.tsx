@@ -19,7 +19,7 @@ import {
   normalizeGermanDisplayText,
 } from "./lib/displayText";
 import { getBriefLoadState, guardBriefForDecisions, isBriefDecisionCurrent } from "./lib/briefSafety";
-import { Activity, ArrowDownRight, ArrowUpRight, Bot, Download, LockKeyhole, Moon, Smartphone, Sun } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowUpRight, Bell, Bot, Download, LockKeyhole, Moon, Smartphone, Sun, X, Zap } from "lucide-react";
 import useInstallPrompt from "./hooks/useInstallPrompt";
 import useAccessibleDialog from "./hooks/useAccessibleDialog";
 
@@ -1694,16 +1694,16 @@ function AppContent() {
                 </div>
               </div>
 
-              <div className="hidden justify-self-center items-center gap-1.5 rounded-[1rem] bg-[var(--bg-elevated)] p-1 ring-1 ring-[var(--line-subtle)] lg:flex">
+              <div className="hidden justify-self-center items-center gap-1 rounded-full bg-[#f5f5f7] p-1 ring-1 ring-black/6 dark:bg-white/10 dark:ring-white/10 lg:flex">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => selectTab(item.id)}
                     aria-current={activeTab === item.id ? "page" : undefined}
-                    className={`rounded-[0.85rem] px-3 py-2 text-xs font-bold transition-all ${
+                    className={`rounded-full px-3.5 py-1.5 text-xs font-medium tracking-tight transition-all ${
                       activeTab === item.id
-                        ? "bg-[#101114] text-white shadow-[0_10px_30px_rgba(17,24,39,0.18)] dark:bg-white dark:text-black dark:shadow-[0_10px_30px_rgba(255,255,255,0.12)]"
-                        : "text-slate-600 hover:bg-black/[0.04] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                        ? "bg-[#1d1d1f] text-white font-semibold shadow-2xs dark:bg-white dark:text-[#1d1d1f]"
+                        : "text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400 dark:hover:text-white"
                     }`}
                   >
                     {item.label}
@@ -1844,33 +1844,34 @@ function AppContent() {
             <div className="mb-4 space-y-2">
               {topAlert ? (
                 <div
-                  className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-sm ${
+                  className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-xs ${
                     isShort
-                      ? "border-rose-500/40 bg-rose-500/[0.08] text-slate-900 dark:border-rose-500/35 dark:bg-rose-950/30 dark:text-white"
+                      ? "border-rose-500/25 bg-white text-[#1d1d1f] dark:border-rose-500/35 dark:bg-rose-950/25 dark:text-white"
                       : isLong
-                        ? "border-emerald-500/40 bg-emerald-500/[0.08] text-slate-900 dark:border-emerald-500/35 dark:bg-emerald-950/30 dark:text-white"
-                        : "border-indigo-500/30 bg-indigo-500/[0.06] text-slate-900 dark:border-indigo-500/30 dark:bg-indigo-950/25 dark:text-white"
+                        ? "border-emerald-500/25 bg-white text-[#1d1d1f] dark:border-emerald-500/35 dark:bg-emerald-950/25 dark:text-white"
+                        : "border-black/8 bg-white text-[#1d1d1f] dark:border-white/12 dark:bg-white/5 dark:text-white"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white ${
-                          isShort ? "bg-rose-600" : isLong ? "bg-emerald-600" : "bg-indigo-600"
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ${
+                          isShort ? "bg-rose-600" : isLong ? "bg-emerald-600" : "bg-[#0071e3]"
                         }`}
                       >
-                        {isShort ? "🔴 LIVE SHORT-SIGNAL" : isLong ? "🟢 LIVE LONG-SIGNAL" : "⚡ LIVE PUSH-SIGNAL"}
+                        {isShort ? <ArrowDownRight size={11} strokeWidth={2.2} /> : isLong ? <ArrowUpRight size={11} strokeWidth={2.2} /> : <Zap size={11} strokeWidth={2.2} />}
+                        {isShort ? "LIVE SHORT-SIGNAL" : isLong ? "LIVE LONG-SIGNAL" : "LIVE PUSH-SIGNAL"}
                       </span>
-                      <span className="text-xs font-extrabold">{topAlert.title}</span>
+                      <span className="text-xs font-semibold">{topAlert.title}</span>
                       {typeof topAlert.reaction_pct === "number" && Math.abs(topAlert.reaction_pct) >= 0.2 ? (
-                        <span className={`text-xs font-black ${topAlert.reaction_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                        <span className={`text-xs font-semibold ${topAlert.reaction_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                           ({topAlert.reaction_pct >= 0 ? "+" : ""}{topAlert.reaction_pct.toFixed(2)}% Live)
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-700 dark:text-slate-200">{topAlert.message}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-[#6e6e73] dark:text-slate-300">{topAlert.message}</p>
                     {topAlert.entry_trigger ? (
-                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-bold">
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-medium text-[#1d1d1f] dark:text-slate-200">
                         <span>Trigger: {topAlert.entry_trigger}</span>
                         {typeof topAlert.stop_loss === "number" ? <span>Stop: ${topAlert.stop_loss.toFixed(2)}</span> : null}
                         {typeof topAlert.target_1 === "number" ? <span>Ziel 1: ${topAlert.target_1.toFixed(2)}</span> : null}
@@ -1882,9 +1883,9 @@ function AppContent() {
                       <button
                         type="button"
                         onClick={requestBrowserPushPermission}
-                        className="rounded-xl border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-extrabold text-slate-800 hover:bg-white dark:border-white/15 dark:bg-white/10 dark:text-white"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-[#f5f5f7] px-3 py-1.5 text-[11px] font-medium text-[#1d1d1f] transition hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-white/10 dark:text-white"
                       >
-                        🔔 Browser-Push aktivieren
+                        <Bell size={12} strokeWidth={1.9} className="text-[#0071e3]" /> Browser-Push aktivieren
                       </button>
                     ) : null}
                     {topAlert.ticker ? (
@@ -1894,32 +1895,35 @@ function AppContent() {
                           setActiveTab("analyze");
                           handleSearch(String(topAlert.ticker));
                         }}
-                        className="rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-black dark:bg-white dark:text-slate-950"
+                        className="rounded-full bg-[#0071e3] px-3.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#0077ed]"
                       >
-                        {topAlert.ticker} handeln / Chart
+                        {topAlert.ticker} öffnen
                       </button>
                     ) : null}
                     <button
                       type="button"
                       onClick={() => setDismissedAlertIds((prev) => [...prev, String(topAlert.id)])}
-                      className="rounded-lg px-2 py-1 text-xs font-bold opacity-60 hover:opacity-100"
+                      className="rounded-full p-1.5 text-[#86868b] transition hover:bg-black/5 hover:text-[#1d1d1f] dark:hover:bg-white/10 dark:hover:text-white"
                       title="Ausblenden"
                     >
-                      ✕
+                      <X size={14} strokeWidth={1.9} />
                     </button>
                   </div>
                 </div>
               ) : browserPushPermission === "default" ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-500/25 bg-indigo-500/[0.05] px-4 py-2.5 text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">
-                    ⚡ Echtzeit-Alerts laufen über <strong>Telegram</strong> + <strong>Live Website-Push</strong> (E-Mail deaktiviert). Aktiviere Browser-Push für sofortige Popups bei offenen Tabs:
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/8 bg-white px-4 py-2.5 text-xs shadow-2xs dark:border-white/10 dark:bg-white/5">
+                  <span className="inline-flex items-center gap-2 font-normal text-[#6e6e73] dark:text-slate-300">
+                    <Zap size={13.5} strokeWidth={1.9} className="shrink-0 text-[#0071e3]" />
+                    <span>
+                      Echtzeit-Alerts laufen über <strong className="font-semibold text-[#1d1d1f] dark:text-white">Telegram</strong> + <strong className="font-semibold text-[#1d1d1f] dark:text-white">Live Website-Push</strong>. Aktiviere Browser-Push für sofortige Popups bei offenen Tabs:
+                    </span>
                   </span>
                   <button
                     type="button"
                     onClick={requestBrowserPushPermission}
-                    className="rounded-xl bg-indigo-600 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-indigo-700"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#0071e3] px-3.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#0077ed]"
                   >
-                    🔔 Browser-Push jetzt erlauben
+                    <Bell size={12} strokeWidth={1.9} /> Browser-Push erlauben
                   </button>
                 </div>
               ) : null}

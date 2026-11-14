@@ -1,4 +1,38 @@
-import { Activity, AlertTriangle, ArrowRight, Ban, BarChart3, CheckCircle2, Eye, Globe2, Send, ShieldAlert, Smartphone, Target, TrendingUp, Zap } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Anchor,
+  ArrowRight,
+  Award,
+  Ban,
+  BarChart3,
+  Bell,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  Clock,
+  Compass,
+  Copy,
+  Crosshair,
+  Eye,
+  FileText,
+  Flame,
+  Globe2,
+  Layers,
+  Link2,
+  Send,
+  Share2,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+  Smartphone,
+  Sparkles,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Portfolio } from "../hooks/usePortfolios";
 import { localizeLearningMessage, localizeMarketRegime, normalizeGermanDisplayText } from "../lib/displayText";
@@ -838,10 +872,10 @@ export default function EdgeDashboardPanel({
   return (
     <section className="surface-panel rounded-[2rem] p-5 sm:p-7">
       {isGuestMode ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-500/25 bg-sky-50/90 px-4 py-2.5 text-xs font-medium text-sky-950 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-200">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/8 bg-[#f5f5f7] px-4 py-2.5 text-xs font-medium text-[#1d1d1f] dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-              👀 Gast-Ansicht (Read-Only)
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#0071e3] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+              <Eye size={11} strokeWidth={2} /> Gast-Ansicht (Read-Only)
             </span>
             <span>
               Du siehst das Live-Analyse-Cockpit im schreibgeschützten Gast-Modus. Alle Signale, Charts &amp; der Risiko-Rechner sind frei nutzbar.
@@ -850,7 +884,7 @@ export default function EdgeDashboardPanel({
           <button
             type="button"
             onClick={() => setIsGuestMode(false)}
-            className="rounded-lg border border-sky-500/30 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-sky-900 hover:bg-white dark:bg-white/10 dark:text-sky-200"
+            className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-semibold text-[#1d1d1f] transition hover:bg-black/5 dark:border-white/15 dark:bg-white/10 dark:text-white"
           >
             Admin-Ansicht
           </button>
@@ -859,143 +893,157 @@ export default function EdgeDashboardPanel({
 
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-slate-400">
               Edge Dashboard
             </span>
-            <div className="inline-flex items-center rounded-full border border-black/10 bg-slate-100/90 p-0.5 text-[11px] font-semibold dark:border-white/15 dark:bg-white/10">
+            <div className="inline-flex items-center rounded-full border border-black/8 bg-[#f5f5f7] p-0.5 text-[11px] font-medium dark:border-white/12 dark:bg-white/10">
               <button
                 type="button"
                 onClick={() => toggleExperienceMode("beginner")}
-                className={`rounded-full px-2.5 py-0.5 transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition ${
                   experienceMode === "beginner"
-                    ? "bg-emerald-600 text-white shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
+                    ? "bg-white text-[#1d1d1f] font-semibold shadow-2xs dark:bg-[#2c2c2e] dark:text-white"
+                    : "text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400"
                 }`}
                 title="Klartext-Ampel ohne Fachchinesisch – perfekt für Einsteiger & schnelle Entscheidungen"
               >
-                🟢 Einsteiger-Modus
+                <ShieldCheck size={12} strokeWidth={2} className={experienceMode === "beginner" ? "text-[#0071e3]" : ""} />
+                Einsteiger
               </button>
               <button
                 type="button"
                 onClick={() => toggleExperienceMode("pro")}
-                className={`rounded-full px-2.5 py-0.5 transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition ${
                   experienceMode === "pro"
-                    ? "bg-[#1d1d1f] text-white shadow-2xs dark:bg-white dark:text-slate-950"
-                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
+                    ? "bg-[#1d1d1f] text-white font-semibold shadow-2xs dark:bg-white dark:text-[#1d1d1f]"
+                    : "text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400"
                 }`}
                 title="Alle institutionellen Metriken (GEX, Volume Profile, AVWAP, Whale Flow)"
               >
-                ⚡ Pro-Modus
+                <Zap size={12} strokeWidth={2} />
+                Pro
               </button>
             </div>
           </div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+          <h2 className="mt-2.5 text-2xl font-semibold tracking-tight text-[#1d1d1f] dark:text-white sm:text-3xl">
             Was jetzt handeln, beobachten oder meiden?
           </h2>
-          <p className="mt-2 text-sm font-normal leading-6 text-slate-600 dark:text-slate-300">
+          <p className="mt-2 text-sm font-normal leading-6 text-[#6e6e73] dark:text-slate-300">
             {experienceMode === "beginner"
               ? "Einsteiger-Ansicht aktiv: Klare Ampel-Signale mit exaktem Einstieg, unserem -0.25R Atmungs-Puffer (damit du vor dem großen Anstieg nicht unnötig ausgestoppt wirst) und festen Gewinnzielen."
               : "Scoreboard, Morning Brief, Portfolio, Lernkurve und Marktregime werden hier zu einer priorisierten Arbeitsliste verdichtet."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setShowStrategyBrainDrawer(!showStrategyBrainDrawer)}
-            className={`inline-flex items-center gap-1.5 rounded-[0.95rem] border px-3 py-2 text-xs font-semibold tracking-wide transition ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium tracking-tight transition ${
               showStrategyBrainDrawer
-                ? "border-indigo-600 bg-indigo-600 text-white"
-                : "border-indigo-500/25 bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-950/40 dark:text-indigo-300"
+                ? "border-[#0071e3] bg-[#0071e3] text-white shadow-2xs"
+                : "border-black/8 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
             }`}
             title="30-Sekunden Strategie-Guide & alle 8 selbstlernenden Profi-Strategien ansehen"
           >
-            🧠 8 Profi-Strategien &amp; 30s Guide
+            <BookOpen size={13.5} strokeWidth={1.8} />
+            8 Strategien &amp; Guide
           </button>
           <button
             type="button"
             onClick={handleCopyTrackRecord}
-            className="inline-flex items-center gap-1.5 rounded-[0.95rem] border border-amber-500/25 bg-amber-50/80 px-3 py-2 text-xs font-semibold tracking-wide text-amber-900 transition hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/8 bg-[#f5f5f7] px-3.5 py-2 text-xs font-medium tracking-tight text-[#1d1d1f] transition hover:bg-[#e8e8ed] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
             title="Datenschutzfreundliche Erfolgsbilanz (nur % & R) kopieren"
           >
-            🏆 Erfolgsbilanz teilen
+            <Award size={13.5} strokeWidth={1.8} className="text-[#0071e3]" />
+            Bilanz teilen
           </button>
           <button
             type="button"
             onClick={handleCopyGuestLink}
-            className="inline-flex items-center gap-1.5 rounded-[0.95rem] border border-emerald-500/25 bg-emerald-50/80 px-3 py-2 text-xs font-semibold tracking-wide text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/8 bg-[#f5f5f7] px-3.5 py-2 text-xs font-medium tracking-tight text-[#1d1d1f] transition hover:bg-[#e8e8ed] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
             title="Schreibgeschützten Link für Freunde kopieren"
           >
-            🔗 Gast-Link teilen
+            <Link2 size={13.5} strokeWidth={1.8} className="text-[#0071e3]" />
+            Gast-Link
           </button>
           <a
             href="#world-market-map"
-            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/8 bg-white/80 dark:bg-white/10 dark:border-white/10 px-3 py-2 text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/8 bg-white px-3.5 py-2 text-xs font-medium tracking-tight text-[#1d1d1f] transition hover:bg-[#f5f5f7] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
           >
-            <Globe2 size={14} /> Weltkarte
+            <Globe2 size={13.5} strokeWidth={1.8} /> Weltkarte
           </a>
           <button
             type="button"
             onClick={onOpenMarkets}
-            className="inline-flex items-center gap-2 rounded-[0.95rem] border border-black/8 bg-white/80 dark:bg-white/10 dark:border-white/10 px-3 py-2 text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/8 bg-white px-3.5 py-2 text-xs font-medium tracking-tight text-[#1d1d1f] transition hover:bg-[#f5f5f7] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
           >
-            <TrendingUp size={14} /> Märkte
+            <TrendingUp size={13.5} strokeWidth={1.8} /> Märkte
           </button>
           <button
             type="button"
             onClick={onOpenPortfolio}
-            className="inline-flex items-center gap-2 rounded-[0.95rem] bg-[#1d1d1f] px-3 py-2 text-xs font-semibold tracking-wide text-white dark:bg-white dark:text-slate-950"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#0071e3] px-4 py-2 text-xs font-medium tracking-tight text-white shadow-2xs transition hover:bg-[#0077ed]"
           >
-            <ShieldAlert size={14} /> Portfolio
+            <Shield size={13.5} strokeWidth={1.8} /> Portfolio
           </button>
         </div>
       </div>
 
       {/* 30-SECOND STRATEGY GUIDE & 8 PRO STRATEGIES SELF-LEARNING BRAIN DRAWER */}
       {showStrategyBrainDrawer ? (
-        <div className="mt-5 rounded-[1.35rem] border border-indigo-500/25 bg-indigo-50/50 p-5 shadow-xs dark:border-indigo-500/30 dark:bg-indigo-950/25">
+        <div className="mt-5 rounded-[1.5rem] border border-black/8 bg-[#f5f5f7] p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-700 dark:text-indigo-300">
-                🎓 30-Sekunden Strategie-Guide &amp; 🧠 Selbstlernendes Profi-Gedächtnis
+              <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0071e3]">
+                <Sparkles size={12} strokeWidth={2} /> 30-Sekunden Strategie-Guide &middot; Selbstlernendes System
               </div>
-              <div className="mt-0.5 text-base font-semibold text-slate-950 dark:text-white">
-                Wie unsere asymmetrische Strategie funktioniert – und wie der Trader aus jedem Trade lernt
+              <div className="mt-0.5 text-base font-semibold text-[#1d1d1f] dark:text-white">
+                Wie unsere asymmetrische Strategie funktioniert – und wie das System aus jedem Trade lernt
               </div>
             </div>
             <button
               type="button"
               onClick={() => setShowStrategyBrainDrawer(false)}
-              className="rounded-lg border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-white/15 dark:bg-white/10 dark:text-slate-200"
+              className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-medium text-[#1d1d1f] transition hover:bg-black/5 dark:border-white/15 dark:bg-white/10 dark:text-slate-200"
             >
               Schließen
             </button>
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            <div className="rounded-xl border border-black/6 bg-white/90 p-3.5 text-xs leading-5 dark:border-white/10 dark:bg-white/5">
-              <div className="font-bold text-slate-950 dark:text-white">1️⃣ Einstieg am Support (-1.0R Netz)</div>
-              <p className="mt-1 text-slate-600 dark:text-slate-300">
+            <div className="rounded-2xl border border-black/6 bg-white p-4 text-xs leading-5 dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-center gap-2 font-semibold text-[#1d1d1f] dark:text-white">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#f5f5f7] text-[10px] font-bold text-[#1d1d1f] dark:bg-white/10 dark:text-white">01</span>
+                Einstieg am Support (-1.0R Netz)
+              </div>
+              <p className="mt-1.5 text-[#6e6e73] dark:text-slate-300">
                 Wir kaufen nie blind ins Blaue, sondern an institutionellen Kaufzonen (Volume Profile POC/VAL, Anchored VWAP &amp; Put-Wall) immer per <strong>Limit-Order</strong>.
               </p>
             </div>
-            <div className="rounded-xl border border-amber-500/30 bg-amber-50/80 p-3.5 text-xs leading-5 dark:border-amber-500/30 dark:bg-amber-950/30">
-              <div className="font-bold text-amber-950 dark:text-amber-200">2️⃣ Der -0.25R Smart Atmungs-Puffer 🌬️</div>
-              <p className="mt-1 text-amber-900 dark:text-amber-200/90">
-                Bei <strong>+1.0R Gewinn</strong> ziehen wir den Stop auf <strong>-0.25R</strong> (75% Risiko weg!). Ein winziger Puffer verhindert, dass dich normale Rücksetzer kurz vor der Haupt-Rallye abschütteln!
+            <div className="rounded-2xl border border-black/6 bg-white p-4 text-xs leading-5 dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-center gap-2 font-semibold text-[#1d1d1f] dark:text-white">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0071e3]/10 text-[10px] font-bold text-[#0071e3]">02</span>
+                Der -0.25R Smart Atmungs-Puffer
+              </div>
+              <p className="mt-1.5 text-[#6e6e73] dark:text-slate-300">
+                Bei <strong>+1.0R Gewinn</strong> ziehen wir den Stop auf <strong>-0.25R</strong> (75% Risiko eliminiert). Ein definierter Puffer verhindert, dass normale Rücksetzer dich vor der Hauptbewegung ausstoppen.
               </p>
             </div>
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/80 p-3.5 text-xs leading-5 dark:border-emerald-500/30 dark:bg-emerald-950/30">
-              <div className="font-bold text-emerald-950 dark:text-emerald-200">3️⃣ Ernte bei +2.0R &amp; 48h Re-Entry 🚀</div>
-              <p className="mt-1 text-emerald-900 dark:text-emerald-200/90">
+            <div className="rounded-2xl border border-black/6 bg-white p-4 text-xs leading-5 dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-center gap-2 font-semibold text-[#1d1d1f] dark:text-white">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/12 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">03</span>
+                Ernte bei +2.0R &amp; 48h Re-Entry
+              </div>
+              <p className="mt-1.5 text-[#6e6e73] dark:text-slate-300">
                 Bei <strong>+2.0R</strong> werden 50% Gewinn gesichert und der Rest läuft risikofrei bis <strong>+3.5R+</strong>. Nach Stop-Hunts überwacht das <strong>48h Wyckoff Re-Entry Radar</strong> den Wiedereinstieg.
               </p>
             </div>
           </div>
 
-          <div className="mt-4 border-t border-indigo-500/15 pt-3.5">
-            <div className="text-xs font-bold text-slate-900 dark:text-white">
-              🏛️ Alle 8 verinnerlichten Profi-Strategien (Bayes-Lern-Gewichtung aktiv: -12 bis +12 Konfluenz-Punkte):
+          <div className="mt-4 border-t border-black/6 pt-4 dark:border-white/10">
+            <div className="text-xs font-semibold text-[#1d1d1f] dark:text-white">
+              Alle 8 verinnerlichten Profi-Strategien (Bayes-Lern-Gewichtung aktiv: -12 bis +12 Konfluenz-Punkte):
             </div>
             <div className="mt-2.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {[
@@ -1008,10 +1056,10 @@ export default function EdgeDashboardPanel({
                 { name: "7. Piotroski Quality Compounder Dip", origin: "Joseph Piotroski", edge: "+0.80R (66% WR)", desc: "F-Score ≥ 7 Cashflow-Leader am 21-EMA" },
                 { name: "8. Wyckoff Spring & 48h Re-Entry", origin: "Richard Wyckoff / PTJ", edge: "+1.15R (63% WR)", desc: "Shakeout-Reclaim nach Stop-Hunt" },
               ].map((st) => (
-                <div key={st.name} className="rounded-lg border border-black/6 bg-white/85 p-2.5 text-[11px] dark:border-white/10 dark:bg-white/5">
-                  <div className="font-bold text-slate-900 dark:text-white">{st.name}</div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400">{st.origin} &middot; <span className="font-semibold text-emerald-700 dark:text-emerald-400">{st.edge}</span></div>
-                  <div className="mt-1 text-[10px] text-slate-600 dark:text-slate-300">{st.desc}</div>
+                <div key={st.name} className="rounded-xl border border-black/6 bg-white p-3 text-[11px] dark:border-white/10 dark:bg-white/5">
+                  <div className="font-semibold text-[#1d1d1f] dark:text-white">{st.name}</div>
+                  <div className="text-[10px] text-[#6e6e73] dark:text-slate-400">{st.origin} &middot; <span className="font-semibold text-emerald-700 dark:text-emerald-400">{st.edge}</span></div>
+                  <div className="mt-1 text-[10px] text-[#6e6e73] dark:text-slate-300">{st.desc}</div>
                 </div>
               ))}
             </div>
@@ -1021,37 +1069,37 @@ export default function EdgeDashboardPanel({
 
       {/* GERMAN BROKER TAX COCKPIT (§ 20 EStG) & PROP-DESK TILT BREAKER BANNER */}
       {showNetAfterTax ? (
-        <div className="mt-4 rounded-[1.25rem] border border-emerald-500/30 bg-emerald-50/60 p-4 shadow-xs dark:border-emerald-500/30 dark:bg-emerald-950/25">
+        <div className="mt-4 rounded-[1.35rem] border border-black/8 bg-[#f5f5f7] p-4 shadow-xs dark:border-white/10 dark:bg-white/5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-800 dark:text-emerald-300">
-              🇩🇪 Deutsches Broker-Steuer-Cockpit (§ 20 EStG) &amp; 💱 Auto-FX Simulation aktiv
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1d1d1f] dark:text-white">
+              <ShieldCheck size={13.5} className="text-[#0071e3]" /> Deutsches Broker-Steuer-Cockpit (§ 20 EStG) &amp; Auto-FX Simulation
             </div>
-            <span className="rounded-md bg-emerald-600/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-200">
+            <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-[#6e6e73] border border-black/6 dark:bg-white/10 dark:text-slate-300">
               Telegram: /steuer &middot; /disziplin &middot; /netto
             </span>
           </div>
-          <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 text-[11px]">
-            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
-              <div className="font-bold text-slate-900 dark:text-white">1️⃣ Aktien-Verlusttopf</div>
-              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 text-[11px]">
+            <div className="rounded-xl border border-black/6 bg-white p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="font-semibold text-[#1d1d1f] dark:text-white">01 · Aktien-Verlusttopf</div>
+              <div className="mt-1 text-[#6e6e73] dark:text-slate-300">
                 Verluste (auch kleine <strong>-0,25R Puffer-Exits</strong>) wandern 1:1 in den Verlusttopf und machen den nächsten Gewinn steuerfrei.
               </div>
             </div>
-            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
-              <div className="font-bold text-slate-900 dark:text-white">2️⃣ 1.000 € Sparer-Pauschbetrag</div>
-              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+            <div className="rounded-xl border border-black/6 bg-white p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="font-semibold text-[#1d1d1f] dark:text-white">02 · 1.000 € Sparer-Pauschbetrag</div>
+              <div className="mt-1 text-[#6e6e73] dark:text-slate-300">
                 Dein jährlicher <strong>Freistellungsauftrag (1.000 €)</strong> wird im Paper-Depot vor der Abgeltungsteuer automatisch ausgeschöpft.
               </div>
             </div>
-            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
-              <div className="font-bold text-slate-900 dark:text-white">3️⃣ 26,375 % Steuer &amp; 0,15 % FX</div>
-              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
-                Erst danach greifen 25 % Abgeltungsteuer + 5,5 % Soli sowie 0,15 % Währungs-Spread bei US-Aktien ($ ➔ €).
+            <div className="rounded-xl border border-black/6 bg-white p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="font-semibold text-[#1d1d1f] dark:text-white">03 · 26,375 % Steuer &amp; 0,15 % FX</div>
+              <div className="mt-1 text-[#6e6e73] dark:text-slate-300">
+                Erst danach greifen 25 % Abgeltungsteuer + 5,5 % Soli sowie 0,15 % Währungs-Spread bei US-Aktien ($ &rarr; €).
               </div>
             </div>
-            <div className="rounded-lg border border-black/6 bg-white/85 p-2.5 dark:border-white/10 dark:bg-white/5">
-              <div className="font-bold text-slate-900 dark:text-white">🛡️ Rache-Trading Tilt-Schutz</div>
-              <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+            <div className="rounded-xl border border-black/6 bg-white p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="font-semibold text-[#1d1d1f] dark:text-white">04 · Rache-Trading Tilt-Schutz</div>
+              <div className="mt-1 text-[#6e6e73] dark:text-slate-300">
                 Prop-Desk Regel: Nach <strong>2 Tagesverlusten</strong> oder <strong>-2.0R</strong> warnt der Tilt-Breaker automatisch vor emotionalen Trades.
               </div>
             </div>
@@ -1206,38 +1254,42 @@ export default function EdgeDashboardPanel({
               <button
                 type="button"
                 onClick={() => setFilterNearBreakout((prev) => !prev)}
-                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition ${
                   filterNearBreakout
-                    ? "border-amber-500/40 bg-amber-500 text-slate-950 shadow-2xs"
-                    : "border-black/10 bg-white text-slate-700 hover:bg-amber-50 dark:border-white/15 dark:bg-white/10 dark:text-slate-300"
+                    ? "border-[#0071e3] bg-[#0071e3] text-white shadow-2xs"
+                    : "border-black/8 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
                 }`}
                 title="Zeigt bevorzugt Setups, deren Live-Kurs weniger als 1,8% vom Entry-Trigger entfernt ist"
               >
-                🔥 {filterNearBreakout ? "Kurz vor Ausbruch (<1,8% Aktiv)" : "Kurz vor Ausbruch filtern"}
+                <Flame size={12.5} strokeWidth={1.9} className={filterNearBreakout ? "text-white" : "text-[#0071e3]"} />
+                {filterNearBreakout ? "Nahe Ausbruch (<1,8% aktiv)" : "Nahe Ausbruch filtern"}
               </button>
-              <span>&middot;</span>
               <button
                 type="button"
                 onClick={() => setShowNetAfterTax(!showNetAfterTax)}
-                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition ${
                   showNetAfterTax
-                    ? "border-emerald-500/30 bg-emerald-600 text-white"
-                    : "border-black/10 bg-white text-slate-700 dark:border-white/15 dark:bg-white/10 dark:text-slate-300"
+                    ? "border-[#1d1d1f] bg-[#1d1d1f] text-white dark:border-white dark:bg-white dark:text-[#1d1d1f]"
+                    : "border-black/8 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/12 dark:bg-white/10 dark:text-slate-200"
                 }`}
                 title="Berechnet alle Gewinne & Verlusttopf-Effekte nach 26,375% deutscher Abgeltungsteuer + Soli & 2€ Ordergebühr"
               >
-                🇩🇪 {showNetAfterTax ? "Netto nach 26,38% Steuer (Aktiv)" : "Brutto-Ansicht"}
+                <ShieldCheck size={12.5} strokeWidth={1.9} />
+                {showNetAfterTax ? "Netto nach 26,38% Steuer" : "Brutto-Ansicht"}
               </button>
             </div>
           </div>
 
           {/* INTERACTIVE CAPITAL & RISK SLIDER (0 MB SERVER RAM, 100% CLIENT-SIDE) */}
-          <div className="mt-4 rounded-2xl border border-black/6 bg-slate-50/90 p-3.5 dark:border-white/10 dark:bg-white/5">
+          <div className="mt-4 rounded-2xl border border-black/6 bg-[#f5f5f7] p-3.5 dark:border-white/10 dark:bg-white/5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex-1">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  <span>🎛️ Dein Depot-Kapital für Stückzahl-Berechnung:</span>
-                  <span className="rounded-lg bg-white px-2.5 py-0.5 text-sm font-bold text-slate-950 shadow-2xs dark:bg-white/10 dark:text-white">
+                <div className="flex items-center justify-between text-xs font-medium text-[#1d1d1f] dark:text-slate-200">
+                  <span className="inline-flex items-center gap-1.5">
+                    <SlidersHorizontal size={13} strokeWidth={1.8} className="text-[#6e6e73]" />
+                    Depot-Kapital für Stückzahl-Berechnung:
+                  </span>
+                  <span className="rounded-lg border border-black/6 bg-white px-2.5 py-0.5 text-sm font-semibold text-[#1d1d1f] shadow-2xs dark:bg-white/10 dark:text-white">
                     {customCapital.toLocaleString("de-DE")} €
                   </span>
                 </div>
@@ -1248,9 +1300,9 @@ export default function EdgeDashboardPanel({
                   step={1000}
                   value={customCapital}
                   onChange={(e) => setCustomCapital(Number(e.target.value))}
-                  className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-300 accent-emerald-600 dark:bg-white/20"
+                  className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-black/12 accent-[#0071e3] dark:bg-white/20"
                 />
-                <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                <div className="mt-1 flex justify-between text-[10px] text-[#86868b]">
                   <span>1.000 €</span>
                   <span>25.000 €</span>
                   <span>50.000 €</span>
@@ -1373,72 +1425,73 @@ export default function EdgeDashboardPanel({
                       <button
                         type="button"
                         onClick={() => handleCopyWkn(setup.ticker, wknInfo.wkn, wknInfo.isin)}
-                        className="rounded-md border border-black/10 bg-slate-100/90 px-2 py-0.5 text-[10px] font-bold text-slate-700 transition hover:bg-slate-200 dark:border-white/15 dark:bg-white/10 dark:text-slate-200"
+                        className="inline-flex items-center gap-1 rounded-full border border-black/8 bg-[#f5f5f7] px-2.5 py-0.5 text-[10px] font-medium text-[#1d1d1f] transition hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-white/10 dark:text-slate-200"
                         title={`Klicken zum Kopieren für Trade Republic / Scalable (ISIN: ${wknInfo.isin})`}
                       >
-                        🇩🇪 WKN: {wknInfo.wkn} 📋
+                        WKN {wknInfo.wkn} <Copy size={10} strokeWidth={1.8} className="text-[#6e6e73]" />
                       </button>
                       {setup.grade_badge ? (
-                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium tracking-wide ${
-                          setup.grade === "A+" ? "border border-emerald-500/25 bg-emerald-50/80 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" :
-                          setup.grade === "A" ? "border border-sky-500/25 bg-sky-50/80 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" :
-                          "border border-slate-200 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-300"
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium tracking-wide ${
+                          setup.grade === "A+" ? "border border-emerald-500/20 bg-emerald-500/8 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" :
+                          setup.grade === "A" ? "border border-[#0071e3]/20 bg-[#0071e3]/8 text-[#0071e3] dark:text-[#2997ff]" :
+                          "border border-black/8 bg-[#f5f5f7] text-[#6e6e73] dark:border-white/10 dark:bg-white/10 dark:text-slate-300"
                         }`}>
                           {setup.grade_badge} ({setup.confluence_score}/100)
                         </span>
                       ) : null}
-                      <span className="rounded-full bg-slate-100 dark:bg-white/10 px-2.5 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                      <span className="rounded-full bg-[#f5f5f7] dark:bg-white/10 px-2.5 py-0.5 text-[10px] font-medium text-[#6e6e73] dark:text-slate-300">
                         {setup.setup_name}
                       </span>
                     </div>
                     <div className="text-right">
-                      <span className="rounded-md border border-black/6 bg-slate-50/80 dark:bg-white/10 dark:border-white/10 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      <span className="rounded-full border border-black/6 bg-[#f5f5f7] dark:bg-white/10 dark:border-white/10 px-2.5 py-0.5 text-xs font-semibold text-[#1d1d1f] dark:text-slate-200">
                         R:R {setup.risk_reward_ratio}:1
                       </span>
                     </div>
                   </div>
 
-                  <p className="mt-2 text-xs font-normal text-slate-600 dark:text-slate-300">
+                  <p className="mt-2 text-xs font-normal text-[#6e6e73] dark:text-slate-300">
                     {setup.catalyst_description}
                   </p>
 
                   {setup.entry_timing?.session_badge ? (
-                    <div className="mt-2 rounded-lg border border-black/6 bg-slate-50/90 px-2.5 py-1 text-[10px] font-medium text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
-                      ⏳ {setup.entry_timing.session_badge}
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-black/6 bg-[#f5f5f7] px-2.5 py-1 text-[10px] font-medium text-[#1d1d1f] dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                      <Clock size={11} strokeWidth={1.8} className="text-[#6e6e73]" />
+                      <span>{setup.entry_timing.session_badge}</span>
                     </div>
                   ) : null}
 
                   {experienceMode === "pro" && setup.confluence_factors?.length ? (
                     <div className="mt-2.5 flex flex-wrap gap-1">
                       {setup.confluence_factors.map((f: string, idx: number) => (
-                        <span key={idx} className="rounded-sm bg-slate-100/80 px-1.5 py-0.5 text-[9px] font-medium text-slate-700 dark:bg-white/10 dark:text-slate-300">
-                          ✓ {f}
+                        <span key={idx} className="inline-flex items-center gap-1 rounded-md bg-[#f5f5f7] px-1.5 py-0.5 text-[9px] font-medium text-[#6e6e73] dark:bg-white/10 dark:text-slate-300">
+                          <Check size={9} strokeWidth={2.2} className="text-[#0071e3]" /> {f}
                         </span>
                       ))}
                     </div>
                   ) : null}
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/80 p-2.5 text-[11px] font-medium text-slate-700 dark:bg-white/5 dark:text-slate-300 border border-black/4 dark:border-white/5">
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-[#f5f5f7] p-3 text-[11px] font-medium text-[#6e6e73] dark:bg-white/5 dark:text-slate-300 border border-black/5 dark:border-white/5">
                     <div>
-                      <span className="text-slate-400">🟢 Einstieg:</span>{" "}
-                      <span className="font-semibold text-slate-900 dark:text-white">${setup.entry_price}</span>
+                      <span className="text-[#86868b]">Einstieg:</span>{" "}
+                      <span className="font-semibold text-[#1d1d1f] dark:text-white">${setup.entry_price}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400" title="Anti-Shakeout Stop ab +1R Gewinn (75% Risiko eliminiert, aber Luft zum Atmen)">
-                        🌬️ Puffer (-0.25R):
+                      <span className="text-[#86868b]" title="Anti-Shakeout Stop ab +1R Gewinn (75% Risiko eliminiert, aber Luft zum Atmen)">
+                        Puffer (-0.25R):
                       </span>{" "}
                       <span className="font-semibold text-amber-600 dark:text-amber-400">
                         ${cushionStop} (-{displayCushionLossEur}€ {showNetAfterTax ? "Netto" : ""})
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400">🛑 Hard Stop (-1R):</span>{" "}
+                      <span className="text-[#86868b]">Hard Stop (-1R):</span>{" "}
                       <span className="font-semibold text-rose-600 dark:text-rose-400">
                         ${setup.invalidation_price} (-{displayMaxLossEur}€ {showNetAfterTax ? "n. Topf" : ""})
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400">🚀 Ziel 1 (2R):</span>{" "}
+                      <span className="text-[#86868b]">Ziel 1 (2R):</span>{" "}
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                         ${setup.target_1} (+{displayT1ProfitEur}€ {showNetAfterTax ? "Netto" : ""})
                       </span>
@@ -1446,87 +1499,92 @@ export default function EdgeDashboardPanel({
                   </div>
 
                   {/* LIVE TRIGGER-DISTANZ-BALKEN */}
-                  <div className="mt-2 rounded-xl border border-black/5 bg-white/80 px-2.5 py-2 text-[10px] dark:border-white/10 dark:bg-white/5">
+                  <div className="mt-2 rounded-xl border border-black/6 bg-white px-3 py-2.5 text-[10px] dark:border-white/10 dark:bg-white/5">
                     <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="font-semibold text-slate-600 dark:text-slate-300">
-                        📍 Live: <strong className="text-slate-950 dark:text-white">${livePrice.toFixed(2)}</strong>
+                      <span className="inline-flex items-center gap-1 font-medium text-[#6e6e73] dark:text-slate-300">
+                        <Crosshair size={11} strokeWidth={1.8} className="text-[#0071e3]" />
+                        Live: <strong className="font-semibold text-[#1d1d1f] dark:text-white">${livePrice.toFixed(2)}</strong>
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                        className={`rounded-full px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
                           isHotBreakout
-                            ? "bg-amber-500/20 text-amber-800 dark:bg-amber-500/30 dark:text-amber-200 animate-pulse"
+                            ? "bg-[#0071e3]/12 text-[#0071e3] dark:bg-[#2997ff]/20 dark:text-[#2997ff]"
                             : isAboveTrigger
-                              ? "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-200"
-                              : "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-300"
+                              ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                              : "bg-[#f5f5f7] text-[#6e6e73] dark:bg-white/10 dark:text-slate-300"
                         }`}
                       >
                         {isHotBreakout
-                          ? `🔥 Kurz vor Ausbruch (${triggerDistancePct >= 0 ? `+${triggerDistancePct.toFixed(2)}%` : `${triggerDistancePct.toFixed(2)}%`} zum Trigger)`
+                          ? `Nahe Ausbruch (${triggerDistancePct >= 0 ? `+${triggerDistancePct.toFixed(2)}%` : `${triggerDistancePct.toFixed(2)}%`} zum Trigger)`
                           : isAboveTrigger
-                            ? `✅ Im Trigger-Bereich (+${Math.abs(triggerDistancePct).toFixed(2)}% über Einstieg)`
-                            : `⏳ Noch +${Math.abs(triggerDistancePct).toFixed(2)}% bis Trigger`}
+                            ? `Im Trigger-Bereich (+${Math.abs(triggerDistancePct).toFixed(2)}% über Einstieg)`
+                            : `Noch +${Math.abs(triggerDistancePct).toFixed(2)}% bis Trigger`}
                       </span>
                     </div>
-                    <div className="relative mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/15">
+                    <div className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/8 dark:bg-white/15">
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${
-                          isAboveTrigger ? "bg-emerald-500" : isHotBreakout ? "bg-amber-500" : "bg-sky-500"
+                          isAboveTrigger ? "bg-emerald-500" : isHotBreakout ? "bg-[#0071e3]" : "bg-[#1d1d1f] dark:bg-white/70"
                         }`}
                         style={{ width: `${liveProgressPct}%` }}
                       />
                       <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-slate-900 dark:bg-white"
+                        className="absolute top-0 bottom-0 w-0.5 bg-[#0071e3]"
                         style={{ left: `${entryMarkerPct}%` }}
                         title={`Entry-Trigger $${entry.toFixed(2)}`}
                       />
                     </div>
-                    <div className="mt-1 flex justify-between text-[9px] font-medium text-slate-400">
-                      <span>🛑 Stop ${hardStop.toFixed(2)}</span>
-                      <span>🎯 Trigger ${entry.toFixed(2)}</span>
-                      <span>🚀 Ziel 1 ${t1.toFixed(2)}</span>
+                    <div className="mt-1 flex justify-between text-[9px] font-medium text-[#86868b]">
+                      <span>Stop ${hardStop.toFixed(2)}</span>
+                      <span>Trigger ${entry.toFixed(2)}</span>
+                      <span>Ziel 1 ${t1.toFixed(2)}</span>
                     </div>
                   </div>
 
                   {experienceMode === "beginner" ? (
-                    <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-50/60 px-2.5 py-1.5 text-[11px] text-emerald-950 dark:border-emerald-500/25 dark:bg-emerald-950/30 dark:text-emerald-200">
-                      💡 <strong>Anti-Shakeout Schutz:</strong> Sobald die Aktie anspringt (+1R), ziehst du den Stop auf <strong>${cushionStop}</strong> (-{displayCushionLossEur}€ Mini-Verlust). So fliegst du bei einem normalen Rücksetzer nicht vor der großen Aufwärtsbewegung raus!
+                    <div className="mt-2 rounded-xl border border-black/6 bg-[#f5f5f7] px-3 py-2 text-[11px] text-[#1d1d1f] dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                      <strong className="text-[#0071e3]">Anti-Shakeout Schutz:</strong> Sobald die Aktie anspringt (+1R), ziehst du den Stop auf <strong>${cushionStop}</strong> (-{displayCushionLossEur}€ Mini-Verlust). So wirst du bei einem normalen Rücksetzer nicht vor der Hauptbewegung ausgestoppt.
                     </div>
                   ) : (
                     <>
                       {setup.options_gex ? (
-                        <div className="mt-2 text-[10px] font-normal text-slate-500">
-                          GEX: <span className="font-semibold text-slate-700 dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
+                        <div className="mt-2 text-[10px] font-normal text-[#6e6e73]">
+                          GEX: <span className="font-semibold text-[#1d1d1f] dark:text-slate-200">{setup.options_gex.regime}</span> &middot; Call Wall: ${setup.options_gex.call_wall} &middot; Put Wall: ${setup.options_gex.put_wall}
                         </div>
                       ) : null}
                       {setup.volume_profile ? (
-                        <div className="mt-0.5 text-[10px] font-normal text-slate-500">
+                        <div className="mt-0.5 text-[10px] font-normal text-[#6e6e73]">
                           Volume Profile: POC ${setup.volume_profile.poc} &middot; VAH ${setup.volume_profile.vah} &middot; VAL ${setup.volume_profile.val}
                         </div>
                       ) : null}
                       {setup.anchored_vwap ? (
-                        <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                          ⚓ AVWAP: {setup.anchored_vwap.ytd ? `YTD $${setup.anchored_vwap.ytd}` : ""}
-                          {setup.anchored_vwap.earnings ? ` · Earnings $${setup.anchored_vwap.earnings}` : ""}
+                        <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-normal text-[#6e6e73]">
+                          <Anchor size={10} strokeWidth={1.8} />
+                          <span>
+                            AVWAP: {setup.anchored_vwap.ytd ? `YTD $${setup.anchored_vwap.ytd}` : ""}
+                            {setup.anchored_vwap.earnings ? ` · Earnings $${setup.anchored_vwap.earnings}` : ""}
+                          </span>
                         </div>
                       ) : null}
                       {setup.whale_flow?.badge ? (
-                        <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                        <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-[#f5f5f7] dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-[#1d1d1f] dark:text-slate-300">
                           <span>{setup.whale_flow.badge}</span>
                           {setup.whale_flow.volume_ratio ? (
-                            <span className="font-semibold text-slate-900 dark:text-white">
+                            <span className="font-semibold text-[#0071e3] dark:text-[#2997ff]">
                               ({setup.whale_flow.volume_ratio}x Vol)
                             </span>
                           ) : null}
                         </div>
                       ) : null}
                       {setup.liquidity_zones?.zone_label && setup.liquidity_zones.zone_label !== "Neutral" ? (
-                        <div className="mt-1 flex items-center gap-1 rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                        <div className="mt-1 flex items-center gap-1 rounded-md bg-[#f5f5f7] dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-[#6e6e73] dark:text-slate-300">
                           <span>{setup.liquidity_zones.zone_label}</span>
                         </div>
                       ) : null}
                       {setup.mtf_alignment?.badge ? (
-                        <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                          🧭 MTF: <span className="font-semibold text-slate-800 dark:text-slate-200">{setup.mtf_alignment.badge}</span>
+                        <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-normal text-[#6e6e73]">
+                          <Compass size={10} strokeWidth={1.8} />
+                          <span>MTF: <strong className="font-semibold text-[#1d1d1f] dark:text-slate-200">{setup.mtf_alignment.badge}</strong></span>
                         </div>
                       ) : null}
                     </>
@@ -1539,34 +1597,34 @@ export default function EdgeDashboardPanel({
                   ) : null}
 
                   {experienceMode === "pro" && setup.trade_management ? (
-                    <div className="mt-2 rounded-lg bg-slate-50/80 p-2 text-[10px] text-slate-600 dark:bg-white/5 dark:text-slate-300">
-                      <div className="font-semibold text-slate-900 dark:text-white">Trailing-Stop Disziplin:</div>
-                      <div>• <strong>2.0R Ziel:</strong> {setup.trade_management.target_1_action}</div>
-                      <div>• <strong>3.5R+ Ziel:</strong> {setup.trade_management.target_2_action}</div>
+                    <div className="mt-2 rounded-lg bg-[#f5f5f7] p-2.5 text-[10px] text-[#6e6e73] dark:bg-white/5 dark:text-slate-300">
+                      <div className="font-semibold text-[#1d1d1f] dark:text-white">Trailing-Stop Disziplin:</div>
+                      <div>&middot; <strong>2.0R Ziel:</strong> {setup.trade_management.target_1_action}</div>
+                      <div>&middot; <strong>3.5R+ Ziel:</strong> {setup.trade_management.target_2_action}</div>
                     </div>
                   ) : null}
 
                   {/* BROKER ORDER CHEAT-SHEET DRAWER */}
                   {openOrderSheetTicker === setup.ticker ? (
-                    <div className="mt-3 rounded-xl border border-indigo-500/25 bg-indigo-50/80 p-3 text-[11px] leading-5 text-indigo-950 dark:border-indigo-500/30 dark:bg-indigo-950/40 dark:text-indigo-200">
-                      <div className="font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-100">
-                        🏦 Broker Order-Spickzettel (Trade Republic / Scalable / ING / IBKR)
+                    <div className="mt-3 rounded-xl border border-black/8 bg-[#f5f5f7] p-3.5 text-[11px] leading-5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                      <div className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-[#0071e3]">
+                        <FileText size={12} strokeWidth={2} /> Broker Order-Spickzettel (Trade Republic / Scalable / ING / IBKR)
                       </div>
-                      <div className="mt-1.5 space-y-1">
+                      <div className="mt-2 space-y-1.5 text-[#6e6e73] dark:text-slate-300">
                         <div>
-                          🇩🇪 <strong>WKN:</strong> <code className="rounded bg-white/80 px-1.5 py-0.5 font-bold text-indigo-950">{wknInfo.wkn}</code> &middot; <strong>ISIN:</strong> <code className="rounded bg-white/80 px-1.5 py-0.5 font-bold text-indigo-950">{wknInfo.isin}</code>
+                          <strong className="text-[#1d1d1f] dark:text-white">WKN:</strong> <code className="rounded bg-white px-1.5 py-0.5 font-semibold text-[#1d1d1f] border border-black/6 dark:bg-white/10 dark:text-white">{wknInfo.wkn}</code> &middot; <strong className="text-[#1d1d1f] dark:text-white">ISIN:</strong> <code className="rounded bg-white px-1.5 py-0.5 font-semibold text-[#1d1d1f] border border-black/6 dark:bg-white/10 dark:text-white">{wknInfo.isin}</code>
                         </div>
                         <div>
-                          1️⃣ <strong>Limit-Kauf (Limit Buy):</strong> <strong>{dynamicShares} Aktien</strong> zu Limit <strong>${entry.toFixed(2)}</strong> (niemals Market-Order beim Börsenstart!)
+                          <strong className="text-[#1d1d1f] dark:text-white">01 · Limit-Kauf:</strong> <strong>{dynamicShares} Aktien</strong> zu Limit <strong>${entry.toFixed(2)}</strong> (keine Market-Order zur Eröffnung)
                         </div>
                         <div>
-                          2️⃣ <strong>Initialer Stop-Loss:</strong> Stop-Market Verkaufsorder bei <strong>${hardStop.toFixed(2)}</strong> (-{displayMaxLossEur}€ {showNetAfterTax ? "effektives Netto-Risiko nach Verlusttopf" : "Risiko"})
+                          <strong className="text-[#1d1d1f] dark:text-white">02 · Initialer Stop-Loss:</strong> Stop-Market Verkaufsorder bei <strong>${hardStop.toFixed(2)}</strong> (-{displayMaxLossEur}€ {showNetAfterTax ? "Netto-Risiko nach Verlusttopf" : "Risiko"})
                         </div>
                         <div>
-                          3️⃣ <strong>Preis-Alarm (Glocke 🔔):</strong> Bei <strong>${(entry + riskPerShare).toFixed(2)} (+1R)</strong> Stop auf unseren <strong>🌬️ Atmungs-Puffer (${cushionStop})</strong> nachziehen!
+                          <strong className="text-[#1d1d1f] dark:text-white">03 · Preis-Alarm:</strong> Bei <strong>${(entry + riskPerShare).toFixed(2)} (+1R)</strong> Stop auf <strong>Atmungs-Puffer (${cushionStop})</strong> nachziehen
                         </div>
                         <div>
-                          💶 <strong>Netto-Auszahlung nach 26,38% Steuer:</strong> Ziel 1: <strong>+{displayT1ProfitEur}€</strong> | Ziel 2: <strong>+{displayT2ProfitEur}€</strong>
+                          <strong className="text-[#1d1d1f] dark:text-white">04 · Netto nach Steuer:</strong> Ziel 1: <strong className="text-emerald-700 dark:text-emerald-400">+{displayT1ProfitEur}€</strong> &middot; Ziel 2: <strong className="text-emerald-700 dark:text-emerald-400">+{displayT2ProfitEur}€</strong>
                         </div>
                       </div>
                     </div>
@@ -1574,19 +1632,19 @@ export default function EdgeDashboardPanel({
 
                   {/* FREE-ROLL PYRAMIDING DRAWER */}
                   {openPyramidTicker === setup.ticker ? (
-                    <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-50/80 p-3 text-[11px] leading-5 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-200">
-                      <div className="font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-100">
-                        🪜 Free-Roll Pyramiding (Gewinner mit 0,00 € Risiko ausbauen)
+                    <div className="mt-3 rounded-xl border border-black/8 bg-[#f5f5f7] p-3.5 text-[11px] leading-5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                      <div className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-[#0071e3]">
+                        <Layers size={12} strokeWidth={2} /> Free-Roll Pyramiding (Gewinner mit 0,00 € Risiko ausbauen)
                       </div>
-                      <div className="mt-1.5 space-y-1">
+                      <div className="mt-2 space-y-1 text-[#6e6e73] dark:text-slate-300">
                         <div>
-                          • <strong>Wann nachkaufen?</strong> Sobald die Aktie bei <strong>${(entry + riskPerShare).toFixed(2)} (+1.0R)</strong> liegt.
+                          &middot; <strong className="text-[#1d1d1f] dark:text-white">Zeitpunkt:</strong> Sobald die Aktie bei <strong>${(entry + riskPerShare).toFixed(2)} (+1.0R)</strong> notiert.
                         </div>
                         <div>
-                          • <strong>Zusatz-Stückzahl (+50% Pyramide):</strong> <strong>+{Math.max(1, Math.round(dynamicShares * 0.5))} Aktien</strong> nachkaufen (Gesamt: {dynamicShares + Math.max(1, Math.round(dynamicShares * 0.5))} Stk).
+                          &middot; <strong className="text-[#1d1d1f] dark:text-white">Zusatz-Stückzahl (+50%):</strong> <strong>+{Math.max(1, Math.round(dynamicShares * 0.5))} Aktien</strong> nachkaufen (Gesamt: {dynamicShares + Math.max(1, Math.round(dynamicShares * 0.5))} Stk).
                         </div>
                         <div>
-                          • <strong>Kombinierter 0€-Risiko-Stop:</strong> Stop für alle Stücke auf <strong>${((dynamicShares * entry + Math.max(1, Math.round(dynamicShares * 0.5)) * (entry + riskPerShare)) / (dynamicShares + Math.max(1, Math.round(dynamicShares * 0.5)))).toFixed(2)}</strong> ziehen – der Buchgewinn der 1. Position bezahlt das Risiko der 2. Position komplett!
+                          &middot; <strong className="text-[#1d1d1f] dark:text-white">Kombinierter 0€-Risiko-Stop:</strong> Stop für alle Stücke auf <strong>${((dynamicShares * entry + Math.max(1, Math.round(dynamicShares * 0.5)) * (entry + riskPerShare)) / (dynamicShares + Math.max(1, Math.round(dynamicShares * 0.5)))).toFixed(2)}</strong> ziehen.
                         </div>
                       </div>
                     </div>
@@ -1594,48 +1652,48 @@ export default function EdgeDashboardPanel({
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-3 dark:border-white/5">
-                  <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                    Sizing: <span className="font-semibold text-slate-950 dark:text-white">{dynamicShares} Stk</span> (~{dynamicPositionValue.toLocaleString("de-DE")}€)
+                  <div className="text-[11px] font-medium text-[#6e6e73] dark:text-slate-300">
+                    Sizing: <span className="font-semibold text-[#1d1d1f] dark:text-white">{dynamicShares} Stk</span> (~{dynamicPositionValue.toLocaleString("de-DE")}€)
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => onAnalyzeTicker(setup.ticker)}
-                      className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                      className="rounded-full border border-black/8 bg-[#f5f5f7] px-3 py-1.5 text-xs font-medium text-[#1d1d1f] transition hover:bg-[#e8e8ed] dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                     >
                       Chart
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpenOrderSheetTicker(openOrderSheetTicker === setup.ticker ? null : setup.ticker)}
-                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                         openOrderSheetTicker === setup.ticker
-                          ? "border-indigo-500 bg-indigo-600 text-white"
-                          : "border-black/8 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                          ? "border-[#0071e3] bg-[#0071e3] text-white"
+                          : "border-black/8 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                       }`}
                       title="Schritt-für-Schritt Eingabe für Trade Republic, Scalable & IBKR"
                     >
-                      🏦 Spickzettel
+                      <FileText size={12} strokeWidth={1.8} /> Spickzettel
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpenPyramidTicker(openPyramidTicker === setup.ticker ? null : setup.ticker)}
-                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                         openPyramidTicker === setup.ticker
-                          ? "border-emerald-600 bg-emerald-600 text-white"
-                          : "border-black/8 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                          ? "border-[#0071e3] bg-[#0071e3] text-white"
+                          : "border-black/8 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                       }`}
                       title="Free-Roll Pyramiding: Gewinner ab +1R mit 0,00 € Risiko aufstocken"
                     >
-                      🪜 0€-Pyramide
+                      <Layers size={12} strokeWidth={1.8} /> Pyramide
                     </button>
                     <button
                       type="button"
                       onClick={() => handleShareSetupCard(setup)}
-                      className="rounded-lg border border-black/8 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+                      className="inline-flex items-center gap-1 rounded-full border border-black/8 bg-[#f5f5f7] px-3 py-1.5 text-xs font-medium text-[#1d1d1f] transition hover:bg-[#e8e8ed] dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
                       title="VIP Signal-Card kopieren & mit Freunden teilen"
                     >
-                      📤 Teilen
+                      <Share2 size={12} strokeWidth={1.8} /> Teilen
                     </button>
                     {!isGuestMode ? (
                       <>
@@ -1643,19 +1701,19 @@ export default function EdgeDashboardPanel({
                           type="button"
                           onClick={() => handleOpenEdgePaperTrade(setup.ticker)}
                           disabled={openingPaperTicker === setup.ticker}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-black/8 bg-white px-3 py-1.5 text-xs font-medium text-[#1d1d1f] shadow-2xs transition hover:bg-[#f5f5f7] disabled:opacity-50 dark:border-white/15 dark:bg-white/10 dark:text-white"
                           title="Als Paper Trade im Demokonto eröffnen"
                         >
-                          <TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          <TrendingUp size={12.5} strokeWidth={1.9} className="text-[#0071e3]" />
                           {openingPaperTicker === setup.ticker ? "Eröffne..." : "Paper Trade"}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleSendEdgeTelegram(setup.ticker)}
                           disabled={sendingTelegramTicker === setup.ticker}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-[#0071e3] px-3.5 py-1.5 text-xs font-medium text-white shadow-2xs transition hover:bg-[#0077ed] disabled:opacity-50"
                         >
-                          <Smartphone size={13} />
+                          <Send size={12} strokeWidth={1.9} />
                           {sendingTelegramTicker === setup.ticker ? "Sendet..." : "Telegram"}
                         </button>
                       </>
@@ -1744,17 +1802,18 @@ export default function EdgeDashboardPanel({
                   </div>
 
                   <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-2.5 text-[11px] dark:border-white/5">
-                    <span className={`rounded-md px-2 py-0.5 font-bold ${
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold ${
                       isT1Hit
-                        ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
-                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        ? "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300"
+                        : "bg-[#f5f5f7] text-[#6e6e73] dark:bg-slate-800 dark:text-slate-300"
                     }`}>
-                      {isT1Hit ? `🟢 BE Stop: $${stop.toFixed(2)}` : `🛡️ Stop: $${stop.toFixed(2)}`}
+                      <Shield size={11} strokeWidth={1.9} />
+                      {isT1Hit ? `BE Stop: $${stop.toFixed(2)}` : `Stop: $${stop.toFixed(2)}`}
                     </span>
                     <button
                       type="button"
                       onClick={() => onAnalyzeTicker(t.ticker)}
-                      className="text-xs font-medium text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white"
+                      className="text-xs font-medium text-[#0071e3] hover:underline dark:text-[#2997ff]"
                     >
                       Chart &rarr;
                     </button>
@@ -1823,8 +1882,8 @@ export default function EdgeDashboardPanel({
                   <span>{leader.badge}</span>
                 </div>
                 {leader.divergent_strength ? (
-                  <div className="mt-1.5 rounded-sm bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[9px] font-medium text-slate-700 dark:text-slate-300">
-                    ⚡ Stark trotz Markt
+                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-[#f5f5f7] dark:bg-white/10 px-2 py-0.5 text-[9px] font-medium text-[#1d1d1f] dark:text-slate-300">
+                    <Zap size={9.5} strokeWidth={2} className="text-[#0071e3]" /> Stark trotz Markt
                   </div>
                 ) : null}
               </div>
@@ -1839,10 +1898,10 @@ export default function EdgeDashboardPanel({
         {Array.isArray(signalScore?.sector_rotation?.sectors) && signalScore.sector_rotation.sectors.length > 0 ? (
           <div className="mt-4 border-t border-black/6 pt-4 dark:border-white/10">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-slate-300">
                 Ganzmarkt-Sektor-Rotation (Institutional Money Flow vs. SPY)
               </div>
-              <div className="text-[11px] font-semibold text-slate-500">
+              <div className="text-[11px] font-medium text-[#6e6e73]">
                 Zuflüsse: {(signalScore.sector_rotation.inflow_leaders || []).join(", ") || "Neutral"}
               </div>
             </div>
@@ -1856,26 +1915,29 @@ export default function EdgeDashboardPanel({
                     onClick={() => onAnalyzeTicker(sec.etf)}
                     className={`cursor-pointer rounded-xl border p-2.5 text-xs transition hover:shadow-xs ${
                       isLeader
-                        ? "border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-950/30"
+                        ? "border-emerald-500/25 bg-emerald-500/[0.04] dark:bg-emerald-950/30"
                         : isLaggard
-                          ? "border-rose-500/30 bg-rose-500/[0.06] dark:bg-rose-950/30"
-                          : "border-black/6 bg-white/80 dark:border-white/10 dark:bg-white/5"
+                          ? "border-rose-500/25 bg-rose-500/[0.04] dark:bg-rose-950/30"
+                          : "border-black/6 bg-white dark:border-white/10 dark:bg-white/5"
                     }`}
                   >
-                    <div className="flex items-center justify-between font-bold">
+                    <div className="flex items-center justify-between font-semibold">
                       <span>{sec.etf}</span>
-                      <span className={isLeader ? "text-emerald-600" : isLaggard ? "text-rose-600" : "text-slate-500"}>
+                      <span className={isLeader ? "text-emerald-600" : isLaggard ? "text-rose-600" : "text-[#6e6e73]"}>
                         {sec.rs_alpha_1m >= 0 ? `+${sec.rs_alpha_1m}%` : `${sec.rs_alpha_1m}%`} RS
                       </span>
                     </div>
-                    <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                    <div className="mt-0.5 truncate text-[10px] font-medium text-[#6e6e73] dark:text-slate-300">
                       {sec.sector}
                     </div>
-                    <div className="mt-1 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider">
-                      <span className={isLeader ? "text-emerald-700 dark:text-emerald-400" : isLaggard ? "text-rose-700 dark:text-rose-400" : "text-slate-500"}>
-                        {isLeader ? "🟢 INFLOW" : isLaggard ? "🔴 OUTFLOW" : "⚪ NEUTRAL"}
+                    <div className="mt-1 flex items-center justify-between text-[9px] font-semibold uppercase tracking-wider">
+                      <span className="inline-flex items-center gap-1">
+                        <span className={`h-1.5 w-1.5 rounded-full ${isLeader ? "bg-emerald-500" : isLaggard ? "bg-rose-500" : "bg-slate-400"}`} />
+                        <span className={isLeader ? "text-emerald-700 dark:text-emerald-400" : isLaggard ? "text-rose-700 dark:text-rose-400" : "text-[#6e6e73]"}>
+                          {isLeader ? "INFLOW" : isLaggard ? "OUTFLOW" : "NEUTRAL"}
+                        </span>
                       </span>
-                      <span className="text-slate-400">RVOL {sec.volume_ratio}x</span>
+                      <span className="text-[#86868b]">RVOL {sec.volume_ratio}x</span>
                     </div>
                   </div>
                 );
@@ -1887,8 +1949,8 @@ export default function EdgeDashboardPanel({
         {Array.isArray(signalScore?.short_equities) && signalScore.short_equities.length > 0 ? (
           <div className="mt-4 border-t border-black/6 pt-4 dark:border-white/10">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-400">
-                🔴 Institutionelle Short-Breakdown Kandidaten (Relative Schwäche unter SMA20/50)
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-400">
+                <TrendingDown size={13.5} strokeWidth={1.9} /> Institutionelle Short-Breakdown Kandidaten (Relative Schwäche unter SMA20/50)
               </div>
             </div>
             <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
@@ -1896,15 +1958,15 @@ export default function EdgeDashboardPanel({
                 <div
                   key={`short-${item.ticker}`}
                   onClick={() => onAnalyzeTicker(item.ticker)}
-                  className="cursor-pointer rounded-xl border border-rose-500/25 bg-rose-500/[0.05] p-3 transition hover:border-rose-500/50 dark:bg-rose-950/25"
+                  className="cursor-pointer rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-3 transition hover:border-rose-500/40 dark:bg-rose-950/25"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-slate-900 dark:text-white">{item.ticker}</span>
-                    <span className="rounded-md bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
-                      🔴 SHORT ({item.total_score})
+                    <span className="text-sm font-semibold text-[#1d1d1f] dark:text-white">{item.ticker}</span>
+                    <span className="rounded-full bg-rose-600/12 px-2 py-0.5 text-[9px] font-semibold uppercase text-rose-700 dark:text-rose-300">
+                      SHORT ({item.total_score})
                     </span>
                   </div>
-                  <div className="mt-1 line-clamp-2 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  <div className="mt-1 line-clamp-2 text-[11px] font-normal text-[#6e6e73] dark:text-slate-300">
                     {item.detail}
                   </div>
                 </div>

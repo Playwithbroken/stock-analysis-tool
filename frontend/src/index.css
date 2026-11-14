@@ -3,35 +3,37 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
 :root {
-  /* Apple Design System: Pure, calm, functional */
+  /* Apple.com/de Design System: Pure, calm, high-contrast, functional */
   --primary-50: #ffffff;
   --primary-100: #f5f5f7;
   --primary-200: #e8e8ed;
 
   --secondary-700: #6e6e73;
-  --secondary-800: #3a3a3c;
+  --secondary-800: #424245;
   --secondary-900: #1d1d1f;
 
-  --accent: #1d1d1f;
-  --accent-strong: #000000;
-  --accent-soft: rgba(0, 0, 0, 0.05);
+  --apple-blue: #0071e3;
+  --apple-blue-hover: #0077ed;
+  --accent: #0071e3;
+  --accent-strong: #0066cc;
+  --accent-soft: rgba(0, 113, 227, 0.08);
 
   --bg-base: #f5f5f7;
   --bg-canvas: #f5f5f7;
-  --bg-elevated: rgba(255, 255, 255, 0.85);
+  --bg-elevated: rgba(255, 255, 255, 0.82);
   --bg-panel: #ffffff;
   --bg-strong: #1d1d1f;
-  --bg-soft: #f0f0f4;
+  --bg-soft: #f5f5f7;
   --line-subtle: rgba(0, 0, 0, 0.06);
   --line-strong: rgba(0, 0, 0, 0.12);
   --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
   --text-tertiary: #86868b;
-  --success: #10b981;
-  --danger: #e11d48;
-  --warning: #f59e0b;
-  --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.03);
+  --success: #1d8348;
+  --danger: #d70015;
+  --warning: #b25000;
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.025);
   --mobile-browser-bottom: 0px;
   --mobile-chrome-gap: max(0.75rem, env(safe-area-inset-bottom));
   --mobile-tabbar-height: 4.55rem;
@@ -149,19 +151,19 @@ h6,
 
 .glass-card {
   background: var(--bg-elevated);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border: 1px solid var(--line-subtle);
   box-shadow: var(--shadow-card);
   transition:
-    transform 180ms ease,
-    box-shadow 180ms ease,
+    transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    box-shadow 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
     border-color 180ms ease;
 }
 
 .glass-card:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.09);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
   transform: translateY(-1px);
 }
 
@@ -169,25 +171,25 @@ h6,
   background: var(--bg-panel);
   border: 1px solid var(--line-subtle);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
 .surface-strong {
-  background: linear-gradient(180deg, #181b24 0%, #10121a 100%);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(180deg, #1d1d1f 0%, #141416 100%);
+  color: #f5f5f7;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.38);
 }
 
 .surface-accent {
   background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent-strong);
 }
 
 .brief-avoid-soft {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.07), rgba(255, 255, 255, 0.78) 72%);
+  background: linear-gradient(135deg, rgba(217, 48, 37, 0.05), rgba(255, 255, 255, 0.92) 72%);
 }
 
 .text-accent {
@@ -203,20 +205,20 @@ h6,
 }
 
 .app-shell {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.2)),
-    rgba(255, 255, 255, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
 .app-shell-header {
   position: relative;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid var(--line-subtle);
-  box-shadow: var(--shadow-card);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.035);
 }
 
 .app-shell-header::after {
@@ -747,36 +749,38 @@ h6,
   }
 }
 
-/* ─── Dark mode ──────────────────────────────────────────────────────────── */
+/* ─── Dark mode (Apple Pro Black & Space Gray) ───────────────────────────── */
 [data-theme="dark"] {
   --primary-50: #000000;
-  --primary-100: #121214;
-  --primary-200: #1c1c1e;
+  --primary-100: #141416;
+  --primary-200: #1d1d1f;
 
-  --secondary-700: #8e8e93;
-  --secondary-800: #c7c7cc;
-  --secondary-900: #f2f2f7;
+  --secondary-700: #86868b;
+  --secondary-800: #a1a1a6;
+  --secondary-900: #f5f5f7;
 
-  --accent: #f2f2f7;
-  --accent-strong: #ffffff;
-  --accent-soft: rgba(255, 255, 255, 0.08);
+  --apple-blue: #2997ff;
+  --apple-blue-hover: #409cff;
+  --accent: #2997ff;
+  --accent-strong: #409cff;
+  --accent-soft: rgba(41, 151, 255, 0.14);
 
   --bg-base: #000000;
-  --bg-canvas: #121214;
-  --bg-elevated: rgba(28, 28, 30, 0.82);
-  --bg-panel: #1c1c1e;
-  --bg-strong: #12141c;
+  --bg-canvas: #000000;
+  --bg-elevated: rgba(29, 29, 31, 0.82);
+  --bg-panel: #1d1d1f;
+  --bg-strong: #141416;
   --bg-soft: #2c2c2e;
   --line-subtle: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.16);
   --text-primary: #f5f5f7;
-  --text-secondary: #aeaeb2;
-  --text-tertiary: #8e8e93;
-  --success: #34d399;
-  --danger: #f87171;
-  --warning: #fbbf24;
-  --shadow-soft: 0 18px 48px rgba(0, 0, 0, 0.45);
-  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #86868b;
+  --success: #30d158;
+  --danger: #ff453a;
+  --warning: #ff9f0a;
+  --shadow-soft: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 
 [data-theme="dark"] body {
@@ -858,12 +862,12 @@ h6,
   cursor: not-allowed !important;
 }
 
-/* Header gradient — theme-aware */
+/* Header gradient — theme-aware (Apple #F5F5F7 / #000000) */
 .header-gradient {
-  background: linear-gradient(180deg, rgba(250,248,243,0.98), rgba(250,248,243,0.94) 72%, rgba(250,248,243,0.82));
+  background: linear-gradient(180deg, rgba(245,245,247,0.96), rgba(245,245,247,0.90) 72%, rgba(245,245,247,0));
 }
 [data-theme="dark"] .header-gradient {
-  background: linear-gradient(180deg, rgba(18,18,20,0.98), rgba(18,18,20,0.94) 72%, rgba(18,18,20,0.82));
+  background: linear-gradient(180deg, rgba(0,0,0,0.96), rgba(0,0,0,0.90) 72%, rgba(0,0,0,0));
 }
 
 /* ── Dark mode: fix hardcoded Tailwind whites/slates ──────────────── */
@@ -1082,20 +1086,20 @@ h6,
 
 /* Price chart colors follow the app's data-theme, including SVG paint. */
 .price-chart {
-  background: #fcfcfa;
-  --chart-up: #0f766e;
-  --chart-down: #b42318;
-  --chart-axis: #596575;
-  --chart-marker: #52716d;
-  --chart-cursor: #475569;
+  background: #ffffff;
+  --chart-up: #1d8348;
+  --chart-down: #d93025;
+  --chart-axis: #6e6e73;
+  --chart-marker: #6e6e73;
+  --chart-cursor: #1d1d1f;
 }
 [data-theme="dark"] .price-chart {
-  background: #101827;
-  --chart-up: #2dd4bf;
-  --chart-down: #fb7185;
-  --chart-axis: #a8b5c8;
-  --chart-marker: #94a3b8;
-  --chart-cursor: #cbd5e1;
+  background: #1d1d1f;
+  --chart-up: #30d158;
+  --chart-down: #ff453a;
+  --chart-axis: #a1a1a6;
+  --chart-marker: #86868b;
+  --chart-cursor: #f5f5f7;
 }
 .price-chart .recharts-xAxis-tick-labels text,
 .price-chart .recharts-xAxis text {
@@ -1457,12 +1461,12 @@ h6,
 
 .ticker-marquee-wrap::before {
   left: 0;
-  background: linear-gradient(90deg, rgba(250, 248, 243, 0.94), transparent);
+  background: linear-gradient(90deg, rgba(245, 245, 247, 0.94), transparent);
 }
 
 .ticker-marquee-wrap::after {
   right: 0;
-  background: linear-gradient(270deg, rgba(250, 248, 243, 0.94), transparent);
+  background: linear-gradient(270deg, rgba(245, 245, 247, 0.94), transparent);
 }
 
 .ticker-marquee-track {
@@ -1831,3 +1835,113 @@ h6,
 .rating-neutral {
   color: var(--warning);
 }
+
+/* ─── Apple.com/de Global Palette Harmonization ──────────────────────────── */
+:root:not([data-theme="dark"]) .text-slate-950,
+:root:not([data-theme="dark"]) .text-slate-900 {
+  color: #1d1d1f;
+}
+
+:root:not([data-theme="dark"]) .text-slate-800,
+:root:not([data-theme="dark"]) .text-slate-700 {
+  color: #333336;
+}
+
+:root:not([data-theme="dark"]) .text-slate-600,
+:root:not([data-theme="dark"]) .text-slate-500 {
+  color: #6e6e73;
+}
+
+:root:not([data-theme="dark"]) .text-slate-400 {
+  color: #86868b;
+}
+
+/* Harmonize multi-colored decorative indigo/violet/purple/sky boxes to Apple neutral + System Blue */
+:root:not([data-theme="dark"]) .bg-indigo-50\/40,
+:root:not([data-theme="dark"]) .bg-indigo-50\/60,
+:root:not([data-theme="dark"]) .bg-indigo-50\/80,
+:root:not([data-theme="dark"]) .bg-indigo-50\/90,
+:root:not([data-theme="dark"]) .bg-indigo-50,
+:root:not([data-theme="dark"]) .bg-violet-50\/60,
+:root:not([data-theme="dark"]) .bg-violet-50,
+:root:not([data-theme="dark"]) .bg-sky-50\/90,
+:root:not([data-theme="dark"]) .bg-sky-50 {
+  background-color: rgba(0, 113, 227, 0.06) !important;
+}
+
+:root:not([data-theme="dark"]) .text-indigo-700,
+:root:not([data-theme="dark"]) .text-indigo-800,
+:root:not([data-theme="dark"]) .text-indigo-900,
+:root:not([data-theme="dark"]) .text-violet-700,
+:root:not([data-theme="dark"]) .text-sky-700,
+:root:not([data-theme="dark"]) .text-sky-800 {
+  color: #0071e3 !important;
+}
+
+:root:not([data-theme="dark"]) .border-indigo-200,
+:root:not([data-theme="dark"]) .border-indigo-200\/70,
+:root:not([data-theme="dark"]) .border-indigo-200\/80,
+:root:not([data-theme="dark"]) .border-sky-200\/80 {
+  border-color: rgba(0, 113, 227, 0.16) !important;
+}
+
+.apple-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: all 160ms ease;
+}
+
+.apple-pill-btn:hover {
+  background: #e8e8ed;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.apple-pill-btn-active,
+.apple-pill-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: #0071e3;
+  color: #ffffff;
+  border: 1px solid #0071e3;
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.22);
+  transition: all 160ms ease;
+}
+
+.apple-pill-btn-active:hover,
+.apple-pill-btn-primary:hover {
+  background: #0077ed;
+  border-color: #0077ed;
+}
+
+[data-theme="dark"] .apple-pill-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .apple-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .apple-pill-btn-active,
+[data-theme="dark"] .apple-pill-btn-primary {
+  background: #2997ff;
+  border-color: #2997ff;
+  color: #ffffff;
+}
+

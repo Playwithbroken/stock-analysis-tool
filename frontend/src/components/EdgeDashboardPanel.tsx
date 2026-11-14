@@ -590,6 +590,7 @@ export default function EdgeDashboardPanel({
   const [rsLeaders, setRsLeaders] = useState<any[]>(() => bootstrapRsLeaders || []);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [dashboardCategory, setDashboardCategory] = useState<"signale" | "staerke" | "makro" | "alle">("signale");
 
   useEffect(() => {
     if (Array.isArray(bootstrapActiveTrades) && bootstrapActiveTrades.length > 0 && activeTrades.length === 0) {
@@ -1135,7 +1136,37 @@ export default function EdgeDashboardPanel({
         })}
       </div>
 
-      <div className="mt-4 hidden rounded-[1.25rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 p-4 sm:block">
+      {/* Apple Segmented Category Bar */}
+      <div className="mt-5 flex flex-wrap gap-1.5 rounded-2xl border border-black/6 bg-[#f5f5f7] p-1.5 dark:border-white/10 dark:bg-[#141416]">
+        {([
+          { id: "signale", label: "Top-Signale & Setups", icon: Zap },
+          { id: "staerke", label: "Relative Stärke & Sektoren", icon: TrendingUp },
+          { id: "makro", label: "Makro & Lernkurve", icon: Activity },
+          { id: "alle", label: "Alle Bereiche", icon: Compass },
+        ] as const).map((tab) => {
+          const Icon = tab.icon;
+          const active = dashboardCategory === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setDashboardCategory(tab.id)}
+              className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all sm:flex-initial ${
+                active
+                  ? "bg-[#0071e3] text-white shadow-xs"
+                  : "text-[#1d1d1f] hover:bg-black/5 dark:text-[#f5f5f7] dark:hover:bg-white/10"
+              }`}
+            >
+              <Icon size={13.5} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {(dashboardCategory === "makro" || dashboardCategory === "alle") && (
+      <>
+      <div className="mt-4 rounded-[1.25rem] border border-black/6 bg-white/70 dark:border-white/10 dark:bg-white/5 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
@@ -1164,7 +1195,7 @@ export default function EdgeDashboardPanel({
         </div>
       </div>
 
-      <div className="mt-4 hidden rounded-[1.35rem] border border-black/6 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5 sm:block">
+      <div className="mt-4 rounded-[1.35rem] border border-black/6 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
@@ -1230,7 +1261,11 @@ export default function EdgeDashboardPanel({
           </div>
         )}
       </div>
+      </>
+      )}
 
+      {(dashboardCategory === "signale" || dashboardCategory === "alle") && (
+      <>
       {/* INSTITUTIONAL TRADING EDGE: GEX, VOLUME PROFILE & ASYMMETRIC SETUPS */}
       {tradingEdge?.asymmetric_setups?.length ? (
         <div className="mt-5 rounded-[1.35rem] border border-black/6 bg-white/70 p-5 shadow-xs dark:border-white/10 dark:bg-white/5">
@@ -1824,7 +1859,11 @@ export default function EdgeDashboardPanel({
           </div>
         </div>
       ) : null}
+      </>
+      )}
 
+      {(dashboardCategory === "staerke" || dashboardCategory === "alle") && (
+      <>
       {/* RELATIVE STRENGTH (RS VS SPY) LEADERBOARD & WATCHLIST SCANNER */}
       <div className="mt-5 rounded-[1.35rem] border border-black/8 bg-white/75 p-5 shadow-2xs dark:border-white/10 dark:bg-slate-900/60">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1846,7 +1885,7 @@ export default function EdgeDashboardPanel({
               type="button"
               onClick={handleTriggerScanner}
               disabled={isScanning}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#0071e3] px-4 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-[#0077ed] disabled:opacity-50"
             >
               <Zap size={13} />
               {isScanning ? "Scannt Watchlist..." : "Watchlist jetzt scannen"}
@@ -1975,7 +2014,10 @@ export default function EdgeDashboardPanel({
           </div>
         ) : null}
       </div>
+      </>
+      )}
 
+      {(dashboardCategory === "signale" || dashboardCategory === "alle") && (
       <div className="edge-decision-strip mt-5 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-emerald-700">
@@ -2044,6 +2086,7 @@ export default function EdgeDashboardPanel({
           ) : null}
         </div>
       </div>
+      )}
     </section>
   );
 }

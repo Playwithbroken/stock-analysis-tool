@@ -308,6 +308,7 @@ export default function PortfolioView({
   const [showRiskRatios, setShowRiskRatios] = useState(false);
   const [showCrisisScenarios, setShowCrisisScenarios] = useState(false);
   const [showInstitutionalReport, setShowInstitutionalReport] = useState(false);
+  const [portfolioCategory, setPortfolioCategory] = useState<"positionen" | "performance" | "risiko" | "ertrag" | "alarme">("positionen");
   const paperDashboardSlow = useSlowProviderState(paperDashboardLoading, 5500);
   const createPortfolioDialogRef = useAccessibleDialog<HTMLDivElement>(
     showCreateModal,
@@ -988,355 +989,71 @@ export default function PortfolioView({
           </div>
         )}
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              Portfolios
-            </div>
-            <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">{portfolios.length}</div>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/6 pt-5 dark:border-white/10">
+          <div className="flex flex-wrap gap-2">
+            {portfolios.map((portfolio) => (
+              <button
+                key={portfolio.id}
+                onClick={() => setSelectedPortfolio(portfolio.id)}
+                className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition-all ${
+                  selectedPortfolio === portfolio.id
+                    ? "bg-[#0071e3] text-white shadow-xs"
+                    : "border border-black/8 bg-[#f5f5f7] text-[#1d1d1f] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c]"
+                }`}
+              >
+                {portfolio.name} ({portfolio.holdings.length})
+              </button>
+            ))}
           </div>
-          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              Ausgewählt
-            </div>
-            <div className="mt-2 text-xl font-black text-slate-900 dark:text-white">
-              {currentPortfolio?.name || "Kein Portfolio"}
-            </div>
+          <div className="text-xs font-medium text-[#6e6e73] dark:text-[#a1a1a6]">
+            {portfolios.length} {portfolios.length === 1 ? "Depot" : "Depots"} · {currentPortfolio?.holdings.length || 0} aktive Positionen
           </div>
-          <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              Aktive Positionen
-            </div>
-            <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
-              {currentPortfolio?.holdings.length || 0}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-2">
-          {portfolios.map((portfolio) => (
-            <button
-              key={portfolio.id}
-              onClick={() => setSelectedPortfolio(portfolio.id)}
-              className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition-all ${
-                selectedPortfolio === portfolio.id
-                  ? "bg-[#0071e3] text-white shadow-xs"
-                  : "border border-black/8 bg-[#f5f5f7] text-[#1d1d1f] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c]"
-              }`}
-            >
-              {portfolio.name} ({portfolio.holdings.length})
-            </button>
-          ))}
         </div>
       </section>
 
       {currentPortfolio ? (
         <div className="space-y-6">
           <section className="surface-panel rounded-[2.2rem] p-6 sm:p-8">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
                   Aktives Portfolio
                 </div>
-                <h2 className="mt-2 text-4xl text-slate-900">{currentPortfolio.name}</h2>
-                <p className="mt-2 text-sm text-slate-500">
-                  {currentPortfolio.holdings.length} Positionen im aktuellen Portfolio.
+                <h2 className="mt-1.5 text-3xl font-semibold tracking-tight text-[#1d1d1f] dark:text-white sm:text-4xl">
+                  {currentPortfolio.name}
+                </h2>
+                <p className="mt-1 text-sm text-[#6e6e73] dark:text-[#a1a1a6]">
+                  {currentPortfolio.holdings.length} Positionen im aktuellen Bestand.
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   onClick={() => currentPortfolio && analyzePortfolio(currentPortfolio, true)}
                   disabled={loading || (currentPortfolio.holdings.length === 0 && !isScalableManagedPortfolio)}
-                  className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
+                  className="rounded-full border border-black/10 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c] disabled:opacity-50"
                 >
                   <span className="inline-flex items-center gap-2">
-                    <RefreshCw size={14} />
-                    {loading ? "Wird aktualisiert" : "Aktualisieren"}
+                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                    {loading ? "Aktualisiert …" : "Aktualisieren"}
                   </span>
                 </button>
                 <button
                   onClick={() => window.open(`/api/portfolio/${selectedPortfolio}/export/csv`)}
-                  className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  className="rounded-full border border-black/10 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c]"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Download size={14} />
-                    CSV exportieren
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowRebalanceWizard((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showRebalanceWizard
-                      ? "border-teal-500/30 bg-teal-500/15 text-teal-800 dark:text-teal-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Scale size={14} />
-                    {showRebalanceWizard ? "Rebalancing schließen" : "Rebalancing-Rechner"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowStressTest((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showStressTest
-                      ? "border-rose-500/30 bg-rose-500/15 text-rose-800 dark:text-rose-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <ShieldAlert size={14} />
-                    {showStressTest ? "Stresstest schließen" : "Crash-Simulator"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowDividendForecast((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showDividendForecast
-                      ? "border-teal-500/30 bg-teal-500/15 text-teal-800 dark:text-teal-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Coins size={14} />
-                    {showDividendForecast ? "Schneeball schließen" : "Dividenden-Schneeball"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowEarningsRadar((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showEarningsRadar
-                      ? "border-indigo-500/30 bg-indigo-500/15 text-indigo-800 dark:text-indigo-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <CalendarDays size={14} />
-                    {showEarningsRadar ? "Radar schließen" : "Earnings-Radar"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowSuperinvestors((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showSuperinvestors
-                      ? "border-purple-500/30 bg-purple-500/15 text-purple-800 dark:text-purple-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Award size={14} />
-                    {showSuperinvestors ? "Superinvestoren schließen" : "Superinvestoren-Radar"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowETFOverlap((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showETFOverlap
-                      ? "border-cyan-500/30 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <PieChart size={14} />
-                    {showETFOverlap ? "Overlap schließen" : "ETF-Overlap & Gebühren"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowTaxHarvesting((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showTaxHarvesting
-                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Scissors size={14} />
-                    {showTaxHarvesting ? "Steuer-Shield schließen" : "Steuer-Optimierer (FSA)"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowOptionsIncome((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showOptionsIncome
-                      ? "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Coins size={14} />
-                    {showOptionsIncome ? "Options-Radar schließen" : "Options-Cashflow"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowMonteCarlo((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showMonteCarlo
-                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Layers size={14} />
-                    {showMonteCarlo ? "Monte-Carlo schließen" : "Monte-Carlo (10k Pfade)"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowFactors((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showFactors
-                      ? "border-purple-500/30 bg-purple-500/15 text-purple-800 dark:text-purple-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Compass size={14} />
-                    {showFactors ? "Faktoren schließen" : "Faktor-Attribution"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowOptimizer((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showOptimizer
-                      ? "border-cyan-500/30 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Target size={14} />
-                    {showOptimizer ? "Optimierung schließen" : "Effizienz & MPT"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowTailRisk((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showTailRisk
-                      ? "border-rose-500/30 bg-rose-500/15 text-rose-800 dark:text-rose-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <AlertOctagon size={14} />
-                    {showTailRisk ? "Tail-Risk schließen" : "Tail-Risk & VaR"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowESG((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showESG
-                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Leaf size={14} />
-                    {showESG ? "ESG schließen" : "ESG & Nachhaltigkeit"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowLiquidity((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showLiquidity
-                      ? "border-cyan-500/30 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Droplets size={14} />
-                    {showLiquidity ? "Liquidität schließen" : "Liquidität & Slippage"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowCurrencyHedging((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showCurrencyHedging
-                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Coins size={14} />
-                    {showCurrencyHedging ? "FX schließen" : "FX & Währungsrisiko"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowBrinson((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showBrinson
-                      ? "border-indigo-500/30 bg-indigo-500/15 text-indigo-800 dark:text-indigo-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Award size={14} />
-                    {showBrinson ? "Attribution schließen" : "Performance-Attribution"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowFixedIncome((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showFixedIncome
-                      ? "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Landmark size={14} />
-                    {showFixedIncome ? "Zinsen schließen" : "Zinsen & Duration"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowRiskRatios((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showRiskRatios
-                      ? "border-violet-500/30 bg-violet-500/15 text-violet-800 dark:text-violet-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <BarChart3 size={14} />
-                    {showRiskRatios ? "Ratios schließen" : "Performance-Ratios"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowCrisisScenarios((prev) => !prev)}
-                  disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
-                    showCrisisScenarios
-                      ? "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                  } disabled:opacity-50`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Flame size={14} />
-                    {showCrisisScenarios ? "Krisen schließen" : "Krisen-Stresstest"}
+                    CSV Export
                   </span>
                 </button>
                 <button
                   onClick={() => setShowInstitutionalReport((prev) => !prev)}
                   disabled={!currentPortfolio || currentPortfolio.holdings.length === 0}
-                  className={`rounded-[1.1rem] border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] transition-colors ${
+                  className={`rounded-full border px-4 py-2.5 text-xs font-semibold transition-colors ${
                     showInstitutionalReport
-                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
-                      : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                      ? "border-[#0071e3] bg-[#0071e3] text-white"
+                      : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7] dark:hover:bg-[#3a3a3c]"
                   } disabled:opacity-50`}
                 >
                   <span className="inline-flex items-center gap-2">
@@ -1348,9 +1065,9 @@ export default function PortfolioView({
                   <>
                     <button
                       onClick={() => setShowScalableImportModal(true)}
-                      className="rounded-[1.1rem] bg-[var(--accent)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                      className="rounded-full bg-[#0071e3] px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#0077ed]"
                     >
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5">
                         <Plus size={14} />
                         Positionen importieren
                       </span>
@@ -1358,84 +1075,101 @@ export default function PortfolioView({
                     <button
                       onClick={handleResetScalable}
                       disabled={scalableResetting}
-                      className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                      className="rounded-full border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/12 dark:text-red-300"
                     >
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5">
                         <Trash2 size={14} />
                         {scalableResetting ? "Leere …" : "Depot leeren"}
                       </span>
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => {
-                      if (confirm("Dieses Portfolio wirklich löschen?")) {
-                        onDeletePortfolio(currentPortfolio.id);
-                        setSelectedPortfolio(null);
-                      }
-                    }}
-                    className="rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.16em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Trash2 size={14} />
-                      Löschen
-                    </span>
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setShowAddHoldingModal(true)}
+                      className="rounded-full bg-[#0071e3] px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#0077ed]"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <Plus size={14} />
+                        Position hinzufügen
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm("Dieses Portfolio wirklich löschen?")) {
+                          onDeletePortfolio(currentPortfolio.id);
+                          setSelectedPortfolio(null);
+                        }
+                      }}
+                      className="rounded-full border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/12 dark:text-red-300"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <Trash2 size={14} />
+                        Löschen
+                      </span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
 
+            {showInstitutionalReport && currentPortfolio && (
+              <div className="mt-6">
+                <InstitutionalReportGenerator
+                  portfolioId={currentPortfolio.id}
+                  portfolioName={currentPortfolio.name}
+                  onAnalyzeStock={onAnalyzeStock}
+                  onClose={() => setShowInstitutionalReport(false)}
+                />
+              </div>
+            )}
+
             {analysis && (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              <div className="mt-6 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-[1.35rem] border border-black/6 bg-[#f5f5f7]/80 p-5 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-[#a1a1a6]">
                     Gesamtwert
                   </div>
-                  <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
+                  <div className="mt-2 text-2xl font-bold tracking-tight text-[#1d1d1f] dark:text-white sm:text-3xl">
                     {formatPrice(analysis.summary.total_value)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <div className="rounded-[1.35rem] border border-black/6 bg-[#f5f5f7]/80 p-5 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-[#a1a1a6]">
                     Investiert
                   </div>
-                  <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
+                  <div className="mt-2 text-2xl font-bold tracking-tight text-[#1d1d1f] dark:text-white sm:text-3xl">
                     {formatPrice(analysis.summary.total_cost)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <div className="rounded-[1.35rem] border border-black/6 bg-[#f5f5f7]/80 p-5 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-[#a1a1a6]">
                     Rendite seit Kauf
                   </div>
-                  <div className={`mt-2 text-3xl font-black ${returnValue >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                  <div className={`mt-2 text-2xl font-bold tracking-tight sm:text-3xl ${returnValue >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {formatPrice(returnValue)}
                   </div>
-                  <div className={`mt-1 text-sm font-bold ${returnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                  <div className={`mt-1 text-xs font-semibold ${returnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {formatPercent(returnPct)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <div className="rounded-[1.35rem] border border-black/6 bg-[#f5f5f7]/80 p-5 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-[#a1a1a6]">
                     Portfolio-Score
                   </div>
-                  <div className={`mt-2 text-3xl font-black ${scoreTone(analysis.summary.avg_score)}`}>
+                  <div className={`mt-2 text-2xl font-bold tracking-tight sm:text-3xl ${scoreTone(analysis.summary.avg_score)}`}>
                     {formatNumber(analysis.summary.avg_score)}
                   </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <div className="rounded-[1.35rem] border border-black/6 bg-[#f5f5f7]/80 p-5 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-[#a1a1a6]">
                     Positionen
                   </div>
-                  <div className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
+                  <div className="mt-2 text-2xl font-bold tracking-tight text-[#1d1d1f] dark:text-white sm:text-3xl">
                     {analysis.summary.num_holdings}
                   </div>
                   {avgHoldingDays != null && (
-                    <div className="hidden">
-                      Ø Haltedauer {formatHoldingPeriod(avgHoldingDays)}
-                    </div>
-                  )}
-                  {avgHoldingDays != null && (
-                    <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                    <div className="mt-1 text-xs font-medium text-[#6e6e73] dark:text-[#a1a1a6]">
                       Ø Haltedauer {formatHoldingPeriod(avgHoldingDays)}
                     </div>
                   )}
@@ -1443,105 +1177,59 @@ export default function PortfolioView({
               </div>
             )}
 
-            {analysis && (
-              <section className="mt-6 rounded-[1.7rem] border border-black/8 bg-white/75 p-5 dark:border-white/10 dark:bg-white/5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
-                      Portfolio-Beratungscheck
-                    </div>
-                    <h3 className="mt-2 text-2xl text-slate-900 dark:text-white">
-                      {advisoryHeadline}
-                    </h3>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-                      Prüft Konzentration, Positionslimit, Diversifikation und Score gegen dein Beratungsprofil.
-                    </p>
-                  </div>
-                  <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.16em] ${advisoryTone}`}>
-                    {advisoryStatus === "ok" ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
-                    {portfolioAdvisoryLoading ? "Prüft" : advisoryStatus === "ok" ? "Passt" : "Prüfen"}
-                  </div>
+            {/* Apple Segmented Category Navigation */}
+            <div className="mt-7 border-t border-black/6 pt-6 dark:border-white/10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                  Ansicht & Werkzeuge nach Kategorie
                 </div>
-
-                <div className="mt-5 grid gap-3 lg:grid-cols-4">
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Status
-                    </div>
-                    <div className="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-white">{advisoryStatusCopy}</div>
-                  </div>
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Top Position
-                    </div>
-                    <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
-                      {advisoryTopHolding?.ticker || "n/a"}
-                    </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      {advisoryTopHoldingPct != null ? `${formatNumber(advisoryTopHoldingPct)}% vom Portfolio` : "Keine Bewertung"}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Positionslimit
-                    </div>
-                    <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
-                      {formatNumber(maxSinglePositionPct)}%
-                    </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      aus deinem Beratungsprofil
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Profil
-                    </div>
-                    <div className="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-white">
-                      {profileValueLabel(advisoryProfileLimits?.preferred_strategy || advisoryProfile?.preferred_strategy || "mixed")} / {profileValueLabel(advisoryProfileLimits?.risk_tolerance || advisoryProfile?.risk_tolerance || "medium")}
-                    </div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      Verlusttragfähigkeit {profileValueLabel(advisoryProfileLimits?.loss_capacity || advisoryProfile?.loss_capacity || "medium")}
-                    </div>
-                  </div>
+                <div className="text-xs text-[#6e6e73] dark:text-[#a1a1a6]">
+                  Wähle einen Bereich für fokussierte Auswertungen und Spezial-Rechner
                 </div>
-
-                <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Priorisierte Prüfliste
-                    </div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
-                      Score {portfolioAdvisoryLoading ? "--" : portfolioAdvisory?.advisory_score ?? "--"}/100
-                    </div>
-                  </div>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                    {advisoryReviewActions.map((item, index) => (
-                      <div
-                        key={`${item.flag || item.title || "review"}-${index}`}
-                        className={`rounded-2xl border p-4 ${advisoryActionTone(item.level)}`}
-                      >
-                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-75">
-                          {advisoryLevelLabel(item.level)} #{index + 1}
-                        </div>
-                        <div className="mt-2 text-sm font-black leading-5">
-                          {item.title || "Prüfpunkt"}
-                        </div>
-                        <div className="mt-2 text-xs font-semibold leading-5 opacity-90">
-                          {item.detail || "Keine harte Bremse erkannt."}
-                        </div>
-                        <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold leading-5 text-slate-700 dark:bg-black/40 dark:text-slate-200">
-                          {item.next_step || "Trigger, Zielgewicht und Invalidierung dokumentieren."}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5 rounded-2xl border border-black/6 bg-[#f5f5f7] p-1.5 dark:border-white/10 dark:bg-[#141416]">
+                {([
+                  { id: "positionen", label: "Positionen & Struktur", icon: LayoutGrid, badge: currentPortfolio.holdings.length },
+                  { id: "performance", label: "Performance & Vergleich", icon: BarChart3 },
+                  { id: "risiko", label: "Risiko & Stresstest", icon: ShieldAlert },
+                  { id: "ertrag", label: "Ertrag & Steuern", icon: Coins },
+                  { id: "alarme", label: "Alarme & Radar", icon: CalendarDays, badge: alerts.filter((item) => item.enabled).length || undefined },
+                ] as const).map((tab) => {
+                  const Icon = tab.icon;
+                  const active = portfolioCategory === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setPortfolioCategory(tab.id)}
+                      className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all sm:flex-initial ${
+                        active
+                          ? "bg-[#0071e3] text-white shadow-xs"
+                          : "text-[#1d1d1f] hover:bg-black/5 dark:text-[#f5f5f7] dark:hover:bg-white/10"
+                      }`}
+                    >
+                      <Icon size={14} />
+                      <span>{tab.label}</span>
+                      {"badge" in tab && tab.badge ? (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                            active
+                              ? "bg-white/20 text-white"
+                              : "bg-black/8 text-[#1d1d1f] dark:bg-white/15 dark:text-white"
+                          }`}
+                        >
+                          {tab.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {holdingEditNotice && (
               <div
-                className={`mt-6 rounded-[1.2rem] border px-4 py-3 text-sm font-semibold ${
+                className={`mt-5 rounded-[1.2rem] border px-4 py-3 text-sm font-semibold ${
                   holdingEditNotice.type === "success"
                     ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
                     : "border-red-500/20 bg-red-500/10 text-red-700 dark:border-red-500/30 dark:text-red-400"
@@ -1550,636 +1238,182 @@ export default function PortfolioView({
                 {holdingEditNotice.message}
               </div>
             )}
-
-            <section className="surface-panel rounded-[2rem] p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
-                    Preisalarme
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    Auslösung bei Kursberührung mit fünf Minuten Sperrzeit. Alarme werden in dieser Beta nur per Telegram versendet.
-                  </p>
-                </div>
-                <div className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-bold text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
-                  {alerts.filter((item) => item.enabled).length} aktiv
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px_140px_120px]">
-                <input
-                  value={newAlertSymbol}
-                  onChange={(e) => setNewAlertSymbol(e.target.value.toUpperCase())}
-                  placeholder="Ticker (z.B. AAPL)"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                />
-                <select
-                  value={newAlertDirection}
-                  onChange={(e) => setNewAlertDirection(e.target.value as "above" | "below")}
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                >
-                  <option value="above">Überschreitet</option>
-                  <option value="below">Unterschreitet</option>
-                </select>
-                <input
-                  value={newAlertTarget}
-                  onChange={(e) => setNewAlertTarget(e.target.value)}
-                  type="number"
-                  step="0.01"
-                  placeholder="Zielkurs"
-                  className="rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                />
-                <button
-                  onClick={createPriceAlert}
-                  className="rounded-xl bg-[#1d1d1f] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-                >
-                  Alarm hinzufügen
-                </button>
-              </div>
-
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:border-white/8 dark:bg-white/[0.02] dark:text-slate-400">
-                      <th className="px-4 py-3">Ticker</th>
-                      <th className="px-4 py-3">Regel</th>
-                      <th className="px-4 py-3 text-right">Zielkurs</th>
-                      <th className="px-4 py-3">Letzte Auslösung</th>
-                      <th className="px-4 py-3 text-right">Status</th>
-                      <th className="px-4 py-3 text-right">Verwalten</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alertsLoading ? (
-                      <tr>
-                        <td className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
-                          Alerts werden geladen...
-                        </td>
-                      </tr>
-                    ) : alerts.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
-                          Noch keine Alerts vorhanden.
-                        </td>
-                      </tr>
-                    ) : (
-                      alerts.map((alert) => (
-                        <tr key={alert.id} className="border-b border-black/6 last:border-b-0 dark:border-white/8">
-                          <td className="px-4 py-4 text-sm font-extrabold text-slate-900 dark:text-white">{alert.symbol}</td>
-                          <td className="px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">{alertDirectionLabel(alert.direction)}</td>
-                          <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            {formatPrice(alert.target_price)}
-                          </td>
-                          <td className="px-4 py-4 text-xs text-slate-500 dark:text-slate-400">
-                            {alert.last_triggered_at
-                              ? new Date(alert.last_triggered_at).toLocaleString()
-                              : "Noch nie"}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <span
-                              className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
-                                alert.enabled
-                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                  : "bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-400"
-                              }`}
-                            >
-                              {alert.enabled ? "Aktiv" : "Pausiert"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => toggleAlert(alert)}
-                                className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                              >
-                                {alert.enabled ? "Pausieren" : "Aktivieren"}
-                              </button>
-                              <button
-                                onClick={() => deleteAlert(alert)}
-                                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                              >
-                                Löschen
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {portfolioVerdict && (
-              <div className="mt-6 flex items-start gap-4 rounded-[1.8rem] border border-black/8 bg-white/80 dark:bg-white/5 p-6 text-slate-900 dark:text-white shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/[0.04] dark:bg-white/10 text-slate-800 dark:text-white">
-                  <LayoutGrid size={22} />
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
-                    Portfolio-Einordnung
-                  </div>
-                  <p className="mt-3 text-base leading-7 text-slate-700 dark:text-slate-300">{portfolioVerdict}</p>
-                </div>
-              </div>
-            )}
           </section>
-
-          {showRebalanceWizard && currentPortfolio && (
-            <RebalanceWizard
-              portfolioId={currentPortfolio.id}
-              portfolioName={currentPortfolio.name}
-              holdingsCount={currentPortfolio.holdings.length}
-              maxProfilePositionPct={maxSinglePositionPct}
-              onClose={() => setShowRebalanceWizard(false)}
-            />
-          )}
-
-          {showStressTest && currentPortfolio && (
-            <StressTestSimulator
-              portfolioId={currentPortfolio.id}
-              portfolioName={currentPortfolio.name}
-            />
-          )}
-
-          {showDividendForecast && currentPortfolio && (
-            <DividendForecastSimulator
-              portfolioId={currentPortfolio.id}
-              portfolioName={currentPortfolio.name}
-            />
-          )}
-
-          {showEarningsRadar && currentPortfolio && (
-            <EarningsRadar
-              portfolioId={currentPortfolio.id}
-              portfolioName={currentPortfolio.name}
-            />
-          )}
-
-          {showSuperinvestors && currentPortfolio && (
-            <PortfolioSuperinvestorRadar
-              portfolioId={currentPortfolio.id}
-              onSelectTicker={onAnalyzeStock}
-            />
-          )}
-
-          {showETFOverlap && currentPortfolio && (
-            <ETFOverlapFeeDetector
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-            />
-          )}
-
-          {showTaxHarvesting && currentPortfolio && (
-            <TaxHarvestingManager
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-            />
-          )}
-
-          {showOptionsIncome && currentPortfolio && (
-            <OptionsIncomeScanner
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-            />
-          )}
-
-          {showMonteCarlo && currentPortfolio && (
-            <MonteCarloSimulator
-              portfolioId={currentPortfolio.id}
-              initialCapital={analysis?.summary.total_value}
-              onClose={() => setShowMonteCarlo(false)}
-            />
-          )}
-
-          {showFactors && currentPortfolio && (
-            <FactorDecompositionRadar
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowFactors(false)}
-            />
-          )}
-
-          {showOptimizer && currentPortfolio && (
-            <EfficientFrontierOptimizer
-              portfolioId={currentPortfolio.id}
-              onApplyTargets={(_targets, _strategyName) => {
-                setShowOptimizer(false);
-                setShowRebalanceWizard(true);
-              }}
-              onClose={() => setShowOptimizer(false)}
-            />
-          )}
-
-          {showTailRisk && currentPortfolio && (
-            <TailRiskTerminal
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowTailRisk(false)}
-            />
-          )}
-
-          {showESG && currentPortfolio && (
-            <ESGSustainabilityRadar
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowESG(false)}
-            />
-          )}
-
-          {showLiquidity && currentPortfolio && (
-            <LiquidityRiskSimulator
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowLiquidity(false)}
-            />
-          )}
-
-          {showCurrencyHedging && currentPortfolio && (
-            <CurrencyHedgingTerminal
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowCurrencyHedging(false)}
-            />
-          )}
-
-          {showBrinson && currentPortfolio && (
-            <BrinsonAttributionTerminal
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowBrinson(false)}
-            />
-          )}
-
-          {showFixedIncome && currentPortfolio && (
-            <FixedIncomeTerminal
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowFixedIncome(false)}
-            />
-          )}
-
-          {showRiskRatios && currentPortfolio && (
-            <RiskRatiosTerminal
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowRiskRatios(false)}
-            />
-          )}
-
-          {showCrisisScenarios && currentPortfolio && (
-            <CrisisScenarioTerminal
-              portfolioId={currentPortfolio.id}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowCrisisScenarios(false)}
-            />
-          )}
-
-          {showInstitutionalReport && currentPortfolio && (
-            <InstitutionalReportGenerator
-              portfolioId={currentPortfolio.id}
-              portfolioName={currentPortfolio.name}
-              onAnalyzeStock={onAnalyzeStock}
-              onClose={() => setShowInstitutionalReport(false)}
-            />
-          )}
 
           {analysis && analysis.holdings.length > 0 ? (
             <>
-              <div className="grid gap-6 lg:grid-cols-2">
-                {isScalableManagedPortfolio ? (
-                  <section className="surface-panel rounded-[2rem] border border-black/8 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-300">
-                      Verifizierter Broker-Snapshot
+              {/* KATEGORIE 1: POSITIONEN & STRUKTUR */}
+              {portfolioCategory === "positionen" && (
+                <div className="space-y-6">
+                  <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] px-5 py-4">
+                    <div className="text-xs font-semibold text-[#6e6e73] dark:text-[#a1a1a6]">
+                      Struktur-Werkzeuge:
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
-                      Aktueller Wert und FIFO-Einstand stammen direkt aus dem abgeglichenen Scalable-Snapshot.
-                      Eine historische Kurve wird erst angezeigt, wenn Scalable dafür vollständig vergleichbare
-                      Zeitreihen liefert.
-                    </p>
-                  </section>
-                ) : (
-                  <PortfolioPerformance portfolioId={selectedPortfolio!} />
-                )}
-                <PortfolioHeatmap holdings={analysis.holdings} />
-              </div>
-
-              <BenchmarkComparison
-                portfolioId={selectedPortfolio!}
-                portfolioName={currentPortfolio?.name}
-              />
-
-              <div className="grid gap-6 lg:grid-cols-2">
-                {!isScalableManagedPortfolio && <DividendDashboard portfolioId={selectedPortfolio!} />}
-                <RiskCorrelationMatrix portfolioId={selectedPortfolio!} />
-              </div>
-
-              {selectedPortfolio && !isScalableManagedPortfolio && (
-                <AssetSuggestions
-                  portfolioId={selectedPortfolio}
-                  onAdd={(ticker: string) => {
-                    setNewHolding({ ticker, shares: "1", buyPrice: "" });
-                    setShowAddHoldingModal(true);
-                  }}
-                />
-              )}
-
-              {Object.keys(analysis.summary.sector_allocation).length > 0 && (
-                <section className="surface-panel rounded-[2rem] p-6">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Sector Allocation
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    {Object.entries(analysis.summary.sector_allocation)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([sector, pct]) => (
-                        <div key={sector} className="grid items-center gap-3 md:grid-cols-[180px_1fr_70px]">
-                          <div className="text-sm font-bold text-slate-800">{sector}</div>
-                          <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
-                            <div
-                              className="h-full rounded-full bg-[#1d1d1f] dark:bg-white"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <div className="text-right text-sm font-bold text-slate-500">
-                            {formatNumber(pct)}%
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </section>
-              )}
-
-              <section className="surface-panel overflow-hidden rounded-[2rem] p-0">
-                <div className="border-b border-black/6 px-6 py-5">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
-                    Positionen
-                  </div>
-                </div>
-                <div className="space-y-3 p-4 md:hidden">
-                  {analysis.holdings.map((holding) => {
-                    const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
-                    const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
-                    const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
-                    const isEditing = isEditingHolding(holding.ticker);
-                    return (
-                      <div
-                        key={`mobile-${holding.ticker}`}
-                        className="rounded-[1.3rem] border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5"
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setShowRebalanceWizard((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showRebalanceWizard
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-extrabold text-slate-900 dark:text-white">{holding.ticker}</div>
-                            <div className="truncate text-sm text-slate-500 dark:text-slate-400">{holding.name}</div>
-                          </div>
-                          <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
-                            holding.recommendation?.includes("BUY")
-                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                              : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
-                                ? "bg-red-500/10 text-red-700 dark:text-red-400"
-                                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                          }`}>
-                            {recommendationLabel(holding.recommendation)}
-                          </span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Scale size={13} />
+                          Rebalancing-Rechner
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowETFOverlap((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showETFOverlap
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <PieChart size={13} />
+                          ETF-Overlap & Gebühren
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowOptimizer((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showOptimizer
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Target size={13} />
+                          Effizienz & MPT
+                        </span>
+                      </button>
+                    </div>
+                  </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Anteile</div>
-                            <div className="mt-1 font-bold text-slate-900 dark:text-white">{holding.shares}</div>
-                          </div>
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Wert</div>
-                            <div className="mt-1 font-bold text-slate-900 dark:text-white">{formatPrice(holding.position_value || 0)}</div>
-                          </div>
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Kaufkurs</div>
-                            <div className="mt-1 font-bold text-slate-900 dark:text-white">
-                              {hasEntry ? formatPrice(holding.buy_price) : "Kurs fehlt"}
-                            </div>
-                          </div>
-                          <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Aktuell</div>
-                            <div className="mt-1 font-bold text-slate-900 dark:text-white">{formatPrice(holding.current_price || 0)}</div>
-                          </div>
-                        </div>
+                  {showRebalanceWizard && currentPortfolio && (
+                    <RebalanceWizard
+                      portfolioId={currentPortfolio.id}
+                      portfolioName={currentPortfolio.name}
+                      holdingsCount={currentPortfolio.holdings.length}
+                      maxProfilePositionPct={maxSinglePositionPct}
+                      onClose={() => setShowRebalanceWizard(false)}
+                    />
+                  )}
+                  {showETFOverlap && currentPortfolio && (
+                    <ETFOverlapFeeDetector
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                    />
+                  )}
+                  {showOptimizer && currentPortfolio && (
+                    <EfficientFrontierOptimizer
+                      portfolioId={currentPortfolio.id}
+                      onApplyTargets={(_targets, _strategyName) => {
+                        setShowOptimizer(false);
+                        setShowRebalanceWizard(true);
+                      }}
+                      onClose={() => setShowOptimizer(false)}
+                    />
+                  )}
 
-                        <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                          <span className="rounded-full border border-black/8 bg-white px-3 py-1 dark:border-white/10 dark:bg-white/5">
-                            Kaufdatum {formatPurchaseDate(holding.purchase_date)}
-                          </span>
-                          <span className="rounded-full border border-black/8 bg-white px-3 py-1 dark:border-white/10 dark:bg-white/5">
-                            Seit Kauf {formatHoldingPeriod(holding.holding_days)}
-                          </span>
-                          <span className={`rounded-full px-3 py-1 ${scoreTone(holding.score || 0)} bg-black/[0.04] dark:bg-white/10`}>
-                            Score {formatNumber(holding.score, 0, "0")}
-                          </span>
+                  {/* Positionen-Tabelle direkt als Hauptelement */}
+                  <section className="surface-panel overflow-hidden rounded-[2rem] p-0">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/6 px-6 py-5 dark:border-white/10">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Bestand & Einzelwerte
                         </div>
-                        {!hasEntry && (
-                          <button
-                            type="button"
-                            onClick={() => openEditHolding({
-                              ticker: holding.ticker,
-                              shares: holding.shares,
-                              buyPrice: holding.buy_price,
-                              purchaseDate: holding.purchase_date,
-                            })}
-                            className="mt-3 w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left text-xs font-semibold text-amber-800 dark:text-amber-400"
-                          >
-                            Kaufkurs fehlt: Einstand eintragen, damit Rendite seit Kauf korrekt berechnet wird.
-                          </button>
-                        )}
-
-                        <div className="mt-4 flex items-end justify-between gap-3">
-                          <div>
-                            <div className={`text-base font-extrabold ${holdingReturn >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                              {formatPrice(holdingReturn)}
-                            </div>
-                            <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                              {formatPercent(holdingReturnPct)}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => onAnalyzeStock(holding.ticker)}
-                              className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                            >
-                              Analysieren
-                            </button>
-                            <button
-                              onClick={() => openEditHolding({
-                                ticker: holding.ticker,
-                                shares: holding.shares,
-                                buyPrice: holding.buy_price,
-                                purchaseDate: holding.purchase_date,
-                              })}
-                              className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
-                                isEditing
-                                  ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
-                                  : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                              }`}
-                            >
-                              {isEditing ? "Bearbeitung" : "Bearbeiten"}
-                            </button>
-                            <button
-                              onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
-                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                            >
-                              Entfernen
-                            </button>
-                          </div>
-                        </div>
-
-                        {isEditing && (
-                          <div className="mt-4 rounded-[1.2rem] border border-[var(--accent)]/20 bg-[var(--accent-soft)]/40 p-4">
-                            <div className="grid gap-3">
-                              <label className="block">
-                                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                                  Anteile
-                                </div>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.0001"
-                                  value={editHoldingShares}
-                                  onChange={(e) => setEditHoldingShares(e.target.value)}
-                                  className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
-                                />
-                              </label>
-                              <label className="block">
-                                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                                  Kaufkurs (USD)
-                                </div>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.0001"
-                                  value={editHoldingBuyPrice}
-                                  onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
-                                  placeholder="Optional"
-                                  className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
-                                />
-                              </label>
-                              <label className="block">
-                                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-                                  Kaufdatum
-                                </div>
-                                <input
-                                  type="date"
-                                  value={editHoldingPurchaseDate}
-                                  onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
-                                  className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
-                                />
-                              </label>
-                            </div>
-                            <div className="mt-4 flex justify-end gap-2">
-                              <button
-                                onClick={closeEditHolding}
-                                className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
-                              >
-                                <span className="inline-flex items-center gap-1">
-                                  <X size={12} />
-                                  Abbrechen
-                                </span>
-                              </button>
-                              <button
-                                onClick={saveHoldingEdit}
-                                disabled={savingHoldingEdit || !editHoldingShares.trim()}
-                                className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
-                              >
-                                <span className="inline-flex items-center gap-1">
-                                  <Check size={12} />
-                                  {savingHoldingEdit ? "Speichert" : "Speichern"}
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                        <h3 className="mt-1 text-lg font-semibold text-[#1d1d1f] dark:text-white">
+                          Positionen ({analysis.holdings.length})
+                        </h3>
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:border-white/8 dark:bg-white/[0.02] dark:text-slate-400">
-                        <th className="px-6 py-4">Aktie</th>
-                        <th className="px-4 py-4 text-right">Anteile</th>
-                        <th className="px-4 py-4 text-right">Kaufdatum</th>
-                        <th className="px-4 py-4 text-right">Haltedauer</th>
-                        <th className="px-4 py-4 text-right">Kaufkurs</th>
-                        <th className="px-4 py-4 text-right">Kurs</th>
-                        <th className="px-4 py-4 text-right">Wert</th>
-                        <th className="px-4 py-4 text-right">Seit Kauf</th>
-                        <th className="px-4 py-4 text-right">Score</th>
-                        <th className="px-4 py-4 text-center">Signal</th>
-                        <th className="px-6 py-4 text-right">Verwalten</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                    </div>
+                    <div className="space-y-3 p-4 md:hidden">
                       {analysis.holdings.map((holding) => {
                         const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
                         const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
                         const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
                         const isEditing = isEditingHolding(holding.ticker);
                         return (
-                        <Fragment key={`desktop-${holding.ticker}`}>
-                          <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02] dark:border-white/8 dark:hover:bg-white/[0.02]">
-                            <td className="px-6 py-4">
-                              <div className="font-extrabold text-slate-900 dark:text-white">{holding.ticker}</div>
-                              <div className="max-w-[220px] truncate text-sm text-slate-500 dark:text-slate-400">{holding.name}</div>
-                            </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
-                              {holding.shares}
-                            </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
-                              {formatPurchaseDate(holding.purchase_date)}
-                            </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
-                              {formatHoldingPeriod(holding.holding_days)}
-                            </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
-                              {hasEntry ? formatPrice(holding.buy_price) : "Kaufkurs fehlt"}
-                            </td>
-                            <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
-                              {formatPrice(holding.current_price || 0)}
-                            </td>
-                            <td className="px-4 py-4 text-right text-sm font-extrabold text-slate-900 dark:text-white">
-                              {formatPrice(holding.position_value || 0)}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                                {formatPrice(holdingReturn)}
+                          <div
+                            key={`mobile-${holding.ticker}`}
+                            className="rounded-[1.3rem] border border-black/8 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-extrabold text-slate-900 dark:text-white">{holding.ticker}</div>
+                                <div className="truncate text-sm text-slate-500 dark:text-slate-400">{holding.name}</div>
                               </div>
-                              <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                                {formatPercent(holdingReturnPct)}
-                              </div>
-                              {!hasEntry && (
-                                <div className="mt-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                                  Bearbeiten für eine korrekte Rendite
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04] dark:bg-white/10`}>
-                                {formatNumber(holding.score, 0, "0")}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              <span
-                                className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
-                                  holding.recommendation?.includes("BUY")
-                                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                    : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
-                                      ? "bg-red-500/10 text-red-700 dark:text-red-400"
-                                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                                }`}
-                              >
+                              <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                                holding.recommendation?.includes("BUY")
+                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                  : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
+                                    ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                                    : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                              }`}>
                                 {recommendationLabel(holding.recommendation)}
                               </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex justify-end gap-2">
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                              <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                                <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Anteile</div>
+                                <div className="mt-1 font-bold text-slate-900 dark:text-white">{holding.shares}</div>
+                              </div>
+                              <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                                <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Wert</div>
+                                <div className="mt-1 font-bold text-slate-900 dark:text-white">{formatPrice(holding.position_value || 0)}</div>
+                              </div>
+                              <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                                <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Kaufkurs</div>
+                                <div className="mt-1 font-bold text-slate-900 dark:text-white">
+                                  {hasEntry ? formatPrice(holding.buy_price) : "Kurs fehlt"}
+                                </div>
+                              </div>
+                              <div className="rounded-xl border border-black/6 bg-black/[0.02] px-3 py-2 dark:border-white/8 dark:bg-white/5">
+                                <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Aktuell</div>
+                                <div className="mt-1 font-bold text-slate-900 dark:text-white">{formatPrice(holding.current_price || 0)}</div>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                              <span className="rounded-full border border-black/8 bg-white px-3 py-1 dark:border-white/10 dark:bg-white/5">
+                                Kaufdatum {formatPurchaseDate(holding.purchase_date)}
+                              </span>
+                              <span className="rounded-full border border-black/8 bg-white px-3 py-1 dark:border-white/10 dark:bg-white/5">
+                                Seit Kauf {formatHoldingPeriod(holding.holding_days)}
+                              </span>
+                              <span className={`rounded-full px-3 py-1 ${scoreTone(holding.score || 0)} bg-black/[0.04] dark:bg-white/10`}>
+                                Score {formatNumber(holding.score, 0, "0")}
+                              </span>
+                            </div>
+                            {!hasEntry && (
+                              <button
+                                type="button"
+                                onClick={() => openEditHolding({
+                                  ticker: holding.ticker,
+                                  shares: holding.shares,
+                                  buyPrice: holding.buy_price,
+                                  purchaseDate: holding.purchase_date,
+                                })}
+                                className="mt-3 w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left text-xs font-semibold text-amber-800 dark:text-amber-400"
+                              >
+                                Kaufkurs fehlt: Einstand eintragen, damit Rendite seit Kauf korrekt berechnet wird.
+                              </button>
+                            )}
+
+                            <div className="mt-4 flex items-end justify-between gap-3">
+                              <div>
+                                <div className={`text-base font-extrabold ${holdingReturn >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                                  {formatPrice(holdingReturn)}
+                                </div>
+                                <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                                  {formatPercent(holdingReturnPct)}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
                                 <button
                                   onClick={() => onAnalyzeStock(holding.ticker)}
                                   className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
@@ -2195,7 +1429,7 @@ export default function PortfolioView({
                                   })}
                                   className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
                                     isEditing
-                                      ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
+                                      ? "border-[#0071e3] bg-[#0071e3] text-white"
                                       : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                                   }`}
                                 >
@@ -2208,14 +1442,13 @@ export default function PortfolioView({
                                   Entfernen
                                 </button>
                               </div>
-                            </td>
-                          </tr>
-                          {isEditing && (
-                            <tr className="border-b border-black/6 bg-[var(--accent-soft)]/30 dark:border-white/8">
-                              <td colSpan={11} className="px-6 py-4">
-                                <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+                            </div>
+
+                            {isEditing && (
+                              <div className="mt-4 rounded-[1.2rem] border border-black/10 bg-[#f5f5f7] p-4 dark:border-white/10 dark:bg-[#2c2c2e]">
+                                <div className="grid gap-3">
                                   <label className="block">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                                       Anteile
                                     </div>
                                     <input
@@ -2224,11 +1457,11 @@ export default function PortfolioView({
                                       step="0.0001"
                                       value={editHoldingShares}
                                       onChange={(e) => setEditHoldingShares(e.target.value)}
-                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
                                     />
                                   </label>
                                   <label className="block">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                                       Kaufkurs (USD)
                                     </div>
                                     <input
@@ -2238,51 +1471,924 @@ export default function PortfolioView({
                                       value={editHoldingBuyPrice}
                                       onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
                                       placeholder="Optional"
-                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
                                     />
                                   </label>
                                   <label className="block">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
                                       Kaufdatum
                                     </div>
                                     <input
                                       type="date"
                                       value={editHoldingPurchaseDate}
                                       onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
-                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
+                                      className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800"
                                     />
                                   </label>
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      onClick={closeEditHolding}
-                                      className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-                                    >
-                                      <span className="inline-flex items-center gap-1">
-                                        <X size={12} />
-                                        Abbrechen
-                                      </span>
-                                    </button>
-                                    <button
-                                      onClick={saveHoldingEdit}
-                                      disabled={savingHoldingEdit || !editHoldingShares.trim()}
-                                      className="rounded-xl bg-[var(--accent)] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
-                                    >
-                                      <span className="inline-flex items-center gap-1">
-                                        <Check size={12} />
-                                        {savingHoldingEdit ? "Speichert" : "Speichern"}
-                                      </span>
-                                    </button>
-                                  </div>
                                 </div>
+                                <div className="mt-4 flex justify-end gap-2">
+                                  <button
+                                    onClick={closeEditHolding}
+                                    className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700"
+                                  >
+                                    <span className="inline-flex items-center gap-1">
+                                      <X size={12} />
+                                      Abbrechen
+                                    </span>
+                                  </button>
+                                  <button
+                                    onClick={saveHoldingEdit}
+                                    disabled={savingHoldingEdit || !editHoldingShares.trim()}
+                                    className="rounded-xl bg-[#0071e3] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                                  >
+                                    <span className="inline-flex items-center gap-1">
+                                      <Check size={12} />
+                                      {savingHoldingEdit ? "Speichert" : "Speichern"}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="hidden overflow-x-auto md:block">
+                      <table className="min-w-full">
+                        <thead>
+                          <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:border-white/8 dark:bg-white/[0.02] dark:text-slate-400">
+                            <th className="px-6 py-4">Aktie</th>
+                            <th className="px-4 py-4 text-right">Anteile</th>
+                            <th className="px-4 py-4 text-right">Kaufdatum</th>
+                            <th className="px-4 py-4 text-right">Haltedauer</th>
+                            <th className="px-4 py-4 text-right">Kaufkurs</th>
+                            <th className="px-4 py-4 text-right">Kurs</th>
+                            <th className="px-4 py-4 text-right">Wert</th>
+                            <th className="px-4 py-4 text-right">Seit Kauf</th>
+                            <th className="px-4 py-4 text-right">Score</th>
+                            <th className="px-4 py-4 text-center">Signal</th>
+                            <th className="px-6 py-4 text-right">Verwalten</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {analysis.holdings.map((holding) => {
+                            const holdingReturn = holding.return_since_buy ?? holding.gain_loss ?? 0;
+                            const holdingReturnPct = holding.return_since_buy_pct ?? holding.gain_loss_pct ?? 0;
+                            const hasEntry = holding.buy_price != null && Number.isFinite(Number(holding.buy_price));
+                            const isEditing = isEditingHolding(holding.ticker);
+                            return (
+                              <Fragment key={`desktop-${holding.ticker}`}>
+                                <tr key={holding.ticker} className="border-b border-black/6 last:border-b-0 hover:bg-black/[0.02] dark:border-white/8 dark:hover:bg-white/[0.02]">
+                                  <td className="px-6 py-4">
+                                    <div className="font-extrabold text-slate-900 dark:text-white">{holding.ticker}</div>
+                                    <div className="max-w-[220px] truncate text-sm text-slate-500 dark:text-slate-400">{holding.name}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {holding.shares}
+                                  </td>
+                                  <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {formatPurchaseDate(holding.purchase_date)}
+                                  </td>
+                                  <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {formatHoldingPeriod(holding.holding_days)}
+                                  </td>
+                                  <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {hasEntry ? formatPrice(holding.buy_price) : "Kaufkurs fehlt"}
+                                  </td>
+                                  <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {formatPrice(holding.current_price || 0)}
+                                  </td>
+                                  <td className="px-4 py-4 text-right text-sm font-extrabold text-slate-900 dark:text-white">
+                                    {formatPrice(holding.position_value || 0)}
+                                  </td>
+                                  <td className="px-4 py-4 text-right">
+                                    <div className={`text-sm font-extrabold ${holdingReturn >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                                      {formatPrice(holdingReturn)}
+                                    </div>
+                                    <div className={`text-xs font-bold ${holdingReturnPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                                      {formatPercent(holdingReturnPct)}
+                                    </div>
+                                    {!hasEntry && (
+                                      <div className="mt-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Bearbeiten für eine korrekte Rendite
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-4 text-right">
+                                    <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${scoreTone(holding.score || 0)} bg-black/[0.04] dark:bg-white/10`}>
+                                      {formatNumber(holding.score, 0, "0")}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <span
+                                      className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+                                        holding.recommendation?.includes("BUY")
+                                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                          : holding.recommendation?.includes("SELL") || holding.recommendation?.includes("AVOID")
+                                            ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                      }`}
+                                    >
+                                      {recommendationLabel(holding.recommendation)}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex justify-end gap-2">
+                                      <button
+                                        onClick={() => onAnalyzeStock(holding.ticker)}
+                                        className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                                      >
+                                        Analysieren
+                                      </button>
+                                      <button
+                                        onClick={() => openEditHolding({
+                                          ticker: holding.ticker,
+                                          shares: holding.shares,
+                                          buyPrice: holding.buy_price,
+                                          purchaseDate: holding.purchase_date,
+                                        })}
+                                        className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors ${
+                                          isEditing
+                                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                                            : "border-black/8 bg-white text-slate-700 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                                        }`}
+                                      >
+                                        {isEditing ? "Bearbeitung" : "Bearbeiten"}
+                                      </button>
+                                      <button
+                                        onClick={() => onRemoveHolding(currentPortfolio.id, holding.ticker)}
+                                        className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                                      >
+                                        Entfernen
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isEditing && (
+                                  <tr className="border-b border-black/6 bg-[#f5f5f7] dark:border-white/8 dark:bg-[#2c2c2e]">
+                                    <td colSpan={11} className="px-6 py-4">
+                                      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+                                        <label className="block">
+                                          <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                            Anteile
+                                          </div>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.0001"
+                                            value={editHoldingShares}
+                                            onChange={(e) => setEditHoldingShares(e.target.value)}
+                                            className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
+                                          />
+                                        </label>
+                                        <label className="block">
+                                          <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                            Kaufkurs (USD)
+                                          </div>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.0001"
+                                            value={editHoldingBuyPrice}
+                                            onChange={(e) => setEditHoldingBuyPrice(e.target.value)}
+                                            placeholder="Optional"
+                                            className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
+                                          />
+                                        </label>
+                                        <label className="block">
+                                          <div className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                            Kaufdatum
+                                          </div>
+                                          <input
+                                            type="date"
+                                            value={editHoldingPurchaseDate}
+                                            onChange={(e) => setEditHoldingPurchaseDate(e.target.value)}
+                                            className="w-full rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white"
+                                          />
+                                        </label>
+                                        <div className="flex justify-end gap-2">
+                                          <button
+                                            onClick={closeEditHolding}
+                                            className="rounded-xl border border-black/8 bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                                          >
+                                            <span className="inline-flex items-center gap-1">
+                                              <X size={12} />
+                                              Abbrechen
+                                            </span>
+                                          </button>
+                                          <button
+                                            onClick={saveHoldingEdit}
+                                            disabled={savingHoldingEdit || !editHoldingShares.trim()}
+                                            className="rounded-xl bg-[#0071e3] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                                          >
+                                            <span className="inline-flex items-center gap-1">
+                                              <Check size={12} />
+                                              {savingHoldingEdit ? "Speichert" : "Speichern"}
+                                            </span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <PortfolioHeatmap holdings={analysis.holdings} />
+                    {Object.keys(analysis.summary.sector_allocation).length > 0 && (
+                      <section className="surface-panel rounded-[2rem] p-6">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Sektor-Allokation
+                        </div>
+                        <div className="mt-5 space-y-3">
+                          {Object.entries(analysis.summary.sector_allocation)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([sector, pct]) => (
+                              <div key={sector} className="grid items-center gap-3 md:grid-cols-[180px_1fr_70px]">
+                                <div className="text-sm font-semibold text-[#1d1d1f] dark:text-white">{sector}</div>
+                                <div className="h-2 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
+                                  <div
+                                    className="h-full rounded-full bg-[#0071e3]"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <div className="text-right text-sm font-semibold text-[#6e6e73] dark:text-[#a1a1a6]">
+                                  {formatNumber(pct)}%
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+
+                  {portfolioVerdict && (
+                    <div className="surface-panel flex items-start gap-4 rounded-[1.8rem] p-6">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#f5f5f7] text-[#1d1d1f] dark:bg-[#2c2c2e] dark:text-white">
+                        <LayoutGrid size={20} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Portfolio-Einordnung
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-[#1d1d1f] dark:text-[#f5f5f7]">{portfolioVerdict}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* KATEGORIE 2: PERFORMANCE & VERGLEICH */}
+              {portfolioCategory === "performance" && (
+                <div className="space-y-6">
+                  <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] px-5 py-4">
+                    <div className="text-xs font-semibold text-[#6e6e73] dark:text-[#a1a1a6]">
+                      Performance-Analyse:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setShowRiskRatios((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showRiskRatios
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <BarChart3 size={13} />
+                          Performance-Ratios (Sharpe / Sortino)
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowBrinson((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showBrinson
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Award size={13} />
+                          Performance-Attribution
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowFactors((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showFactors
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Compass size={13} />
+                          Faktor-Attribution
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showRiskRatios && currentPortfolio && (
+                    <RiskRatiosTerminal
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowRiskRatios(false)}
+                    />
+                  )}
+                  {showBrinson && currentPortfolio && (
+                    <BrinsonAttributionTerminal
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowBrinson(false)}
+                    />
+                  )}
+                  {showFactors && currentPortfolio && (
+                    <FactorDecompositionRadar
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowFactors(false)}
+                    />
+                  )}
+
+                  <BenchmarkComparison
+                    portfolioId={selectedPortfolio!}
+                    portfolioName={currentPortfolio?.name}
+                  />
+
+                  {isScalableManagedPortfolio ? (
+                    <section className="surface-panel rounded-[2rem] p-6">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                        Verifizierter Broker-Snapshot
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#1d1d1f] dark:text-[#f5f5f7]">
+                        Aktueller Wert und FIFO-Einstand stammen direkt aus dem abgeglichenen Scalable-Snapshot.
+                        Nutze den Benchmark-Vergleich oben für die historische Entwicklung deiner aktuellen Gewichtung gegen SPY, QQQ und DAX.
+                      </p>
+                    </section>
+                  ) : (
+                    <PortfolioPerformance portfolioId={selectedPortfolio!} />
+                  )}
+                </div>
+              )}
+
+              {/* KATEGORIE 3: RISIKO & STRESSTEST */}
+              {portfolioCategory === "risiko" && (
+                <div className="space-y-6">
+                  <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] px-5 py-4">
+                    <div className="text-xs font-semibold text-[#6e6e73] dark:text-[#a1a1a6]">
+                      Risiko-Simulatoren:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setShowStressTest((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showStressTest
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <ShieldAlert size={13} />
+                          Crash-Simulator
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowCrisisScenarios((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showCrisisScenarios
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Flame size={13} />
+                          Krisen-Stresstest
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowTailRisk((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showTailRisk
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <AlertOctagon size={13} />
+                          Tail-Risk & VaR
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowMonteCarlo((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showMonteCarlo
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Layers size={13} />
+                          Monte-Carlo (10k Pfade)
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowLiquidity((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showLiquidity
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Droplets size={13} />
+                          Liquidität & Slippage
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowCurrencyHedging((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showCurrencyHedging
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Coins size={13} />
+                          FX & Währungsrisiko
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showStressTest && currentPortfolio && (
+                    <StressTestSimulator
+                      portfolioId={currentPortfolio.id}
+                      portfolioName={currentPortfolio.name}
+                    />
+                  )}
+                  {showCrisisScenarios && currentPortfolio && (
+                    <CrisisScenarioTerminal
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowCrisisScenarios(false)}
+                    />
+                  )}
+                  {showTailRisk && currentPortfolio && (
+                    <TailRiskTerminal
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowTailRisk(false)}
+                    />
+                  )}
+                  {showMonteCarlo && currentPortfolio && (
+                    <MonteCarloSimulator
+                      portfolioId={currentPortfolio.id}
+                      initialCapital={analysis?.summary.total_value}
+                      onClose={() => setShowMonteCarlo(false)}
+                    />
+                  )}
+                  {showLiquidity && currentPortfolio && (
+                    <LiquidityRiskSimulator
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowLiquidity(false)}
+                    />
+                  )}
+                  {showCurrencyHedging && currentPortfolio && (
+                    <CurrencyHedgingTerminal
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowCurrencyHedging(false)}
+                    />
+                  )}
+
+                  <section className="surface-panel rounded-[2rem] p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Portfolio-Beratungscheck
+                        </div>
+                        <h3 className="mt-2 text-2xl font-semibold text-[#1d1d1f] dark:text-white">
+                          {advisoryHeadline}
+                        </h3>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Prüft Konzentration, Positionslimit, Diversifikation und Score gegen dein Beratungsprofil.
+                        </p>
+                      </div>
+                      <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] ${advisoryTone}`}>
+                        {advisoryStatus === "ok" ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
+                        {portfolioAdvisoryLoading ? "Prüft" : advisoryStatus === "ok" ? "Passt" : "Prüfen"}
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 lg:grid-cols-4">
+                      <div className="rounded-2xl border border-black/6 bg-[#f5f5f7]/80 p-4 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Status
+                        </div>
+                        <div className="mt-2 text-sm font-bold leading-6 text-[#1d1d1f] dark:text-white">{advisoryStatusCopy}</div>
+                      </div>
+                      <div className="rounded-2xl border border-black/6 bg-[#f5f5f7]/80 p-4 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Top Position
+                        </div>
+                        <div className="mt-2 text-2xl font-bold text-[#1d1d1f] dark:text-white">
+                          {advisoryTopHolding?.ticker || "n/a"}
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-[#6e6e73] dark:text-[#a1a1a6]">
+                          {advisoryTopHoldingPct != null ? `${formatNumber(advisoryTopHoldingPct)}% vom Portfolio` : "Keine Bewertung"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-black/6 bg-[#f5f5f7]/80 p-4 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Positionslimit
+                        </div>
+                        <div className="mt-2 text-2xl font-bold text-[#1d1d1f] dark:text-white">
+                          {formatNumber(maxSinglePositionPct)}%
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-[#6e6e73] dark:text-[#a1a1a6]">
+                          aus deinem Beratungsprofil
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-black/6 bg-[#f5f5f7]/80 p-4 dark:border-white/10 dark:bg-[#2c2c2e]/75">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Profil
+                        </div>
+                        <div className="mt-2 text-sm font-bold leading-6 text-[#1d1d1f] dark:text-white">
+                          {profileValueLabel(advisoryProfileLimits?.preferred_strategy || advisoryProfile?.preferred_strategy || "mixed")} / {profileValueLabel(advisoryProfileLimits?.risk_tolerance || advisoryProfile?.risk_tolerance || "medium")}
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Verlusttragfähigkeit {profileValueLabel(advisoryProfileLimits?.loss_capacity || advisoryProfile?.loss_capacity || "medium")}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-black/6 bg-[#f5f5f7]/60 p-4 dark:border-white/10 dark:bg-[#2c2c2e]/50">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Priorisierte Prüfliste
+                        </div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1d1d1f] dark:text-white">
+                          Score {portfolioAdvisoryLoading ? "--" : portfolioAdvisory?.advisory_score ?? "--"}/100
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                        {advisoryReviewActions.map((item, index) => (
+                          <div
+                            key={`${item.flag || item.title || "review"}-${index}`}
+                            className={`rounded-2xl border p-4 ${advisoryActionTone(item.level)}`}
+                          >
+                            <div className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-75">
+                              {advisoryLevelLabel(item.level)} #{index + 1}
+                            </div>
+                            <div className="mt-2 text-sm font-bold leading-5">
+                              {item.title || "Prüfpunkt"}
+                            </div>
+                            <div className="mt-2 text-xs font-medium leading-5 opacity-90">
+                              {item.detail || "Keine harte Bremse erkannt."}
+                            </div>
+                            <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs font-semibold leading-5 text-[#1d1d1f] dark:bg-black/40 dark:text-[#f5f5f7]">
+                              {item.next_step || "Trigger, Zielgewicht und Invalidierung dokumentieren."}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  <RiskCorrelationMatrix portfolioId={selectedPortfolio!} />
+                </div>
+              )}
+
+              {/* KATEGORIE 4: ERTRAG & STEUERN */}
+              {portfolioCategory === "ertrag" && (
+                <div className="space-y-6">
+                  <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] px-5 py-4">
+                    <div className="text-xs font-semibold text-[#6e6e73] dark:text-[#a1a1a6]">
+                      Cashflow & Steuer-Werkzeuge:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setShowTaxHarvesting((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showTaxHarvesting
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Scissors size={13} />
+                          Steuer-Optimierer (FSA)
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowDividendForecast((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showDividendForecast
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Coins size={13} />
+                          Dividenden-Schneeball
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowOptionsIncome((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showOptionsIncome
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Coins size={13} />
+                          Options-Cashflow
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowFixedIncome((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showFixedIncome
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Landmark size={13} />
+                          Zinsen & Duration
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showTaxHarvesting && currentPortfolio && (
+                    <TaxHarvestingManager
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                    />
+                  )}
+                  {showDividendForecast && currentPortfolio && (
+                    <DividendForecastSimulator
+                      portfolioId={currentPortfolio.id}
+                      portfolioName={currentPortfolio.name}
+                    />
+                  )}
+                  {showOptionsIncome && currentPortfolio && (
+                    <OptionsIncomeScanner
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                    />
+                  )}
+                  {showFixedIncome && currentPortfolio && (
+                    <FixedIncomeTerminal
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowFixedIncome(false)}
+                    />
+                  )}
+
+                  <DividendDashboard portfolioId={selectedPortfolio!} />
+                </div>
+              )}
+
+              {/* KATEGORIE 5: ALARME & RADAR */}
+              {portfolioCategory === "alarme" && (
+                <div className="space-y-6">
+                  <div className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] px-5 py-4">
+                    <div className="text-xs font-semibold text-[#6e6e73] dark:text-[#a1a1a6]">
+                      Radar & Nachhaltigkeit:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setShowEarningsRadar((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showEarningsRadar
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDays size={13} />
+                          Earnings-Radar
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowSuperinvestors((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showSuperinvestors
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Award size={13} />
+                          Superinvestoren-Radar
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShowESG((prev) => !prev)}
+                        className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                          showESG
+                            ? "border-[#0071e3] bg-[#0071e3] text-white"
+                            : "border-black/10 bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Leaf size={13} />
+                          ESG & Nachhaltigkeit
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showEarningsRadar && currentPortfolio && (
+                    <EarningsRadar
+                      portfolioId={currentPortfolio.id}
+                      portfolioName={currentPortfolio.name}
+                    />
+                  )}
+                  {showSuperinvestors && currentPortfolio && (
+                    <PortfolioSuperinvestorRadar
+                      portfolioId={currentPortfolio.id}
+                      onSelectTicker={onAnalyzeStock}
+                    />
+                  )}
+                  {showESG && currentPortfolio && (
+                    <ESGSustainabilityRadar
+                      portfolioId={currentPortfolio.id}
+                      onAnalyzeStock={onAnalyzeStock}
+                      onClose={() => setShowESG(false)}
+                    />
+                  )}
+
+                  <section className="surface-panel rounded-[2rem] p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Preisalarme
+                        </div>
+                        <p className="mt-1 text-sm text-[#6e6e73] dark:text-[#a1a1a6]">
+                          Auslösung bei Kursberührung mit fünf Minuten Sperrzeit.
+                        </p>
+                      </div>
+                      <div className="rounded-full border border-black/8 bg-[#f5f5f7] px-3 py-1 text-xs font-semibold text-[#1d1d1f] dark:border-white/10 dark:bg-[#2c2c2e] dark:text-white">
+                        {alerts.filter((item) => item.enabled).length} aktiv
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px_140px_auto]">
+                      <input
+                        value={newAlertSymbol}
+                        onChange={(e) => setNewAlertSymbol(e.target.value.toUpperCase())}
+                        placeholder="Ticker (z.B. AAPL)"
+                        className="rounded-xl border border-black/10 bg-[#f5f5f7] px-4 py-3 text-sm font-semibold text-[#1d1d1f] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-white"
+                      />
+                      <select
+                        value={newAlertDirection}
+                        onChange={(e) => setNewAlertDirection(e.target.value as "above" | "below")}
+                        className="rounded-xl border border-black/10 bg-[#f5f5f7] px-4 py-3 text-sm font-semibold text-[#1d1d1f] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-white"
+                      >
+                        <option value="above">Überschreitet</option>
+                        <option value="below">Unterschreitet</option>
+                      </select>
+                      <input
+                        value={newAlertTarget}
+                        onChange={(e) => setNewAlertTarget(e.target.value)}
+                        type="number"
+                        step="0.01"
+                        placeholder="Zielkurs"
+                        className="rounded-xl border border-black/10 bg-[#f5f5f7] px-4 py-3 text-sm font-semibold text-[#1d1d1f] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-white"
+                      />
+                      <button
+                        onClick={createPriceAlert}
+                        className="rounded-full bg-[#0071e3] px-5 py-3 text-xs font-semibold text-white transition-colors hover:bg-[#0077ed]"
+                      >
+                        Alarm hinzufügen
+                      </button>
+                    </div>
+
+                    <div className="mt-5 overflow-x-auto">
+                      <table className="min-w-full">
+                        <thead>
+                          <tr className="border-b border-black/6 bg-black/[0.02] text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73] dark:border-white/8 dark:bg-white/[0.02] dark:text-[#a1a1a6]">
+                            <th className="px-4 py-3">Ticker</th>
+                            <th className="px-4 py-3">Regel</th>
+                            <th className="px-4 py-3 text-right">Zielkurs</th>
+                            <th className="px-4 py-3">Letzte Auslösung</th>
+                            <th className="px-4 py-3 text-right">Status</th>
+                            <th className="px-4 py-3 text-right">Verwalten</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alertsLoading ? (
+                            <tr>
+                              <td className="px-4 py-4 text-sm text-[#6e6e73] dark:text-[#a1a1a6]" colSpan={6}>
+                                Alerts werden geladen...
                               </td>
                             </tr>
+                          ) : alerts.length === 0 ? (
+                            <tr>
+                              <td className="px-4 py-4 text-sm text-[#6e6e73] dark:text-[#a1a1a6]" colSpan={6}>
+                                Noch keine Alerts vorhanden.
+                              </td>
+                            </tr>
+                          ) : (
+                            alerts.map((alert) => (
+                              <tr key={alert.id} className="border-b border-black/6 last:border-b-0 dark:border-white/8">
+                                <td className="px-4 py-4 text-sm font-bold text-[#1d1d1f] dark:text-white">{alert.symbol}</td>
+                                <td className="px-4 py-4 text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">{alertDirectionLabel(alert.direction)}</td>
+                                <td className="px-4 py-4 text-right text-sm font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                                  {formatPrice(alert.target_price)}
+                                </td>
+                                <td className="px-4 py-4 text-xs text-[#6e6e73] dark:text-[#a1a1a6]">
+                                  {alert.last_triggered_at
+                                    ? new Date(alert.last_triggered_at).toLocaleString()
+                                    : "Noch nie"}
+                                </td>
+                                <td className="px-4 py-4 text-right">
+                                  <span
+                                    className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                                      alert.enabled
+                                        ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400"
+                                        : "bg-black/6 text-[#6e6e73] dark:bg-white/10 dark:text-[#a1a1a6]"
+                                    }`}
+                                  >
+                                    {alert.enabled ? "Aktiv" : "Pausiert"}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4">
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={() => toggleAlert(alert)}
+                                      className="rounded-full border border-black/10 bg-[#f5f5f7] px-3 py-1.5 text-[11px] font-semibold text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-white"
+                                    >
+                                      {alert.enabled ? "Pausieren" : "Aktivieren"}
+                                    </button>
+                                    <button
+                                      onClick={() => deleteAlert(alert)}
+                                      className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
+                                    >
+                                      Löschen
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
                           )}
-                        </Fragment>
-                      )})}
-                    </tbody>
-                  </table>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  {selectedPortfolio && !isScalableManagedPortfolio && (
+                    <AssetSuggestions
+                      portfolioId={selectedPortfolio}
+                      onAdd={(ticker: string) => {
+                        setNewHolding({ ticker, shares: "1", buyPrice: "" });
+                        setShowAddHoldingModal(true);
+                      }}
+                    />
+                  )}
+
+                  {paperDashboard ? (
+                    <PaperTradingPanel
+                      data={paperDashboard}
+                      onAnalyze={onAnalyzeStock}
+                      onRefresh={refreshPaperDashboard}
+                    />
+                  ) : (
+                    <ProviderStatePanel
+                      view="paper-trader"
+                      state={paperDashboardLoading ? (paperDashboardSlow ? "slow" : "loading") : paperDashboardError ? "error" : "empty"}
+                      title={
+                        paperDashboardLoading
+                          ? paperDashboardSlow
+                            ? "Paper-Lernkonto antwortet langsam"
+                            : "Paper-Lernkonto wird geladen"
+                          : paperDashboardError
+                            ? "Paper-Lernkonto nicht erreichbar"
+                            : "Noch keine Paper-Trading-Daten"
+                      }
+                      description={
+                        paperDashboardLoading
+                          ? "Demo-Trades, Geldfluss, Risikobuckets und Lernstände werden getrennt geladen."
+                          : paperDashboardError || "Der Provider hat geantwortet, aber noch keine Demo-Trades oder Lernstände geliefert."
+                      }
+                      source="Paper-Trading-Service"
+                      onRetry={() => void refreshPaperDashboard()}
+                      retryLabel="Paper-Daten neu laden"
+                    />
+                  )}
                 </div>
-              </section>
+              )}
             </>
           ) : (
             <section className="surface-panel rounded-[2.4rem] p-10 text-center">
@@ -2296,14 +2402,14 @@ export default function PortfolioView({
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <button
                   onClick={() => window.open(`/api/portfolio/${selectedPortfolio}/export/csv`)}
-                  className="rounded-[1.2rem] border border-black/8 bg-white px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  className="rounded-full border border-black/10 bg-[#f5f5f7] px-5 py-3 text-xs font-semibold text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed] dark:border-white/15 dark:bg-[#2c2c2e] dark:text-[#f5f5f7]"
                 >
                   CSV exportieren
                 </button>
                 {!isScalableManagedPortfolio ? (
                   <button
                     onClick={() => setShowAddHoldingModal(true)}
-                    className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                    className="rounded-full bg-[#0071e3] px-5 py-3 text-xs font-semibold text-white transition-colors hover:bg-[#0077ed]"
                   >
                     Aktie hinzufügen
                   </button>
@@ -2311,7 +2417,7 @@ export default function PortfolioView({
                   <>
                     <button
                       onClick={() => setShowScalableImportModal(true)}
-                      className="rounded-[1.2rem] bg-[var(--accent)] px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+                      className="rounded-full bg-[#0071e3] px-5 py-3 text-xs font-semibold text-white transition-colors hover:bg-[#0077ed]"
                     >
                       <span className="inline-flex items-center gap-2">
                         <Plus size={15} />
@@ -2321,7 +2427,7 @@ export default function PortfolioView({
                     <button
                       onClick={handleLoadScalableSample}
                       disabled={scalableSyncing}
-                      className="rounded-[1.2rem] border border-amber-500/20 bg-amber-500/10 px-5 py-3 text-xs font-extrabold uppercase tracking-[0.16em] text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                      className="rounded-full border border-amber-500/20 bg-amber-500/10 px-5 py-3 text-xs font-semibold text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
                     >
                       <span className="inline-flex items-center gap-2">
                         <Sparkles size={15} />
@@ -2354,42 +2460,12 @@ export default function PortfolioView({
                 setCreatePortfolioNotice(null);
                 setShowCreateModal(true);
               }}
-              className="mt-6 rounded-[1.3rem] bg-[var(--accent)] px-6 py-4 text-xs font-extrabold uppercase tracking-[0.18em] text-white transition-colors hover:bg-[var(--accent-strong)]"
+              className="mt-6 rounded-full bg-[#0071e3] px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#0077ed]"
             >
               Erstes Portfolio erstellen
             </button>
           )}
         </section>
-      )}
-
-      {paperDashboard ? (
-        <PaperTradingPanel
-          data={paperDashboard}
-          onAnalyze={onAnalyzeStock}
-          onRefresh={refreshPaperDashboard}
-        />
-      ) : (
-        <ProviderStatePanel
-          view="paper-trader"
-          state={paperDashboardLoading ? (paperDashboardSlow ? "slow" : "loading") : paperDashboardError ? "error" : "empty"}
-          title={
-            paperDashboardLoading
-              ? paperDashboardSlow
-                ? "Paper-Lernkonto antwortet langsam"
-                : "Paper-Lernkonto wird geladen"
-              : paperDashboardError
-                ? "Paper-Lernkonto nicht erreichbar"
-                : "Noch keine Paper-Trading-Daten"
-          }
-          description={
-            paperDashboardLoading
-              ? "Demo-Trades, Geldfluss, Risikobuckets und Lernstände werden getrennt geladen."
-              : paperDashboardError || "Der Provider hat geantwortet, aber noch keine Demo-Trades oder Lernstände geliefert."
-          }
-          source="Paper-Trading-Service"
-          onRetry={() => void refreshPaperDashboard()}
-          retryLabel="Paper-Daten neu laden"
-        />
       )}
 
       {showCreateModal && (

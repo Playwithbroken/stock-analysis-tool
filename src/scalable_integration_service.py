@@ -22,10 +22,59 @@ import shutil
 import sqlite3
 import subprocess
 import threading
-from typing import Any, Callable, Dict, Iterable, List, Optional
+import time
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import uuid
 
 from src.storage import DB_PATH
+
+
+_FX_CACHE: Dict[Tuple[str, str], Tuple[float, float]] = {}
+_FX_CACHE_LOCK = threading.Lock()
+_FX_FALLBACK_PER_EUR: Dict[str, float] = {
+    "EUR": 1.0,
+    "DKK": 7.46,
+    "USD": 1.10,
+    "CHF": 0.94,
+    "GBP": 0.85,
+    "SEK": 11.40,
+    "NOK": 11.65,
+    "JPY": 162.50,
+    "CAD": 1.50,
+    "AUD": 1.66,
+}
+
+
+def _get_fx_rate(from_currency: str, to_currency: str) -> float:
+    """Return live FX conversion multiplier from_currency -> to_currency with 10-min cache."""
+    src = str(from_currency or "EUR").strip().upper()
+    dst = str(to_currency or "EUR").strip().upper()
+    if src == dst:
+        return 1.0
+    now = time.time()
+    with _FX_CACHE_LOCK:
+        cached = _FX_CACHE.get((src, dst))
+        if cached and (now - cached[1]) < 600:
+            return cached[0]
+    rate: Optional[float] = None
+    try:
+        import yfinance as yf
+
+        val = yf.Ticker(f"{src}{dst}=X").fast_info.get("lastPrice")
+        if val and float(val) > 0:
+            rate = float(val)
+    except Exception:
+        rate = None
+    if rate is None:
+        src_per_eur = _FX_FALLBACK_PER_EUR.get(src)
+        dst_per_eur = _FX_FALLBACK_PER_EUR.get(dst)
+        if src_per_eur and dst_per_eur:
+            rate = dst_per_eur / src_per_eur
+        else:
+            rate = 1.0
+    with _FX_CACHE_LOCK:
+        _FX_CACHE[(src, dst)] = (rate, now)
+    return rate
 
 
 SCALABLE_PORTFOLIO_ID = "scalable-capital-read-only"
@@ -998,13 +1047,25 @@ class ScalableIntegrationService:
 
                     fetcher = DataFetcher(ticker)
                     pdata = fetcher.get_price_data()
+                    info = fetcher.info or {}
                     live_p = pdata.get("current_price") if isinstance(pdata, dict) else None
                     if live_p and float(live_p) > 0:
-                        current_price = Decimal(str(round(float(live_p), 4)))
+                        raw_curr = str(
+                            (pdata.get("currency") if isinstance(pdata, dict) else None)
+                            or (info.get("currency") if isinstance(info, dict) else None)
+                            or row.get("valuation_currency")
+                            or "EUR"
+                        ).strip()
+                        price_val = float(live_p)
+                        if raw_curr in {"GBp", "GBX"}:
+                            price_val /= 100.0
+                            raw_curr = "GBP"
+                        target_curr = str(row.get("valuation_currency") or status_info.get("currency") or "EUR").strip().upper()
+                        fx = _get_fx_rate(raw_curr, target_curr)
+                        current_price = Decimal(str(round(price_val * fx, 4)))
                         valuation = current_price * quantity
                         change_1d = float(pdata.get("change_percent") or 0.0)
                         quote_refreshed = True
-                    info = fetcher.info or {}
                     if isinstance(info, dict) and info.get("sector"):
                         sector = str(info.get("sector"))
                     all_data = fetcher.get_all_data()
